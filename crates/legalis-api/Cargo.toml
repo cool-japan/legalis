@@ -1,0 +1,22 @@
+[package]
+name = "legalis-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "REST/GraphQL API server for Legalis-RS"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-dsl.workspace = true
+legalis-verifier.workspace = true
+legalis-registry.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+uuid.workspace = true

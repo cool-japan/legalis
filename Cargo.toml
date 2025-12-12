@@ -1,0 +1,86 @@
+[workspace]
+resolver = "3"
+members = [
+    # Core Layer
+    "crates/legalis-core",
+    "crates/legalis-dsl",
+    "crates/legalis-registry",
+    # Intelligence Layer
+    "crates/legalis-llm",
+    "crates/legalis-verifier",
+    # Simulation & Analysis Layer
+    "crates/legalis-sim",
+    "crates/legalis-diff",
+    # Internationalization & Porting Layer
+    "crates/legalis-i18n",
+    "crates/legalis-porting",
+    # Output Layer
+    "crates/legalis-viz",
+    "crates/legalis-chain",
+    # Infrastructure Layer
+    "crates/legalis-audit",
+    "crates/legalis-api",
+    "crates/legalis-cli",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+indexmap = { version = "2.0", features = ["serde"] }
+
+# HTTP/API
+reqwest = { version = "0.12", features = ["json"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+
+# Visualization
+petgraph = "0.7"
+
+# Tracing/Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Internationalization
+rust-i18n = "3.0"
+unic-langid = "0.9"
+
+# Internal crates
+legalis-core = { path = "crates/legalis-core" }
+legalis-dsl = { path = "crates/legalis-dsl" }
+legalis-llm = { path = "crates/legalis-llm" }
+legalis-sim = { path = "crates/legalis-sim" }
+legalis-verifier = { path = "crates/legalis-verifier" }
+legalis-chain = { path = "crates/legalis-chain" }
+legalis-viz = { path = "crates/legalis-viz" }
+legalis-i18n = { path = "crates/legalis-i18n" }
+legalis-porting = { path = "crates/legalis-porting" }
+legalis-api = { path = "crates/legalis-api" }
+legalis-cli = { path = "crates/legalis-cli" }
+legalis-audit = { path = "crates/legalis-audit" }
+legalis-registry = { path = "crates/legalis-registry" }
+legalis-diff = { path = "crates/legalis-diff" }
