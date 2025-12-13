@@ -159,60 +159,51 @@ impl<'ctx> SmtVerifier<'ctx> {
                 Ok(attr_var._eq(&Int::from_i64(self.ctx, hash_value)))
             }
 
-            Condition::DateRange {
-                after,
-                before,
-                attribute,
-            } => {
-                let date_var = self.get_or_create_int_var(&format!("date_{}", attribute));
+            Condition::DateRange { start, end } => {
+                let date_var = self.get_or_create_int_var("date");
                 let mut constraints = Vec::new();
 
-                if let Some(after_date) = after {
-                    let after_days = Self::date_to_days(after_date);
-                    constraints.push(date_var.ge(&Int::from_i64(self.ctx, after_days)));
+                if let Some(start_date) = start {
+                    let start_days = Self::date_to_days(start_date);
+                    constraints.push(date_var.ge(&Int::from_i64(self.ctx, start_days)));
                 }
 
-                if let Some(before_date) = before {
-                    let before_days = Self::date_to_days(before_date);
-                    constraints.push(date_var.le(&Int::from_i64(self.ctx, before_days)));
+                if let Some(end_date) = end {
+                    let end_days = Self::date_to_days(end_date);
+                    constraints.push(date_var.le(&Int::from_i64(self.ctx, end_days)));
                 }
 
                 if constraints.is_empty() {
                     Ok(Bool::from_bool(self.ctx, true))
                 } else {
-                    Ok(Bool::and(
-                        self.ctx,
-                        &constraints.iter().collect::<Vec<_>>(),
-                    ))
+                    Ok(Bool::and(self.ctx, &constraints.iter().collect::<Vec<_>>()))
                 }
             }
 
-            Condition::Geographic { region, inclusive } => {
+            Condition::Geographic {
+                region_type,
+                region_id,
+            } => {
                 // For geographic checks, we use a boolean variable
-                let region_var = self.get_or_create_bool_var(&format!("in_region_{}", region));
-                if *inclusive {
-                    Ok(region_var.clone())
-                } else {
-                    Ok(region_var.not())
-                }
+                let region_var = self
+                    .get_or_create_bool_var(&format!("in_region_{:?}_{}", region_type, region_id));
+                Ok(region_var.clone())
             }
 
             Condition::EntityRelationship {
-                relation,
-                target_id,
+                relationship_type,
+                target_entity_id,
             } => {
                 // Encode relationship as a boolean variable
-                let rel_var = self.get_or_create_bool_var(&format!("rel_{}_{}", relation, target_id));
+                let target_str = target_entity_id.as_deref().unwrap_or("any");
+                let rel_var = self
+                    .get_or_create_bool_var(&format!("rel_{:?}_{}", relationship_type, target_str));
                 Ok(rel_var.clone())
             }
 
-            Condition::ResidencyDuration {
-                region,
-                min_years,
-                attribute,
-            } => {
-                let duration_var = self.get_or_create_int_var(&format!("residency_{}_{}", region, attribute));
-                Ok(duration_var.ge(&Int::from_i64(self.ctx, *min_years as i64)))
+            Condition::ResidencyDuration { operator, months } => {
+                let duration_var = self.get_or_create_int_var("residency_months");
+                self.translate_comparison(&duration_var, operator, *months as i64)
             }
 
             Condition::Custom { description } => {

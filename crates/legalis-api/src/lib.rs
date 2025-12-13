@@ -6,8 +6,11 @@
 //! - Simulation endpoints
 //! - Registry queries
 //! - OpenAPI 3.0 documentation
+//! - Authentication and authorization (RBAC + ReBAC)
 
+pub mod auth;
 mod openapi;
+pub mod rebac;
 
 use axum::{
     Json, Router,
@@ -38,6 +41,9 @@ pub enum ApiError {
 
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
+
+    #[error(transparent)]
+    Auth(#[from] auth::AuthError),
 }
 
 impl IntoResponse for ApiError {
@@ -47,6 +53,7 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
             ApiError::ValidationFailed(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
+            ApiError::Auth(err) => return err.into_response(),
         };
 
         let body = Json(ErrorResponse { error: message });
@@ -90,12 +97,15 @@ pub struct ResponseMeta {
 pub struct AppState {
     /// In-memory statute storage
     pub statutes: RwLock<Vec<Statute>>,
+    /// ReBAC authorization engine
+    pub rebac: RwLock<rebac::ReBACEngine>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             statutes: RwLock::new(Vec::new()),
+            rebac: RwLock::new(rebac::ReBACEngine::new()),
         }
     }
 }
@@ -182,7 +192,12 @@ async fn health_check() -> impl IntoResponse {
 }
 
 /// List all statutes.
-async fn list_statutes(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, ApiError> {
+async fn list_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
     let statutes = state.statutes.read().await;
     let summaries: Vec<StatuteSummary> = statutes.iter().map(StatuteSummary::from).collect();
 
@@ -193,9 +208,12 @@ async fn list_statutes(State(state): State<Arc<AppState>>) -> Result<impl IntoRe
 
 /// Get a specific statute.
 async fn get_statute(
+    user: auth::AuthUser,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
     let statutes = state.statutes.read().await;
     let statute = statutes
         .iter()
@@ -207,9 +225,12 @@ async fn get_statute(
 
 /// Create a new statute.
 async fn create_statute(
+    user: auth::AuthUser,
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateStatuteRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::CreateStatutes)?;
+
     let mut statutes = state.statutes.write().await;
 
     // Check for duplicate ID
@@ -220,7 +241,10 @@ async fn create_statute(
         )));
     }
 
-    info!("Creating statute: {}", req.statute.id);
+    info!(
+        "Creating statute: {} by user {}",
+        req.statute.id, user.username
+    );
     statutes.push(req.statute.clone());
 
     Ok((StatusCode::CREATED, Json(ApiResponse::new(req.statute))))
@@ -228,9 +252,12 @@ async fn create_statute(
 
 /// Delete a statute.
 async fn delete_statute(
+    user: auth::AuthUser,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::DeleteStatutes)?;
+
     let mut statutes = state.statutes.write().await;
     let initial_len = statutes.len();
     statutes.retain(|s| s.id != id);
@@ -239,15 +266,18 @@ async fn delete_statute(
         return Err(ApiError::NotFound(format!("Statute not found: {}", id)));
     }
 
-    info!("Deleted statute: {}", id);
+    info!("Deleted statute: {} by user {}", id, user.username);
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Verify statutes.
 async fn verify_statutes(
+    user: auth::AuthUser,
     State(state): State<Arc<AppState>>,
     Json(req): Json<VerifyRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
     let statutes = state.statutes.read().await;
 
     let to_verify: Vec<&Statute> = if req.statute_ids.is_empty() {
@@ -336,6 +366,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/statutes")
+                    .header("Authorization", "ApiKey lgl_12345678901234567890")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -343,5 +374,21 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_list_statutes_unauthorized() {
+        let app = create_test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/statutes")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

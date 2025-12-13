@@ -22,7 +22,7 @@
 - [x] Add support for loading statutes from files (YAML, TOML, JSON) - in CLI
 - [x] Implement serialization/deserialization roundtrip tests
 - [x] Add tracing/logging infrastructure (tracing crate integrated)
-- [ ] Create Docker container for easy deployment
+- [x] Create Docker container for easy deployment
 - [ ] Add OpenTelemetry integration for observability
 
 ### Low Priority
@@ -46,8 +46,8 @@
 - [x] Add temporal validity (effective dates, sunset clauses)
 
 #### Improvements
-- [ ] Make `LegalEntity` trait more flexible with dynamic attribute types
-- [ ] Add validation methods for `Statute` construction
+- [x] Make `LegalEntity` trait more flexible with dynamic attribute types (TypedAttributes system)
+- [x] Add validation methods for `Statute` construction
 - [x] Implement `Display` trait for all types for better debugging
 - [ ] Add serde feature flag for optional serialization
 
@@ -63,11 +63,11 @@
 
 #### Grammar Extensions
 - [x] Add IMPORT statement for referencing other statutes (parse_document, ImportNode, AS alias)
-- [ ] Add EXCEPTION clauses
-- [ ] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
+- [x] Add EXCEPTION clauses
+- [x] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
 - [x] Support for comments in DSL (// and /* */)
-- [ ] Add AMENDMENT clause for version tracking
-- [ ] Add JURISDICTION clause for locale binding
+- [x] Add AMENDMENT clause for version tracking
+- [x] Add JURISDICTION clause for locale binding
 
 ### legalis-registry
 
@@ -118,8 +118,8 @@
 ### legalis-verifier
 
 #### Formal Verification
-- [ ] Integrate Z3 SMT solver for proper constraint solving
-- [ ] Implement satisfiability checking for conditions
+- [x] Integrate Z3 SMT solver for proper constraint solving
+- [x] Implement satisfiability checking for conditions
 - [ ] Add temporal logic verification (LTL/CTL)
 - [ ] Create proof generation for verification results
 - [ ] Add model checking for statute interactions
@@ -285,12 +285,12 @@
 - [x] Health check endpoint
 - [ ] Add GraphQL API support
 - [ ] Implement WebSocket for real-time updates
-- [ ] Add OpenAPI/Swagger documentation
+- [x] Add OpenAPI/Swagger documentation
 - [ ] Create API versioning strategy (v1, v2)
 
 #### Security
-- [ ] Add authentication (JWT, API keys)
-- [ ] Implement authorization (RBAC)
+- [x] Add authentication (JWT, API keys)
+- [x] Implement authorization (RBAC + ReBAC)
 - [ ] Add rate limiting
 - [ ] Create audit logging for API calls
 

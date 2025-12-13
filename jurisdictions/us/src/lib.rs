@@ -61,12 +61,10 @@ pub mod cases;
 pub mod restatement;
 
 // Re-export key functions for convenience
-pub use cases::{
-    donoghue_v_stevenson, garratt_v_dailey, palsgraf_v_long_island, vosburg_v_putney,
-};
+pub use cases::{donoghue_v_stevenson, garratt_v_dailey, palsgraf_v_long_island, vosburg_v_putney};
 pub use restatement::{
-    battery_as_statute, iied_as_statute, products_liability_as_statute, section_158_battery,
-    section_402a_products_liability, section_46_iied,
+    battery_as_statute, iied_as_statute, products_liability_as_statute, section_46_iied,
+    section_158_battery, section_402a_products_liability,
 };
 
 #[cfg(test)]
@@ -106,7 +104,10 @@ mod tests {
     fn test_statute_versions_available() {
         // Verify statute representations of Restatement sections
         let battery_statute = battery_as_statute();
-        assert_eq!(battery_statute.jurisdiction, Some("US-RESTATEMENT".to_string()));
+        assert_eq!(
+            battery_statute.jurisdiction,
+            Some("US-RESTATEMENT".to_string())
+        );
 
         let iied_statute = iied_as_statute();
         assert!(iied_statute.is_valid());

@@ -286,9 +286,7 @@ pub fn garratt_v_dailey() -> Case {
         "Five-year-old defendant pulled chair away as elderly plaintiff was sitting down. \
         Plaintiff fell and fractured hip. Question whether child had requisite intent.",
     )
-    .with_issue(
-        "What level of intent is required for battery? Can a child have that intent?",
-    )
+    .with_issue("What level of intent is required for battery? Can a child have that intent?")
     .with_holding(
         "Intent for battery exists if defendant acts with (1) purpose to cause contact OR \
         (2) substantial certainty that contact will occur. Age is not a defense if intent exists.",
@@ -465,9 +463,17 @@ mod tests {
         ];
 
         for case in cases {
-            assert!(!case.citation.is_empty(), "{} missing citation", case.short_name);
+            assert!(
+                !case.citation.is_empty(),
+                "{} missing citation",
+                case.short_name
+            );
             assert!(!case.facts.is_empty(), "{} missing facts", case.short_name);
-            assert!(!case.holding.is_empty(), "{} missing holding", case.short_name);
+            assert!(
+                !case.holding.is_empty(),
+                "{} missing holding",
+                case.short_name
+            );
             assert!(!case.ratio.is_empty(), "{} missing ratio", case.short_name);
             assert!(case.rule.is_some(), "{} missing rule", case.short_name);
         }

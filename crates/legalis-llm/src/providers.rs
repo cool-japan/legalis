@@ -394,7 +394,7 @@ impl LLMProvider for MockProvider {
 /// This function properly handles:
 /// - Buffering incomplete lines across byte chunks
 /// - Parsing "data: " prefixed SSE messages
-/// - Handling "[DONE]" completion marker
+/// - Handling `[DONE]` completion marker
 /// - JSON parsing of OpenAI streaming responses
 /// - Error propagation with context
 fn parse_sse_stream(

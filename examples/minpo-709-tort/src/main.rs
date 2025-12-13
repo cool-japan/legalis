@@ -141,9 +141,7 @@ fn print_result(_scenario: &str, result: &LegalResult<legalis_core::Effect>) {
         LegalResult::Deterministic(effect) => {
             println!("   ✅ Result: DETERMINISTIC");
             println!("   Effect: {}", effect);
-            println!(
-                "   ⚖️  Outcome: Tortfeasor is LIABLE for damages (損害賠償責任あり)"
-            );
+            println!("   ⚖️  Outcome: Tortfeasor is LIABLE for damages (損害賠償責任あり)");
         }
         LegalResult::JudicialDiscretion {
             issue,
@@ -229,14 +227,8 @@ async fn run_population_simulation() {
 
     println!("📊 Simulation Results:\n");
     println!("Total applications: {}", metrics.total_applications);
-    println!(
-        "Deterministic outcomes: {}",
-        metrics.deterministic_count
-    );
-    println!(
-        "Judicial discretion required: {}",
-        metrics.discretion_count
-    );
+    println!("Deterministic outcomes: {}", metrics.deterministic_count);
+    println!("Judicial discretion required: {}", metrics.discretion_count);
     println!("Void/Invalid cases: {}", metrics.void_count);
 
     let rate = metrics.deterministic_ratio();
@@ -251,10 +243,7 @@ async fn run_population_simulation() {
         "   - {} cases require judicial review (discretion)",
         metrics.discretion_count
     );
-    println!(
-        "   - {} cases have no liability (void)",
-        metrics.void_count
-    );
+    println!("   - {} cases have no liability (void)", metrics.void_count);
     println!("\n   This demonstrates Legalis-RS's core philosophy:");
     println!("   \"計算可能性と裁量の分離\" (Separation of computation and discretion)");
 }

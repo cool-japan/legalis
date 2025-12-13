@@ -391,10 +391,9 @@ mod tests {
         let statute = bgb_826();
 
         // § 826 should only have intent requirement, not negligence
-        let has_intent_req = statute
-            .preconditions
-            .iter()
-            .any(|c| matches!(c, Condition::AttributeEquals { key, .. } if key == "schadigungsvorsatz"));
+        let has_intent_req = statute.preconditions.iter().any(
+            |c| matches!(c, Condition::AttributeEquals { key, .. } if key == "schadigungsvorsatz"),
+        );
 
         assert!(has_intent_req);
     }

@@ -3,13 +3,20 @@
 //! This module defines the foundational types that represent legal concepts,
 //! including the distinction between deterministic (computable) and
 //! discretionary (requiring human judgment) legal outcomes.
+//!
+//! ## Features
+//!
+//! - `serde` (default): Enable serialization/deserialization support for all types
 
 pub mod case_law;
+pub mod typed_attributes;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 // Re-export Common Law types
 pub use case_law::{
@@ -17,12 +24,16 @@ pub use case_law::{
     PrecedentWeight,
 };
 
+// Re-export Typed Attributes
+pub use typed_attributes::{AttributeError, AttributeValue, TypedAttributes};
+
 /// Legal judgment result as an Algebraic Data Type (ADT).
 ///
 /// This type embodies the core philosophy of Legalis-RS:
 /// "Not everything should be computable" - preserving human agency
 /// in legal interpretation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LegalResult<T> {
     /// Deterministic domain: Results derived automatically through computation.
     /// Examples: age requirements, income limits, deadline calculations.
@@ -112,7 +123,8 @@ pub trait LegalEntity: Send + Sync {
 }
 
 /// A simple implementation of LegalEntity for testing and basic use cases.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BasicEntity {
     id: Uuid,
     attributes: std::collections::HashMap<String, String>,
@@ -156,8 +168,144 @@ impl LegalEntity for BasicEntity {
     }
 }
 
+/// A type-safe implementation of LegalEntity using strongly-typed attributes.
+///
+/// This provides compile-time type safety and runtime validation for entity attributes,
+/// replacing error-prone string parsing with explicit type handling.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TypedEntity {
+    id: Uuid,
+    attributes: TypedAttributes,
+}
+
+impl TypedEntity {
+    /// Creates a new TypedEntity with a random UUID.
+    pub fn new() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            attributes: TypedAttributes::new(),
+        }
+    }
+
+    /// Creates a new TypedEntity with a specific UUID.
+    pub fn with_id(id: Uuid) -> Self {
+        Self {
+            id,
+            attributes: TypedAttributes::new(),
+        }
+    }
+
+    /// Gets the typed attributes storage.
+    pub fn attributes(&self) -> &TypedAttributes {
+        &self.attributes
+    }
+
+    /// Gets mutable access to the typed attributes storage.
+    pub fn attributes_mut(&mut self) -> &mut TypedAttributes {
+        &mut self.attributes
+    }
+
+    /// Sets a u32 attribute.
+    pub fn set_u32(&mut self, key: impl Into<String>, value: u32) {
+        self.attributes.set_u32(key, value);
+    }
+
+    /// Gets a u32 attribute.
+    pub fn get_u32(&self, key: &str) -> Result<u32, AttributeError> {
+        self.attributes.get_u32(key)
+    }
+
+    /// Sets a u64 attribute.
+    pub fn set_u64(&mut self, key: impl Into<String>, value: u64) {
+        self.attributes.set_u64(key, value);
+    }
+
+    /// Gets a u64 attribute.
+    pub fn get_u64(&self, key: &str) -> Result<u64, AttributeError> {
+        self.attributes.get_u64(key)
+    }
+
+    /// Sets a boolean attribute.
+    pub fn set_bool(&mut self, key: impl Into<String>, value: bool) {
+        self.attributes.set_bool(key, value);
+    }
+
+    /// Gets a boolean attribute.
+    pub fn get_bool(&self, key: &str) -> Result<bool, AttributeError> {
+        self.attributes.get_bool(key)
+    }
+
+    /// Sets a string attribute.
+    pub fn set_string(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.attributes.set_string(key, value);
+    }
+
+    /// Gets a string attribute.
+    pub fn get_string(&self, key: &str) -> Result<&str, AttributeError> {
+        self.attributes.get_string(key)
+    }
+
+    /// Sets a date attribute.
+    pub fn set_date(&mut self, key: impl Into<String>, value: NaiveDate) {
+        self.attributes.set_date(key, value);
+    }
+
+    /// Gets a date attribute.
+    pub fn get_date(&self, key: &str) -> Result<NaiveDate, AttributeError> {
+        self.attributes.get_date(key)
+    }
+
+    /// Sets an f64 attribute.
+    pub fn set_f64(&mut self, key: impl Into<String>, value: f64) {
+        self.attributes.set_f64(key, value);
+    }
+
+    /// Gets an f64 attribute.
+    pub fn get_f64(&self, key: &str) -> Result<f64, AttributeError> {
+        self.attributes.get_f64(key)
+    }
+
+    /// Sets a typed attribute value.
+    pub fn set_typed(&mut self, key: impl Into<String>, value: AttributeValue) {
+        self.attributes.set(key, value);
+    }
+
+    /// Gets a typed attribute value.
+    pub fn get_typed(&self, key: &str) -> Option<&AttributeValue> {
+        self.attributes.get(key)
+    }
+
+    /// Checks if an attribute exists.
+    pub fn has_attribute(&self, key: &str) -> bool {
+        self.attributes.has(key)
+    }
+}
+
+impl Default for TypedEntity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LegalEntity for TypedEntity {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
+    fn get_attribute(&self, key: &str) -> Option<String> {
+        self.attributes.get(key).map(|v| v.to_string_value())
+    }
+
+    fn set_attribute(&mut self, key: &str, value: String) {
+        self.attributes
+            .set(key, AttributeValue::parse_from_string(&value));
+    }
+}
+
 /// Condition type for statute preconditions.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Condition {
     /// Age comparison (e.g., age >= 18)
     Age { operator: ComparisonOp, value: u32 },
@@ -232,7 +380,8 @@ impl fmt::Display for Condition {
 }
 
 /// Geographic region types.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum RegionType {
     /// Country level
     Country,
@@ -249,7 +398,8 @@ pub enum RegionType {
 }
 
 /// Entity relationship types.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum RelationshipType {
     /// Parent-child relationship
     ParentChild,
@@ -266,7 +416,8 @@ pub enum RelationshipType {
 }
 
 /// Comparison operators for conditions.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ComparisonOp {
     Equal,
     NotEqual,
@@ -290,7 +441,8 @@ impl fmt::Display for ComparisonOp {
 }
 
 /// Legal effect produced when statute conditions are met.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Effect {
     /// Type of effect
     pub effect_type: EffectType,
@@ -324,7 +476,8 @@ impl fmt::Display for Effect {
 }
 
 /// Types of legal effects.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum EffectType {
     /// Grant a right or permission
     Grant,
@@ -357,7 +510,8 @@ impl fmt::Display for EffectType {
 }
 
 /// Temporal validity for statutes.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TemporalValidity {
     /// Effective date (when the statute comes into force)
     pub effective_date: Option<NaiveDate>,
@@ -407,7 +561,8 @@ impl fmt::Display for TemporalValidity {
 }
 
 /// Statute (legal article) definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Statute {
     /// Unique identifier (e.g., "civil-code-article-1")
     pub id: String,
@@ -947,5 +1102,118 @@ mod tests {
                 .to_string()
                 .contains("Version")
         );
+    }
+
+    #[test]
+    fn test_typed_entity_basic_operations() {
+        let mut entity = TypedEntity::new();
+
+        // Set various typed attributes
+        entity.set_u32("age", 25);
+        entity.set_u64("income", 50000);
+        entity.set_bool("is_citizen", true);
+        entity.set_string("name", "Alice");
+        entity.set_date("birth_date", NaiveDate::from_ymd_opt(1999, 1, 15).unwrap());
+        entity.set_f64("tax_rate", 0.15);
+
+        // Get typed attributes
+        assert_eq!(entity.get_u32("age").unwrap(), 25);
+        assert_eq!(entity.get_u64("income").unwrap(), 50000);
+        assert!(entity.get_bool("is_citizen").unwrap());
+        assert_eq!(entity.get_string("name").unwrap(), "Alice");
+        assert_eq!(
+            entity.get_date("birth_date").unwrap(),
+            NaiveDate::from_ymd_opt(1999, 1, 15).unwrap()
+        );
+        assert_eq!(entity.get_f64("tax_rate").unwrap(), 0.15);
+
+        // Test attribute existence
+        assert!(entity.has_attribute("age"));
+        assert!(!entity.has_attribute("nonexistent"));
+    }
+
+    #[test]
+    fn test_typed_entity_type_safety() {
+        let mut entity = TypedEntity::new();
+        entity.set_string("name", "Bob");
+
+        // Attempting to get string as u32 should fail
+        assert!(entity.get_u32("name").is_err());
+
+        // Not found error
+        assert!(entity.get_u32("missing").is_err());
+    }
+
+    #[test]
+    fn test_typed_entity_legal_entity_trait() {
+        let mut entity = TypedEntity::new();
+
+        // Test LegalEntity trait implementation
+        let _id = entity.id();
+        assert!(entity.get_attribute("age").is_none());
+
+        // Set via LegalEntity trait (uses string parsing)
+        entity.set_attribute("age", "30".to_string());
+        assert_eq!(entity.get_attribute("age").unwrap(), "30");
+
+        // Verify it was parsed as u32
+        assert_eq!(entity.get_u32("age").unwrap(), 30);
+
+        // Set boolean via trait
+        entity.set_attribute("active", "true".to_string());
+        assert!(entity.get_bool("active").unwrap());
+    }
+
+    #[test]
+    fn test_typed_entity_backward_compatibility() {
+        let mut entity = TypedEntity::new();
+
+        // Simulate old string-based code
+        entity.set_attribute("age", "25".to_string());
+        entity.set_attribute("income", "50000".to_string());
+        entity.set_attribute("is_citizen", "true".to_string());
+
+        // New typed code can read these
+        assert_eq!(entity.get_u32("age").unwrap(), 25);
+        assert_eq!(entity.get_u64("income").unwrap(), 50000);
+        assert!(entity.get_bool("is_citizen").unwrap());
+
+        // Verify string retrieval still works
+        assert_eq!(entity.get_attribute("age").unwrap(), "25");
+        assert_eq!(entity.get_attribute("income").unwrap(), "50000");
+        assert_eq!(entity.get_attribute("is_citizen").unwrap(), "true");
+    }
+
+    #[test]
+    fn test_typed_entity_attribute_value_conversions() {
+        let mut entity = TypedEntity::new();
+
+        // Test AttributeValue directly
+        entity.set_typed("count", AttributeValue::U32(42));
+        let val = entity.get_typed("count").unwrap();
+        assert_eq!(val.as_u32().unwrap(), 42);
+        assert_eq!(val.as_u64().unwrap(), 42); // Upcasting works
+
+        // Test date parsing
+        entity.set_attribute("registration_date", "2024-01-15".to_string());
+        assert_eq!(
+            entity.get_date("registration_date").unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_typed_entity_integration_with_condition() {
+        let mut entity = TypedEntity::new();
+        entity.set_u32("age", 25);
+
+        // TypedEntity implements LegalEntity, so it works with existing condition checking
+        assert_eq!(entity.get_attribute("age").unwrap(), "25");
+
+        // This demonstrates backward compatibility with existing SimEngine code
+        let age_from_trait = entity
+            .get_attribute("age")
+            .and_then(|v| v.parse::<u32>().ok());
+        assert_eq!(age_from_trait, Some(25));
     }
 }

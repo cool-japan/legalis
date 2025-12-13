@@ -81,6 +81,11 @@ pub fn generate_spec() -> Value {
                     "summary": "List all statutes",
                     "description": "Returns a list of all statutes with summary information",
                     "operationId": "listStatutes",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
                     "responses": {
                         "200": {
                             "description": "List of statutes",
@@ -88,6 +93,32 @@ pub fn generate_spec() -> Value {
                                 "application/json": {
                                     "schema": {
                                         "$ref": "#/components/schemas/StatuteListResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid authentication credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Missing authentication credentials"
+                                    }
+                                }
+                            }
+                        },
+                        "403": {
+                            "description": "Insufficient permissions to read statutes",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Permission denied: ReadStatutes required"
                                     }
                                 }
                             }
@@ -99,12 +130,38 @@ pub fn generate_spec() -> Value {
                     "summary": "Create a new statute",
                     "description": "Creates a new statute in the system",
                     "operationId": "createStatute",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
                     "requestBody": {
                         "required": true,
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CreateStatuteRequest"
+                                },
+                                "example": {
+                                    "statute": {
+                                        "id": "civil-code-article-42",
+                                        "title": "Contractual Capacity",
+                                        "preconditions": [
+                                            {
+                                                "condition_type": "Age",
+                                                "operator": "GreaterThanOrEqual",
+                                                "value": 18
+                                            }
+                                        ],
+                                        "effect": {
+                                            "effect_type": "Grant",
+                                            "description": "Person gains capacity to enter into contracts",
+                                            "parameters": {
+                                                "right": "contract_capacity"
+                                            }
+                                        },
+                                        "version": 1
+                                    }
                                 }
                             }
                         }
@@ -131,6 +188,35 @@ pub fn generate_spec() -> Value {
                                 "application/json": {
                                     "schema": {
                                         "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Invalid statute data: missing required field 'title'"
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid authentication credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Missing authentication credentials"
+                                    }
+                                }
+                            }
+                        },
+                        "403": {
+                            "description": "Insufficient permissions to create statutes",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Permission denied: WriteStatutes required"
                                     }
                                 }
                             }
@@ -144,6 +230,11 @@ pub fn generate_spec() -> Value {
                     "summary": "Get a statute by ID",
                     "description": "Returns detailed information about a specific statute",
                     "operationId": "getStatute",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
                     "parameters": [
                         {
                             "name": "id",
@@ -172,12 +263,41 @@ pub fn generate_spec() -> Value {
                                 }
                             }
                         },
+                        "401": {
+                            "description": "Missing or invalid authentication credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Missing authentication credentials"
+                                    }
+                                }
+                            }
+                        },
+                        "403": {
+                            "description": "Insufficient permissions to read statutes",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Permission denied: ReadStatutes required"
+                                    }
+                                }
+                            }
+                        },
                         "404": {
                             "description": "Statute not found",
                             "content": {
                                 "application/json": {
                                     "schema": {
                                         "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Not found: statute with id 'civil-code-art-1'"
                                     }
                                 }
                             }
@@ -189,6 +309,11 @@ pub fn generate_spec() -> Value {
                     "summary": "Delete a statute",
                     "description": "Deletes a statute from the system",
                     "operationId": "deleteStatute",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
                     "parameters": [
                         {
                             "name": "id",
@@ -196,7 +321,8 @@ pub fn generate_spec() -> Value {
                             "description": "Statute ID to delete",
                             "required": true,
                             "schema": {
-                                "type": "string"
+                                "type": "string",
+                                "example": "civil-code-art-1"
                             }
                         }
                     ],
@@ -204,12 +330,41 @@ pub fn generate_spec() -> Value {
                         "204": {
                             "description": "Statute deleted successfully"
                         },
+                        "401": {
+                            "description": "Missing or invalid authentication credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Missing authentication credentials"
+                                    }
+                                }
+                            }
+                        },
+                        "403": {
+                            "description": "Insufficient permissions to delete statutes",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Permission denied: DeleteStatutes required"
+                                    }
+                                }
+                            }
+                        },
                         "404": {
                             "description": "Statute not found",
                             "content": {
                                 "application/json": {
                                     "schema": {
                                         "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Not found: statute with id 'civil-code-art-1'"
                                     }
                                 }
                             }
@@ -223,12 +378,31 @@ pub fn generate_spec() -> Value {
                     "summary": "Verify statutes",
                     "description": "Verifies one or more statutes for logical consistency and validity",
                     "operationId": "verifyStatutes",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
                     "requestBody": {
                         "required": true,
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/VerifyRequest"
+                                },
+                                "examples": {
+                                    "verify_all": {
+                                        "summary": "Verify all statutes",
+                                        "value": {
+                                            "statute_ids": []
+                                        }
+                                    },
+                                    "verify_specific": {
+                                        "summary": "Verify specific statutes",
+                                        "value": {
+                                            "statute_ids": ["civil-code-art-1", "tax-code-sec-42"]
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -245,6 +419,28 @@ pub fn generate_spec() -> Value {
                                                 "$ref": "#/components/schemas/VerifyResponse"
                                             }
                                         }
+                                    },
+                                    "examples": {
+                                        "passed": {
+                                            "summary": "Verification passed",
+                                            "value": {
+                                                "data": {
+                                                    "passed": true,
+                                                    "errors": [],
+                                                    "warnings": []
+                                                }
+                                            }
+                                        },
+                                        "failed": {
+                                            "summary": "Verification failed",
+                                            "value": {
+                                                "data": {
+                                                    "passed": false,
+                                                    "errors": ["Contradiction detected between civil-code-art-1 and civil-code-art-2"],
+                                                    "warnings": ["Statute tax-code-sec-42 has high complexity score"]
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -255,6 +451,35 @@ pub fn generate_spec() -> Value {
                                 "application/json": {
                                     "schema": {
                                         "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Invalid request: statute_ids must be an array"
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid authentication credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Missing authentication credentials"
+                                    }
+                                }
+                            }
+                        },
+                        "403": {
+                            "description": "Insufficient permissions to verify statutes",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ErrorResponse"
+                                    },
+                                    "example": {
+                                        "error": "Permission denied: VerifyStatutes required"
                                     }
                                 }
                             }
@@ -264,6 +489,26 @@ pub fn generate_spec() -> Value {
             }
         },
         "components": {
+            "securitySchemes": {
+                "ApiKeyAuth": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "Authorization",
+                    "description": "API key authentication using 'ApiKey <key>' format. Keys must start with 'lgl_' prefix. Example: 'ApiKey lgl_12345678901234567890'"
+                },
+                "ApiKeyHeader": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Key",
+                    "description": "Alternative API key authentication using X-API-Key header. Example: 'lgl_12345678901234567890'"
+                },
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT",
+                    "description": "JWT Bearer token authentication. Tokens are issued upon successful login."
+                }
+            },
             "schemas": {
                 "ErrorResponse": {
                     "type": "object",

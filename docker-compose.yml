@@ -1,0 +1,118 @@
+# Docker Compose configuration for Legalis-RS
+# Provides both development and production deployment options
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Legalis API Server
+  # =============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - RUST_VERSION=1.83
+    image: legalis-rs:latest
+    container_name: legalis-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+      - LEGALIS_HOST=0.0.0.0
+      - LEGALIS_PORT=3000
+    volumes:
+      # Mount examples directory for easy access
+      - ./examples:/app/examples:ro
+      # Mount persistent data directory
+      - legalis-data:/app/data
+    networks:
+      - legalis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # =============================================================================
+  # Redis (for future caching and session storage)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: legalis-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - legalis-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # =============================================================================
+  # PostgreSQL (for future database integration)
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: legalis-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=legalis
+      - POSTGRES_USER=legalis
+      - POSTGRES_PASSWORD=legalis_dev_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - legalis-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legalis"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # =============================================================================
+  # Nginx Reverse Proxy (optional, for production)
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: legalis-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - legalis-network
+    depends_on:
+      - api
+    profiles:
+      - production
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  legalis-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  legalis-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local

@@ -72,7 +72,60 @@ pub trait LegalEntity: Send + Sync {
 }
 ```
 
+### Typed Attributes System
+
+Legalis-Core provides a type-safe attribute system to replace error-prone string parsing with strongly-typed values:
+
+```rust
+use legalis_core::{TypedEntity, AttributeValue, AttributeError};
+use chrono::NaiveDate;
+
+// Create a typed entity
+let mut person = TypedEntity::new();
+
+// Set typed attributes (compile-time type safety)
+person.set_u32("age", 25);
+person.set_u64("income", 50000);
+person.set_bool("is_citizen", true);
+person.set_string("name", "Alice");
+person.set_date("birth_date", NaiveDate::from_ymd_opt(1999, 1, 15).unwrap());
+person.set_f64("tax_rate", 0.15);
+
+// Get typed attributes (no parsing errors)
+assert_eq!(person.get_u32("age").unwrap(), 25);
+assert!(person.get_bool("is_citizen").unwrap());
+
+// Type safety - this will return an error
+assert!(person.get_u32("name").is_err()); // name is a String, not u32
+```
+
+**Supported Types:**
+- `u32`, `u64`, `i64` - Integer values
+- `bool` - Boolean flags
+- `String` - Text values
+- `NaiveDate` - Date values
+- `f64` - Floating point numbers
+- `Vec<String>` - String lists
+
+**Backward Compatibility:**
+`TypedEntity` implements `LegalEntity` trait and automatically parses string values:
+
+```rust
+let mut entity = TypedEntity::new();
+
+// Old string-based code still works
+entity.set_attribute("age", "30".to_string());
+
+// New typed code can read the parsed value
+assert_eq!(entity.get_u32("age").unwrap(), 30);
+
+// String retrieval also works
+assert_eq!(entity.get_attribute("age").unwrap(), "30");
+```
+
 ## Usage
+
+### Basic Entity (String-based)
 
 ```rust
 use legalis_core::{Statute, Condition, Effect, EffectType, ComparisonOp, BasicEntity};
@@ -88,10 +141,24 @@ let statute = Statute::new(
     value: 18,
 });
 
-// Create an entity
+// Create an entity (string-based)
 let mut citizen = BasicEntity::new();
 citizen.set_attribute("age", "25".to_string());
 citizen.set_attribute("citizenship", "JP".to_string());
+```
+
+### Typed Entity (Type-safe)
+
+```rust
+use legalis_core::{TypedEntity, Statute, Condition, Effect, EffectType, ComparisonOp};
+
+// Create an entity (type-safe)
+let mut citizen = TypedEntity::new();
+citizen.set_u32("age", 25);                // No string conversion needed
+citizen.set_string("citizenship", "JP");   // Explicit type
+
+// Both BasicEntity and TypedEntity implement LegalEntity trait
+// and work seamlessly with the rest of the framework
 ```
 
 ## Design Philosophy

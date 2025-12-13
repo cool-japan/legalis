@@ -8,7 +8,7 @@
 mod smt;
 
 #[cfg(feature = "z3-solver")]
-pub use smt::{create_z3_context, SmtVerifier};
+pub use smt::{SmtVerifier, create_z3_context};
 
 use legalis_core::Statute;
 use std::collections::{HashMap, HashSet};
@@ -245,14 +245,15 @@ impl StatuteVerifier {
             // Build conjunction of all preconditions
             let mut combined = statute.preconditions[0].clone();
             for condition in &statute.preconditions[1..] {
-                combined = legalis_core::Condition::And(Box::new(combined), Box::new(condition.clone()));
+                combined =
+                    legalis_core::Condition::And(Box::new(combined), Box::new(condition.clone()));
             }
 
             // If the conjunction is unsatisfiable, the statute is dead
-            match smt_verifier.is_satisfiable(&combined) {
-                Ok(satisfiable) => return !satisfiable,
-                Err(_) => {} // Fall through to simple checking
+            if let Ok(satisfiable) = smt_verifier.is_satisfiable(&combined) {
+                return !satisfiable;
             }
+            // Fall through to simple checking on error
         }
 
         // Simple pairwise checking (used when z3-solver feature is not enabled or SMT fails)
@@ -278,10 +279,10 @@ impl StatuteVerifier {
             let ctx = smt::create_z3_context();
             let mut smt_verifier = smt::SmtVerifier::new(&ctx);
 
-            match smt_verifier.contradict(cond1, cond2) {
-                Ok(contradicts) => return contradicts,
-                Err(_) => {} // Fall through to simple check
+            if let Ok(contradicts) = smt_verifier.contradict(cond1, cond2) {
+                return contradicts;
             }
+            // Fall through to simple check on error
         }
 
         // Simple heuristic check (used when z3-solver feature is not enabled)
@@ -366,12 +367,14 @@ impl StatuteVerifier {
             // Build conjunction of all preconditions from both statutes
             let mut combined1 = statute1.preconditions[0].clone();
             for condition in &statute1.preconditions[1..] {
-                combined1 = legalis_core::Condition::And(Box::new(combined1), Box::new(condition.clone()));
+                combined1 =
+                    legalis_core::Condition::And(Box::new(combined1), Box::new(condition.clone()));
             }
 
             let mut combined2 = statute2.preconditions[0].clone();
             for condition in &statute2.preconditions[1..] {
-                combined2 = legalis_core::Condition::And(Box::new(combined2), Box::new(condition.clone()));
+                combined2 =
+                    legalis_core::Condition::And(Box::new(combined2), Box::new(condition.clone()));
             }
 
             // Check if both sets of preconditions can be true simultaneously
@@ -380,13 +383,13 @@ impl StatuteVerifier {
                 Ok(false) => {
                     // Preconditions can both be true - check if effects conflict
                     use legalis_core::EffectType;
-                    return match (&statute1.effect.effect_type, &statute2.effect.effect_type) {
-                        (EffectType::Grant, EffectType::Revoke) => true,
-                        (EffectType::Revoke, EffectType::Grant) => true,
-                        (EffectType::Obligation, EffectType::Prohibition) => true,
-                        (EffectType::Prohibition, EffectType::Obligation) => true,
-                        _ => false,
-                    };
+                    return matches!(
+                        (&statute1.effect.effect_type, &statute2.effect.effect_type),
+                        (EffectType::Grant, EffectType::Revoke)
+                            | (EffectType::Revoke, EffectType::Grant)
+                            | (EffectType::Obligation, EffectType::Prohibition)
+                            | (EffectType::Prohibition, EffectType::Obligation)
+                    );
                 }
                 Err(_) => {} // Fall through to simple check
             }

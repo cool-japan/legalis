@@ -6,9 +6,13 @@ license.workspace = true
 rust-version.workspace = true
 description = "Core types and traits for Legalis-RS legal framework"
 
+[features]
+default = ["serde"]
+serde = ["dep:serde", "dep:serde_json", "uuid/serde", "chrono/serde"]
+
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true

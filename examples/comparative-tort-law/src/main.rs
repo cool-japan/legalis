@@ -59,8 +59,8 @@ use legalis_core::{BasicEntity, LegalEntity, LegalResult};
 use legalis_de::{bgb_823_1, bgb_826};
 use legalis_fr::article_1240;
 use legalis_jp::article_709;
-use legalis_us::{battery_as_statute, iied_as_statute, products_liability_as_statute};
 use legalis_sim::SimEngine;
+use legalis_us::{battery_as_statute, iied_as_statute, products_liability_as_statute};
 
 #[tokio::main]
 async fn main() {
@@ -173,7 +173,9 @@ fn test_case_1_battery() {
 
     println!("\n  ✅ Consensus: All systems impose liability for intentional battery.");
     println!("     Civil Law: Protected interest (body/health) violated + fault + causation");
-    println!("     Common Law: Intent + harmful contact (no need for 'protected interest' analysis)");
+    println!(
+        "     Common Law: Intent + harmful contact (no need for 'protected interest' analysis)"
+    );
 }
 
 /// Test Case 2: Economic Loss through Fraud
@@ -290,7 +292,9 @@ fn test_case_3_personality_rights() {
     println!("     🇯🇵: Via 'legally protected interests'");
     println!("     🇫🇷: Via 'tout dommage' (any damage)");
     println!("\n  🇺🇸 Note: Defamation is a SEPARATE tort in Common Law (not battery).");
-    println!("     This shows Common Law's categorical approach: different torts, different rules.");
+    println!(
+        "     This shows Common Law's categorical approach: different torts, different rules."
+    );
 }
 
 /// Test Case 4: Pure Economic Loss (Negligence)
@@ -457,7 +461,10 @@ fn test_case_6_product_liability() {
 fn print_result(result: &LegalResult<legalis_core::Effect>) {
     match result {
         LegalResult::Deterministic(effect) => {
-            println!("     ✅ Deterministic: {} - {}", effect.effect_type, effect.description);
+            println!(
+                "     ✅ Deterministic: {} - {}",
+                effect.effect_type, effect.description
+            );
         }
         LegalResult::JudicialDiscretion { issue, .. } => {
             println!("     ⚖️  Judicial Discretion Required: {}", issue);

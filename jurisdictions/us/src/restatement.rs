@@ -41,10 +41,7 @@
 //! We model Restatement sections as **CaseRule** objects rather than Statutes,
 //! since they represent distilled common law principles, not legislative enactments.
 
-use legalis_core::{
-    case_law::CaseRule,
-    Condition, Effect, EffectType, Statute,
-};
+use legalis_core::{Condition, Effect, EffectType, Statute, case_law::CaseRule};
 
 /// Restatement (Second) of Torts § 158 - Battery (暴行罪)
 ///
@@ -394,10 +391,7 @@ mod tests {
     #[test]
     fn test_section_158_battery() {
         let rule = section_158_battery();
-        assert_eq!(
-            rule.name,
-            "Restatement (Second) of Torts § 158 - Battery"
-        );
+        assert_eq!(rule.name, "Restatement (Second) of Torts § 158 - Battery");
         assert_eq!(rule.conditions.len(), 4);
         assert!(rule.exceptions.len() >= 3);
     }

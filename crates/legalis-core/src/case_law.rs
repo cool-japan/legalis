@@ -149,7 +149,11 @@ impl Case {
 
     /// Determines precedent weight for another case in a given jurisdiction.
     #[must_use]
-    pub fn precedent_weight(&self, target_jurisdiction: &str, target_court: &Court) -> PrecedentWeight {
+    pub fn precedent_weight(
+        &self,
+        target_jurisdiction: &str,
+        target_court: &Court,
+    ) -> PrecedentWeight {
         // Same jurisdiction
         if self.jurisdiction == target_jurisdiction {
             // Higher court in same system
@@ -325,9 +329,7 @@ impl CaseDatabase {
         self.cases
             .values()
             .filter(|c| {
-                c.jurisdiction == jurisdiction
-                    && c.court.level() > court.level()
-                    && !c.overruled
+                c.jurisdiction == jurisdiction && c.court.level() > court.level() && !c.overruled
             })
             .collect()
     }
@@ -368,13 +370,7 @@ mod tests {
 
     #[test]
     fn test_precedent_weight_same_jurisdiction() {
-        let supreme_case = Case::new(
-            "Test v. Case",
-            "Test",
-            2020,
-            Court::Supreme,
-            "US-NY",
-        );
+        let supreme_case = Case::new("Test v. Case", "Test", 2020, Court::Supreme, "US-NY");
 
         // Supreme court case is binding on trial court in same jurisdiction
         assert_eq!(
@@ -391,13 +387,7 @@ mod tests {
 
     #[test]
     fn test_precedent_weight_different_jurisdiction() {
-        let ny_case = Case::new(
-            "Test v. Case",
-            "Test",
-            2020,
-            Court::Supreme,
-            "US-NY",
-        );
+        let ny_case = Case::new("Test v. Case", "Test", 2020, Court::Supreme, "US-NY");
 
         // Different US state is persuasive
         assert_eq!(
