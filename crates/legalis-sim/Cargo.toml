@@ -17,7 +17,7 @@ chrono.workspace = true
 num_cpus = "1.16"
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 
 [[bench]]
 name = "simulation"
