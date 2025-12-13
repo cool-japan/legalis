@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use legalis_cli::{commands, Cli, Commands};
+use legalis_cli::{Cli, Commands, commands};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -53,6 +53,54 @@ async fn main() -> Result<()> {
         }
         Commands::Init { path } => {
             commands::handle_init(path)?;
+        }
+        Commands::Diff {
+            old,
+            new,
+            diff_format,
+        } => {
+            commands::handle_diff(old, new, diff_format)?;
+        }
+        Commands::Simulate {
+            input,
+            population,
+            output,
+        } => {
+            commands::handle_simulate(input, *population, output.as_deref()).await?;
+        }
+        Commands::Audit {
+            input,
+            output,
+            with_complexity,
+        } => {
+            commands::handle_audit(input, output, *with_complexity)?;
+        }
+        Commands::Complexity { input, output } => {
+            commands::handle_complexity(input, output.as_deref())?;
+        }
+        Commands::Port {
+            input,
+            target,
+            output,
+            port_format,
+        } => {
+            commands::handle_port(input, target, output.as_deref(), port_format)?;
+        }
+        Commands::Import {
+            input,
+            from,
+            output,
+            import_output,
+        } => {
+            commands::handle_import(input, from.as_ref(), output.as_deref(), import_output)?;
+        }
+        Commands::Convert {
+            input,
+            from,
+            to,
+            output,
+        } => {
+            commands::handle_convert(input, from.as_ref(), to, output.as_deref())?;
         }
     }
 

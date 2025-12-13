@@ -1,7 +1,9 @@
 //! Simulation engine implementation.
 
 use crate::metrics::SimulationMetrics;
-use legalis_core::{BasicEntity, Condition, ComparisonOp, Effect, LegalEntity, LegalResult, Statute};
+use legalis_core::{
+    BasicEntity, ComparisonOp, Condition, Effect, LegalEntity, LegalResult, Statute,
+};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -22,10 +24,7 @@ pub struct SimEngine {
 
 impl SimEngine {
     /// Creates a new simulation engine.
-    pub fn new(
-        statutes: Vec<Statute>,
-        population: Vec<Box<dyn LegalEntity>>,
-    ) -> Self {
+    pub fn new(statutes: Vec<Statute>, population: Vec<Box<dyn LegalEntity>>) -> Self {
         Self {
             statutes,
             population: population.into_iter().map(Arc::from).collect(),
@@ -115,7 +114,10 @@ impl SimEngine {
     fn evaluate_condition(agent: &dyn LegalEntity, condition: &Condition) -> ConditionResult {
         match condition {
             Condition::Age { operator, value } => {
-                match agent.get_attribute("age").and_then(|v| v.parse::<u32>().ok()) {
+                match agent
+                    .get_attribute("age")
+                    .and_then(|v| v.parse::<u32>().ok())
+                {
                     Some(age) => {
                         let result = match operator {
                             ComparisonOp::Equal => age == *value,
@@ -131,11 +133,16 @@ impl SimEngine {
                             ConditionResult::False
                         }
                     }
-                    None => ConditionResult::Indeterminate("Age attribute not found or invalid".to_string()),
+                    None => ConditionResult::Indeterminate(
+                        "Age attribute not found or invalid".to_string(),
+                    ),
                 }
             }
             Condition::Income { operator, value } => {
-                match agent.get_attribute("income").and_then(|v| v.parse::<u64>().ok()) {
+                match agent
+                    .get_attribute("income")
+                    .and_then(|v| v.parse::<u64>().ok())
+                {
                     Some(income) => {
                         let result = match operator {
                             ComparisonOp::Equal => income == *value,
@@ -151,7 +158,9 @@ impl SimEngine {
                             ConditionResult::False
                         }
                     }
-                    None => ConditionResult::Indeterminate("Income attribute not found or invalid".to_string()),
+                    None => ConditionResult::Indeterminate(
+                        "Income attribute not found or invalid".to_string(),
+                    ),
                 }
             }
             Condition::HasAttribute { key } => {
@@ -161,23 +170,22 @@ impl SimEngine {
                     ConditionResult::False
                 }
             }
-            Condition::AttributeEquals { key, value } => {
-                match agent.get_attribute(key) {
-                    Some(attr_value) if attr_value == *value => ConditionResult::True,
-                    Some(_) => ConditionResult::False,
-                    None => ConditionResult::Indeterminate(format!("Attribute '{key}' not found")),
-                }
-            }
+            Condition::AttributeEquals { key, value } => match agent.get_attribute(key) {
+                Some(attr_value) if attr_value == *value => ConditionResult::True,
+                Some(_) => ConditionResult::False,
+                None => ConditionResult::Indeterminate(format!("Attribute '{key}' not found")),
+            },
             Condition::And(left, right) => {
                 match (
                     Self::evaluate_condition(agent, left),
                     Self::evaluate_condition(agent, right),
                 ) {
                     (ConditionResult::True, ConditionResult::True) => ConditionResult::True,
-                    (ConditionResult::False, _) | (_, ConditionResult::False) => ConditionResult::False,
-                    (ConditionResult::Indeterminate(r), _) | (_, ConditionResult::Indeterminate(r)) => {
-                        ConditionResult::Indeterminate(r)
+                    (ConditionResult::False, _) | (_, ConditionResult::False) => {
+                        ConditionResult::False
                     }
+                    (ConditionResult::Indeterminate(r), _)
+                    | (_, ConditionResult::Indeterminate(r)) => ConditionResult::Indeterminate(r),
                 }
             }
             Condition::Or(left, right) => {
@@ -185,11 +193,12 @@ impl SimEngine {
                     Self::evaluate_condition(agent, left),
                     Self::evaluate_condition(agent, right),
                 ) {
-                    (ConditionResult::True, _) | (_, ConditionResult::True) => ConditionResult::True,
-                    (ConditionResult::False, ConditionResult::False) => ConditionResult::False,
-                    (ConditionResult::Indeterminate(r), _) | (_, ConditionResult::Indeterminate(r)) => {
-                        ConditionResult::Indeterminate(r)
+                    (ConditionResult::True, _) | (_, ConditionResult::True) => {
+                        ConditionResult::True
                     }
+                    (ConditionResult::False, ConditionResult::False) => ConditionResult::False,
+                    (ConditionResult::Indeterminate(r), _)
+                    | (_, ConditionResult::Indeterminate(r)) => ConditionResult::Indeterminate(r),
                 }
             }
             Condition::Not(inner) => match Self::evaluate_condition(agent, inner) {
@@ -197,8 +206,74 @@ impl SimEngine {
                 ConditionResult::False => ConditionResult::True,
                 ConditionResult::Indeterminate(r) => ConditionResult::Indeterminate(r),
             },
-            Condition::Custom { description } => {
-                ConditionResult::Indeterminate(format!("Custom condition requires evaluation: {description}"))
+            Condition::Custom { description } => ConditionResult::Indeterminate(format!(
+                "Custom condition requires evaluation: {description}"
+            )),
+            Condition::DateRange { start, end } => {
+                match agent
+                    .get_attribute("current_date")
+                    .and_then(|v| chrono::NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok())
+                {
+                    Some(date) => {
+                        let after_start = start.is_none_or(|s| date >= s);
+                        let before_end = end.is_none_or(|e| date <= e);
+                        if after_start && before_end {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(
+                        "Date attribute not found or invalid".to_string(),
+                    ),
+                }
+            }
+            Condition::Geographic { region_id, .. } => match agent.get_attribute("region") {
+                Some(agent_region) if agent_region == *region_id => ConditionResult::True,
+                Some(_) => ConditionResult::False,
+                None => ConditionResult::Indeterminate("Region attribute not found".to_string()),
+            },
+            Condition::EntityRelationship {
+                relationship_type,
+                target_entity_id,
+            } => {
+                let rel_key = format!("relationship_{:?}", relationship_type).to_lowercase();
+                match agent.get_attribute(&rel_key) {
+                    Some(rel_value) => match target_entity_id {
+                        Some(target) if rel_value == *target => ConditionResult::True,
+                        Some(_) => ConditionResult::False,
+                        None => ConditionResult::True,
+                    },
+                    None => ConditionResult::Indeterminate(format!(
+                        "Relationship {:?} not found",
+                        relationship_type
+                    )),
+                }
+            }
+            Condition::ResidencyDuration { operator, months } => {
+                match agent
+                    .get_attribute("residency_months")
+                    .and_then(|v| v.parse::<u32>().ok())
+                {
+                    Some(residency) => {
+                        let result = match operator {
+                            ComparisonOp::Equal => residency == *months,
+                            ComparisonOp::NotEqual => residency != *months,
+                            ComparisonOp::GreaterThan => residency > *months,
+                            ComparisonOp::GreaterOrEqual => residency >= *months,
+                            ComparisonOp::LessThan => residency < *months,
+                            ComparisonOp::LessOrEqual => residency <= *months,
+                        };
+                        if result {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(
+                        "Residency duration not found or invalid".to_string(),
+                    ),
+                }
             }
         }
     }
@@ -312,15 +387,11 @@ mod tests {
         entity.set_attribute("age", "25".to_string());
         entity.set_attribute("income", "5000000".to_string());
 
-        let statute = Statute::new(
-            "test",
-            "Test",
-            Effect::new(EffectType::Grant, "Test"),
-        )
-        .with_precondition(Condition::Age {
-            operator: ComparisonOp::GreaterOrEqual,
-            value: 18,
-        });
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"))
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            });
 
         let result = SimEngine::apply_law(&entity, &statute);
         assert!(result.is_deterministic());
@@ -328,9 +399,7 @@ mod tests {
 
     #[test]
     fn test_population_builder() {
-        let population = PopulationBuilder::new()
-            .generate_random(100)
-            .build();
+        let population = PopulationBuilder::new().generate_random(100).build();
 
         assert_eq!(population.len(), 100);
     }

@@ -195,30 +195,32 @@ impl ContractGenerator {
         match condition {
             Condition::Age { operator, value } => {
                 let op = self.comparison_to_solidity(*operator);
-                Ok(format!("        require(age {} {}, \"Age requirement not met\");\n", op, value))
+                Ok(format!(
+                    "        require(age {} {}, \"Age requirement not met\");\n",
+                    op, value
+                ))
             }
             Condition::Income { operator, value } => {
                 let op = self.comparison_to_solidity(*operator);
-                Ok(format!("        require(income {} {}, \"Income requirement not met\");\n", op, value))
+                Ok(format!(
+                    "        require(income {} {}, \"Income requirement not met\");\n",
+                    op, value
+                ))
             }
             Condition::And(left, right) => {
                 let mut result = self.condition_to_solidity(left)?;
                 result.push_str(&self.condition_to_solidity(right)?);
                 Ok(result)
             }
-            Condition::Or(left, right) => {
-                Ok(format!(
-                    "        require({} || {}, \"OR condition not met\");\n",
-                    self.condition_to_solidity_expr(left)?,
-                    self.condition_to_solidity_expr(right)?
-                ))
-            }
-            Condition::Not(inner) => {
-                Ok(format!(
-                    "        require(!{}, \"NOT condition not met\");\n",
-                    self.condition_to_solidity_expr(inner)?
-                ))
-            }
+            Condition::Or(left, right) => Ok(format!(
+                "        require({} || {}, \"OR condition not met\");\n",
+                self.condition_to_solidity_expr(left)?,
+                self.condition_to_solidity_expr(right)?
+            )),
+            Condition::Not(inner) => Ok(format!(
+                "        require(!{}, \"NOT condition not met\");\n",
+                self.condition_to_solidity_expr(inner)?
+            )),
             _ => Ok("        // Custom condition - manual implementation required\n".to_string()),
         }
     }
@@ -252,7 +254,7 @@ impl ContractGenerator {
         let mut params = Vec::new();
 
         for condition in conditions {
-            self.extract_params_from_condition(condition, &mut params);
+            Self::extract_params_from_condition(condition, &mut params);
         }
 
         params.sort_by(|a, b| a.0.cmp(&b.0));
@@ -260,7 +262,7 @@ impl ContractGenerator {
         params
     }
 
-    fn extract_params_from_condition(&self, condition: &Condition, params: &mut Vec<(String, String)>) {
+    fn extract_params_from_condition(condition: &Condition, params: &mut Vec<(String, String)>) {
         match condition {
             Condition::Age { .. } => {
                 params.push(("age".to_string(), "uint256".to_string()));
@@ -269,11 +271,11 @@ impl ContractGenerator {
                 params.push(("income".to_string(), "uint256".to_string()));
             }
             Condition::And(left, right) | Condition::Or(left, right) => {
-                self.extract_params_from_condition(left, params);
-                self.extract_params_from_condition(right, params);
+                Self::extract_params_from_condition(left, params);
+                Self::extract_params_from_condition(right, params);
             }
             Condition::Not(inner) => {
-                self.extract_params_from_condition(inner, params);
+                Self::extract_params_from_condition(inner, params);
             }
             _ => {}
         }
@@ -325,11 +327,17 @@ impl ContractGenerator {
         match condition {
             Condition::Age { operator, value } => {
                 let op = self.comparison_to_rust(*operator);
-                Ok(format!("        if !(age {} {}) {{ return false; }}\n", op, value))
+                Ok(format!(
+                    "        if !(age {} {}) {{ return false; }}\n",
+                    op, value
+                ))
             }
             Condition::Income { operator, value } => {
                 let op = self.comparison_to_rust(*operator);
-                Ok(format!("        if !(income {} {}) {{ return false; }}\n", op, value))
+                Ok(format!(
+                    "        if !(income {} {}) {{ return false; }}\n",
+                    op, value
+                ))
             }
             Condition::And(left, right) => {
                 let mut result = self.condition_to_rust(left)?;
@@ -458,12 +466,8 @@ mod tests {
 
     #[test]
     fn test_discretionary_statute_error() {
-        let statute = Statute::new(
-            "test",
-            "Test",
-            Effect::new(EffectType::Grant, "Test"),
-        )
-        .with_discretion("Requires human judgment");
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"))
+            .with_discretion("Requires human judgment");
 
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
         let result = generator.generate(&statute);

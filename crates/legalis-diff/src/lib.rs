@@ -147,7 +147,12 @@ pub fn diff(old: &Statute, new: &Statute) -> DiffResult<StatuteDiff> {
     }
 
     // Check preconditions
-    diff_preconditions(&old.preconditions, &new.preconditions, &mut changes, &mut impact);
+    diff_preconditions(
+        &old.preconditions,
+        &new.preconditions,
+        &mut changes,
+        &mut impact,
+    );
 
     // Check effect
     if old.effect != new.effect {
@@ -160,7 +165,9 @@ pub fn diff(old: &Statute, new: &Statute) -> DiffResult<StatuteDiff> {
         });
         impact.affects_outcome = true;
         impact.severity = impact.severity.max(Severity::Major);
-        impact.notes.push("Outcome of statute application changed".to_string());
+        impact
+            .notes
+            .push("Outcome of statute application changed".to_string());
     }
 
     // Check discretion logic
@@ -187,7 +194,9 @@ pub fn diff(old: &Statute, new: &Statute) -> DiffResult<StatuteDiff> {
             });
             impact.discretion_changed = true;
             impact.severity = impact.severity.max(Severity::Major);
-            impact.notes.push("Human judgment no longer required - now deterministic".to_string());
+            impact
+                .notes
+                .push("Human judgment no longer required - now deterministic".to_string());
         }
         (Some(old_logic), Some(new_logic)) if old_logic != new_logic => {
             changes.push(Change {
@@ -222,31 +231,35 @@ fn diff_preconditions(
 
     // Check for added/removed conditions
     if new_len > old_len {
-        for i in old_len..new_len {
+        for (i, cond) in new.iter().enumerate().skip(old_len) {
             changes.push(Change {
                 change_type: ChangeType::Added,
                 target: ChangeTarget::Precondition { index: i },
                 description: format!("New precondition added at position {}", i + 1),
                 old_value: None,
-                new_value: Some(format!("{:?}", new[i])),
+                new_value: Some(format!("{:?}", cond)),
             });
         }
         impact.affects_eligibility = true;
         impact.severity = impact.severity.max(Severity::Major);
-        impact.notes.push("New eligibility conditions added".to_string());
+        impact
+            .notes
+            .push("New eligibility conditions added".to_string());
     } else if old_len > new_len {
-        for i in new_len..old_len {
+        for (i, cond) in old.iter().enumerate().skip(new_len) {
             changes.push(Change {
                 change_type: ChangeType::Removed,
                 target: ChangeTarget::Precondition { index: i },
                 description: format!("Precondition removed from position {}", i + 1),
-                old_value: Some(format!("{:?}", old[i])),
+                old_value: Some(format!("{:?}", cond)),
                 new_value: None,
             });
         }
         impact.affects_eligibility = true;
         impact.severity = impact.severity.max(Severity::Major);
-        impact.notes.push("Eligibility conditions removed".to_string());
+        impact
+            .notes
+            .push("Eligibility conditions removed".to_string());
     }
 
     // Check for modified conditions
@@ -341,7 +354,9 @@ mod tests {
     #[test]
     fn test_discretion_added() {
         let old = test_statute();
-        let new = old.clone().with_discretion("Consider special circumstances");
+        let new = old
+            .clone()
+            .with_discretion("Consider special circumstances");
 
         let result = diff(&old, &new).unwrap();
         assert!(result.impact.discretion_changed);

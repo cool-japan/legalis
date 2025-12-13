@@ -14,10 +14,25 @@ pub enum Token {
     Revoke,
     Obligation,
 
+    // Metadata keywords
+    EffectiveDate,
+    ExpiryDate,
+    Jurisdiction,
+    Version,
+    Has,
+
+    // Logical operators
+    And,
+    Or,
+    Not,
+
     // Structural
+    LParen,
+    RParen,
     LBrace,
     RBrace,
     Colon,
+    Dash,
 
     // Literals
     Ident(String),

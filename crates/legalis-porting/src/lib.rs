@@ -189,7 +189,11 @@ impl PortingEngine {
     }
 
     /// Ports a single statute.
-    pub fn port_statute(&self, statute: &Statute, options: &PortingOptions) -> PortingResult<PortedStatute> {
+    pub fn port_statute(
+        &self,
+        statute: &Statute,
+        options: &PortingOptions,
+    ) -> PortingResult<PortedStatute> {
         let mut changes = Vec::new();
         let mut adapted = statute.clone();
 
@@ -219,10 +223,9 @@ impl PortingEngine {
 
         // Check for age of majority differences
         if source_params.age_of_majority != target_params.age_of_majority {
-            if let (Some(source_age), Some(target_age)) = (
-                source_params.age_of_majority,
-                target_params.age_of_majority,
-            ) {
+            if let (Some(source_age), Some(target_age)) =
+                (source_params.age_of_majority, target_params.age_of_majority)
+            {
                 // Would need to modify conditions here
                 changes.push(PortingChange {
                     change_type: ChangeType::ValueAdaptation,
@@ -276,7 +279,8 @@ impl PortingEngine {
                 findings.push(CompatibilityFinding {
                     severity: Severity::Info,
                     category: "Discretion".to_string(),
-                    description: "Statute contains discretionary elements requiring local review".to_string(),
+                    description: "Statute contains discretionary elements requiring local review"
+                        .to_string(),
                     statute_id: Some(statute.id.clone()),
                 });
             }
@@ -291,8 +295,8 @@ impl PortingEngine {
 
     fn calculate_compatibility_score(&self, report: &CompatibilityReport) -> f64 {
         let base_score = 1.0;
-        let deductions = (report.adaptations_required as f64 * 0.1)
-            + (report.incompatibilities as f64 * 0.2);
+        let deductions =
+            (report.adaptations_required as f64 * 0.1) + (report.incompatibilities as f64 * 0.2);
         (base_score - deductions).max(0.0)
     }
 
@@ -301,7 +305,8 @@ impl PortingEngine {
 
         if report.compatibility_score < 0.5 {
             recommendations.push(
-                "Low compatibility score. Consider a full legal review before adoption.".to_string(),
+                "Low compatibility score. Consider a full legal review before adoption."
+                    .to_string(),
             );
         }
 

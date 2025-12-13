@@ -7,11 +7,11 @@
 //! - Registry queries
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use legalis_core::Statute;
 use serde::{Deserialize, Serialize};
@@ -173,13 +173,13 @@ async fn health_check() -> impl IntoResponse {
 }
 
 /// List all statutes.
-async fn list_statutes(
-    State(state): State<Arc<AppState>>,
-) -> Result<impl IntoResponse, ApiError> {
+async fn list_statutes(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, ApiError> {
     let statutes = state.statutes.read().await;
     let summaries: Vec<StatuteSummary> = statutes.iter().map(StatuteSummary::from).collect();
 
-    Ok(Json(ApiResponse::new(StatuteListResponse { statutes: summaries })))
+    Ok(Json(ApiResponse::new(StatuteListResponse {
+        statutes: summaries,
+    })))
 }
 
 /// Get a specific statute.
@@ -295,6 +295,7 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
+    #[allow(unused_imports)]
     use legalis_core::{Effect, EffectType};
     use tower::ServiceExt;
 
@@ -307,7 +308,12 @@ mod tests {
     async fn test_health_check() {
         let app = create_test_router();
         let response = app
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

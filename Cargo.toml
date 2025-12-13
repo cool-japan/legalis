@@ -14,6 +14,8 @@ members = [
     # Internationalization & Porting Layer
     "crates/legalis-i18n",
     "crates/legalis-porting",
+    # Interoperability Layer
+    "crates/legalis-interop",
     # Output Layer
     "crates/legalis-viz",
     "crates/legalis-chain",
@@ -21,6 +23,10 @@ members = [
     "crates/legalis-audit",
     "crates/legalis-api",
     "crates/legalis-cli",
+    # Jurisdictions
+    "jurisdictions/jp",
+    # Examples
+    "examples/jp-constitution-3d",
 ]
 
 [workspace.package]
@@ -34,10 +40,10 @@ rust-version = "1.85"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
-toml = "0.8"
+toml = "0.9"
 
 # Async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 async-trait = "0.1"
 
 # Error handling
@@ -45,9 +51,9 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 # Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-indexmap = { version = "2.0", features = ["serde"] }
+indexmap = { version = "2.12", features = ["serde"] }
 
 # HTTP/API
 reqwest = { version = "0.12", features = ["json"] }
@@ -56,17 +62,17 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # CLI
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 
 # Visualization
-petgraph = "0.7"
+petgraph = "0.8"
 
 # Tracing/Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internationalization
-rust-i18n = "3.0"
+rust-i18n = "3.1"
 unic-langid = "0.9"
 
 # Internal crates
@@ -84,3 +90,5 @@ legalis-cli = { path = "crates/legalis-cli" }
 legalis-audit = { path = "crates/legalis-audit" }
 legalis-registry = { path = "crates/legalis-registry" }
 legalis-diff = { path = "crates/legalis-diff" }
+legalis-interop = { path = "crates/legalis-interop" }
+legalis-jp = { path = "jurisdictions/jp" }

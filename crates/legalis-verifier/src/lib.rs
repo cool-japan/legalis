@@ -18,7 +18,10 @@ pub enum VerificationError {
     DeadStatute { statute_id: String },
 
     #[error("Constitutional conflict: {statute_id} conflicts with {principle}")]
-    ConstitutionalConflict { statute_id: String, principle: String },
+    ConstitutionalConflict {
+        statute_id: String,
+        principle: String,
+    },
 
     #[error("Logical contradiction: {0}")]
     LogicalContradiction(String),
@@ -161,7 +164,7 @@ impl StatuteVerifier {
         let mut errors = Vec::new();
 
         for statute in statutes {
-            if self.has_cycle(&statute.id, &graph, &mut visited, &mut rec_stack) {
+            if Self::has_cycle(&statute.id, &graph, &mut visited, &mut rec_stack) {
                 errors.push(VerificationError::CircularReference(format!(
                     "Statute '{}' is part of a circular reference",
                     statute.id
@@ -177,7 +180,6 @@ impl StatuteVerifier {
     }
 
     fn has_cycle<'a>(
-        &self,
         node: &'a str,
         graph: &HashMap<&'a str, HashSet<&'a str>>,
         visited: &mut HashSet<&'a str>,
@@ -195,7 +197,7 @@ impl StatuteVerifier {
 
         if let Some(deps) = graph.get(node) {
             for dep in deps {
-                if self.has_cycle(dep, graph, visited, rec_stack) {
+                if Self::has_cycle(dep, graph, visited, rec_stack) {
                     return true;
                 }
             }
@@ -211,9 +213,11 @@ impl StatuteVerifier {
 
         for statute in statutes {
             if self.is_dead_statute(statute) {
-                result.merge(VerificationResult::fail(vec![VerificationError::DeadStatute {
-                    statute_id: statute.id.clone(),
-                }]));
+                result.merge(VerificationResult::fail(vec![
+                    VerificationError::DeadStatute {
+                        statute_id: statute.id.clone(),
+                    },
+                ]));
             }
         }
 
@@ -225,7 +229,8 @@ impl StatuteVerifier {
         // In a real implementation, this would use an SMT solver
         for i in 0..statute.preconditions.len() {
             for j in (i + 1)..statute.preconditions.len() {
-                if self.conditions_contradict(&statute.preconditions[i], &statute.preconditions[j]) {
+                if self.conditions_contradict(&statute.preconditions[i], &statute.preconditions[j])
+                {
                     return true;
                 }
             }
@@ -269,7 +274,11 @@ impl StatuteVerifier {
         result
     }
 
-    fn complies_with_principle(&self, _statute: &Statute, _principle: &ConstitutionalPrinciple) -> bool {
+    fn complies_with_principle(
+        &self,
+        _statute: &Statute,
+        _principle: &ConstitutionalPrinciple,
+    ) -> bool {
         // Simplified compliance check
         // In a real implementation, this would analyze the statute's conditions
         true
@@ -340,6 +349,209 @@ pub fn verify_integrity(laws: &[Statute]) -> Result<VerificationResult, String> 
     Ok(verifier.verify(laws))
 }
 
+/// Complexity metrics for a statute.
+#[derive(Debug, Clone, Default)]
+pub struct ComplexityMetrics {
+    /// Number of preconditions
+    pub condition_count: usize,
+    /// Maximum nesting depth of conditions
+    pub condition_depth: usize,
+    /// Number of logical operators (AND, OR, NOT)
+    pub logical_operator_count: usize,
+    /// Number of distinct condition types
+    pub condition_type_count: usize,
+    /// Whether the statute has discretion logic
+    pub has_discretion: bool,
+    /// Cyclomatic complexity (simplified)
+    pub cyclomatic_complexity: usize,
+    /// Overall complexity score (0-100, higher = more complex)
+    pub complexity_score: u32,
+    /// Complexity level
+    pub complexity_level: ComplexityLevel,
+}
+
+/// Complexity levels for statutes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ComplexityLevel {
+    /// Simple statute with few conditions
+    #[default]
+    Simple,
+    /// Moderate complexity
+    Moderate,
+    /// Complex statute requiring careful review
+    Complex,
+    /// Very complex statute, consider simplification
+    VeryComplex,
+}
+
+impl std::fmt::Display for ComplexityLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Simple => write!(f, "Simple"),
+            Self::Moderate => write!(f, "Moderate"),
+            Self::Complex => write!(f, "Complex"),
+            Self::VeryComplex => write!(f, "Very Complex"),
+        }
+    }
+}
+
+/// Analyzes the complexity of a statute.
+pub fn analyze_complexity(statute: &Statute) -> ComplexityMetrics {
+    let mut metrics = ComplexityMetrics {
+        condition_count: statute.preconditions.len(),
+        ..Default::default()
+    };
+
+    // Analyze each condition
+    let mut condition_types = HashSet::new();
+    for condition in &statute.preconditions {
+        let (depth, ops, types) = analyze_condition(condition);
+        metrics.condition_depth = metrics.condition_depth.max(depth);
+        metrics.logical_operator_count += ops;
+        condition_types.extend(types);
+    }
+    metrics.condition_type_count = condition_types.len();
+
+    // Check for discretion
+    metrics.has_discretion = statute.discretion_logic.is_some();
+
+    // Calculate cyclomatic complexity (simplified: 1 + decision points)
+    metrics.cyclomatic_complexity = 1 + metrics.condition_count + metrics.logical_operator_count;
+
+    // Calculate overall score (0-100)
+    let mut score: u32 = 0;
+    // Only count conditions beyond 1 as adding complexity
+    if metrics.condition_count > 1 {
+        score += ((metrics.condition_count - 1) * 10).min(30) as u32;
+    }
+    // Depth only adds complexity beyond 1
+    if metrics.condition_depth > 1 {
+        score += ((metrics.condition_depth - 1) * 15).min(30) as u32;
+    }
+    score += (metrics.logical_operator_count * 8).min(24) as u32;
+    // Multiple condition types adds complexity
+    if metrics.condition_type_count > 1 {
+        score += ((metrics.condition_type_count - 1) * 6).min(12) as u32;
+    }
+    if metrics.has_discretion {
+        score += 10;
+    }
+    metrics.complexity_score = score.min(100);
+
+    // Determine level
+    metrics.complexity_level = match metrics.complexity_score {
+        0..=25 => ComplexityLevel::Simple,
+        26..=50 => ComplexityLevel::Moderate,
+        51..=75 => ComplexityLevel::Complex,
+        _ => ComplexityLevel::VeryComplex,
+    };
+
+    metrics
+}
+
+/// Analyzes a condition recursively.
+/// Returns (depth, operator_count, condition_types)
+fn analyze_condition(condition: &legalis_core::Condition) -> (usize, usize, HashSet<String>) {
+    use legalis_core::Condition;
+
+    match condition {
+        Condition::Age { .. } => (1, 0, ["Age".to_string()].into_iter().collect()),
+        Condition::Income { .. } => (1, 0, ["Income".to_string()].into_iter().collect()),
+        Condition::HasAttribute { .. } => {
+            (1, 0, ["HasAttribute".to_string()].into_iter().collect())
+        }
+        Condition::AttributeEquals { .. } => {
+            (1, 0, ["AttributeEquals".to_string()].into_iter().collect())
+        }
+        Condition::DateRange { .. } => (1, 0, ["DateRange".to_string()].into_iter().collect()),
+        Condition::Geographic { .. } => (1, 0, ["Geographic".to_string()].into_iter().collect()),
+        Condition::EntityRelationship { .. } => (
+            1,
+            0,
+            ["EntityRelationship".to_string()].into_iter().collect(),
+        ),
+        Condition::ResidencyDuration { .. } => (
+            1,
+            0,
+            ["ResidencyDuration".to_string()].into_iter().collect(),
+        ),
+        Condition::Custom { .. } => (1, 0, ["Custom".to_string()].into_iter().collect()),
+        Condition::And(left, right) => {
+            let (l_depth, l_ops, l_types) = analyze_condition(left);
+            let (r_depth, r_ops, r_types) = analyze_condition(right);
+            let mut types = l_types;
+            types.extend(r_types);
+            (1 + l_depth.max(r_depth), 1 + l_ops + r_ops, types)
+        }
+        Condition::Or(left, right) => {
+            let (l_depth, l_ops, l_types) = analyze_condition(left);
+            let (r_depth, r_ops, r_types) = analyze_condition(right);
+            let mut types = l_types;
+            types.extend(r_types);
+            (1 + l_depth.max(r_depth), 1 + l_ops + r_ops, types)
+        }
+        Condition::Not(inner) => {
+            let (depth, ops, types) = analyze_condition(inner);
+            (1 + depth, 1 + ops, types)
+        }
+    }
+}
+
+/// Generates a complexity report for multiple statutes.
+pub fn complexity_report(statutes: &[Statute]) -> String {
+    let mut report = String::new();
+    report.push_str("# Statute Complexity Report\n\n");
+
+    let mut total_score = 0u32;
+    let mut max_complexity = ComplexityLevel::Simple;
+
+    for statute in statutes {
+        let metrics = analyze_complexity(statute);
+        total_score += metrics.complexity_score;
+        if metrics.complexity_level as u8 > max_complexity as u8 {
+            max_complexity = metrics.complexity_level;
+        }
+
+        report.push_str(&format!("## {}: \"{}\"\n", statute.id, statute.title));
+        report.push_str(&format!(
+            "- Complexity Level: {}\n",
+            metrics.complexity_level
+        ));
+        report.push_str(&format!(
+            "- Complexity Score: {}/100\n",
+            metrics.complexity_score
+        ));
+        report.push_str(&format!("- Conditions: {}\n", metrics.condition_count));
+        report.push_str(&format!("- Max Depth: {}\n", metrics.condition_depth));
+        report.push_str(&format!(
+            "- Logical Operators: {}\n",
+            metrics.logical_operator_count
+        ));
+        report.push_str(&format!(
+            "- Condition Types: {}\n",
+            metrics.condition_type_count
+        ));
+        report.push_str(&format!("- Has Discretion: {}\n", metrics.has_discretion));
+        report.push_str(&format!(
+            "- Cyclomatic Complexity: {}\n\n",
+            metrics.cyclomatic_complexity
+        ));
+    }
+
+    let avg_score = if statutes.is_empty() {
+        0
+    } else {
+        total_score / statutes.len() as u32
+    };
+
+    report.push_str("## Summary\n");
+    report.push_str(&format!("- Total Statutes: {}\n", statutes.len()));
+    report.push_str(&format!("- Average Complexity Score: {}\n", avg_score));
+    report.push_str(&format!("- Maximum Complexity Level: {}\n", max_complexity));
+
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,5 +602,102 @@ mod tests {
 
         let result = verify_integrity(&statutes).unwrap();
         assert!(result.passed);
+    }
+
+    #[test]
+    fn test_complexity_simple() {
+        let statute = Statute::new(
+            "simple-1",
+            "Simple Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let metrics = analyze_complexity(&statute);
+        assert_eq!(metrics.condition_count, 1);
+        assert_eq!(metrics.condition_depth, 1);
+        assert_eq!(metrics.logical_operator_count, 0);
+        assert_eq!(metrics.complexity_level, ComplexityLevel::Simple);
+    }
+
+    #[test]
+    fn test_complexity_with_and() {
+        let statute = Statute::new(
+            "and-1",
+            "AND Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            }),
+        ));
+
+        let metrics = analyze_complexity(&statute);
+        assert_eq!(metrics.condition_count, 1);
+        assert_eq!(metrics.condition_depth, 2);
+        assert_eq!(metrics.logical_operator_count, 1);
+        assert_eq!(metrics.condition_type_count, 2); // Age and Income
+    }
+
+    #[test]
+    fn test_complexity_nested() {
+        let statute = Statute::new(
+            "nested-1",
+            "Nested Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Or(
+            Box::new(Condition::And(
+                Box::new(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                }),
+                Box::new(Condition::Income {
+                    operator: ComparisonOp::LessThan,
+                    value: 50000,
+                }),
+            )),
+            Box::new(Condition::HasAttribute {
+                key: "disabled".to_string(),
+            }),
+        ))
+        .with_discretion("Consider special circumstances");
+
+        let metrics = analyze_complexity(&statute);
+        assert_eq!(metrics.condition_depth, 3);
+        assert_eq!(metrics.logical_operator_count, 2); // AND + OR
+        assert!(metrics.has_discretion);
+        assert!(metrics.complexity_score > 25); // Should be at least moderate
+    }
+
+    #[test]
+    fn test_complexity_report() {
+        let statutes = vec![
+            Statute::new("s1", "Simple", Effect::new(EffectType::Grant, "Test")),
+            Statute::new(
+                "s2",
+                "With Condition",
+                Effect::new(EffectType::Grant, "Test"),
+            )
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 21,
+            }),
+        ];
+
+        let report = complexity_report(&statutes);
+        assert!(report.contains("# Statute Complexity Report"));
+        assert!(report.contains("s1"));
+        assert!(report.contains("s2"));
+        assert!(report.contains("## Summary"));
     }
 }

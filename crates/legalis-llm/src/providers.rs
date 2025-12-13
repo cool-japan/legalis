@@ -244,7 +244,11 @@ impl MockProvider {
     }
 
     /// Adds a mock response for a given prompt pattern.
-    pub fn with_response(mut self, pattern: impl Into<String>, response: impl Into<String>) -> Self {
+    pub fn with_response(
+        mut self,
+        pattern: impl Into<String>,
+        response: impl Into<String>,
+    ) -> Self {
         self.responses.insert(pattern.into(), response.into());
         self
     }
@@ -335,7 +339,10 @@ mod tests {
     async fn test_mock_provider() {
         let provider = MockProvider::new().with_response("test", r#"{"result": "success"}"#);
 
-        let response = provider.generate_text("This is a test prompt").await.unwrap();
+        let response = provider
+            .generate_text("This is a test prompt")
+            .await
+            .unwrap();
         assert!(response.contains("success"));
     }
 }

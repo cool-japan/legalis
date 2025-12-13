@@ -212,9 +212,10 @@ impl AuditTrail {
             AuditError::StorageError(format!("Failed to acquire write lock: {}", e))
         })?;
 
-        let mut last_hash = self.last_hash.write().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire hash lock: {}", e))
-        })?;
+        let mut last_hash = self
+            .last_hash
+            .write()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire hash lock: {}", e)))?;
 
         // Set previous hash and recompute
         record.previous_hash = last_hash.clone();
@@ -230,9 +231,10 @@ impl AuditTrail {
 
     /// Gets a record by ID.
     pub fn get(&self, id: Uuid) -> AuditResult<AuditRecord> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         records
             .iter()
@@ -243,9 +245,10 @@ impl AuditTrail {
 
     /// Queries records by statute ID.
     pub fn query_by_statute(&self, statute_id: &str) -> AuditResult<Vec<AuditRecord>> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         Ok(records
             .iter()
@@ -256,9 +259,10 @@ impl AuditTrail {
 
     /// Queries records by subject ID.
     pub fn query_by_subject(&self, subject_id: Uuid) -> AuditResult<Vec<AuditRecord>> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         Ok(records
             .iter()
@@ -273,9 +277,10 @@ impl AuditTrail {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> AuditResult<Vec<AuditRecord>> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         Ok(records
             .iter()
@@ -286,9 +291,10 @@ impl AuditTrail {
 
     /// Verifies the integrity of the entire audit trail.
     pub fn verify_integrity(&self) -> AuditResult<bool> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         let mut expected_prev_hash: Option<String> = None;
 
@@ -322,9 +328,10 @@ impl AuditTrail {
 
     /// Generates a compliance report.
     pub fn generate_report(&self) -> AuditResult<ComplianceReport> {
-        let records = self.records.read().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire read lock: {}", e))
-        })?;
+        let records = self
+            .records
+            .read()
+            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
 
         let total = records.len();
         let automatic = records

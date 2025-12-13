@@ -1,7 +1,7 @@
 //! Parser utilities for the legal DSL.
 
-use crate::ast::*;
 use crate::DslResult;
+use crate::ast::*;
 
 /// Trait for converting AST nodes to core types.
 pub trait ToCore {
@@ -38,7 +38,7 @@ impl ToCore for ConditionNode {
                             })
                         } else {
                             Ok(legalis_core::Condition::Custom {
-                                description: format!("Age condition with non-numeric value"),
+                                description: "Age condition with non-numeric value".to_string(),
                             })
                         }
                     }
@@ -50,7 +50,7 @@ impl ToCore for ConditionNode {
                             })
                         } else {
                             Ok(legalis_core::Condition::Custom {
-                                description: format!("Income condition with non-numeric value"),
+                                description: "Income condition with non-numeric value".to_string(),
                             })
                         }
                     }
@@ -59,7 +59,9 @@ impl ToCore for ConditionNode {
                     }),
                 }
             }
-            ConditionNode::HasAttribute { key } => Ok(legalis_core::Condition::HasAttribute { key: key.clone() }),
+            ConditionNode::HasAttribute { key } => {
+                Ok(legalis_core::Condition::HasAttribute { key: key.clone() })
+            }
             ConditionNode::And(left, right) => Ok(legalis_core::Condition::And(
                 Box::new(left.to_core()?),
                 Box::new(right.to_core()?),
@@ -68,7 +70,9 @@ impl ToCore for ConditionNode {
                 Box::new(left.to_core()?),
                 Box::new(right.to_core()?),
             )),
-            ConditionNode::Not(inner) => Ok(legalis_core::Condition::Not(Box::new(inner.to_core()?))),
+            ConditionNode::Not(inner) => {
+                Ok(legalis_core::Condition::Not(Box::new(inner.to_core()?)))
+            }
         }
     }
 }

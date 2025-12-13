@@ -355,7 +355,8 @@ impl JurisdictionRegistry {
 
     /// Registers a jurisdiction.
     pub fn register(&mut self, jurisdiction: Jurisdiction) {
-        self.jurisdictions.insert(jurisdiction.id.clone(), jurisdiction);
+        self.jurisdictions
+            .insert(jurisdiction.id.clone(), jurisdiction);
     }
 
     /// Gets a jurisdiction by ID.

@@ -118,7 +118,15 @@ mod tests {
                 "description": "Test effect",
                 "parameters": {}
             },
-            "discretion_logic": null
+            "discretion_logic": null,
+            "temporal_validity": {
+                "effective_date": null,
+                "expiry_date": null,
+                "enacted_at": null,
+                "amended_at": null
+            },
+            "version": 1,
+            "jurisdiction": null
         }"#;
 
         let provider = MockProvider::new().with_response("Parse", mock_response);

@@ -119,8 +119,8 @@ impl StatuteEntry {
     pub fn is_active(&self) -> bool {
         let now = Utc::now();
         self.status == StatuteStatus::Active
-            && self.effective_date.map_or(true, |d| d <= now)
-            && self.expiry_date.map_or(true, |d| d > now)
+            && self.effective_date.is_none_or(|d| d <= now)
+            && self.expiry_date.is_none_or(|d| d > now)
     }
 }
 
@@ -263,11 +263,7 @@ impl StatuteRegistry {
     pub fn query_by_tag(&self, tag: &str) -> Vec<&StatuteEntry> {
         self.tag_index
             .get(tag)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.statutes.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.statutes.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -275,11 +271,7 @@ impl StatuteRegistry {
     pub fn query_by_jurisdiction(&self, jurisdiction: &str) -> Vec<&StatuteEntry> {
         self.jurisdiction_index
             .get(jurisdiction)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.statutes.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.statutes.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -352,7 +344,11 @@ mod tests {
     use legalis_core::{Effect, EffectType};
 
     fn test_statute(id: &str) -> Statute {
-        Statute::new(id, format!("Test {}", id), Effect::new(EffectType::Grant, "Test"))
+        Statute::new(
+            id,
+            format!("Test {}", id),
+            Effect::new(EffectType::Grant, "Test"),
+        )
     }
 
     #[test]

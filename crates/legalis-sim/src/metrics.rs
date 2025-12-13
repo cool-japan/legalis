@@ -35,7 +35,7 @@ impl SimulationMetrics {
         let statute_metrics = self
             .statute_metrics
             .entry(result.statute_id.clone())
-            .or_insert_with(StatuteMetrics::default);
+            .or_default();
 
         statute_metrics.total += 1;
 
@@ -78,7 +78,10 @@ impl SimulationMetrics {
     pub fn summary(&self) -> String {
         let mut report = String::new();
         report.push_str("=== Simulation Summary ===\n");
-        report.push_str(&format!("Total applications: {}\n", self.total_applications));
+        report.push_str(&format!(
+            "Total applications: {}\n",
+            self.total_applications
+        ));
         report.push_str(&format!(
             "Deterministic: {} ({:.1}%)\n",
             self.deterministic_count,

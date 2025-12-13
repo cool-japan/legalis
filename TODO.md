@@ -11,7 +11,7 @@
 - [x] Implement cross-jurisdiction porting (legalis-porting)
 - [x] Add audit trail and decision logging (legalis-audit)
 - [x] Add statute diffing and change detection (legalis-diff)
-- [ ] Add comprehensive integration tests across all crates
+- [x] Add comprehensive integration tests across all crates
 - [ ] Set up CI/CD pipeline (GitHub Actions)
 - [ ] Add benchmarks for simulation engine performance
 - [ ] Create example applications demonstrating real-world use cases
@@ -19,7 +19,7 @@
 ### Medium Priority
 - [ ] Add documentation comments (rustdoc) to all public APIs
 - [x] Add support for loading statutes from files (YAML, TOML, JSON) - in CLI
-- [ ] Implement serialization/deserialization roundtrip tests
+- [x] Implement serialization/deserialization roundtrip tests
 - [x] Add tracing/logging infrastructure (tracing crate integrated)
 - [ ] Create Docker container for easy deployment
 - [ ] Add OpenTelemetry integration for observability
@@ -38,16 +38,16 @@
 
 #### Features
 - [x] Add metadata support for statutes (enactment date, jurisdiction, version)
-- [ ] Add more condition types (date ranges, geographic regions, entity relationships)
+- [x] Add more condition types (date ranges, geographic regions, entity relationships)
 - [ ] Implement condition optimization (simplification, normalization)
 - [ ] Add hierarchical statute relationships (parent/child, amendments)
-- [ ] Create statute builder pattern with fluent API
-- [ ] Add temporal validity (effective dates, sunset clauses)
+- [x] Create statute builder pattern with fluent API
+- [x] Add temporal validity (effective dates, sunset clauses)
 
 #### Improvements
 - [ ] Make `LegalEntity` trait more flexible with dynamic attribute types
 - [ ] Add validation methods for `Statute` construction
-- [ ] Implement `Display` trait for all types for better debugging
+- [x] Implement `Display` trait for all types for better debugging
 - [ ] Add serde feature flag for optional serialization
 
 ### legalis-dsl
@@ -55,7 +55,7 @@
 #### Features
 - [ ] Add support for multi-statute documents
 - [x] Implement AND/OR/NOT operators in condition parsing
-- [ ] Add support for nested conditions with parentheses
+- [x] Add support for nested conditions with parentheses (precedence-correct parsing)
 - [ ] Create pretty-printer for AST back to DSL format
 - [ ] Add line/column tracking for better error messages
 - [ ] Add LSP (Language Server Protocol) support
@@ -64,7 +64,7 @@
 - [ ] Add IMPORT statement for referencing other statutes
 - [ ] Add EXCEPTION clauses
 - [ ] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
-- [ ] Support for comments in DSL (// and /* */)
+- [x] Support for comments in DSL (// and /* */)
 - [ ] Add AMENDMENT clause for version tracking
 - [ ] Add JURISDICTION clause for locale binding
 
@@ -127,7 +127,7 @@
 - [x] Basic conflict detection between statutes
 - [x] Logical contradiction checking
 - [ ] Implement dead code detection (unreachable statute branches)
-- [ ] Add complexity metrics for statutes
+- [x] Add complexity metrics for statutes
 - [ ] Create dependency graph analysis
 - [ ] Implement semantic similarity detection between statutes
 
@@ -231,7 +231,7 @@
 - [x] GraphViz DOT format
 - [ ] D3.js interactive visualization
 - [ ] PlantUML sequence diagrams
-- [ ] ASCII art for terminal output
+- [x] ASCII art for terminal output (tree and box formats)
 - [ ] SVG/PNG direct rendering
 
 #### Features
@@ -307,10 +307,11 @@
 - [x] export - Export to smart contracts
 - [x] serve - Start API server
 - [x] init - Initialize new project
-- [ ] Add diff - Compare statute versions
-- [ ] Add port - Port statutes between jurisdictions
-- [ ] Add simulate - Run population simulations
-- [ ] Add audit - Generate audit reports
+- [x] Add diff - Compare statute versions
+- [x] Add port - Port statutes between jurisdictions
+- [x] Add simulate - Run population simulations
+- [x] Add audit - Generate audit reports
+- [x] Add complexity - Analyze statute complexity
 
 #### Features
 - [ ] Add interactive REPL mode
@@ -335,6 +336,65 @@
 - [ ] Implement log rotation and archival
 - [ ] Create searchable audit index
 - [ ] Add backup and recovery procedures
+
+---
+
+## Interoperability Layer
+
+### legalis-interop
+
+The interoperability layer enables Legalis-RS to import from and export to other legal DSL formats,
+making it a universal bridge between legal technology ecosystems.
+
+#### Supported Formats
+
+##### Catala (Inria, France)
+- [x] Catala AST parser → legalis_core::Statute
+- [x] legalis_core::Statute → Catala output
+- [x] Support for Catala's literate programming style
+- [ ] Preserve legal article references during conversion
+- [x] Handle Catala's scope and context model
+
+##### Stipula (University of Bologna)
+- [x] Stipula contract parser → legalis_core::Statute
+- [x] legalis_core::Statute → Stipula output
+- [x] Map party/asset model to legal entities
+- [ ] Convert state machines to condition logic
+- [ ] Support for temporal obligations
+
+##### SLL / L4 (Singapore)
+- [x] L4 parser → legalis_core::Statute
+- [x] legalis_core::Statute → L4 output
+- [x] Support for deontic logic (MUST, MAY, SHANT)
+- [x] Handle rule-based reasoning model
+- [ ] Convert decision tables
+
+##### Standard Formats
+- [x] Akoma Ntoso XML import/export (OASIS standard)
+- [ ] LegalRuleML import/export
+- [ ] LKIF (Legal Knowledge Interchange Format)
+- [ ] LegalDocML support
+
+#### CLI Integration
+- [ ] `legalis import --from catala input.catala_en`
+- [ ] `legalis import --from stipula input.stipula`
+- [ ] `legalis import --from l4 input.l4`
+- [ ] `legalis export --to catala output.catala_en`
+- [ ] `legalis export --to stipula output.stipula`
+- [x] Auto-detect format from file extension
+
+#### Conversion Features
+- [x] Bidirectional conversion with loss reporting
+- [ ] Semantic preservation validation
+- [x] Metadata mapping between formats
+- [ ] Batch conversion for statute collections
+- [ ] Diff-aware incremental conversion
+
+#### Quality Assurance
+- [x] Round-trip conversion tests
+- [ ] Semantic equivalence verification
+- [ ] Coverage reports for format features
+- [x] Conversion confidence scoring
 
 ---
 

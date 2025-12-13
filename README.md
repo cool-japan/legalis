@@ -50,6 +50,8 @@ legalis-rs/
 │   ├── # Internationalization & Porting Layer
 │   ├── legalis-i18n/      # Multi-language/jurisdiction support
 │   ├── legalis-porting/   # Cross-jurisdiction law transfer
+│   ├── # Interoperability Layer
+│   ├── legalis-interop/   # Import/export: Catala, Stipula, L4 formats
 │   ├── # Output Layer
 │   ├── legalis-viz/       # Visualization (decision trees, flowcharts)
 │   ├── legalis-chain/     # Smart contract export (Solidity, WASM, Ink!)
@@ -88,6 +90,11 @@ legalis-rs/
 |-------|-------------|
 | `legalis-i18n` | Multi-language support, locale handling, jurisdiction registry |
 | `legalis-porting` | Cross-jurisdiction law transfer with cultural adaptation (Soft ODA) |
+
+### Interoperability Layer
+| Crate | Description |
+|-------|-------------|
+| `legalis-interop` | Import/export for Catala, Stipula, L4 legal DSL formats |
 
 ### Output Layer
 | Crate | Description |
@@ -227,6 +234,42 @@ let contract = generator.generate(&statute)?;
 
 println!("{}", contract.source);
 ```
+
+## Legal DSL Interoperability
+
+Legalis-RS can import from and export to other legal DSL formats:
+
+```rust
+use legalis_interop::{LegalConverter, LegalFormat};
+
+let converter = LegalConverter::new();
+
+// Auto-detect and import from Catala
+let catala_source = r#"
+declaration scope AdultRights:
+  context input content integer
+"#;
+let (statutes, report) = converter.auto_import(catala_source)?;
+
+// Export to L4 format
+let (l4_output, _) = converter.export(&statutes, LegalFormat::L4)?;
+
+// Direct format conversion
+let (stipula_output, _) = converter.convert(
+    catala_source,
+    LegalFormat::Catala,
+    LegalFormat::Stipula
+)?;
+```
+
+### Supported Formats
+
+| Format | Origin | Features |
+|--------|--------|----------|
+| **Catala** | Inria, France | Literate programming, scope-based, strong typing |
+| **Stipula** | U. Bologna, Italy | Smart contracts, party/asset model, state machines |
+| **L4** | Singapore | Deontic logic (MUST/MAY/SHANT), rule-based reasoning |
+| **Akoma Ntoso** | OASIS Standard | XML legislative documents, semantic markup |
 
 ## Architecture Decisions
 

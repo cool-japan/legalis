@@ -4,7 +4,9 @@
 //! including the distinction between deterministic (computable) and
 //! discretionary (requiring human judgment) legal outcomes.
 
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use uuid::Uuid;
 
 /// Legal judgment result as an Algebraic Data Type (ADT).
@@ -65,6 +67,26 @@ impl<T> LegalResult<T> {
                 narrative_hint,
             },
             Self::Void { reason } => LegalResult::Void { reason },
+        }
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for LegalResult<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Deterministic(value) => write!(f, "Deterministic({})", value),
+            Self::JudicialDiscretion {
+                issue,
+                narrative_hint,
+                ..
+            } => {
+                write!(f, "JudicialDiscretion: {}", issue)?;
+                if let Some(hint) = narrative_hint {
+                    write!(f, " [hint: {}]", hint)?;
+                }
+                Ok(())
+            }
+            Self::Void { reason } => write!(f, "Void: {}", reason),
         }
     }
 }
@@ -137,6 +159,23 @@ pub enum Condition {
     HasAttribute { key: String },
     /// Attribute value check
     AttributeEquals { key: String, value: String },
+    /// Date range check (effective within date range)
+    DateRange {
+        start: Option<NaiveDate>,
+        end: Option<NaiveDate>,
+    },
+    /// Geographic region check
+    Geographic {
+        region_type: RegionType,
+        region_id: String,
+    },
+    /// Entity relationship check
+    EntityRelationship {
+        relationship_type: RelationshipType,
+        target_entity_id: Option<String>,
+    },
+    /// Residency duration check
+    ResidencyDuration { operator: ComparisonOp, months: u32 },
     /// Logical AND of conditions
     And(Box<Condition>, Box<Condition>),
     /// Logical OR of conditions
@@ -145,6 +184,77 @@ pub enum Condition {
     Not(Box<Condition>),
     /// Custom condition with description
     Custom { description: String },
+}
+
+impl fmt::Display for Condition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Age { operator, value } => write!(f, "age {} {}", operator, value),
+            Self::Income { operator, value } => write!(f, "income {} {}", operator, value),
+            Self::HasAttribute { key } => write!(f, "has_attribute({})", key),
+            Self::AttributeEquals { key, value } => write!(f, "{} == \"{}\"", key, value),
+            Self::DateRange { start, end } => match (start, end) {
+                (Some(s), Some(e)) => write!(f, "date in [{}, {}]", s, e),
+                (Some(s), None) => write!(f, "date >= {}", s),
+                (None, Some(e)) => write!(f, "date <= {}", e),
+                (None, None) => write!(f, "date (any)"),
+            },
+            Self::Geographic {
+                region_type,
+                region_id,
+            } => {
+                write!(f, "in {:?}({})", region_type, region_id)
+            }
+            Self::EntityRelationship {
+                relationship_type,
+                target_entity_id,
+            } => match target_entity_id {
+                Some(id) => write!(f, "{:?} with {}", relationship_type, id),
+                None => write!(f, "has {:?}", relationship_type),
+            },
+            Self::ResidencyDuration { operator, months } => {
+                write!(f, "residency {} {} months", operator, months)
+            }
+            Self::And(left, right) => write!(f, "({} AND {})", left, right),
+            Self::Or(left, right) => write!(f, "({} OR {})", left, right),
+            Self::Not(inner) => write!(f, "NOT {}", inner),
+            Self::Custom { description } => write!(f, "custom({})", description),
+        }
+    }
+}
+
+/// Geographic region types.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RegionType {
+    /// Country level
+    Country,
+    /// State/Province level
+    State,
+    /// City/Municipality level
+    City,
+    /// District/Ward level
+    District,
+    /// Postal/ZIP code area
+    PostalCode,
+    /// Custom region
+    Custom,
+}
+
+/// Entity relationship types.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RelationshipType {
+    /// Parent-child relationship
+    ParentChild,
+    /// Spousal relationship
+    Spouse,
+    /// Employment relationship
+    Employment,
+    /// Guardianship
+    Guardian,
+    /// Business ownership
+    BusinessOwner,
+    /// Contractual relationship
+    Contractual,
 }
 
 /// Comparison operators for conditions.
@@ -156,6 +266,19 @@ pub enum ComparisonOp {
     GreaterOrEqual,
     LessThan,
     LessOrEqual,
+}
+
+impl fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Equal => write!(f, "=="),
+            Self::NotEqual => write!(f, "!="),
+            Self::GreaterThan => write!(f, ">"),
+            Self::GreaterOrEqual => write!(f, ">="),
+            Self::LessThan => write!(f, "<"),
+            Self::LessOrEqual => write!(f, "<="),
+        }
+    }
 }
 
 /// Legal effect produced when statute conditions are met.
@@ -186,6 +309,12 @@ impl Effect {
     }
 }
 
+impl fmt::Display for Effect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.effect_type, self.description)
+    }
+}
+
 /// Types of legal effects.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EffectType {
@@ -205,6 +334,70 @@ pub enum EffectType {
     Custom,
 }
 
+impl fmt::Display for EffectType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Grant => write!(f, "GRANT"),
+            Self::Revoke => write!(f, "REVOKE"),
+            Self::Obligation => write!(f, "OBLIGATION"),
+            Self::Prohibition => write!(f, "PROHIBITION"),
+            Self::MonetaryTransfer => write!(f, "MONETARY_TRANSFER"),
+            Self::StatusChange => write!(f, "STATUS_CHANGE"),
+            Self::Custom => write!(f, "CUSTOM"),
+        }
+    }
+}
+
+/// Temporal validity for statutes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct TemporalValidity {
+    /// Effective date (when the statute comes into force)
+    pub effective_date: Option<NaiveDate>,
+    /// Expiry date (sunset clause)
+    pub expiry_date: Option<NaiveDate>,
+    /// Enactment timestamp
+    pub enacted_at: Option<DateTime<Utc>>,
+    /// Last amended timestamp
+    pub amended_at: Option<DateTime<Utc>>,
+}
+
+impl TemporalValidity {
+    /// Creates a new TemporalValidity with no dates set.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the effective date.
+    pub fn with_effective_date(mut self, date: NaiveDate) -> Self {
+        self.effective_date = Some(date);
+        self
+    }
+
+    /// Sets the expiry date.
+    pub fn with_expiry_date(mut self, date: NaiveDate) -> Self {
+        self.expiry_date = Some(date);
+        self
+    }
+
+    /// Checks if the statute is currently active.
+    pub fn is_active(&self, as_of: NaiveDate) -> bool {
+        let after_effective = self.effective_date.is_none_or(|d| as_of >= d);
+        let before_expiry = self.expiry_date.is_none_or(|d| as_of <= d);
+        after_effective && before_expiry
+    }
+}
+
+impl fmt::Display for TemporalValidity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (&self.effective_date, &self.expiry_date) {
+            (Some(eff), Some(exp)) => write!(f, "valid {} to {}", eff, exp),
+            (Some(eff), None) => write!(f, "effective from {}", eff),
+            (None, Some(exp)) => write!(f, "expires {}", exp),
+            (None, None) => write!(f, "no temporal constraints"),
+        }
+    }
+}
+
 /// Statute (legal article) definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Statute {
@@ -218,6 +411,12 @@ pub struct Statute {
     pub effect: Effect,
     /// Discretion logic description (Else If Maybe)
     pub discretion_logic: Option<String>,
+    /// Temporal validity (effective dates, sunset clauses)
+    pub temporal_validity: TemporalValidity,
+    /// Version number
+    pub version: u32,
+    /// Jurisdiction identifier
+    pub jurisdiction: Option<String>,
 }
 
 impl Statute {
@@ -229,6 +428,9 @@ impl Statute {
             preconditions: Vec::new(),
             effect,
             discretion_logic: None,
+            temporal_validity: TemporalValidity::default(),
+            version: 1,
+            jurisdiction: None,
         }
     }
 
@@ -242,6 +444,200 @@ impl Statute {
     pub fn with_discretion(mut self, logic: impl Into<String>) -> Self {
         self.discretion_logic = Some(logic.into());
         self
+    }
+
+    /// Sets temporal validity.
+    pub fn with_temporal_validity(mut self, validity: TemporalValidity) -> Self {
+        self.temporal_validity = validity;
+        self
+    }
+
+    /// Sets the version.
+    pub fn with_version(mut self, version: u32) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Sets the jurisdiction.
+    pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+
+    /// Checks if the statute is currently active.
+    pub fn is_active(&self, as_of: NaiveDate) -> bool {
+        self.temporal_validity.is_active(as_of)
+    }
+
+    /// Validates the statute and returns a list of validation errors.
+    pub fn validate(&self) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+
+        // Validate ID
+        if self.id.is_empty() {
+            errors.push(ValidationError::EmptyId);
+        } else if !self.is_valid_id(&self.id) {
+            errors.push(ValidationError::InvalidId(self.id.clone()));
+        }
+
+        // Validate title
+        if self.title.is_empty() {
+            errors.push(ValidationError::EmptyTitle);
+        }
+
+        // Validate temporal consistency
+        if let (Some(eff), Some(exp)) = (
+            self.temporal_validity.effective_date,
+            self.temporal_validity.expiry_date,
+        ) {
+            if exp < eff {
+                errors.push(ValidationError::ExpiryBeforeEffective {
+                    effective: eff,
+                    expiry: exp,
+                });
+            }
+        }
+
+        // Validate preconditions
+        for (i, cond) in self.preconditions.iter().enumerate() {
+            if let Some(err) = Self::validate_condition(cond) {
+                errors.push(ValidationError::InvalidCondition {
+                    index: i,
+                    message: err,
+                });
+            }
+        }
+
+        // Validate effect
+        if self.effect.description.is_empty() {
+            errors.push(ValidationError::EmptyEffectDescription);
+        }
+
+        // Validate version
+        if self.version == 0 {
+            errors.push(ValidationError::InvalidVersion);
+        }
+
+        errors
+    }
+
+    /// Returns true if the statute is valid (has no validation errors).
+    pub fn is_valid(&self) -> bool {
+        self.validate().is_empty()
+    }
+
+    /// Validates the statute and returns an error if invalid.
+    pub fn validated(self) -> Result<Self, Vec<ValidationError>> {
+        let errors = self.validate();
+        if errors.is_empty() {
+            Ok(self)
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Checks if an ID is valid (alphanumeric with dashes/underscores).
+    fn is_valid_id(&self, id: &str) -> bool {
+        !id.is_empty()
+            && id
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            && id.chars().next().is_some_and(|c| c.is_alphabetic())
+    }
+
+    /// Validates a condition recursively.
+    fn validate_condition(condition: &Condition) -> Option<String> {
+        match condition {
+            Condition::Age { value, .. } => {
+                if *value > 150 {
+                    Some(format!("Unrealistic age value: {}", value))
+                } else {
+                    None
+                }
+            }
+            Condition::And(left, right) | Condition::Or(left, right) => {
+                Self::validate_condition(left).or_else(|| Self::validate_condition(right))
+            }
+            Condition::Not(inner) => Self::validate_condition(inner),
+            Condition::ResidencyDuration { months, .. } => {
+                if *months > 1200 {
+                    Some(format!("Unrealistic residency duration: {} months", months))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Validation errors for statutes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidationError {
+    /// Statute ID is empty.
+    EmptyId,
+    /// Statute ID contains invalid characters.
+    InvalidId(String),
+    /// Statute title is empty.
+    EmptyTitle,
+    /// Expiry date is before effective date.
+    ExpiryBeforeEffective {
+        effective: NaiveDate,
+        expiry: NaiveDate,
+    },
+    /// A precondition is invalid.
+    InvalidCondition { index: usize, message: String },
+    /// Effect description is empty.
+    EmptyEffectDescription,
+    /// Version must be > 0.
+    InvalidVersion,
+}
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyId => write!(f, "Statute ID cannot be empty"),
+            Self::InvalidId(id) => write!(
+                f,
+                "Invalid statute ID: '{}' (must start with letter, contain only alphanumeric/dash/underscore)",
+                id
+            ),
+            Self::EmptyTitle => write!(f, "Statute title cannot be empty"),
+            Self::ExpiryBeforeEffective { effective, expiry } => {
+                write!(
+                    f,
+                    "Expiry date ({}) cannot be before effective date ({})",
+                    expiry, effective
+                )
+            }
+            Self::InvalidCondition { index, message } => {
+                write!(f, "Invalid condition at index {}: {}", index, message)
+            }
+            Self::EmptyEffectDescription => write!(f, "Effect description cannot be empty"),
+            Self::InvalidVersion => write!(f, "Version must be greater than 0"),
+        }
+    }
+}
+
+impl fmt::Display for Statute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "STATUTE {}: \"{}\"", self.id, self.title)?;
+        if let Some(ref jur) = self.jurisdiction {
+            writeln!(f, "  JURISDICTION: {}", jur)?;
+        }
+        writeln!(f, "  VERSION: {}", self.version)?;
+        writeln!(f, "  {}", self.temporal_validity)?;
+        if !self.preconditions.is_empty() {
+            writeln!(f, "  WHEN:")?;
+            for cond in &self.preconditions {
+                writeln!(f, "    {}", cond)?;
+            }
+        }
+        writeln!(f, "  THEN: {}", self.effect)?;
+        if let Some(ref disc) = self.discretion_logic {
+            writeln!(f, "  DISCRETION: {}", disc)?;
+        }
+        Ok(())
     }
 }
 
@@ -276,6 +672,20 @@ mod tests {
     }
 
     #[test]
+    fn test_legal_result_display() {
+        let det: LegalResult<i32> = LegalResult::Deterministic(42);
+        assert_eq!(format!("{}", det), "Deterministic(42)");
+
+        let disc: LegalResult<i32> = LegalResult::JudicialDiscretion {
+            issue: "test issue".to_string(),
+            context_id: Uuid::new_v4(),
+            narrative_hint: Some("consider facts".to_string()),
+        };
+        assert!(format!("{}", disc).contains("test issue"));
+        assert!(format!("{}", disc).contains("consider facts"));
+    }
+
+    #[test]
     fn test_basic_entity() {
         let mut entity = BasicEntity::new();
         entity.set_attribute("age", "25".to_string());
@@ -299,5 +709,235 @@ mod tests {
         assert_eq!(statute.id, "test-statute-1");
         assert_eq!(statute.preconditions.len(), 1);
         assert!(statute.discretion_logic.is_some());
+    }
+
+    #[test]
+    fn test_temporal_validity() {
+        let today = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+        let past = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let future = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
+
+        let validity = TemporalValidity::new()
+            .with_effective_date(past)
+            .with_expiry_date(future);
+
+        assert!(validity.is_active(today));
+        assert!(!validity.is_active(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()));
+        assert!(!validity.is_active(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()));
+    }
+
+    #[test]
+    fn test_statute_with_temporal_validity() {
+        let statute = Statute::new(
+            "sunset-test",
+            "Sunset Test Act",
+            Effect::new(EffectType::Grant, "Temporary grant"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+                .with_expiry_date(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()),
+        )
+        .with_jurisdiction("US-CA");
+
+        assert!(statute.is_active(NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()));
+        assert!(!statute.is_active(NaiveDate::from_ymd_opt(2024, 12, 31).unwrap()));
+        assert_eq!(statute.jurisdiction, Some("US-CA".to_string()));
+    }
+
+    #[test]
+    fn test_condition_display() {
+        let age_cond = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        };
+        assert_eq!(format!("{}", age_cond), "age >= 18");
+
+        let and_cond = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            }),
+        );
+        assert!(format!("{}", and_cond).contains("AND"));
+    }
+
+    #[test]
+    fn test_geographic_condition() {
+        let cond = Condition::Geographic {
+            region_type: RegionType::State,
+            region_id: "CA".to_string(),
+        };
+        assert!(format!("{}", cond).contains("State"));
+        assert!(format!("{}", cond).contains("CA"));
+    }
+
+    #[test]
+    fn test_entity_relationship_condition() {
+        let cond = Condition::EntityRelationship {
+            relationship_type: RelationshipType::Employment,
+            target_entity_id: Some("employer-123".to_string()),
+        };
+        assert!(format!("{}", cond).contains("Employment"));
+    }
+
+    #[test]
+    fn test_statute_display() {
+        let statute = Statute::new(
+            "display-test",
+            "Display Test Act",
+            Effect::new(EffectType::Grant, "Test grant"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        })
+        .with_version(2)
+        .with_jurisdiction("JP");
+
+        let display = format!("{}", statute);
+        assert!(display.contains("display-test"));
+        assert!(display.contains("Display Test Act"));
+        assert!(display.contains("VERSION: 2"));
+        assert!(display.contains("JP"));
+    }
+
+    #[test]
+    fn test_statute_validation_valid() {
+        let statute = Statute::new(
+            "valid-statute",
+            "Valid Statute",
+            Effect::new(EffectType::Grant, "Grant something"),
+        );
+
+        assert!(statute.is_valid());
+        assert!(statute.validate().is_empty());
+    }
+
+    #[test]
+    fn test_statute_validation_empty_id() {
+        let mut statute = Statute::new("temp", "Test", Effect::new(EffectType::Grant, "Grant"));
+        statute.id = String::new();
+
+        let errors = statute.validate();
+        assert!(errors.iter().any(|e| matches!(e, ValidationError::EmptyId)));
+    }
+
+    #[test]
+    fn test_statute_validation_invalid_id() {
+        let mut statute = Statute::new("temp", "Test", Effect::new(EffectType::Grant, "Grant"));
+        statute.id = "123-invalid".to_string(); // Starts with number
+
+        let errors = statute.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::InvalidId(_)))
+        );
+    }
+
+    #[test]
+    fn test_statute_validation_empty_title() {
+        let mut statute = Statute::new("test-id", "temp", Effect::new(EffectType::Grant, "Grant"));
+        statute.title = String::new();
+
+        let errors = statute.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::EmptyTitle))
+        );
+    }
+
+    #[test]
+    fn test_statute_validation_expiry_before_effective() {
+        let statute = Statute::new(
+            "temporal-error",
+            "Temporal Error Statute",
+            Effect::new(EffectType::Grant, "Grant"),
+        )
+        .with_temporal_validity(TemporalValidity {
+            effective_date: Some(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()),
+            expiry_date: Some(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()), // Before effective!
+            enacted_at: None,
+            amended_at: None,
+        });
+
+        let errors = statute.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::ExpiryBeforeEffective { .. }))
+        );
+    }
+
+    #[test]
+    fn test_statute_validation_invalid_condition() {
+        let statute = Statute::new(
+            "age-error",
+            "Age Error Statute",
+            Effect::new(EffectType::Grant, "Grant"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 200, // Unrealistic age
+        });
+
+        let errors = statute.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::InvalidCondition { .. }))
+        );
+    }
+
+    #[test]
+    fn test_statute_validation_zero_version() {
+        let mut statute = Statute::new(
+            "zero-version",
+            "Zero Version Statute",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        statute.version = 0;
+
+        let errors = statute.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::InvalidVersion))
+        );
+    }
+
+    #[test]
+    fn test_statute_validated_method() {
+        let valid_statute = Statute::new(
+            "valid",
+            "Valid Statute",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        assert!(valid_statute.validated().is_ok());
+
+        let mut invalid_statute = Statute::new(
+            "invalid",
+            "Invalid",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        invalid_statute.id = String::new();
+        assert!(invalid_statute.validated().is_err());
+    }
+
+    #[test]
+    fn test_validation_error_display() {
+        assert!(ValidationError::EmptyId.to_string().contains("empty"));
+        assert!(ValidationError::EmptyTitle.to_string().contains("title"));
+        assert!(
+            ValidationError::InvalidVersion
+                .to_string()
+                .contains("Version")
+        );
     }
 }
