@@ -12,9 +12,10 @@
 - [x] Add audit trail and decision logging (legalis-audit)
 - [x] Add statute diffing and change detection (legalis-diff)
 - [x] Add comprehensive integration tests across all crates
-- [ ] Set up CI/CD pipeline (GitHub Actions)
-- [ ] Add benchmarks for simulation engine performance
-- [ ] Create example applications demonstrating real-world use cases
+- [x] Set up CI/CD pipeline (GitHub Actions with test, clippy, fmt, docs, bench jobs)
+- [x] Add benchmarks for simulation engine performance (legalis-sim)
+- [x] Add Linked Open Data (RDF/TTL/JSON-LD) export (legalis-lod)
+- [x] Create example applications demonstrating real-world use cases (welfare-benefits example)
 
 ### Medium Priority
 - [ ] Add documentation comments (rustdoc) to all public APIs
@@ -39,7 +40,7 @@
 #### Features
 - [x] Add metadata support for statutes (enactment date, jurisdiction, version)
 - [x] Add more condition types (date ranges, geographic regions, entity relationships)
-- [ ] Implement condition optimization (simplification, normalization)
+- [x] Implement condition optimization (simplification, normalization, CNF conversion)
 - [ ] Add hierarchical statute relationships (parent/child, amendments)
 - [x] Create statute builder pattern with fluent API
 - [x] Add temporal validity (effective dates, sunset clauses)
@@ -53,15 +54,15 @@
 ### legalis-dsl
 
 #### Features
-- [ ] Add support for multi-statute documents
+- [x] Add support for multi-statute documents (parse_statutes method)
 - [x] Implement AND/OR/NOT operators in condition parsing
 - [x] Add support for nested conditions with parentheses (precedence-correct parsing)
-- [ ] Create pretty-printer for AST back to DSL format
-- [ ] Add line/column tracking for better error messages
+- [x] Create pretty-printer for AST back to DSL format (legalis-dsl printer module, CLI format command)
+- [x] Add line/column tracking for better error messages (SourceLocation struct, SpannedToken)
 - [ ] Add LSP (Language Server Protocol) support
 
 #### Grammar Extensions
-- [ ] Add IMPORT statement for referencing other statutes
+- [x] Add IMPORT statement for referencing other statutes (parse_document, ImportNode, AS alias)
 - [ ] Add EXCEPTION clauses
 - [ ] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
 - [x] Support for comments in DSL (// and /* */)
@@ -315,7 +316,7 @@
 
 #### Features
 - [ ] Add interactive REPL mode
-- [ ] Create shell completions (bash, zsh, fish)
+- [x] Create shell completions (bash, zsh, fish) via `legalis completions <shell>`
 - [ ] Add progress indicators for long operations
 - [ ] Implement watch mode for file changes
 
@@ -376,11 +377,10 @@ making it a universal bridge between legal technology ecosystems.
 - [ ] LegalDocML support
 
 #### CLI Integration
-- [ ] `legalis import --from catala input.catala_en`
-- [ ] `legalis import --from stipula input.stipula`
-- [ ] `legalis import --from l4 input.l4`
-- [ ] `legalis export --to catala output.catala_en`
-- [ ] `legalis export --to stipula output.stipula`
+- [x] `legalis import --from catala input.catala_en`
+- [x] `legalis import --from stipula input.stipula`
+- [x] `legalis import --from l4 input.l4`
+- [x] `legalis convert` command for format-to-format conversion
 - [x] Auto-detect format from file extension
 
 #### Conversion Features

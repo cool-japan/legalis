@@ -352,11 +352,11 @@ fn generate_statute_visualizations(constitution: &Constitution) {
 
     let statutes = constitution.to_statutes();
 
-    if let Some(statute) = statutes.first() {
-        if let Ok(tree) = DecisionTree::from_statute(statute) {
-            println!("ASCII Tree for Article 9:");
-            println!("{}\n", tree.to_ascii());
-        }
+    if let Some(statute) = statutes.first()
+        && let Ok(tree) = DecisionTree::from_statute(statute)
+    {
+        println!("ASCII Tree for Article 9:");
+        println!("{}\n", tree.to_ascii());
     }
 
     // Show fundamental rights as a list

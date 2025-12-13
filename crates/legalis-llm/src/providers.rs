@@ -1,8 +1,10 @@
 //! LLM provider implementations.
 
-use crate::{LLMConfig, LLMProvider};
-use anyhow::{Context, Result};
+use crate::{LLMConfig, LLMProvider, StreamChunk, TextStream};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use bytes::Bytes;
+use futures::stream::StreamExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -126,6 +128,61 @@ impl LLMProvider for OpenAiClient {
     fn model_name(&self) -> &str {
         &self.model
     }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        #[derive(Serialize)]
+        struct StreamRequest {
+            model: String,
+            messages: Vec<ChatMessage>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let request = StreamRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", self.base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to OpenAI API")?;
+
+        // Get the byte stream from the response
+        let byte_stream = response.bytes_stream();
+
+        // Convert to text stream with SSE parsing
+        let text_stream = parse_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
 }
 
 /// Anthropic Claude client.
@@ -228,6 +285,18 @@ impl LLMProvider for AnthropicClient {
     fn model_name(&self) -> &str {
         &self.model
     }
+
+    async fn generate_text_stream(&self, _prompt: &str) -> Result<TextStream> {
+        // Anthropic streaming would be implemented similarly to OpenAI
+        // For now, return an error indicating it's not yet implemented
+        Err(anyhow!(
+            "Streaming not yet implemented for Anthropic provider"
+        ))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        false // Will be true once implemented
+    }
 }
 
 /// Mock LLM provider for testing.
@@ -283,6 +352,149 @@ impl LLMProvider for MockProvider {
     fn model_name(&self) -> &str {
         "mock-v1"
     }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        // Get the full response first
+        let text = self.generate_text(prompt).await?;
+
+        // Split into chunks (simulate streaming by splitting at word boundaries)
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let chunk_size = 5; // 5 words per chunk
+
+        let mut chunks = Vec::new();
+        let total_chunks = words.len().div_ceil(chunk_size);
+
+        for (i, word_chunk) in words.chunks(chunk_size).enumerate() {
+            let content = if i == 0 {
+                word_chunk.join(" ")
+            } else {
+                format!(" {}", word_chunk.join(" "))
+            };
+
+            let is_final = i == total_chunks - 1;
+            let mut chunk = StreamChunk::new(content);
+            chunk.is_final = is_final;
+            chunks.push(chunk);
+        }
+
+        // Convert to stream
+        use futures::stream;
+        let stream = stream::iter(chunks.into_iter().map(Ok));
+
+        Ok(Box::pin(stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+}
+
+/// Parses Server-Sent Events (SSE) stream into StreamChunks.
+///
+/// This function properly handles:
+/// - Buffering incomplete lines across byte chunks
+/// - Parsing "data: " prefixed SSE messages
+/// - Handling "[DONE]" completion marker
+/// - JSON parsing of OpenAI streaming responses
+/// - Error propagation with context
+fn parse_sse_stream(
+    byte_stream: impl futures::Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static,
+) -> impl futures::Stream<Item = Result<StreamChunk>> + Send {
+    use futures::stream;
+
+    // SSE response structures
+    #[derive(Deserialize)]
+    struct StreamResponse {
+        choices: Vec<StreamChoice>,
+    }
+
+    #[derive(Deserialize)]
+    struct StreamChoice {
+        delta: Delta,
+        finish_reason: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct Delta {
+        content: Option<String>,
+    }
+
+    // State for buffering across chunks
+    struct ParserState {
+        buffer: String,
+    }
+
+    let initial_state = ParserState {
+        buffer: String::new(),
+    };
+
+    byte_stream
+        .scan(initial_state, |state, byte_result| {
+            // Convert reqwest error to anyhow error
+            let bytes = match byte_result {
+                Ok(b) => b,
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!("Stream error: {}", e))]));
+                }
+            };
+
+            // Append to buffer
+            match String::from_utf8(bytes.to_vec()) {
+                Ok(text) => state.buffer.push_str(&text),
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!(
+                        "UTF-8 decode error: {}",
+                        e
+                    ))]));
+                }
+            }
+
+            let mut chunks = Vec::new();
+
+            // Process complete lines
+            while let Some(newline_pos) = state.buffer.find('\n') {
+                let line = state.buffer[..newline_pos].trim().to_string();
+                state.buffer = state.buffer[newline_pos + 1..].to_string();
+
+                // Skip empty lines
+                if line.is_empty() {
+                    continue;
+                }
+
+                // Parse SSE format: "data: <json>" or "data: [DONE]"
+                if let Some(data) = line.strip_prefix("data: ") {
+                    // Check for completion marker
+                    if data == "[DONE]" {
+                        chunks.push(Ok(StreamChunk::final_chunk("")));
+                        continue;
+                    }
+
+                    // Parse JSON response
+                    match serde_json::from_str::<StreamResponse>(data) {
+                        Ok(response) => {
+                            if let Some(choice) = response.choices.first() {
+                                if let Some(content) = &choice.delta.content {
+                                    let is_final = choice.finish_reason.is_some();
+                                    let mut chunk = StreamChunk::new(content.clone());
+                                    chunk.is_final = is_final;
+                                    chunks.push(Ok(chunk));
+                                } else if choice.finish_reason.is_some() {
+                                    // Final chunk with no content
+                                    chunks.push(Ok(StreamChunk::final_chunk("")));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Log parse error but continue streaming
+                            tracing::debug!("Failed to parse SSE JSON: {} for data: {}", e, data);
+                        }
+                    }
+                }
+            }
+
+            futures::future::ready(Some(chunks))
+        })
+        .flat_map(stream::iter)
 }
 
 /// Extracts JSON from a text that might contain markdown code blocks or other content.
@@ -344,5 +556,54 @@ mod tests {
             .await
             .unwrap();
         assert!(response.contains("success"));
+    }
+
+    #[tokio::test]
+    async fn test_mock_provider_streaming() {
+        use futures::StreamExt;
+
+        let provider = MockProvider::new()
+            .with_response("test", "This is a test response with multiple words");
+
+        assert!(provider.supports_streaming());
+
+        let mut stream = provider
+            .generate_text_stream("This is a test prompt")
+            .await
+            .unwrap();
+
+        let mut collected = String::new();
+        let mut chunk_count = 0;
+        let mut saw_final = false;
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.unwrap();
+            collected.push_str(&chunk.content);
+            chunk_count += 1;
+
+            if chunk.is_final {
+                saw_final = true;
+            }
+        }
+
+        assert!(chunk_count > 0, "Should have received at least one chunk");
+        assert!(saw_final, "Should have seen a final chunk");
+        assert_eq!(
+            collected.trim(),
+            "This is a test response with multiple words",
+            "Collected text should match original response"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stream_chunk_builder() {
+        let chunk = StreamChunk::new("test content").with_token_count(42);
+
+        assert_eq!(chunk.content, "test content");
+        assert!(!chunk.is_final);
+        assert_eq!(chunk.token_count, Some(42));
+
+        let final_chunk = StreamChunk::final_chunk("final");
+        assert!(final_chunk.is_final);
     }
 }

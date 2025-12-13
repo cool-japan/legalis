@@ -55,10 +55,16 @@ legalis-rs/
 │   ├── # Output Layer
 │   ├── legalis-viz/       # Visualization (decision trees, flowcharts)
 │   ├── legalis-chain/     # Smart contract export (Solidity, WASM, Ink!)
+│   ├── legalis-lod/       # Linked Open Data (RDF/TTL) export
 │   ├── # Infrastructure Layer
 │   ├── legalis-audit/     # Audit trail and decision logging
 │   ├── legalis-api/       # REST API server
 │   └── legalis-cli/       # Command-line interface
+├── jurisdictions/
+│   └── jp/                # Japanese legal system implementation
+├── examples/
+│   ├── jp-constitution-3d/ # 3D visualization of Japanese Constitution
+│   └── welfare-benefits/   # Welfare benefits eligibility system
 ├── legalis.md             # Full specification document
 ├── Cargo.toml             # Workspace configuration
 └── README.md
@@ -101,6 +107,7 @@ legalis-rs/
 |-------|-------------|
 | `legalis-viz` | Visualization: decision trees, flowcharts, dependency graphs |
 | `legalis-chain` | Smart contract generation (Solidity, WASM, Ink!) |
+| `legalis-lod` | Linked Open Data (RDF/TTL) export for semantic web integration |
 
 ### Infrastructure Layer
 | Crate | Description |
@@ -108,6 +115,17 @@ legalis-rs/
 | `legalis-audit` | Audit trail with tamper-proof decision logging |
 | `legalis-api` | REST API server for external integrations |
 | `legalis-cli` | Command-line tool for parsing, verification, and export |
+
+### Jurisdictions
+| Jurisdiction | Description |
+|--------------|-------------|
+| `jp` | Japanese legal system implementation with localization support |
+
+### Examples
+| Example | Description |
+|---------|-------------|
+| `jp-constitution-3d` | 3D visualization of the Japanese Constitution demonstrating multi-dimensional legal relationships |
+| `welfare-benefits` | Welfare benefits eligibility determination system showcasing rule-based processing |
 
 ## Quick Start
 
@@ -270,6 +288,22 @@ let (stipula_output, _) = converter.convert(
 | **Stipula** | U. Bologna, Italy | Smart contracts, party/asset model, state machines |
 | **L4** | Singapore | Deontic logic (MUST/MAY/SHANT), rule-based reasoning |
 | **Akoma Ntoso** | OASIS Standard | XML legislative documents, semantic markup |
+
+## Linked Open Data Export
+
+Export statutes to RDF/TTL format for semantic web integration:
+
+```rust
+use legalis_lod::LodExporter;
+
+let exporter = LodExporter::new();
+let ttl_output = exporter.export_to_turtle(&statutes)?;
+
+// Or export to RDF/XML
+let rdf_output = exporter.export_to_rdf_xml(&statutes)?;
+```
+
+This enables integration with knowledge graphs and semantic web systems, allowing legal data to be linked with other open data sources.
 
 ## Architecture Decisions
 

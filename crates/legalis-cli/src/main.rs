@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use legalis_cli::{Cli, Commands, commands};
+use legalis_cli::{Cli, Commands, commands, generate_completions};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -101,6 +101,25 @@ async fn main() -> Result<()> {
             output,
         } => {
             commands::handle_convert(input, from.as_ref(), to, output.as_deref())?;
+        }
+        Commands::Completions { shell } => {
+            generate_completions(*shell);
+        }
+        Commands::Lod {
+            input,
+            output,
+            rdf_format,
+            base_uri,
+        } => {
+            commands::handle_lod(input, output.as_deref(), rdf_format, base_uri)?;
+        }
+        Commands::Format {
+            input,
+            output,
+            inplace,
+            style,
+        } => {
+            commands::handle_format(input, output.as_deref(), *inplace, style)?;
         }
     }
 

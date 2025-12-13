@@ -8,7 +8,8 @@
 
 pub mod commands;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 
 /// Legalis-RS Command Line Interface
 #[derive(Parser)]
@@ -221,6 +222,51 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Export statute to Linked Open Data format (RDF/TTL/JSON-LD)
+    Lod {
+        /// Input file path
+        #[arg(short, long)]
+        input: String,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// RDF output format
+        #[arg(long, default_value = "turtle")]
+        rdf_format: RdfOutputFormat,
+
+        /// Base URI for generated resources
+        #[arg(long, default_value = "https://example.org/legalis/")]
+        base_uri: String,
+    },
+
+    /// Format (pretty-print) a DSL file
+    Format {
+        /// Input file path
+        #[arg(short, long)]
+        input: String,
+
+        /// Output file (defaults to stdout, use --inplace to modify in place)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Modify the file in place
+        #[arg(long)]
+        inplace: bool,
+
+        /// Output style (default, compact, verbose)
+        #[arg(long, default_value = "default")]
+        style: FormatStyle,
+    },
 }
 
 /// Port output format options.
@@ -309,4 +355,57 @@ pub enum ImportOutputFormat {
     Yaml,
     /// Native Legalis DSL format
     Legalis,
+}
+
+/// RDF output format options for LOD export.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum RdfOutputFormat {
+    /// Turtle format (TTL) - human-readable RDF
+    #[default]
+    Turtle,
+    /// N-Triples format - line-based RDF
+    NTriples,
+    /// RDF/XML format
+    RdfXml,
+    /// JSON-LD format - JSON-based RDF
+    JsonLd,
+}
+
+impl From<RdfOutputFormat> for legalis_lod::RdfFormat {
+    fn from(f: RdfOutputFormat) -> Self {
+        match f {
+            RdfOutputFormat::Turtle => legalis_lod::RdfFormat::Turtle,
+            RdfOutputFormat::NTriples => legalis_lod::RdfFormat::NTriples,
+            RdfOutputFormat::RdfXml => legalis_lod::RdfFormat::RdfXml,
+            RdfOutputFormat::JsonLd => legalis_lod::RdfFormat::JsonLd,
+        }
+    }
+}
+
+/// Format style options for DSL pretty-printing.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum FormatStyle {
+    /// Default formatting (4-space indent)
+    #[default]
+    Default,
+    /// Compact formatting (2-space indent, no comments)
+    Compact,
+    /// Verbose formatting (includes comments, wide lines)
+    Verbose,
+}
+
+impl From<FormatStyle> for legalis_dsl::PrinterConfig {
+    fn from(style: FormatStyle) -> Self {
+        match style {
+            FormatStyle::Default => legalis_dsl::PrinterConfig::default(),
+            FormatStyle::Compact => legalis_dsl::PrinterConfig::compact(),
+            FormatStyle::Verbose => legalis_dsl::PrinterConfig::verbose(),
+        }
+    }
+}
+
+/// Generates shell completions and writes them to stdout.
+pub fn generate_completions(shell: Shell) {
+    let mut cmd = Cli::command();
+    generate(shell, &mut cmd, "legalis", &mut std::io::stdout());
 }

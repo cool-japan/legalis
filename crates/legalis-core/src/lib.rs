@@ -4,10 +4,18 @@
 //! including the distinction between deterministic (computable) and
 //! discretionary (requiring human judgment) legal outcomes.
 
+pub mod case_law;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
+
+// Re-export Common Law types
+pub use case_law::{
+    Case, CaseDatabase, CaseRule, Court, DamageType, Precedent, PrecedentApplication,
+    PrecedentWeight,
+};
 
 /// Legal judgment result as an Algebraic Data Type (ADT).
 ///

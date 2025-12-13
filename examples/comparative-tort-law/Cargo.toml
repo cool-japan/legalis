@@ -1,0 +1,14 @@
+[package]
+name = "comparative-tort-law"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-jp = { path = "../../jurisdictions/jp" }
+legalis-de = { path = "../../jurisdictions/de" }
+legalis-fr = { path = "../../jurisdictions/fr" }
+legalis-us = { path = "../../jurisdictions/us" }
+legalis-sim = { path = "../../crates/legalis-sim" }
+tokio = { version = "1.43", features = ["full"] }
+uuid = "1.11"

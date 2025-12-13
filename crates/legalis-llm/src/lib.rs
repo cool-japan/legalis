@@ -11,7 +11,49 @@ pub use providers::*;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::stream::Stream;
 use serde::de::DeserializeOwned;
+use std::pin::Pin;
+
+/// Streaming text chunk from an LLM.
+#[derive(Debug, Clone)]
+pub struct StreamChunk {
+    /// The text content
+    pub content: String,
+    /// Whether this is the final chunk
+    pub is_final: bool,
+    /// Token count (if available)
+    pub token_count: Option<usize>,
+}
+
+impl StreamChunk {
+    /// Creates a new stream chunk.
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            is_final: false,
+            token_count: None,
+        }
+    }
+
+    /// Creates a final stream chunk.
+    pub fn final_chunk(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            is_final: true,
+            token_count: None,
+        }
+    }
+
+    /// Adds token count information.
+    pub fn with_token_count(mut self, count: usize) -> Self {
+        self.token_count = Some(count);
+        self
+    }
+}
+
+/// Type alias for stream of text chunks.
+pub type TextStream = Pin<Box<dyn Stream<Item = Result<StreamChunk>> + Send>>;
 
 /// LLM provider abstraction trait.
 ///
@@ -25,11 +67,22 @@ pub trait LLMProvider: Send + Sync {
     /// Generates structured data (JSON) from a prompt.
     async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T>;
 
+    /// Generates text as a stream of chunks.
+    ///
+    /// This enables real-time streaming of responses for better UX.
+    /// If streaming is not supported, returns an error.
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream>;
+
     /// Returns the name of this provider.
     fn provider_name(&self) -> &str;
 
     /// Returns the model being used.
     fn model_name(&self) -> &str;
+
+    /// Returns whether this provider supports streaming.
+    fn supports_streaming(&self) -> bool {
+        false
+    }
 }
 
 /// Configuration for LLM requests.

@@ -1,5 +1,15 @@
 # legalis-llm TODO
 
+## Completed
+
+- [x] LLMProvider trait abstraction
+- [x] OpenAI provider implementation
+- [x] Anthropic Claude provider implementation
+- [x] LLMConfig with temperature, max_tokens, system prompt
+- [x] Structured JSON response generation
+- [x] Law compiler for natural language to statute
+- [x] Multi-provider switching support
+
 ## Providers
 
 ### New Implementations

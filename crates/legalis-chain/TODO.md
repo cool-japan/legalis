@@ -1,5 +1,16 @@
 # legalis-chain TODO
 
+## Completed
+
+- [x] ContractGenerator with platform selection
+- [x] Solidity code generation
+- [x] Rust WASM code generation
+- [x] Ink! (Substrate) code generation
+- [x] Discretionary statute filtering
+- [x] Batch contract generation
+- [x] Basic condition-to-code translation
+- [x] ABI generation for Solidity
+
 ## Target Platforms
 
 ### New Targets

@@ -1,0 +1,17 @@
+[package]
+name = "legalis-us"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "United States jurisdiction support for Legalis-RS (Common Law)"
+
+[dependencies]
+legalis-core.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

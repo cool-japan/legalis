@@ -1,8 +1,8 @@
 //! CLI command implementations.
 
 use crate::{
-    DiffFormat, ExportFormat, ImportOutputFormat, LegalDslFormat, OutputFormat, PortFormat,
-    VizFormat,
+    DiffFormat, ExportFormat, FormatStyle, ImportOutputFormat, LegalDslFormat, OutputFormat,
+    PortFormat, RdfOutputFormat, VizFormat,
 };
 use anyhow::{Context, Result};
 use legalis_core::Statute;
@@ -724,6 +724,98 @@ fn statute_to_dsl(statute: &Statute) -> String {
 
     dsl.push('}');
     dsl
+}
+
+/// Handles the LOD export command.
+pub fn handle_lod(
+    input: &str,
+    output: Option<&str>,
+    format: &RdfOutputFormat,
+    base_uri: &str,
+) -> Result<()> {
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Create exporter with custom base URI
+    let namespaces = legalis_lod::Namespaces::with_base(base_uri);
+    let rdf_format: legalis_lod::RdfFormat = format.clone().into();
+    let exporter = legalis_lod::LodExporter::with_namespaces(rdf_format, namespaces);
+
+    let output_str = exporter
+        .export(&statute)
+        .map_err(|e| anyhow::anyhow!("LOD export error: {}", e))?;
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &output_str)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!(
+            "Exported to {} format: {}",
+            rdf_format.extension(),
+            out_path
+        );
+    } else {
+        println!("{}", output_str);
+    }
+
+    println!(
+        "\nExported statute '{}' to {} format",
+        statute.id,
+        format_name(format)
+    );
+    println!("Base URI: {}", base_uri);
+    println!("MIME type: {}", rdf_format.mime_type());
+
+    Ok(())
+}
+
+/// Returns a human-readable name for the RDF format.
+fn format_name(format: &RdfOutputFormat) -> &'static str {
+    match format {
+        RdfOutputFormat::Turtle => "Turtle (TTL)",
+        RdfOutputFormat::NTriples => "N-Triples",
+        RdfOutputFormat::RdfXml => "RDF/XML",
+        RdfOutputFormat::JsonLd => "JSON-LD",
+    }
+}
+
+/// Handles the format command.
+pub fn handle_format(
+    input: &str,
+    output: Option<&str>,
+    inplace: bool,
+    style: &FormatStyle,
+) -> Result<()> {
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Create printer with specified style
+    let config: legalis_dsl::PrinterConfig = style.clone().into();
+    let printer = legalis_dsl::DslPrinter::with_config(config);
+    let formatted = printer.format(&statute);
+
+    if inplace {
+        fs::write(input, &formatted)
+            .with_context(|| format!("Failed to write to file: {}", input))?;
+        println!("Formatted: {}", input);
+    } else if let Some(out_path) = output {
+        fs::write(out_path, &formatted)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("Formatted output written to: {}", out_path);
+    } else {
+        println!("{}", formatted);
+    }
+
+    Ok(())
 }
 
 /// Converts a condition to DSL format.

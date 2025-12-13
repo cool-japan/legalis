@@ -1,33 +1,41 @@
 # legalis-dsl TODO
 
+## Completed
+
+- [x] Add IMPORT statement for cross-statute references
+- [x] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
+- [x] Add JURISDICTION specifier
+- [x] Add VERSION specifier
+- [x] Implement AND/OR operators in condition parsing
+- [x] Add NOT operator support
+- [x] Support parentheses for grouping conditions
+- [x] Add single-line comment support (//)
+- [x] Add multi-line comment support (/* */)
+- [x] Add source location tracking (line, column)
+- [x] Create pretty-printer (AST -> DSL text)
+- [x] Add multi-statute document parsing
+- [x] Add HAS keyword for attribute checks
+
 ## Parser Features
 
 ### Grammar Extensions
-- [ ] Add IMPORT statement for cross-statute references
 - [ ] Add EXCEPTION clause for handling edge cases
-- [ ] Add EFFECTIVE_DATE and EXPIRY_DATE clauses
 - [ ] Support DEFAULT clause for missing attributes
-- [ ] Add JURISDICTION specifier
-
-### Operators
-- [ ] Implement AND/OR operators in condition parsing
-- [ ] Add NOT operator support
-- [ ] Support parentheses for grouping conditions
+- [ ] Add AMENDMENT clause for version tracking
 - [ ] Add BETWEEN operator for ranges
 - [ ] Add IN operator for set membership
 
-### Comments
-- [ ] Add single-line comment support (//)
-- [ ] Add multi-line comment support (/* */)
-- [ ] Add documentation comments for metadata
+### Advanced Conditions
+- [ ] Add date comparison conditions
+- [ ] Add string pattern matching (LIKE)
+- [ ] Add numeric range conditions
 
 ## AST Improvements
 
-- [ ] Add source location tracking (line, column)
 - [ ] Implement AST visitor pattern
 - [ ] Add AST transformation utilities
-- [ ] Create pretty-printer (AST -> DSL text)
 - [ ] Implement AST diffing for change detection
+- [ ] Add AST optimization passes
 
 ## Error Handling
 
@@ -41,7 +49,6 @@
 
 - [ ] Create syntax highlighting definitions (VSCode, vim)
 - [ ] Add LSP (Language Server Protocol) support
-- [ ] Create formatter/linter tool
 - [ ] Add REPL for interactive parsing
 - [ ] Create schema/grammar documentation generator
 

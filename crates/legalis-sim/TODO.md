@@ -1,5 +1,16 @@
 # legalis-sim TODO
 
+## Completed
+
+- [x] SimEngine with async parallel execution
+- [x] Entity trait for simulation subjects
+- [x] BasicEntity with typed attributes
+- [x] Population creation and management
+- [x] Statute application to populations
+- [x] SimMetrics for result aggregation
+- [x] Rayon-based parallel processing
+- [x] Deterministic vs discretionary tracking
+
 ## Engine Features
 
 ### Temporal Simulation

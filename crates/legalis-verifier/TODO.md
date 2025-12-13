@@ -1,5 +1,17 @@
 # legalis-verifier TODO
 
+## Completed
+
+- [x] StatuteVerifier with configurable principles
+- [x] VerificationResult with errors, warnings, suggestions
+- [x] Circular reference detection
+- [x] Dead statute detection
+- [x] Constitutional conflict checking
+- [x] Logical contradiction detection
+- [x] Ambiguity detection
+- [x] Default constitutional principles
+- [x] Result merging for multiple checks
+
 ## SMT Solver Integration
 
 - [ ] Integrate Z3 solver via z3 crate

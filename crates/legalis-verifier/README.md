@@ -138,13 +138,97 @@ pub enum PrincipleCheck {
 }
 ```
 
-## Future: SMT Solver Integration
+## SMT Solver Integration
 
-The crate is designed to integrate with Z3 or similar SMT solvers for rigorous formal verification of legal consistency. This would enable:
+The verifier supports optional Z3 SMT solver integration for rigorous formal verification. Enable with the `z3-solver` feature:
 
-- Satisfiability checking for complex condition combinations
-- Proof generation for verification results
-- Temporal logic verification (LTL/CTL)
+```toml
+[dependencies]
+legalis-verifier = { version = "0.2", features = ["z3-solver"] }
+```
+
+### SMT-Based Verification Features
+
+When `z3-solver` is enabled:
+
+- **Satisfiability Checking**: Formally proves whether conditions can be satisfied
+- **Tautology Verification**: Checks if conditions are always true
+- **Contradiction Detection**: Rigorously proves when conditions contradict
+- **Implication Checking**: Verifies logical implications (cond1 => cond2)
+- **Counterexample Generation**: Provides concrete variable assignments
+
+### Usage Example
+
+```rust
+#[cfg(feature = "z3-solver")]
+{
+    use legalis_verifier::{create_z3_context, SmtVerifier};
+    use legalis_core::{Condition, ComparisonOp};
+
+    let ctx = create_z3_context();
+    let mut verifier = SmtVerifier::new(&ctx);
+
+    let cond1 = Condition::Age {
+        operator: ComparisonOp::GreaterOrEqual,
+        value: 21,
+    };
+
+    let cond2 = Condition::Age {
+        operator: ComparisonOp::GreaterOrEqual,
+        value: 18,
+    };
+
+    // Check implication: Age >= 21 implies Age >= 18
+    assert!(verifier.implies(&cond1, &cond2)?);
+
+    // Get a model (counterexample)
+    if let Some(model) = verifier.get_model(&cond1)? {
+        println!("Example: age = {}", model["age"]);
+    }
+}
+```
+
+### Automatic Fallback
+
+The verifier automatically falls back to heuristic checking if:
+- The `z3-solver` feature is not enabled
+- The SMT solver fails or times out
+
+This ensures verification always works, with optional enhanced precision.
+
+## Complexity Analysis
+
+The verifier includes comprehensive complexity metrics for statutes:
+
+```rust
+use legalis_verifier::{analyze_complexity, complexity_report};
+
+let metrics = analyze_complexity(&statute);
+println!("Complexity Level: {}", metrics.complexity_level);
+println!("Score: {}/100", metrics.complexity_score);
+
+// Generate report for multiple statutes
+let report = complexity_report(&statutes);
+println!("{}", report);
+```
+
+### Complexity Metrics
+
+- **condition_count**: Number of preconditions
+- **condition_depth**: Maximum nesting level
+- **logical_operator_count**: AND, OR, NOT operations
+- **condition_type_count**: Number of distinct condition types
+- **has_discretion**: Whether discretionary logic is present
+- **cyclomatic_complexity**: Measure of code paths (1 + decisions)
+- **complexity_score**: Overall score (0-100)
+- **complexity_level**: Simple, Moderate, Complex, or Very Complex
+
+### Complexity Levels
+
+- **Simple (0-25)**: Few conditions, minimal complexity
+- **Moderate (26-50)**: Some nesting or multiple conditions
+- **Complex (51-75)**: Deep nesting or many logical operators
+- **Very Complex (76-100)**: Consider simplification
 
 ## License
 

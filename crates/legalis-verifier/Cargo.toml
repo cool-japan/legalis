@@ -11,3 +11,9 @@ legalis-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+z3 = { version = "0.12", optional = true }
+anyhow.workspace = true
+
+[features]
+default = []
+z3-solver = ["z3"]

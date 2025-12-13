@@ -159,10 +159,16 @@ impl LawNumber {
             (LawType::Act, stripped)
         } else if let Some(stripped) = rest.strip_prefix("政令") {
             (LawType::CabinetOrder, stripped)
+        } else if let Some(stripped) = rest.strip_prefix("府令") {
+            (LawType::PrimeMinisterOrder, stripped)
         } else if let Some(stripped) = rest.strip_prefix("省令") {
             (LawType::MinisterialOrdinance, stripped)
+        } else if let Some(stripped) = rest.strip_prefix("規則") {
+            (LawType::Rule, stripped)
         } else if let Some(stripped) = rest.strip_prefix("条約") {
             (LawType::Treaty, stripped)
+        } else if let Some(stripped) = rest.strip_prefix("条例") {
+            (LawType::LocalOrdinance, stripped)
         } else {
             return None;
         };
@@ -389,6 +395,7 @@ mod tests {
 
     #[test]
     fn test_law_number_parse() {
+        // 法律 (Act)
         let law_num = LawNumber::parse("令和元年法律第一号").unwrap();
         assert_eq!(law_num.era, Era::Reiwa);
         assert_eq!(law_num.year, 1);
@@ -399,6 +406,36 @@ mod tests {
         assert_eq!(law_num.era, Era::Showa);
         assert_eq!(law_num.year, 22);
         assert_eq!(law_num.number, 131);
+
+        // 政令 (Cabinet Order)
+        let law_num = LawNumber::parse("令和五年政令第四十二号").unwrap();
+        assert_eq!(law_num.law_type, LawType::CabinetOrder);
+        assert_eq!(law_num.number, 42);
+
+        // 府令 (Prime Minister's Office Order)
+        let law_num = LawNumber::parse("平成十年府令第三号").unwrap();
+        assert_eq!(law_num.law_type, LawType::PrimeMinisterOrder);
+        assert_eq!(law_num.number, 3);
+
+        // 省令 (Ministerial Ordinance)
+        let law_num = LawNumber::parse("令和二年省令第十五号").unwrap();
+        assert_eq!(law_num.law_type, LawType::MinisterialOrdinance);
+        assert_eq!(law_num.number, 15);
+
+        // 規則 (Rules)
+        let law_num = LawNumber::parse("令和三年規則第七号").unwrap();
+        assert_eq!(law_num.law_type, LawType::Rule);
+        assert_eq!(law_num.number, 7);
+
+        // 条約 (Treaty)
+        let law_num = LawNumber::parse("昭和二十六年条約第五号").unwrap();
+        assert_eq!(law_num.law_type, LawType::Treaty);
+        assert_eq!(law_num.number, 5);
+
+        // 条例 (Local Ordinance)
+        let law_num = LawNumber::parse("令和四年条例第二十号").unwrap();
+        assert_eq!(law_num.law_type, LawType::LocalOrdinance);
+        assert_eq!(law_num.number, 20);
     }
 
     #[test]

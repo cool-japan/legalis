@@ -126,7 +126,9 @@ mod tests {
                 "amended_at": null
             },
             "version": 1,
-            "jurisdiction": null
+            "jurisdiction": null,
+            "relations": [],
+            "amendments": []
         }"#;
 
         let provider = MockProvider::new().with_response("Parse", mock_response);

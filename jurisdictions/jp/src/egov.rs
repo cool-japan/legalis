@@ -1,7 +1,7 @@
 //! e-Gov Law XML Parser.
 //!
 //! Parses Japanese laws from the official e-Gov XML format.
-//! See: https://laws.e-gov.go.jp/
+//! See: <https://laws.e-gov.go.jp/>
 
 use quick_xml::Reader;
 use quick_xml::events::Event;

@@ -5,6 +5,9 @@
 //! - Verification endpoints
 //! - Simulation endpoints
 //! - Registry queries
+//! - OpenAPI 3.0 documentation
+
+mod openapi;
 
 use axum::{
     Json, Router,
@@ -159,8 +162,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(get_statute).delete(delete_statute),
         )
         .route("/api/v1/verify", post(verify_statutes))
+        .route("/api-docs/openapi.json", get(openapi_spec))
         .layer(CorsLayer::permissive())
         .with_state(state)
+}
+
+/// Returns the OpenAPI 3.0 specification.
+async fn openapi_spec() -> impl IntoResponse {
+    Json(openapi::generate_spec())
 }
 
 /// Health check endpoint.

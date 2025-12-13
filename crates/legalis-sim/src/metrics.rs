@@ -2,11 +2,12 @@
 
 use crate::engine::LawApplicationResult;
 use legalis_core::LegalResult;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Metrics collected during simulation.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SimulationMetrics {
     /// Total number of law applications
     pub total_applications: usize,
@@ -107,7 +108,7 @@ impl SimulationMetrics {
 }
 
 /// Metrics for a single statute.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StatuteMetrics {
     /// Total applications of this statute
     pub total: usize,

@@ -19,14 +19,21 @@ members = [
     # Output Layer
     "crates/legalis-viz",
     "crates/legalis-chain",
+    "crates/legalis-lod",
     # Infrastructure Layer
     "crates/legalis-audit",
     "crates/legalis-api",
     "crates/legalis-cli",
     # Jurisdictions
     "jurisdictions/jp",
+    "jurisdictions/de",
+    "jurisdictions/fr",
+    "jurisdictions/us",
     # Examples
     "examples/jp-constitution-3d",
+    "examples/welfare-benefits",
+    "examples/minpo-709-tort",
+    "examples/comparative-tort-law",
 ]
 
 [workspace.package]
@@ -56,7 +63,7 @@ chrono = { version = "0.4", features = ["serde"] }
 indexmap = { version = "2.12", features = ["serde"] }
 
 # HTTP/API
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 axum = "0.8"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
@@ -91,4 +98,8 @@ legalis-audit = { path = "crates/legalis-audit" }
 legalis-registry = { path = "crates/legalis-registry" }
 legalis-diff = { path = "crates/legalis-diff" }
 legalis-interop = { path = "crates/legalis-interop" }
+legalis-lod = { path = "crates/legalis-lod" }
 legalis-jp = { path = "jurisdictions/jp" }
+legalis-de = { path = "jurisdictions/de" }
+legalis-fr = { path = "jurisdictions/fr" }
+legalis-us = { path = "jurisdictions/us" }
