@@ -13,6 +13,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 regex-lite = "0.1"
-quick-xml = { version = "0.37", features = ["serialize"] }
+quick-xml = { version = "0.38", features = ["serialize"] }
 
 [dev-dependencies]
