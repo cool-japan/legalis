@@ -4,10 +4,12 @@
 //! string-based attribute storage with strongly-typed values and validation.
 
 use chrono::NaiveDate;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// Errors that can occur when working with typed attributes.
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -34,7 +36,8 @@ pub enum AttributeError {
 }
 
 /// A typed attribute value that can hold various legal entity properties.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AttributeValue {
     /// Unsigned 32-bit integer (age, counts, etc.)
     U32(u32),
@@ -233,7 +236,8 @@ impl fmt::Display for AttributeValue {
 }
 
 /// Type-safe attribute storage for legal entities.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TypedAttributes {
     /// Internal storage of typed attributes
     attributes: HashMap<String, AttributeValue>,

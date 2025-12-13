@@ -49,7 +49,7 @@
 - [x] Make `LegalEntity` trait more flexible with dynamic attribute types (TypedAttributes system)
 - [x] Add validation methods for `Statute` construction
 - [x] Implement `Display` trait for all types for better debugging
-- [ ] Add serde feature flag for optional serialization
+- [x] Add serde feature flag for optional serialization
 
 ### legalis-dsl
 
@@ -291,7 +291,7 @@
 #### Security
 - [x] Add authentication (JWT, API keys)
 - [x] Implement authorization (RBAC + ReBAC)
-- [ ] Add rate limiting
+- [x] Add rate limiting
 - [ ] Create audit logging for API calls
 
 #### Performance

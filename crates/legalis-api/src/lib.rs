@@ -10,6 +10,7 @@
 
 pub mod auth;
 mod openapi;
+pub mod rate_limit;
 pub mod rebac;
 
 use axum::{
