@@ -14,5 +14,15 @@ thiserror.workspace = true
 chrono.workspace = true
 regex-lite = "0.1"
 quick-xml = { version = "0.37", features = ["serialize"] }
+rayon = { version = "1.10", optional = true }
+
+[features]
+default = []
+parallel = ["rayon"]
 
 [dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "conversion"
+harness = false

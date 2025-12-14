@@ -14,7 +14,11 @@ thiserror.workspace = true
 z3 = { version = "0.12", optional = true }
 anyhow.workspace = true
 chrono.workspace = true
+rayon = { version = "1.10", optional = true }
+printpdf = { version = "0.7", optional = true }
 
 [features]
 default = []
 z3-solver = ["z3"]
+parallel = ["rayon"]
+pdf = ["printpdf"]

@@ -1,0 +1,674 @@
+//! Prompt template system for structured prompt generation.
+//!
+//! This module provides a flexible template system for creating and managing
+//! prompts with variable substitution, versioning, and domain-specific templates.
+
+use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// A prompt template with variable substitution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptTemplate {
+    /// Template name
+    pub name: String,
+    /// Template content with placeholders in {{variable}} format
+    pub template: String,
+    /// Optional description
+    pub description: Option<String>,
+    /// Template version
+    pub version: u32,
+    /// Default values for variables
+    pub defaults: HashMap<String, String>,
+}
+
+impl PromptTemplate {
+    /// Creates a new prompt template.
+    pub fn new(name: impl Into<String>, template: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            template: template.into(),
+            description: None,
+            version: 1,
+            defaults: HashMap::new(),
+        }
+    }
+
+    /// Sets the description.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Sets the version.
+    pub fn with_version(mut self, version: u32) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Adds a default value for a variable.
+    pub fn with_default(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.defaults.insert(key.into(), value.into());
+        self
+    }
+
+    /// Renders the template with the given variables.
+    ///
+    /// Variables should be provided in {{variable}} format in the template.
+    /// Missing variables will use defaults if available, otherwise return an error.
+    pub fn render(&self, variables: &HashMap<String, String>) -> Result<String> {
+        let mut result = self.template.clone();
+
+        // Find all variables in the template
+        let vars = self.extract_variables();
+
+        for var in vars {
+            let value = variables
+                .get(&var)
+                .or_else(|| self.defaults.get(&var))
+                .ok_or_else(|| anyhow!("Missing variable: {}", var))?;
+
+            let placeholder = format!("{{{{{}}}}}", var);
+            result = result.replace(&placeholder, value);
+        }
+
+        // Check for any remaining unresolved variables
+        if result.contains("{{") {
+            let remaining = self.extract_variables_from(&result);
+            if !remaining.is_empty() {
+                return Err(anyhow!("Unresolved variables: {:?}", remaining));
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Renders the template with builder-style variable assignment.
+    pub fn render_with(
+        &self,
+        builder: impl FnOnce(TemplateBuilder) -> TemplateBuilder,
+    ) -> Result<String> {
+        let template_builder = TemplateBuilder::new();
+        let template_builder = builder(template_builder);
+        self.render(&template_builder.variables)
+    }
+
+    /// Extracts all variable names from the template.
+    pub fn extract_variables(&self) -> Vec<String> {
+        self.extract_variables_from(&self.template)
+    }
+
+    fn extract_variables_from(&self, text: &str) -> Vec<String> {
+        let mut vars = Vec::new();
+        let mut chars = text.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c == '{' && chars.peek() == Some(&'{') {
+                chars.next(); // consume second '{'
+
+                let mut var_name = String::new();
+                while let Some(c) = chars.next() {
+                    if c == '}' && chars.peek() == Some(&'}') {
+                        chars.next(); // consume second '}'
+                        vars.push(var_name.trim().to_string());
+                        break;
+                    }
+                    var_name.push(c);
+                }
+            }
+        }
+
+        vars
+    }
+
+    /// Lists all required variables (those without defaults).
+    pub fn required_variables(&self) -> Vec<String> {
+        self.extract_variables()
+            .into_iter()
+            .filter(|var| !self.defaults.contains_key(var))
+            .collect()
+    }
+
+    /// Validates that all required variables are provided.
+    pub fn validate_variables(&self, variables: &HashMap<String, String>) -> Result<()> {
+        let required = self.required_variables();
+        let missing: Vec<_> = required
+            .iter()
+            .filter(|var| !variables.contains_key(*var))
+            .collect();
+
+        if !missing.is_empty() {
+            return Err(anyhow!("Missing required variables: {:?}", missing));
+        }
+
+        Ok(())
+    }
+}
+
+/// Builder for template variables.
+pub struct TemplateBuilder {
+    variables: HashMap<String, String>,
+}
+
+impl TemplateBuilder {
+    /// Creates a new template builder.
+    pub fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+        }
+    }
+
+    /// Sets a variable value.
+    pub fn set(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.variables.insert(key.into(), value.into());
+        self
+    }
+}
+
+impl Default for TemplateBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A registry for managing multiple prompt templates.
+pub struct TemplateRegistry {
+    templates: HashMap<String, Vec<PromptTemplate>>,
+}
+
+impl TemplateRegistry {
+    /// Creates a new template registry.
+    pub fn new() -> Self {
+        Self {
+            templates: HashMap::new(),
+        }
+    }
+
+    /// Registers a template.
+    pub fn register(&mut self, template: PromptTemplate) {
+        self.templates
+            .entry(template.name.clone())
+            .or_default()
+            .push(template);
+    }
+
+    /// Gets the latest version of a template by name.
+    pub fn get(&self, name: &str) -> Option<&PromptTemplate> {
+        self.templates
+            .get(name)
+            .and_then(|versions| versions.iter().max_by_key(|t| t.version))
+    }
+
+    /// Gets a specific version of a template.
+    pub fn get_version(&self, name: &str, version: u32) -> Option<&PromptTemplate> {
+        self.templates
+            .get(name)?
+            .iter()
+            .find(|t| t.version == version)
+    }
+
+    /// Lists all template names.
+    pub fn list_templates(&self) -> Vec<String> {
+        self.templates.keys().cloned().collect()
+    }
+
+    /// Gets all versions of a template.
+    pub fn get_all_versions(&self, name: &str) -> Option<&Vec<PromptTemplate>> {
+        self.templates.get(name)
+    }
+
+    /// Creates a registry with common legal templates.
+    pub fn with_legal_templates() -> Self {
+        let mut registry = Self::new();
+
+        // Statute compilation template
+        registry.register(
+            PromptTemplate::new(
+                "compile_statute",
+                r#"You are a 'Legal Compiler'. Convert the following natural language statute text into a structured JSON format.
+
+Mark any interpretive or discretionary parts as 'JudicialDiscretion'.
+
+Statute text:
+{{statute_text}}
+
+Respond with valid JSON matching this structure:
+{
+    "id": "statute-id",
+    "title": "Statute Title",
+    "preconditions": [],
+    "effect": {
+        "effect_type": "Grant|Revoke|Obligation|Prohibition|MonetaryTransfer|StatusChange|Custom",
+        "description": "Effect description",
+        "parameters": {}
+    },
+    "discretion_logic": null or "description of discretionary element"
+}"#,
+            )
+            .with_description("Compiles natural language statute into structured format"),
+        );
+
+        // Statute analysis template
+        registry.register(
+            PromptTemplate::new(
+                "analyze_statute",
+                r#"Analyze the following statute for:
+1. Logical consistency
+2. Ambiguous language that might require judicial interpretation
+3. Potential conflicts with common legal principles
+4. Missing conditions or edge cases
+
+Statute:
+{{statute_json}}
+
+Respond with JSON:
+{
+    "issues": ["list of identified issues"],
+    "ambiguities": ["list of ambiguous terms or phrases"],
+    "recommendations": ["list of recommendations"],
+    "discretion_points": ["areas requiring human judgment"]
+}"#,
+            )
+            .with_description("Analyzes a statute for potential issues"),
+        );
+
+        // Statute explanation template
+        registry.register(
+            PromptTemplate::new(
+                "explain_statute",
+                r#"Explain the following statute in plain language that a non-lawyer can understand.
+Include:
+1. Who this law applies to
+2. What conditions must be met
+3. What happens when conditions are met
+4. Any areas where human judgment is required
+
+Statute:
+{{statute_json}}
+
+Provide a clear, concise explanation."#,
+            )
+            .with_description("Generates plain language explanation of a statute"),
+        );
+
+        // Contract analysis template
+        registry.register(
+            PromptTemplate::new(
+                "analyze_contract",
+                r#"Analyze the following contract and identify:
+1. Key obligations for each party
+2. Potential risks or unfavorable terms
+3. Ambiguous clauses that may lead to disputes
+4. Missing standard provisions
+
+Contract:
+{{contract_text}}
+
+Provide analysis in JSON format:
+{
+    "obligations": {"party1": [...], "party2": [...]},
+    "risks": [...],
+    "ambiguities": [...],
+    "missing_provisions": [...]
+}"#,
+            )
+            .with_description("Analyzes a contract for key terms and risks"),
+        );
+
+        registry
+    }
+
+    /// Creates a registry with common coding templates.
+    pub fn with_coding_templates() -> Self {
+        let mut registry = Self::new();
+
+        registry.register(
+            PromptTemplate::new(
+                "code_review",
+                r#"Review the following code and provide feedback on:
+1. Code quality and style
+2. Potential bugs or issues
+3. Performance concerns
+4. Security vulnerabilities
+5. Suggestions for improvement
+
+Language: {{language}}
+
+Code:
+{{code}}
+
+Provide detailed review."#,
+            )
+            .with_description("Reviews code for quality, bugs, and improvements")
+            .with_default("language", "Rust"),
+        );
+
+        registry.register(
+            PromptTemplate::new(
+                "generate_tests",
+                r#"Generate comprehensive unit tests for the following code.
+Include edge cases, error conditions, and normal operation.
+
+Language: {{language}}
+Testing Framework: {{framework}}
+
+Code:
+{{code}}
+
+Generate test code."#,
+            )
+            .with_description("Generates unit tests for given code")
+            .with_default("language", "Rust")
+            .with_default("framework", "built-in"),
+        );
+
+        registry
+    }
+}
+
+impl Default for TemplateRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A/B testing for prompts.
+pub mod ab_testing {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Variant in an A/B test.
+    #[derive(Debug, Clone)]
+    pub struct PromptVariant {
+        pub name: String,
+        pub template: PromptTemplate,
+        pub weight: f64,
+    }
+
+    /// Statistics for a variant.
+    #[derive(Debug, Clone, Default)]
+    pub struct VariantStats {
+        pub requests: usize,
+        pub successes: usize,
+        pub failures: usize,
+        pub total_latency_ms: u128,
+    }
+
+    impl VariantStats {
+        pub fn success_rate(&self) -> f64 {
+            if self.requests == 0 {
+                0.0
+            } else {
+                (self.successes as f64 / self.requests as f64) * 100.0
+            }
+        }
+
+        pub fn avg_latency_ms(&self) -> f64 {
+            if self.requests == 0 {
+                0.0
+            } else {
+                self.total_latency_ms as f64 / self.requests as f64
+            }
+        }
+    }
+
+    /// A/B test configuration.
+    pub struct ABTest {
+        name: String,
+        variants: Vec<PromptVariant>,
+        stats: Arc<std::sync::Mutex<HashMap<String, VariantStats>>>,
+        selection_counter: Arc<AtomicUsize>,
+    }
+
+    impl ABTest {
+        /// Creates a new A/B test.
+        pub fn new(name: impl Into<String>) -> Self {
+            Self {
+                name: name.into(),
+                variants: Vec::new(),
+                stats: Arc::new(std::sync::Mutex::new(HashMap::new())),
+                selection_counter: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        /// Adds a variant to the test.
+        pub fn add_variant(
+            mut self,
+            name: impl Into<String>,
+            template: PromptTemplate,
+            weight: f64,
+        ) -> Self {
+            let variant_name = name.into();
+            self.variants.push(PromptVariant {
+                name: variant_name.clone(),
+                template,
+                weight,
+            });
+            self.stats
+                .lock()
+                .unwrap()
+                .insert(variant_name, VariantStats::default());
+            self
+        }
+
+        /// Selects a variant based on weights (weighted random selection).
+        pub fn select_variant(&self) -> Option<&PromptVariant> {
+            if self.variants.is_empty() {
+                return None;
+            }
+
+            // Simple round-robin for now (can be enhanced with true weighted random)
+            let counter = self.selection_counter.fetch_add(1, Ordering::SeqCst);
+            let total_weight: f64 = self.variants.iter().map(|v| v.weight).sum();
+
+            if total_weight == 0.0 {
+                // Equal distribution if no weights
+                Some(&self.variants[counter % self.variants.len()])
+            } else {
+                // Weighted selection
+                let mut cumulative = 0.0;
+                let target = (counter as f64 % total_weight) / total_weight * total_weight;
+
+                for variant in &self.variants {
+                    cumulative += variant.weight;
+                    if target < cumulative {
+                        return Some(variant);
+                    }
+                }
+
+                self.variants.last()
+            }
+        }
+
+        /// Records a successful request for a variant.
+        pub fn record_success(&self, variant_name: &str, latency_ms: u128) {
+            let mut stats = self.stats.lock().unwrap();
+            if let Some(variant_stats) = stats.get_mut(variant_name) {
+                variant_stats.requests += 1;
+                variant_stats.successes += 1;
+                variant_stats.total_latency_ms += latency_ms;
+            }
+        }
+
+        /// Records a failed request for a variant.
+        pub fn record_failure(&self, variant_name: &str, latency_ms: u128) {
+            let mut stats = self.stats.lock().unwrap();
+            if let Some(variant_stats) = stats.get_mut(variant_name) {
+                variant_stats.requests += 1;
+                variant_stats.failures += 1;
+                variant_stats.total_latency_ms += latency_ms;
+            }
+        }
+
+        /// Gets statistics for all variants.
+        pub fn get_stats(&self) -> HashMap<String, VariantStats> {
+            self.stats.lock().unwrap().clone()
+        }
+
+        /// Gets the winning variant based on success rate.
+        pub fn get_winner(&self) -> Option<(String, VariantStats)> {
+            let stats = self.stats.lock().unwrap();
+            stats
+                .iter()
+                .max_by(|a, b| {
+                    a.1.success_rate()
+                        .partial_cmp(&b.1.success_rate())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(name, stats)| (name.clone(), stats.clone()))
+        }
+
+        /// Generates a report of the A/B test.
+        pub fn generate_report(&self) -> String {
+            let mut report = format!("A/B Test Report: {}\n", self.name);
+            report.push_str("=".repeat(50).as_str());
+            report.push('\n');
+
+            let stats = self.stats.lock().unwrap();
+
+            for (variant_name, variant_stats) in stats.iter() {
+                report.push_str(&format!("\nVariant: {}\n", variant_name));
+                report.push_str(&format!("  Requests: {}\n", variant_stats.requests));
+                report.push_str(&format!("  Successes: {}\n", variant_stats.successes));
+                report.push_str(&format!("  Failures: {}\n", variant_stats.failures));
+                report.push_str(&format!(
+                    "  Success Rate: {:.2}%\n",
+                    variant_stats.success_rate()
+                ));
+                report.push_str(&format!(
+                    "  Avg Latency: {:.2}ms\n",
+                    variant_stats.avg_latency_ms()
+                ));
+            }
+
+            if let Some((winner_name, winner_stats)) = self.get_winner() {
+                report.push_str(&format!(
+                    "\nWinner: {} ({:.2}% success rate)\n",
+                    winner_name,
+                    winner_stats.success_rate()
+                ));
+            }
+
+            report
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_render() {
+        let template = PromptTemplate::new("test", "Hello, {{name}}! You are {{age}} years old.");
+
+        let mut vars = HashMap::new();
+        vars.insert("name".to_string(), "Alice".to_string());
+        vars.insert("age".to_string(), "30".to_string());
+
+        let result = template.render(&vars).unwrap();
+        assert_eq!(result, "Hello, Alice! You are 30 years old.");
+    }
+
+    #[test]
+    fn test_template_with_defaults() {
+        let template = PromptTemplate::new("test", "Hello, {{name}}! Language: {{language}}")
+            .with_default("language", "English");
+
+        let mut vars = HashMap::new();
+        vars.insert("name".to_string(), "Bob".to_string());
+
+        let result = template.render(&vars).unwrap();
+        assert_eq!(result, "Hello, Bob! Language: English");
+    }
+
+    #[test]
+    fn test_template_missing_variable() {
+        let template = PromptTemplate::new("test", "Hello, {{name}}!");
+
+        let vars = HashMap::new();
+        let result = template.render(&vars);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_extract_variables() {
+        let template = PromptTemplate::new("test", "{{var1}} and {{var2}} but not { var3 }");
+
+        let vars = template.extract_variables();
+        assert_eq!(vars, vec!["var1", "var2"]);
+    }
+
+    #[test]
+    fn test_template_required_variables() {
+        let template = PromptTemplate::new("test", "{{required}} and {{optional}}")
+            .with_default("optional", "default");
+
+        let required = template.required_variables();
+        assert_eq!(required, vec!["required"]);
+    }
+
+    #[test]
+    fn test_template_builder() {
+        let template = PromptTemplate::new("test", "{{a}} + {{b}} = {{c}}");
+
+        let result = template
+            .render_with(|b| b.set("a", "1").set("b", "2").set("c", "3"))
+            .unwrap();
+
+        assert_eq!(result, "1 + 2 = 3");
+    }
+
+    #[test]
+    fn test_registry_basic() {
+        let mut registry = TemplateRegistry::new();
+
+        let template = PromptTemplate::new("greeting", "Hello, {{name}}!");
+        registry.register(template);
+
+        let retrieved = registry.get("greeting");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "greeting");
+    }
+
+    #[test]
+    fn test_registry_versioning() {
+        let mut registry = TemplateRegistry::new();
+
+        registry.register(PromptTemplate::new("test", "Version 1").with_version(1));
+        registry.register(PromptTemplate::new("test", "Version 2").with_version(2));
+
+        let latest = registry.get("test").unwrap();
+        assert_eq!(latest.version, 2);
+
+        let v1 = registry.get_version("test", 1).unwrap();
+        assert_eq!(v1.template, "Version 1");
+    }
+
+    #[test]
+    fn test_legal_templates() {
+        let registry = TemplateRegistry::with_legal_templates();
+
+        assert!(registry.get("compile_statute").is_some());
+        assert!(registry.get("analyze_statute").is_some());
+        assert!(registry.get("explain_statute").is_some());
+        assert!(registry.get("analyze_contract").is_some());
+    }
+
+    #[test]
+    fn test_coding_templates() {
+        let registry = TemplateRegistry::with_coding_templates();
+
+        assert!(registry.get("code_review").is_some());
+        assert!(registry.get("generate_tests").is_some());
+
+        // Test with defaults
+        let code_review = registry.get("code_review").unwrap();
+        let mut vars = HashMap::new();
+        vars.insert("code".to_string(), "fn main() {}".to_string());
+
+        let result = code_review.render(&vars).unwrap();
+        assert!(result.contains("Rust")); // Default language
+    }
+}

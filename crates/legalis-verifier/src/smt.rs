@@ -132,6 +132,265 @@ impl<'ctx> SmtVerifier<'ctx> {
         }
     }
 
+    /// Gets multiple models (up to max_count) that satisfy the condition.
+    ///
+    /// This is useful for exploring different valid scenarios.
+    pub fn get_multiple_models(
+        &mut self,
+        condition: &Condition,
+        max_count: usize,
+    ) -> Result<Vec<HashMap<String, i64>>> {
+        self.solver.reset();
+        let formula = self.translate_condition(condition)?;
+        self.solver.assert(&formula);
+
+        let mut models = Vec::new();
+
+        for _ in 0..max_count {
+            match self.solver.check() {
+                z3::SatResult::Sat => {
+                    let model = self.solver.get_model().context("Failed to get model")?;
+                    let mut result = HashMap::new();
+
+                    // Extract values for integer variables
+                    let mut blocking_clause = Vec::new();
+                    for (name, var) in &self.int_vars {
+                        if let Some(value) = model.eval(var, true) {
+                            if let Some(i) = value.as_i64() {
+                                result.insert(name.clone(), i);
+                                // Create constraint to block this assignment
+                                let int_value = Int::from_i64(self.ctx, i);
+                                blocking_clause.push(var._eq(&int_value).not());
+                            }
+                        }
+                    }
+
+                    models.push(result);
+
+                    // Block this model to find a different one
+                    if !blocking_clause.is_empty() {
+                        let block = Bool::or(self.ctx, &blocking_clause.iter().collect::<Vec<_>>());
+                        self.solver.assert(&block);
+                    } else {
+                        break; // No more models possible
+                    }
+                }
+                z3::SatResult::Unsat => break,
+                z3::SatResult::Unknown => {
+                    return Err(anyhow::anyhow!("SMT solver returned unknown"));
+                }
+            }
+        }
+
+        Ok(models)
+    }
+
+    /// Checks equivalence of two conditions.
+    ///
+    /// Returns `Ok(true)` if the two conditions are logically equivalent.
+    pub fn equivalent(&mut self, cond1: &Condition, cond2: &Condition) -> Result<bool> {
+        // Two conditions are equivalent if cond1 <=> cond2
+        // which is (cond1 => cond2) AND (cond2 => cond1)
+        let implies_forward = self.implies(cond1, cond2)?;
+        let implies_backward = self.implies(cond2, cond1)?;
+        Ok(implies_forward && implies_backward)
+    }
+
+    /// Finds the minimal unsatisfiable core of conditions.
+    ///
+    /// Given a set of conditions that are unsatisfiable together,
+    /// returns a minimal subset that is still unsatisfiable.
+    pub fn find_unsat_core(&mut self, conditions: &[Condition]) -> Result<Vec<usize>> {
+        self.solver.reset();
+
+        // Assert each condition with a tracking literal
+        let mut tracking_literals = Vec::new();
+        for (i, cond) in conditions.iter().enumerate() {
+            let formula = self.translate_condition(cond)?;
+            let track_name = format!("track_{}", i);
+            let track_lit = Bool::new_const(self.ctx, track_name);
+            tracking_literals.push((i, track_lit.clone()));
+
+            // Assert: track_lit => formula
+            let implication = Bool::or(self.ctx, &[&track_lit.not(), &formula]);
+            self.solver.assert(&implication);
+        }
+
+        // Assert all tracking literals
+        for (_, lit) in &tracking_literals {
+            self.solver.assert(lit);
+        }
+
+        match self.solver.check() {
+            z3::SatResult::Unsat => {
+                // Get unsat core
+                let core = self.solver.get_unsat_core();
+                let mut core_indices = Vec::new();
+
+                for (idx, track_lit) in &tracking_literals {
+                    if core.contains(track_lit) {
+                        core_indices.push(*idx);
+                    }
+                }
+
+                Ok(core_indices)
+            }
+            z3::SatResult::Sat => Err(anyhow::anyhow!("Conditions are satisfiable, no unsat core")),
+            z3::SatResult::Unknown => Err(anyhow::anyhow!("SMT solver returned unknown")),
+        }
+    }
+
+    /// Resets the solver state, clearing all assertions.
+    pub fn reset(&mut self) {
+        self.solver.reset();
+        self.int_vars.clear();
+        self.bool_vars.clear();
+    }
+
+    /// Pushes a new scope for incremental solving.
+    pub fn push(&mut self) {
+        self.solver.push();
+    }
+
+    /// Pops the most recent scope.
+    pub fn pop(&mut self) {
+        self.solver.pop(1);
+    }
+
+    /// Asserts a condition without checking satisfiability.
+    ///
+    /// Useful for incremental solving where multiple conditions
+    /// are added before checking.
+    pub fn assert_condition(&mut self, condition: &Condition) -> Result<()> {
+        let formula = self.translate_condition(condition)?;
+        self.solver.assert(&formula);
+        Ok(())
+    }
+
+    /// Checks the current set of assertions for satisfiability.
+    pub fn check(&mut self) -> Result<bool> {
+        match self.solver.check() {
+            z3::SatResult::Sat => Ok(true),
+            z3::SatResult::Unsat => Ok(false),
+            z3::SatResult::Unknown => Err(anyhow::anyhow!("SMT solver returned unknown")),
+        }
+    }
+
+    /// Gets statistics about the current solver state.
+    pub fn get_statistics(&self) -> HashMap<String, String> {
+        let stats = self.solver.get_statistics();
+        let mut result = HashMap::new();
+
+        for (key, value) in stats.entries() {
+            result.insert(key.to_string(), value.to_string());
+        }
+
+        result
+    }
+
+    /// Generates a proof for an unsatisfiable formula.
+    ///
+    /// Returns a proof object that can be exported or analyzed.
+    /// Note: Requires Z3 to be configured with proof generation enabled.
+    pub fn get_proof(&mut self, condition: &Condition) -> Result<Option<String>> {
+        self.solver.reset();
+        let formula = self.translate_condition(condition)?;
+        self.solver.assert(&formula);
+
+        match self.solver.check() {
+            z3::SatResult::Unsat => {
+                // Get proof
+                let proof = self.solver.get_proof();
+                if let Some(proof_ast) = proof {
+                    Ok(Some(proof_ast.to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
+            z3::SatResult::Sat => Err(anyhow::anyhow!(
+                "Formula is satisfiable, no proof available"
+            )),
+            z3::SatResult::Unknown => Err(anyhow::anyhow!("SMT solver returned unknown")),
+        }
+    }
+
+    /// Exports a proof in SMTLIB2 format.
+    ///
+    /// This generates an SMTLIB2 representation of the proof
+    /// that can be verified by other SMT solvers.
+    pub fn export_proof_smtlib2(&mut self, condition: &Condition) -> Result<String> {
+        self.solver.reset();
+        let formula = self.translate_condition(condition)?;
+
+        let mut smtlib2 = String::new();
+        smtlib2.push_str("; Proof for condition\n");
+        smtlib2.push_str("(set-logic ALL)\n");
+
+        // Declare variables
+        for (name, _) in &self.int_vars {
+            smtlib2.push_str(&format!("(declare-const {} Int)\n", name));
+        }
+        for (name, _) in &self.bool_vars {
+            smtlib2.push_str(&format!("(declare-const {} Bool)\n", name));
+        }
+
+        // Assert the formula
+        smtlib2.push_str(&format!("(assert {})\n", formula));
+        smtlib2.push_str("(check-sat)\n");
+
+        self.solver.assert(&formula);
+
+        match self.solver.check() {
+            z3::SatResult::Unsat => {
+                smtlib2.push_str("; Result: unsat\n");
+                if let Some(proof) = self.solver.get_proof() {
+                    smtlib2.push_str(&format!("; Proof: {}\n", proof));
+                }
+            }
+            z3::SatResult::Sat => {
+                smtlib2.push_str("; Result: sat\n");
+            }
+            z3::SatResult::Unknown => {
+                smtlib2.push_str("; Result: unknown\n");
+            }
+        }
+
+        Ok(smtlib2)
+    }
+
+    /// Generates a human-readable proof explanation.
+    ///
+    /// This produces a textual explanation of why a condition is unsatisfiable,
+    /// using the unsat core and other information from the solver.
+    pub fn explain_unsat(&mut self, conditions: &[Condition]) -> Result<String> {
+        if conditions.is_empty() {
+            return Err(anyhow::anyhow!("No conditions provided"));
+        }
+
+        let core_indices = self.find_unsat_core(conditions)?;
+
+        let mut explanation = String::new();
+        explanation.push_str("Unsatisfiability Explanation:\n\n");
+        explanation.push_str(&format!("Total conditions: {}\n", conditions.len()));
+        explanation.push_str(&format!(
+            "Core conditions causing unsatisfiability: {}\n\n",
+            core_indices.len()
+        ));
+
+        explanation.push_str("The following conditions cannot be satisfied together:\n");
+        for idx in &core_indices {
+            if let Some(cond) = conditions.get(*idx) {
+                explanation.push_str(&format!("  [{}] {}\n", idx, cond));
+            }
+        }
+
+        explanation.push_str("\nExplanation:\n");
+        explanation.push_str("These conditions form a minimal unsatisfiable core, meaning that\n");
+        explanation.push_str("there is no possible assignment of values that would satisfy all of them simultaneously.\n");
+
+        Ok(explanation)
+    }
+
     /// Translates a Legalis condition to a Z3 formula.
     fn translate_condition(&mut self, condition: &Condition) -> Result<Bool<'ctx>> {
         match condition {
@@ -519,5 +778,96 @@ mod tests {
 
         assert!(verifier.is_satisfiable(&condition).unwrap());
         assert!(!verifier.is_tautology(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_proof_generation_unsat() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Unsatisfiable condition: Age > 65 AND Age < 18
+        let condition = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterThan,
+                value: 65,
+            }),
+            Box::new(Condition::Age {
+                operator: ComparisonOp::LessThan,
+                value: 18,
+            }),
+        );
+
+        // Should be able to get a proof for unsatisfiable formula
+        let proof_result = verifier.get_proof(&condition);
+        assert!(proof_result.is_ok());
+    }
+
+    #[test]
+    fn test_smtlib2_export() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        };
+
+        let smtlib2 = verifier.export_proof_smtlib2(&condition).unwrap();
+
+        assert!(smtlib2.contains("set-logic"));
+        assert!(smtlib2.contains("declare-const"));
+        assert!(smtlib2.contains("assert"));
+        assert!(smtlib2.contains("check-sat"));
+    }
+
+    #[test]
+    fn test_explain_unsat() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let conditions = vec![
+            Condition::Age {
+                operator: ComparisonOp::GreaterThan,
+                value: 65,
+            },
+            Condition::Age {
+                operator: ComparisonOp::LessThan,
+                value: 18,
+            },
+        ];
+
+        let explanation = verifier.explain_unsat(&conditions).unwrap();
+
+        assert!(explanation.contains("Unsatisfiability Explanation"));
+        assert!(explanation.contains("Total conditions:"));
+        assert!(explanation.contains("Core conditions"));
+    }
+
+    #[test]
+    fn test_unsat_core() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Create a set of unsatisfiable conditions
+        let conditions = vec![
+            Condition::Age {
+                operator: ComparisonOp::GreaterThan,
+                value: 65,
+            },
+            Condition::Age {
+                operator: ComparisonOp::LessThan,
+                value: 18,
+            },
+            Condition::Income {
+                operator: ComparisonOp::GreaterThan,
+                value: 0,
+            },
+        ];
+
+        let core = verifier.find_unsat_core(&conditions).unwrap();
+
+        // The core should contain at least the two contradicting age conditions
+        assert!(!core.is_empty());
+        assert!(core.len() <= conditions.len());
     }
 }

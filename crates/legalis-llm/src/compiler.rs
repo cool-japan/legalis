@@ -86,6 +86,159 @@ Statute:
 
         self.provider.generate_text(&prompt).await
     }
+
+    /// Compiles multiple statutes in batch.
+    ///
+    /// This is more efficient than calling compile() multiple times as it can
+    /// batch requests to the LLM provider.
+    pub async fn compile_batch(&self, raw_texts: &[String]) -> Result<Vec<Result<Statute>>> {
+        let mut results = Vec::new();
+
+        for text in raw_texts {
+            let result = self.compile(text).await;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Compiles multiple statutes in batch with parallelism.
+    ///
+    /// Uses concurrent requests to speed up batch compilation.
+    pub async fn compile_batch_parallel(
+        &self,
+        raw_texts: &[String],
+        max_concurrent: usize,
+    ) -> Result<Vec<Result<Statute>>> {
+        use futures::stream::{self, StreamExt};
+
+        let results = stream::iter(raw_texts.iter())
+            .map(|text| async move { self.compile(text).await })
+            .buffer_unordered(max_concurrent)
+            .collect::<Vec<_>>()
+            .await;
+
+        Ok(results)
+    }
+}
+
+/// Compilation cache for statutes.
+pub struct CompilationCache {
+    cache: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Statute>>>,
+}
+
+impl CompilationCache {
+    /// Creates a new compilation cache.
+    pub fn new() -> Self {
+        Self {
+            cache: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+
+    /// Gets a cached statute by text hash.
+    pub fn get(&self, text: &str) -> Option<Statute> {
+        let key = Self::hash_text(text);
+        self.cache.lock().unwrap().get(&key).cloned()
+    }
+
+    /// Stores a compiled statute in the cache.
+    pub fn put(&self, text: &str, statute: Statute) {
+        let key = Self::hash_text(text);
+        self.cache.lock().unwrap().insert(key, statute);
+    }
+
+    /// Clears the cache.
+    pub fn clear(&self) {
+        self.cache.lock().unwrap().clear();
+    }
+
+    /// Gets the cache size.
+    pub fn len(&self) -> usize {
+        self.cache.lock().unwrap().len()
+    }
+
+    /// Checks if the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.cache.lock().unwrap().is_empty()
+    }
+
+    fn hash_text(text: &str) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    }
+}
+
+impl Default for CompilationCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Law compiler with caching support.
+pub struct CachedLawCompiler<P: LLMProvider> {
+    compiler: LawCompiler<P>,
+    cache: CompilationCache,
+}
+
+impl<P: LLMProvider> CachedLawCompiler<P> {
+    /// Creates a new cached law compiler.
+    pub fn new(provider: P) -> Self {
+        Self {
+            compiler: LawCompiler::new(provider),
+            cache: CompilationCache::new(),
+        }
+    }
+
+    /// Compiles a statute with caching.
+    pub async fn compile(&self, raw_text: &str) -> Result<Statute> {
+        // Check cache first
+        if let Some(cached) = self.cache.get(raw_text) {
+            tracing::debug!("Cache hit for statute compilation");
+            return Ok(cached);
+        }
+
+        // Cache miss - compile and store
+        let statute = self.compiler.compile(raw_text).await?;
+        self.cache.put(raw_text, statute.clone());
+
+        Ok(statute)
+    }
+
+    /// Compiles multiple statutes in batch with caching.
+    pub async fn compile_batch(&self, raw_texts: &[String]) -> Result<Vec<Result<Statute>>> {
+        let mut results = Vec::new();
+
+        for text in raw_texts {
+            let result = self.compile(text).await;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Analyzes a statute.
+    pub async fn analyze(&self, statute: &Statute) -> Result<AnalysisReport> {
+        self.compiler.analyze(statute).await
+    }
+
+    /// Explains a statute.
+    pub async fn explain(&self, statute: &Statute) -> Result<String> {
+        self.compiler.explain(statute).await
+    }
+
+    /// Clears the compilation cache.
+    pub fn clear_cache(&self) {
+        self.cache.clear();
+    }
+
+    /// Gets cache statistics.
+    pub fn cache_size(&self) -> usize {
+        self.cache.len()
+    }
 }
 
 /// Report from statute analysis.

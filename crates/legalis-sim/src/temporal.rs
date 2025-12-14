@@ -631,6 +631,322 @@ impl TemporalSimEngine {
 
         self.run().await
     }
+
+    /// Applies a statute retroactively from a given date.
+    /// This re-simulates all time steps from the retroactive date onwards.
+    pub async fn apply_retroactive_statute(
+        &mut self,
+        statute: TemporalStatute,
+        retroactive_from: NaiveDate,
+    ) -> TemporalMetrics {
+        // Add the statute to the collection
+        self.statutes.push(statute);
+
+        // Re-run simulation from the retroactive date
+        let original_start = self.config.start_date;
+        self.config.start_date = retroactive_from;
+
+        let metrics = self.run().await;
+
+        // Restore original start date
+        self.config.start_date = original_start;
+
+        metrics
+    }
+
+    /// Simulates what-if scenarios by comparing current state with alternative statute.
+    pub async fn what_if_scenario(
+        &self,
+        alternative_statute: TemporalStatute,
+        from_date: NaiveDate,
+    ) -> (TemporalMetrics, TemporalMetrics) {
+        // Clone current engine for baseline
+        let mut baseline_engine = TemporalSimEngine::new(self.config.clone());
+        baseline_engine.statutes = self.statutes.clone();
+
+        // Clone agents
+        let agents_read = self.agents.read().await;
+        let mut baseline_agents = baseline_engine.agents.write().await;
+        for (id, state) in agents_read.iter() {
+            baseline_agents.insert(*id, state.clone());
+        }
+        drop(baseline_agents);
+        drop(agents_read);
+
+        // Run baseline from the specified date
+        baseline_engine.config.start_date = from_date;
+        let baseline_metrics = baseline_engine.run().await;
+
+        // Create alternative engine
+        let mut alternative_engine = TemporalSimEngine::new(self.config.clone());
+        alternative_engine.statutes = self.statutes.clone();
+        alternative_engine.statutes.push(alternative_statute);
+
+        // Clone agents for alternative
+        let agents_read = self.agents.read().await;
+        let mut alt_agents = alternative_engine.agents.write().await;
+        for (id, state) in agents_read.iter() {
+            alt_agents.insert(*id, state.clone());
+        }
+        drop(alt_agents);
+        drop(agents_read);
+
+        // Run alternative from the specified date
+        alternative_engine.config.start_date = from_date;
+        let alternative_metrics = alternative_engine.run().await;
+
+        (baseline_metrics, alternative_metrics)
+    }
+
+    /// Projects a numeric attribute value into the future based on a projection model.
+    #[allow(dead_code)]
+    fn project_value(&self, current_value: f64, model: &ProjectionModel, steps: i64) -> f64 {
+        match model {
+            ProjectionModel::Constant => current_value,
+            ProjectionModel::Linear => current_value + steps as f64,
+            ProjectionModel::Exponential { rate } => {
+                current_value * (1.0 + rate).powi(steps as i32)
+            }
+            ProjectionModel::CustomRate { rate_per_step } => {
+                current_value * (1.0 + rate_per_step).powi(steps as i32)
+            }
+        }
+    }
+
+    /// Runs a future projection simulation with demographic changes.
+    ///
+    /// This extends the simulation into the future with projected population growth,
+    /// income changes, aging, births, and deaths based on the projection config.
+    pub async fn run_with_projection(
+        &mut self,
+        projection_config: ProjectionConfig,
+    ) -> TemporalMetrics {
+        let mut metrics = TemporalMetrics::new();
+        let mut current_date = self.config.start_date;
+        let time_step_years = match self.config.time_step {
+            TimeStep::Day => 1.0 / 365.0,
+            TimeStep::Week => 1.0 / 52.0,
+            TimeStep::Month => 1.0 / 12.0,
+            TimeStep::Quarter => 0.25,
+            TimeStep::Year => 1.0,
+        };
+
+        let mut step_count = 0i64;
+
+        while current_date <= self.config.end_date {
+            // Process scheduled events for this date
+            let events_today = self.process_events(current_date).await;
+            for event in &events_today {
+                metrics.record_event(event.clone());
+            }
+
+            // Apply demographic projections
+            if step_count > 0 {
+                self.apply_demographic_projection(
+                    current_date,
+                    &projection_config,
+                    time_step_years,
+                    &mut metrics,
+                )
+                .await;
+            }
+
+            // Get active statutes for this date
+            let active_statutes: Vec<&Statute> = self
+                .statutes
+                .iter()
+                .filter(|s| s.is_effective_at(current_date))
+                .map(|s| s.version_at(current_date))
+                .collect();
+
+            // Get active agents for this date
+            let agents_read = self.agents.read().await;
+            let active_agents: Vec<&AgentState> = agents_read
+                .values()
+                .filter(|a| a.is_active_at(current_date))
+                .collect();
+
+            // Run simulation for this time step
+            let step_metrics = self.simulate_step(current_date, &active_statutes, &active_agents);
+
+            // Create snapshot
+            let snapshot = TimeSnapshot {
+                date: current_date,
+                metrics: step_metrics.clone(),
+                active_agents: active_agents.len(),
+                active_statutes: active_statutes.len(),
+                events: events_today,
+            };
+
+            // Merge into cumulative metrics
+            metrics.cumulative.total_applications += step_metrics.total_applications;
+            metrics.cumulative.deterministic_count += step_metrics.deterministic_count;
+            metrics.cumulative.discretion_count += step_metrics.discretion_count;
+            metrics.cumulative.void_count += step_metrics.void_count;
+
+            for (statute_id, statute_metrics) in step_metrics.statute_metrics {
+                let cumulative = metrics
+                    .cumulative
+                    .statute_metrics
+                    .entry(statute_id)
+                    .or_default();
+                cumulative.total += statute_metrics.total;
+                cumulative.deterministic += statute_metrics.deterministic;
+                cumulative.discretion += statute_metrics.discretion;
+                cumulative.void += statute_metrics.void;
+            }
+
+            metrics.add_snapshot(snapshot);
+
+            // Advance time
+            current_date += self.config.time_step.to_duration();
+            step_count += 1;
+        }
+
+        metrics
+    }
+
+    /// Applies demographic projection changes to the population.
+    #[allow(clippy::too_many_arguments)]
+    async fn apply_demographic_projection(
+        &mut self,
+        current_date: NaiveDate,
+        config: &ProjectionConfig,
+        time_step_years: f64,
+        metrics: &mut TemporalMetrics,
+    ) {
+        let mut agents = self.agents.write().await;
+        let agent_ids: Vec<Uuid> = agents.keys().copied().collect();
+
+        // Update existing agents
+        for agent_id in &agent_ids {
+            if let Some(agent) = agents.get_mut(agent_id) {
+                if !agent.is_active_at(current_date) {
+                    continue;
+                }
+
+                // Age progression
+                if let Some(age_str) = agent.attributes.get("age") {
+                    if let Ok(age) = age_str.parse::<u32>() {
+                        let years_passed = if self.config.time_step == TimeStep::Year {
+                            1
+                        } else {
+                            0
+                        };
+                        if years_passed > 0 {
+                            let new_age = age + years_passed;
+                            agent.set_attribute("age", new_age.to_string(), current_date);
+                        }
+                    }
+                }
+
+                // Income projection
+                if let Some(income_str) = agent.attributes.get("income") {
+                    if let Ok(income) = income_str.parse::<f64>() {
+                        let projected_income = match &config.income_model {
+                            ProjectionModel::Exponential { rate } => {
+                                income * (1.0 + rate * time_step_years)
+                            }
+                            ProjectionModel::CustomRate { rate_per_step } => {
+                                income * (1.0 + rate_per_step)
+                            }
+                            _ => income,
+                        };
+                        if (projected_income - income).abs() > 0.01 {
+                            agent.set_attribute(
+                                "income",
+                                projected_income.round().to_string(),
+                                current_date,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle births (new agents)
+        let active_count = agents
+            .values()
+            .filter(|a| a.is_active_at(current_date))
+            .count();
+        let birth_count =
+            (active_count as f64 * config.birth_rate * time_step_years).round() as usize;
+
+        for _ in 0..birth_count {
+            let new_id = Uuid::new_v4();
+            let mut new_agent = AgentState::new(new_id);
+            new_agent.birth_date = Some(current_date);
+            new_agent.set_attribute("age", "0".to_string(), current_date);
+            new_agent.set_attribute("income", "0".to_string(), current_date);
+            agents.insert(new_id, new_agent);
+
+            metrics.record_event(TemporalEvent::AgentBirth {
+                agent_id: new_id,
+                date: current_date,
+            });
+        }
+
+        // Handle deaths
+        let death_count =
+            (active_count as f64 * config.death_rate * time_step_years).round() as usize;
+        let active_ids: Vec<Uuid> = agents
+            .iter()
+            .filter(|(_, a)| a.is_active_at(current_date))
+            .map(|(id, _)| *id)
+            .collect();
+
+        for i in 0..death_count.min(active_ids.len()) {
+            if let Some(agent) = agents.get_mut(&active_ids[i]) {
+                agent.death_date = Some(current_date);
+                agent.active = false;
+
+                metrics.record_event(TemporalEvent::AgentDeath {
+                    agent_id: active_ids[i],
+                    date: current_date,
+                });
+            }
+        }
+    }
+}
+
+/// Projection model for future simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProjectionModel {
+    /// Linear trend projection
+    Linear,
+    /// Exponential growth/decay
+    Exponential { rate: f64 },
+    /// Custom growth rate per time step
+    CustomRate { rate_per_step: f64 },
+    /// Constant (no change)
+    Constant,
+}
+
+/// Configuration for future projection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectionConfig {
+    /// Model for population growth
+    pub population_model: ProjectionModel,
+    /// Model for income changes
+    pub income_model: ProjectionModel,
+    /// Model for age progression (typically constant +1 per year)
+    pub age_model: ProjectionModel,
+    /// Birth rate (new agents per year, as fraction of population)
+    pub birth_rate: f64,
+    /// Death rate (agents leaving per year, as fraction of population)
+    pub death_rate: f64,
+}
+
+impl Default for ProjectionConfig {
+    fn default() -> Self {
+        Self {
+            population_model: ProjectionModel::Linear,
+            income_model: ProjectionModel::Exponential { rate: 0.03 }, // 3% annual growth
+            age_model: ProjectionModel::Constant,
+            birth_rate: 0.012, // 1.2% per year
+            death_rate: 0.008, // 0.8% per year
+        }
+    }
 }
 
 /// Builder for temporal simulations.

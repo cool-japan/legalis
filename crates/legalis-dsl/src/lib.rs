@@ -7,21 +7,29 @@
 //!
 //! ```text
 //! STATUTE ::= "STATUTE" ID ":" TITLE "{" BODY "}"
-//! BODY ::= (METADATA | WHEN | THEN | DISCRETION)*
+//! BODY ::= (METADATA | DEFAULT | WHEN | THEN | DISCRETION | EXCEPTION | AMENDMENT | SUPERSEDES)*
 //! METADATA ::= EFFECTIVE_DATE | EXPIRY_DATE | JURISDICTION | VERSION
 //! EFFECTIVE_DATE ::= ("EFFECTIVE_DATE" | "EFFECTIVE") DATE
 //! EXPIRY_DATE ::= ("EXPIRY_DATE" | "EXPIRY" | "EXPIRES") DATE
 //! JURISDICTION ::= "JURISDICTION" (STRING | IDENT)
 //! VERSION ::= "VERSION" NUMBER
 //! DATE ::= YYYY "-" MM "-" DD | STRING
+//! DEFAULT ::= "DEFAULT" IDENT ("=" | ":") VALUE
 //! WHEN ::= "WHEN" CONDITION
 //! CONDITION ::= OR_EXPR
 //! OR_EXPR ::= AND_EXPR ("OR" AND_EXPR)*
 //! AND_EXPR ::= UNARY_EXPR ("AND" UNARY_EXPR)*
 //! UNARY_EXPR ::= "NOT" UNARY_EXPR | "(" CONDITION ")" | PRIMARY_COND
-//! PRIMARY_COND ::= AGE_COND | INCOME_COND | "HAS" IDENT | IDENT
+//! PRIMARY_COND ::= FIELD_COND | "HAS" IDENT | IDENT
+//! FIELD_COND ::= FIELD (COMPARISON_OP VALUE | "BETWEEN" VALUE "AND" VALUE | "IN" VALUE_LIST | "LIKE" PATTERN)
+//! FIELD ::= "AGE" | "INCOME" | IDENT
+//! VALUE_LIST ::= "(" VALUE ("," VALUE)* ")" | VALUE ("," VALUE)*
 //! THEN ::= "THEN" EFFECT
+//! EFFECT ::= ("GRANT" | "REVOKE" | "OBLIGATION" | "PROHIBITION") STRING
 //! DISCRETION ::= "DISCRETION" STRING
+//! EXCEPTION ::= "EXCEPTION" ["WHEN" CONDITION] STRING
+//! AMENDMENT ::= "AMENDMENT" IDENT ["VERSION" NUMBER] ["EFFECTIVE_DATE" DATE] STRING
+//! SUPERSEDES ::= "SUPERSEDES" IDENT ("," IDENT)*
 //! ```
 //!
 //! ## Comments
@@ -36,11 +44,24 @@
 //!     VERSION 2
 //!     EFFECTIVE_DATE 2024-01-01
 //!     EXPIRY_DATE 2030-12-31
-//!     WHEN AGE >= 18 AND HAS citizen
+//!     DEFAULT status "pending"
+//!     WHEN AGE BETWEEN 18 AND 120 AND HAS citizen
 //!     THEN GRANT "Right to vote"
+//!     EXCEPTION WHEN AGE < 18 AND HAS guardian_consent "Minors with parental consent"
 //!     DISCRETION "Consider residency requirements"
 //! }
 //! ```
+//!
+//! ## Advanced Features
+//!
+//! The DSL supports advanced condition operators:
+//! - `BETWEEN`: Range checking (e.g., `AGE BETWEEN 18 AND 65`)
+//! - `IN`: Set membership (e.g., `AGE IN (18, 21, 25)`)
+//! - `LIKE`: Pattern matching (e.g., `INCOME LIKE "consulting%"`)
+//! - `DEFAULT`: Default values for attributes (e.g., `DEFAULT status "pending"`)
+//! - `EXCEPTION`: Exception clauses (e.g., `EXCEPTION WHEN condition "description"`)
+//! - `AMENDMENT`: Version tracking (e.g., `AMENDMENT old-law VERSION 2 "Updated rules"`)
+//! - `SUPERSEDES`: Replacing old statutes (e.g., `SUPERSEDES old-law, legacy-law`)
 
 use chrono::NaiveDate;
 use legalis_core::{Condition, Effect, EffectType, Statute, TemporalValidity};
@@ -57,8 +78,48 @@ pub use ast::*;
 pub use parser::*;
 pub use printer::*;
 
+/// Serializes a LegalDocument AST to JSON string.
+pub fn to_json(doc: &ast::LegalDocument) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(doc)
+}
+
+/// Deserializes a LegalDocument AST from JSON string.
+pub fn from_json(json: &str) -> Result<ast::LegalDocument, serde_json::Error> {
+    serde_json::from_str(json)
+}
+
+/// Serializes a StatuteNode AST to JSON string.
+pub fn statute_to_json(statute: &ast::StatuteNode) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(statute)
+}
+
+/// Deserializes a StatuteNode AST from JSON string.
+pub fn statute_from_json(json: &str) -> Result<ast::StatuteNode, serde_json::Error> {
+    serde_json::from_str(json)
+}
+
+/// Serializes a LegalDocument AST to YAML string.
+pub fn to_yaml(doc: &ast::LegalDocument) -> Result<String, serde_yaml::Error> {
+    serde_yaml::to_string(doc)
+}
+
+/// Deserializes a LegalDocument AST from YAML string.
+pub fn from_yaml(yaml: &str) -> Result<ast::LegalDocument, serde_yaml::Error> {
+    serde_yaml::from_str(yaml)
+}
+
+/// Serializes a StatuteNode AST to YAML string.
+pub fn statute_to_yaml(statute: &ast::StatuteNode) -> Result<String, serde_yaml::Error> {
+    serde_yaml::to_string(statute)
+}
+
+/// Deserializes a StatuteNode AST from YAML string.
+pub fn statute_from_yaml(yaml: &str) -> Result<ast::StatuteNode, serde_yaml::Error> {
+    serde_yaml::from_str(yaml)
+}
+
 /// Source location for error reporting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct SourceLocation {
     /// Line number (1-indexed)
     pub line: usize,
@@ -130,6 +191,22 @@ pub enum DslError {
 
     #[error("Unmatched parenthesis at {}", .0.map(|l| l.to_string()).unwrap_or_else(|| "unknown".to_string()))]
     UnmatchedParen(Option<SourceLocation>),
+
+    #[error("Syntax error at {location}: {message}\nExpected: {expected}\nFound: {found}{}", hint.as_ref().map(|h| format!("\nHint: {}", h)).unwrap_or_default())]
+    SyntaxError {
+        location: SourceLocation,
+        message: String,
+        expected: String,
+        found: String,
+        hint: Option<String>,
+    },
+
+    #[error("Undefined reference at {location}: {name}\n{}", hint.as_ref().map(|h| format!("Hint: {}", h)).unwrap_or_default())]
+    UndefinedReference {
+        location: SourceLocation,
+        name: String,
+        hint: Option<String>,
+    },
 }
 
 impl DslError {
@@ -148,6 +225,93 @@ impl DslError {
             message: message.into(),
         }
     }
+
+    /// Creates a syntax error with context and optional hint.
+    pub fn syntax_error(
+        location: SourceLocation,
+        message: impl Into<String>,
+        expected: impl Into<String>,
+        found: impl Into<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::SyntaxError {
+            location,
+            message: message.into(),
+            expected: expected.into(),
+            found: found.into(),
+            hint,
+        }
+    }
+
+    /// Creates an undefined reference error with optional suggestion.
+    pub fn undefined_reference(
+        location: SourceLocation,
+        name: impl Into<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::UndefinedReference {
+            location,
+            name: name.into(),
+            hint,
+        }
+    }
+}
+
+/// Calculates the Levenshtein distance between two strings.
+/// Used for "did you mean?" suggestions.
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a_len = a.chars().count();
+    let b_len = b.chars().count();
+
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
+
+    let mut prev_row: Vec<usize> = (0..=b_len).collect();
+    let mut curr_row = vec![0; b_len + 1];
+
+    for (i, a_char) in a.chars().enumerate() {
+        curr_row[0] = i + 1;
+
+        for (j, b_char) in b.chars().enumerate() {
+            let cost = if a_char == b_char { 0 } else { 1 };
+            curr_row[j + 1] = (curr_row[j] + 1)
+                .min(prev_row[j + 1] + 1)
+                .min(prev_row[j] + cost);
+        }
+
+        std::mem::swap(&mut prev_row, &mut curr_row);
+    }
+
+    prev_row[b_len]
+}
+
+/// Finds the closest match from a list of valid keywords.
+/// Returns None if no close match is found.
+pub fn suggest_keyword(input: &str, valid_keywords: &[&str]) -> Option<String> {
+    let input_upper = input.to_uppercase();
+
+    let mut best_match: Option<(&str, usize)> = None;
+
+    for &keyword in valid_keywords {
+        let distance = levenshtein_distance(&input_upper, keyword);
+
+        // Only suggest if distance is small (typo threshold)
+        if distance <= 2 {
+            match best_match {
+                None => best_match = Some((keyword, distance)),
+                Some((_, best_distance)) if distance < best_distance => {
+                    best_match = Some((keyword, distance));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    best_match.map(|(keyword, _)| keyword.to_string())
 }
 
 /// Result type for DSL operations.
@@ -382,6 +546,8 @@ impl LegalDslParser {
         let mut exceptions = Vec::new();
         let mut amendments = Vec::new();
         let mut supersedes = Vec::new();
+        let mut defaults = Vec::new();
+        let mut requires = Vec::new();
 
         // Parse body
         while let Some(token) = iter.next() {
@@ -389,6 +555,23 @@ impl LegalDslParser {
                 Token::When => {
                     if let Some(cond) = self.parse_condition_node(&mut iter)? {
                         conditions.push(cond);
+                    }
+                }
+                Token::Unless => {
+                    // UNLESS is equivalent to WHEN NOT
+                    if let Some(cond) = self.parse_condition_node(&mut iter)? {
+                        conditions.push(ast::ConditionNode::Not(Box::new(cond)));
+                    }
+                }
+                Token::Requires => {
+                    // Parse comma-separated list of statute IDs that are required
+                    loop {
+                        match iter.next() {
+                            Some(Token::Ident(id)) => requires.push(id.clone()),
+                            Some(Token::StringLit(id)) => requires.push(id.clone()),
+                            Some(Token::Comma) => continue,
+                            _ => break,
+                        }
                     }
                 }
                 Token::Then => {
@@ -419,6 +602,10 @@ impl LegalDslParser {
                         }
                     }
                 }
+                Token::Default => {
+                    let default = self.parse_default_node(&mut iter)?;
+                    defaults.push(default);
+                }
                 Token::RBrace => break,
                 _ => {}
             }
@@ -433,6 +620,8 @@ impl LegalDslParser {
             exceptions,
             amendments,
             supersedes,
+            defaults,
+            requires,
         })
     }
 
@@ -533,23 +722,11 @@ impl LegalDslParser {
         match iter.peek().cloned() {
             Some(Token::Age) => {
                 iter.next();
-                let op = self.parse_comparison_op(iter)?;
-                let value = self.parse_number(iter)?;
-                Ok(Some(ast::ConditionNode::Comparison {
-                    field: "age".to_string(),
-                    operator: op.to_string(),
-                    value: ast::ConditionValue::Number(value as i64),
-                }))
+                self.parse_field_condition(iter, "age")
             }
             Some(Token::Income) => {
                 iter.next();
-                let op = self.parse_comparison_op(iter)?;
-                let value = self.parse_number(iter)?;
-                Ok(Some(ast::ConditionNode::Comparison {
-                    field: "income".to_string(),
-                    operator: op.to_string(),
-                    value: ast::ConditionValue::Number(value as i64),
-                }))
+                self.parse_field_condition(iter, "income")
             }
             Some(Token::Has) => {
                 iter.next();
@@ -587,6 +764,160 @@ impl LegalDslParser {
             }
             Some(Token::Then) | Some(Token::RBrace) | Some(Token::Discretion) => Ok(None),
             _ => Ok(None),
+        }
+    }
+
+    /// Parses field conditions including BETWEEN, IN, LIKE, and comparison operators.
+    fn parse_field_condition<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+        field: &str,
+    ) -> DslResult<Option<ast::ConditionNode>>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        match iter.peek() {
+            Some(Token::Between) => {
+                iter.next(); // consume BETWEEN
+                let min = self.parse_condition_value(iter)?;
+                // Expect AND
+                if !matches!(iter.next(), Some(Token::And)) {
+                    return Err(DslError::InvalidCondition(
+                        "Expected AND in BETWEEN expression".to_string(),
+                    ));
+                }
+                let max = self.parse_condition_value(iter)?;
+                Ok(Some(ast::ConditionNode::Between {
+                    field: field.to_string(),
+                    min,
+                    max,
+                }))
+            }
+            Some(Token::In) => {
+                iter.next(); // consume IN
+                // Expect opening paren or bracket
+                let _has_paren = if matches!(iter.peek(), Some(Token::LParen)) {
+                    iter.next();
+                    true
+                } else {
+                    false
+                };
+
+                let mut values = Vec::new();
+                loop {
+                    if matches!(iter.peek(), Some(Token::RParen) | Some(Token::Comma)) {
+                        if matches!(iter.peek(), Some(Token::RParen)) {
+                            iter.next(); // consume closing paren
+                            break;
+                        }
+                        if matches!(iter.peek(), Some(Token::Comma)) {
+                            iter.next(); // consume comma
+                            continue;
+                        }
+                    }
+
+                    if matches!(
+                        iter.peek(),
+                        Some(Token::Then)
+                            | Some(Token::And)
+                            | Some(Token::Or)
+                            | Some(Token::RBrace)
+                    ) {
+                        break;
+                    }
+
+                    let value = self.parse_condition_value(iter)?;
+                    values.push(value);
+
+                    if matches!(iter.peek(), Some(Token::Comma)) {
+                        iter.next(); // consume comma
+                    } else if matches!(iter.peek(), Some(Token::RParen)) {
+                        iter.next(); // consume closing paren
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+
+                Ok(Some(ast::ConditionNode::In {
+                    field: field.to_string(),
+                    values,
+                }))
+            }
+            Some(Token::Like) => {
+                iter.next(); // consume LIKE
+                let pattern = match iter.next() {
+                    Some(Token::StringLit(s)) => s.clone(),
+                    Some(Token::Ident(s)) => s.clone(),
+                    _ => {
+                        return Err(DslError::InvalidCondition(
+                            "Expected pattern after LIKE".to_string(),
+                        ));
+                    }
+                };
+                Ok(Some(ast::ConditionNode::Like {
+                    field: field.to_string(),
+                    pattern,
+                }))
+            }
+            Some(Token::Operator(_)) => {
+                let op = self.parse_comparison_op(iter)?;
+                let value = self.parse_condition_value(iter)?;
+                Ok(Some(ast::ConditionNode::Comparison {
+                    field: field.to_string(),
+                    operator: op.to_string(),
+                    value,
+                }))
+            }
+            _ => Err(DslError::InvalidCondition(format!(
+                "Expected comparison operator, BETWEEN, IN, or LIKE after {}",
+                field
+            ))),
+        }
+    }
+
+    /// Parses a condition value (number, string, date, or boolean).
+    fn parse_condition_value<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::ConditionValue>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        match iter.peek() {
+            Some(Token::Number(n)) => {
+                let val = ast::ConditionValue::Number(*n as i64);
+                iter.next();
+                Ok(val)
+            }
+            Some(Token::StringLit(s)) => {
+                let s = s.clone();
+                iter.next();
+                // Check if it looks like a date (YYYY-MM-DD)
+                if s.contains('-')
+                    && s.split('-').count() == 3
+                    && s.split('-').all(|part| part.parse::<u32>().is_ok())
+                {
+                    Ok(ast::ConditionValue::Date(s))
+                } else {
+                    Ok(ast::ConditionValue::String(s))
+                }
+            }
+            Some(Token::Ident(s)) => {
+                let s_upper = s.to_uppercase();
+                let val = if s_upper == "TRUE" {
+                    ast::ConditionValue::Boolean(true)
+                } else if s_upper == "FALSE" {
+                    ast::ConditionValue::Boolean(false)
+                } else {
+                    ast::ConditionValue::String(s.clone())
+                };
+                iter.next();
+                Ok(val)
+            }
+            _ => Err(DslError::InvalidCondition(
+                "Expected value (number, string, date, or boolean)".to_string(),
+            )),
         }
     }
 
@@ -648,6 +979,62 @@ impl LegalDslParser {
             conditions,
             description,
         })
+    }
+
+    /// Parses a default value declaration.
+    fn parse_default_node<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::DefaultNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Get field name
+        let field = match iter.next() {
+            Some(Token::Ident(f)) => f.clone(),
+            Some(Token::StringLit(f)) => f.clone(),
+            _ => return Err(DslError::parse_error("Expected field name after DEFAULT")),
+        };
+
+        // Expect = or :
+        match iter.peek() {
+            Some(Token::Operator(op)) if op == "=" => {
+                iter.next();
+            }
+            Some(Token::Colon) => {
+                iter.next();
+            }
+            _ => {}
+        }
+
+        // Get value
+        let value = match iter.peek() {
+            Some(Token::Number(n)) => {
+                let val = ast::ConditionValue::Number(*n as i64);
+                iter.next();
+                val
+            }
+            Some(Token::StringLit(s)) => {
+                let val = ast::ConditionValue::String(s.clone());
+                iter.next();
+                val
+            }
+            Some(Token::Ident(s)) => {
+                let s_upper = s.to_uppercase();
+                let val = if s_upper == "TRUE" {
+                    ast::ConditionValue::Boolean(true)
+                } else if s_upper == "FALSE" {
+                    ast::ConditionValue::Boolean(false)
+                } else {
+                    ast::ConditionValue::String(s.clone())
+                };
+                iter.next();
+                val
+            }
+            _ => return Err(DslError::parse_error("Expected default value")),
+        };
+
+        Ok(ast::DefaultNode { field, value })
     }
 
     /// Parses an amendment clause.
@@ -879,6 +1266,8 @@ impl LegalDslParser {
                     let token = match word.to_uppercase().as_str() {
                         "STATUTE" => Token::Statute,
                         "WHEN" => Token::When,
+                        "UNLESS" => Token::Unless,
+                        "REQUIRES" => Token::Requires,
                         "THEN" => Token::Then,
                         "DISCRETION" => Token::Discretion,
                         "AGE" => Token::Age,
@@ -896,6 +1285,10 @@ impl LegalDslParser {
                         "OR" => Token::Or,
                         "NOT" => Token::Not,
                         "HAS" => Token::Has,
+                        "BETWEEN" => Token::Between,
+                        "IN" => Token::In,
+                        "LIKE" => Token::Like,
+                        "DEFAULT" => Token::Default,
                         "EFFECTIVE_DATE" | "EFFECTIVE" => Token::EffectiveDate,
                         "EXPIRY_DATE" | "EXPIRY" | "EXPIRES" => Token::ExpiryDate,
                         "JURISDICTION" => Token::Jurisdiction,

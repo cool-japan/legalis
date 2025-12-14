@@ -14,3 +14,8 @@ thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 indexmap.workspace = true
+lru = "0.12"
+fuzzy-matcher = "0.3"
+
+[dev-dependencies]
+criterion = "0.5"

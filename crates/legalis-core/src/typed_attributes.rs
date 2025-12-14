@@ -3,7 +3,7 @@
 //! This module provides a type-safe attribute system that replaces the
 //! string-based attribute storage with strongly-typed values and validation.
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
@@ -443,6 +443,374 @@ impl TypedAttributes {
             .iter()
             .map(|(k, v)| (k.clone(), v.to_string_value()))
             .collect()
+    }
+}
+
+/// Type alias for custom validation functions.
+pub type ValidatorFn = fn(&AttributeValue) -> Result<(), String>;
+
+/// Validation rule for attribute values.
+///
+/// These rules can be applied to validate attribute values before they are set
+/// or after they are retrieved.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ValidationRule {
+    /// Value must be within a range (inclusive)
+    RangeU32 { min: u32, max: u32 },
+    /// Value must be within a range (inclusive)
+    RangeU64 { min: u64, max: u64 },
+    /// Value must be within a range (inclusive)
+    RangeI64 { min: i64, max: i64 },
+    /// Value must be within a range (inclusive)
+    RangeF64 { min: f64, max: f64 },
+    /// Value must match a regex pattern
+    Regex { pattern: String },
+    /// Value must be one of the allowed values
+    OneOf { values: Vec<String> },
+    /// Value must not be empty (for strings)
+    NotEmpty,
+    /// Custom validation function (not serializable)
+    #[cfg_attr(feature = "serde", serde(skip))]
+    Custom {
+        name: String,
+        #[cfg_attr(feature = "serde", serde(skip))]
+        validator: Option<ValidatorFn>,
+    },
+}
+
+impl ValidationRule {
+    /// Validates an attribute value against this rule.
+    pub fn validate(&self, value: &AttributeValue) -> Result<(), AttributeError> {
+        match self {
+            Self::RangeU32 { min, max } => {
+                let v = value.as_u32().map_err(|_| AttributeError::InvalidValue {
+                    key: "".to_string(),
+                    reason: "Expected u32 value".to_string(),
+                })?;
+                if v < *min || v > *max {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value {} out of range [{}, {}]", v, min, max),
+                    });
+                }
+                Ok(())
+            }
+            Self::RangeU64 { min, max } => {
+                let v = value.as_u64().map_err(|_| AttributeError::InvalidValue {
+                    key: "".to_string(),
+                    reason: "Expected u64 value".to_string(),
+                })?;
+                if v < *min || v > *max {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value {} out of range [{}, {}]", v, min, max),
+                    });
+                }
+                Ok(())
+            }
+            Self::RangeI64 { min, max } => {
+                let v = value.as_i64().map_err(|_| AttributeError::InvalidValue {
+                    key: "".to_string(),
+                    reason: "Expected i64 value".to_string(),
+                })?;
+                if v < *min || v > *max {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value {} out of range [{}, {}]", v, min, max),
+                    });
+                }
+                Ok(())
+            }
+            Self::RangeF64 { min, max } => {
+                let v = value.as_f64().map_err(|_| AttributeError::InvalidValue {
+                    key: "".to_string(),
+                    reason: "Expected f64 value".to_string(),
+                })?;
+                if v < *min || v > *max {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value {} out of range [{}, {}]", v, min, max),
+                    });
+                }
+                Ok(())
+            }
+            Self::Regex { pattern } => {
+                let v = value
+                    .as_string()
+                    .map_err(|_| AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: "Expected string value".to_string(),
+                    })?;
+                let re = regex::Regex::new(pattern).map_err(|e| AttributeError::InvalidValue {
+                    key: "".to_string(),
+                    reason: format!("Invalid regex pattern: {}", e),
+                })?;
+                if !re.is_match(v) {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value '{}' does not match pattern '{}'", v, pattern),
+                    });
+                }
+                Ok(())
+            }
+            Self::OneOf { values } => {
+                let v = value.to_string_value();
+                if !values.contains(&v) {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("Value '{}' not in allowed values: {:?}", v, values),
+                    });
+                }
+                Ok(())
+            }
+            Self::NotEmpty => {
+                let v = value
+                    .as_string()
+                    .map_err(|_| AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: "Expected string value".to_string(),
+                    })?;
+                if v.is_empty() {
+                    return Err(AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: "Value cannot be empty".to_string(),
+                    });
+                }
+                Ok(())
+            }
+            Self::Custom { name, validator } => {
+                if let Some(validator_fn) = validator {
+                    validator_fn(value).map_err(|reason| AttributeError::InvalidValue {
+                        key: "".to_string(),
+                        reason: format!("{}: {}", name, reason),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+/// Attribute validator that stores validation rules for multiple attributes.
+#[derive(Debug, Clone, Default)]
+pub struct AttributeValidator {
+    rules: HashMap<String, Vec<ValidationRule>>,
+}
+
+impl AttributeValidator {
+    /// Creates a new empty validator.
+    pub fn new() -> Self {
+        Self {
+            rules: HashMap::new(),
+        }
+    }
+
+    /// Adds a validation rule for an attribute.
+    pub fn add_rule(&mut self, key: impl Into<String>, rule: ValidationRule) {
+        self.rules.entry(key.into()).or_default().push(rule);
+    }
+
+    /// Validates a single attribute value.
+    pub fn validate(&self, key: &str, value: &AttributeValue) -> Result<(), AttributeError> {
+        if let Some(rules) = self.rules.get(key) {
+            for rule in rules {
+                rule.validate(value).map_err(|e| match e {
+                    AttributeError::InvalidValue { reason, .. } => AttributeError::InvalidValue {
+                        key: key.to_string(),
+                        reason,
+                    },
+                    other => other,
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates all attributes in a TypedAttributes.
+    pub fn validate_all(&self, attrs: &TypedAttributes) -> Result<(), AttributeError> {
+        for (key, value) in attrs.iter() {
+            self.validate(key, value)?;
+        }
+        Ok(())
+    }
+
+    /// Removes all rules for an attribute.
+    pub fn remove_rules(&mut self, key: &str) {
+        self.rules.remove(key);
+    }
+
+    /// Clears all validation rules.
+    pub fn clear(&mut self) {
+        self.rules.clear();
+    }
+
+    /// Returns true if there are any rules for the given attribute.
+    pub fn has_rules(&self, key: &str) -> bool {
+        self.rules.contains_key(key)
+    }
+}
+
+/// A single change record for an attribute.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AttributeChange {
+    /// The attribute key that was changed
+    pub key: String,
+    /// The old value (None if attribute was newly created)
+    pub old_value: Option<AttributeValue>,
+    /// The new value (None if attribute was deleted)
+    pub new_value: Option<AttributeValue>,
+    /// Timestamp of the change
+    pub timestamp: DateTime<Utc>,
+    /// Optional description or reason for the change
+    pub reason: Option<String>,
+}
+
+impl AttributeChange {
+    /// Creates a new attribute change record.
+    pub fn new(
+        key: String,
+        old_value: Option<AttributeValue>,
+        new_value: Option<AttributeValue>,
+    ) -> Self {
+        Self {
+            key,
+            old_value,
+            new_value,
+            timestamp: Utc::now(),
+            reason: None,
+        }
+    }
+
+    /// Creates a new attribute change record with a reason.
+    pub fn with_reason(
+        key: String,
+        old_value: Option<AttributeValue>,
+        new_value: Option<AttributeValue>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            key,
+            old_value,
+            new_value,
+            timestamp: Utc::now(),
+            reason: Some(reason.into()),
+        }
+    }
+
+    /// Returns true if this change represents a creation (no old value).
+    pub fn is_creation(&self) -> bool {
+        self.old_value.is_none() && self.new_value.is_some()
+    }
+
+    /// Returns true if this change represents a deletion (no new value).
+    pub fn is_deletion(&self) -> bool {
+        self.old_value.is_some() && self.new_value.is_none()
+    }
+
+    /// Returns true if this change represents a modification.
+    pub fn is_modification(&self) -> bool {
+        self.old_value.is_some() && self.new_value.is_some()
+    }
+}
+
+/// Attribute change history tracker.
+///
+/// This structure tracks all changes to attributes over time, providing
+/// an audit trail for legal compliance and debugging.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AttributeHistory {
+    /// All changes, stored in chronological order
+    changes: Vec<AttributeChange>,
+    /// Maximum number of changes to keep (None = unlimited)
+    max_history: Option<usize>,
+}
+
+impl AttributeHistory {
+    /// Creates a new empty attribute history.
+    pub fn new() -> Self {
+        Self {
+            changes: Vec::new(),
+            max_history: None,
+        }
+    }
+
+    /// Creates a new attribute history with a maximum size limit.
+    pub fn with_max_size(max_size: usize) -> Self {
+        Self {
+            changes: Vec::new(),
+            max_history: Some(max_size),
+        }
+    }
+
+    /// Records a new attribute change.
+    pub fn record(&mut self, change: AttributeChange) {
+        self.changes.push(change);
+
+        // Trim history if needed
+        if let Some(max) = self.max_history {
+            if self.changes.len() > max {
+                self.changes.drain(0..(self.changes.len() - max));
+            }
+        }
+    }
+
+    /// Returns all changes for a specific attribute.
+    pub fn get_changes(&self, key: &str) -> Vec<&AttributeChange> {
+        self.changes
+            .iter()
+            .filter(|change| change.key == key)
+            .collect()
+    }
+
+    /// Returns the last N changes for a specific attribute.
+    pub fn get_recent_changes(&self, key: &str, n: usize) -> Vec<&AttributeChange> {
+        self.changes
+            .iter()
+            .filter(|change| change.key == key)
+            .rev()
+            .take(n)
+            .collect()
+    }
+
+    /// Returns all changes in chronological order.
+    pub fn all_changes(&self) -> &[AttributeChange] {
+        &self.changes
+    }
+
+    /// Returns the total number of recorded changes.
+    pub fn len(&self) -> usize {
+        self.changes.len()
+    }
+
+    /// Returns true if no changes have been recorded.
+    pub fn is_empty(&self) -> bool {
+        self.changes.is_empty()
+    }
+
+    /// Clears all change history.
+    pub fn clear(&mut self) {
+        self.changes.clear();
+    }
+
+    /// Returns the last change for a specific attribute.
+    pub fn last_change(&self, key: &str) -> Option<&AttributeChange> {
+        self.changes.iter().rev().find(|change| change.key == key)
+    }
+
+    /// Returns all attribute keys that have been modified.
+    pub fn modified_keys(&self) -> Vec<String> {
+        let mut keys: Vec<String> = self
+            .changes
+            .iter()
+            .map(|change| change.key.clone())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        keys
     }
 }
 

@@ -18,10 +18,10 @@
 - [ ] Add statute fork/clone endpoint
 
 ### Verification
-- [ ] Add verification endpoints
+- [x] Add verification endpoints
 - [ ] Implement async verification with polling
 - [ ] Create verification report endpoints
-- [ ] Add batch verification support
+- [x] Add batch verification support
 
 ### Simulation
 - [ ] Add simulation trigger endpoints
@@ -82,8 +82,8 @@
 
 - [ ] Add structured logging
 - [ ] Implement request tracing
-- [ ] Create metrics endpoint (Prometheus)
-- [ ] Add health check endpoints
+- [x] Create metrics endpoint (Prometheus)
+- [x] Add health check endpoints
 - [ ] Implement distributed tracing
 
 ## Deployment

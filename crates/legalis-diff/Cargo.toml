@@ -11,3 +11,11 @@ legalis-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "diff_performance"
+harness = false

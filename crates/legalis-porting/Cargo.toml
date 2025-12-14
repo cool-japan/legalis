@@ -15,3 +15,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.6", features = ["async_tokio"] }
+
+[[bench]]
+name = "porting"
+harness = false

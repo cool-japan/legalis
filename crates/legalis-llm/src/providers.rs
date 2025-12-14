@@ -286,16 +286,826 @@ impl LLMProvider for AnthropicClient {
         &self.model
     }
 
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        #[derive(Serialize)]
+        struct AnthropicStreamRequest {
+            model: String,
+            max_tokens: u32,
+            messages: Vec<AnthropicMessage>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            system: Option<String>,
+            stream: bool,
+        }
+
+        let request = AnthropicStreamRequest {
+            model: self.model.clone(),
+            max_tokens: self.config.max_tokens,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+            system: self.config.system_prompt.clone(),
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Anthropic API")?;
+
+        // Get the byte stream from the response
+        let byte_stream = response.bytes_stream();
+
+        // Convert to text stream with SSE parsing for Anthropic format
+        let text_stream = parse_anthropic_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+}
+
+/// Google Gemini client.
+pub struct GeminiClient {
+    api_key: String,
+    model: String,
+    client: reqwest::Client,
+    config: LLMConfig,
+}
+
+impl GeminiClient {
+    /// Creates a new Gemini client.
+    pub fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            model: model.into(),
+            client: reqwest::Client::new(),
+            config: LLMConfig::default(),
+        }
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: LLMConfig) -> Self {
+        self.config = config;
+        self
+    }
+}
+
+#[derive(Serialize)]
+struct GeminiRequest {
+    contents: Vec<GeminiContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system_instruction: Option<GeminiSystemInstruction>,
+    generation_config: GeminiGenerationConfig,
+}
+
+#[derive(Serialize)]
+struct GeminiSystemInstruction {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Serialize)]
+struct GeminiContent {
+    role: String,
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GeminiPart {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct GeminiGenerationConfig {
+    temperature: f32,
+    max_output_tokens: u32,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiCandidate>,
+}
+
+#[derive(Deserialize)]
+struct GeminiCandidate {
+    content: GeminiResponseContent,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponseContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[async_trait]
+impl LLMProvider for GeminiClient {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        let contents = vec![GeminiContent {
+            role: "user".to_string(),
+            parts: vec![GeminiPart {
+                text: prompt.to_string(),
+            }],
+        }];
+
+        let system_instruction =
+            self.config
+                .system_prompt
+                .as_ref()
+                .map(|sys_prompt| GeminiSystemInstruction {
+                    parts: vec![GeminiPart {
+                        text: sys_prompt.clone(),
+                    }],
+                });
+
+        let request = GeminiRequest {
+            contents,
+            system_instruction,
+            generation_config: GeminiGenerationConfig {
+                temperature: self.config.temperature,
+                max_output_tokens: self.config.max_tokens,
+            },
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, self.api_key
+        );
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Gemini API")?;
+
+        let gemini_response: GeminiResponse = response
+            .json()
+            .await
+            .context("Failed to parse Gemini response")?;
+
+        gemini_response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .map(|p| p.text.clone())
+            .ok_or_else(|| anyhow!("No response from Gemini"))
+    }
+
+    async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T> {
+        let text = self.generate_text(prompt).await?;
+        let json_str = extract_json(&text).unwrap_or(&text);
+        serde_json::from_str(json_str).context("Failed to parse structured response")
+    }
+
+    fn provider_name(&self) -> &str {
+        "Google Gemini"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        let contents = vec![GeminiContent {
+            role: "user".to_string(),
+            parts: vec![GeminiPart {
+                text: prompt.to_string(),
+            }],
+        }];
+
+        let system_instruction =
+            self.config
+                .system_prompt
+                .as_ref()
+                .map(|sys_prompt| GeminiSystemInstruction {
+                    parts: vec![GeminiPart {
+                        text: sys_prompt.clone(),
+                    }],
+                });
+
+        let request = GeminiRequest {
+            contents,
+            system_instruction,
+            generation_config: GeminiGenerationConfig {
+                temperature: self.config.temperature,
+                max_output_tokens: self.config.max_tokens,
+            },
+        };
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?key={}",
+            self.model, self.api_key
+        );
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Gemini API")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("Gemini API error: {}", response.status()));
+        }
+
+        let byte_stream = response.bytes_stream();
+        Ok(Box::pin(parse_gemini_stream(byte_stream)))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+}
+
+/// Azure OpenAI client.
+///
+/// Azure OpenAI uses a different authentication method and endpoint structure
+/// compared to standard OpenAI.
+pub struct AzureOpenAiClient {
+    api_key: String,
+    deployment_name: String,
+    endpoint: String,
+    api_version: String,
+    client: reqwest::Client,
+    config: LLMConfig,
+}
+
+impl AzureOpenAiClient {
+    /// Creates a new Azure OpenAI client.
+    ///
+    /// # Arguments
+    /// * `api_key` - Azure OpenAI API key
+    /// * `deployment_name` - Name of the deployed model
+    /// * `endpoint` - Azure OpenAI endpoint (e.g., "https://your-resource.openai.azure.com")
+    pub fn new(
+        api_key: impl Into<String>,
+        deployment_name: impl Into<String>,
+        endpoint: impl Into<String>,
+    ) -> Self {
+        Self {
+            api_key: api_key.into(),
+            deployment_name: deployment_name.into(),
+            endpoint: endpoint.into(),
+            api_version: "2024-02-15-preview".to_string(),
+            client: reqwest::Client::new(),
+            config: LLMConfig::default(),
+        }
+    }
+
+    /// Sets a custom API version.
+    pub fn with_api_version(mut self, version: impl Into<String>) -> Self {
+        self.api_version = version.into();
+        self
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: LLMConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    fn chat_completions_url(&self) -> String {
+        format!(
+            "{}/openai/deployments/{}/chat/completions?api-version={}",
+            self.endpoint, self.deployment_name, self.api_version
+        )
+    }
+}
+
+#[async_trait]
+impl LLMProvider for AzureOpenAiClient {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        let request = ChatRequest {
+            model: self.deployment_name.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+        };
+
+        let response = self
+            .client
+            .post(self.chat_completions_url())
+            .header("api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Azure OpenAI API")?;
+
+        let chat_response: ChatResponse = response
+            .json()
+            .await
+            .context("Failed to parse Azure OpenAI response")?;
+
+        chat_response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .ok_or_else(|| anyhow!("No response from Azure OpenAI"))
+    }
+
+    async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T> {
+        let text = self.generate_text(prompt).await?;
+        let json_str = extract_json(&text).unwrap_or(&text);
+        serde_json::from_str(json_str).context("Failed to parse structured response")
+    }
+
+    fn provider_name(&self) -> &str {
+        "Azure OpenAI"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.deployment_name
+    }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        #[derive(Serialize)]
+        struct StreamRequest {
+            model: String,
+            messages: Vec<ChatMessage>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let request = StreamRequest {
+            model: self.deployment_name.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post(self.chat_completions_url())
+            .header("api-key", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Azure OpenAI API")?;
+
+        let byte_stream = response.bytes_stream();
+        let text_stream = parse_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+}
+
+/// Mistral AI client.
+pub struct MistralClient {
+    api_key: String,
+    model: String,
+    client: reqwest::Client,
+    config: LLMConfig,
+}
+
+impl MistralClient {
+    /// Creates a new Mistral AI client.
+    pub fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            model: model.into(),
+            client: reqwest::Client::new(),
+            config: LLMConfig::default(),
+        }
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: LLMConfig) -> Self {
+        self.config = config;
+        self
+    }
+}
+
+#[async_trait]
+impl LLMProvider for MistralClient {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        let request = ChatRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+        };
+
+        let response = self
+            .client
+            .post("https://api.mistral.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Mistral AI API")?;
+
+        let chat_response: ChatResponse = response
+            .json()
+            .await
+            .context("Failed to parse Mistral AI response")?;
+
+        chat_response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .ok_or_else(|| anyhow!("No response from Mistral AI"))
+    }
+
+    async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T> {
+        let text = self.generate_text(prompt).await?;
+        let json_str = extract_json(&text).unwrap_or(&text);
+        serde_json::from_str(json_str).context("Failed to parse structured response")
+    }
+
+    fn provider_name(&self) -> &str {
+        "Mistral AI"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        #[derive(Serialize)]
+        struct StreamRequest {
+            model: String,
+            messages: Vec<ChatMessage>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let request = StreamRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post("https://api.mistral.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Mistral AI API")?;
+
+        let byte_stream = response.bytes_stream();
+        let text_stream = parse_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+}
+
+/// HuggingFace Inference API client.
+pub struct HuggingFaceClient {
+    api_key: String,
+    model: String,
+    client: reqwest::Client,
+    config: LLMConfig,
+}
+
+impl HuggingFaceClient {
+    /// Creates a new HuggingFace client.
+    ///
+    /// # Arguments
+    /// * `api_key` - HuggingFace API token
+    /// * `model` - Model ID (e.g., "gpt2", "meta-llama/Llama-2-7b-chat-hf")
+    pub fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            model: model.into(),
+            client: reqwest::Client::new(),
+            config: LLMConfig::default(),
+        }
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: LLMConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    fn inference_url(&self) -> String {
+        format!("https://api-inference.huggingface.co/models/{}", self.model)
+    }
+}
+
+#[async_trait]
+impl LLMProvider for HuggingFaceClient {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        #[derive(Serialize)]
+        struct HfRequest {
+            inputs: String,
+            parameters: HfParameters,
+        }
+
+        #[derive(Serialize)]
+        struct HfParameters {
+            max_new_tokens: u32,
+            temperature: f32,
+            return_full_text: bool,
+        }
+
+        #[derive(Deserialize)]
+        struct HfResponse {
+            #[serde(default)]
+            generated_text: String,
+        }
+
+        let mut full_prompt = prompt.to_string();
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            full_prompt = format!("{}\n\n{}", system_prompt, prompt);
+        }
+
+        let request = HfRequest {
+            inputs: full_prompt,
+            parameters: HfParameters {
+                max_new_tokens: self.config.max_tokens,
+                temperature: self.config.temperature,
+                return_full_text: false,
+            },
+        };
+
+        let response = self
+            .client
+            .post(self.inference_url())
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to HuggingFace API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("HuggingFace API error {}: {}", status, error_text));
+        }
+
+        // HuggingFace returns an array of responses
+        let hf_responses: Vec<HfResponse> = response
+            .json()
+            .await
+            .context("Failed to parse HuggingFace response")?;
+
+        hf_responses
+            .first()
+            .map(|r| r.generated_text.clone())
+            .ok_or_else(|| anyhow!("No response from HuggingFace"))
+    }
+
+    async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T> {
+        let text = self.generate_text(prompt).await?;
+        let json_str = extract_json(&text).unwrap_or(&text);
+        serde_json::from_str(json_str).context("Failed to parse structured response")
+    }
+
+    fn provider_name(&self) -> &str {
+        "HuggingFace"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
     async fn generate_text_stream(&self, _prompt: &str) -> Result<TextStream> {
-        // Anthropic streaming would be implemented similarly to OpenAI
-        // For now, return an error indicating it's not yet implemented
+        // HuggingFace Inference API doesn't support streaming in the same way
+        // We'll return an error indicating streaming is not supported
         Err(anyhow!(
-            "Streaming not yet implemented for Anthropic provider"
+            "Streaming is not supported for HuggingFace Inference API"
         ))
     }
 
     fn supports_streaming(&self) -> bool {
-        false // Will be true once implemented
+        false
+    }
+}
+
+/// Ollama client for local LLM support.
+///
+/// Ollama provides an OpenAI-compatible API for running local models
+/// like Llama 2, Mistral, Phi, and others.
+pub struct OllamaClient {
+    model: String,
+    base_url: String,
+    client: reqwest::Client,
+    config: LLMConfig,
+}
+
+impl OllamaClient {
+    /// Creates a new Ollama client.
+    ///
+    /// # Arguments
+    /// * `model` - The model name (e.g., "llama2", "mistral", "phi")
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            base_url: "http://localhost:11434".to_string(),
+            client: reqwest::Client::new(),
+            config: LLMConfig::default(),
+        }
+    }
+
+    /// Sets a custom base URL for the Ollama server.
+    pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_url = url.into();
+        self
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: LLMConfig) -> Self {
+        self.config = config;
+        self
+    }
+}
+
+#[async_trait]
+impl LLMProvider for OllamaClient {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        let request = ChatRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/v1/chat/completions", self.base_url))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Ollama API")?;
+
+        let chat_response: ChatResponse = response
+            .json()
+            .await
+            .context("Failed to parse Ollama response")?;
+
+        chat_response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .ok_or_else(|| anyhow!("No response from Ollama"))
+    }
+
+    async fn generate_structured<T: DeserializeOwned + Send>(&self, prompt: &str) -> Result<T> {
+        let text = self.generate_text(prompt).await?;
+        let json_str = extract_json(&text).unwrap_or(&text);
+        serde_json::from_str(json_str).context("Failed to parse structured response")
+    }
+
+    fn provider_name(&self) -> &str {
+        "Ollama"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        let mut messages = Vec::new();
+
+        if let Some(ref system_prompt) = self.config.system_prompt {
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt.clone(),
+            });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        #[derive(Serialize)]
+        struct StreamRequest {
+            model: String,
+            messages: Vec<ChatMessage>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let request = StreamRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/v1/chat/completions", self.base_url))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Ollama API")?;
+
+        let byte_stream = response.bytes_stream();
+        let text_stream = parse_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
     }
 }
 
@@ -488,6 +1298,164 @@ fn parse_sse_stream(
                             // Log parse error but continue streaming
                             tracing::debug!("Failed to parse SSE JSON: {} for data: {}", e, data);
                         }
+                    }
+                }
+            }
+
+            futures::future::ready(Some(chunks))
+        })
+        .flat_map(stream::iter)
+}
+
+/// Parses Anthropic SSE stream into StreamChunks.
+fn parse_anthropic_sse_stream(
+    byte_stream: impl futures::Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static,
+) -> impl futures::Stream<Item = Result<StreamChunk>> + Send {
+    use futures::stream;
+
+    #[derive(Deserialize)]
+    struct AnthropicStreamEvent {
+        #[serde(rename = "type")]
+        event_type: String,
+        #[serde(default)]
+        delta: Option<AnthropicDelta>,
+    }
+
+    #[derive(Deserialize)]
+    struct AnthropicDelta {
+        #[serde(rename = "type")]
+        #[allow(dead_code)]
+        delta_type: String,
+        text: Option<String>,
+    }
+
+    struct ParserState {
+        buffer: String,
+    }
+
+    let initial_state = ParserState {
+        buffer: String::new(),
+    };
+
+    byte_stream
+        .scan(initial_state, |state, byte_result| {
+            let bytes = match byte_result {
+                Ok(b) => b,
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!("Stream error: {}", e))]));
+                }
+            };
+
+            match String::from_utf8(bytes.to_vec()) {
+                Ok(text) => state.buffer.push_str(&text),
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!(
+                        "UTF-8 decode error: {}",
+                        e
+                    ))]));
+                }
+            }
+
+            let mut chunks = Vec::new();
+
+            while let Some(newline_pos) = state.buffer.find('\n') {
+                let line = state.buffer[..newline_pos].trim().to_string();
+                state.buffer = state.buffer[newline_pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Some(data) = line.strip_prefix("data: ") {
+                    match serde_json::from_str::<AnthropicStreamEvent>(data) {
+                        Ok(event) => {
+                            if event.event_type == "content_block_delta" {
+                                if let Some(delta) = event.delta {
+                                    if let Some(text) = delta.text {
+                                        chunks.push(Ok(StreamChunk::new(text)));
+                                    }
+                                }
+                            } else if event.event_type == "message_stop" {
+                                chunks.push(Ok(StreamChunk::final_chunk("")));
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to parse Anthropic SSE JSON: {} for data: {}",
+                                e,
+                                data
+                            );
+                        }
+                    }
+                }
+            }
+
+            futures::future::ready(Some(chunks))
+        })
+        .flat_map(stream::iter)
+}
+
+/// Parses Gemini streaming responses (newline-delimited JSON) into StreamChunks.
+///
+/// Gemini's streaming API returns JSON objects separated by newlines.
+/// Each JSON object has the same structure as the non-streaming response.
+fn parse_gemini_stream(
+    byte_stream: impl futures::Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static,
+) -> impl futures::Stream<Item = Result<StreamChunk>> + Send {
+    use futures::stream;
+
+    struct ParserState {
+        buffer: String,
+    }
+
+    let initial_state = ParserState {
+        buffer: String::new(),
+    };
+
+    byte_stream
+        .scan(initial_state, |state, byte_result| {
+            let bytes = match byte_result {
+                Ok(b) => b,
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!("Stream error: {}", e))]));
+                }
+            };
+
+            match String::from_utf8(bytes.to_vec()) {
+                Ok(text) => state.buffer.push_str(&text),
+                Err(e) => {
+                    return futures::future::ready(Some(vec![Err(anyhow!(
+                        "UTF-8 decode error: {}",
+                        e
+                    ))]));
+                }
+            }
+
+            let mut chunks = Vec::new();
+
+            // Process complete JSON objects (separated by newlines)
+            while let Some(newline_pos) = state.buffer.find('\n') {
+                let line = state.buffer[..newline_pos].trim().to_string();
+                state.buffer = state.buffer[newline_pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                // Parse the JSON response
+                match serde_json::from_str::<GeminiResponse>(&line) {
+                    Ok(response) => {
+                        if let Some(candidate) = response.candidates.first() {
+                            if let Some(part) = candidate.content.parts.first() {
+                                if !part.text.is_empty() {
+                                    chunks.push(Ok(StreamChunk::new(part.text.clone())));
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!("Failed to parse Gemini JSON: {} for line: {}", e, line);
+                        // Don't fail the stream for parse errors, just log and continue
                     }
                 }
             }

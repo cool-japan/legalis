@@ -6,10 +6,18 @@
 //! - Change categorization
 //! - Impact analysis
 //! - Amendment tracking
+//! - Multiple output formats (JSON, HTML, Markdown)
 
 use legalis_core::{Condition, Statute};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub mod analysis;
+pub mod formats;
+pub mod git;
+pub mod merge;
+pub mod templates;
+pub mod timeline;
 
 /// Errors during diff operations.
 #[derive(Debug, Error)]
@@ -318,12 +326,55 @@ mod tests {
         })
     }
 
+    fn empty_statute() -> Statute {
+        Statute::new(
+            "empty-statute",
+            "Empty Statute",
+            Effect::new(EffectType::Grant, "Empty effect"),
+        )
+    }
+
     #[test]
     fn test_no_changes() {
         let statute = test_statute();
         let result = diff(&statute, &statute).unwrap();
         assert!(result.changes.is_empty());
         assert_eq!(result.impact.severity, Severity::None);
+    }
+
+    #[test]
+    fn test_identical_statutes() {
+        let statute1 = test_statute();
+        let statute2 = test_statute();
+        let result = diff(&statute1, &statute2).unwrap();
+        assert!(result.changes.is_empty());
+        assert_eq!(result.impact.severity, Severity::None);
+        assert!(!result.impact.affects_eligibility);
+        assert!(!result.impact.affects_outcome);
+    }
+
+    #[test]
+    fn test_empty_statutes() {
+        let statute1 = empty_statute();
+        let statute2 = empty_statute();
+        let result = diff(&statute1, &statute2).unwrap();
+        assert!(result.changes.is_empty());
+        assert_eq!(result.impact.severity, Severity::None);
+    }
+
+    #[test]
+    fn test_empty_to_populated() {
+        let old = empty_statute();
+        let mut new = old.clone();
+        new.preconditions.push(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let result = diff(&old, &new).unwrap();
+        assert_eq!(result.changes.len(), 1);
+        assert!(result.impact.affects_eligibility);
+        assert!(matches!(result.changes[0].change_type, ChangeType::Added));
     }
 
     #[test]
@@ -352,6 +403,55 @@ mod tests {
     }
 
     #[test]
+    fn test_precondition_removed() {
+        let mut old = test_statute();
+        old.preconditions.push(Condition::Income {
+            operator: ComparisonOp::LessOrEqual,
+            value: 5000000,
+        });
+        let new = test_statute(); // Has only the age condition
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.affects_eligibility);
+        assert!(result.impact.severity >= Severity::Major);
+        let has_removed = result
+            .changes
+            .iter()
+            .any(|c| matches!(c.change_type, ChangeType::Removed));
+        assert!(has_removed);
+    }
+
+    #[test]
+    fn test_precondition_modified() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.preconditions[0] = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        };
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.affects_eligibility);
+        assert!(!result.changes.is_empty());
+        let has_modified = result
+            .changes
+            .iter()
+            .any(|c| matches!(c.change_type, ChangeType::Modified));
+        assert!(has_modified);
+    }
+
+    #[test]
+    fn test_effect_change() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.effect = Effect::new(EffectType::Revoke, "Revoke instead");
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.affects_outcome);
+        assert_eq!(result.impact.severity, Severity::Major);
+    }
+
+    #[test]
     fn test_discretion_added() {
         let old = test_statute();
         let new = old
@@ -363,6 +463,43 @@ mod tests {
     }
 
     #[test]
+    fn test_discretion_removed() {
+        let old = test_statute().with_discretion("Consider special circumstances");
+        let new = test_statute();
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.discretion_changed);
+        assert!(result.impact.severity >= Severity::Major);
+    }
+
+    #[test]
+    fn test_discretion_modified() {
+        let old = test_statute().with_discretion("Consider special circumstances");
+        let new = test_statute().with_discretion("Consider different circumstances");
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.discretion_changed);
+    }
+
+    #[test]
+    fn test_multiple_changes() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.title = "New Title".to_string();
+        new.preconditions.push(Condition::Income {
+            operator: ComparisonOp::LessOrEqual,
+            value: 5000000,
+        });
+        new.effect = Effect::new(EffectType::Obligation, "New effect");
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.changes.len() >= 3);
+        assert!(result.impact.affects_eligibility);
+        assert!(result.impact.affects_outcome);
+        assert_eq!(result.impact.severity, Severity::Major);
+    }
+
+    #[test]
     fn test_id_mismatch_error() {
         let old = test_statute();
         let mut new = test_statute();
@@ -370,5 +507,45 @@ mod tests {
 
         let result = diff(&old, &new);
         assert!(matches!(result, Err(DiffError::IdMismatch(_, _))));
+    }
+
+    #[test]
+    fn test_summarize() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.title = "Modified Title".to_string();
+
+        let result = diff(&old, &new).unwrap();
+        let summary = summarize(&result);
+
+        assert!(summary.contains("test-statute"));
+        assert!(summary.contains("Modified"));
+    }
+
+    #[test]
+    fn test_all_preconditions_removed() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.preconditions.clear();
+
+        let result = diff(&old, &new).unwrap();
+        assert!(result.impact.affects_eligibility);
+        assert!(result.impact.severity >= Severity::Major);
+    }
+
+    #[test]
+    fn test_version_info_present() {
+        let old = test_statute();
+        let new = test_statute();
+
+        let mut result = diff(&old, &new).unwrap();
+        result.version_info = Some(VersionInfo {
+            old_version: Some(1),
+            new_version: Some(2),
+        });
+
+        assert!(result.version_info.is_some());
+        assert_eq!(result.version_info.as_ref().unwrap().old_version, Some(1));
+        assert_eq!(result.version_info.as_ref().unwrap().new_version, Some(2));
     }
 }

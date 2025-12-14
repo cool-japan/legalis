@@ -13,41 +13,41 @@
 - [ ] Add SQLite backend
 - [ ] Add PostgreSQL backend
 - [ ] Implement connection pooling
-- [ ] Add backup and restore functionality
+- [x] Add backup and restore functionality
 - [ ] Support for transactions
 
 ## Search
 
-- [ ] Full-text search across statutes
-- [ ] Fuzzy matching for statute IDs
-- [ ] Search by condition types
-- [ ] Search by effect types
-- [ ] Advanced query language
+- [x] Full-text search across statutes
+- [x] Fuzzy matching for statute IDs
+- [x] Search by condition types
+- [x] Search by effect types
+- [x] Advanced query language
 
 ## Performance
 
-- [ ] Add caching layer (LRU cache)
-- [ ] Implement optimistic concurrency control
-- [ ] Add batch operations
-- [ ] Implement lazy loading for large statutes
+- [x] Add caching layer (LRU cache)
+- [x] Implement optimistic concurrency control
+- [x] Add batch operations
+- [x] Implement lazy loading for large statutes
 
 ## Features
 
-- [ ] Event sourcing for complete change history
-- [ ] Webhook notifications for statute changes
-- [ ] Multi-tenant support for isolated registries
+- [x] Event sourcing for complete change history
+- [x] Webhook notifications for statute changes
+- [x] Multi-tenant support for isolated registries
 - [ ] Import/export in Akoma Ntoso format
-- [ ] Statute dependency tracking
+- [x] Statute dependency tracking (enhanced with dependency graphs)
 
 ## API
 
 - [ ] Add async API variants
 - [ ] Implement streaming for large result sets
-- [ ] Add pagination support
+- [x] Add pagination support
 - [ ] Create GraphQL interface
 
 ## Testing
 
 - [ ] Add integration tests with real databases
-- [ ] Add performance benchmarks
+- [x] Add performance benchmarks
 - [ ] Test concurrent access patterns

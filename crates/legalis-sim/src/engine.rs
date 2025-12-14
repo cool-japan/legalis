@@ -287,6 +287,122 @@ enum ConditionResult {
     Indeterminate(String),
 }
 
+/// Relationship-based condition evaluator.
+pub struct RelationshipConditions {
+    graph: crate::relationships::RelationshipGraph,
+}
+
+impl RelationshipConditions {
+    /// Creates a new relationship condition evaluator.
+    pub fn new(graph: crate::relationships::RelationshipGraph) -> Self {
+        Self { graph }
+    }
+
+    /// Checks if an entity has a specific relationship type.
+    pub fn has_relationship(
+        &self,
+        entity_id: uuid::Uuid,
+        rel_type: crate::relationships::RelationshipType,
+    ) -> bool {
+        !self.graph.get_relationships(entity_id, rel_type).is_empty()
+    }
+
+    /// Checks if an entity has at least N relationships of a given type.
+    pub fn has_min_relationships(
+        &self,
+        entity_id: uuid::Uuid,
+        rel_type: crate::relationships::RelationshipType,
+        min_count: usize,
+    ) -> bool {
+        self.graph.get_relationships(entity_id, rel_type).len() >= min_count
+    }
+
+    /// Checks if an entity has at most N relationships of a given type.
+    pub fn has_max_relationships(
+        &self,
+        entity_id: uuid::Uuid,
+        rel_type: crate::relationships::RelationshipType,
+        max_count: usize,
+    ) -> bool {
+        self.graph.get_relationships(entity_id, rel_type).len() <= max_count
+    }
+
+    /// Checks if an entity is related to a specific target entity.
+    pub fn is_related_to(
+        &self,
+        entity_id: uuid::Uuid,
+        target_id: uuid::Uuid,
+        rel_type: crate::relationships::RelationshipType,
+    ) -> bool {
+        self.graph.has_relationship(entity_id, target_id, rel_type)
+    }
+
+    /// Checks if an entity is connected to another entity through any path (within max_depth hops).
+    pub fn is_connected_to(
+        &self,
+        entity_id: uuid::Uuid,
+        target_id: uuid::Uuid,
+        max_depth: usize,
+    ) -> bool {
+        self.graph
+            .find_connected(entity_id, max_depth)
+            .contains(&target_id)
+    }
+
+    /// Gets relationship count for a specific type.
+    pub fn count_relationships(
+        &self,
+        entity_id: uuid::Uuid,
+        rel_type: crate::relationships::RelationshipType,
+    ) -> usize {
+        self.graph.get_relationships(entity_id, rel_type).len()
+    }
+}
+
+/// Contract-based condition evaluator.
+pub struct ContractConditions {
+    registry: crate::relationships::ContractRegistry,
+}
+
+impl ContractConditions {
+    /// Creates a new contract condition evaluator.
+    pub fn new(registry: crate::relationships::ContractRegistry) -> Self {
+        Self { registry }
+    }
+
+    /// Checks if an entity has active contracts.
+    pub fn has_active_contracts(&self, entity_id: uuid::Uuid) -> bool {
+        !self.registry.get_active_contracts(entity_id).is_empty()
+    }
+
+    /// Checks if an entity has at least N active contracts.
+    pub fn has_min_active_contracts(&self, entity_id: uuid::Uuid, min_count: usize) -> bool {
+        self.registry.get_active_contracts(entity_id).len() >= min_count
+    }
+
+    /// Checks if an entity has a contract of a specific type.
+    pub fn has_contract_type(
+        &self,
+        entity_id: uuid::Uuid,
+        contract_type: crate::relationships::ContractType,
+    ) -> bool {
+        self.registry.get_by_party(entity_id).iter().any(|c| {
+            c.contract_type == contract_type
+                && c.status == crate::relationships::ContractStatus::Active
+        })
+    }
+
+    /// Checks if total contract value exceeds a threshold.
+    pub fn contract_value_exceeds(&self, entity_id: uuid::Uuid, threshold: f64) -> bool {
+        self.registry.total_value(entity_id) > threshold
+    }
+
+    /// Gets count of active contracts for an entity.
+    pub fn count_active_contracts(&self, entity_id: uuid::Uuid) -> usize {
+        self.registry.get_active_contracts(entity_id).len()
+    }
+}
+
 /// Builder for creating test populations.
 pub struct PopulationBuilder {
     entities: Vec<Box<dyn LegalEntity>>,

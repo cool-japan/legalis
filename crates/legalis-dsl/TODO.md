@@ -15,33 +15,42 @@
 - [x] Create pretty-printer (AST -> DSL text)
 - [x] Add multi-statute document parsing
 - [x] Add HAS keyword for attribute checks
+- [x] Add EXCEPTION clause for handling edge cases
+- [x] Support DEFAULT clause for missing attributes
+- [x] Add AMENDMENT clause for version tracking
+- [x] Add BETWEEN operator for ranges
+- [x] Add IN operator for set membership
+- [x] Add date comparison conditions
+- [x] Add string pattern matching (LIKE)
+- [x] Implement AST visitor pattern
 
 ## Parser Features
 
 ### Grammar Extensions
-- [ ] Add EXCEPTION clause for handling edge cases
-- [ ] Support DEFAULT clause for missing attributes
-- [ ] Add AMENDMENT clause for version tracking
-- [ ] Add BETWEEN operator for ranges
-- [ ] Add IN operator for set membership
+- [ ] Add WHEN clause for temporal conditions
+- [x] Add UNLESS clause for negative conditions
+- [x] Add REQUIRES clause for dependencies
 
 ### Advanced Conditions
-- [ ] Add date comparison conditions
-- [ ] Add string pattern matching (LIKE)
-- [ ] Add numeric range conditions
+- [ ] Add numeric range conditions with custom operators
+- [ ] Add regex pattern matching support
+- [ ] Add set operations (UNION, INTERSECT, EXCEPT)
 
 ## AST Improvements
 
-- [ ] Implement AST visitor pattern
-- [ ] Add AST transformation utilities
+- [x] Add AST transformation utilities
+- [x] Add AST serialization (to JSON)
+- [x] Add AST serialization to YAML
+- [x] Add AST optimization passes (flatten, deduplicate, simplify, normalize)
 - [ ] Implement AST diffing for change detection
-- [ ] Add AST optimization passes
 
 ## Error Handling
 
+- [x] Improve error messages with suggestions
+- [x] Add "did you mean?" suggestions for typos (Levenshtein distance)
+- [x] Create SyntaxError with context (expected vs found)
+- [x] Create UndefinedReference error with hints
 - [ ] Add error recovery for partial parsing
-- [ ] Improve error messages with suggestions
-- [ ] Add "did you mean?" suggestions for typos
 - [ ] Create error spans for IDE integration
 - [ ] Add warning system for deprecated syntax
 

@@ -62,6 +62,15 @@ impl ToCore for ConditionNode {
             ConditionNode::HasAttribute { key } => {
                 Ok(legalis_core::Condition::HasAttribute { key: key.clone() })
             }
+            ConditionNode::Between { field, min, max } => Ok(legalis_core::Condition::Custom {
+                description: format!("{} BETWEEN {:?} AND {:?}", field, min, max),
+            }),
+            ConditionNode::In { field, values } => Ok(legalis_core::Condition::Custom {
+                description: format!("{} IN {:?}", field, values),
+            }),
+            ConditionNode::Like { field, pattern } => Ok(legalis_core::Condition::Custom {
+                description: format!("{} LIKE {}", field, pattern),
+            }),
             ConditionNode::And(left, right) => Ok(legalis_core::Condition::And(
                 Box::new(left.to_core()?),
                 Box::new(right.to_core()?),

@@ -11,46 +11,39 @@
 - [x] Implement `Display` trait for all public types
 - [x] Create builder pattern for complex types
 - [x] Add temporal validity (effective dates, sunset clauses)
-
-## In Progress
-
-- [ ] Add `evaluate` method with generic context
+- [x] Add `and_then` combinator for chaining results
+- [x] Implement conversions from common types (From<Option<T>>, From<Result<T, E>>)
+- [x] Add `unwrap_or_discretion` helper method
+- [x] Add `unwrap_or`, `unwrap_or_else`, `combine`, `ok`, `as_ref`, `into_result` methods
+- [x] Add `Compound` effect type for multiple effects
+- [x] Add `Conditional` effect (runtime conditions)
+- [x] Add `Delayed` effect with trigger conditions
+- [x] Implement effect conflict detection
+- [x] Add amendment/supersedes relationships (via hierarchy module)
+- [x] Implement statute hierarchy (parent/child)
+- [x] Add tags/categories for classification
+- [x] Support typed attributes (via TypedEntity and TypedAttributes)
+- [x] Add validation methods for construction invariants (Statute::validate)
+- [x] Add serde feature flag for optional serialization
+- [x] Add `evaluate` method with generic context (Condition::evaluate)
+- [x] Add PartialOrd/Ord for ComparisonOp
+- [x] Add comparison methods (compare_u32, compare_u64, compare_i64, compare_f64)
 
 ## Types & Structures
 
-### LegalResult
-- [ ] Add `and_then` combinator for chaining results
-- [ ] Implement `TryFrom` conversions from common types
-- [ ] Add `unwrap_or_discretion` helper method
-- [ ] Create `LegalResultExt` extension trait
-
 ### Condition
-- [ ] Add `ResidencyDuration` condition improvements
-- [ ] Implement condition caching for performance
-
-### Effect
-- [ ] Add `Compound` effect type for multiple effects
-- [ ] Add `Conditional` effect (runtime conditions)
-- [ ] Add `Delayed` effect with trigger conditions
-- [ ] Implement effect conflict detection
-
-### Statute
-- [ ] Add amendment/supersedes relationships
-- [ ] Implement statute hierarchy (parent/child)
-- [ ] Add tags/categories for classification
+- [x] Add `ResidencyDuration` condition improvements (added ResidencyType and DurationUnit enums)
+- [x] Implement condition caching for performance (added ConditionCache)
 
 ### LegalEntity
-- [ ] Support typed attributes (not just String)
-- [ ] Add attribute validation rules
-- [ ] Implement attribute change history
-- [ ] Add entity relationships (belongs_to, has_many)
+- [x] Add attribute validation rules (added ValidationRule and AttributeValidator)
+- [x] Implement attribute change history (added AttributeChange and AttributeHistory)
+- [x] Add entity relationships (belongs_to, has_many) (added EntityRelationships)
 
 ## Improvements
 
-- [ ] Add comprehensive `PartialOrd`/`Ord` implementations
-- [ ] Add validation methods for construction invariants
+- [x] Add comprehensive `PartialOrd`/`Ord` implementations (added to all enum types)
 - [ ] Implement `schemars::JsonSchema` for OpenAPI
-- [ ] Add serde feature flag for optional serialization
 
 ## Testing
 

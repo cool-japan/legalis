@@ -8,28 +8,33 @@
 - [x] Decision tree visualization
 - [x] Discretion zone highlighting
 - [x] Dependency graph between statutes
+- [x] PlantUML sequence diagrams
+- [x] HTML with embedded JavaScript (D3.js)
+- [x] D3.js interactive visualization
+- [x] Timeline visualization for temporal statutes
+- [x] Customizable styling/theming (light, dark, high-contrast, colorblind-friendly)
+- [x] Annotation support for judicial notes
+- [x] Support for large graph layouts
 
 ## Formats
 
-- [ ] D3.js interactive visualization
-- [ ] PlantUML sequence diagrams
-- [ ] SVG/PNG direct rendering
-- [ ] HTML with embedded JavaScript
+- [x] SVG direct rendering
+- [ ] PNG direct rendering
 
 ## Features
 
-- [ ] Interactive web-based visualization
-- [ ] Statute dependency graphs
-- [ ] Timeline visualization for temporal statutes
-- [ ] Population distribution charts from simulations
+- [x] Interactive web-based visualization
+- [x] Statute dependency graphs
+- [x] Timeline visualization for temporal statutes
+- [x] Population distribution charts from simulations
 - [ ] Drill-down navigation
 
 ## Improvements
 
-- [ ] Add customizable styling/theming
-- [ ] Create accessibility-compliant output
-- [ ] Add annotation support for judicial notes
-- [ ] Support for large graph layouts
+- [x] Add customizable styling/theming
+- [x] Create accessibility-compliant output
+- [x] Add annotation support for judicial notes
+- [x] Support for large graph layouts
 
 ## Export
 
