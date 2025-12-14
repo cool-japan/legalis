@@ -19,7 +19,7 @@ anyhow.workspace = true
 chrono.workspace = true
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 
 [[bench]]
 name = "porting"

@@ -13,7 +13,7 @@ chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-quick-xml = { version = "0.37", features = ["serialize"] }
+quick-xml = { version = "0.38", features = ["serialize"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
