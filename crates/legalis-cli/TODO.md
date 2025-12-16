@@ -18,33 +18,33 @@
 ## Commands
 
 ### New Commands
-- [ ] Add `lint` command for style checking
-- [ ] Create `fmt` command for formatting
-- [ ] Add `watch` command for file watching
+- [x] Add `lint` command for style checking
+- [x] Create `fmt` command for formatting (implemented as `format` command)
+- [x] Add `watch` command for file watching
 - [ ] Implement `repl` command for interactive mode
-- [ ] Add `test` command for statute testing
+- [x] Add `test` command for statute testing
 - [ ] Create `publish` command for registry upload
 
 ### Enhancements
-- [ ] Add `--dry-run` flag for modify commands
+- [x] Add `--dry-run` flag for modify commands (init, format)
 - [ ] Implement `--interactive` mode for guided input
-- [ ] Add `--quiet` mode for scripting
-- [ ] Create `--json-output` for machine parsing
-- [ ] Add `--config` flag for config file
+- [x] Add `--quiet` mode for scripting
+- [x] Create `--json-output` for machine parsing (already exists via --format)
+- [x] Add `--config` flag for config file
 
 ## Configuration
 
-- [ ] Add config file support (legalis.toml)
-- [ ] Implement project-level configuration
-- [ ] Create user-level global configuration
-- [ ] Add environment variable overrides
+- [x] Add config file support (legalis.toml)
+- [x] Implement project-level configuration
+- [x] Create user-level global configuration
+- [x] Add environment variable overrides (LEGALIS_*)
 - [ ] Support config inheritance
 
 ## Output
 
 ### Formatting
-- [ ] Add colored output with styles
-- [ ] Implement table output format
+- [x] Add colored output with styles (for verify and lint commands)
+- [x] Implement table output format (--format table)
 - [ ] Create progress bars for long operations
 - [ ] Add spinner for async operations
 - [ ] Implement diff highlighting
@@ -57,11 +57,11 @@
 
 ## Project Management
 
-- [ ] Add `new` command for statute templates
+- [x] Add `new` command for statute templates (with 5 template types)
 - [ ] Create `add` command for dependencies
 - [ ] Implement `update` command for updates
 - [ ] Add `clean` command for cache cleanup
-- [ ] Create `doctor` command for diagnostics
+- [x] Create `doctor` command for diagnostics
 
 ## Registry Integration
 

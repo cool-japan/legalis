@@ -201,7 +201,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: Evaluate eligibility and record in audit trail
     println!("Step 4: Evaluating eligibility for each citizen...\n");
-    let audit_trail = AuditTrail::new();
+    let mut audit_trail = AuditTrail::new();
 
     for (name, age, income, attrs) in &test_citizens {
         let citizen = create_citizen(name, *age, *income, attrs);

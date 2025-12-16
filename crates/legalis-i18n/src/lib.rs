@@ -2365,6 +2365,442 @@ impl WorkingDaysConfig {
     }
 }
 
+/// External translation service interface.
+/// Implement this trait to integrate with services like Google Translate, DeepL, etc.
+pub trait TranslationService: Send + Sync + std::fmt::Debug {
+    /// Translates text from source locale to target locale.
+    fn translate(&self, text: &str, source: &Locale, target: &Locale) -> I18nResult<String>;
+
+    /// Translates multiple texts in batch.
+    fn translate_batch(
+        &self,
+        texts: &[&str],
+        source: &Locale,
+        target: &Locale,
+    ) -> I18nResult<Vec<String>>;
+
+    /// Gets the name of this translation service.
+    fn service_name(&self) -> &str;
+
+    /// Checks if the service is available.
+    fn is_available(&self) -> bool;
+}
+
+/// Mock translation service for testing and fallback.
+#[derive(Debug, Clone)]
+pub struct MockTranslationService {
+    available: bool,
+}
+
+impl MockTranslationService {
+    /// Creates a new mock translation service.
+    pub fn new() -> Self {
+        Self { available: true }
+    }
+
+    /// Sets availability status.
+    pub fn set_available(&mut self, available: bool) {
+        self.available = available;
+    }
+}
+
+impl Default for MockTranslationService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TranslationService for MockTranslationService {
+    fn translate(&self, text: &str, _source: &Locale, target: &Locale) -> I18nResult<String> {
+        if !self.available {
+            return Err(I18nError::TranslationMissing {
+                key: text.to_string(),
+                locale: target.tag(),
+            });
+        }
+        // Mock: just prepend target locale to the text
+        Ok(format!("[{}] {}", target.tag(), text))
+    }
+
+    fn translate_batch(
+        &self,
+        texts: &[&str],
+        source: &Locale,
+        target: &Locale,
+    ) -> I18nResult<Vec<String>> {
+        texts
+            .iter()
+            .map(|text| self.translate(text, source, target))
+            .collect()
+    }
+
+    fn service_name(&self) -> &str {
+        "MockTranslationService"
+    }
+
+    fn is_available(&self) -> bool {
+        self.available
+    }
+}
+
+/// Translation memory entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranslationMemoryEntry {
+    /// Source text
+    pub source_text: String,
+    /// Source locale
+    pub source_locale: Locale,
+    /// Translated text
+    pub target_text: String,
+    /// Target locale
+    pub target_locale: Locale,
+    /// Translation quality score (0.0 to 1.0)
+    pub quality_score: f32,
+    /// Translation metadata
+    pub metadata: HashMap<String, String>,
+    /// Timestamp when this entry was created
+    pub created_at: u64,
+}
+
+impl TranslationMemoryEntry {
+    /// Creates a new translation memory entry.
+    pub fn new(
+        source_text: impl Into<String>,
+        source_locale: Locale,
+        target_text: impl Into<String>,
+        target_locale: Locale,
+    ) -> Self {
+        Self {
+            source_text: source_text.into(),
+            source_locale,
+            target_text: target_text.into(),
+            target_locale,
+            quality_score: 1.0,
+            metadata: HashMap::new(),
+            created_at: 0, // In production, use actual timestamp
+        }
+    }
+
+    /// Sets the quality score.
+    pub fn with_quality(mut self, score: f32) -> Self {
+        self.quality_score = score.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds metadata.
+    pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+}
+
+/// Translation memory for caching and reusing translations.
+#[derive(Debug, Default)]
+pub struct TranslationMemory {
+    /// Stored translation entries
+    entries: Vec<TranslationMemoryEntry>,
+    /// Index for fast lookup: (source_text, source_locale, target_locale) -> entry index
+    index: HashMap<(String, String, String), Vec<usize>>,
+}
+
+impl TranslationMemory {
+    /// Creates a new translation memory.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a translation entry to the memory.
+    pub fn add_entry(&mut self, entry: TranslationMemoryEntry) {
+        let key = (
+            entry.source_text.clone(),
+            entry.source_locale.tag(),
+            entry.target_locale.tag(),
+        );
+
+        let index = self.entries.len();
+        self.entries.push(entry);
+
+        self.index.entry(key).or_default().push(index);
+    }
+
+    /// Adds a simple translation to the memory.
+    pub fn add_translation(
+        &mut self,
+        source_text: impl Into<String>,
+        source_locale: Locale,
+        target_text: impl Into<String>,
+        target_locale: Locale,
+    ) {
+        let entry =
+            TranslationMemoryEntry::new(source_text, source_locale, target_text, target_locale);
+        self.add_entry(entry);
+    }
+
+    /// Finds exact matches for a source text.
+    pub fn find_exact(
+        &self,
+        source_text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+    ) -> Vec<&TranslationMemoryEntry> {
+        let key = (
+            source_text.to_string(),
+            source_locale.tag(),
+            target_locale.tag(),
+        );
+
+        self.index
+            .get(&key)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter_map(|&i| self.entries.get(i))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Finds fuzzy matches for a source text (simple substring matching).
+    pub fn find_fuzzy(
+        &self,
+        source_text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+        min_similarity: f32,
+    ) -> Vec<(&TranslationMemoryEntry, f32)> {
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.source_locale.tag() == source_locale.tag()
+                    && e.target_locale.tag() == target_locale.tag()
+            })
+            .filter_map(|e| {
+                let similarity = self.calculate_similarity(source_text, &e.source_text);
+                if similarity >= min_similarity {
+                    Some((e, similarity))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Calculates similarity between two strings (simple Jaccard similarity).
+    fn calculate_similarity(&self, text1: &str, text2: &str) -> f32 {
+        let words1: std::collections::HashSet<&str> = text1.split_whitespace().collect();
+        let words2: std::collections::HashSet<&str> = text2.split_whitespace().collect();
+
+        if words1.is_empty() && words2.is_empty() {
+            return 1.0;
+        }
+
+        let intersection: std::collections::HashSet<_> = words1.intersection(&words2).collect();
+        let union: std::collections::HashSet<_> = words1.union(&words2).collect();
+
+        if union.is_empty() {
+            0.0
+        } else {
+            intersection.len() as f32 / union.len() as f32
+        }
+    }
+
+    /// Gets all entries in the memory.
+    pub fn entries(&self) -> &[TranslationMemoryEntry] {
+        &self.entries
+    }
+
+    /// Gets the number of entries in the memory.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Checks if the memory is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Clears all entries from the memory.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.index.clear();
+    }
+}
+
+/// Machine translation fallback manager.
+/// Uses translation memory first, then falls back to external services.
+#[derive(Debug)]
+pub struct MachineTranslationFallback {
+    /// Translation memory for caching
+    memory: TranslationMemory,
+    /// External translation services in priority order
+    services: Vec<Box<dyn TranslationService>>,
+}
+
+impl MachineTranslationFallback {
+    /// Creates a new machine translation fallback manager.
+    pub fn new() -> Self {
+        Self {
+            memory: TranslationMemory::new(),
+            services: vec![],
+        }
+    }
+
+    /// Adds a translation service.
+    pub fn add_service(&mut self, service: Box<dyn TranslationService>) {
+        self.services.push(service);
+    }
+
+    /// Gets a reference to the translation memory.
+    pub fn memory(&self) -> &TranslationMemory {
+        &self.memory
+    }
+
+    /// Gets a mutable reference to the translation memory.
+    pub fn memory_mut(&mut self) -> &mut TranslationMemory {
+        &mut self.memory
+    }
+
+    /// Translates text using fallback chain: memory -> services.
+    pub fn translate(
+        &mut self,
+        text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+    ) -> I18nResult<String> {
+        // First, try exact match in translation memory
+        let exact_matches = self.memory.find_exact(text, source_locale, target_locale);
+        if let Some(entry) = exact_matches.first() {
+            return Ok(entry.target_text.clone());
+        }
+
+        // Try fuzzy match (>= 0.9 similarity)
+        let fuzzy_matches = self
+            .memory
+            .find_fuzzy(text, source_locale, target_locale, 0.9);
+        if let Some((entry, _)) = fuzzy_matches.first() {
+            return Ok(entry.target_text.clone());
+        }
+
+        // Fall back to external services
+        for service in &self.services {
+            if !service.is_available() {
+                continue;
+            }
+
+            match service.translate(text, source_locale, target_locale) {
+                Ok(translation) => {
+                    // Cache the translation in memory
+                    self.memory.add_translation(
+                        text.to_string(),
+                        source_locale.clone(),
+                        translation.clone(),
+                        target_locale.clone(),
+                    );
+                    return Ok(translation);
+                }
+                Err(_) => {
+                    // Try next service
+                    continue;
+                }
+            }
+        }
+
+        // No translation available
+        Err(I18nError::TranslationMissing {
+            key: text.to_string(),
+            locale: target_locale.tag(),
+        })
+    }
+}
+
+impl Default for MachineTranslationFallback {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legal term extractor for extracting terminology from statutes.
+#[derive(Debug, Default)]
+pub struct TerminologyExtractor {
+    /// Known legal terms
+    known_terms: std::collections::HashSet<String>,
+    /// Extracted terms with frequencies
+    extracted: HashMap<String, usize>,
+}
+
+impl TerminologyExtractor {
+    /// Creates a new terminology extractor.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates an extractor with known legal terms from a dictionary.
+    pub fn with_dictionary(dictionary: &LegalDictionary) -> Self {
+        let mut extractor = Self::new();
+        for (key, _) in &dictionary.translations {
+            extractor.known_terms.insert(key.clone());
+        }
+        extractor
+    }
+
+    /// Adds a known legal term.
+    pub fn add_known_term(&mut self, term: impl Into<String>) {
+        self.known_terms.insert(term.into());
+    }
+
+    /// Extracts terminology from statute text.
+    pub fn extract_from_text(&mut self, text: &str) {
+        // Simple extraction: find known terms and count frequencies
+        let words: Vec<&str> = text
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .filter(|w| !w.is_empty())
+            .collect();
+
+        for window in words.windows(1) {
+            let term = window.join("_").to_lowercase();
+            if self.known_terms.contains(&term) {
+                *self.extracted.entry(term).or_insert(0) += 1;
+            }
+        }
+
+        // Also try multi-word terms (up to 3 words)
+        for window_size in 2..=3 {
+            for window in words.windows(window_size) {
+                let term = window.join("_").to_lowercase();
+                if self.known_terms.contains(&term) {
+                    *self.extracted.entry(term).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
+    /// Gets extracted terms sorted by frequency.
+    pub fn get_terms_by_frequency(&self) -> Vec<(String, usize)> {
+        let mut terms: Vec<_> = self
+            .extracted
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
+        terms.sort_by(|a, b| b.1.cmp(&a.1));
+        terms
+    }
+
+    /// Gets the frequency of a specific term.
+    pub fn get_frequency(&self, term: &str) -> usize {
+        *self.extracted.get(term).unwrap_or(&0)
+    }
+
+    /// Gets all extracted terms.
+    pub fn extracted_terms(&self) -> &HashMap<String, usize> {
+        &self.extracted
+    }
+
+    /// Clears all extracted terms.
+    pub fn clear(&mut self) {
+        self.extracted.clear();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2964,5 +3400,193 @@ mod tests {
                 .iter()
                 .any(|d| d.contains("Quebec") || d.contains("Bilingual"))
         );
+    }
+
+    #[test]
+    fn test_mock_translation_service() {
+        let service = MockTranslationService::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        let result = service.translate("contract", &en, &ja).unwrap();
+        assert_eq!(result, "[ja] contract");
+        assert_eq!(service.service_name(), "MockTranslationService");
+        assert!(service.is_available());
+    }
+
+    #[test]
+    fn test_mock_translation_service_unavailable() {
+        let mut service = MockTranslationService::new();
+        service.set_available(false);
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        let result = service.translate("contract", &en, &ja);
+        assert!(result.is_err());
+        assert!(!service.is_available());
+    }
+
+    #[test]
+    fn test_translation_memory_exact_match() {
+        let mut memory = TranslationMemory::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory.add_translation("contract", en.clone(), "契約", ja.clone());
+
+        let matches = memory.find_exact("contract", &en, &ja);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].target_text, "契約");
+    }
+
+    #[test]
+    fn test_translation_memory_no_match() {
+        let memory = TranslationMemory::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        let matches = memory.find_exact("contract", &en, &ja);
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn test_translation_memory_fuzzy_match() {
+        let mut memory = TranslationMemory::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory.add_translation("employment contract", en.clone(), "雇用契約", ja.clone());
+
+        let matches = memory.find_fuzzy("employment contract agreement", &en, &ja, 0.5);
+        assert!(!matches.is_empty());
+        assert!(matches[0].1 > 0.5); // Similarity score
+    }
+
+    #[test]
+    fn test_translation_memory_entry() {
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        let entry = TranslationMemoryEntry::new("contract", en, "契約", ja)
+            .with_quality(0.95)
+            .with_metadata("translator", "human");
+
+        assert_eq!(entry.source_text, "contract");
+        assert_eq!(entry.target_text, "契約");
+        assert_eq!(entry.quality_score, 0.95);
+        assert_eq!(entry.metadata.get("translator").unwrap(), "human");
+    }
+
+    #[test]
+    fn test_machine_translation_fallback_memory_hit() {
+        let mut fallback = MachineTranslationFallback::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        // Pre-populate memory
+        fallback
+            .memory_mut()
+            .add_translation("contract", en.clone(), "契約", ja.clone());
+
+        // Should find in memory
+        let result = fallback.translate("contract", &en, &ja).unwrap();
+        assert_eq!(result, "契約");
+    }
+
+    #[test]
+    fn test_machine_translation_fallback_service() {
+        let mut fallback = MachineTranslationFallback::new();
+        fallback.add_service(Box::new(MockTranslationService::new()));
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        // Should fall back to service
+        let result = fallback.translate("contract", &en, &ja).unwrap();
+        assert_eq!(result, "[ja] contract");
+
+        // Should now be in memory
+        assert_eq!(fallback.memory().len(), 1);
+    }
+
+    #[test]
+    fn test_machine_translation_fallback_no_service() {
+        let mut fallback = MachineTranslationFallback::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        // Should fail - no memory, no services
+        let result = fallback.translate("contract", &en, &ja);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_terminology_extractor() {
+        let mut extractor = TerminologyExtractor::new();
+        extractor.add_known_term("contract");
+        extractor.add_known_term("employment");
+        extractor.add_known_term("statute");
+
+        let text = "This contract governs employment. The statute requires a written contract.";
+        extractor.extract_from_text(text);
+
+        assert_eq!(extractor.get_frequency("contract"), 2);
+        assert_eq!(extractor.get_frequency("employment"), 1);
+        assert_eq!(extractor.get_frequency("statute"), 1);
+
+        let terms = extractor.get_terms_by_frequency();
+        assert_eq!(terms[0].0, "contract");
+        assert_eq!(terms[0].1, 2);
+    }
+
+    #[test]
+    fn test_terminology_extractor_with_dictionary() {
+        let mut dict = LegalDictionary::new(Locale::new("en"));
+        dict.add_translation("contract", "contract");
+        dict.add_translation("statute", "statute");
+
+        let mut extractor = TerminologyExtractor::with_dictionary(&dict);
+
+        let text = "The contract requires compliance with the statute.";
+        extractor.extract_from_text(text);
+
+        assert_eq!(extractor.get_frequency("contract"), 1);
+        assert_eq!(extractor.get_frequency("statute"), 1);
+    }
+
+    #[test]
+    fn test_terminology_extractor_clear() {
+        let mut extractor = TerminologyExtractor::new();
+        extractor.add_known_term("contract");
+
+        let text = "This is a contract.";
+        extractor.extract_from_text(text);
+
+        assert_eq!(extractor.get_frequency("contract"), 1);
+
+        extractor.clear();
+        assert_eq!(extractor.get_frequency("contract"), 0);
+        assert!(extractor.extracted_terms().is_empty());
+    }
+
+    #[test]
+    fn test_translation_service_batch() {
+        let service = MockTranslationService::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        let texts = vec!["contract", "statute", "employment"];
+        let results = service.translate_batch(&texts, &en, &ja).unwrap();
+
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0], "[ja] contract");
+        assert_eq!(results[1], "[ja] statute");
+        assert_eq!(results[2], "[ja] employment");
     }
 }

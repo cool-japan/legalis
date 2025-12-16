@@ -12,12 +12,18 @@ use legalis_core::{Condition, Statute};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod algorithms;
 pub mod analysis;
 pub mod formats;
 pub mod git;
 pub mod merge;
+pub mod optimization;
+pub mod semantic;
+pub mod statistics;
 pub mod templates;
 pub mod timeline;
+pub mod vcs;
+pub mod visual;
 
 /// Errors during diff operations.
 #[derive(Debug, Error)]
@@ -68,7 +74,7 @@ pub struct Change {
 }
 
 /// Types of changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ChangeType {
     /// Something was added
     Added,
@@ -118,7 +124,9 @@ pub struct ImpactAssessment {
 }
 
 /// Severity of changes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub enum Severity {
     /// No significant impact
     #[default]

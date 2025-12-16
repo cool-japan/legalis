@@ -47,34 +47,32 @@ impl LkifImporter {
                         b"head" => in_head = true,
                         b"atom" => {
                             // Parse atom for conditions or effects
-                            if let Some(pred_attr) = e.attributes().find(|a| {
+                            if let Some(Ok(attr)) = e.attributes().find(|a| {
                                 a.as_ref()
                                     .map(|attr| attr.key.as_ref() == b"pred")
                                     .unwrap_or(false)
                             }) {
-                                if let Ok(attr) = pred_attr {
-                                    let pred = String::from_utf8_lossy(&attr.value).to_string();
+                                let pred = String::from_utf8_lossy(&attr.value).to_string();
 
-                                    if in_body {
-                                        // Parse as condition
-                                        if pred.contains("age") {
-                                            conditions.push(Condition::Age {
-                                                operator: ComparisonOp::GreaterOrEqual,
-                                                value: 18,
-                                            });
-                                        }
-                                    } else if in_head {
-                                        // Parse as effect
-                                        effect_desc = pred;
-                                        if effect_desc.contains("obliged")
-                                            || effect_desc.contains("must")
-                                        {
-                                            effect_type = EffectType::Obligation;
-                                        } else if effect_desc.contains("prohibited")
-                                            || effect_desc.contains("forbidden")
-                                        {
-                                            effect_type = EffectType::Prohibition;
-                                        }
+                                if in_body {
+                                    // Parse as condition
+                                    if pred.contains("age") {
+                                        conditions.push(Condition::Age {
+                                            operator: ComparisonOp::GreaterOrEqual,
+                                            value: 18,
+                                        });
+                                    }
+                                } else if in_head {
+                                    // Parse as effect
+                                    effect_desc = pred;
+                                    if effect_desc.contains("obliged")
+                                        || effect_desc.contains("must")
+                                    {
+                                        effect_type = EffectType::Obligation;
+                                    } else if effect_desc.contains("prohibited")
+                                        || effect_desc.contains("forbidden")
+                                    {
+                                        effect_type = EffectType::Prohibition;
                                     }
                                 }
                             }
@@ -95,10 +93,8 @@ impl LkifImporter {
                         .to_string()
                         .trim()
                         .to_string();
-                    if !text.is_empty() {
-                        if rule_name.is_empty() {
-                            rule_name = text.clone();
-                        }
+                    if !text.is_empty() && rule_name.is_empty() {
+                        rule_name = text.clone();
                     }
                 }
                 Ok(Event::Eof) => break,

@@ -50,9 +50,33 @@ impl FormatCoverage {
             LegalFormat::L4 => Self::analyze_l4(),
             LegalFormat::AkomaNtoso => Self::analyze_akoma_ntoso(),
             LegalFormat::LegalRuleML => Self::analyze_legalruleml(),
+            LegalFormat::LegalDocML => Self::analyze_legaldocml(),
             LegalFormat::LKIF => Self::analyze_lkif(),
             LegalFormat::Legalis => Self::analyze_legalis(),
         }
+    }
+
+    fn analyze_legaldocml() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Section/Article structure".to_string(),
+            "Document metadata".to_string(),
+            "Cross-references".to_string(),
+            "Basic conditions".to_string(),
+        ];
+
+        let unsupported = vec![
+            "Amendments".to_string(),
+            "Quoted structures".to_string(),
+            "Complex versioning".to_string(),
+        ];
+
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Natural language parsing".to_string(),
+            "Simple heuristics only".to_string(),
+        );
+
+        (supported, unsupported, partial)
     }
 
     fn analyze_catala() -> (Vec<String>, Vec<String>, HashMap<String, String>) {

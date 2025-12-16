@@ -555,6 +555,330 @@ pub mod ab_testing {
     }
 }
 
+/// Prompt optimization suggestions and analysis.
+pub mod optimization {
+    use super::*;
+
+    /// Types of optimization suggestions.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SuggestionType {
+        /// Prompt is too long and should be shortened
+        TooLong,
+        /// Prompt is too short and lacks detail
+        TooShort,
+        /// Prompt contains redundant information
+        Redundant,
+        /// Prompt could be more specific
+        VagueInstructions,
+        /// Prompt should include examples
+        MissingExamples,
+        /// Prompt should specify output format
+        MissingFormat,
+        /// Prompt contains ambiguous language
+        AmbiguousLanguage,
+        /// Prompt could benefit from chain-of-thought prompting
+        UseChainOfThought,
+        /// Prompt should be split into multiple steps
+        SplitIntoSteps,
+        /// Prompt could use a template
+        UseTemplate,
+    }
+
+    /// An optimization suggestion for a prompt.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct OptimizationSuggestion {
+        /// Type of suggestion
+        pub suggestion_type: SuggestionType,
+        /// Severity level (0-100, higher is more important)
+        pub severity: u8,
+        /// Description of the issue
+        pub description: String,
+        /// Suggested improvement
+        pub improvement: Option<String>,
+        /// Example of improved prompt
+        pub example: Option<String>,
+    }
+
+    impl OptimizationSuggestion {
+        /// Creates a new optimization suggestion.
+        pub fn new(
+            suggestion_type: SuggestionType,
+            severity: u8,
+            description: impl Into<String>,
+        ) -> Self {
+            Self {
+                suggestion_type,
+                severity: severity.min(100),
+                description: description.into(),
+                improvement: None,
+                example: None,
+            }
+        }
+
+        /// Adds an improvement suggestion.
+        pub fn with_improvement(mut self, improvement: impl Into<String>) -> Self {
+            self.improvement = Some(improvement.into());
+            self
+        }
+
+        /// Adds an example.
+        pub fn with_example(mut self, example: impl Into<String>) -> Self {
+            self.example = Some(example.into());
+            self
+        }
+    }
+
+    /// Result of prompt analysis.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PromptAnalysis {
+        /// The analyzed prompt
+        pub prompt: String,
+        /// Character count
+        pub char_count: usize,
+        /// Word count
+        pub word_count: usize,
+        /// Estimated token count (rough approximation)
+        pub estimated_tokens: usize,
+        /// Optimization suggestions
+        pub suggestions: Vec<OptimizationSuggestion>,
+        /// Overall quality score (0-100)
+        pub quality_score: u8,
+    }
+
+    impl PromptAnalysis {
+        /// Returns high-severity suggestions (severity >= 70).
+        pub fn high_severity_suggestions(&self) -> Vec<&OptimizationSuggestion> {
+            self.suggestions
+                .iter()
+                .filter(|s| s.severity >= 70)
+                .collect()
+        }
+
+        /// Returns medium-severity suggestions (40 <= severity < 70).
+        pub fn medium_severity_suggestions(&self) -> Vec<&OptimizationSuggestion> {
+            self.suggestions
+                .iter()
+                .filter(|s| s.severity >= 40 && s.severity < 70)
+                .collect()
+        }
+
+        /// Returns low-severity suggestions (severity < 40).
+        pub fn low_severity_suggestions(&self) -> Vec<&OptimizationSuggestion> {
+            self.suggestions
+                .iter()
+                .filter(|s| s.severity < 40)
+                .collect()
+        }
+    }
+
+    /// Analyzer for prompt optimization.
+    pub struct PromptOptimizer {
+        /// Minimum recommended prompt length
+        min_length: usize,
+        /// Maximum recommended prompt length
+        max_length: usize,
+    }
+
+    impl PromptOptimizer {
+        /// Creates a new prompt optimizer with default settings.
+        pub fn new() -> Self {
+            Self {
+                min_length: 50,
+                max_length: 4000,
+            }
+        }
+
+        /// Sets the minimum recommended length.
+        pub fn with_min_length(mut self, min_length: usize) -> Self {
+            self.min_length = min_length;
+            self
+        }
+
+        /// Sets the maximum recommended length.
+        pub fn with_max_length(mut self, max_length: usize) -> Self {
+            self.max_length = max_length;
+            self
+        }
+
+        /// Analyzes a prompt and returns optimization suggestions.
+        pub fn analyze(&self, prompt: &str) -> PromptAnalysis {
+            let char_count = prompt.len();
+            let word_count = prompt.split_whitespace().count();
+            let estimated_tokens = (word_count as f64 * 1.3) as usize; // Rough estimate
+
+            let mut suggestions = Vec::new();
+
+            // Check length
+            if char_count < self.min_length {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::TooShort,
+                        80,
+                        format!(
+                            "Prompt is quite short ({} characters). Consider adding more detail.",
+                            char_count
+                        ),
+                    )
+                    .with_improvement(
+                        "Add specific instructions, context, and desired output format.",
+                    ),
+                );
+            } else if char_count > self.max_length {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::TooLong,
+                        70,
+                        format!(
+                            "Prompt is quite long ({} characters). Consider breaking it down.",
+                            char_count
+                        ),
+                    )
+                    .with_improvement("Split complex prompts into multiple smaller steps."),
+                );
+            }
+
+            // Check for vague language
+            let vague_words = [
+                "maybe",
+                "perhaps",
+                "somehow",
+                "something",
+                "stuff",
+                "things",
+            ];
+            let vague_count = vague_words
+                .iter()
+                .filter(|word| prompt.to_lowercase().contains(*word))
+                .count();
+
+            if vague_count > 0 {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::VagueInstructions,
+                        60,
+                        format!(
+                            "Prompt contains {} vague word(s). Be more specific.",
+                            vague_count
+                        ),
+                    )
+                    .with_improvement("Replace vague language with concrete instructions."),
+                );
+            }
+
+            // Check for output format specification
+            if !prompt.to_lowercase().contains("format")
+                && !prompt.to_lowercase().contains("json")
+                && !prompt.to_lowercase().contains("xml")
+                && !prompt.to_lowercase().contains("markdown")
+            {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::MissingFormat,
+                        50,
+                        "Prompt doesn't specify an output format.",
+                    )
+                    .with_improvement("Add instructions like 'Respond in JSON format' or 'Use markdown formatting'."),
+                );
+            }
+
+            // Check for examples
+            if !prompt.to_lowercase().contains("example")
+                && !prompt.to_lowercase().contains("for instance")
+                && word_count > 20
+            {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::MissingExamples,
+                        40,
+                        "Consider adding examples to clarify expectations.",
+                    )
+                    .with_improvement("Include one or two examples of desired output."),
+                );
+            }
+
+            // Check for question marks (possible ambiguity)
+            let question_count = prompt.matches('?').count();
+            if question_count > 3 {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::AmbiguousLanguage,
+                        55,
+                        format!(
+                            "Prompt contains {} questions. Use declarative instructions instead.",
+                            question_count
+                        ),
+                    )
+                    .with_improvement("Replace questions with direct instructions."),
+                );
+            }
+
+            // Suggest chain-of-thought for complex tasks
+            if word_count > 100 && !prompt.to_lowercase().contains("step by step") {
+                suggestions.push(
+                    OptimizationSuggestion::new(
+                        SuggestionType::UseChainOfThought,
+                        45,
+                        "For complex tasks, consider requesting step-by-step reasoning.",
+                    )
+                    .with_improvement(
+                        "Add: 'Think through this step by step' or 'Show your reasoning'.",
+                    ),
+                );
+            }
+
+            // Calculate quality score
+            let base_score = 100;
+            let penalty = suggestions
+                .iter()
+                .map(|s| s.severity as i32 / 10)
+                .sum::<i32>();
+            let quality_score = (base_score - penalty).max(0) as u8;
+
+            PromptAnalysis {
+                prompt: prompt.to_string(),
+                char_count,
+                word_count,
+                estimated_tokens,
+                suggestions,
+                quality_score,
+            }
+        }
+
+        /// Suggests template-based alternatives for common patterns.
+        pub fn suggest_template(&self, prompt: &str) -> Option<String> {
+            let lower = prompt.to_lowercase();
+
+            if lower.contains("compile") && lower.contains("law") {
+                return Some("compile_statute".to_string());
+            }
+
+            if lower.contains("analyze") && (lower.contains("statute") || lower.contains("law")) {
+                return Some("analyze_statute".to_string());
+            }
+
+            if lower.contains("explain") && (lower.contains("statute") || lower.contains("law")) {
+                return Some("explain_statute".to_string());
+            }
+
+            if lower.contains("review") && lower.contains("code") {
+                return Some("code_review".to_string());
+            }
+
+            if lower.contains("generate") && lower.contains("test") {
+                return Some("generate_tests".to_string());
+            }
+
+            None
+        }
+    }
+
+    impl Default for PromptOptimizer {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

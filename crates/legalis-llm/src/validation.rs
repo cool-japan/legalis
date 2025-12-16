@@ -362,6 +362,389 @@ pub fn calculate_confidence(text: &str) -> f64 {
     score.clamp(0.0, 1.0)
 }
 
+/// Advanced validation rules beyond simple JSON schema.
+pub mod rules {
+    use super::*;
+    use serde_json::Value;
+
+    /// A validation rule trait.
+    pub trait ValidationRule: Send + Sync {
+        /// Validates a value and returns errors if any.
+        fn validate(&self, value: &Value) -> Vec<String>;
+
+        /// Returns the name of this rule.
+        fn name(&self) -> &str;
+
+        /// Returns the severity of violations (0-100).
+        fn severity(&self) -> u8 {
+            50
+        }
+    }
+
+    /// Rule that checks string length.
+    pub struct LengthRule {
+        field: String,
+        min_length: Option<usize>,
+        max_length: Option<usize>,
+    }
+
+    impl LengthRule {
+        /// Creates a new length rule for a field.
+        pub fn new(field: impl Into<String>) -> Self {
+            Self {
+                field: field.into(),
+                min_length: None,
+                max_length: None,
+            }
+        }
+
+        /// Sets the minimum length.
+        pub fn min(mut self, min: usize) -> Self {
+            self.min_length = Some(min);
+            self
+        }
+
+        /// Sets the maximum length.
+        pub fn max(mut self, max: usize) -> Self {
+            self.max_length = Some(max);
+            self
+        }
+    }
+
+    impl ValidationRule for LengthRule {
+        fn validate(&self, value: &Value) -> Vec<String> {
+            let mut errors = Vec::new();
+
+            if let Some(obj) = value.as_object() {
+                if let Some(field_value) = obj.get(&self.field) {
+                    if let Some(s) = field_value.as_str() {
+                        let len = s.len();
+
+                        if let Some(min) = self.min_length {
+                            if len < min {
+                                errors.push(format!(
+                                    "Field '{}' is too short: {} < {}",
+                                    self.field, len, min
+                                ));
+                            }
+                        }
+
+                        if let Some(max) = self.max_length {
+                            if len > max {
+                                errors.push(format!(
+                                    "Field '{}' is too long: {} > {}",
+                                    self.field, len, max
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            errors
+        }
+
+        fn name(&self) -> &str {
+            "LengthRule"
+        }
+
+        fn severity(&self) -> u8 {
+            60
+        }
+    }
+
+    /// Rule that checks numeric ranges.
+    pub struct RangeRule {
+        field: String,
+        min: Option<f64>,
+        max: Option<f64>,
+    }
+
+    impl RangeRule {
+        /// Creates a new range rule for a field.
+        pub fn new(field: impl Into<String>) -> Self {
+            Self {
+                field: field.into(),
+                min: None,
+                max: None,
+            }
+        }
+
+        /// Sets the minimum value.
+        pub fn min(mut self, min: f64) -> Self {
+            self.min = Some(min);
+            self
+        }
+
+        /// Sets the maximum value.
+        pub fn max(mut self, max: f64) -> Self {
+            self.max = Some(max);
+            self
+        }
+    }
+
+    impl ValidationRule for RangeRule {
+        fn validate(&self, value: &Value) -> Vec<String> {
+            let mut errors = Vec::new();
+
+            if let Some(obj) = value.as_object() {
+                if let Some(field_value) = obj.get(&self.field) {
+                    if let Some(num) = field_value.as_f64() {
+                        if let Some(min) = self.min {
+                            if num < min {
+                                errors.push(format!(
+                                    "Field '{}' is below minimum: {} < {}",
+                                    self.field, num, min
+                                ));
+                            }
+                        }
+
+                        if let Some(max) = self.max {
+                            if num > max {
+                                errors.push(format!(
+                                    "Field '{}' exceeds maximum: {} > {}",
+                                    self.field, num, max
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            errors
+        }
+
+        fn name(&self) -> &str {
+            "RangeRule"
+        }
+
+        fn severity(&self) -> u8 {
+            70
+        }
+    }
+
+    /// Rule that checks array length.
+    pub struct ArrayLengthRule {
+        field: String,
+        min_items: Option<usize>,
+        max_items: Option<usize>,
+    }
+
+    impl ArrayLengthRule {
+        /// Creates a new array length rule.
+        pub fn new(field: impl Into<String>) -> Self {
+            Self {
+                field: field.into(),
+                min_items: None,
+                max_items: None,
+            }
+        }
+
+        /// Sets the minimum number of items.
+        pub fn min(mut self, min: usize) -> Self {
+            self.min_items = Some(min);
+            self
+        }
+
+        /// Sets the maximum number of items.
+        pub fn max(mut self, max: usize) -> Self {
+            self.max_items = Some(max);
+            self
+        }
+    }
+
+    impl ValidationRule for ArrayLengthRule {
+        fn validate(&self, value: &Value) -> Vec<String> {
+            let mut errors = Vec::new();
+
+            if let Some(obj) = value.as_object() {
+                if let Some(field_value) = obj.get(&self.field) {
+                    if let Some(arr) = field_value.as_array() {
+                        let len = arr.len();
+
+                        if let Some(min) = self.min_items {
+                            if len < min {
+                                errors.push(format!(
+                                    "Field '{}' has too few items: {} < {}",
+                                    self.field, len, min
+                                ));
+                            }
+                        }
+
+                        if let Some(max) = self.max_items {
+                            if len > max {
+                                errors.push(format!(
+                                    "Field '{}' has too many items: {} > {}",
+                                    self.field, len, max
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            errors
+        }
+
+        fn name(&self) -> &str {
+            "ArrayLengthRule"
+        }
+    }
+
+    /// Rule that checks for pattern matching.
+    pub struct PatternRule {
+        field: String,
+        pattern: String,
+    }
+
+    impl PatternRule {
+        /// Creates a new pattern rule.
+        pub fn new(field: impl Into<String>, pattern: impl Into<String>) -> Self {
+            Self {
+                field: field.into(),
+                pattern: pattern.into(),
+            }
+        }
+    }
+
+    impl ValidationRule for PatternRule {
+        fn validate(&self, value: &Value) -> Vec<String> {
+            let mut errors = Vec::new();
+
+            if let Some(obj) = value.as_object() {
+                if let Some(field_value) = obj.get(&self.field) {
+                    if let Some(s) = field_value.as_str() {
+                        // Simple pattern matching (not full regex)
+                        if !s.contains(&self.pattern) {
+                            errors.push(format!(
+                                "Field '{}' does not match pattern '{}'",
+                                self.field, self.pattern
+                            ));
+                        }
+                    }
+                }
+            }
+
+            errors
+        }
+
+        fn name(&self) -> &str {
+            "PatternRule"
+        }
+    }
+
+    /// Rule that ensures a field is not empty.
+    pub struct NotEmptyRule {
+        field: String,
+    }
+
+    impl NotEmptyRule {
+        /// Creates a new not-empty rule.
+        pub fn new(field: impl Into<String>) -> Self {
+            Self {
+                field: field.into(),
+            }
+        }
+    }
+
+    impl ValidationRule for NotEmptyRule {
+        fn validate(&self, value: &Value) -> Vec<String> {
+            let mut errors = Vec::new();
+
+            if let Some(obj) = value.as_object() {
+                if let Some(field_value) = obj.get(&self.field) {
+                    let is_empty = match field_value {
+                        Value::String(s) => s.is_empty(),
+                        Value::Array(a) => a.is_empty(),
+                        Value::Object(o) => o.is_empty(),
+                        Value::Null => true,
+                        _ => false,
+                    };
+
+                    if is_empty {
+                        errors.push(format!("Field '{}' must not be empty", self.field));
+                    }
+                }
+            }
+
+            errors
+        }
+
+        fn name(&self) -> &str {
+            "NotEmptyRule"
+        }
+
+        fn severity(&self) -> u8 {
+            80
+        }
+    }
+
+    /// Composite validator that applies multiple rules.
+    pub struct RuleValidator {
+        rules: Vec<Box<dyn ValidationRule>>,
+    }
+
+    impl RuleValidator {
+        /// Creates a new rule validator.
+        pub fn new() -> Self {
+            Self { rules: Vec::new() }
+        }
+
+        /// Adds a validation rule.
+        pub fn add_rule<R: ValidationRule + 'static>(mut self, rule: R) -> Self {
+            self.rules.push(Box::new(rule));
+            self
+        }
+
+        /// Validates a value against all rules.
+        pub fn validate(&self, value: &Value) -> ValidationResult {
+            let mut all_errors = Vec::new();
+            let mut total_severity = 0u32;
+
+            for rule in &self.rules {
+                let errors = rule.validate(value);
+                if !errors.is_empty() {
+                    total_severity += rule.severity() as u32;
+                    all_errors.extend(errors);
+                }
+            }
+
+            if all_errors.is_empty() {
+                ValidationResult::valid()
+            } else {
+                // Calculate confidence based on severity
+                let confidence =
+                    (100.0 - (total_severity as f64 / self.rules.len() as f64)) / 100.0;
+                ValidationResult::invalid(all_errors).with_confidence(confidence.max(0.0))
+            }
+        }
+
+        /// Validates and returns only high-severity errors.
+        pub fn validate_critical(&self, value: &Value) -> ValidationResult {
+            let mut critical_errors = Vec::new();
+
+            for rule in &self.rules {
+                if rule.severity() >= 70 {
+                    let errors = rule.validate(value);
+                    critical_errors.extend(errors);
+                }
+            }
+
+            if critical_errors.is_empty() {
+                ValidationResult::valid()
+            } else {
+                ValidationResult::invalid(critical_errors)
+            }
+        }
+    }
+
+    impl Default for RuleValidator {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

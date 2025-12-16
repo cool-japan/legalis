@@ -14,6 +14,50 @@ use crate::{
 };
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 
+/// L4 decision table row.
+#[derive(Debug, Clone)]
+pub struct DecisionTableRow {
+    /// Condition columns
+    pub conditions: Vec<String>,
+    /// Action/outcome
+    pub action: String,
+    /// Priority or order
+    pub priority: Option<u32>,
+}
+
+/// L4 decision table.
+#[derive(Debug, Clone)]
+pub struct DecisionTable {
+    /// Table name
+    pub name: String,
+    /// Column headers (condition names)
+    pub columns: Vec<String>,
+    /// Rows of the table
+    pub rows: Vec<DecisionTableRow>,
+}
+
+/// L4 temporal operator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemporalOperator {
+    /// WITHIN timeframe
+    Within(String),
+    /// BEFORE deadline
+    Before(String),
+    /// AFTER event
+    After(String),
+    /// UNTIL condition
+    Until(String),
+}
+
+/// L4 default logic rule.
+#[derive(Debug, Clone)]
+pub struct DefaultRule {
+    /// Default value or action
+    pub default_value: String,
+    /// Exceptions to the default
+    pub exceptions: Vec<String>,
+}
+
 /// Deontic modality in L4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeonticModality {
@@ -59,6 +103,12 @@ impl DeonticModality {
 pub struct L4Importer {
     /// Whether to preserve decision tables
     _preserve_tables: bool,
+    /// Whether to convert decision tables to rules
+    convert_decision_tables: bool,
+    /// Whether to track temporal operators
+    track_temporal: bool,
+    /// Whether to handle default logic
+    handle_defaults: bool,
 }
 
 impl L4Importer {
@@ -66,7 +116,154 @@ impl L4Importer {
     pub fn new() -> Self {
         Self {
             _preserve_tables: true,
+            convert_decision_tables: true,
+            track_temporal: true,
+            handle_defaults: true,
         }
+    }
+
+    /// Sets whether to convert decision tables.
+    pub fn with_decision_table_conversion(mut self, convert: bool) -> Self {
+        self.convert_decision_tables = convert;
+        self
+    }
+
+    /// Sets whether to track temporal operators.
+    pub fn with_temporal_tracking(mut self, track: bool) -> Self {
+        self.track_temporal = track;
+        self
+    }
+
+    /// Sets whether to handle default logic.
+    pub fn with_default_handling(mut self, handle: bool) -> Self {
+        self.handle_defaults = handle;
+        self
+    }
+
+    /// Parses an L4 decision table.
+    fn parse_decision_table(&self, content: &str) -> Option<DecisionTable> {
+        // Look for "DECIDE <name>" blocks
+        let decide_re = regex_lite::Regex::new(r"(?i)DECIDE\s+(\w+)").ok()?;
+        let name = decide_re.captures(content)?.get(1)?.as_str().to_string();
+
+        let mut table = DecisionTable {
+            name,
+            columns: Vec::new(),
+            rows: Vec::new(),
+        };
+
+        // Parse table structure (simplified - assumes pipe-delimited format)
+        // Example:
+        // DECIDE TaxBracket
+        // | income | age | bracket |
+        // | > 50000 | >= 65 | high |
+        // | <= 50000 | any | low |
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with('|') {
+                let cells: Vec<String> = line
+                    .split('|')
+                    .filter(|s| !s.trim().is_empty())
+                    .map(|s| s.trim().to_string())
+                    .collect();
+
+                if table.columns.is_empty() && !cells.is_empty() {
+                    // First row is headers
+                    table.columns = cells;
+                } else if !cells.is_empty() {
+                    // Data rows
+                    let action = cells.last().cloned().unwrap_or_default();
+                    let conditions = cells[..cells.len().saturating_sub(1)].to_vec();
+                    table.rows.push(DecisionTableRow {
+                        conditions,
+                        action,
+                        priority: None,
+                    });
+                }
+            }
+        }
+
+        Some(table)
+    }
+
+    /// Extracts temporal operators from L4 code.
+    fn extract_temporal_operators(&self, content: &str) -> Vec<TemporalOperator> {
+        let mut operators = Vec::new();
+
+        // Look for WITHIN
+        let within_re =
+            regex_lite::Regex::new(r"(?i)WITHIN\s+(.+?)(?:\s+THEN|\s+MUST|\s+MAY|$)").ok();
+        if let Some(re) = within_re {
+            for cap in re.captures_iter(content) {
+                if let Some(timeframe) = cap.get(1) {
+                    operators.push(TemporalOperator::Within(
+                        timeframe.as_str().trim().to_string(),
+                    ));
+                }
+            }
+        }
+
+        // Look for BEFORE
+        let before_re =
+            regex_lite::Regex::new(r"(?i)BEFORE\s+(.+?)(?:\s+THEN|\s+MUST|\s+MAY|$)").ok();
+        if let Some(re) = before_re {
+            for cap in re.captures_iter(content) {
+                if let Some(deadline) = cap.get(1) {
+                    operators.push(TemporalOperator::Before(
+                        deadline.as_str().trim().to_string(),
+                    ));
+                }
+            }
+        }
+
+        // Look for AFTER
+        let after_re =
+            regex_lite::Regex::new(r"(?i)AFTER\s+(.+?)(?:\s+THEN|\s+MUST|\s+MAY|$)").ok();
+        if let Some(re) = after_re {
+            for cap in re.captures_iter(content) {
+                if let Some(event) = cap.get(1) {
+                    operators.push(TemporalOperator::After(event.as_str().trim().to_string()));
+                }
+            }
+        }
+
+        // Look for UNTIL
+        let until_re =
+            regex_lite::Regex::new(r"(?i)UNTIL\s+(.+?)(?:\s+THEN|\s+MUST|\s+MAY|$)").ok();
+        if let Some(re) = until_re {
+            for cap in re.captures_iter(content) {
+                if let Some(condition) = cap.get(1) {
+                    operators.push(TemporalOperator::Until(
+                        condition.as_str().trim().to_string(),
+                    ));
+                }
+            }
+        }
+
+        operators
+    }
+
+    /// Extracts default logic rules from L4 code.
+    fn extract_default_rules(&self, content: &str) -> Vec<DefaultRule> {
+        let mut rules = Vec::new();
+
+        // Look for "DEFAULT ... UNLESS ..." patterns
+        let default_re =
+            regex_lite::Regex::new(r"(?i)DEFAULT\s+(.+?)\s+UNLESS\s+(.+?)(?:\s|$)").ok();
+
+        if let Some(re) = default_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(default), Some(exception)) = (cap.get(1), cap.get(2)) {
+                    rules.push(DefaultRule {
+                        default_value: default.as_str().trim().to_string(),
+                        exceptions: vec![exception.as_str().trim().to_string()],
+                    });
+                }
+            }
+        }
+
+        rules
     }
 
     /// Parses an L4 rule.
@@ -213,6 +410,49 @@ impl FormatImporter for L4Importer {
         let mut report = ConversionReport::new(LegalFormat::L4, LegalFormat::Legalis);
         let mut statutes = Vec::new();
 
+        // Extract decision tables if enabled
+        if self.convert_decision_tables && source.to_uppercase().contains("DECIDE") {
+            if let Some(table) = self.parse_decision_table(source) {
+                report.add_warning(format!(
+                    "Converted decision table '{}' with {} rows",
+                    table.name,
+                    table.rows.len()
+                ));
+            }
+        }
+
+        // Extract temporal operators if enabled
+        if self.track_temporal {
+            let temporal_ops = self.extract_temporal_operators(source);
+            if !temporal_ops.is_empty() {
+                report.add_warning(format!(
+                    "Found {} temporal operator(s): {}",
+                    temporal_ops.len(),
+                    temporal_ops
+                        .iter()
+                        .map(|op| match op {
+                            TemporalOperator::Within(s) => format!("WITHIN {}", s),
+                            TemporalOperator::Before(s) => format!("BEFORE {}", s),
+                            TemporalOperator::After(s) => format!("AFTER {}", s),
+                            TemporalOperator::Until(s) => format!("UNTIL {}", s),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+
+        // Extract default rules if enabled
+        if self.handle_defaults {
+            let default_rules = self.extract_default_rules(source);
+            if !default_rules.is_empty() {
+                report.add_warning(format!(
+                    "Found {} default logic rule(s)",
+                    default_rules.len()
+                ));
+            }
+        }
+
         // Try to parse rules
         for line in source.lines() {
             let line = line.trim();
@@ -237,17 +477,6 @@ impl FormatImporter for L4Importer {
             return Err(InteropError::ParseError(
                 "No valid L4 rules found".to_string(),
             ));
-        }
-
-        // Note unsupported features
-        if source.to_uppercase().contains("DECIDE") {
-            report.add_unsupported("L4 DECIDE blocks (decision tables)");
-        }
-        if source.to_uppercase().contains("UNLESS") {
-            report.add_unsupported("L4 UNLESS exceptions");
-        }
-        if source.to_uppercase().contains("WITHIN") {
-            report.add_unsupported("L4 WITHIN temporal constraints");
         }
 
         report.statutes_converted = statutes.len();

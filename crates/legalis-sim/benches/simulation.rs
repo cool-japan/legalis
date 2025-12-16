@@ -7,8 +7,8 @@ use legalis_core::{
 };
 use legalis_sim::{
     BehavioralProfile, ComplianceContext, ComplianceModel, DecisionStrategy, DemographicProfile,
-    PopulationBuilder, PopulationGenerator, RelationshipGraph, RelationshipType, SimEngine,
-    TemporalSimBuilder, TemporalStatute, TimeStep,
+    DistributedCoordinator, PopulationBuilder, PopulationGenerator, RelationshipGraph,
+    RelationshipType, SimEngine, SimdBatchProcessor, TemporalSimBuilder, TemporalStatute, TimeStep,
 };
 use std::hint::black_box;
 
@@ -306,6 +306,95 @@ fn bench_temporal_simulation(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_simd_operations(c: &mut Criterion) {
+    let mut group = c.benchmark_group("simd_operations");
+
+    // Benchmark SIMD sum vs standard sum
+    for size in [100, 1000, 10000, 100000] {
+        let data: Vec<f64> = (1..=size).map(|x| x as f64).collect();
+
+        group.bench_function(format!("simd_sum_{}", size), |b| {
+            b.iter(|| black_box(SimdBatchProcessor::sum_f64(&data)));
+        });
+
+        group.bench_function(format!("std_sum_{}", size), |b| {
+            b.iter(|| black_box(data.iter().sum::<f64>()));
+        });
+
+        // Benchmark SIMD mean
+        group.bench_function(format!("simd_mean_{}", size), |b| {
+            b.iter(|| black_box(SimdBatchProcessor::mean_f64(&data)));
+        });
+
+        // Benchmark SIMD variance
+        group.bench_function(format!("simd_variance_{}", size), |b| {
+            b.iter(|| black_box(SimdBatchProcessor::variance_f64(&data)));
+        });
+
+        // Benchmark SIMD min/max
+        group.bench_function(format!("simd_min_{}", size), |b| {
+            b.iter(|| black_box(SimdBatchProcessor::min_f64(&data)));
+        });
+
+        group.bench_function(format!("simd_max_{}", size), |b| {
+            b.iter(|| black_box(SimdBatchProcessor::max_f64(&data)));
+        });
+    }
+
+    // Benchmark SIMD dot product
+    let vec_a: Vec<f64> = (0..10000).map(|x| x as f64).collect();
+    let vec_b: Vec<f64> = (0..10000).map(|x| (x * 2) as f64).collect();
+
+    group.bench_function("simd_dot_product_10k", |b| {
+        b.iter(|| black_box(SimdBatchProcessor::dot_product_f64(&vec_a, &vec_b)));
+    });
+
+    group.bench_function("std_dot_product_10k", |b| {
+        b.iter(|| {
+            black_box(
+                vec_a
+                    .iter()
+                    .zip(vec_b.iter())
+                    .map(|(a, b)| a * b)
+                    .sum::<f64>(),
+            )
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_distributed_coordination(c: &mut Criterion) {
+    let mut group = c.benchmark_group("distributed_coordination");
+
+    // Benchmark work distribution
+    for (num_nodes, items) in [(2, 1000), (4, 10000), (8, 100000)] {
+        group.bench_function(
+            format!("distribute_{}nodes_{}items", num_nodes, items),
+            |b| {
+                let coordinator = DistributedCoordinator::new(num_nodes);
+                b.iter(|| {
+                    let data: Vec<i32> = (0..items).collect();
+                    black_box(coordinator.distribute_work(data))
+                });
+            },
+        );
+    }
+
+    // Benchmark result aggregation
+    for num_nodes in [2, 4, 8, 16] {
+        group.bench_function(format!("aggregate_{}nodes", num_nodes), |b| {
+            let coordinator = DistributedCoordinator::new(num_nodes);
+            let node_results: Vec<Vec<i32>> = (0..num_nodes)
+                .map(|i| (i * 100..(i + 1) * 100).collect())
+                .collect();
+            b.iter(|| black_box(coordinator.aggregate_results(node_results.clone())));
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_condition_evaluation,
@@ -318,6 +407,8 @@ criterion_group!(
     bench_population_generation,
     bench_relationship_queries,
     bench_temporal_simulation,
+    bench_simd_operations,
+    bench_distributed_coordination,
 );
 
 criterion_main!(benches);

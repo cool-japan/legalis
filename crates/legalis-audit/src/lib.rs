@@ -1,15 +1,101 @@
 //! Legalis-Audit: Audit trail and decision logging for Legalis-RS.
 //!
-//! This crate provides comprehensive audit logging for legal decisions:
-//! - Decision recording with full context
-//! - Immutable audit trails
-//! - Compliance reporting
-//! - Decision replay and analysis
+//! This crate provides comprehensive audit logging for legal decisions with:
+//!
+//! ## Core Features
+//! - **Decision recording** with full context (actor, statute, subject, etc.)
+//! - **Hash chain integrity** for tamper detection
+//! - **Immutable audit trails** with cryptographic verification
+//! - **Compliance reporting** with detailed statistics
+//!
+//! ## Storage Backends
+//! - **In-memory**: Fast, ephemeral storage for testing/development
+//! - **JSONL**: Durable file-based storage with human-readable format
+//! - **Custom**: Implement `AuditStorage` trait for your own backend
+//!
+//! ## Query System
+//! Use the [`query::QueryBuilder`] for flexible filtering:
+//! - Filter by statute ID, subject ID, event type
+//! - Filter by actor type (System, User, External)
+//! - Date range queries
+//! - Pagination support
+//!
+//! ## Export Formats
+//! - CSV for spreadsheet analysis
+//! - JSON for programmatic access
+//! - JSON-LD for semantic web compatibility
+//!
+//! ## Analysis & Anomaly Detection
+//! Use [`analysis::DecisionAnalyzer`] for pattern analysis:
+//! - Decision distribution by statute, actor, event type
+//! - Temporal distribution and trend analysis
+//! - Anomaly detection (volume spikes, unusual override rates)
+//! - Compliance summary generation
+//!
+//! ## Decision Replay
+//! Use [`replay::DecisionReplayer`] for historical analysis:
+//! - Point-in-time reconstruction of audit trail state
+//! - Subject and statute history tracking
+//! - Timeline comparison between two points
+//! - What-if analysis by filtering decisions
+//!
+//! ## GDPR Compliance
+//! Use [`retention`] module for GDPR compliance:
+//! - Data subject access requests (Article 15)
+//! - Right to explanation for automated decisions (Article 22)
+//! - Retention policies with statute exemptions
+//! - Erasure analysis (right to be forgotten)
+//!
+//! ## Example Usage
+//!
+//! ```rust
+//! use legalis_audit::{AuditTrail, AuditRecord, EventType, Actor, DecisionContext, DecisionResult};
+//! use std::collections::HashMap;
+//! use uuid::Uuid;
+//!
+//! // Create an in-memory audit trail
+//! let mut trail = AuditTrail::new();
+//!
+//! // Or use JSONL file storage
+//! // let mut trail = AuditTrail::with_jsonl_file("/path/to/audit.jsonl").unwrap();
+//!
+//! // Record a decision
+//! let record = AuditRecord::new(
+//!     EventType::AutomaticDecision,
+//!     Actor::System { component: "engine".to_string() },
+//!     "statute-123".to_string(),
+//!     Uuid::new_v4(),
+//!     DecisionContext::default(),
+//!     DecisionResult::Deterministic {
+//!         effect_applied: "approved".to_string(),
+//!         parameters: HashMap::new(),
+//!     },
+//!     None,
+//! );
+//!
+//! let id = trail.record(record).unwrap();
+//!
+//! // Query records
+//! let records = trail.query_by_statute("statute-123").unwrap();
+//!
+//! // Verify integrity
+//! assert!(trail.verify_integrity().unwrap());
+//!
+//! // Generate compliance report
+//! let report = trail.generate_report().unwrap();
+//! println!("Total decisions: {}", report.total_decisions);
+//! ```
+
+pub mod analysis;
+pub mod export;
+pub mod query;
+pub mod replay;
+pub mod retention;
+pub mod storage;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -27,6 +113,18 @@ pub enum AuditError {
 
     #[error("Tamper detected: {0}")]
     TamperDetected(String),
+
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
+
+    #[error("Export error: {0}")]
+    ExportError(String),
+
+    #[error("Query error: {0}")]
+    QueryError(String),
 }
 
 /// Result type for audit operations.
@@ -193,37 +291,41 @@ pub enum DecisionResult {
 
 /// Audit trail storage.
 pub struct AuditTrail {
-    records: Arc<RwLock<Vec<AuditRecord>>>,
-    last_hash: Arc<RwLock<Option<String>>>,
+    storage: Box<dyn storage::AuditStorage>,
 }
 
 impl AuditTrail {
-    /// Creates a new audit trail.
+    /// Creates a new audit trail with in-memory storage.
     pub fn new() -> Self {
         Self {
-            records: Arc::new(RwLock::new(Vec::new())),
-            last_hash: Arc::new(RwLock::new(None)),
+            storage: Box::new(storage::memory::MemoryStorage::new()),
         }
     }
 
+    /// Creates a new audit trail with custom storage.
+    pub fn with_storage(storage: Box<dyn storage::AuditStorage>) -> Self {
+        Self { storage }
+    }
+
+    /// Creates a new audit trail with JSONL file storage.
+    pub fn with_jsonl_file<P: AsRef<std::path::Path>>(path: P) -> AuditResult<Self> {
+        Ok(Self {
+            storage: Box::new(storage::jsonl::JsonlStorage::new(path)?),
+        })
+    }
+
     /// Records a new decision.
-    pub fn record(&self, mut record: AuditRecord) -> AuditResult<Uuid> {
-        let mut records = self.records.write().map_err(|e| {
-            AuditError::StorageError(format!("Failed to acquire write lock: {}", e))
-        })?;
-
-        let mut last_hash = self
-            .last_hash
-            .write()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire hash lock: {}", e)))?;
-
-        // Set previous hash and recompute
-        record.previous_hash = last_hash.clone();
+    pub fn record(&mut self, mut record: AuditRecord) -> AuditResult<Uuid> {
+        // Get last hash and set previous hash
+        let last_hash = self.storage.get_last_hash()?;
+        record.previous_hash = last_hash;
         record.record_hash = record.compute_hash();
 
         let id = record.id;
-        *last_hash = Some(record.record_hash.clone());
-        records.push(record);
+        let hash = record.record_hash.clone();
+
+        self.storage.store(record)?;
+        self.storage.set_last_hash(Some(hash))?;
 
         tracing::info!("Audit record created: {}", id);
         Ok(id)
@@ -231,44 +333,17 @@ impl AuditTrail {
 
     /// Gets a record by ID.
     pub fn get(&self, id: Uuid) -> AuditResult<AuditRecord> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
-
-        records
-            .iter()
-            .find(|r| r.id == id)
-            .cloned()
-            .ok_or(AuditError::RecordNotFound(id))
+        self.storage.get(id)
     }
 
     /// Queries records by statute ID.
     pub fn query_by_statute(&self, statute_id: &str) -> AuditResult<Vec<AuditRecord>> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
-
-        Ok(records
-            .iter()
-            .filter(|r| r.statute_id == statute_id)
-            .cloned()
-            .collect())
+        self.storage.get_by_statute(statute_id)
     }
 
     /// Queries records by subject ID.
     pub fn query_by_subject(&self, subject_id: Uuid) -> AuditResult<Vec<AuditRecord>> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
-
-        Ok(records
-            .iter()
-            .filter(|r| r.subject_id == subject_id)
-            .cloned()
-            .collect())
+        self.storage.get_by_subject(subject_id)
     }
 
     /// Queries records within a time range.
@@ -277,25 +352,18 @@ impl AuditTrail {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> AuditResult<Vec<AuditRecord>> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
+        self.storage.get_by_time_range(start, end)
+    }
 
-        Ok(records
-            .iter()
-            .filter(|r| r.timestamp >= start && r.timestamp <= end)
-            .cloned()
-            .collect())
+    /// Queries records using a query builder.
+    pub fn query(&self, query: &query::QueryBuilder) -> AuditResult<Vec<AuditRecord>> {
+        let all_records = self.storage.get_all()?;
+        Ok(query.execute(&all_records))
     }
 
     /// Verifies the integrity of the entire audit trail.
     pub fn verify_integrity(&self) -> AuditResult<bool> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
-
+        let records = self.storage.get_all()?;
         let mut expected_prev_hash: Option<String> = None;
 
         for record in records.iter() {
@@ -323,15 +391,12 @@ impl AuditTrail {
 
     /// Returns the total number of records.
     pub fn count(&self) -> usize {
-        self.records.read().map(|r| r.len()).unwrap_or(0)
+        self.storage.count().unwrap_or(0)
     }
 
     /// Generates a compliance report.
     pub fn generate_report(&self) -> AuditResult<ComplianceReport> {
-        let records = self
-            .records
-            .read()
-            .map_err(|e| AuditError::StorageError(format!("Failed to acquire read lock: {}", e)))?;
+        let records = self.storage.get_all()?;
 
         let total = records.len();
         let automatic = records
@@ -355,6 +420,122 @@ impl AuditTrail {
             integrity_verified: self.verify_integrity().is_ok(),
             generated_at: Utc::now(),
         })
+    }
+
+    /// Exports all records to CSV format.
+    pub fn export_csv<W: std::io::Write>(&self, writer: &mut W) -> AuditResult<()> {
+        let records = self.storage.get_all()?;
+        export::to_csv(&records, writer)
+    }
+
+    /// Exports all records to JSON-LD format.
+    pub fn export_jsonld(&self) -> AuditResult<serde_json::Value> {
+        let records = self.storage.get_all()?;
+        export::to_jsonld(&records)
+    }
+
+    /// Exports all records to JSON format.
+    pub fn export_json(&self) -> AuditResult<serde_json::Value> {
+        let records = self.storage.get_all()?;
+        export::to_json(&records)
+    }
+
+    /// Analyzes decision patterns in the audit trail.
+    pub fn analyze_patterns(&self) -> AuditResult<analysis::DecisionAnalysis> {
+        let records = self.storage.get_all()?;
+        Ok(analysis::DecisionAnalyzer::analyze(&records))
+    }
+
+    /// Generates a distribution report for a specific dimension.
+    pub fn distribution_report(
+        &self,
+        dimension: &str,
+    ) -> AuditResult<analysis::DistributionReport> {
+        let records = self.storage.get_all()?;
+        Ok(analysis::DecisionAnalyzer::distribution_report(
+            &records, dimension,
+        ))
+    }
+
+    /// Detects volume anomalies in the audit trail.
+    pub fn detect_volume_anomalies(
+        &self,
+        threshold: f64,
+    ) -> AuditResult<Vec<analysis::VolumeAnomaly>> {
+        let records = self.storage.get_all()?;
+        Ok(analysis::AnomalyDetector::detect_volume_spikes(
+            &records, threshold,
+        ))
+    }
+
+    /// Detects override anomalies in the audit trail.
+    pub fn detect_override_anomalies(&self) -> AuditResult<Vec<analysis::OverrideAnomaly>> {
+        let records = self.storage.get_all()?;
+        Ok(analysis::AnomalyDetector::detect_override_anomalies(
+            &records,
+        ))
+    }
+
+    /// Reconstructs the audit trail state at a specific point in time.
+    pub fn reconstruct_at(
+        &self,
+        point_in_time: DateTime<Utc>,
+    ) -> AuditResult<replay::TimelineState> {
+        let records = self.storage.get_all()?;
+        Ok(replay::DecisionReplayer::reconstruct_at_time(
+            &records,
+            point_in_time,
+        ))
+    }
+
+    /// Gets the complete history for a specific subject.
+    pub fn subject_history(&self, subject_id: Uuid) -> AuditResult<replay::SubjectHistory> {
+        let records = self.storage.get_all()?;
+        replay::DecisionReplayer::subject_history(&records, subject_id)
+    }
+
+    /// Gets the complete history for a specific statute.
+    pub fn statute_history(&self, statute_id: &str) -> AuditResult<replay::StatuteHistory> {
+        let records = self.storage.get_all()?;
+        replay::DecisionReplayer::statute_history(&records, statute_id)
+    }
+
+    /// Compares the audit trail between two points in time.
+    pub fn compare_timepoints(
+        &self,
+        time1: DateTime<Utc>,
+        time2: DateTime<Utc>,
+    ) -> AuditResult<replay::TimelineComparison> {
+        let records = self.storage.get_all()?;
+        Ok(replay::DecisionReplayer::compare_timepoints(
+            &records, time1, time2,
+        ))
+    }
+
+    /// Applies a retention policy to identify records to delete.
+    pub fn apply_retention_policy(
+        &self,
+        policy: &retention::RetentionPolicy,
+    ) -> AuditResult<Vec<AuditRecord>> {
+        let records = self.storage.get_all()?;
+        Ok(policy.records_to_delete(&records))
+    }
+
+    /// Exports all data for a subject (GDPR Article 15).
+    pub fn export_subject_data(
+        &self,
+        subject_id: Uuid,
+    ) -> AuditResult<retention::SubjectDataExport> {
+        let records = self.storage.get_all()?;
+        Ok(retention::DataSubjectAccessRequest::export_subject_data(
+            &records, subject_id,
+        ))
+    }
+
+    /// Generates an explanation for a specific decision (GDPR Article 22).
+    pub fn explain_decision(&self, record_id: Uuid) -> AuditResult<retention::DecisionExplanation> {
+        let record = self.get(record_id)?;
+        Ok(retention::DecisionExplanation::generate(&record))
     }
 }
 
@@ -401,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_audit_trail() {
-        let trail = AuditTrail::new();
+        let mut trail = AuditTrail::new();
 
         let record = AuditRecord::new(
             EventType::AutomaticDecision,
@@ -425,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_audit_integrity() {
-        let trail = AuditTrail::new();
+        let mut trail = AuditTrail::new();
 
         for i in 0..5 {
             let record = AuditRecord::new(
@@ -450,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_compliance_report() {
-        let trail = AuditTrail::new();
+        let mut trail = AuditTrail::new();
 
         let record = AuditRecord::new(
             EventType::AutomaticDecision,
@@ -471,5 +652,217 @@ mod tests {
         let report = trail.generate_report().unwrap();
         assert_eq!(report.total_decisions, 1);
         assert_eq!(report.automatic_decisions, 1);
+    }
+
+    #[test]
+    fn test_query_builder_integration() {
+        let mut trail = AuditTrail::new();
+
+        let subject_id = Uuid::new_v4();
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::User {
+                user_id: "user-123".to_string(),
+                role: "admin".to_string(),
+            },
+            "statute-test".to_string(),
+            subject_id,
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        trail.record(record).unwrap();
+
+        let query = query::QueryBuilder::new()
+            .subject_id(subject_id)
+            .actor(query::ActorFilter::AnyUser);
+        let results = trail.query(&query).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_export_csv() {
+        let mut trail = AuditTrail::new();
+
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::System {
+                component: "test".to_string(),
+            },
+            "test-statute".to_string(),
+            Uuid::new_v4(),
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        trail.record(record).unwrap();
+
+        let mut output = Vec::new();
+        trail.export_csv(&mut output).unwrap();
+        let csv = String::from_utf8(output).unwrap();
+        assert!(csv.contains("id,timestamp"));
+    }
+
+    #[test]
+    fn test_export_jsonld() {
+        let mut trail = AuditTrail::new();
+
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::System {
+                component: "test".to_string(),
+            },
+            "test-statute".to_string(),
+            Uuid::new_v4(),
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        trail.record(record).unwrap();
+
+        let jsonld = trail.export_jsonld().unwrap();
+        assert!(jsonld.get("@context").is_some());
+        assert!(jsonld.get("@graph").is_some());
+    }
+
+    #[test]
+    fn test_analyze_patterns() {
+        let mut trail = AuditTrail::new();
+
+        for _ in 0..5 {
+            let record = AuditRecord::new(
+                EventType::AutomaticDecision,
+                Actor::System {
+                    component: "test".to_string(),
+                },
+                "statute-1".to_string(),
+                Uuid::new_v4(),
+                DecisionContext::default(),
+                DecisionResult::Deterministic {
+                    effect_applied: "test".to_string(),
+                    parameters: HashMap::new(),
+                },
+                None,
+            );
+            trail.record(record).unwrap();
+        }
+
+        let analysis = trail.analyze_patterns().unwrap();
+        assert_eq!(analysis.total_decisions, 5);
+        assert!(analysis.by_statute.contains_key("statute-1"));
+    }
+
+    #[test]
+    fn test_subject_history() {
+        let mut trail = AuditTrail::new();
+        let subject_id = Uuid::new_v4();
+
+        for _ in 0..3 {
+            let record = AuditRecord::new(
+                EventType::AutomaticDecision,
+                Actor::System {
+                    component: "test".to_string(),
+                },
+                "statute-1".to_string(),
+                subject_id,
+                DecisionContext::default(),
+                DecisionResult::Deterministic {
+                    effect_applied: "test".to_string(),
+                    parameters: HashMap::new(),
+                },
+                None,
+            );
+            trail.record(record).unwrap();
+        }
+
+        let history = trail.subject_history(subject_id).unwrap();
+        assert_eq!(history.total_decisions, 3);
+        assert_eq!(history.subject_id, subject_id);
+    }
+
+    #[test]
+    fn test_retention_policy() {
+        let mut trail = AuditTrail::new();
+
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::System {
+                component: "test".to_string(),
+            },
+            "statute-1".to_string(),
+            Uuid::new_v4(),
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        trail.record(record).unwrap();
+
+        let policy = retention::RetentionPolicy::new(30);
+        let to_delete = trail.apply_retention_policy(&policy).unwrap();
+        // Fresh records should not be deleted
+        assert_eq!(to_delete.len(), 0);
+    }
+
+    #[test]
+    fn test_gdpr_export() {
+        let mut trail = AuditTrail::new();
+        let subject_id = Uuid::new_v4();
+
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::System {
+                component: "test".to_string(),
+            },
+            "statute-1".to_string(),
+            subject_id,
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        trail.record(record).unwrap();
+
+        let export = trail.export_subject_data(subject_id).unwrap();
+        assert_eq!(export.total_records, 1);
+        assert_eq!(export.subject_id, subject_id);
+    }
+
+    #[test]
+    fn test_explain_decision() {
+        let mut trail = AuditTrail::new();
+
+        let record = AuditRecord::new(
+            EventType::AutomaticDecision,
+            Actor::System {
+                component: "test".to_string(),
+            },
+            "statute-1".to_string(),
+            Uuid::new_v4(),
+            DecisionContext::default(),
+            DecisionResult::Deterministic {
+                effect_applied: "test".to_string(),
+                parameters: HashMap::new(),
+            },
+            None,
+        );
+        let id = trail.record(record).unwrap();
+
+        let explanation = trail.explain_decision(id).unwrap();
+        assert!(!explanation.explanation.is_empty());
+        assert!(explanation.explanation.contains("statute-1"));
     }
 }

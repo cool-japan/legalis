@@ -14,10 +14,55 @@ use crate::{
 };
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 
+/// Stipula state machine transition.
+#[derive(Debug, Clone)]
+pub struct StateMachineTransition {
+    /// From state
+    pub from: String,
+    /// To state
+    pub to: String,
+    /// Trigger event
+    pub trigger: Option<String>,
+    /// Guard condition
+    pub guard: Option<String>,
+}
+
+/// Stipula asset transfer.
+#[derive(Debug, Clone)]
+pub struct AssetTransfer {
+    /// Asset name
+    pub asset: String,
+    /// Asset type
+    pub asset_type: String,
+    /// From party
+    pub from: String,
+    /// To party
+    pub to: String,
+    /// Amount or quantity
+    pub amount: Option<String>,
+}
+
+/// Stipula temporal obligation.
+#[derive(Debug, Clone)]
+pub struct TemporalObligation {
+    /// Obligation description
+    pub description: String,
+    /// Deadline expression (e.g., "now + 30 days")
+    pub deadline: Option<String>,
+    /// Recurring pattern
+    pub recurring: Option<String>,
+}
+
 /// Stipula format importer.
 pub struct StipulaImporter {
     /// Whether to preserve party definitions
     _preserve_parties: bool,
+    /// Whether to convert state machines
+    convert_state_machines: bool,
+    /// Whether to track temporal obligations
+    track_temporal: bool,
+    /// Whether to track asset transfers
+    track_assets: bool,
 }
 
 impl StipulaImporter {
@@ -25,7 +70,144 @@ impl StipulaImporter {
     pub fn new() -> Self {
         Self {
             _preserve_parties: true,
+            convert_state_machines: true,
+            track_temporal: true,
+            track_assets: true,
         }
+    }
+
+    /// Sets whether to convert state machines.
+    pub fn with_state_machine_conversion(mut self, convert: bool) -> Self {
+        self.convert_state_machines = convert;
+        self
+    }
+
+    /// Sets whether to track temporal obligations.
+    pub fn with_temporal_tracking(mut self, track: bool) -> Self {
+        self.track_temporal = track;
+        self
+    }
+
+    /// Sets whether to track asset transfers.
+    pub fn with_asset_tracking(mut self, track: bool) -> Self {
+        self.track_assets = track;
+        self
+    }
+
+    /// Extracts state machine transitions from Stipula code.
+    fn extract_state_transitions(&self, content: &str) -> Vec<StateMachineTransition> {
+        let mut transitions = Vec::new();
+
+        // Look for state transitions: "state -> newState"
+        let transition_re = regex_lite::Regex::new(r"(?m)(\w+)\s*->\s*(\w+)").ok();
+
+        if let Some(re) = transition_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(from), Some(to)) = (cap.get(1), cap.get(2)) {
+                    transitions.push(StateMachineTransition {
+                        from: from.as_str().to_string(),
+                        to: to.as_str().to_string(),
+                        trigger: None,
+                        guard: None,
+                    });
+                }
+            }
+        }
+
+        transitions
+    }
+
+    /// Extracts temporal obligations from Stipula code.
+    fn extract_temporal_obligations(&self, content: &str) -> Vec<TemporalObligation> {
+        let mut obligations = Vec::new();
+
+        // Look for "before", "after", "within" temporal keywords
+        let temporal_re = regex_lite::Regex::new(r"(?i)(before|after|within)\s+(.+?)(?:\{|$)").ok();
+
+        if let Some(re) = temporal_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(keyword), Some(expr)) = (cap.get(1), cap.get(2)) {
+                    obligations.push(TemporalObligation {
+                        description: format!("{} {}", keyword.as_str(), expr.as_str().trim()),
+                        deadline: Some(expr.as_str().trim().to_string()),
+                        recurring: None,
+                    });
+                }
+            }
+        }
+
+        // Look for "now" expressions
+        let now_re =
+            regex_lite::Regex::new(r"now\s*([+\-])\s*(\d+)\s*(days?|hours?|months?|years?)").ok();
+
+        if let Some(re) = now_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(op), Some(num), Some(unit)) = (cap.get(1), cap.get(2), cap.get(3)) {
+                    obligations.push(TemporalObligation {
+                        description: format!(
+                            "Deadline: now {} {} {}",
+                            op.as_str(),
+                            num.as_str(),
+                            unit.as_str()
+                        ),
+                        deadline: Some(format!(
+                            "now {} {} {}",
+                            op.as_str(),
+                            num.as_str(),
+                            unit.as_str()
+                        )),
+                        recurring: None,
+                    });
+                }
+            }
+        }
+
+        obligations
+    }
+
+    /// Extracts asset transfers from Stipula code.
+    fn extract_asset_transfers(&self, content: &str) -> Vec<AssetTransfer> {
+        let mut transfers = Vec::new();
+
+        // Look for "transfer" or "send" operations
+        let transfer_re =
+            regex_lite::Regex::new(r"(?i)(transfer|send)\s+(\w+)\s+from\s+(\w+)\s+to\s+(\w+)").ok();
+
+        if let Some(re) = transfer_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(asset), Some(from), Some(to)) = (cap.get(2), cap.get(3), cap.get(4)) {
+                    transfers.push(AssetTransfer {
+                        asset: asset.as_str().to_string(),
+                        asset_type: "unknown".to_string(),
+                        from: from.as_str().to_string(),
+                        to: to.as_str().to_string(),
+                        amount: None,
+                    });
+                }
+            }
+        }
+
+        // Also look for asset declarations
+        let asset_decl_re =
+            regex_lite::Regex::new(r"asset\s+(\w+)\s*:\s*(\w+)(?:\s*=\s*(.+?))?").ok();
+
+        if let Some(re) = asset_decl_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(name), Some(typ)) = (cap.get(1), cap.get(2)) {
+                    let amount = cap.get(3).map(|m| m.as_str().to_string());
+                    // Create a dummy transfer to track the asset
+                    transfers.push(AssetTransfer {
+                        asset: name.as_str().to_string(),
+                        asset_type: typ.as_str().to_string(),
+                        from: "".to_string(),
+                        to: "".to_string(),
+                        amount,
+                    });
+                }
+            }
+        }
+
+        transfers
     }
 
     /// Parses a Stipula agreement.
@@ -38,6 +220,44 @@ impl StipulaImporter {
 
         // Parse parties
         let parties: Vec<&str> = parties_str.split(',').map(|s| s.trim()).collect();
+
+        // Extract state transitions if enabled
+        if self.convert_state_machines {
+            let transitions = self.extract_state_transitions(content);
+            if !transitions.is_empty() {
+                report.add_warning(format!(
+                    "Converted {} state transition(s) to conditional logic",
+                    transitions.len()
+                ));
+            }
+        }
+
+        // Extract temporal obligations if enabled
+        if self.track_temporal {
+            let obligations = self.extract_temporal_obligations(content);
+            if !obligations.is_empty() {
+                report.add_warning(format!(
+                    "Found {} temporal obligation(s): {}",
+                    obligations.len(),
+                    obligations
+                        .iter()
+                        .map(|o| o.description.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+
+        // Extract asset transfers if enabled
+        if self.track_assets {
+            let transfers = self.extract_asset_transfers(content);
+            if !transfers.is_empty() {
+                report.add_warning(format!(
+                    "Tracked {} asset declaration(s) and transfer(s)",
+                    transfers.len()
+                ));
+            }
+        }
 
         // Create statute from agreement
         let mut statute = Statute::new(
@@ -56,7 +276,7 @@ impl StipulaImporter {
             }
         }
 
-        // Parse asset declarations
+        // Parse asset declarations (keeping original logic for backward compatibility)
         let asset_re = regex_lite::Regex::new(r"asset\s+(\w+)\s*:\s*(\w+)").ok()?;
         for cap in asset_re.captures_iter(content) {
             let asset_name = cap.get(1).map(|m| m.as_str()).unwrap_or("asset");

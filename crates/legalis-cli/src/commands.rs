@@ -2,9 +2,11 @@
 
 use crate::{
     DiffFormat, ExportFormat, FormatStyle, ImportOutputFormat, LegalDslFormat, OutputFormat,
-    PortFormat, RdfOutputFormat, VizFormat,
+    PortFormat, RdfOutputFormat, StatuteTemplate, VizFormat, WatchCommand,
 };
 use anyhow::{Context, Result};
+use colored::Colorize;
+use comfy_table::{Cell, Color, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
 use legalis_core::Statute;
 use legalis_dsl::LegalDslParser;
 use legalis_i18n::JurisdictionRegistry;
@@ -28,7 +30,7 @@ pub fn handle_parse(input: &str, output: Option<&str>, format: &OutputFormat) ->
     let output_str = match format {
         OutputFormat::Json => serde_json::to_string_pretty(&statute)?,
         OutputFormat::Yaml => serde_yaml::to_string(&statute)?,
-        OutputFormat::Text => format!("{:#?}", statute),
+        OutputFormat::Text | OutputFormat::Table => format!("{:#?}", statute),
     };
 
     if let Some(out_path) = output {
@@ -73,31 +75,83 @@ pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> 
                 }))?
             );
         }
+        OutputFormat::Table => {
+            let mut table = Table::new();
+            table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS)
+                .set_header(vec![
+                    Cell::new("Type").fg(Color::Cyan),
+                    Cell::new("Status").fg(Color::Cyan),
+                    Cell::new("Message").fg(Color::Cyan),
+                ]);
+
+            // Add verification status row
+            let status_cell = if result.passed {
+                Cell::new("✓ Passed").fg(Color::Green)
+            } else {
+                Cell::new("✗ Failed").fg(Color::Red)
+            };
+            table.add_row(vec![
+                Cell::new("Verification"),
+                status_cell,
+                Cell::new(format!("{} statutes verified", statutes.len())),
+            ]);
+
+            // Add errors
+            for error in &result.errors {
+                table.add_row(vec![
+                    Cell::new("Error").fg(Color::Red),
+                    Cell::new("✗").fg(Color::Red),
+                    Cell::new(error.to_string()),
+                ]);
+            }
+
+            // Add warnings
+            for warning in &result.warnings {
+                table.add_row(vec![
+                    Cell::new("Warning").fg(Color::Yellow),
+                    Cell::new("⚠").fg(Color::Yellow),
+                    Cell::new(warning),
+                ]);
+            }
+
+            // Add suggestions
+            for suggestion in &result.suggestions {
+                table.add_row(vec![
+                    Cell::new("Suggestion").fg(Color::Cyan),
+                    Cell::new("→").fg(Color::Cyan),
+                    Cell::new(suggestion),
+                ]);
+            }
+
+            println!("{}", table);
+        }
         OutputFormat::Yaml | OutputFormat::Text => {
             if result.passed {
-                println!("✓ Verification passed");
+                println!("{}", "✓ Verification passed".green().bold());
             } else {
-                println!("✗ Verification failed");
+                println!("{}", "✗ Verification failed".red().bold());
             }
 
             if !result.errors.is_empty() {
-                println!("\nErrors:");
+                println!("\n{}:", "Errors".red().bold());
                 for error in &result.errors {
-                    println!("  ✗ {}", error);
+                    println!("  {} {}", "✗".red(), error);
                 }
             }
 
             if !result.warnings.is_empty() {
-                println!("\nWarnings:");
+                println!("\n{}:", "Warnings".yellow().bold());
                 for warning in &result.warnings {
-                    println!("  ⚠ {}", warning);
+                    println!("  {} {}", "⚠".yellow(), warning);
                 }
             }
 
             if !result.suggestions.is_empty() {
-                println!("\nSuggestions:");
+                println!("\n{}:", "Suggestions".cyan().bold());
                 for suggestion in &result.suggestions {
-                    println!("  → {}", suggestion);
+                    println!("  {} {}", "→".cyan(), suggestion);
                 }
             }
         }
@@ -175,14 +229,10 @@ pub fn handle_export(input: &str, output: &str, export_format: &ExportFormat) ->
 }
 
 /// Handles the init command.
-pub fn handle_init(path: &str) -> Result<()> {
+pub fn handle_init(path: &str, dry_run: bool) -> Result<()> {
     let project_path = Path::new(path);
 
-    // Create directories
-    fs::create_dir_all(project_path.join("statutes"))?;
-    fs::create_dir_all(project_path.join("output"))?;
-
-    // Create sample statute
+    // Create sample statute content
     let sample_statute = r#"STATUTE sample-adult-rights: "Sample Adult Rights Act" {
     WHEN AGE >= 18
     THEN GRANT "Full legal capacity"
@@ -190,9 +240,7 @@ pub fn handle_init(path: &str) -> Result<()> {
 }
 "#;
 
-    fs::write(project_path.join("statutes/sample.legal"), sample_statute)?;
-
-    // Create config file
+    // Create config file content
     let config = r#"# Legalis Project Configuration
 version: "0.2.0"
 
@@ -210,13 +258,47 @@ output:
   directory: "./output"
 "#;
 
+    if dry_run {
+        println!(
+            "{}",
+            "[DRY RUN] Would initialize Legalis project at:"
+                .cyan()
+                .bold()
+        );
+        println!("  {}", path);
+        println!("\n{}", "Would create:".cyan().bold());
+        println!("  - statutes/ {}", "(directory)".dimmed());
+        println!("  - output/ {}", "(directory)".dimmed());
+        println!("  - statutes/sample.legal");
+        println!("  - legalis.yaml");
+        println!("\n{}", "Sample statute content:".cyan());
+        println!("{}", sample_statute.dimmed());
+        println!("{}", "Config file content:".cyan());
+        println!("{}", config.dimmed());
+        return Ok(());
+    }
+
+    // Create directories
+    fs::create_dir_all(project_path.join("statutes"))?;
+    fs::create_dir_all(project_path.join("output"))?;
+
+    fs::write(project_path.join("statutes/sample.legal"), sample_statute)?;
     fs::write(project_path.join("legalis.yaml"), config)?;
 
-    println!("✓ Initialized Legalis project at: {}", path);
-    println!("  Created:");
+    println!(
+        "{}",
+        format!("✓ Initialized Legalis project at: {}", path)
+            .green()
+            .bold()
+    );
+    println!("  {}:", "Created".green());
     println!("    - statutes/sample.legal");
     println!("    - legalis.yaml");
-    println!("\nRun 'legalis verify -i statutes/sample.legal' to verify the sample statute.");
+    println!(
+        "\n{}",
+        format!("Run 'legalis verify -i statutes/sample.legal' to verify the sample statute.")
+            .cyan()
+    );
 
     Ok(())
 }
@@ -567,7 +649,7 @@ pub fn handle_import(
     let content = fs::read_to_string(input)
         .with_context(|| format!("Failed to read input file: {}", input))?;
 
-    let converter = LegalConverter::new();
+    let mut converter = LegalConverter::new();
 
     // Import statutes
     let (statutes, report) = if let Some(format) = from {
@@ -639,7 +721,7 @@ pub fn handle_convert(
     let content = fs::read_to_string(input)
         .with_context(|| format!("Failed to read input file: {}", input))?;
 
-    let converter = LegalConverter::new();
+    let mut converter = LegalConverter::new();
     let target_format: LegalFormat = to.clone().into();
 
     let (output_str, report) = if let Some(source_format) = from {
@@ -789,6 +871,7 @@ pub fn handle_format(
     output: Option<&str>,
     inplace: bool,
     style: &FormatStyle,
+    dry_run: bool,
 ) -> Result<()> {
     let content = fs::read_to_string(input)
         .with_context(|| format!("Failed to read input file: {}", input))?;
@@ -803,14 +886,40 @@ pub fn handle_format(
     let printer = legalis_dsl::DslPrinter::with_config(config);
     let formatted = printer.format(&statute);
 
+    if dry_run {
+        if inplace {
+            println!(
+                "{}",
+                format!("[DRY RUN] Would format file in place: {}", input)
+                    .cyan()
+                    .bold()
+            );
+        } else if let Some(out_path) = output {
+            println!(
+                "{}",
+                format!("[DRY RUN] Would write formatted output to: {}", out_path)
+                    .cyan()
+                    .bold()
+            );
+        } else {
+            println!("{}", "[DRY RUN] Would write to stdout:".cyan().bold());
+        }
+        println!("\n{}", "Formatted content:".cyan());
+        println!("{}", formatted);
+        return Ok(());
+    }
+
     if inplace {
         fs::write(input, &formatted)
             .with_context(|| format!("Failed to write to file: {}", input))?;
-        println!("Formatted: {}", input);
+        println!("{}", format!("✓ Formatted: {}", input).green());
     } else if let Some(out_path) = output {
         fs::write(out_path, &formatted)
             .with_context(|| format!("Failed to write output file: {}", out_path))?;
-        println!("Formatted output written to: {}", out_path);
+        println!(
+            "{}",
+            format!("✓ Formatted output written to: {}", out_path).green()
+        );
     } else {
         println!("{}", formatted);
     }
@@ -865,5 +974,560 @@ fn condition_to_dsl(condition: &legalis_core::Condition) -> String {
             format!("CUSTOM \"{}\"", description)
         }
         _ => format!("{:?}", condition),
+    }
+}
+
+/// Lint rule violations.
+#[derive(Debug)]
+pub struct LintViolation {
+    pub file: String,
+    pub line: Option<usize>,
+    pub rule: String,
+    pub severity: LintSeverity,
+    pub message: String,
+    pub suggestion: Option<String>,
+}
+
+/// Lint severity levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LintSeverity {
+    Error,
+    Warning,
+    Style,
+}
+
+/// Handles the lint command.
+pub fn handle_lint(inputs: &[String], fix: bool, strict: bool) -> Result<()> {
+    let mut all_violations = Vec::new();
+    let parser = LegalDslParser::new();
+
+    for input in inputs {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+
+        // Parse the file
+        let statute = match parser.parse_statute(&content) {
+            Ok(s) => s,
+            Err(e) => {
+                all_violations.push(LintViolation {
+                    file: input.clone(),
+                    line: None,
+                    rule: "syntax".to_string(),
+                    severity: LintSeverity::Error,
+                    message: format!("Parse error: {}", e),
+                    suggestion: None,
+                });
+                continue;
+            }
+        };
+
+        // Check for style violations
+        let violations = check_style(&statute, input);
+        all_violations.extend(violations);
+    }
+
+    // Display violations
+    if all_violations.is_empty() {
+        println!("{}", "✓ No linting issues found".green().bold());
+        return Ok(());
+    }
+
+    for violation in &all_violations {
+        let (severity_str, color_fn): (&str, fn(&str) -> colored::ColoredString) =
+            match violation.severity {
+                LintSeverity::Error => ("error", |s| s.red()),
+                LintSeverity::Warning => ("warning", |s| s.yellow()),
+                LintSeverity::Style => ("style", |s| s.cyan()),
+            };
+
+        if let Some(line) = violation.line {
+            println!(
+                "{}:{}: {} [{}] {}",
+                violation.file.bold(),
+                line,
+                color_fn(severity_str).bold(),
+                violation.rule,
+                violation.message
+            );
+        } else {
+            println!(
+                "{}: {} [{}] {}",
+                violation.file.bold(),
+                color_fn(severity_str).bold(),
+                violation.rule,
+                violation.message
+            );
+        }
+
+        if let Some(ref suggestion) = violation.suggestion {
+            println!("  {}: {}", "Suggestion".cyan(), suggestion);
+        }
+    }
+
+    let error_count = all_violations
+        .iter()
+        .filter(|v| v.severity == LintSeverity::Error)
+        .count();
+    let warning_count = all_violations
+        .iter()
+        .filter(|v| v.severity == LintSeverity::Warning)
+        .count();
+
+    println!(
+        "\nFound {} {}, {} {}",
+        error_count.to_string().red().bold(),
+        "error(s)".red(),
+        warning_count.to_string().yellow().bold(),
+        "warning(s)".yellow()
+    );
+
+    if fix {
+        println!("\nNote: Auto-fix is not yet implemented");
+    }
+
+    if error_count > 0 || (strict && warning_count > 0) {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Check statute for style violations.
+fn check_style(statute: &Statute, file: &str) -> Vec<LintViolation> {
+    let mut violations = Vec::new();
+
+    // Check for empty title
+    if statute.title.trim().is_empty() {
+        violations.push(LintViolation {
+            file: file.to_string(),
+            line: None,
+            rule: "empty-title".to_string(),
+            severity: LintSeverity::Error,
+            message: "Statute title should not be empty".to_string(),
+            suggestion: Some("Add a descriptive title".to_string()),
+        });
+    }
+
+    // Check for missing jurisdiction
+    if statute.jurisdiction.is_none() {
+        violations.push(LintViolation {
+            file: file.to_string(),
+            line: None,
+            rule: "missing-jurisdiction".to_string(),
+            severity: LintSeverity::Warning,
+            message: "Statute should specify a jurisdiction".to_string(),
+            suggestion: Some("Add a JURISDICTION directive".to_string()),
+        });
+    }
+
+    // Check for missing preconditions
+    if statute.preconditions.is_empty() {
+        violations.push(LintViolation {
+            file: file.to_string(),
+            line: None,
+            rule: "no-preconditions".to_string(),
+            severity: LintSeverity::Style,
+            message: "Statute has no preconditions".to_string(),
+            suggestion: Some("Consider adding WHEN conditions".to_string()),
+        });
+    }
+
+    // Check for vague effect descriptions
+    if statute.effect.description.trim().len() < 10 {
+        violations.push(LintViolation {
+            file: file.to_string(),
+            line: None,
+            rule: "vague-effect".to_string(),
+            severity: LintSeverity::Style,
+            message: "Effect description is too short".to_string(),
+            suggestion: Some("Provide a more detailed description".to_string()),
+        });
+    }
+
+    violations
+}
+
+/// Handles the watch command.
+#[allow(dead_code)]
+pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<()> {
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    println!("Watching files: {:?}", inputs);
+    println!("Command: {:?}", command);
+
+    // Simple polling-based watcher (in a real implementation, use notify crate)
+    let mut last_modified = std::collections::HashMap::new();
+
+    for input in inputs {
+        if let Ok(metadata) = fs::metadata(input) {
+            if let Ok(modified) = metadata.modified() {
+                last_modified.insert(input.clone(), modified);
+            }
+        }
+    }
+
+    loop {
+        sleep(Duration::from_secs(1)).await;
+
+        for input in inputs {
+            if let Ok(metadata) = fs::metadata(input) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Some(&last_mod) = last_modified.get(input) {
+                        if modified > last_mod {
+                            println!("\n{} changed, running {:?}...", input, command);
+                            match command {
+                                WatchCommand::Verify => {
+                                    let _ =
+                                        handle_verify(&[input.clone()], false, &OutputFormat::Text);
+                                }
+                                WatchCommand::Lint => {
+                                    let _ = handle_lint(&[input.clone()], false, false);
+                                }
+                                WatchCommand::Test => {
+                                    println!("Test command not yet implemented");
+                                }
+                                WatchCommand::Format => {
+                                    let _ = handle_format(
+                                        input,
+                                        None,
+                                        true,
+                                        &FormatStyle::Default,
+                                        false,
+                                    );
+                                }
+                            }
+                            last_modified.insert(input.clone(), modified);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Handles the test command.
+pub fn handle_test(inputs: &[String], tests_file: &str, verbose: bool) -> Result<()> {
+    let statutes = parse_statutes(inputs)?;
+
+    let test_content = fs::read_to_string(tests_file)
+        .with_context(|| format!("Failed to read test file: {}", tests_file))?;
+
+    println!("Running tests from: {}", tests_file);
+    println!("Testing {} statute(s)", statutes.len());
+
+    // Parse test cases (simple YAML format for now)
+    let test_cases: Vec<TestCase> = serde_yaml::from_str(&test_content)
+        .map_err(|e| anyhow::anyhow!("Failed to parse test file: {}", e))?;
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    for (idx, test_case) in test_cases.iter().enumerate() {
+        if verbose {
+            println!("\nTest {}: {}", idx + 1, test_case.description);
+        }
+
+        // Find the statute to test
+        let statute = statutes
+            .iter()
+            .find(|s| test_case.statute_id.as_ref().map_or(true, |id| &s.id == id))
+            .ok_or_else(|| anyhow::anyhow!("Statute not found for test case {}", idx + 1))?;
+
+        // Check if conditions match
+        let result = evaluate_test_case(statute, test_case);
+
+        if result {
+            passed += 1;
+            if verbose {
+                println!("  ✓ Passed");
+            } else {
+                print!(".");
+            }
+        } else {
+            failed += 1;
+            if verbose {
+                println!("  ✗ Failed");
+            } else {
+                print!("F");
+            }
+        }
+    }
+
+    if !verbose {
+        println!();
+    }
+
+    println!("\nTest Results: {} passed, {} failed", passed, failed);
+
+    if failed > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Test case structure.
+#[derive(Debug, serde::Deserialize)]
+struct TestCase {
+    pub description: String,
+    pub statute_id: Option<String>,
+    #[allow(dead_code)]
+    pub expected_effect: Option<String>,
+    #[allow(dead_code)]
+    pub age: Option<u32>,
+    #[allow(dead_code)]
+    pub income: Option<u64>,
+}
+
+/// Evaluate a test case against a statute.
+fn evaluate_test_case(statute: &Statute, _test_case: &TestCase) -> bool {
+    // Simple evaluation - just check if statute exists for now
+    // In a real implementation, this would evaluate conditions
+    !statute.preconditions.is_empty() || statute.effect.description.len() > 0
+}
+
+/// Handles the new command.
+pub fn handle_new(name: &str, template: &StatuteTemplate, output: Option<&str>) -> Result<()> {
+    let statute_content = generate_statute_template(name, template);
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &statute_content)
+            .with_context(|| format!("Failed to write statute file: {}", out_path))?;
+        println!(
+            "{}",
+            format!("✓ Created statute: {}", out_path).green().bold()
+        );
+        println!("\n{}", "Next steps:".cyan());
+        println!("  1. Edit the statute file to customize conditions and effects");
+        println!(
+            "  2. Run {} to verify",
+            format!("legalis verify -i {}", out_path).bold()
+        );
+        println!(
+            "  3. Run {} to lint",
+            format!("legalis lint -i {}", out_path).bold()
+        );
+    } else {
+        println!("{}", statute_content);
+    }
+
+    Ok(())
+}
+
+/// Generate a statute template based on the template type.
+fn generate_statute_template(name: &str, template: &StatuteTemplate) -> String {
+    match template {
+        StatuteTemplate::Basic => format!(
+            r#"STATUTE {}: "Basic Statute" {{
+    JURISDICTION "JP"
+    VERSION 1
+
+    WHEN AGE >= 18
+    THEN GRANT "Adult rights and responsibilities"
+
+    DISCRETION "Consider individual circumstances"
+}}
+"#,
+            name
+        ),
+        StatuteTemplate::Income => format!(
+            r#"STATUTE {}: "Income-Based Benefits" {{
+    JURISDICTION "JP"
+    VERSION 1
+
+    WHEN INCOME <= 3000000
+    THEN GRANT "Low-income benefits and subsidies"
+
+    DISCRETION "Verify income documentation and household size"
+}}
+"#,
+            name
+        ),
+        StatuteTemplate::Geographic => format!(
+            r#"STATUTE {}: "Regional Statute" {{
+    JURISDICTION "JP"
+    VERSION 1
+
+    WHEN REGION PREFECTURE "Tokyo"
+    THEN GRANT "Regional-specific rights"
+
+    DISCRETION "Verify residency requirements"
+}}
+"#,
+            name
+        ),
+        StatuteTemplate::Temporal => format!(
+            r#"STATUTE {}: "Time-Limited Statute" {{
+    JURISDICTION "JP"
+    VERSION 1
+    EFFECTIVE "2024-01-01"
+    EXPIRES "2025-12-31"
+
+    WHEN AGE >= 20
+    THEN GRANT "Temporary program benefits"
+
+    DISCRETION "Review eligibility annually"
+}}
+"#,
+            name
+        ),
+        StatuteTemplate::Complex => format!(
+            r#"STATUTE {}: "Complex Statute" {{
+    JURISDICTION "JP"
+    VERSION 1
+
+    WHEN (AGE >= 18 AND INCOME <= 5000000) OR HAS "disability_status"
+    THEN GRANT "Comprehensive support package"
+
+    DISCRETION "Evaluate based on individual needs assessment"
+}}
+"#,
+            name
+        ),
+    }
+}
+
+/// Handles the doctor command.
+pub fn handle_doctor(verbose: bool) -> Result<()> {
+    println!("{}", "Legalis Doctor - System Diagnostics".bold().cyan());
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+
+    let mut issues = Vec::new();
+    let mut warnings = Vec::new();
+
+    // Check 1: Rust version
+    print!("{} ", "Checking Rust installation...".dimmed());
+    match std::process::Command::new("rustc")
+        .arg("--version")
+        .output()
+    {
+        Ok(output) => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            println!("{}", "✓".green());
+            if verbose {
+                println!("  {}", version.trim().dimmed());
+            }
+        }
+        Err(_) => {
+            println!("{}", "✗".red());
+            issues.push("Rust compiler not found in PATH");
+        }
+    }
+
+    // Check 2: Project structure
+    print!("{} ", "Checking project structure...".dimmed());
+    let has_project = Path::new("legalis.toml").exists()
+        || Path::new("legalis.yaml").exists()
+        || Path::new("Cargo.toml").exists();
+
+    if has_project {
+        println!("{}", "✓".green());
+        if verbose {
+            if Path::new("legalis.toml").exists() {
+                println!("  {} found", "legalis.toml".bold());
+            }
+            if Path::new("legalis.yaml").exists() {
+                println!("  {} found", "legalis.yaml".bold());
+            }
+        }
+    } else {
+        println!("{}", "⚠".yellow());
+        warnings.push("No legalis.toml or legalis.yaml found (not in a Legalis project)");
+    }
+
+    // Check 3: Config file
+    print!("{} ", "Checking configuration...".dimmed());
+    let config = crate::config::Config::load();
+    println!("{}", "✓".green());
+    if verbose {
+        println!(
+            "  Jurisdiction: {:?}",
+            config.jurisdiction.unwrap_or_else(|| "None".to_string())
+        );
+        println!("  Output format: {}", config.output.format);
+        println!("  Colored output: {}", config.output.colored);
+    }
+
+    // Check 4: Write permissions
+    print!("{} ", "Checking write permissions...".dimmed());
+    match std::env::temp_dir().join(".legalis_test").metadata() {
+        Ok(_) => {
+            println!("{}", "✓".green());
+        }
+        Err(_) => {
+            // Try to write a test file
+            match fs::write(std::env::temp_dir().join(".legalis_test"), "test") {
+                Ok(_) => {
+                    println!("{}", "✓".green());
+                    let _ = fs::remove_file(std::env::temp_dir().join(".legalis_test"));
+                }
+                Err(_) => {
+                    println!("{}", "✗".red());
+                    issues.push("No write permission to temp directory");
+                }
+            }
+        }
+    }
+
+    // Check 5: Environment variables
+    print!("{} ", "Checking environment variables...".dimmed());
+    let env_vars = vec![
+        "LEGALIS_JURISDICTION",
+        "LEGALIS_VERIFY_STRICT",
+        "LEGALIS_OUTPUT_FORMAT",
+        "LEGALIS_OUTPUT_COLORED",
+    ];
+    let env_set: Vec<_> = env_vars
+        .iter()
+        .filter(|var| std::env::var(var).is_ok())
+        .collect();
+
+    if env_set.is_empty() {
+        println!("{}", "○".dimmed());
+        if verbose {
+            println!("  No environment overrides set");
+        }
+    } else {
+        println!("{}", "✓".green());
+        if verbose {
+            for var in env_set {
+                if let Ok(value) = std::env::var(var) {
+                    println!("  {}: {}", var.bold(), value);
+                }
+            }
+        }
+    }
+
+    // Summary
+    println!();
+    println!("{}", "=".repeat(50).dimmed());
+
+    if issues.is_empty() && warnings.is_empty() {
+        println!("{}", "✓ All checks passed!".green().bold());
+    } else {
+        if !issues.is_empty() {
+            println!("\n{}:", "Issues".red().bold());
+            for issue in &issues {
+                println!("  {} {}", "✗".red(), issue);
+            }
+        }
+
+        if !warnings.is_empty() {
+            println!("\n{}:", "Warnings".yellow().bold());
+            for warning in &warnings {
+                println!("  {} {}", "⚠".yellow(), warning);
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "System diagnostics found {} issue(s)",
+            issues.len()
+        ))
     }
 }

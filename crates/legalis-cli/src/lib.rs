@@ -7,6 +7,7 @@
 //! - Exporting to various formats
 
 pub mod commands;
+pub mod config;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
@@ -24,6 +25,14 @@ pub struct Cli {
     #[arg(short, long, default_value = "text")]
     pub format: OutputFormat,
 
+    /// Path to config file (defaults to legalis.toml or ~/.config/legalis/config.toml)
+    #[arg(long)]
+    pub config: Option<String>,
+
+    /// Quiet mode (suppress non-error output)
+    #[arg(short, long)]
+    pub quiet: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -35,6 +44,7 @@ pub enum OutputFormat {
     Text,
     Json,
     Yaml,
+    Table,
 }
 
 /// Available commands.
@@ -108,6 +118,10 @@ pub enum Commands {
         /// Project directory
         #[arg(default_value = ".")]
         path: String,
+
+        /// Dry run (show what would be created without actually creating)
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Compare two statute files
@@ -266,7 +280,104 @@ pub enum Commands {
         /// Output style (default, compact, verbose)
         #[arg(long, default_value = "default")]
         style: FormatStyle,
+
+        /// Dry run (show what would be written without actually writing)
+        #[arg(long)]
+        dry_run: bool,
     },
+
+    /// Lint DSL files for style and best practices
+    Lint {
+        /// Input file(s) to lint
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Fix auto-fixable issues
+        #[arg(long)]
+        fix: bool,
+
+        /// Fail on warnings
+        #[arg(long)]
+        strict: bool,
+    },
+
+    /// Watch files for changes and re-run commands
+    Watch {
+        /// Input file(s) to watch
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Command to run on changes (verify, lint, test)
+        #[arg(short, long, default_value = "verify")]
+        command: WatchCommand,
+    },
+
+    /// Test statutes with test cases
+    Test {
+        /// Input statute file(s)
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Test specification file
+        #[arg(short, long)]
+        tests: String,
+
+        /// Verbose test output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Create a new statute from a template
+    New {
+        /// Statute name/ID
+        #[arg(short, long)]
+        name: String,
+
+        /// Statute template type
+        #[arg(short, long, default_value = "basic")]
+        template: StatuteTemplate,
+
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Run diagnostics on the installation
+    Doctor {
+        /// Verbose diagnostic output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+}
+
+/// Statute template options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum StatuteTemplate {
+    /// Basic statute with age condition
+    #[default]
+    Basic,
+    /// Income-based statute
+    Income,
+    /// Geographic/regional statute
+    Geographic,
+    /// Time-based statute with effective dates
+    Temporal,
+    /// Complex statute with multiple conditions
+    Complex,
+}
+
+/// Watch command options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum WatchCommand {
+    /// Run verification
+    #[default]
+    Verify,
+    /// Run linter
+    Lint,
+    /// Run tests
+    Test,
+    /// Run formatting
+    Format,
 }
 
 /// Port output format options.

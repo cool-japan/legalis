@@ -10,10 +10,10 @@
 
 ## Formats
 
-- [ ] Add SPARQL query generation for exported data
+- [x] Add SPARQL query generation for exported data
 - [ ] Implement streaming serialization for large datasets
 - [ ] Add RDFa output for HTML embedding
-- [ ] Support TriG format for named graphs
+- [x] Support TriG format for named graphs
 
 ## Ontologies
 
@@ -22,7 +22,7 @@
 - [ ] Implement LKIF-Core (Legal Knowledge Interchange Format)
 - [ ] Add LegalRuleML ontology mapping
 - [ ] Support Akoma Ntoso ontology
-- [ ] Add SKOS for concept hierarchies
+- [x] Add SKOS for concept hierarchies
 
 ### Custom Extensions
 - [ ] Create Legalis ontology specification document
@@ -33,10 +33,10 @@
 ## Linked Data
 
 - [ ] Add URI dereferencing support
-- [ ] Implement content negotiation
-- [ ] Create VOID dataset descriptions
-- [ ] Add provenance tracking (PROV-O)
-- [ ] Implement license metadata (CC, etc.)
+- [x] Implement content negotiation
+- [x] Create VOID dataset descriptions
+- [x] Add provenance tracking (PROV-O)
+- [x] Implement license metadata (CC, etc.)
 
 ## Integration
 
@@ -68,7 +68,7 @@
 
 ## Testing
 
-- [ ] Add RDF validation tests
+- [x] Add RDF validation tests
 - [ ] Create round-trip conversion tests
-- [ ] Test all output formats
+- [x] Test all output formats
 - [ ] Benchmark serialization performance

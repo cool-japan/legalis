@@ -4,18 +4,22 @@
 //! enabling pluggable AI models (OpenAI, Anthropic, Gemini, Local LLMs).
 
 mod cache;
+mod cancellation;
 mod compiler;
 mod providers;
 mod resilience;
 mod templates;
+mod testing;
 mod token_tracker;
 mod validation;
 
 pub use cache::*;
+pub use cancellation::*;
 pub use compiler::*;
 pub use providers::*;
 pub use resilience::*;
 pub use templates::*;
+pub use testing::*;
 pub use token_tracker::*;
 pub use validation::*;
 

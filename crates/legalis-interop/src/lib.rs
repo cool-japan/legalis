@@ -6,6 +6,7 @@
 //! - **L4**: Singapore's legal DSL with deontic logic support
 //! - **Akoma Ntoso**: XML standard for legislative documents (OASIS)
 //! - **LegalRuleML**: XML standard for legal rules
+//! - **LegalDocML**: OASIS legal document markup standard
 //! - **LKIF**: Legal Knowledge Interchange Format (ESTRELLA)
 
 pub mod akoma_ntoso;
@@ -16,6 +17,7 @@ pub mod coverage;
 mod edge_cases_tests;
 pub mod incremental;
 pub mod l4;
+pub mod legaldocml;
 pub mod legalruleml;
 pub mod lkif;
 pub mod stipula;
@@ -62,6 +64,8 @@ pub enum LegalFormat {
     AkomaNtoso,
     /// LegalRuleML XML standard
     LegalRuleML,
+    /// LegalDocML - OASIS legal document markup standard
+    LegalDocML,
     /// LKIF - Legal Knowledge Interchange Format
     LKIF,
     /// Native Legalis DSL format
@@ -77,6 +81,7 @@ impl LegalFormat {
             LegalFormat::L4 => "l4",
             LegalFormat::AkomaNtoso => "xml",
             LegalFormat::LegalRuleML => "xml",
+            LegalFormat::LegalDocML => "xml",
             LegalFormat::LKIF => "xml",
             LegalFormat::Legalis => "legal",
         }
@@ -193,6 +198,7 @@ impl LegalConverter {
                 Box::new(l4::L4Importer::new()),
                 Box::new(akoma_ntoso::AkomaNtosoImporter::new()),
                 Box::new(legalruleml::LegalRuleMLImporter::new()),
+                Box::new(legaldocml::LegalDocMLImporter::new()),
                 Box::new(lkif::LkifImporter::new()),
             ],
             exporters: vec![
@@ -201,6 +207,7 @@ impl LegalConverter {
                 Box::new(l4::L4Exporter::new()),
                 Box::new(akoma_ntoso::AkomaNtosoExporter::new()),
                 Box::new(legalruleml::LegalRuleMLExporter::new()),
+                Box::new(legaldocml::LegalDocMLExporter::new()),
                 Box::new(lkif::LkifExporter::new()),
             ],
             cache: None,

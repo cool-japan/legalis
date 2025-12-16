@@ -10,11 +10,11 @@
 
 ## Storage
 
-- [ ] Add SQLite backend
-- [ ] Add PostgreSQL backend
-- [ ] Implement connection pooling
+- [x] Add SQLite backend
+- [x] Add PostgreSQL backend
+- [x] Implement connection pooling
 - [x] Add backup and restore functionality
-- [ ] Support for transactions
+- [x] Support for transactions (database transactions via sqlx)
 
 ## Search
 
@@ -36,18 +36,19 @@
 - [x] Event sourcing for complete change history
 - [x] Webhook notifications for statute changes
 - [x] Multi-tenant support for isolated registries
-- [ ] Import/export in Akoma Ntoso format
+- [x] Import/export in Akoma Ntoso format
 - [x] Statute dependency tracking (enhanced with dependency graphs)
+- [x] Transaction support for batch operations
 
 ## API
 
-- [ ] Add async API variants
-- [ ] Implement streaming for large result sets
+- [x] Add async API variants
+- [x] Implement streaming for large result sets
 - [x] Add pagination support
-- [ ] Create GraphQL interface
+- [x] Create GraphQL interface
 
 ## Testing
 
-- [ ] Add integration tests with real databases
+- [x] Add integration tests with real databases (via storage backend tests)
 - [x] Add performance benchmarks
-- [ ] Test concurrent access patterns
+- [x] Test concurrent access patterns

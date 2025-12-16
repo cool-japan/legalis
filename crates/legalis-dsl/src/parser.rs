@@ -71,6 +71,57 @@ impl ToCore for ConditionNode {
             ConditionNode::Like { field, pattern } => Ok(legalis_core::Condition::Custom {
                 description: format!("{} LIKE {}", field, pattern),
             }),
+            ConditionNode::Matches {
+                field,
+                regex_pattern,
+            } => Ok(legalis_core::Condition::Custom {
+                description: format!("{} MATCHES {}", field, regex_pattern),
+            }),
+            ConditionNode::InRange {
+                field,
+                min,
+                max,
+                inclusive_min,
+                inclusive_max,
+            } => {
+                let min_bracket = if *inclusive_min { "[" } else { "(" };
+                let max_bracket = if *inclusive_max { "]" } else { ")" };
+                Ok(legalis_core::Condition::Custom {
+                    description: format!(
+                        "{} IN_RANGE {}{:?}..{:?}{}",
+                        field, min_bracket, min, max, max_bracket
+                    ),
+                })
+            }
+            ConditionNode::NotInRange {
+                field,
+                min,
+                max,
+                inclusive_min,
+                inclusive_max,
+            } => {
+                let min_bracket = if *inclusive_min { "[" } else { "(" };
+                let max_bracket = if *inclusive_max { "]" } else { ")" };
+                Ok(legalis_core::Condition::Custom {
+                    description: format!(
+                        "{} NOT_IN_RANGE {}{:?}..{:?}{}",
+                        field, min_bracket, min, max, max_bracket
+                    ),
+                })
+            }
+            ConditionNode::TemporalComparison {
+                field,
+                operator,
+                value,
+            } => {
+                let field_desc = match field {
+                    TemporalField::CurrentDate => "CURRENT_DATE".to_string(),
+                    TemporalField::DateField(name) => format!("DATE_FIELD({})", name),
+                };
+                Ok(legalis_core::Condition::Custom {
+                    description: format!("{} {} {:?}", field_desc, operator, value),
+                })
+            }
             ConditionNode::And(left, right) => Ok(legalis_core::Condition::And(
                 Box::new(left.to_core()?),
                 Box::new(right.to_core()?),

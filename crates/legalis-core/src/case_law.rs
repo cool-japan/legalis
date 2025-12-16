@@ -35,6 +35,9 @@ use uuid::Uuid;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
+
 use crate::{Condition, Effect};
 
 /// A judicial decision (判例).
@@ -43,6 +46,7 @@ use crate::{Condition, Effect};
 /// future courts must follow under the doctrine of stare decisis.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Case {
     /// Unique case identifier
     pub id: Uuid,
@@ -182,6 +186,7 @@ impl Case {
 /// Legal rule extracted from a case.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct CaseRule {
     /// Name of the rule/doctrine
     pub name: String,
@@ -196,6 +201,7 @@ pub struct CaseRule {
 /// Court hierarchy (裁判所の階層).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum Court {
     /// Supreme Court / House of Lords (最高裁判所)
     Supreme,
@@ -223,6 +229,7 @@ impl Court {
 /// Weight of precedent (先例の拘束力).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentWeight {
     /// Must follow (same jurisdiction, higher court) - 拘束的先例
     Binding,
@@ -237,6 +244,7 @@ pub enum PrecedentWeight {
 /// Precedent relationship between cases.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Precedent {
     /// The precedent case
     pub case_id: Uuid,
@@ -251,6 +259,7 @@ pub struct Precedent {
 /// How a precedent was applied.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentApplication {
     /// Followed the precedent directly
     Followed,
@@ -267,6 +276,7 @@ pub enum PrecedentApplication {
 /// Damages in Common Law (英米法の損害賠償).
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum DamageType {
     /// Compensatory damages (補償的損害賠償) - restore plaintiff to original position
     Compensatory {
@@ -303,6 +313,8 @@ impl DamageType {
 
 /// Case database for precedent searches.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct CaseDatabase {
     cases: HashMap<Uuid, Case>,
     precedents: Vec<Precedent>,

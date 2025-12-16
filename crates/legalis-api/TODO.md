@@ -11,16 +11,16 @@
 ## Endpoints
 
 ### Statute Operations
-- [ ] Add batch statute operations
-- [ ] Implement statute versioning endpoints
-- [ ] Add search/filter endpoints
-- [ ] Create statute comparison endpoint
-- [ ] Add statute fork/clone endpoint
+- [x] Add batch statute operations
+- [x] Implement statute versioning endpoints
+- [x] Add search/filter endpoints
+- [x] Create statute comparison endpoint
+- [x] Add statute fork/clone endpoint (via versioning)
 
 ### Verification
 - [x] Add verification endpoints
-- [ ] Implement async verification with polling
-- [ ] Create verification report endpoints
+- [x] Implement async verification with polling
+- [x] Create verification report endpoints (via detailed endpoint)
 - [x] Add batch verification support
 
 ### Simulation
@@ -73,25 +73,26 @@
 - [ ] Create cache invalidation strategy
 
 ### Optimization
-- [ ] Add request compression (gzip, brotli)
+- [x] Add request compression (gzip, brotli)
+- [x] Implement pagination (offset-based, see search endpoint)
 - [ ] Implement pagination with cursors
 - [ ] Add field selection (GraphQL-style)
 - [ ] Create connection pooling
 
 ## Observability
 
-- [ ] Add structured logging
-- [ ] Implement request tracing
+- [x] Add structured logging
+- [x] Implement request tracing (via logging middleware)
 - [x] Create metrics endpoint (Prometheus)
 - [x] Add health check endpoints
-- [ ] Implement distributed tracing
+- [ ] Implement distributed tracing (OpenTelemetry)
 
 ## Deployment
 
 - [ ] Add Docker configuration
 - [ ] Create Kubernetes manifests
-- [ ] Implement graceful shutdown
-- [ ] Add configuration via environment variables
+- [x] Implement graceful shutdown
+- [x] Add configuration via environment variables
 - [ ] Create deployment documentation
 
 ## Testing

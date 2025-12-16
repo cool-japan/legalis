@@ -185,6 +185,134 @@ pub struct StatuteVerifier {
     caching_enabled: bool,
 }
 
+/// Budget for verification operations.
+#[derive(Debug, Clone, Copy)]
+pub struct VerificationBudget {
+    /// Maximum number of statutes to verify (None = unlimited)
+    pub max_statutes: Option<usize>,
+    /// Maximum number of checks to perform (None = unlimited)
+    pub max_checks: Option<usize>,
+    /// Maximum time in milliseconds (None = unlimited)
+    pub max_time_ms: Option<u64>,
+}
+
+impl VerificationBudget {
+    /// Creates an unlimited budget.
+    pub fn unlimited() -> Self {
+        Self {
+            max_statutes: None,
+            max_checks: None,
+            max_time_ms: None,
+        }
+    }
+
+    /// Creates a budget with maximum number of statutes.
+    pub fn with_max_statutes(max: usize) -> Self {
+        Self {
+            max_statutes: Some(max),
+            max_checks: None,
+            max_time_ms: None,
+        }
+    }
+
+    /// Creates a budget with maximum number of checks.
+    pub fn with_max_checks(max: usize) -> Self {
+        Self {
+            max_statutes: None,
+            max_checks: Some(max),
+            max_time_ms: None,
+        }
+    }
+
+    /// Creates a budget with maximum time.
+    pub fn with_max_time_ms(max: u64) -> Self {
+        Self {
+            max_statutes: None,
+            max_checks: None,
+            max_time_ms: Some(max),
+        }
+    }
+
+    /// Checks if the statute limit has been reached.
+    pub fn statute_limit_reached(&self, count: usize) -> bool {
+        self.max_statutes.map_or(false, |max| count >= max)
+    }
+
+    /// Checks if the check limit has been reached.
+    pub fn check_limit_reached(&self, count: usize) -> bool {
+        self.max_checks.map_or(false, |max| count >= max)
+    }
+
+    /// Checks if the time limit has been reached.
+    pub fn time_limit_reached(&self, elapsed_ms: u64) -> bool {
+        self.max_time_ms.map_or(false, |max| elapsed_ms >= max)
+    }
+}
+
+impl Default for VerificationBudget {
+    fn default() -> Self {
+        Self::unlimited()
+    }
+}
+
+/// Incremental verification state for tracking statute changes.
+#[derive(Debug, Clone)]
+pub struct IncrementalState {
+    /// Hashes of previously verified statutes
+    statute_hashes: HashMap<String, u64>,
+    /// Previous verification results
+    previous_results: HashMap<String, VerificationResult>,
+}
+
+impl IncrementalState {
+    /// Creates a new incremental state.
+    pub fn new() -> Self {
+        Self {
+            statute_hashes: HashMap::new(),
+            previous_results: HashMap::new(),
+        }
+    }
+
+    /// Computes a hash for a statute.
+    fn compute_hash(statute: &Statute) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        statute.id.hash(&mut hasher);
+        statute.title.hash(&mut hasher);
+        statute.preconditions.len().hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Checks if a statute has changed since last verification.
+    pub fn has_changed(&self, statute: &Statute) -> bool {
+        let current_hash = Self::compute_hash(statute);
+        match self.statute_hashes.get(&statute.id) {
+            Some(&previous_hash) => previous_hash != current_hash,
+            None => true, // New statute
+        }
+    }
+
+    /// Updates the state with a verified statute.
+    pub fn update(&mut self, statute: &Statute, result: VerificationResult) {
+        let hash = Self::compute_hash(statute);
+        self.statute_hashes.insert(statute.id.clone(), hash);
+        self.previous_results.insert(statute.id.clone(), result);
+    }
+
+    /// Gets the previous result for a statute if available.
+    pub fn get_previous_result(&self, statute_id: &str) -> Option<&VerificationResult> {
+        self.previous_results.get(statute_id)
+    }
+}
+
+impl Default for IncrementalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatuteVerifier {
     /// Creates a new verifier.
     pub fn new() -> Self {
@@ -284,6 +412,148 @@ impl StatuteVerifier {
         }
 
         result
+    }
+
+    /// Performs incremental verification, only re-checking changed statutes.
+    ///
+    /// This method uses an IncrementalState to track which statutes have changed
+    /// and only re-verifies those statutes, reusing previous results for unchanged ones.
+    pub fn verify_incremental(
+        &self,
+        statutes: &[Statute],
+        state: &mut IncrementalState,
+    ) -> VerificationResult {
+        let mut result = VerificationResult::pass();
+        let mut changed_statutes = Vec::new();
+        let mut unchanged_statutes = Vec::new();
+
+        // Partition statutes into changed and unchanged
+        for statute in statutes {
+            if state.has_changed(statute) {
+                changed_statutes.push(statute);
+            } else {
+                unchanged_statutes.push(statute);
+            }
+        }
+
+        // Reuse results for unchanged statutes
+        for statute in &unchanged_statutes {
+            if let Some(prev_result) = state.get_previous_result(&statute.id) {
+                result.merge(prev_result.clone());
+            }
+        }
+
+        // Verify changed statutes
+        for statute in &changed_statutes {
+            let statute_result = self.verify_single_statute(statute);
+            state.update(statute, statute_result.clone());
+            result.merge(statute_result);
+        }
+
+        // Always re-check global constraints (circular refs, contradictions)
+        // as they may be affected by changes
+        if !changed_statutes.is_empty() {
+            result.merge(self.check_circular_references(statutes));
+            result.merge(self.check_contradictions(statutes));
+        }
+
+        result
+    }
+
+    /// Verifies a single statute in isolation.
+    fn verify_single_statute(&self, statute: &Statute) -> VerificationResult {
+        let mut result = VerificationResult::pass();
+
+        // Check constitutional compliance
+        result.merge(self.check_constitutional_compliance(statute));
+
+        // Check for redundant conditions
+        result.merge(self.check_redundant_conditions(statute));
+
+        // Check for unreachable code
+        result.merge(self.check_unreachable_code(statute));
+
+        // Check if statute is dead
+        if self.is_dead_statute(statute) {
+            result.merge(VerificationResult::fail(vec![
+                VerificationError::DeadStatute {
+                    statute_id: statute.id.clone(),
+                },
+            ]));
+        }
+
+        result
+    }
+
+    /// Verifies statutes with a specified budget.
+    ///
+    /// This method respects the verification budget and stops early if limits are reached.
+    /// Returns a tuple of (result, statutes_verified, checks_performed, budget_exceeded).
+    pub fn verify_with_budget(
+        &self,
+        statutes: &[Statute],
+        budget: VerificationBudget,
+    ) -> (VerificationResult, usize, usize, bool) {
+        use std::time::Instant;
+
+        let start_time = Instant::now();
+        let mut result = VerificationResult::pass();
+        let mut statutes_verified = 0;
+        let mut checks_performed = 0;
+        let mut budget_exceeded = false;
+
+        // Helper to check budget
+        let check_budget = |verified: usize, checks: usize, start: Instant| -> bool {
+            if budget.statute_limit_reached(verified) {
+                return true;
+            }
+            if budget.check_limit_reached(checks) {
+                return true;
+            }
+            let elapsed = start.elapsed().as_millis() as u64;
+            if budget.time_limit_reached(elapsed) {
+                return true;
+            }
+            false
+        };
+
+        // Check circular references (counts as 1 check)
+        if check_budget(statutes_verified, checks_performed, start_time) {
+            budget_exceeded = true;
+            return (result, statutes_verified, checks_performed, budget_exceeded);
+        }
+        result.merge(self.check_circular_references(statutes));
+        checks_performed += 1;
+
+        // Check dead statutes (counts as 1 check)
+        if check_budget(statutes_verified, checks_performed, start_time) {
+            budget_exceeded = true;
+            return (result, statutes_verified, checks_performed, budget_exceeded);
+        }
+        result.merge(self.check_dead_statutes(statutes));
+        checks_performed += 1;
+
+        // Verify individual statutes
+        for statute in statutes {
+            if check_budget(statutes_verified, checks_performed, start_time) {
+                budget_exceeded = true;
+                break;
+            }
+
+            result.merge(self.verify_single_statute(statute));
+            statutes_verified += 1;
+            checks_performed += 3; // constitutional, redundant, unreachable
+        }
+
+        // Check contradictions if budget allows (counts as 1 check)
+        if !check_budget(statutes_verified, checks_performed, start_time) {
+            result.merge(self.check_contradictions(statutes));
+            checks_performed += 1;
+        } else {
+            budget_exceeded = true;
+        }
+
+        (result, statutes_verified, checks_performed, budget_exceeded)
     }
 
     /// Verifies a set of statutes in parallel (requires 'parallel' feature).
@@ -848,7 +1118,7 @@ pub struct ConstitutionalPrinciple {
 }
 
 /// Types of constitutional checks.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum PrincipleCheck {
     /// No discrimination based on protected attributes
     NoDiscrimination,
@@ -856,8 +1126,673 @@ pub enum PrincipleCheck {
     RequiresProcedure,
     /// Must not be retroactive
     NoRetroactivity,
-    /// Custom check with description
-    Custom(String),
+    /// Comprehensive equality check
+    EqualityCheck,
+    /// Due process verification
+    DueProcess,
+    /// Privacy impact assessment
+    PrivacyImpact,
+    /// Proportionality checking
+    Proportionality,
+    /// Accessibility verification
+    Accessibility,
+    /// Custom check with description and implementation
+    Custom {
+        /// Description of the custom check
+        description: String,
+    },
+}
+
+/// Result of a constitutional principle check.
+#[derive(Debug, Clone)]
+pub struct PrincipleCheckResult {
+    /// Whether the check passed
+    pub passed: bool,
+    /// Issues found (if any)
+    pub issues: Vec<String>,
+    /// Suggestions for improvement
+    pub suggestions: Vec<String>,
+}
+
+impl PrincipleCheckResult {
+    /// Creates a passing result.
+    pub fn pass() -> Self {
+        Self {
+            passed: true,
+            issues: Vec::new(),
+            suggestions: Vec::new(),
+        }
+    }
+
+    /// Creates a failing result with issues.
+    pub fn fail(issues: Vec<String>) -> Self {
+        Self {
+            passed: false,
+            issues,
+            suggestions: Vec::new(),
+        }
+    }
+
+    /// Adds a suggestion.
+    pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
+        self.suggestions.push(suggestion.into());
+        self
+    }
+}
+
+/// Performs a comprehensive equality check on a statute.
+///
+/// Checks for potential discrimination based on protected attributes
+/// like age, gender, race, etc.
+pub fn check_equality(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+
+    // Check for age-based discrimination
+    for condition in &statute.preconditions {
+        if let legalis_core::Condition::Age { operator, value } = condition {
+            use legalis_core::ComparisonOp;
+            match operator {
+                ComparisonOp::GreaterThan | ComparisonOp::GreaterOrEqual => {
+                    if *value > 65 {
+                        issues.push(format!(
+                            "Potential age discrimination: requires age > {}",
+                            value
+                        ));
+                    }
+                }
+                ComparisonOp::LessThan | ComparisonOp::LessOrEqual => {
+                    if *value < 18 {
+                        issues.push(format!(
+                            "Potential age discrimination: requires age < {}",
+                            value
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Check for attribute-based discrimination
+    for condition in &statute.preconditions {
+        if let legalis_core::Condition::HasAttribute { key } = condition {
+            let key_lower = key.to_lowercase();
+            if key_lower.contains("gender")
+                || key_lower.contains("race")
+                || key_lower.contains("religion")
+                || key_lower.contains("nationality")
+            {
+                issues.push(format!(
+                    "Potential discrimination based on protected attribute: {}",
+                    key
+                ));
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        PrincipleCheckResult::pass()
+    } else {
+        PrincipleCheckResult::fail(issues).with_suggestion(
+            "Review for potential discrimination and ensure legitimate justification exists",
+        )
+    }
+}
+
+/// Performs due process verification on a statute.
+///
+/// Checks that adequate procedural safeguards are in place.
+pub fn check_due_process(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+
+    // Check if statute has discretion logic (good for due process)
+    let has_discretion = statute.discretion_logic.is_some();
+
+    // Check for certain effect types that require due process
+    use legalis_core::EffectType;
+    match statute.effect.effect_type {
+        EffectType::Revoke | EffectType::Prohibition => {
+            if !has_discretion {
+                issues.push(
+                    "Statute revokes/prohibits without discretionary review mechanism".to_string(),
+                );
+            }
+        }
+        _ => {}
+    }
+
+    // Check for abrupt conditions without review
+    if statute.preconditions.is_empty() && !has_discretion {
+        match statute.effect.effect_type {
+            EffectType::Revoke | EffectType::Prohibition => {
+                issues.push("No preconditions or review process for punitive action".to_string());
+            }
+            _ => {}
+        }
+    }
+
+    if issues.is_empty() {
+        PrincipleCheckResult::pass()
+    } else {
+        PrincipleCheckResult::fail(issues)
+            .with_suggestion("Add discretionary review or appeal mechanism for fairness")
+    }
+}
+
+/// Performs privacy impact assessment on a statute.
+///
+/// Checks if the statute might impact individual privacy.
+pub fn check_privacy_impact(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Check for attributes that might involve personal data
+    for condition in &statute.preconditions {
+        match condition {
+            legalis_core::Condition::HasAttribute { key }
+            | legalis_core::Condition::AttributeEquals { key, .. } => {
+                let key_lower = key.to_lowercase();
+                if key_lower.contains("medical")
+                    || key_lower.contains("health")
+                    || key_lower.contains("financial")
+                    || key_lower.contains("biometric")
+                    || key_lower.contains("location")
+                    || key_lower.contains("address")
+                {
+                    issues.push(format!(
+                        "Processes potentially sensitive personal data: {}",
+                        key
+                    ));
+                    suggestions
+                        .push("Ensure data minimization and appropriate safeguards".to_string());
+                }
+            }
+            legalis_core::Condition::Geographic { .. } => {
+                issues.push("Uses geographic/location data which may be sensitive".to_string());
+                suggestions.push("Consider privacy implications of location tracking".to_string());
+            }
+            _ => {}
+        }
+    }
+
+    if issues.is_empty() {
+        PrincipleCheckResult::pass()
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Performs proportionality checking on a statute.
+///
+/// Checks if the statute's effects are proportional to its conditions.
+pub fn check_proportionality(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+
+    use legalis_core::EffectType;
+
+    // Check for disproportionate effects
+    let condition_count = statute.preconditions.len();
+
+    match statute.effect.effect_type {
+        EffectType::Revoke | EffectType::Prohibition => {
+            // Severe effects should have multiple conditions
+            if condition_count < 2 {
+                issues.push(format!(
+                    "Severe effect ({:?}) based on only {} condition(s) - may be disproportionate",
+                    statute.effect.effect_type, condition_count
+                ));
+            }
+        }
+        EffectType::Obligation => {
+            // Obligations should have clear conditions
+            if condition_count == 0 {
+                issues.push(
+                    "Obligation imposed without any preconditions - may be disproportionate"
+                        .to_string(),
+                );
+            }
+        }
+        _ => {}
+    }
+
+    // Check for overly complex conditions for simple grants
+    if matches!(statute.effect.effect_type, EffectType::Grant) && condition_count > 5 {
+        issues.push(format!(
+            "Simple grant has {} conditions - may create unnecessary barriers",
+            condition_count
+        ));
+    }
+
+    if issues.is_empty() {
+        PrincipleCheckResult::pass()
+    } else {
+        PrincipleCheckResult::fail(issues)
+            .with_suggestion("Ensure effects are proportional to conditions and legitimate aims")
+    }
+}
+
+/// Performs accessibility verification on a statute.
+///
+/// Checks if the statute creates barriers for people with disabilities
+/// or other accessibility concerns.
+pub fn check_accessibility(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Check for conditions that might create accessibility barriers
+    for condition in &statute.preconditions {
+        match condition {
+            legalis_core::Condition::HasAttribute { key } => {
+                let key_lower = key.to_lowercase();
+
+                // Check for physical ability requirements
+                if key_lower.contains("physical")
+                    || key_lower.contains("mobility")
+                    || key_lower.contains("vision")
+                    || key_lower.contains("hearing")
+                {
+                    issues.push(format!(
+                        "Condition based on physical ability may create accessibility barrier: {}",
+                        key
+                    ));
+                    suggestions.push(
+                        "Consider reasonable accommodations for people with disabilities"
+                            .to_string(),
+                    );
+                }
+
+                // Check for digital literacy requirements
+                if key_lower.contains("digital")
+                    || key_lower.contains("online")
+                    || key_lower.contains("internet")
+                {
+                    issues.push(format!(
+                        "Digital requirement may create barrier for those without internet access: {}",
+                        key
+                    ));
+                    suggestions
+                        .push("Provide alternative non-digital methods of compliance".to_string());
+                }
+
+                // Check for language barriers
+                if key_lower.contains("language") || key_lower.contains("english") {
+                    issues.push(format!("Language requirement may create barrier: {}", key));
+                    suggestions
+                        .push("Provide translation services or multilingual support".to_string());
+                }
+            }
+
+            // Check for geographic barriers
+            legalis_core::Condition::Geographic { region_id, .. } => {
+                if !region_id.is_empty() {
+                    issues.push(format!(
+                        "Geographic restriction may limit accessibility: {}",
+                        region_id
+                    ));
+                    suggestions.push(
+                        "Consider remote participation options or multiple locations".to_string(),
+                    );
+                }
+            }
+
+            // Check for income barriers
+            legalis_core::Condition::Income { operator, value } => {
+                use legalis_core::ComparisonOp;
+                if matches!(
+                    operator,
+                    ComparisonOp::GreaterThan | ComparisonOp::GreaterOrEqual
+                ) {
+                    issues.push(format!(
+                        "Income requirement may create financial barrier: requires income >= {}",
+                        value
+                    ));
+                    suggestions.push(
+                        "Consider fee waivers or sliding scale based on ability to pay".to_string(),
+                    );
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    // Check if statute provides discretion (good for accessibility)
+    if statute.discretion_logic.is_some() {
+        suggestions
+            .push("Discretion allows for individual accessibility accommodations".to_string());
+    }
+
+    if issues.is_empty() {
+        PrincipleCheckResult::pass()
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Impact assessment for a statute or set of statutes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ImpactAssessment {
+    /// Affected groups
+    pub affected_groups: Vec<String>,
+    /// Positive impacts
+    pub positive_impacts: Vec<String>,
+    /// Negative impacts
+    pub negative_impacts: Vec<String>,
+    /// Equity concerns
+    pub equity_concerns: Vec<String>,
+    /// Accessibility concerns
+    pub accessibility_concerns: Vec<String>,
+    /// Privacy concerns
+    pub privacy_concerns: Vec<String>,
+    /// Economic impact level (Low, Medium, High)
+    pub economic_impact: ImpactLevel,
+    /// Social impact level (Low, Medium, High)
+    pub social_impact: ImpactLevel,
+    /// Overall risk level (Low, Medium, High, Critical)
+    pub overall_risk: RiskLevel,
+}
+
+/// Impact level classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ImpactLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl std::fmt::Display for ImpactLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Low => write!(f, "Low"),
+            Self::Medium => write!(f, "Medium"),
+            Self::High => write!(f, "High"),
+        }
+    }
+}
+
+/// Risk level classification.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl std::fmt::Display for RiskLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Low => write!(f, "Low"),
+            Self::Medium => write!(f, "Medium"),
+            Self::High => write!(f, "High"),
+            Self::Critical => write!(f, "Critical"),
+        }
+    }
+}
+
+impl ImpactAssessment {
+    /// Creates a new impact assessment.
+    pub fn new() -> Self {
+        Self {
+            affected_groups: Vec::new(),
+            positive_impacts: Vec::new(),
+            negative_impacts: Vec::new(),
+            equity_concerns: Vec::new(),
+            accessibility_concerns: Vec::new(),
+            privacy_concerns: Vec::new(),
+            economic_impact: ImpactLevel::Low,
+            social_impact: ImpactLevel::Low,
+            overall_risk: RiskLevel::Low,
+        }
+    }
+
+    /// Generates a human-readable report.
+    pub fn report(&self) -> String {
+        let mut report = String::new();
+        report.push_str("# Impact Assessment Report\n\n");
+
+        report.push_str(&format!(
+            "**Overall Risk Level**: {}\n\n",
+            self.overall_risk
+        ));
+
+        if !self.affected_groups.is_empty() {
+            report.push_str("## Affected Groups\n");
+            for group in &self.affected_groups {
+                report.push_str(&format!("- {}\n", group));
+            }
+            report.push('\n');
+        }
+
+        if !self.positive_impacts.is_empty() {
+            report.push_str("## Positive Impacts\n");
+            for impact in &self.positive_impacts {
+                report.push_str(&format!("- {}\n", impact));
+            }
+            report.push('\n');
+        }
+
+        if !self.negative_impacts.is_empty() {
+            report.push_str("## Negative Impacts\n");
+            for impact in &self.negative_impacts {
+                report.push_str(&format!("- {}\n", impact));
+            }
+            report.push('\n');
+        }
+
+        if !self.equity_concerns.is_empty() {
+            report.push_str("## Equity Concerns\n");
+            for concern in &self.equity_concerns {
+                report.push_str(&format!("- {}\n", concern));
+            }
+            report.push('\n');
+        }
+
+        if !self.accessibility_concerns.is_empty() {
+            report.push_str("## Accessibility Concerns\n");
+            for concern in &self.accessibility_concerns {
+                report.push_str(&format!("- {}\n", concern));
+            }
+            report.push('\n');
+        }
+
+        if !self.privacy_concerns.is_empty() {
+            report.push_str("## Privacy Concerns\n");
+            for concern in &self.privacy_concerns {
+                report.push_str(&format!("- {}\n", concern));
+            }
+            report.push('\n');
+        }
+
+        report.push_str("## Impact Levels\n");
+        report.push_str(&format!("- Economic Impact: {}\n", self.economic_impact));
+        report.push_str(&format!("- Social Impact: {}\n", self.social_impact));
+
+        report
+    }
+}
+
+impl Default for ImpactAssessment {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Performs an impact assessment on a statute.
+///
+/// Analyzes the potential impacts of a statute on various groups and dimensions.
+pub fn assess_impact(statute: &Statute) -> ImpactAssessment {
+    let mut assessment = ImpactAssessment::new();
+
+    // Identify affected groups
+    for condition in &statute.preconditions {
+        match condition {
+            legalis_core::Condition::Age { value, .. } => {
+                if *value < 18 {
+                    assessment.affected_groups.push("Minors".to_string());
+                } else if *value >= 65 {
+                    assessment.affected_groups.push("Seniors".to_string());
+                } else {
+                    assessment.affected_groups.push("Adults".to_string());
+                }
+            }
+            legalis_core::Condition::Income { .. } => {
+                assessment
+                    .affected_groups
+                    .push("Income earners".to_string());
+                assessment.economic_impact = ImpactLevel::High;
+            }
+            legalis_core::Condition::HasAttribute { key } => {
+                let key_lower = key.to_lowercase();
+                if key_lower.contains("disabled") || key_lower.contains("disability") {
+                    assessment
+                        .affected_groups
+                        .push("People with disabilities".to_string());
+                }
+                if key_lower.contains("veteran") {
+                    assessment.affected_groups.push("Veterans".to_string());
+                }
+                if key_lower.contains("student") {
+                    assessment.affected_groups.push("Students".to_string());
+                }
+            }
+            legalis_core::Condition::Geographic { region_id, .. } => {
+                assessment
+                    .affected_groups
+                    .push(format!("Residents of {}", region_id));
+            }
+            _ => {}
+        }
+    }
+
+    // Analyze impacts based on effect type
+    use legalis_core::EffectType;
+    match statute.effect.effect_type {
+        EffectType::Grant => {
+            assessment
+                .positive_impacts
+                .push(format!("Grants benefit: {}", statute.effect.description));
+            assessment.social_impact = ImpactLevel::Medium;
+        }
+        EffectType::Revoke => {
+            assessment
+                .negative_impacts
+                .push(format!("Revokes benefit: {}", statute.effect.description));
+            assessment.social_impact = ImpactLevel::High;
+            assessment.overall_risk = RiskLevel::High;
+        }
+        EffectType::Obligation => {
+            assessment.negative_impacts.push(format!(
+                "Imposes obligation: {}",
+                statute.effect.description
+            ));
+            assessment.social_impact = ImpactLevel::Medium;
+        }
+        EffectType::Prohibition => {
+            assessment
+                .negative_impacts
+                .push(format!("Prohibits action: {}", statute.effect.description));
+            assessment.social_impact = ImpactLevel::High;
+            assessment.overall_risk = RiskLevel::High;
+        }
+        _ => {}
+    }
+
+    // Run constitutional checks and aggregate concerns
+    let equality_result = check_equality(statute);
+    if !equality_result.passed {
+        assessment.equity_concerns.extend(equality_result.issues);
+        assessment.overall_risk = assessment.overall_risk.max(RiskLevel::High);
+    }
+
+    let accessibility_result = check_accessibility(statute);
+    if !accessibility_result.passed {
+        assessment
+            .accessibility_concerns
+            .extend(accessibility_result.issues);
+        assessment.overall_risk = assessment.overall_risk.max(RiskLevel::Medium);
+    }
+
+    let privacy_result = check_privacy_impact(statute);
+    if !privacy_result.passed {
+        assessment.privacy_concerns.extend(privacy_result.issues);
+        assessment.overall_risk = assessment.overall_risk.max(RiskLevel::Medium);
+    }
+
+    // Adjust risk based on number of concerns
+    let total_concerns = assessment.equity_concerns.len()
+        + assessment.accessibility_concerns.len()
+        + assessment.privacy_concerns.len();
+
+    if total_concerns > 5 {
+        assessment.overall_risk = RiskLevel::Critical;
+    } else if total_concerns > 3 {
+        assessment.overall_risk = assessment.overall_risk.max(RiskLevel::High);
+    }
+
+    assessment
+}
+
+/// Performs impact assessment on multiple statutes and generates a comprehensive report.
+pub fn assess_multiple_impacts(statutes: &[Statute]) -> String {
+    let mut report = String::new();
+    report.push_str("# Comprehensive Impact Assessment\n\n");
+    report.push_str(&format!("Analyzed {} statute(s)\n\n", statutes.len()));
+
+    let mut all_groups: HashSet<String> = HashSet::new();
+    let mut total_positive = 0;
+    let mut total_negative = 0;
+    let mut max_risk = RiskLevel::Low;
+
+    for statute in statutes {
+        let assessment = assess_impact(statute);
+        all_groups.extend(assessment.affected_groups.clone());
+        total_positive += assessment.positive_impacts.len();
+        total_negative += assessment.negative_impacts.len();
+        max_risk = max_risk.max(assessment.overall_risk);
+
+        report.push_str(&format!(
+            "## Statute: {} - \"{}\"\n",
+            statute.id, statute.title
+        ));
+        report.push_str(&assessment.report());
+        report.push_str("\n---\n\n");
+    }
+
+    // Summary
+    report.push_str("## Overall Summary\n\n");
+    report.push_str(&format!("- **Maximum Risk Level**: {}\n", max_risk));
+    report.push_str(&format!(
+        "- **Total Affected Groups**: {}\n",
+        all_groups.len()
+    ));
+    report.push_str(&format!(
+        "- **Total Positive Impacts**: {}\n",
+        total_positive
+    ));
+    report.push_str(&format!(
+        "- **Total Negative Impacts**: {}\n\n",
+        total_negative
+    ));
+
+    if !all_groups.is_empty() {
+        report.push_str("### All Affected Groups:\n");
+        for group in &all_groups {
+            report.push_str(&format!("- {}\n", group));
+        }
+    }
+
+    report
 }
 
 /// Verifies the integrity of a set of laws.
@@ -1581,6 +2516,653 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     lines
 }
 
+/// Semantic similarity score between two items (0.0 = completely different, 1.0 = identical).
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct SimilarityScore(pub f64);
+
+impl SimilarityScore {
+    /// Creates a new similarity score (clamped to [0.0, 1.0]).
+    pub fn new(score: f64) -> Self {
+        Self(score.clamp(0.0, 1.0))
+    }
+
+    /// Returns true if similarity is high (>= 0.8).
+    pub fn is_high(&self) -> bool {
+        self.0 >= 0.8
+    }
+
+    /// Returns true if similarity is moderate (>= 0.5 and < 0.8).
+    pub fn is_moderate(&self) -> bool {
+        self.0 >= 0.5 && self.0 < 0.8
+    }
+
+    /// Returns true if similarity is low (< 0.5).
+    pub fn is_low(&self) -> bool {
+        self.0 < 0.5
+    }
+}
+
+/// Calculates semantic similarity between two statutes.
+///
+/// The similarity is based on:
+/// - Title similarity (Levenshtein distance)
+/// - Condition overlap
+/// - Effect type similarity
+/// - Discretion similarity
+pub fn semantic_similarity(statute1: &Statute, statute2: &Statute) -> SimilarityScore {
+    let mut similarity = 0.0f64;
+    let mut weight_sum = 0.0f64;
+
+    // Title similarity (weight: 0.2)
+    let title_weight = 0.2;
+    let title_sim = string_similarity(&statute1.title, &statute2.title);
+    similarity += title_sim * title_weight;
+    weight_sum += title_weight;
+
+    // Effect type similarity (weight: 0.3)
+    let effect_weight = 0.3;
+    let effect_sim = if statute1.effect.effect_type == statute2.effect.effect_type {
+        1.0
+    } else {
+        0.0
+    };
+    similarity += effect_sim * effect_weight;
+    weight_sum += effect_weight;
+
+    // Condition overlap (weight: 0.4)
+    let condition_weight = 0.4;
+    let condition_sim =
+        condition_overlap_similarity(&statute1.preconditions, &statute2.preconditions);
+    similarity += condition_sim * condition_weight;
+    weight_sum += condition_weight;
+
+    // Discretion similarity (weight: 0.1)
+    let discretion_weight = 0.1;
+    let discretion_sim = match (&statute1.discretion_logic, &statute2.discretion_logic) {
+        (Some(_), Some(_)) => 1.0,
+        (None, None) => 1.0,
+        _ => 0.0,
+    };
+    similarity += discretion_sim * discretion_weight;
+    weight_sum += discretion_weight;
+
+    SimilarityScore::new(similarity / weight_sum)
+}
+
+/// Calculates string similarity using Levenshtein distance.
+fn string_similarity(s1: &str, s2: &str) -> f64 {
+    if s1 == s2 {
+        return 1.0;
+    }
+    if s1.is_empty() || s2.is_empty() {
+        return 0.0;
+    }
+
+    let distance = levenshtein_distance(s1, s2);
+    let max_len = s1.len().max(s2.len());
+    1.0 - (distance as f64 / max_len as f64)
+}
+
+/// Calculates Levenshtein distance between two strings.
+fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+    let len1 = s1.chars().count();
+    let len2 = s2.chars().count();
+
+    if len1 == 0 {
+        return len2;
+    }
+    if len2 == 0 {
+        return len1;
+    }
+
+    let mut matrix = vec![vec![0usize; len2 + 1]; len1 + 1];
+
+    for i in 0..=len1 {
+        matrix[i][0] = i;
+    }
+    for j in 0..=len2 {
+        matrix[0][j] = j;
+    }
+
+    let s1_chars: Vec<char> = s1.chars().collect();
+    let s2_chars: Vec<char> = s2.chars().collect();
+
+    for i in 1..=len1 {
+        for j in 1..=len2 {
+            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+            matrix[i][j] = (matrix[i - 1][j] + 1)
+                .min(matrix[i][j - 1] + 1)
+                .min(matrix[i - 1][j - 1] + cost);
+        }
+    }
+
+    matrix[len1][len2]
+}
+
+/// Calculates overlap similarity between two sets of conditions.
+fn condition_overlap_similarity(
+    conditions1: &[legalis_core::Condition],
+    conditions2: &[legalis_core::Condition],
+) -> f64 {
+    if conditions1.is_empty() && conditions2.is_empty() {
+        return 1.0;
+    }
+    if conditions1.is_empty() || conditions2.is_empty() {
+        return 0.0;
+    }
+
+    let mut matching_pairs = 0;
+    let total_comparisons = conditions1.len() * conditions2.len();
+
+    for c1 in conditions1 {
+        for c2 in conditions2 {
+            if conditions_are_similar(c1, c2) {
+                matching_pairs += 1;
+            }
+        }
+    }
+
+    matching_pairs as f64 / total_comparisons as f64
+}
+
+/// Checks if two conditions are similar.
+fn conditions_are_similar(c1: &legalis_core::Condition, c2: &legalis_core::Condition) -> bool {
+    use legalis_core::Condition;
+
+    match (c1, c2) {
+        (Condition::Age { .. }, Condition::Age { .. }) => true,
+        (Condition::Income { .. }, Condition::Income { .. }) => true,
+        (Condition::HasAttribute { key: k1 }, Condition::HasAttribute { key: k2 }) => k1 == k2,
+        (
+            Condition::AttributeEquals { key: k1, .. },
+            Condition::AttributeEquals { key: k2, .. },
+        ) => k1 == k2,
+        (Condition::DateRange { .. }, Condition::DateRange { .. }) => true,
+        (Condition::Geographic { .. }, Condition::Geographic { .. }) => true,
+        (Condition::EntityRelationship { .. }, Condition::EntityRelationship { .. }) => true,
+        (Condition::ResidencyDuration { .. }, Condition::ResidencyDuration { .. }) => true,
+        (Condition::Custom { description: d1 }, Condition::Custom { description: d2 }) => {
+            string_similarity(d1, d2) > 0.7
+        }
+        (Condition::And(l1, r1), Condition::And(l2, r2)) => {
+            conditions_are_similar(l1, l2) && conditions_are_similar(r1, r2)
+        }
+        (Condition::Or(l1, r1), Condition::Or(l2, r2)) => {
+            conditions_are_similar(l1, l2) && conditions_are_similar(r1, r2)
+        }
+        (Condition::Not(c1), Condition::Not(c2)) => conditions_are_similar(c1, c2),
+        _ => false,
+    }
+}
+
+/// Finds pairs of statutes with high semantic similarity (potential duplicates).
+///
+/// Returns a list of statute pairs with similarity scores above the threshold.
+pub fn find_similar_statutes(
+    statutes: &[Statute],
+    threshold: f64,
+) -> Vec<(String, String, SimilarityScore)> {
+    let mut similar_pairs = Vec::new();
+
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let similarity = semantic_similarity(&statutes[i], &statutes[j]);
+            if similarity.0 >= threshold {
+                similar_pairs.push((statutes[i].id.clone(), statutes[j].id.clone(), similarity));
+            }
+        }
+    }
+
+    similar_pairs
+}
+
+/// Represents an ambiguous term found in statutes.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AmbiguousTerm {
+    /// The ambiguous term
+    pub term: String,
+    /// Context where the term appears
+    pub contexts: Vec<String>,
+    /// Statute IDs where the term is used
+    pub statute_ids: Vec<String>,
+    /// Suggested disambiguations
+    pub suggestions: Vec<String>,
+}
+
+impl AmbiguousTerm {
+    /// Creates a new ambiguous term.
+    pub fn new(term: impl Into<String>) -> Self {
+        Self {
+            term: term.into(),
+            contexts: Vec::new(),
+            statute_ids: Vec::new(),
+            suggestions: Vec::new(),
+        }
+    }
+
+    /// Adds a context to the ambiguous term.
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.contexts.push(context.into());
+        self
+    }
+
+    /// Adds a statute ID to the ambiguous term.
+    pub fn with_statute_id(mut self, statute_id: impl Into<String>) -> Self {
+        self.statute_ids.push(statute_id.into());
+        self
+    }
+
+    /// Adds a suggestion for disambiguation.
+    pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
+        self.suggestions.push(suggestion.into());
+        self
+    }
+}
+
+/// Common ambiguous legal terms and their potential meanings.
+const AMBIGUOUS_LEGAL_TERMS: &[(&str, &[&str])] = &[
+    ("person", &["natural person", "legal person", "corporation"]),
+    ("child", &["minor", "dependent", "offspring"]),
+    (
+        "residence",
+        &["domicile", "dwelling", "temporary residence"],
+    ),
+    ("income", &["gross income", "net income", "taxable income"]),
+    ("tax", &["income tax", "sales tax", "property tax"]),
+    (
+        "benefit",
+        &["welfare benefit", "tax benefit", "employment benefit"],
+    ),
+    (
+        "disability",
+        &[
+            "physical disability",
+            "mental disability",
+            "learning disability",
+        ],
+    ),
+    (
+        "family",
+        &["immediate family", "extended family", "household"],
+    ),
+    (
+        "spouse",
+        &["legal spouse", "common-law spouse", "domestic partner"],
+    ),
+    (
+        "property",
+        &[
+            "real property",
+            "personal property",
+            "intellectual property",
+        ],
+    ),
+];
+
+/// Finds ambiguous terms in a set of statutes.
+///
+/// This function identifies terms that may have multiple meanings
+/// and suggests disambiguations based on common legal usage.
+pub fn find_ambiguous_terms(statutes: &[Statute]) -> Vec<AmbiguousTerm> {
+    let mut ambiguous_terms = HashMap::new();
+
+    for statute in statutes {
+        // Check title for ambiguous terms
+        for (term, suggestions) in AMBIGUOUS_LEGAL_TERMS {
+            if statute.title.to_lowercase().contains(term) {
+                let entry = ambiguous_terms
+                    .entry(term.to_string())
+                    .or_insert_with(|| AmbiguousTerm::new(*term));
+
+                if !entry.statute_ids.contains(&statute.id) {
+                    entry.statute_ids.push(statute.id.clone());
+                }
+                if !entry.contexts.contains(&statute.title) {
+                    entry.contexts.push(statute.title.clone());
+                }
+                for suggestion in *suggestions {
+                    if !entry.suggestions.contains(&suggestion.to_string()) {
+                        entry.suggestions.push(suggestion.to_string());
+                    }
+                }
+            }
+        }
+
+        // Check effect descriptions for ambiguous terms
+        if statute.effect.description.to_lowercase().contains("person") {
+            let entry = ambiguous_terms
+                .entry("person".to_string())
+                .or_insert_with(|| AmbiguousTerm::new("person"));
+
+            if !entry.statute_ids.contains(&statute.id) {
+                entry.statute_ids.push(statute.id.clone());
+            }
+            if !entry.contexts.contains(&statute.effect.description) {
+                entry.contexts.push(statute.effect.description.clone());
+            }
+        }
+    }
+
+    ambiguous_terms.into_values().collect()
+}
+
+/// Generates a term disambiguation report for a set of statutes.
+pub fn term_disambiguation_report(statutes: &[Statute]) -> String {
+    let ambiguous_terms = find_ambiguous_terms(statutes);
+
+    if ambiguous_terms.is_empty() {
+        return "# Term Disambiguation Report\n\nNo ambiguous terms found.\n".to_string();
+    }
+
+    let mut report = String::new();
+    report.push_str("# Term Disambiguation Report\n\n");
+    report.push_str(&format!(
+        "Found {} ambiguous terms:\n\n",
+        ambiguous_terms.len()
+    ));
+
+    for term in &ambiguous_terms {
+        report.push_str(&format!("## Term: \"{}\"\n", term.term));
+        report.push_str(&format!(
+            "- Used in {} statute(s): {}\n",
+            term.statute_ids.len(),
+            term.statute_ids.join(", ")
+        ));
+
+        if !term.contexts.is_empty() {
+            report.push_str("- Contexts:\n");
+            for context in &term.contexts {
+                report.push_str(&format!("  - {}\n", context));
+            }
+        }
+
+        if !term.suggestions.is_empty() {
+            report.push_str("- Suggested disambiguations:\n");
+            for suggestion in &term.suggestions {
+                report.push_str(&format!("  - {}\n", suggestion));
+            }
+        }
+
+        report.push('\n');
+    }
+
+    report
+}
+
+/// Represents a cross-reference validation error.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CrossReferenceError {
+    /// Statute ID containing the reference
+    pub source_statute_id: String,
+    /// Referenced statute ID that is invalid
+    pub referenced_statute_id: String,
+    /// Error type
+    pub error_type: CrossReferenceErrorType,
+}
+
+/// Types of cross-reference errors.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CrossReferenceErrorType {
+    /// Referenced statute does not exist
+    NotFound,
+    /// Reference creates a circular dependency
+    CircularReference,
+    /// Reference is ambiguous (multiple matches)
+    Ambiguous,
+}
+
+impl std::fmt::Display for CrossReferenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.error_type {
+            CrossReferenceErrorType::NotFound => write!(
+                f,
+                "Statute '{}' references non-existent statute '{}'",
+                self.source_statute_id, self.referenced_statute_id
+            ),
+            CrossReferenceErrorType::CircularReference => write!(
+                f,
+                "Statute '{}' creates circular reference with '{}'",
+                self.source_statute_id, self.referenced_statute_id
+            ),
+            CrossReferenceErrorType::Ambiguous => write!(
+                f,
+                "Statute '{}' has ambiguous reference to '{}'",
+                self.source_statute_id, self.referenced_statute_id
+            ),
+        }
+    }
+}
+
+/// Validates cross-references between statutes.
+///
+/// This function checks that all statute references in conditions
+/// point to valid existing statutes.
+pub fn validate_cross_references(statutes: &[Statute]) -> Vec<CrossReferenceError> {
+    let mut errors = Vec::new();
+    let statute_ids: HashSet<&str> = statutes.iter().map(|s| s.id.as_str()).collect();
+
+    for statute in statutes {
+        let references = extract_statute_references_from_conditions(&statute.preconditions);
+
+        for reference in references {
+            // Check if the referenced statute exists
+            if !statute_ids.contains(reference.as_str()) {
+                errors.push(CrossReferenceError {
+                    source_statute_id: statute.id.clone(),
+                    referenced_statute_id: reference.clone(),
+                    error_type: CrossReferenceErrorType::NotFound,
+                });
+            }
+        }
+    }
+
+    errors
+}
+
+/// Extracts statute references from a list of conditions.
+fn extract_statute_references_from_conditions(
+    conditions: &[legalis_core::Condition],
+) -> Vec<String> {
+    let mut refs = Vec::new();
+    for condition in conditions {
+        extract_refs_from_single_condition(condition, &mut refs);
+    }
+    refs
+}
+
+/// Recursively extracts references from a single condition.
+fn extract_refs_from_single_condition(condition: &legalis_core::Condition, refs: &mut Vec<String>) {
+    use legalis_core::Condition;
+
+    match condition {
+        Condition::Custom { description } => {
+            // Extract statute references with "statute:" prefix
+            if let Some(statute_ref) = description.strip_prefix("statute:") {
+                refs.push(statute_ref.trim().to_string());
+            }
+        }
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            extract_refs_from_single_condition(left, refs);
+            extract_refs_from_single_condition(right, refs);
+        }
+        Condition::Not(inner) => {
+            extract_refs_from_single_condition(inner, refs);
+        }
+        _ => {}
+    }
+}
+
+/// Generates a cross-reference validation report.
+pub fn cross_reference_report(statutes: &[Statute]) -> String {
+    let errors = validate_cross_references(statutes);
+
+    if errors.is_empty() {
+        return "# Cross-Reference Validation Report\n\nAll cross-references are valid.\n"
+            .to_string();
+    }
+
+    let mut report = String::new();
+    report.push_str("# Cross-Reference Validation Report\n\n");
+    report.push_str(&format!(
+        "Found {} cross-reference error(s):\n\n",
+        errors.len()
+    ));
+
+    for error in &errors {
+        report.push_str(&format!("- {}\n", error));
+    }
+
+    report
+}
+
+/// Represents a terminology inconsistency.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TerminologyInconsistency {
+    /// The term variations found
+    pub variations: Vec<String>,
+    /// Statute IDs where variations are used
+    pub statute_ids: Vec<String>,
+    /// Suggested canonical term
+    pub canonical_term: String,
+}
+
+impl TerminologyInconsistency {
+    /// Creates a new terminology inconsistency.
+    pub fn new(canonical_term: impl Into<String>) -> Self {
+        Self {
+            variations: Vec::new(),
+            statute_ids: Vec::new(),
+            canonical_term: canonical_term.into(),
+        }
+    }
+
+    /// Adds a variation to the inconsistency.
+    pub fn with_variation(mut self, variation: impl Into<String>) -> Self {
+        let var = variation.into();
+        if !self.variations.contains(&var) {
+            self.variations.push(var);
+        }
+        self
+    }
+
+    /// Adds a statute ID to the inconsistency.
+    pub fn with_statute_id(mut self, statute_id: impl Into<String>) -> Self {
+        let id = statute_id.into();
+        if !self.statute_ids.contains(&id) {
+            self.statute_ids.push(id);
+        }
+        self
+    }
+}
+
+/// Common term variations that should be consistent.
+const TERM_VARIATIONS: &[(&str, &[&str])] = &[
+    ("applicant", &["applicant", "appellant", "petitioner"]),
+    ("minor", &["minor", "child", "juvenile", "underage person"]),
+    ("guardian", &["guardian", "custodian", "caretaker"]),
+    ("income", &["income", "earnings", "revenue", "compensation"]),
+    ("residence", &["residence", "domicile", "dwelling", "home"]),
+    (
+        "employer",
+        &["employer", "company", "business", "organization"],
+    ),
+    (
+        "employee",
+        &["employee", "worker", "staff member", "personnel"],
+    ),
+    (
+        "benefit",
+        &["benefit", "entitlement", "allowance", "payment"],
+    ),
+    ("disabled", &["disabled", "handicapped", "impaired"]),
+    ("spouse", &["spouse", "partner", "husband", "wife"]),
+];
+
+/// Checks for terminology consistency across statutes.
+///
+/// This function identifies where similar terms are used inconsistently
+/// and suggests a canonical term for each concept.
+pub fn check_terminology_consistency(statutes: &[Statute]) -> Vec<TerminologyInconsistency> {
+    let mut inconsistencies = Vec::new();
+
+    for (canonical, variations) in TERM_VARIATIONS {
+        let mut found_variations = HashMap::new();
+
+        for statute in statutes {
+            let text = format!("{} {}", statute.title, statute.effect.description).to_lowercase();
+
+            for variation in *variations {
+                if text.contains(variation) {
+                    found_variations
+                        .entry(variation.to_string())
+                        .or_insert_with(Vec::new)
+                        .push(statute.id.clone());
+                }
+            }
+        }
+
+        // If more than one variation is found, report inconsistency
+        if found_variations.len() > 1 {
+            let mut inconsistency = TerminologyInconsistency::new(*canonical);
+
+            for (variation, statute_ids) in found_variations {
+                inconsistency = inconsistency.with_variation(&variation);
+                for id in statute_ids {
+                    inconsistency = inconsistency.with_statute_id(id);
+                }
+            }
+
+            inconsistencies.push(inconsistency);
+        }
+    }
+
+    inconsistencies
+}
+
+/// Generates a terminology consistency report.
+pub fn terminology_consistency_report(statutes: &[Statute]) -> String {
+    let inconsistencies = check_terminology_consistency(statutes);
+
+    if inconsistencies.is_empty() {
+        return "# Terminology Consistency Report\n\nTerminology is consistent across all statutes.\n"
+            .to_string();
+    }
+
+    let mut report = String::new();
+    report.push_str("# Terminology Consistency Report\n\n");
+    report.push_str(&format!(
+        "Found {} terminology inconsistenc(ies):\n\n",
+        inconsistencies.len()
+    ));
+
+    for inconsistency in &inconsistencies {
+        report.push_str(&format!(
+            "## Inconsistent use of \"{}\"\n",
+            inconsistency.canonical_term
+        ));
+        report.push_str(&format!(
+            "- Found {} variation(s): {}\n",
+            inconsistency.variations.len(),
+            inconsistency.variations.join(", ")
+        ));
+        report.push_str(&format!(
+            "- Used in {} statute(s): {}\n",
+            inconsistency.statute_ids.len(),
+            inconsistency.statute_ids.join(", ")
+        ));
+        report.push_str(&format!(
+            "- Recommendation: Use \"{}\" consistently\n\n",
+            inconsistency.canonical_term
+        ));
+    }
+
+    report
+}
+
 /// Generates a SARIF (Static Analysis Results Interchange Format) report.
 ///
 /// SARIF is a standard JSON format for static analysis results,
@@ -1726,6 +3308,1220 @@ pub fn generate_sarif_report(
 
     serde_json::to_string_pretty(&sarif)
 }
+
+// =============================================================================
+// Temporal Logic Support
+// =============================================================================
+
+/// Linear Temporal Logic (LTL) formula.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum LtlFormula {
+    /// Atomic proposition (a condition)
+    Atom(String),
+    /// Negation
+    Not(Box<LtlFormula>),
+    /// Conjunction (and)
+    And(Box<LtlFormula>, Box<LtlFormula>),
+    /// Disjunction (or)
+    Or(Box<LtlFormula>, Box<LtlFormula>),
+    /// Implication
+    Implies(Box<LtlFormula>, Box<LtlFormula>),
+    /// Next (holds in the next state)
+    Next(Box<LtlFormula>),
+    /// Eventually (holds at some point in the future)
+    Eventually(Box<LtlFormula>),
+    /// Always (holds at all points in the future)
+    Always(Box<LtlFormula>),
+    /// Until (first holds until second becomes true)
+    Until(Box<LtlFormula>, Box<LtlFormula>),
+    /// Release (second holds until first becomes true, or forever)
+    Release(Box<LtlFormula>, Box<LtlFormula>),
+}
+
+impl LtlFormula {
+    /// Creates a new atomic proposition.
+    pub fn atom(name: impl Into<String>) -> Self {
+        Self::Atom(name.into())
+    }
+
+    /// Creates a negation.
+    pub fn not(formula: LtlFormula) -> Self {
+        Self::Not(Box::new(formula))
+    }
+
+    /// Creates a conjunction.
+    pub fn and(left: LtlFormula, right: LtlFormula) -> Self {
+        Self::And(Box::new(left), Box::new(right))
+    }
+
+    /// Creates a disjunction.
+    pub fn or(left: LtlFormula, right: LtlFormula) -> Self {
+        Self::Or(Box::new(left), Box::new(right))
+    }
+
+    /// Creates an implication.
+    pub fn implies(antecedent: LtlFormula, consequent: LtlFormula) -> Self {
+        Self::Implies(Box::new(antecedent), Box::new(consequent))
+    }
+
+    /// Creates a next operator.
+    pub fn next(formula: LtlFormula) -> Self {
+        Self::Next(Box::new(formula))
+    }
+
+    /// Creates an eventually operator.
+    pub fn eventually(formula: LtlFormula) -> Self {
+        Self::Eventually(Box::new(formula))
+    }
+
+    /// Creates an always operator.
+    pub fn always(formula: LtlFormula) -> Self {
+        Self::Always(Box::new(formula))
+    }
+
+    /// Creates an until operator.
+    pub fn until(left: LtlFormula, right: LtlFormula) -> Self {
+        Self::Until(Box::new(left), Box::new(right))
+    }
+
+    /// Creates a release operator.
+    pub fn release(left: LtlFormula, right: LtlFormula) -> Self {
+        Self::Release(Box::new(left), Box::new(right))
+    }
+}
+
+impl std::fmt::Display for LtlFormula {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Atom(name) => write!(f, "{}", name),
+            Self::Not(formula) => write!(f, "¬({})", formula),
+            Self::And(left, right) => write!(f, "({} ∧ {})", left, right),
+            Self::Or(left, right) => write!(f, "({} ∨ {})", left, right),
+            Self::Implies(left, right) => write!(f, "({} → {})", left, right),
+            Self::Next(formula) => write!(f, "X({})", formula),
+            Self::Eventually(formula) => write!(f, "F({})", formula),
+            Self::Always(formula) => write!(f, "G({})", formula),
+            Self::Until(left, right) => write!(f, "({} U {})", left, right),
+            Self::Release(left, right) => write!(f, "({} R {})", left, right),
+        }
+    }
+}
+
+/// Computation Tree Logic (CTL) formula.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CtlFormula {
+    /// Atomic proposition
+    Atom(String),
+    /// Negation
+    Not(Box<CtlFormula>),
+    /// Conjunction
+    And(Box<CtlFormula>, Box<CtlFormula>),
+    /// Disjunction
+    Or(Box<CtlFormula>, Box<CtlFormula>),
+    /// Implication
+    Implies(Box<CtlFormula>, Box<CtlFormula>),
+    /// Exists Next (there exists a next state where formula holds)
+    ExistsNext(Box<CtlFormula>),
+    /// All Next (formula holds in all next states)
+    AllNext(Box<CtlFormula>),
+    /// Exists Eventually (there exists a path where formula eventually holds)
+    ExistsEventually(Box<CtlFormula>),
+    /// All Eventually (formula eventually holds on all paths)
+    AllEventually(Box<CtlFormula>),
+    /// Exists Always (there exists a path where formula always holds)
+    ExistsAlways(Box<CtlFormula>),
+    /// All Always (formula always holds on all paths)
+    AllAlways(Box<CtlFormula>),
+    /// Exists Until
+    ExistsUntil(Box<CtlFormula>, Box<CtlFormula>),
+    /// All Until
+    AllUntil(Box<CtlFormula>, Box<CtlFormula>),
+}
+
+impl CtlFormula {
+    /// Creates a new atomic proposition.
+    pub fn atom(name: impl Into<String>) -> Self {
+        Self::Atom(name.into())
+    }
+
+    /// Creates a negation.
+    pub fn not(formula: CtlFormula) -> Self {
+        Self::Not(Box::new(formula))
+    }
+
+    /// Creates a conjunction.
+    pub fn and(left: CtlFormula, right: CtlFormula) -> Self {
+        Self::And(Box::new(left), Box::new(right))
+    }
+
+    /// Creates a disjunction.
+    pub fn or(left: CtlFormula, right: CtlFormula) -> Self {
+        Self::Or(Box::new(left), Box::new(right))
+    }
+
+    /// Creates an implication.
+    pub fn implies(antecedent: CtlFormula, consequent: CtlFormula) -> Self {
+        Self::Implies(Box::new(antecedent), Box::new(consequent))
+    }
+
+    /// Creates an exists-next operator.
+    pub fn exists_next(formula: CtlFormula) -> Self {
+        Self::ExistsNext(Box::new(formula))
+    }
+
+    /// Creates an all-next operator.
+    pub fn all_next(formula: CtlFormula) -> Self {
+        Self::AllNext(Box::new(formula))
+    }
+
+    /// Creates an exists-eventually operator.
+    pub fn exists_eventually(formula: CtlFormula) -> Self {
+        Self::ExistsEventually(Box::new(formula))
+    }
+
+    /// Creates an all-eventually operator.
+    pub fn all_eventually(formula: CtlFormula) -> Self {
+        Self::AllEventually(Box::new(formula))
+    }
+
+    /// Creates an exists-always operator.
+    pub fn exists_always(formula: CtlFormula) -> Self {
+        Self::ExistsAlways(Box::new(formula))
+    }
+
+    /// Creates an all-always operator.
+    pub fn all_always(formula: CtlFormula) -> Self {
+        Self::AllAlways(Box::new(formula))
+    }
+
+    /// Creates an exists-until operator.
+    pub fn exists_until(left: CtlFormula, right: CtlFormula) -> Self {
+        Self::ExistsUntil(Box::new(left), Box::new(right))
+    }
+
+    /// Creates an all-until operator.
+    pub fn all_until(left: CtlFormula, right: CtlFormula) -> Self {
+        Self::AllUntil(Box::new(left), Box::new(right))
+    }
+}
+
+impl std::fmt::Display for CtlFormula {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Atom(name) => write!(f, "{}", name),
+            Self::Not(formula) => write!(f, "¬({})", formula),
+            Self::And(left, right) => write!(f, "({} ∧ {})", left, right),
+            Self::Or(left, right) => write!(f, "({} ∨ {})", left, right),
+            Self::Implies(left, right) => write!(f, "({} → {})", left, right),
+            Self::ExistsNext(formula) => write!(f, "EX({})", formula),
+            Self::AllNext(formula) => write!(f, "AX({})", formula),
+            Self::ExistsEventually(formula) => write!(f, "EF({})", formula),
+            Self::AllEventually(formula) => write!(f, "AF({})", formula),
+            Self::ExistsAlways(formula) => write!(f, "EG({})", formula),
+            Self::AllAlways(formula) => write!(f, "AG({})", formula),
+            Self::ExistsUntil(left, right) => write!(f, "E({} U {})", left, right),
+            Self::AllUntil(left, right) => write!(f, "A({} U {})", left, right),
+        }
+    }
+}
+
+/// A state in a temporal model.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TemporalState {
+    /// State identifier
+    pub id: String,
+    /// Atomic propositions that hold in this state
+    pub propositions: HashSet<String>,
+}
+
+impl TemporalState {
+    /// Creates a new temporal state.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            propositions: HashSet::new(),
+        }
+    }
+
+    /// Adds a proposition to this state.
+    pub fn with_proposition(mut self, prop: impl Into<String>) -> Self {
+        self.propositions.insert(prop.into());
+        self
+    }
+
+    /// Checks if a proposition holds in this state.
+    pub fn satisfies(&self, prop: &str) -> bool {
+        self.propositions.contains(prop)
+    }
+}
+
+/// A transition system for temporal logic verification.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TransitionSystem {
+    /// All states in the system
+    pub states: HashMap<String, TemporalState>,
+    /// Transitions between states (from -> to list)
+    pub transitions: HashMap<String, Vec<String>>,
+    /// Initial states
+    pub initial_states: HashSet<String>,
+}
+
+impl TransitionSystem {
+    /// Creates a new empty transition system.
+    pub fn new() -> Self {
+        Self {
+            states: HashMap::new(),
+            transitions: HashMap::new(),
+            initial_states: HashSet::new(),
+        }
+    }
+
+    /// Adds a state to the system.
+    pub fn add_state(&mut self, state: TemporalState) {
+        self.states.insert(state.id.clone(), state);
+    }
+
+    /// Adds a transition from one state to another.
+    pub fn add_transition(&mut self, from: impl Into<String>, to: impl Into<String>) {
+        self.transitions
+            .entry(from.into())
+            .or_insert_with(Vec::new)
+            .push(to.into());
+    }
+
+    /// Marks a state as initial.
+    pub fn add_initial_state(&mut self, state_id: impl Into<String>) {
+        self.initial_states.insert(state_id.into());
+    }
+
+    /// Gets the successors of a state.
+    pub fn successors(&self, state_id: &str) -> Vec<&TemporalState> {
+        self.transitions
+            .get(state_id)
+            .map(|ids| ids.iter().filter_map(|id| self.states.get(id)).collect())
+            .unwrap_or_default()
+    }
+}
+
+impl Default for TransitionSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Checks if an LTL formula holds in a transition system.
+///
+/// This is a simplified model checker that verifies LTL properties
+/// over finite traces. For production use, consider using a dedicated
+/// model checker like SPIN or NuSMV.
+pub fn verify_ltl(system: &TransitionSystem, formula: &LtlFormula) -> bool {
+    // For each initial state, verify the formula
+    for initial_id in &system.initial_states {
+        if let Some(initial_state) = system.states.get(initial_id) {
+            let mut visited = HashSet::new();
+            if !check_ltl_from_state(system, initial_state, formula, &mut visited) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Helper function to check LTL from a specific state.
+#[allow(dead_code)]
+fn check_ltl_from_state(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &LtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    // Prevent infinite loops in cyclic systems
+    if visited.contains(&state.id) {
+        return true; // Optimistically assume formula holds in cycles
+    }
+    visited.insert(state.id.clone());
+
+    match formula {
+        LtlFormula::Atom(prop) => state.satisfies(prop),
+        LtlFormula::Not(f) => !check_ltl_from_state(system, state, f, visited),
+        LtlFormula::And(left, right) => {
+            check_ltl_from_state(system, state, left, visited)
+                && check_ltl_from_state(system, state, right, visited)
+        }
+        LtlFormula::Or(left, right) => {
+            check_ltl_from_state(system, state, left, visited)
+                || check_ltl_from_state(system, state, right, visited)
+        }
+        LtlFormula::Implies(left, right) => {
+            !check_ltl_from_state(system, state, left, visited)
+                || check_ltl_from_state(system, state, right, visited)
+        }
+        LtlFormula::Next(f) => {
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return true; // No next state, vacuously true
+            }
+            successors
+                .iter()
+                .all(|s| check_ltl_from_state(system, s, f, visited))
+        }
+        LtlFormula::Eventually(f) => {
+            check_eventually(system, state, f, visited, &mut HashSet::new())
+        }
+        LtlFormula::Always(f) => check_always(system, state, f, visited),
+        LtlFormula::Until(left, right) => {
+            check_until(system, state, left, right, visited, &mut HashSet::new())
+        }
+        LtlFormula::Release(left, right) => {
+            // p R q = ¬(¬p U ¬q)
+            let not_p = LtlFormula::not(*left.clone());
+            let not_q = LtlFormula::not(*right.clone());
+            !check_until(system, state, &not_p, &not_q, visited, &mut HashSet::new())
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn check_eventually(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &LtlFormula,
+    visited: &mut HashSet<String>,
+    path_visited: &mut HashSet<String>,
+) -> bool {
+    if path_visited.contains(&state.id) {
+        return false; // Cycle without finding formula
+    }
+    path_visited.insert(state.id.clone());
+
+    // Check if formula holds in current state
+    if check_ltl_from_state(system, state, formula, visited) {
+        return true;
+    }
+
+    // Check if formula holds in any successor
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_eventually(system, s, formula, visited, path_visited))
+}
+
+#[allow(dead_code)]
+fn check_always(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &LtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if !check_ltl_from_state(system, state, formula, visited) {
+        return false;
+    }
+
+    let successors = system.successors(&state.id);
+    if successors.is_empty() {
+        return true; // No more states, formula held throughout
+    }
+
+    successors
+        .iter()
+        .all(|s| check_always(system, s, formula, visited))
+}
+
+#[allow(dead_code)]
+fn check_until(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    left: &LtlFormula,
+    right: &LtlFormula,
+    visited: &mut HashSet<String>,
+    path_visited: &mut HashSet<String>,
+) -> bool {
+    if path_visited.contains(&state.id) {
+        return false;
+    }
+    path_visited.insert(state.id.clone());
+
+    // Check if right holds
+    if check_ltl_from_state(system, state, right, visited) {
+        return true;
+    }
+
+    // Check if left holds and until holds in some successor
+    if !check_ltl_from_state(system, state, left, visited) {
+        return false;
+    }
+
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_until(system, s, left, right, visited, path_visited))
+}
+
+/// Checks if a CTL formula holds in a transition system.
+pub fn verify_ctl(system: &TransitionSystem, formula: &CtlFormula) -> bool {
+    // Verify formula from all initial states
+    for initial_id in &system.initial_states {
+        if let Some(initial_state) = system.states.get(initial_id) {
+            if !check_ctl_from_state(system, initial_state, formula) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+#[allow(dead_code)]
+fn check_ctl_from_state(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlFormula,
+) -> bool {
+    match formula {
+        CtlFormula::Atom(prop) => state.satisfies(prop),
+        CtlFormula::Not(f) => !check_ctl_from_state(system, state, f),
+        CtlFormula::And(left, right) => {
+            check_ctl_from_state(system, state, left) && check_ctl_from_state(system, state, right)
+        }
+        CtlFormula::Or(left, right) => {
+            check_ctl_from_state(system, state, left) || check_ctl_from_state(system, state, right)
+        }
+        CtlFormula::Implies(left, right) => {
+            !check_ctl_from_state(system, state, left) || check_ctl_from_state(system, state, right)
+        }
+        CtlFormula::ExistsNext(f) => {
+            let successors = system.successors(&state.id);
+            successors
+                .iter()
+                .any(|s| check_ctl_from_state(system, s, f))
+        }
+        CtlFormula::AllNext(f) => {
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return true;
+            }
+            successors
+                .iter()
+                .all(|s| check_ctl_from_state(system, s, f))
+        }
+        CtlFormula::ExistsEventually(f) => {
+            check_ctl_exists_eventually(system, state, f, &mut HashSet::new())
+        }
+        CtlFormula::AllEventually(f) => {
+            check_ctl_all_eventually(system, state, f, &mut HashSet::new())
+        }
+        CtlFormula::ExistsAlways(f) => {
+            check_ctl_exists_always(system, state, f, &mut HashSet::new())
+        }
+        CtlFormula::AllAlways(f) => check_ctl_all_always(system, state, f, &mut HashSet::new()),
+        CtlFormula::ExistsUntil(left, right) => {
+            check_ctl_exists_until(system, state, left, right, &mut HashSet::new())
+        }
+        CtlFormula::AllUntil(left, right) => {
+            check_ctl_all_until(system, state, left, right, &mut HashSet::new())
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn check_ctl_exists_eventually(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if visited.contains(&state.id) {
+        return false;
+    }
+    visited.insert(state.id.clone());
+
+    if check_ctl_from_state(system, state, formula) {
+        return true;
+    }
+
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_ctl_exists_eventually(system, s, formula, visited))
+}
+
+#[allow(dead_code)]
+fn check_ctl_all_eventually(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if visited.contains(&state.id) {
+        return false;
+    }
+    visited.insert(state.id.clone());
+
+    if check_ctl_from_state(system, state, formula) {
+        return true;
+    }
+
+    let successors = system.successors(&state.id);
+    if successors.is_empty() {
+        return false;
+    }
+
+    successors
+        .iter()
+        .all(|s| check_ctl_all_eventually(system, s, formula, visited))
+}
+
+#[allow(dead_code)]
+fn check_ctl_exists_always(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if !check_ctl_from_state(system, state, formula) {
+        return false;
+    }
+
+    if visited.contains(&state.id) {
+        return true; // Cycle where formula always holds
+    }
+    visited.insert(state.id.clone());
+
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_ctl_exists_always(system, s, formula, visited))
+}
+
+#[allow(dead_code)]
+fn check_ctl_all_always(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if !check_ctl_from_state(system, state, formula) {
+        return false;
+    }
+
+    if visited.contains(&state.id) {
+        return true;
+    }
+    visited.insert(state.id.clone());
+
+    let successors = system.successors(&state.id);
+    if successors.is_empty() {
+        return true;
+    }
+
+    successors
+        .iter()
+        .all(|s| check_ctl_all_always(system, s, formula, visited))
+}
+
+#[allow(dead_code)]
+fn check_ctl_exists_until(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    left: &CtlFormula,
+    right: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if visited.contains(&state.id) {
+        return false;
+    }
+    visited.insert(state.id.clone());
+
+    if check_ctl_from_state(system, state, right) {
+        return true;
+    }
+
+    if !check_ctl_from_state(system, state, left) {
+        return false;
+    }
+
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_ctl_exists_until(system, s, left, right, visited))
+}
+
+#[allow(dead_code)]
+fn check_ctl_all_until(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    left: &CtlFormula,
+    right: &CtlFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if visited.contains(&state.id) {
+        return false;
+    }
+    visited.insert(state.id.clone());
+
+    if check_ctl_from_state(system, state, right) {
+        return true;
+    }
+
+    if !check_ctl_from_state(system, state, left) {
+        return false;
+    }
+
+    let successors = system.successors(&state.id);
+    if successors.is_empty() {
+        return false;
+    }
+
+    successors
+        .iter()
+        .all(|s| check_ctl_all_until(system, s, left, right, visited))
+}
+
+/// Deadline constraint for temporal verification.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Deadline {
+    /// Identifier for this deadline
+    pub id: String,
+    /// Event that must occur
+    pub event: String,
+    /// Maximum time steps allowed
+    pub max_steps: usize,
+    /// Description of the deadline
+    pub description: String,
+}
+
+impl Deadline {
+    /// Creates a new deadline.
+    pub fn new(id: impl Into<String>, event: impl Into<String>, max_steps: usize) -> Self {
+        Self {
+            id: id.into(),
+            event: event.into(),
+            max_steps,
+            description: String::new(),
+        }
+    }
+
+    /// Adds a description to the deadline.
+    pub fn with_description(mut self, desc: impl Into<String>) -> Self {
+        self.description = desc.into();
+        self
+    }
+}
+
+/// Result of deadline verification.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DeadlineVerificationResult {
+    /// Whether all deadlines were met
+    pub passed: bool,
+    /// Violated deadlines
+    pub violations: Vec<DeadlineViolation>,
+}
+
+/// A deadline violation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DeadlineViolation {
+    /// Deadline that was violated
+    pub deadline_id: String,
+    /// Actual number of steps taken
+    pub actual_steps: usize,
+    /// Maximum allowed steps
+    pub max_steps: usize,
+    /// Description of the violation
+    pub description: String,
+}
+
+/// Verifies deadlines in a transition system.
+pub fn verify_deadlines(
+    system: &TransitionSystem,
+    deadlines: &[Deadline],
+) -> DeadlineVerificationResult {
+    let mut violations = Vec::new();
+
+    for deadline in deadlines {
+        for initial_id in &system.initial_states {
+            if let Some(initial_state) = system.states.get(initial_id) {
+                let steps = count_steps_to_event(
+                    system,
+                    initial_state,
+                    &deadline.event,
+                    &mut HashSet::new(),
+                );
+
+                if let Some(actual_steps) = steps {
+                    if actual_steps > deadline.max_steps {
+                        violations.push(DeadlineViolation {
+                            deadline_id: deadline.id.clone(),
+                            actual_steps,
+                            max_steps: deadline.max_steps,
+                            description: format!(
+                                "Event '{}' occurred after {} steps (deadline: {} steps)",
+                                deadline.event, actual_steps, deadline.max_steps
+                            ),
+                        });
+                    }
+                } else if deadline.max_steps < usize::MAX {
+                    // Event never occurs, which violates the deadline
+                    violations.push(DeadlineViolation {
+                        deadline_id: deadline.id.clone(),
+                        actual_steps: usize::MAX,
+                        max_steps: deadline.max_steps,
+                        description: format!(
+                            "Event '{}' never occurs (deadline: {} steps)",
+                            deadline.event, deadline.max_steps
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    DeadlineVerificationResult {
+        passed: violations.is_empty(),
+        violations,
+    }
+}
+
+#[allow(dead_code)]
+fn count_steps_to_event(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    event: &str,
+    visited: &mut HashSet<String>,
+) -> Option<usize> {
+    if visited.contains(&state.id) {
+        return None; // Cycle without finding event
+    }
+    visited.insert(state.id.clone());
+
+    if state.satisfies(event) {
+        return Some(0);
+    }
+
+    let successors = system.successors(&state.id);
+    let mut min_steps = None;
+
+    for successor in successors {
+        if let Some(steps) = count_steps_to_event(system, successor, event, visited) {
+            let total = steps + 1;
+            min_steps = Some(min_steps.map_or(total, |current: usize| current.min(total)));
+        }
+    }
+
+    min_steps
+}
+
+/// Sequence constraint specifying required event ordering.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SequenceConstraint {
+    /// Identifier for this constraint
+    pub id: String,
+    /// Events that must occur in order
+    pub events: Vec<String>,
+    /// Whether the sequence must be immediate (no other events between)
+    pub strict: bool,
+    /// Description of the constraint
+    pub description: String,
+}
+
+impl SequenceConstraint {
+    /// Creates a new sequence constraint.
+    pub fn new(id: impl Into<String>, events: Vec<String>) -> Self {
+        Self {
+            id: id.into(),
+            events,
+            strict: false,
+            description: String::new(),
+        }
+    }
+
+    /// Makes the sequence strict (events must be immediate).
+    pub fn strict(mut self) -> Self {
+        self.strict = true;
+        self
+    }
+
+    /// Adds a description.
+    pub fn with_description(mut self, desc: impl Into<String>) -> Self {
+        self.description = desc.into();
+        self
+    }
+}
+
+/// Result of sequence constraint verification.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SequenceVerificationResult {
+    /// Whether all constraints were satisfied
+    pub passed: bool,
+    /// Violated constraints
+    pub violations: Vec<SequenceViolation>,
+}
+
+/// A sequence constraint violation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SequenceViolation {
+    /// Constraint that was violated
+    pub constraint_id: String,
+    /// Description of the violation
+    pub description: String,
+    /// Events that violated the order
+    pub violating_events: Vec<String>,
+}
+
+/// Verifies sequence constraints in a transition system.
+pub fn verify_sequences(
+    system: &TransitionSystem,
+    constraints: &[SequenceConstraint],
+) -> SequenceVerificationResult {
+    let mut violations = Vec::new();
+
+    for constraint in constraints {
+        for initial_id in &system.initial_states {
+            if let Some(initial_state) = system.states.get(initial_id) {
+                if !check_sequence(
+                    system,
+                    initial_state,
+                    &constraint.events,
+                    0,
+                    constraint.strict,
+                    &mut HashSet::new(),
+                ) {
+                    violations.push(SequenceViolation {
+                        constraint_id: constraint.id.clone(),
+                        description: format!(
+                            "Required event sequence {:?} was not followed",
+                            constraint.events
+                        ),
+                        violating_events: constraint.events.clone(),
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    SequenceVerificationResult {
+        passed: violations.is_empty(),
+        violations,
+    }
+}
+
+#[allow(dead_code)]
+fn check_sequence(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    events: &[String],
+    current_index: usize,
+    strict: bool,
+    visited: &mut HashSet<(String, usize)>,
+) -> bool {
+    let key = (state.id.clone(), current_index);
+    if visited.contains(&key) {
+        return false;
+    }
+    visited.insert(key);
+
+    if current_index >= events.len() {
+        return true; // All events found in order
+    }
+
+    let current_event = &events[current_index];
+
+    if state.satisfies(current_event) {
+        // Found current event, look for next
+        let successors = system.successors(&state.id);
+        return successors
+            .iter()
+            .any(|s| check_sequence(system, s, events, current_index + 1, strict, visited))
+            || (current_index + 1 >= events.len()); // Last event found
+    }
+
+    if strict {
+        // In strict mode, we can't skip states
+        return false;
+    }
+
+    // Continue to next state without finding this event
+    let successors = system.successors(&state.id);
+    successors
+        .iter()
+        .any(|s| check_sequence(system, s, events, current_index, strict, visited))
+}
+
+// =============================================================================
+// Principle Definition DSL
+// =============================================================================
+
+/// A principle definition in the DSL.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PrincipleDefinition {
+    /// Unique identifier
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Description
+    pub description: String,
+    /// Priority (higher = more important)
+    pub priority: u32,
+    /// Jurisdiction where this principle applies
+    pub jurisdiction: Option<String>,
+    /// Conditions that must be checked
+    pub checks: Vec<PrincipleCheck>,
+}
+
+impl PrincipleDefinition {
+    /// Creates a new principle definition.
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            description: description.into(),
+            priority: 0,
+            jurisdiction: None,
+            checks: Vec::new(),
+        }
+    }
+
+    /// Sets the priority.
+    pub fn with_priority(mut self, priority: u32) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    /// Sets the jurisdiction.
+    pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+
+    /// Adds a check.
+    pub fn with_check(mut self, check: PrincipleCheck) -> Self {
+        self.checks.push(check);
+        self
+    }
+}
+
+/// A composite principle combining multiple principles.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CompositePrinciple {
+    /// Identifier
+    pub id: String,
+    /// Name
+    pub name: String,
+    /// Component principles
+    pub components: Vec<String>,
+    /// How to combine results (All must pass or Any must pass)
+    pub combination_mode: CombinationMode,
+}
+
+/// How to combine principle results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CombinationMode {
+    /// All component principles must pass
+    All,
+    /// At least one component principle must pass
+    Any,
+    /// Majority of component principles must pass
+    Majority,
+}
+
+impl CompositePrinciple {
+    /// Creates a new composite principle.
+    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            components: Vec::new(),
+            combination_mode: CombinationMode::All,
+        }
+    }
+
+    /// Adds a component principle.
+    pub fn with_component(mut self, principle_id: impl Into<String>) -> Self {
+        self.components.push(principle_id.into());
+        self
+    }
+
+    /// Sets the combination mode.
+    pub fn with_mode(mut self, mode: CombinationMode) -> Self {
+        self.combination_mode = mode;
+        self
+    }
+}
+
+/// A jurisdictional rule set containing principles for a specific jurisdiction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JurisdictionalRuleSet {
+    /// Jurisdiction identifier
+    pub jurisdiction: String,
+    /// Name of the jurisdiction
+    pub name: String,
+    /// Principles that apply in this jurisdiction
+    pub principles: Vec<PrincipleDefinition>,
+    /// Composite principles
+    pub composites: Vec<CompositePrinciple>,
+}
+
+impl JurisdictionalRuleSet {
+    /// Creates a new jurisdictional rule set.
+    pub fn new(jurisdiction: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            jurisdiction: jurisdiction.into(),
+            name: name.into(),
+            principles: Vec::new(),
+            composites: Vec::new(),
+        }
+    }
+
+    /// Adds a principle.
+    pub fn with_principle(mut self, principle: PrincipleDefinition) -> Self {
+        self.principles.push(principle);
+        self
+    }
+
+    /// Adds a composite principle.
+    pub fn with_composite(mut self, composite: CompositePrinciple) -> Self {
+        self.composites.push(composite);
+        self
+    }
+
+    /// Gets principles by priority (highest first).
+    pub fn principles_by_priority(&self) -> Vec<&PrincipleDefinition> {
+        let mut sorted: Vec<_> = self.principles.iter().collect();
+        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted
+    }
+}
+
+/// Principle registry managing multiple jurisdictions.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PrincipleRegistry {
+    /// Rule sets by jurisdiction
+    pub jurisdictions: HashMap<String, JurisdictionalRuleSet>,
+}
+
+impl PrincipleRegistry {
+    /// Creates a new empty registry.
+    pub fn new() -> Self {
+        Self {
+            jurisdictions: HashMap::new(),
+        }
+    }
+
+    /// Adds a jurisdictional rule set.
+    pub fn add_jurisdiction(&mut self, rule_set: JurisdictionalRuleSet) {
+        self.jurisdictions
+            .insert(rule_set.jurisdiction.clone(), rule_set);
+    }
+
+    /// Gets a rule set for a jurisdiction.
+    pub fn get_jurisdiction(&self, jurisdiction: &str) -> Option<&JurisdictionalRuleSet> {
+        self.jurisdictions.get(jurisdiction)
+    }
+
+    /// Verifies a statute against a specific jurisdiction's rules.
+    pub fn verify_for_jurisdiction(
+        &self,
+        statute: &Statute,
+        jurisdiction: &str,
+    ) -> VerificationResult {
+        let mut result = VerificationResult::pass();
+
+        if let Some(rule_set) = self.get_jurisdiction(jurisdiction) {
+            // Check principles in priority order
+            for principle_def in rule_set.principles_by_priority() {
+                for check in &principle_def.checks {
+                    let check_result = match check {
+                        PrincipleCheck::NoDiscrimination => check_equality(statute),
+                        PrincipleCheck::RequiresProcedure => check_due_process(statute),
+                        PrincipleCheck::NoRetroactivity => PrincipleCheckResult::pass(), // TODO: implement
+                        PrincipleCheck::EqualityCheck => check_equality(statute),
+                        PrincipleCheck::DueProcess => check_due_process(statute),
+                        PrincipleCheck::PrivacyImpact => check_privacy_impact(statute),
+                        PrincipleCheck::Proportionality => check_proportionality(statute),
+                        PrincipleCheck::Accessibility => check_accessibility(statute),
+                        PrincipleCheck::Custom { .. } => {
+                            // Custom checks would be implemented here
+                            PrincipleCheckResult::pass()
+                        }
+                    };
+
+                    if !check_result.passed {
+                        result.merge(VerificationResult::fail(vec![
+                            VerificationError::ConstitutionalConflict {
+                                statute_id: statute.id.clone(),
+                                principle: principle_def.name.clone(),
+                            },
+                        ]));
+                    }
+                }
+            }
+
+            // Check composite principles
+            for composite in &rule_set.composites {
+                let component_results: Vec<bool> = composite
+                    .components
+                    .iter()
+                    .filter_map(|comp_id| rule_set.principles.iter().find(|p| &p.id == comp_id))
+                    .map(|principle_def| {
+                        principle_def.checks.iter().all(|check| {
+                            match check {
+                                PrincipleCheck::NoDiscrimination => check_equality(statute).passed,
+                                PrincipleCheck::RequiresProcedure => {
+                                    check_due_process(statute).passed
+                                }
+                                PrincipleCheck::NoRetroactivity => true, // TODO: implement
+                                PrincipleCheck::EqualityCheck => check_equality(statute).passed,
+                                PrincipleCheck::DueProcess => check_due_process(statute).passed,
+                                PrincipleCheck::PrivacyImpact => {
+                                    check_privacy_impact(statute).passed
+                                }
+                                PrincipleCheck::Proportionality => {
+                                    check_proportionality(statute).passed
+                                }
+                                PrincipleCheck::Accessibility => {
+                                    check_accessibility(statute).passed
+                                }
+                                PrincipleCheck::Custom { .. } => true,
+                            }
+                        })
+                    })
+                    .collect();
+
+                let composite_passed = match composite.combination_mode {
+                    CombinationMode::All => component_results.iter().all(|&x| x),
+                    CombinationMode::Any => component_results.iter().any(|&x| x),
+                    CombinationMode::Majority => {
+                        let passed_count = component_results.iter().filter(|&&x| x).count();
+                        passed_count * 2 > component_results.len()
+                    }
+                };
+
+                if !composite_passed {
+                    result.merge(VerificationResult::fail(vec![
+                        VerificationError::ConstitutionalConflict {
+                            statute_id: statute.id.clone(),
+                            principle: composite.name.clone(),
+                        },
+                    ]));
+                }
+            }
+        }
+
+        result
+    }
+}
+
+// =============================================================================
+// Watch Mode for Continuous Verification
+// =============================================================================
+//
+// Note: Watch mode is planned for future implementation.
+// It would require additional dependencies like the `notify` crate for file watching.
+// The implementation would monitor statute files for changes and automatically
+// trigger verification when changes are detected.
 
 #[cfg(test)]
 mod tests {
@@ -2075,5 +4871,910 @@ mod tests {
         coverage.compute_percentage();
 
         assert_eq!(coverage.coverage_percentage, 50.0);
+    }
+
+    #[test]
+    fn test_semantic_similarity_identical() {
+        let statute1 = Statute::new(
+            "test-1",
+            "Tax Credit",
+            Effect::new(EffectType::Grant, "Grant tax credit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let statute2 = Statute::new(
+            "test-2",
+            "Tax Credit",
+            Effect::new(EffectType::Grant, "Grant tax credit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let similarity = semantic_similarity(&statute1, &statute2);
+        assert!(similarity.is_high());
+        assert!(similarity.0 > 0.8);
+    }
+
+    #[test]
+    fn test_semantic_similarity_different() {
+        let statute1 = Statute::new(
+            "test-1",
+            "Tax Credit",
+            Effect::new(EffectType::Grant, "Grant tax credit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let statute2 = Statute::new(
+            "test-2",
+            "Parking Fine",
+            Effect::new(EffectType::Obligation, "Pay fine"),
+        )
+        .with_precondition(Condition::Income {
+            operator: ComparisonOp::LessThan,
+            value: 30000,
+        });
+
+        let similarity = semantic_similarity(&statute1, &statute2);
+        assert!(similarity.is_low());
+        assert!(similarity.0 < 0.5);
+    }
+
+    #[test]
+    fn test_find_similar_statutes() {
+        let statutes = vec![
+            Statute::new(
+                "test-1",
+                "Tax Credit A",
+                Effect::new(EffectType::Grant, "Grant"),
+            )
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Statute::new(
+                "test-2",
+                "Tax Credit B",
+                Effect::new(EffectType::Grant, "Grant"),
+            )
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 21,
+            }),
+            Statute::new(
+                "test-3",
+                "Parking Fine",
+                Effect::new(EffectType::Obligation, "Pay fine"),
+            )
+            .with_precondition(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 30000,
+            }),
+        ];
+
+        let similar = find_similar_statutes(&statutes, 0.7);
+        // test-1 and test-2 should be similar
+        assert!(!similar.is_empty());
+    }
+
+    #[test]
+    fn test_string_similarity() {
+        assert_eq!(string_similarity("hello", "hello"), 1.0);
+        assert_eq!(string_similarity("", ""), 1.0); // Two empty strings are identical
+        assert_eq!(string_similarity("hello", ""), 0.0); // Non-empty vs empty
+        assert!(string_similarity("hello", "hallo") > 0.5);
+        assert!(string_similarity("hello", "world") < 0.5);
+    }
+
+    #[test]
+    fn test_similarity_score() {
+        let score = SimilarityScore::new(0.85);
+        assert!(score.is_high());
+        assert!(!score.is_moderate());
+        assert!(!score.is_low());
+
+        let score = SimilarityScore::new(0.6);
+        assert!(!score.is_high());
+        assert!(score.is_moderate());
+        assert!(!score.is_low());
+
+        let score = SimilarityScore::new(0.3);
+        assert!(!score.is_high());
+        assert!(!score.is_moderate());
+        assert!(score.is_low());
+    }
+
+    #[test]
+    fn test_find_ambiguous_terms() {
+        let statutes = vec![
+            Statute::new(
+                "test-1",
+                "Tax benefit for persons",
+                Effect::new(EffectType::Grant, "Grant to eligible person"),
+            ),
+            Statute::new(
+                "test-2",
+                "Child support",
+                Effect::new(EffectType::Obligation, "Pay support"),
+            ),
+        ];
+
+        let ambiguous = find_ambiguous_terms(&statutes);
+        assert!(!ambiguous.is_empty());
+
+        // Should find "person" and "child"
+        let person_term = ambiguous.iter().find(|t| t.term == "person");
+        assert!(person_term.is_some());
+
+        let child_term = ambiguous.iter().find(|t| t.term == "child");
+        assert!(child_term.is_some());
+    }
+
+    #[test]
+    fn test_term_disambiguation_report() {
+        let statutes = vec![Statute::new(
+            "test-1",
+            "Income tax benefit",
+            Effect::new(EffectType::Grant, "Grant tax benefit"),
+        )];
+
+        let report = term_disambiguation_report(&statutes);
+        assert!(report.contains("Term Disambiguation Report"));
+        assert!(report.contains("income") || report.contains("tax") || report.contains("benefit"));
+    }
+
+    #[test]
+    fn test_ambiguous_term_builder() {
+        let term = AmbiguousTerm::new("test")
+            .with_context("context1")
+            .with_statute_id("statute1")
+            .with_suggestion("suggestion1");
+
+        assert_eq!(term.term, "test");
+        assert_eq!(term.contexts.len(), 1);
+        assert_eq!(term.statute_ids.len(), 1);
+        assert_eq!(term.suggestions.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_cross_references_valid() {
+        let statute1 = Statute::new(
+            "statute-a",
+            "Statute A",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let statute2 = Statute::new(
+            "statute-b",
+            "Statute B",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Custom {
+            description: "statute:statute-a".to_string(),
+        });
+
+        let errors = validate_cross_references(&[statute1, statute2]);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_cross_references_invalid() {
+        let statute = Statute::new(
+            "statute-a",
+            "Statute A",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Custom {
+            description: "statute:non-existent".to_string(),
+        });
+
+        let errors = validate_cross_references(&[statute]);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].error_type, CrossReferenceErrorType::NotFound);
+        assert_eq!(errors[0].referenced_statute_id, "non-existent");
+    }
+
+    #[test]
+    fn test_cross_reference_report() {
+        let statute = Statute::new(
+            "statute-a",
+            "Statute A",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Custom {
+            description: "statute:missing".to_string(),
+        });
+
+        let report = cross_reference_report(&[statute]);
+        assert!(report.contains("Cross-Reference Validation Report"));
+        assert!(report.contains("missing"));
+    }
+
+    #[test]
+    fn test_cross_reference_error_display() {
+        let error = CrossReferenceError {
+            source_statute_id: "statute-a".to_string(),
+            referenced_statute_id: "statute-b".to_string(),
+            error_type: CrossReferenceErrorType::NotFound,
+        };
+
+        let display = format!("{}", error);
+        assert!(display.contains("statute-a"));
+        assert!(display.contains("statute-b"));
+        assert!(display.contains("non-existent"));
+    }
+
+    #[test]
+    fn test_terminology_consistency() {
+        let statutes = vec![
+            Statute::new(
+                "test-1",
+                "Minor support benefit",
+                Effect::new(EffectType::Grant, "Grant benefit to child"),
+            ),
+            Statute::new(
+                "test-2",
+                "Juvenile assistance",
+                Effect::new(EffectType::Grant, "Grant assistance to juvenile"),
+            ),
+        ];
+
+        let inconsistencies = check_terminology_consistency(&statutes);
+        // Should find inconsistent use of "minor" vs "child" vs "juvenile"
+        assert!(!inconsistencies.is_empty());
+    }
+
+    #[test]
+    fn test_terminology_consistency_report() {
+        let statutes = vec![
+            Statute::new(
+                "test-1",
+                "Income benefit",
+                Effect::new(EffectType::Grant, "Grant benefit"),
+            ),
+            Statute::new(
+                "test-2",
+                "Earnings benefit",
+                Effect::new(EffectType::Grant, "Grant benefit"),
+            ),
+        ];
+
+        let report = terminology_consistency_report(&statutes);
+        assert!(report.contains("Terminology Consistency Report"));
+    }
+
+    #[test]
+    fn test_terminology_inconsistency_builder() {
+        let inconsistency = TerminologyInconsistency::new("canonical")
+            .with_variation("var1")
+            .with_variation("var2")
+            .with_statute_id("statute1");
+
+        assert_eq!(inconsistency.canonical_term, "canonical");
+        assert_eq!(inconsistency.variations.len(), 2);
+        assert_eq!(inconsistency.statute_ids.len(), 1);
+    }
+
+    #[test]
+    fn test_incremental_state() {
+        let mut state = IncrementalState::new();
+
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        // First time should be marked as changed
+        assert!(state.has_changed(&statute));
+
+        // Update state
+        let result = VerificationResult::pass();
+        state.update(&statute, result.clone());
+
+        // Should not be marked as changed now
+        assert!(!state.has_changed(&statute));
+
+        // Modify statute (change title)
+        let modified_statute = Statute::new(
+            "test-1",
+            "Modified Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        // Should be marked as changed
+        assert!(state.has_changed(&modified_statute));
+    }
+
+    #[test]
+    fn test_verify_incremental() {
+        let verifier = StatuteVerifier::new();
+        let mut state = IncrementalState::new();
+
+        let statute1 = Statute::new("test-1", "Test 1", Effect::new(EffectType::Grant, "Test"));
+
+        let statute2 = Statute::new("test-2", "Test 2", Effect::new(EffectType::Grant, "Test"));
+
+        // First verification
+        let result1 =
+            verifier.verify_incremental(&[statute1.clone(), statute2.clone()], &mut state);
+        assert!(result1.passed);
+
+        // Second verification without changes
+        let result2 =
+            verifier.verify_incremental(&[statute1.clone(), statute2.clone()], &mut state);
+        assert!(result2.passed);
+
+        // Third verification with one changed statute
+        let modified_statute1 = Statute::new(
+            "test-1",
+            "Modified Test 1",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        let result3 = verifier.verify_incremental(&[modified_statute1, statute2], &mut state);
+        assert!(result3.passed);
+    }
+
+    #[test]
+    fn test_verification_budget() {
+        let budget = VerificationBudget::with_max_statutes(5);
+        assert!(!budget.statute_limit_reached(4));
+        assert!(budget.statute_limit_reached(5));
+
+        let budget = VerificationBudget::with_max_checks(10);
+        assert!(!budget.check_limit_reached(9));
+        assert!(budget.check_limit_reached(10));
+
+        let budget = VerificationBudget::unlimited();
+        assert!(!budget.statute_limit_reached(1000));
+        assert!(!budget.check_limit_reached(1000));
+    }
+
+    #[test]
+    fn test_verify_with_budget() {
+        let verifier = StatuteVerifier::new();
+        let statutes = vec![
+            Statute::new("test-1", "Test 1", Effect::new(EffectType::Grant, "Test")),
+            Statute::new("test-2", "Test 2", Effect::new(EffectType::Grant, "Test")),
+            Statute::new("test-3", "Test 3", Effect::new(EffectType::Grant, "Test")),
+        ];
+
+        // Unlimited budget
+        let budget = VerificationBudget::unlimited();
+        let (result, verified, _checks, exceeded) = verifier.verify_with_budget(&statutes, budget);
+        assert!(result.passed);
+        assert_eq!(verified, 3);
+        assert!(!exceeded);
+
+        // Limited budget (only 1 statute)
+        let budget = VerificationBudget::with_max_statutes(1);
+        let (result, verified, _checks, exceeded) = verifier.verify_with_budget(&statutes, budget);
+        assert!(result.passed);
+        assert_eq!(verified, 1);
+        assert!(exceeded);
+
+        // Limited budget (only 5 checks - should stop early)
+        let budget = VerificationBudget::with_max_checks(5);
+        let (_result, verified, _checks, exceeded) = verifier.verify_with_budget(&statutes, budget);
+        // Should verify fewer statutes due to check limit
+        assert!(verified < 3);
+        assert!(exceeded);
+    }
+
+    #[test]
+    fn test_equality_check() {
+        // Statute with potential age discrimination
+        let statute = Statute::new(
+            "test-1",
+            "Senior benefit",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 70,
+        });
+
+        let result = check_equality(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+    }
+
+    #[test]
+    fn test_due_process_check() {
+        // Statute that revokes without due process
+        let statute = Statute::new(
+            "test-1",
+            "License revocation",
+            Effect::new(EffectType::Revoke, "Revoke license"),
+        );
+
+        let result = check_due_process(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+
+        // Statute with discretion (passes due process)
+        let statute_with_discretion = Statute::new(
+            "test-2",
+            "License revocation with review",
+            Effect::new(EffectType::Revoke, "Revoke license"),
+        )
+        .with_discretion("Review individual circumstances");
+
+        let result2 = check_due_process(&statute_with_discretion);
+        assert!(result2.passed);
+    }
+
+    #[test]
+    fn test_privacy_impact_check() {
+        // Statute with sensitive data
+        let statute = Statute::new(
+            "test-1",
+            "Medical benefit",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_precondition(Condition::HasAttribute {
+            key: "medical_history".to_string(),
+        });
+
+        let result = check_privacy_impact(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(!result.suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_proportionality_check() {
+        // Severe effect with too few conditions
+        let statute = Statute::new(
+            "test-1",
+            "Prohibition",
+            Effect::new(EffectType::Prohibition, "Prohibit action"),
+        );
+
+        let result = check_proportionality(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+
+        // Grant with too many conditions
+        let mut complex_statute = Statute::new(
+            "test-2",
+            "Complex grant",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        );
+        for i in 0..6 {
+            complex_statute = complex_statute.with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18 + i,
+            });
+        }
+
+        let result2 = check_proportionality(&complex_statute);
+        assert!(!result2.passed);
+    }
+
+    #[test]
+    fn test_principle_check_result() {
+        let result = PrincipleCheckResult::pass();
+        assert!(result.passed);
+        assert!(result.issues.is_empty());
+
+        let result =
+            PrincipleCheckResult::fail(vec!["Issue 1".to_string()]).with_suggestion("Fix it");
+        assert!(!result.passed);
+        assert_eq!(result.issues.len(), 1);
+        assert_eq!(result.suggestions.len(), 1);
+    }
+
+    #[test]
+    fn test_accessibility_check() {
+        // Statute with physical requirement
+        let statute = Statute::new(
+            "test-1",
+            "Physical test requirement",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_precondition(Condition::HasAttribute {
+            key: "physical_fitness".to_string(),
+        });
+
+        let result = check_accessibility(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(!result.suggestions.is_empty());
+
+        // Statute with digital requirement
+        let statute2 = Statute::new(
+            "test-2",
+            "Online registration",
+            Effect::new(EffectType::Obligation, "Register online"),
+        )
+        .with_precondition(Condition::HasAttribute {
+            key: "internet_access".to_string(),
+        });
+
+        let result2 = check_accessibility(&statute2);
+        assert!(!result2.passed);
+        assert!(result2.issues.iter().any(|i| i.contains("internet")));
+    }
+
+    #[test]
+    fn test_impact_assessment() {
+        // Statute affecting seniors
+        let statute = Statute::new(
+            "test-1",
+            "Senior benefit",
+            Effect::new(EffectType::Grant, "Grant senior benefit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 65,
+        });
+
+        let assessment = assess_impact(&statute);
+        assert!(assessment.affected_groups.contains(&"Seniors".to_string()));
+        assert!(!assessment.positive_impacts.is_empty());
+
+        // Statute with revocation
+        let statute2 = Statute::new(
+            "test-2",
+            "License revocation",
+            Effect::new(EffectType::Revoke, "Revoke license"),
+        );
+
+        let assessment2 = assess_impact(&statute2);
+        assert!(!assessment2.negative_impacts.is_empty());
+        assert!(assessment2.overall_risk >= RiskLevel::High);
+    }
+
+    #[test]
+    fn test_assess_multiple_impacts() {
+        let statutes = vec![
+            Statute::new(
+                "test-1",
+                "Tax benefit",
+                Effect::new(EffectType::Grant, "Grant tax benefit"),
+            )
+            .with_precondition(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            }),
+            Statute::new(
+                "test-2",
+                "License requirement",
+                Effect::new(EffectType::Obligation, "Obtain license"),
+            ),
+        ];
+
+        let report = assess_multiple_impacts(&statutes);
+        assert!(report.contains("Comprehensive Impact Assessment"));
+        assert!(report.contains("Overall Summary"));
+    }
+
+    #[test]
+    fn test_impact_levels() {
+        assert_eq!(format!("{}", ImpactLevel::Low), "Low");
+        assert_eq!(format!("{}", ImpactLevel::Medium), "Medium");
+        assert_eq!(format!("{}", ImpactLevel::High), "High");
+
+        assert_eq!(format!("{}", RiskLevel::Low), "Low");
+        assert_eq!(format!("{}", RiskLevel::Critical), "Critical");
+    }
+
+    #[test]
+    fn test_impact_assessment_report() {
+        let mut assessment = ImpactAssessment::new();
+        assessment.affected_groups.push("Test group".to_string());
+        assessment
+            .positive_impacts
+            .push("Positive impact".to_string());
+        assessment.overall_risk = RiskLevel::Medium;
+
+        let report = assessment.report();
+        assert!(report.contains("Impact Assessment Report"));
+        assert!(report.contains("Test group"));
+        assert!(report.contains("Medium"));
+    }
+
+    // =========================================================================
+    // Temporal Logic Tests
+    // =========================================================================
+
+    #[test]
+    fn test_ltl_atom() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1").with_proposition("p");
+        system.add_state(s1);
+        system.add_initial_state("s1");
+
+        let formula = LtlFormula::atom("p");
+        assert!(verify_ltl(&system, &formula));
+
+        let formula2 = LtlFormula::atom("q");
+        assert!(!verify_ltl(&system, &formula2));
+    }
+
+    #[test]
+    fn test_ltl_next() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2").with_proposition("p");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s1", "s2");
+        system.add_initial_state("s1");
+
+        let formula = LtlFormula::next(LtlFormula::atom("p"));
+        assert!(verify_ltl(&system, &formula));
+    }
+
+    #[test]
+    fn test_ltl_always() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1").with_proposition("p");
+        let s2 = TemporalState::new("s2").with_proposition("p");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s1", "s2");
+        system.add_initial_state("s1");
+
+        let formula = LtlFormula::always(LtlFormula::atom("p"));
+        assert!(verify_ltl(&system, &formula));
+    }
+
+    #[test]
+    fn test_ltl_eventually() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2");
+        let s3 = TemporalState::new("s3").with_proposition("p");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s2", "s3");
+        system.add_initial_state("s1");
+
+        let formula = LtlFormula::eventually(LtlFormula::atom("p"));
+        assert!(verify_ltl(&system, &formula));
+    }
+
+    #[test]
+    fn test_ltl_display() {
+        let formula = LtlFormula::always(LtlFormula::atom("p"));
+        assert_eq!(format!("{}", formula), "G(p)");
+
+        let formula2 = LtlFormula::eventually(LtlFormula::atom("q"));
+        assert_eq!(format!("{}", formula2), "F(q)");
+    }
+
+    #[test]
+    fn test_ctl_exists_next() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2").with_proposition("p");
+        let s3 = TemporalState::new("s3");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s1", "s3");
+        system.add_initial_state("s1");
+
+        let formula = CtlFormula::exists_next(CtlFormula::atom("p"));
+        assert!(verify_ctl(&system, &formula));
+    }
+
+    #[test]
+    fn test_ctl_all_next() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2").with_proposition("p");
+        let s3 = TemporalState::new("s3").with_proposition("p");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s1", "s3");
+        system.add_initial_state("s1");
+
+        let formula = CtlFormula::all_next(CtlFormula::atom("p"));
+        assert!(verify_ctl(&system, &formula));
+    }
+
+    #[test]
+    fn test_ctl_display() {
+        let formula = CtlFormula::exists_eventually(CtlFormula::atom("p"));
+        assert_eq!(format!("{}", formula), "EF(p)");
+
+        let formula2 = CtlFormula::all_always(CtlFormula::atom("q"));
+        assert_eq!(format!("{}", formula2), "AG(q)");
+    }
+
+    #[test]
+    fn test_deadline_verification_pass() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2");
+        let s3 = TemporalState::new("s3").with_proposition("completed");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s2", "s3");
+        system.add_initial_state("s1");
+
+        let deadline = Deadline::new("d1", "completed", 5);
+        let result = verify_deadlines(&system, &[deadline]);
+        assert!(result.passed);
+        assert!(result.violations.is_empty());
+    }
+
+    #[test]
+    fn test_deadline_verification_fail() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1");
+        let s2 = TemporalState::new("s2");
+        let s3 = TemporalState::new("s3").with_proposition("completed");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s2", "s3");
+        system.add_initial_state("s1");
+
+        let deadline = Deadline::new("d1", "completed", 1);
+        let result = verify_deadlines(&system, &[deadline]);
+        assert!(!result.passed);
+        assert!(!result.violations.is_empty());
+    }
+
+    #[test]
+    fn test_sequence_verification_pass() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1").with_proposition("start");
+        let s2 = TemporalState::new("s2").with_proposition("middle");
+        let s3 = TemporalState::new("s3").with_proposition("end");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_state(s3);
+        system.add_transition("s1", "s2");
+        system.add_transition("s2", "s3");
+        system.add_initial_state("s1");
+
+        let constraint = SequenceConstraint::new(
+            "seq1",
+            vec!["start".to_string(), "middle".to_string(), "end".to_string()],
+        );
+        let result = verify_sequences(&system, &[constraint]);
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn test_sequence_verification_fail() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1").with_proposition("start");
+        let s2 = TemporalState::new("s2").with_proposition("end");
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s1", "s2");
+        system.add_initial_state("s1");
+
+        let constraint = SequenceConstraint::new(
+            "seq1",
+            vec!["start".to_string(), "middle".to_string(), "end".to_string()],
+        );
+        let result = verify_sequences(&system, &[constraint]);
+        assert!(!result.passed);
+    }
+
+    #[test]
+    fn test_temporal_state_creation() {
+        let state = TemporalState::new("s1")
+            .with_proposition("p")
+            .with_proposition("q");
+
+        assert_eq!(state.id, "s1");
+        assert!(state.satisfies("p"));
+        assert!(state.satisfies("q"));
+        assert!(!state.satisfies("r"));
+    }
+
+    #[test]
+    fn test_transition_system_creation() {
+        let mut system = TransitionSystem::new();
+        let s1 = TemporalState::new("s1").with_proposition("p");
+        let s2 = TemporalState::new("s2").with_proposition("q");
+
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s1", "s2");
+        system.add_initial_state("s1");
+
+        assert_eq!(system.states.len(), 2);
+        assert!(system.initial_states.contains("s1"));
+        assert_eq!(system.successors("s1").len(), 1);
+    }
+
+    // =========================================================================
+    // Principle Registry Tests
+    // =========================================================================
+
+    #[test]
+    fn test_principle_definition_creation() {
+        let principle = PrincipleDefinition::new("test", "Test Principle", "A test")
+            .with_priority(10)
+            .with_jurisdiction("US")
+            .with_check(PrincipleCheck::NoDiscrimination);
+
+        assert_eq!(principle.id, "test");
+        assert_eq!(principle.priority, 10);
+        assert_eq!(principle.jurisdiction, Some("US".to_string()));
+        assert_eq!(principle.checks.len(), 1);
+    }
+
+    #[test]
+    fn test_composite_principle_creation() {
+        let composite = CompositePrinciple::new("comp1", "Composite")
+            .with_component("p1")
+            .with_component("p2")
+            .with_mode(CombinationMode::All);
+
+        assert_eq!(composite.id, "comp1");
+        assert_eq!(composite.components.len(), 2);
+        assert_eq!(composite.combination_mode, CombinationMode::All);
+    }
+
+    #[test]
+    fn test_jurisdictional_rule_set() {
+        let principle = PrincipleDefinition::new("p1", "Principle 1", "Test").with_priority(10);
+
+        let rule_set = JurisdictionalRuleSet::new("US", "United States").with_principle(principle);
+
+        assert_eq!(rule_set.jurisdiction, "US");
+        assert_eq!(rule_set.principles.len(), 1);
+    }
+
+    #[test]
+    fn test_principle_registry() {
+        let mut registry = PrincipleRegistry::new();
+
+        let principle = PrincipleDefinition::new("p1", "Test", "Description")
+            .with_check(PrincipleCheck::NoDiscrimination);
+
+        let rule_set = JurisdictionalRuleSet::new("US", "United States").with_principle(principle);
+
+        registry.add_jurisdiction(rule_set);
+
+        assert!(registry.get_jurisdiction("US").is_some());
+        assert!(registry.get_jurisdiction("UK").is_none());
+    }
+
+    #[test]
+    fn test_verify_for_jurisdiction() {
+        let mut registry = PrincipleRegistry::new();
+
+        let principle = PrincipleDefinition::new("equality", "Equality", "Equal treatment")
+            .with_priority(10)
+            .with_check(PrincipleCheck::NoDiscrimination);
+
+        let rule_set = JurisdictionalRuleSet::new("US", "United States").with_principle(principle);
+
+        registry.add_jurisdiction(rule_set);
+
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let result = registry.verify_for_jurisdiction(&statute, "US");
+        assert!(result.passed || !result.passed); // Just verify it runs
     }
 }

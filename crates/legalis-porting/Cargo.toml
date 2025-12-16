@@ -20,6 +20,7 @@ chrono.workspace = true
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["async_tokio"] }
+proptest = "1.5"
 
 [[bench]]
 name = "porting"

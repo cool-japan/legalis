@@ -13,6 +13,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
+#[cfg(feature = "png-export")]
+use resvg::usvg;
+#[cfg(feature = "png-export")]
+use tiny_skia::Pixmap;
+
 /// Errors during visualization.
 #[derive(Debug, Error)]
 pub enum VizError {
@@ -683,6 +688,19 @@ impl DecisionTree {
         svg
     }
 
+    /// Exports the tree to PNG format.
+    #[cfg(feature = "png-export")]
+    pub fn to_png(&self) -> VizResult<Vec<u8>> {
+        self.to_png_with_theme(&Theme::default())
+    }
+
+    /// Exports the tree to PNG format with a custom theme.
+    #[cfg(feature = "png-export")]
+    pub fn to_png_with_theme(&self, theme: &Theme) -> VizResult<Vec<u8>> {
+        let svg_data = self.to_svg_with_theme(theme);
+        svg_to_png(&svg_data)
+    }
+
     /// Helper to render a node in SVG format.
     fn svg_render_node(
         &self,
@@ -768,6 +786,7 @@ impl DecisionTree {
     }
 
     /// Exports the tree to HTML with embedded D3.js visualization using a custom theme.
+    /// Includes drill-down navigation support.
     pub fn to_html_with_theme(&self, theme: &Theme) -> String {
         let mut html = String::new();
 
@@ -779,8 +798,9 @@ impl DecisionTree {
         html.push_str(&format!("        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: {}; color: {}; }}\n", theme.background_color, theme.text_color));
         html.push_str("        .node { cursor: pointer; }\n");
         html.push_str(
-            "        .node circle { fill: #fff; stroke: steelblue; stroke-width: 3px; }\n",
+            "        .node circle { fill: #fff; stroke: steelblue; stroke-width: 3px; transition: all 0.3s; }\n",
         );
+        html.push_str("        .node circle:hover { stroke-width: 5px; }\n");
         html.push_str(&format!(
             "        .node.root circle {{ fill: {}; stroke: #333; }}\n",
             theme.root_color
@@ -802,13 +822,24 @@ impl DecisionTree {
             theme.text_color
         ));
         html.push_str(&format!(
-            "        .link {{ fill: none; stroke: {}; stroke-width: 2px; }}\n",
+            "        .link {{ fill: none; stroke: {}; stroke-width: 2px; transition: opacity 0.3s; }}\n",
             theme.link_color
         ));
+        html.push_str("        .link.hidden { opacity: 0.2; }\n");
         html.push_str("        .link-label { font-size: 10px; fill: #666; }\n");
+        html.push_str("        #details { position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 15px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-width: 300px; display: none; }\n");
+        html.push_str("        #details.visible { display: block; }\n");
+        html.push_str("        #details h3 { margin-top: 0; }\n");
+        html.push_str("        .close-btn { float: right; cursor: pointer; font-size: 20px; }\n");
         html.push_str("    </style>\n</head>\n<body>\n");
-        html.push_str("    <h1>Legal Decision Tree</h1>\n");
+        html.push_str("    <h1>Legal Decision Tree (Interactive)</h1>\n");
+        html.push_str("    <p>Click on nodes to view details and drill down</p>\n");
         html.push_str("    <div id=\"tree\"></div>\n");
+        html.push_str("    <div id=\"details\">\n");
+        html.push_str("        <span class=\"close-btn\" onclick=\"document.getElementById('details').classList.remove('visible')\">&times;</span>\n");
+        html.push_str("        <h3 id=\"detail-title\"></h3>\n");
+        html.push_str("        <div id=\"detail-content\"></div>\n");
+        html.push_str("    </div>\n");
         html.push_str("    <script>\n");
         html.push_str("const treeData = ");
         html.push_str(&self.to_d3_json());
@@ -823,6 +854,24 @@ impl DecisionTree {
         html.push_str("const node = g.selectAll(\".node\").data(root.descendants()).enter().append(\"g\").attr(\"class\", function(d) { return \"node \" + d.data.type; }).attr(\"transform\", function(d) { return \"translate(\" + d.y + \",\" + d.x + \")\"; });\n");
         html.push_str("node.append(\"circle\").attr(\"r\", 6);\n");
         html.push_str("node.append(\"text\").attr(\"dy\", 3).attr(\"x\", function(d) { return d.children ? -10 : 10; }).style(\"text-anchor\", function(d) { return d.children ? \"end\" : \"start\"; }).text(function(d) { return d.data.name; });\n");
+        html.push_str("node.on(\"click\", function(event, d) {\n");
+        html.push_str("    const details = document.getElementById('details');\n");
+        html.push_str("    const title = document.getElementById('detail-title');\n");
+        html.push_str("    const content = document.getElementById('detail-content');\n");
+        html.push_str("    title.textContent = d.data.name;\n");
+        html.push_str(
+            "    content.innerHTML = '<p><strong>Type:</strong> ' + d.data.type + '</p>';\n",
+        );
+        html.push_str("    if (d.children) {\n");
+        html.push_str("        content.innerHTML += '<p><strong>Children:</strong> ' + d.children.length + '</p>';\n");
+        html.push_str("    }\n");
+        html.push_str("    if (d.depth > 0) {\n");
+        html.push_str(
+            "        content.innerHTML += '<p><strong>Depth:</strong> ' + d.depth + '</p>';\n",
+        );
+        html.push_str("    }\n");
+        html.push_str("    details.classList.add('visible');\n");
+        html.push_str("});\n");
         html.push_str("    </script>\n</body>\n</html>");
 
         html
@@ -1540,18 +1589,26 @@ impl DependencyGraph {
 
     /// Exports to SVG format.
     pub fn to_svg(&self) -> String {
+        self.to_svg_with_theme(&Theme::default())
+    }
+
+    /// Exports to SVG format with custom theme.
+    pub fn to_svg_with_theme(&self, theme: &Theme) -> String {
         let mut svg = String::new();
         let width = self.layout_config.width;
         let height = self.layout_config.height;
 
         svg.push_str(&format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\">\n",
-            width, height
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" style=\"background-color: {}\">\n",
+            width, height, theme.background_color
         ));
 
         svg.push_str("  <defs>\n");
         svg.push_str("    <marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"9\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">\n");
-        svg.push_str("      <path d=\"M0,0 L0,6 L9,3 z\" fill=\"#666\" />\n");
+        svg.push_str(&format!(
+            "      <path d=\"M0,0 L0,6 L9,3 z\" fill=\"{}\" />\n",
+            theme.link_color
+        ));
         svg.push_str("    </marker>\n");
         svg.push_str("  </defs>\n");
 
@@ -1580,8 +1637,8 @@ impl DependencyGraph {
                     (node_positions.get(&source), node_positions.get(&target))
                 {
                     svg.push_str(&format!(
-                        "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#999\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n",
-                        x1, y1, x2, y2
+                        "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n",
+                        x1, y1, x2, y2, theme.link_color
                     ));
 
                     // Add edge label
@@ -1589,8 +1646,8 @@ impl DependencyGraph {
                     let mid_x = (x1 + x2) / 2;
                     let mid_y = (y1 + y2) / 2;
                     svg.push_str(&format!(
-                        "  <text x=\"{}\" y=\"{}\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">{}</text>\n",
-                        mid_x, mid_y.saturating_sub(5), label
+                        "  <text x=\"{}\" y=\"{}\" font-size=\"10\" fill=\"{}\" text-anchor=\"middle\">{}</text>\n",
+                        mid_x, mid_y.saturating_sub(5), theme.text_color, label
                     ));
                 }
             }
@@ -1602,8 +1659,8 @@ impl DependencyGraph {
                 let statute_id = &self.graph[node_idx];
 
                 svg.push_str(&format!(
-                    "  <circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"#69b3a2\" stroke=\"#fff\" stroke-width=\"2\"/>\n",
-                    x, y, node_radius
+                    "  <circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"{}\" stroke-width=\"2\"/>\n",
+                    x, y, node_radius, theme.condition_color, theme.text_color
                 ));
 
                 // Truncate long statute IDs
@@ -1614,14 +1671,27 @@ impl DependencyGraph {
                 };
 
                 svg.push_str(&format!(
-                    "  <text x=\"{}\" y=\"{}\" font-size=\"10\" fill=\"#fff\" text-anchor=\"middle\">{}</text>\n",
-                    x, y + 4, display_id
+                    "  <text x=\"{}\" y=\"{}\" font-size=\"10\" fill=\"{}\" text-anchor=\"middle\">{}</text>\n",
+                    x, y + 4, theme.text_color, display_id
                 ));
             }
         }
 
         svg.push_str("</svg>");
         svg
+    }
+
+    /// Exports to PNG format.
+    #[cfg(feature = "png-export")]
+    pub fn to_png(&self) -> VizResult<Vec<u8>> {
+        self.to_png_with_theme(&Theme::default())
+    }
+
+    /// Exports to PNG format with a custom theme.
+    #[cfg(feature = "png-export")]
+    pub fn to_png_with_theme(&self, theme: &Theme) -> VizResult<Vec<u8>> {
+        let svg_data = self.to_svg_with_theme(theme);
+        svg_to_png(&svg_data)
     }
 
     /// Exports to HTML with embedded D3.js force-directed graph visualization.
@@ -1757,67 +1827,6 @@ fn format_condition(condition: &Condition) -> String {
         Condition::ResidencyDuration { operator, months } => {
             format!("Residency {} {} months", format_operator(operator), months)
         }
-        Condition::Between {
-            attribute,
-            min,
-            max,
-        } => {
-            format!("{} BETWEEN {} AND {}", attribute, min, max)
-        }
-        Condition::InSet { attribute, values } => {
-            format!("{} IN ({})", attribute, values.join(", "))
-        }
-        Condition::TimeOfDay {
-            start_hour,
-            start_minute,
-            end_hour,
-            end_minute,
-        } => {
-            format!(
-                "Time {:02}:{:02}-{:02}:{:02}",
-                start_hour, start_minute, end_hour, end_minute
-            )
-        }
-        Condition::Percentage {
-            attribute,
-            operator,
-            percentage,
-            of_value,
-        } => {
-            format!(
-                "{} {} {}% of {}",
-                attribute,
-                format_operator(operator),
-                percentage,
-                of_value
-            )
-        }
-        Condition::Formula {
-            expression,
-            operator,
-            value,
-        } => {
-            format!("{} {} {}", expression, format_operator(operator), value)
-        }
-        Condition::Count {
-            attribute,
-            operator,
-            count,
-        } => {
-            format!(
-                "Count({}) {} {}",
-                attribute,
-                format_operator(operator),
-                count
-            )
-        }
-        Condition::Pattern {
-            attribute,
-            pattern,
-            pattern_type,
-        } => {
-            format!("{} {:?} '{}'", attribute, pattern_type, pattern)
-        }
         Condition::And(_, _) => "AND condition".to_string(),
         Condition::Or(_, _) => "OR condition".to_string(),
         Condition::Not(_) => "NOT condition".to_string(),
@@ -1833,6 +1842,288 @@ fn format_operator(op: &legalis_core::ComparisonOp) -> &'static str {
         legalis_core::ComparisonOp::GreaterOrEqual => "≥",
         legalis_core::ComparisonOp::LessThan => "<",
         legalis_core::ComparisonOp::LessOrEqual => "≤",
+    }
+}
+
+/// Converts SVG data to PNG format.
+#[cfg(feature = "png-export")]
+fn svg_to_png(svg_data: &str) -> VizResult<Vec<u8>> {
+    let options = usvg::Options::default();
+    let tree = usvg::Tree::from_str(svg_data, &options)
+        .map_err(|e| VizError::RenderError(format!("Failed to parse SVG: {}", e)))?;
+
+    let size = tree.size();
+    let width = size.width().ceil() as u32;
+    let height = size.height().ceil() as u32;
+
+    let mut pixmap = Pixmap::new(width, height)
+        .ok_or_else(|| VizError::RenderError("Failed to create pixmap".to_string()))?;
+
+    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+
+    pixmap
+        .encode_png()
+        .map_err(|e| VizError::RenderError(format!("Failed to encode PNG: {}", e)))
+}
+
+/// Plugin trait for custom renderers.
+pub trait Renderer {
+    /// The output type produced by this renderer.
+    type Output;
+
+    /// Renders a decision tree.
+    fn render_decision_tree(&self, tree: &DecisionTree) -> VizResult<Self::Output>;
+
+    /// Renders a dependency graph.
+    fn render_dependency_graph(&self, graph: &DependencyGraph) -> VizResult<Self::Output>;
+
+    /// Renders a timeline.
+    fn render_timeline(&self, timeline: &Timeline) -> VizResult<Self::Output>;
+
+    /// Renders a population chart.
+    fn render_population_chart(&self, chart: &PopulationChart) -> VizResult<Self::Output>;
+}
+
+/// Registry for custom renderers.
+pub struct RendererRegistry {
+    renderers: HashMap<String, Box<dyn std::any::Any>>,
+}
+
+impl RendererRegistry {
+    /// Creates a new renderer registry.
+    pub fn new() -> Self {
+        Self {
+            renderers: HashMap::new(),
+        }
+    }
+
+    /// Registers a custom renderer.
+    pub fn register<R: Renderer + 'static>(&mut self, name: &str, renderer: R) {
+        self.renderers.insert(name.to_string(), Box::new(renderer));
+    }
+
+    /// Gets a renderer by name.
+    pub fn get<R: 'static>(&self, name: &str) -> Option<&R> {
+        self.renderers.get(name).and_then(|r| r.downcast_ref())
+    }
+}
+
+impl Default for RendererRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Real-time update event for visualizations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpdateEvent {
+    /// Population data updated
+    PopulationUpdate {
+        category: String,
+        count: usize,
+        timestamp: String,
+    },
+    /// New node added to decision tree
+    NodeAdded {
+        node_id: String,
+        node_type: String,
+        parent_id: Option<String>,
+    },
+    /// Statute dependency added
+    DependencyAdded {
+        from_statute: String,
+        to_statute: String,
+        relation: String,
+    },
+    /// Timeline event added
+    TimelineEventAdded { date: String, description: String },
+    /// Statistics updated
+    StatisticsUpdate { metric: String, value: f64 },
+}
+
+/// Live visualization handler for real-time updates.
+pub struct LiveVisualization {
+    /// Population chart for live updates
+    pub population_chart: PopulationChart,
+    /// Dependency graph for live updates
+    pub dependency_graph: DependencyGraph,
+    /// Timeline for live updates
+    pub timeline: Timeline,
+    /// Update history
+    update_history: Vec<UpdateEvent>,
+}
+
+impl LiveVisualization {
+    /// Creates a new live visualization handler.
+    pub fn new(title: &str) -> Self {
+        Self {
+            population_chart: PopulationChart::new(title),
+            dependency_graph: DependencyGraph::new(),
+            timeline: Timeline::new(),
+            update_history: Vec::new(),
+        }
+    }
+
+    /// Processes an update event.
+    pub fn process_update(&mut self, event: UpdateEvent) {
+        match &event {
+            UpdateEvent::PopulationUpdate {
+                category,
+                count,
+                timestamp,
+            } => {
+                // Check if we should add a new time point
+                if self.population_chart.time_series.is_empty()
+                    || self
+                        .population_chart
+                        .time_series
+                        .last()
+                        .map(|(t, _)| t != timestamp)
+                        .unwrap_or(true)
+                {
+                    self.population_chart.add_time_point(timestamp, Vec::new());
+                }
+
+                // Update or add the data point
+                if let Some((_time, data)) = self.population_chart.time_series.last_mut() {
+                    if let Some(point) = data.iter_mut().find(|p| p.category == *category) {
+                        point.count = *count;
+                    } else {
+                        data.push(PopulationDataPoint {
+                            category: category.clone(),
+                            count: *count,
+                            percentage: None,
+                        });
+                    }
+                }
+            }
+            UpdateEvent::DependencyAdded {
+                from_statute,
+                to_statute,
+                relation,
+            } => {
+                self.dependency_graph
+                    .add_dependency(from_statute, to_statute, relation);
+            }
+            UpdateEvent::TimelineEventAdded { date, description } => {
+                self.timeline.add_event(
+                    date,
+                    TimelineEvent::Amended {
+                        statute_id: "live-update".to_string(),
+                        description: description.clone(),
+                    },
+                );
+            }
+            _ => {}
+        }
+
+        self.update_history.push(event);
+    }
+
+    /// Exports the current state to HTML with WebSocket support for real-time updates.
+    pub fn to_live_html(&self, websocket_url: &str) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <title>Live Visualization Dashboard</title>\n");
+        html.push_str("    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n");
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }\n");
+        html.push_str("        h1 { color: #333; }\n");
+        html.push_str(
+            "        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }\n",
+        );
+        html.push_str("        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .status { position: fixed; top: 10px; right: 10px; padding: 10px 20px; border-radius: 4px; color: white; }\n");
+        html.push_str("        .status.connected { background: #4caf50; }\n");
+        html.push_str("        .status.disconnected { background: #f44336; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"status disconnected\" id=\"status\">Disconnected</div>\n");
+        html.push_str("    <h1>Live Visualization Dashboard</h1>\n");
+        html.push_str("    <div class=\"dashboard\">\n");
+        html.push_str("        <div class=\"panel\">\n");
+        html.push_str("            <h2>Population Chart</h2>\n");
+        html.push_str("            <canvas id=\"populationChart\"></canvas>\n");
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"panel\">\n");
+        html.push_str("            <h2>Update Log</h2>\n");
+        html.push_str("            <div id=\"updateLog\" style=\"max-height: 400px; overflow-y: auto;\"></div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const wsUrl = '{}';\n", websocket_url));
+        html.push_str("let ws = null;\n");
+        html.push_str("const populationData = {};\n");
+        html.push_str("let chart = null;\n\n");
+        html.push_str("function connect() {\n");
+        html.push_str("    ws = new WebSocket(wsUrl);\n");
+        html.push_str("    ws.onopen = function() {\n");
+        html.push_str("        document.getElementById('status').textContent = 'Connected';\n");
+        html.push_str(
+            "        document.getElementById('status').className = 'status connected';\n",
+        );
+        html.push_str("    };\n");
+        html.push_str("    ws.onmessage = function(event) {\n");
+        html.push_str("        const update = JSON.parse(event.data);\n");
+        html.push_str("        processUpdate(update);\n");
+        html.push_str("    };\n");
+        html.push_str("    ws.onclose = function() {\n");
+        html.push_str("        document.getElementById('status').textContent = 'Disconnected';\n");
+        html.push_str(
+            "        document.getElementById('status').className = 'status disconnected';\n",
+        );
+        html.push_str("        setTimeout(connect, 5000);\n");
+        html.push_str("    };\n");
+        html.push_str("}\n\n");
+        html.push_str("function processUpdate(update) {\n");
+        html.push_str("    const log = document.getElementById('updateLog');\n");
+        html.push_str("    const entry = document.createElement('div');\n");
+        html.push_str("    entry.textContent = JSON.stringify(update);\n");
+        html.push_str("    entry.style.padding = '5px';\n");
+        html.push_str("    entry.style.borderBottom = '1px solid #eee';\n");
+        html.push_str("    log.insertBefore(entry, log.firstChild);\n");
+        html.push_str("    if (update.PopulationUpdate) {\n");
+        html.push_str("        const data = update.PopulationUpdate;\n");
+        html.push_str("        populationData[data.category] = data.count;\n");
+        html.push_str("        updateChart();\n");
+        html.push_str("    }\n");
+        html.push_str("}\n\n");
+        html.push_str("function updateChart() {\n");
+        html.push_str(
+            "    const ctx = document.getElementById('populationChart').getContext('2d');\n",
+        );
+        html.push_str("    if (chart) chart.destroy();\n");
+        html.push_str("    chart = new Chart(ctx, {\n");
+        html.push_str("        type: 'bar',\n");
+        html.push_str("        data: {\n");
+        html.push_str("            labels: Object.keys(populationData),\n");
+        html.push_str("            datasets: [{\n");
+        html.push_str("                label: 'Count',\n");
+        html.push_str("                data: Object.values(populationData),\n");
+        html.push_str("                backgroundColor: 'rgba(54, 162, 235, 0.6)'\n");
+        html.push_str("            }]\n");
+        html.push_str("        },\n");
+        html.push_str(
+            "        options: { responsive: true, scales: { y: { beginAtZero: true } } }\n",
+        );
+        html.push_str("    });\n");
+        html.push_str("}\n\n");
+        html.push_str("connect();\n");
+        html.push_str("    </script>\n</body>\n</html>");
+
+        html
+    }
+
+    /// Returns the update history.
+    pub fn update_history(&self) -> &[UpdateEvent] {
+        &self.update_history
+    }
+
+    /// Clears the update history.
+    pub fn clear_history(&mut self) {
+        self.update_history.clear();
     }
 }
 
@@ -2300,5 +2591,206 @@ mod tests {
         let svg = tree.to_svg_with_theme(&theme);
         assert!(svg.contains("<svg"));
         assert!(svg.contains(&theme.background_color));
+    }
+
+    #[test]
+    #[cfg(feature = "png-export")]
+    fn test_png_export() {
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let png_data = tree.to_png();
+        assert!(png_data.is_ok());
+        assert!(!png_data.unwrap().is_empty());
+    }
+
+    #[test]
+    #[cfg(feature = "png-export")]
+    fn test_dependency_graph_png() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-a", "statute-b", "references");
+
+        let png_data = graph.to_png();
+        assert!(png_data.is_ok());
+        assert!(!png_data.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_drill_down_html() {
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let html = tree.to_html();
+        assert!(html.contains("Interactive"));
+        assert!(html.contains("drill down"));
+        assert!(html.contains("details"));
+        assert!(html.contains("click"));
+    }
+
+    #[test]
+    fn test_renderer_registry() {
+        let registry = RendererRegistry::new();
+        assert!(registry.renderers.is_empty());
+    }
+
+    #[test]
+    fn test_live_visualization() {
+        let mut live_viz = LiveVisualization::new("Test Live Viz");
+
+        let event = UpdateEvent::PopulationUpdate {
+            category: "Eligible".to_string(),
+            count: 100,
+            timestamp: "2024-01-01".to_string(),
+        };
+
+        live_viz.process_update(event);
+        assert_eq!(live_viz.update_history().len(), 1);
+    }
+
+    #[test]
+    fn test_live_visualization_dependency_update() {
+        let mut live_viz = LiveVisualization::new("Test");
+
+        let event = UpdateEvent::DependencyAdded {
+            from_statute: "statute-a".to_string(),
+            to_statute: "statute-b".to_string(),
+            relation: "references".to_string(),
+        };
+
+        live_viz.process_update(event);
+        assert_eq!(live_viz.dependency_graph.node_count(), 2);
+    }
+
+    #[test]
+    fn test_live_html_export() {
+        let live_viz = LiveVisualization::new("Test");
+        let html = live_viz.to_live_html("ws://localhost:8080");
+        assert!(html.contains("WebSocket"));
+        assert!(html.contains("ws://localhost:8080"));
+        assert!(html.contains("Live Visualization Dashboard"));
+    }
+
+    #[test]
+    fn test_update_event_serialization() {
+        let event = UpdateEvent::PopulationUpdate {
+            category: "Test".to_string(),
+            count: 50,
+            timestamp: "2024-01-01".to_string(),
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("PopulationUpdate"));
+        assert!(json.contains("Test"));
+    }
+
+    #[test]
+    fn test_theme_colorblind_friendly() {
+        let theme = Theme::colorblind_friendly();
+        assert_eq!(theme.condition_color, "#0173b2");
+        assert_eq!(theme.discretion_color, "#de8f05");
+        assert_eq!(theme.outcome_color, "#029e73");
+    }
+
+    #[test]
+    fn test_dependency_graph_svg_with_theme() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-a", "statute-b", "references");
+
+        let theme = Theme::high_contrast();
+        let svg = graph.to_svg_with_theme(&theme);
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains(&theme.background_color));
+    }
+
+    #[test]
+    fn test_all_output_formats_decision_tree() {
+        let statute = Statute::new(
+            "comprehensive-test",
+            "Comprehensive Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        // Test all export formats
+        let dot = tree.to_dot();
+        assert!(!dot.is_empty());
+
+        let ascii = tree.to_ascii();
+        assert!(ascii.contains("Comprehensive Test Statute"));
+
+        let box_format = tree.to_box();
+        assert!(box_format.contains("┌"));
+
+        let mermaid = tree.to_mermaid();
+        assert!(mermaid.contains("flowchart TD"));
+
+        let plantuml = tree.to_plantuml();
+        assert!(plantuml.contains("@startuml"));
+
+        let svg = tree.to_svg();
+        assert!(svg.contains("<svg"));
+
+        let html = tree.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+    }
+
+    #[test]
+    fn test_all_output_formats_dependency_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-1", "statute-2", "references");
+        graph.add_dependency("statute-2", "statute-3", "amends");
+
+        let dot = graph.to_dot();
+        assert!(!dot.is_empty());
+
+        let mermaid = graph.to_mermaid();
+        assert!(mermaid.contains("flowchart LR"));
+
+        let plantuml = graph.to_plantuml();
+        assert!(plantuml.contains("@startuml"));
+
+        let svg = graph.to_svg();
+        assert!(svg.contains("<svg"));
+
+        let html = graph.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+    }
+
+    #[test]
+    fn test_layout_config_compact() {
+        let config = LayoutConfig::compact();
+        assert_eq!(config.width, 800);
+        assert_eq!(config.height, 400);
+        assert_eq!(config.node_spacing, 50);
+        assert_eq!(config.max_nodes, Some(50));
+    }
+
+    #[test]
+    fn test_live_visualization_clear_history() {
+        let mut live_viz = LiveVisualization::new("Test");
+
+        let event = UpdateEvent::StatisticsUpdate {
+            metric: "test_metric".to_string(),
+            value: 42.5,
+        };
+
+        live_viz.process_update(event);
+        assert_eq!(live_viz.update_history().len(), 1);
+
+        live_viz.clear_history();
+        assert_eq!(live_viz.update_history().len(), 0);
     }
 }

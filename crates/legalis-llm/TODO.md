@@ -45,13 +45,13 @@
 - [x] Add Azure OpenAI provider
 - [x] Add Mistral AI provider
 - [x] Add HuggingFace Inference API support
-- [ ] Add llama.cpp direct integration
+- [x] Add llama.cpp direct integration
 
 ## Streaming
 
 - [x] Implement async stream combinators
 - [x] Add progress callbacks for long operations
-- [ ] Support cancellation tokens
+- [x] Support cancellation tokens
 
 ## Caching
 
@@ -68,22 +68,22 @@
 ## Prompts
 
 - [x] Add A/B testing for prompts
-- [ ] Create prompt optimization suggestions
+- [x] Create prompt optimization suggestions
 
 ## Law Compiler
 
-- [ ] Implement incremental compilation
-- [ ] Create compilation pipeline with stages
-- [ ] Add custom pre/post processors
+- [x] Implement incremental compilation
+- [x] Create compilation pipeline with stages
+- [x] Add custom pre/post processors
 
 ## Validation
 
-- [ ] Create validation rule definitions (beyond JSON schema)
+- [x] Create validation rule definitions (beyond JSON schema)
 
 ## Testing
 
-- [ ] Add integration tests with mock servers
-- [ ] Create recorded response fixtures
-- [ ] Add latency/performance tests
-- [ ] Test error handling paths
-- [ ] Add chaos testing for resilience
+- [x] Add integration tests with mock servers
+- [x] Create recorded response fixtures
+- [x] Add latency/performance tests
+- [x] Test error handling paths
+- [x] Add chaos testing for resilience

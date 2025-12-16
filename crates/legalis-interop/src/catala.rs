@@ -14,10 +14,27 @@ use crate::{
 };
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 
+/// Catala scope metadata for tracking inheritance.
+#[derive(Debug, Clone)]
+pub struct CatalaScope {
+    /// Scope name
+    pub name: String,
+    /// Parent scope (for inheritance)
+    pub parent: Option<String>,
+    /// Legal article references
+    pub article_refs: Vec<String>,
+    /// Exception handlers
+    pub exceptions: Vec<String>,
+}
+
 /// Catala format importer.
 pub struct CatalaImporter {
     /// Whether to preserve legal text comments
     preserve_comments: bool,
+    /// Whether to track article references
+    track_articles: bool,
+    /// Whether to preserve exception handling
+    preserve_exceptions: bool,
 }
 
 impl CatalaImporter {
@@ -25,6 +42,8 @@ impl CatalaImporter {
     pub fn new() -> Self {
         Self {
             preserve_comments: true,
+            track_articles: true,
+            preserve_exceptions: true,
         }
     }
 
@@ -34,12 +53,127 @@ impl CatalaImporter {
         self
     }
 
+    /// Sets whether to track article references.
+    pub fn with_article_tracking(mut self, track: bool) -> Self {
+        self.track_articles = track;
+        self
+    }
+
+    /// Sets whether to preserve exception handling.
+    pub fn with_exception_preservation(mut self, preserve: bool) -> Self {
+        self.preserve_exceptions = preserve;
+        self
+    }
+
+    /// Extracts legal article references from Catala comments.
+    fn extract_article_refs(&self, content: &str) -> Vec<String> {
+        let mut refs = Vec::new();
+
+        // Look for article references in comments like "@Article 123", "@Art. 456", etc.
+        let article_re =
+            regex_lite::Regex::new(r"(?i)@(?:article|art\.?|section|sec\.?|§)\s*(\d+(?:\.\d+)*)")
+                .ok();
+
+        if let Some(re) = article_re {
+            for cap in re.captures_iter(content) {
+                if let Some(m) = cap.get(1) {
+                    refs.push(format!("Article {}", m.as_str()));
+                }
+            }
+        }
+
+        // Also check for legal citation formats like "Code civil, art. 123"
+        let citation_re = regex_lite::Regex::new(
+            r"(?i)([A-Z][A-Za-z\s]+),\s*(?:article|art\.?)\s*(\d+(?:\.\d+)*)",
+        )
+        .ok();
+
+        if let Some(re) = citation_re {
+            for cap in re.captures_iter(content) {
+                if let (Some(source), Some(article)) = (cap.get(1), cap.get(2)) {
+                    refs.push(format!("{}, Article {}", source.as_str(), article.as_str()));
+                }
+            }
+        }
+
+        refs
+    }
+
+    /// Extracts exception handlers from Catala code.
+    fn extract_exceptions(&self, content: &str) -> Vec<String> {
+        let mut exceptions = Vec::new();
+
+        // Look for "exception" keyword
+        let exception_re = regex_lite::Regex::new(r"(?m)^\s*exception\s+(\w+)\s+").ok();
+
+        if let Some(re) = exception_re {
+            for cap in re.captures_iter(content) {
+                if let Some(m) = cap.get(1) {
+                    exceptions.push(m.as_str().to_string());
+                }
+            }
+        }
+
+        // Also look for "definition ... under condition ... consequence exception"
+        let exception_def_re = regex_lite::Regex::new(r"(?i)consequence\s+exception").ok();
+
+        if let Some(re) = exception_def_re {
+            if re.is_match(content) {
+                exceptions.push("Default logic exception".to_string());
+            }
+        }
+
+        exceptions
+    }
+
+    /// Detects scope inheritance from Catala code.
+    fn detect_scope_inheritance(&self, content: &str) -> Option<String> {
+        // Look for scope inheritance: "scope Child extends Parent:"
+        let inherit_re = regex_lite::Regex::new(r"(?i)scope\s+\w+\s+extends\s+(\w+)\s*:").ok()?;
+
+        inherit_re
+            .captures(content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+    }
+
     /// Parses a Catala scope declaration.
     fn parse_scope(&self, content: &str, report: &mut ConversionReport) -> Option<Statute> {
         // Look for scope declaration: "declaration scope ScopeName:"
         let scope_re = regex_lite::Regex::new(r"declaration\s+scope\s+(\w+):").ok()?;
         let captures = scope_re.captures(content)?;
         let scope_name = captures.get(1)?.as_str();
+
+        // Extract article references if enabled
+        if self.track_articles {
+            let article_refs = self.extract_article_refs(content);
+            if !article_refs.is_empty() {
+                report.add_warning(format!(
+                    "Preserved {} article reference(s) in metadata",
+                    article_refs.len()
+                ));
+            }
+        }
+
+        // Extract exceptions if enabled
+        if self.preserve_exceptions {
+            let exceptions = self.extract_exceptions(content);
+            if !exceptions.is_empty() {
+                report.add_warning(format!(
+                    "Found {} exception(s): {}",
+                    exceptions.len(),
+                    exceptions.join(", ")
+                ));
+            }
+        }
+
+        // Check for scope inheritance
+        if let Some(parent) = self.detect_scope_inheritance(content) {
+            report.add_warning(format!(
+                "Scope inheritance detected: {} extends {}",
+                scope_name, parent
+            ));
+        }
 
         // Create statute from scope
         let mut statute = Statute::new(
@@ -162,6 +296,10 @@ impl FormatImporter for CatalaImporter {
 pub struct CatalaExporter {
     /// Language variant (en, fr)
     language: String,
+    /// Whether to include article references in comments
+    include_article_refs: bool,
+    /// Whether to generate exception handling code
+    generate_exceptions: bool,
 }
 
 impl CatalaExporter {
@@ -169,12 +307,26 @@ impl CatalaExporter {
     pub fn new() -> Self {
         Self {
             language: "en".to_string(),
+            include_article_refs: true,
+            generate_exceptions: true,
         }
     }
 
     /// Sets the output language.
     pub fn with_language(mut self, lang: impl Into<String>) -> Self {
         self.language = lang.into();
+        self
+    }
+
+    /// Sets whether to include article references.
+    pub fn with_article_refs(mut self, include: bool) -> Self {
+        self.include_article_refs = include;
+        self
+    }
+
+    /// Sets whether to generate exception handling.
+    pub fn with_exceptions(mut self, generate: bool) -> Self {
+        self.generate_exceptions = generate;
         self
     }
 

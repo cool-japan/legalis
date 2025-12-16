@@ -15,6 +15,7 @@ uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 num_cpus = "1.16"
+wide = "0.7"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["async_tokio"] }

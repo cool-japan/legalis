@@ -27,14 +27,14 @@
 ## Parser Features
 
 ### Grammar Extensions
-- [ ] Add WHEN clause for temporal conditions
+- [x] Add WHEN clause for temporal conditions
 - [x] Add UNLESS clause for negative conditions
 - [x] Add REQUIRES clause for dependencies
 
 ### Advanced Conditions
-- [ ] Add numeric range conditions with custom operators
-- [ ] Add regex pattern matching support
-- [ ] Add set operations (UNION, INTERSECT, EXCEPT)
+- [x] Add numeric range conditions with custom operators
+- [x] Add regex pattern matching support
+- [x] Add set operations (UNION, INTERSECT, DIFFERENCE) - AST and parsing infrastructure
 
 ## AST Improvements
 
@@ -42,7 +42,7 @@
 - [x] Add AST serialization (to JSON)
 - [x] Add AST serialization to YAML
 - [x] Add AST optimization passes (flatten, deduplicate, simplify, normalize)
-- [ ] Implement AST diffing for change detection
+- [x] Implement AST diffing for change detection
 
 ## Error Handling
 
@@ -51,14 +51,14 @@
 - [x] Create SyntaxError with context (expected vs found)
 - [x] Create UndefinedReference error with hints
 - [ ] Add error recovery for partial parsing
-- [ ] Create error spans for IDE integration
-- [ ] Add warning system for deprecated syntax
+- [x] Create error spans for IDE integration
+- [x] Add warning system for deprecated syntax
 
 ## Tooling
 
-- [ ] Create syntax highlighting definitions (VSCode, vim)
+- [x] Create syntax highlighting definitions (VSCode, vim)
 - [ ] Add LSP (Language Server Protocol) support
-- [ ] Add REPL for interactive parsing
+- [x] Add REPL for interactive parsing
 - [ ] Create schema/grammar documentation generator
 
 ## Performance
@@ -71,6 +71,6 @@
 ## Testing
 
 - [ ] Add corpus of real-world legal document examples
-- [ ] Add fuzzing for parser robustness
+- [x] Add fuzzing for parser robustness
 - [ ] Test error message quality
-- [ ] Add benchmark suite
+- [x] Add benchmark suite

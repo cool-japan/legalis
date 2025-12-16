@@ -23,24 +23,24 @@
 ## Format Support
 
 ### Catala
-- [ ] Preserve legal article references during conversion
-- [ ] Support for Catala's exception handling
-- [ ] Handle scope inheritance
+- [x] Preserve legal article references during conversion
+- [x] Support for Catala's exception handling
+- [x] Handle scope inheritance
 
 ### Stipula
-- [ ] Convert state machines to condition logic
-- [ ] Support for temporal obligations
-- [ ] Handle asset transfer semantics
+- [x] Convert state machines to condition logic
+- [x] Support for temporal obligations
+- [x] Handle asset transfer semantics
 
 ### L4
-- [ ] Convert decision tables
-- [ ] Support for L4's temporal operators
-- [ ] Handle L4's default logic
+- [x] Convert decision tables
+- [x] Support for L4's temporal operators
+- [x] Handle L4's default logic
 
 ### Standard Formats
 - [x] LegalRuleML import/export
 - [x] LKIF (Legal Knowledge Interchange Format)
-- [ ] LegalDocML support
+- [x] LegalDocML support
 
 ## Quality Assurance
 

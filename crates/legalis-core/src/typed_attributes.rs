@@ -11,8 +11,13 @@ use thiserror::Error;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
+
 /// Errors that can occur when working with typed attributes.
 #[derive(Error, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum AttributeError {
     /// Attribute not found
     #[error("Attribute '{0}' not found")]
@@ -38,6 +43,7 @@ pub enum AttributeError {
 /// A typed attribute value that can hold various legal entity properties.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum AttributeValue {
     /// Unsigned 32-bit integer (age, counts, etc.)
     U32(u32),
@@ -238,6 +244,7 @@ impl fmt::Display for AttributeValue {
 /// Type-safe attribute storage for legal entities.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct TypedAttributes {
     /// Internal storage of typed attributes
     attributes: HashMap<String, AttributeValue>,

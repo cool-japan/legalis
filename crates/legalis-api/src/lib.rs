@@ -8,7 +8,10 @@
 //! - OpenAPI 3.0 documentation
 //! - Authentication and authorization (RBAC + ReBAC)
 
+pub mod async_jobs;
 pub mod auth;
+pub mod config;
+pub mod logging;
 mod metrics;
 mod openapi;
 pub mod rate_limit;
@@ -16,8 +19,9 @@ pub mod rebac;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    middleware,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -26,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::info;
 
 /// API errors.
@@ -95,12 +99,23 @@ pub struct ResponseMeta {
     pub per_page: Option<usize>,
 }
 
+/// Verification job result.
+#[derive(Clone, Serialize)]
+pub struct VerificationJobResult {
+    pub passed: bool,
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+    pub statute_count: usize,
+}
+
 /// Application state.
 pub struct AppState {
     /// In-memory statute storage
     pub statutes: RwLock<Vec<Statute>>,
     /// ReBAC authorization engine
     pub rebac: RwLock<rebac::ReBACEngine>,
+    /// Async verification job manager
+    pub verification_jobs: async_jobs::JobManager<VerificationJobResult>,
 }
 
 impl AppState {
@@ -108,6 +123,7 @@ impl AppState {
         Self {
             statutes: RwLock::new(Vec::new()),
             rebac: RwLock::new(rebac::ReBACEngine::new()),
+            verification_jobs: async_jobs::JobManager::new(),
         }
     }
 }
@@ -162,6 +178,26 @@ pub struct VerifyResponse {
     pub passed: bool,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
+}
+
+/// Async verification start response.
+#[derive(Serialize)]
+pub struct AsyncVerifyStartResponse {
+    pub job_id: String,
+    pub status: String,
+    pub poll_url: String,
+}
+
+/// Job status response.
+#[derive(Serialize)]
+pub struct JobStatusResponse<T> {
+    pub id: String,
+    pub status: String,
+    pub progress: f32,
+    pub result: Option<T>,
+    pub error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Detailed verification report response.
@@ -230,6 +266,102 @@ pub struct ComplexityResponse {
     pub precondition_count: usize,
     pub nesting_depth: usize,
     pub has_discretion: bool,
+}
+
+/// Search/filter parameters for statutes.
+#[derive(Deserialize)]
+pub struct StatuteSearchQuery {
+    /// Search by title (case-insensitive substring match)
+    pub title: Option<String>,
+    /// Filter by whether statute has discretion
+    pub has_discretion: Option<bool>,
+    /// Filter by minimum number of preconditions
+    pub min_preconditions: Option<usize>,
+    /// Filter by maximum number of preconditions
+    pub max_preconditions: Option<usize>,
+    /// Limit number of results
+    pub limit: Option<usize>,
+    /// Offset for pagination
+    pub offset: Option<usize>,
+}
+
+/// Statute comparison request.
+#[derive(Deserialize)]
+pub struct StatuteComparisonRequest {
+    pub statute_id_a: String,
+    pub statute_id_b: String,
+}
+
+/// Statute comparison response.
+#[derive(Serialize)]
+pub struct StatuteComparisonResponse {
+    pub statute_a: StatuteSummary,
+    pub statute_b: StatuteSummary,
+    pub differences: ComparisonDifferences,
+    pub similarity_score: f64,
+}
+
+/// Differences between two statutes.
+#[derive(Serialize)]
+pub struct ComparisonDifferences {
+    pub precondition_count_diff: i32,
+    pub nesting_depth_diff: i32,
+    pub both_have_discretion: bool,
+    pub discretion_differs: bool,
+}
+
+/// Batch statute create request.
+#[derive(Deserialize)]
+pub struct BatchCreateStatutesRequest {
+    pub statutes: Vec<Statute>,
+}
+
+/// Batch statute create response.
+#[derive(Serialize)]
+pub struct BatchCreateStatutesResponse {
+    pub created: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
+/// Batch statute delete request.
+#[derive(Deserialize)]
+pub struct BatchDeleteStatutesRequest {
+    pub statute_ids: Vec<String>,
+}
+
+/// Batch statute delete response.
+#[derive(Serialize)]
+pub struct BatchDeleteStatutesResponse {
+    pub deleted: usize,
+    pub not_found: Vec<String>,
+}
+
+/// Create new version of statute request.
+#[derive(Deserialize)]
+pub struct CreateVersionRequest {
+    /// Optional modifications to apply to the new version
+    pub title: Option<String>,
+    pub preconditions: Option<Vec<legalis_core::Condition>>,
+    pub effect: Option<legalis_core::Effect>,
+    pub discretion_logic: Option<String>,
+}
+
+/// Statute version list response.
+#[derive(Serialize)]
+pub struct StatuteVersionListResponse {
+    pub base_id: String,
+    pub versions: Vec<StatuteVersionInfo>,
+    pub total_versions: usize,
+}
+
+/// Information about a statute version.
+#[derive(Serialize)]
+pub struct StatuteVersionInfo {
+    pub id: String,
+    pub version: u32,
+    pub title: String,
+    pub created_at: Option<String>,
 }
 
 /// Conflict detection request.
@@ -320,18 +452,34 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/health/ready", get(readiness_check))
         .route("/metrics", get(metrics_endpoint))
         .route("/api/v1/statutes", get(list_statutes).post(create_statute))
+        .route("/api/v1/statutes/search", get(search_statutes))
+        .route("/api/v1/statutes/batch", post(batch_create_statutes))
+        .route("/api/v1/statutes/batch/delete", post(batch_delete_statutes))
+        .route("/api/v1/statutes/compare", post(compare_statutes))
         .route(
             "/api/v1/statutes/{id}",
             get(get_statute).delete(delete_statute),
         )
         .route("/api/v1/statutes/{id}/complexity", get(analyze_complexity))
+        .route("/api/v1/statutes/{id}/versions", get(get_statute_versions))
+        .route(
+            "/api/v1/statutes/{id}/versions/new",
+            post(create_statute_version),
+        )
         .route("/api/v1/verify", post(verify_statutes))
         .route("/api/v1/verify/detailed", post(verify_statutes_detailed))
         .route("/api/v1/verify/conflicts", post(detect_conflicts))
         .route("/api/v1/verify/batch", post(verify_batch))
+        .route("/api/v1/verify/async", post(verify_statutes_async))
+        .route(
+            "/api/v1/verify/async/{job_id}",
+            get(get_verification_job_status),
+        )
         .route("/api/v1/simulate", post(run_simulation))
         .route("/api/v1/simulate/compare", post(compare_simulations))
         .route("/api-docs/openapi.json", get(openapi_spec))
+        .layer(middleware::from_fn(logging::log_request))
+        .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -399,6 +547,65 @@ async fn list_statutes(
     })))
 }
 
+/// Search/filter statutes.
+async fn search_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<StatuteSearchQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let statutes = state.statutes.read().await;
+
+    let mut filtered: Vec<&Statute> = statutes.iter().collect();
+
+    // Filter by title
+    if let Some(ref title_query) = query.title {
+        let title_lower = title_query.to_lowercase();
+        filtered.retain(|s| s.title.to_lowercase().contains(&title_lower));
+    }
+
+    // Filter by discretion
+    if let Some(has_discretion) = query.has_discretion {
+        filtered.retain(|s| s.discretion_logic.is_some() == has_discretion);
+    }
+
+    // Filter by min preconditions
+    if let Some(min) = query.min_preconditions {
+        filtered.retain(|s| s.preconditions.len() >= min);
+    }
+
+    // Filter by max preconditions
+    if let Some(max) = query.max_preconditions {
+        filtered.retain(|s| s.preconditions.len() <= max);
+    }
+
+    // Apply pagination
+    let total = filtered.len();
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(100).min(1000); // Cap at 1000
+
+    let paginated = filtered
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(StatuteSummary::from)
+        .collect();
+
+    let meta = ResponseMeta {
+        total: Some(total),
+        page: Some(offset / limit),
+        per_page: Some(limit),
+    };
+
+    Ok(Json(
+        ApiResponse::new(StatuteListResponse {
+            statutes: paginated,
+        })
+        .with_meta(meta),
+    ))
+}
+
 /// Get a specific statute.
 async fn get_statute(
     user: auth::AuthUser,
@@ -441,6 +648,152 @@ async fn create_statute(
     statutes.push(req.statute.clone());
 
     Ok((StatusCode::CREATED, Json(ApiResponse::new(req.statute))))
+}
+
+/// Compare two statutes.
+async fn compare_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<StatuteComparisonRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let statutes = state.statutes.read().await;
+
+    let statute_a = statutes
+        .iter()
+        .find(|s| s.id == req.statute_id_a)
+        .ok_or_else(|| ApiError::NotFound(format!("Statute not found: {}", req.statute_id_a)))?;
+
+    let statute_b = statutes
+        .iter()
+        .find(|s| s.id == req.statute_id_b)
+        .ok_or_else(|| ApiError::NotFound(format!("Statute not found: {}", req.statute_id_b)))?;
+
+    let summary_a = StatuteSummary::from(statute_a);
+    let summary_b = StatuteSummary::from(statute_b);
+
+    let precondition_count_a = statute_a.preconditions.len() as i32;
+    let precondition_count_b = statute_b.preconditions.len() as i32;
+
+    let nesting_depth_a = calculate_nesting_depth(&statute_a.preconditions) as i32;
+    let nesting_depth_b = calculate_nesting_depth(&statute_b.preconditions) as i32;
+
+    let has_discretion_a = statute_a.discretion_logic.is_some();
+    let has_discretion_b = statute_b.discretion_logic.is_some();
+
+    let differences = ComparisonDifferences {
+        precondition_count_diff: precondition_count_b - precondition_count_a,
+        nesting_depth_diff: nesting_depth_b - nesting_depth_a,
+        both_have_discretion: has_discretion_a && has_discretion_b,
+        discretion_differs: has_discretion_a != has_discretion_b,
+    };
+
+    // Calculate similarity score (0.0 to 100.0)
+    let mut similarity_score = 100.0;
+
+    // Penalize for precondition differences
+    let precond_diff = (precondition_count_b - precondition_count_a).abs() as f64;
+    similarity_score -= precond_diff * 5.0;
+
+    // Penalize for nesting depth differences
+    let depth_diff = (nesting_depth_b - nesting_depth_a).abs() as f64;
+    similarity_score -= depth_diff * 10.0;
+
+    // Penalize if discretion differs
+    if differences.discretion_differs {
+        similarity_score -= 20.0;
+    }
+
+    similarity_score = similarity_score.max(0.0).min(100.0);
+
+    Ok(Json(ApiResponse::new(StatuteComparisonResponse {
+        statute_a: summary_a,
+        statute_b: summary_b,
+        differences,
+        similarity_score,
+    })))
+}
+
+/// Batch create statutes.
+async fn batch_create_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<BatchCreateStatutesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::CreateStatutes)?;
+
+    if req.statutes.is_empty() {
+        return Err(ApiError::BadRequest("No statutes provided".to_string()));
+    }
+
+    let mut statutes = state.statutes.write().await;
+    let mut created = 0;
+    let mut failed = 0;
+    let mut errors = Vec::new();
+
+    for statute in req.statutes {
+        // Check for duplicate ID
+        if statutes.iter().any(|s| s.id == statute.id) {
+            errors.push(format!("Statute with ID '{}' already exists", statute.id));
+            failed += 1;
+            continue;
+        }
+
+        info!(
+            "Creating statute: {} by user {} (batch)",
+            statute.id, user.username
+        );
+        statutes.push(statute);
+        created += 1;
+    }
+
+    Ok((
+        if created > 0 {
+            StatusCode::CREATED
+        } else {
+            StatusCode::BAD_REQUEST
+        },
+        Json(ApiResponse::new(BatchCreateStatutesResponse {
+            created,
+            failed,
+            errors,
+        })),
+    ))
+}
+
+/// Batch delete statutes.
+async fn batch_delete_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<BatchDeleteStatutesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::DeleteStatutes)?;
+
+    if req.statute_ids.is_empty() {
+        return Err(ApiError::BadRequest("No statute IDs provided".to_string()));
+    }
+
+    let mut statutes = state.statutes.write().await;
+    let mut deleted = 0;
+    let mut not_found = Vec::new();
+
+    for id in req.statute_ids {
+        let initial_len = statutes.len();
+        statutes.retain(|s| s.id != id);
+
+        if statutes.len() < initial_len {
+            info!("Deleted statute: {} by user {} (batch)", id, user.username);
+            deleted += 1;
+        } else {
+            not_found.push(id);
+        }
+    }
+
+    Ok(Json(ApiResponse::new(BatchDeleteStatutesResponse {
+        deleted,
+        not_found,
+    })))
 }
 
 /// Delete a statute.
@@ -593,6 +946,146 @@ async fn detect_conflicts(
     })))
 }
 
+/// Start async verification of statutes.
+/// Returns a job ID that can be used to poll for results.
+async fn verify_statutes_async(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<VerifyRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    // Create a job
+    let job_id = state.verification_jobs.create_job().await;
+
+    // Clone state for the background task
+    let state_clone = Arc::clone(&state);
+    let statute_ids = req.statute_ids.clone();
+    let job_id_clone = job_id.clone();
+
+    // Spawn background task
+    tokio::spawn(async move {
+        let job_id = job_id_clone;
+        // Mark job as running
+        state_clone
+            .verification_jobs
+            .update_job(&job_id, |job| {
+                job.set_running();
+            })
+            .await;
+
+        // Get statutes
+        let statutes = state_clone.statutes.read().await;
+
+        let to_verify: Vec<&Statute> = if statute_ids.is_empty() {
+            statutes.iter().collect()
+        } else {
+            statutes
+                .iter()
+                .filter(|s| statute_ids.contains(&s.id))
+                .collect()
+        };
+
+        if to_verify.is_empty() {
+            state_clone
+                .verification_jobs
+                .update_job(&job_id, |job| {
+                    job.fail("No statutes to verify".to_string());
+                })
+                .await;
+            return;
+        }
+
+        // Update progress
+        state_clone
+            .verification_jobs
+            .update_job(&job_id, |job| {
+                job.set_progress(30.0);
+            })
+            .await;
+
+        // Run verification
+        let verifier = legalis_verifier::StatuteVerifier::new();
+        let to_verify_owned: Vec<Statute> = to_verify.into_iter().cloned().collect();
+        let statute_count = to_verify_owned.len();
+
+        state_clone
+            .verification_jobs
+            .update_job(&job_id, |job| {
+                job.set_progress(60.0);
+            })
+            .await;
+
+        let result = verifier.verify(&to_verify_owned);
+
+        state_clone
+            .verification_jobs
+            .update_job(&job_id, |job| {
+                job.set_progress(90.0);
+            })
+            .await;
+
+        // Complete job
+        let job_result = VerificationJobResult {
+            passed: result.passed,
+            errors: result.errors.iter().map(|e| e.to_string()).collect(),
+            warnings: result.warnings,
+            statute_count,
+        };
+
+        state_clone
+            .verification_jobs
+            .update_job(&job_id, |job| {
+                job.complete(job_result);
+            })
+            .await;
+    });
+
+    let poll_url = format!("/api/v1/verify/async/{}", job_id);
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ApiResponse::new(AsyncVerifyStartResponse {
+            job_id,
+            status: "pending".to_string(),
+            poll_url,
+        })),
+    ))
+}
+
+/// Get async verification job status.
+async fn get_verification_job_status(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(job_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    let job = state
+        .verification_jobs
+        .get_job(&job_id)
+        .await
+        .ok_or_else(|| ApiError::NotFound(format!("Job not found: {}", job_id)))?;
+
+    let status_str = match job.status {
+        async_jobs::JobStatus::Pending => "pending",
+        async_jobs::JobStatus::Running => "running",
+        async_jobs::JobStatus::Completed => "completed",
+        async_jobs::JobStatus::Failed => "failed",
+    }
+    .to_string();
+
+    Ok(Json(ApiResponse::new(JobStatusResponse {
+        id: job.id,
+        status: status_str,
+        progress: job.progress,
+        result: job.result,
+        error: job.error,
+        created_at: job.created_at.to_rfc3339(),
+        updated_at: job.updated_at.to_rfc3339(),
+    })))
+}
+
 /// Batch verification of multiple statute groups.
 /// Each job is verified independently, allowing parallel processing.
 async fn verify_batch(
@@ -692,6 +1185,119 @@ async fn analyze_complexity(
         nesting_depth,
         has_discretion,
     })))
+}
+
+/// Get all versions of a statute by base ID.
+/// Statutes are grouped by their base ID (the part before the version suffix).
+async fn get_statute_versions(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(base_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let statutes = state.statutes.read().await;
+
+    // Find all statutes that match the base_id
+    // We consider statutes with the same ID or ID that starts with base_id
+    let versions: Vec<StatuteVersionInfo> = statutes
+        .iter()
+        .filter(|s| s.id == base_id || s.id.starts_with(&format!("{}-v", base_id)))
+        .map(|s| StatuteVersionInfo {
+            id: s.id.clone(),
+            version: s.version,
+            title: s.title.clone(),
+            created_at: None, // Would need to track creation timestamps
+        })
+        .collect();
+
+    if versions.is_empty() {
+        return Err(ApiError::NotFound(format!(
+            "No statutes found with base ID: {}",
+            base_id
+        )));
+    }
+
+    let total_versions = versions.len();
+
+    Ok(Json(ApiResponse::new(StatuteVersionListResponse {
+        base_id,
+        versions,
+        total_versions,
+    })))
+}
+
+/// Create a new version of an existing statute.
+async fn create_statute_version(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<CreateVersionRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::CreateStatutes)?;
+
+    let mut statutes = state.statutes.write().await;
+
+    // Find the original statute
+    let original = statutes
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| ApiError::NotFound(format!("Statute not found: {}", id)))?
+        .clone();
+
+    // Find the highest version number for this base statute
+    let base_id = if original.id.contains("-v") {
+        original.id.split("-v").next().unwrap_or(&original.id)
+    } else {
+        &original.id
+    };
+
+    let max_version = statutes
+        .iter()
+        .filter(|s| s.id == base_id || s.id.starts_with(&format!("{}-v", base_id)))
+        .map(|s| s.version)
+        .max()
+        .unwrap_or(original.version);
+
+    let new_version = max_version + 1;
+    let new_id = format!("{}-v{}", base_id, new_version);
+
+    // Check if new ID already exists
+    if statutes.iter().any(|s| s.id == new_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Statute version already exists: {}",
+            new_id
+        )));
+    }
+
+    // Create new version based on original with optional modifications
+    let mut new_statute = original.clone();
+    new_statute.id = new_id.clone();
+    new_statute.version = new_version;
+
+    if let Some(title) = req.title {
+        new_statute.title = title;
+    }
+
+    if let Some(preconditions) = req.preconditions {
+        new_statute.preconditions = preconditions;
+    }
+
+    if let Some(effect) = req.effect {
+        new_statute.effect = effect;
+    }
+
+    if let Some(discretion) = req.discretion_logic {
+        new_statute.discretion_logic = Some(discretion);
+    }
+
+    info!(
+        "Creating statute version: {} (v{}) by user {}",
+        new_id, new_version, user.username
+    );
+    statutes.push(new_statute.clone());
+
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(new_statute))))
 }
 
 /// Helper function to calculate nesting depth of conditions.

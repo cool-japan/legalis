@@ -48,6 +48,10 @@ pub enum Token {
     Version,
     Has,
 
+    // Temporal keywords
+    CurrentDate,
+    DateField,
+
     // Logical operators
     And,
     Or,
@@ -57,7 +61,15 @@ pub enum Token {
     Between,
     In,
     Like,
+    Matches, // Regex pattern matching
+    InRange, // Numeric range with inclusive/exclusive bounds
+    NotInRange,
     Default,
+
+    // Set operations
+    Union,
+    Intersect,
+    Difference,
 
     // Structural
     LParen,
@@ -86,7 +98,7 @@ pub struct ImportNode {
 }
 
 /// AST node for a complete legal document.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LegalDocument {
     /// Import declarations at the top of the document.
     pub imports: Vec<ImportNode>,
@@ -95,7 +107,7 @@ pub struct LegalDocument {
 }
 
 /// AST node for an exception clause.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExceptionNode {
     /// Conditions under which the exception applies
     pub conditions: Vec<ConditionNode>,
@@ -104,7 +116,7 @@ pub struct ExceptionNode {
 }
 
 /// AST node for an amendment clause.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AmendmentNode {
     /// ID of the statute being amended
     pub target_id: String,
@@ -117,7 +129,7 @@ pub struct AmendmentNode {
 }
 
 /// AST node for a statute definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StatuteNode {
     pub id: String,
     pub title: String,
@@ -132,7 +144,7 @@ pub struct StatuteNode {
 }
 
 /// AST node for conditions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ConditionNode {
     Comparison {
         field: String,
@@ -155,22 +167,73 @@ pub enum ConditionNode {
         field: String,
         pattern: String,
     },
+    /// Regex pattern matching
+    Matches {
+        field: String,
+        regex_pattern: String,
+    },
+    /// Numeric range with inclusive/exclusive bounds
+    InRange {
+        field: String,
+        min: ConditionValue,
+        max: ConditionValue,
+        inclusive_min: bool,
+        inclusive_max: bool,
+    },
+    /// Negated numeric range
+    NotInRange {
+        field: String,
+        min: ConditionValue,
+        max: ConditionValue,
+        inclusive_min: bool,
+        inclusive_max: bool,
+    },
+    /// Temporal condition comparing current date with a value
+    TemporalComparison {
+        field: TemporalField,
+        operator: String,
+        value: ConditionValue,
+    },
     And(Box<ConditionNode>, Box<ConditionNode>),
     Or(Box<ConditionNode>, Box<ConditionNode>),
     Not(Box<ConditionNode>),
 }
 
+/// Temporal field types for date/time conditions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TemporalField {
+    /// The current system date
+    CurrentDate,
+    /// A custom date field
+    DateField(String),
+}
+
+/// Set expressions for set operations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SetExpression {
+    /// A simple set of values
+    Values(Vec<ConditionValue>),
+    /// Union of two sets
+    Union(Box<SetExpression>, Box<SetExpression>),
+    /// Intersection of two sets
+    Intersect(Box<SetExpression>, Box<SetExpression>),
+    /// Difference of two sets (A - B)
+    Difference(Box<SetExpression>, Box<SetExpression>),
+}
+
 /// Values that can appear in conditions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ConditionValue {
     Number(i64),
     String(String),
     Boolean(bool),
     Date(String),
+    /// A set expression for set operations
+    SetExpr(SetExpression),
 }
 
 /// AST node for effects.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EffectNode {
     pub effect_type: String,
     pub description: String,
@@ -178,7 +241,7 @@ pub struct EffectNode {
 }
 
 /// AST node for default value declarations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DefaultNode {
     pub field: String,
     pub value: ConditionValue,
@@ -265,7 +328,7 @@ pub trait AstVisitor {
             ConditionNode::Not(inner) => {
                 self.visit_condition(inner);
             }
-            _ => {} // Leaf nodes: no recursion needed
+            _ => {} // Leaf nodes (including TemporalComparison): no recursion needed
         }
     }
 
@@ -374,6 +437,102 @@ mod tests {
     }
 }
 
+/// Represents the difference between two LegalDocuments.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentDiff {
+    pub added_imports: Vec<ImportNode>,
+    pub removed_imports: Vec<ImportNode>,
+    pub added_statutes: Vec<StatuteNode>,
+    pub removed_statutes: Vec<StatuteNode>,
+    pub modified_statutes: Vec<(String, StatuteDiff)>,
+}
+
+impl DocumentDiff {
+    /// Returns true if there are any changes.
+    pub fn has_changes(&self) -> bool {
+        !self.added_imports.is_empty()
+            || !self.removed_imports.is_empty()
+            || !self.added_statutes.is_empty()
+            || !self.removed_statutes.is_empty()
+            || !self.modified_statutes.is_empty()
+    }
+
+    /// Returns a summary of changes as a string.
+    pub fn summary(&self) -> String {
+        let mut parts = Vec::new();
+
+        if !self.added_imports.is_empty() {
+            parts.push(format!("{} import(s) added", self.added_imports.len()));
+        }
+        if !self.removed_imports.is_empty() {
+            parts.push(format!("{} import(s) removed", self.removed_imports.len()));
+        }
+        if !self.added_statutes.is_empty() {
+            parts.push(format!("{} statute(s) added", self.added_statutes.len()));
+        }
+        if !self.removed_statutes.is_empty() {
+            parts.push(format!(
+                "{} statute(s) removed",
+                self.removed_statutes.len()
+            ));
+        }
+        if !self.modified_statutes.is_empty() {
+            parts.push(format!(
+                "{} statute(s) modified",
+                self.modified_statutes.len()
+            ));
+        }
+
+        if parts.is_empty() {
+            "No changes".to_string()
+        } else {
+            parts.join(", ")
+        }
+    }
+}
+
+/// Represents the difference between two StatuteNodes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteDiff {
+    pub changes: Vec<StatuteChange>,
+}
+
+impl StatuteDiff {
+    /// Returns true if there are any changes.
+    pub fn has_changes(&self) -> bool {
+        !self.changes.is_empty()
+    }
+}
+
+/// Represents a specific change in a statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum StatuteChange {
+    TitleChanged {
+        old: String,
+        new: String,
+    },
+    ConditionsChanged {
+        added: Vec<ConditionNode>,
+        removed: Vec<ConditionNode>,
+    },
+    EffectsChanged,
+    DiscretionChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+    ExceptionsChanged,
+    AmendmentsChanged,
+    SupersedesChanged {
+        old: Vec<String>,
+        new: Vec<String>,
+    },
+    DefaultsChanged,
+    RequiresChanged {
+        old: Vec<String>,
+        new: Vec<String>,
+    },
+}
+
 /// AST transformation utilities.
 pub mod transform {
     use super::*;
@@ -398,7 +557,7 @@ pub mod transform {
                 Box::new(simplify_condition(left)),
                 Box::new(simplify_condition(right)),
             ),
-            // Leaf nodes remain unchanged
+            // Leaf nodes (including TemporalComparison) remain unchanged
             _ => cond.clone(),
         }
     }
@@ -669,6 +828,120 @@ pub mod transform {
         }
     }
 
+    /// Computes differences between two LegalDocuments.
+    pub fn diff_documents(old: &LegalDocument, new: &LegalDocument) -> DocumentDiff {
+        let mut added_imports = Vec::new();
+        let mut removed_imports = Vec::new();
+        let mut added_statutes = Vec::new();
+        let mut removed_statutes = Vec::new();
+        let mut modified_statutes = Vec::new();
+
+        // Diff imports
+        for import in &new.imports {
+            if !old.imports.iter().any(|i| i.path == import.path) {
+                added_imports.push(import.clone());
+            }
+        }
+        for import in &old.imports {
+            if !new.imports.iter().any(|i| i.path == import.path) {
+                removed_imports.push(import.clone());
+            }
+        }
+
+        // Diff statutes
+        for statute in &new.statutes {
+            if let Some(old_statute) = old.statutes.iter().find(|s| s.id == statute.id) {
+                let statute_diff = diff_statutes(old_statute, statute);
+                if statute_diff.has_changes() {
+                    modified_statutes.push((statute.id.clone(), statute_diff));
+                }
+            } else {
+                added_statutes.push(statute.clone());
+            }
+        }
+        for statute in &old.statutes {
+            if !new.statutes.iter().any(|s| s.id == statute.id) {
+                removed_statutes.push(statute.clone());
+            }
+        }
+
+        DocumentDiff {
+            added_imports,
+            removed_imports,
+            added_statutes,
+            removed_statutes,
+            modified_statutes,
+        }
+    }
+
+    /// Computes differences between two StatuteNodes.
+    pub fn diff_statutes(old: &StatuteNode, new: &StatuteNode) -> StatuteDiff {
+        let mut changes = Vec::new();
+
+        if old.title != new.title {
+            changes.push(StatuteChange::TitleChanged {
+                old: old.title.clone(),
+                new: new.title.clone(),
+            });
+        }
+
+        if old.conditions != new.conditions {
+            changes.push(StatuteChange::ConditionsChanged {
+                added: new
+                    .conditions
+                    .iter()
+                    .filter(|c| !old.conditions.contains(c))
+                    .cloned()
+                    .collect(),
+                removed: old
+                    .conditions
+                    .iter()
+                    .filter(|c| !new.conditions.contains(c))
+                    .cloned()
+                    .collect(),
+            });
+        }
+
+        if old.effects != new.effects {
+            changes.push(StatuteChange::EffectsChanged);
+        }
+
+        if old.discretion != new.discretion {
+            changes.push(StatuteChange::DiscretionChanged {
+                old: old.discretion.clone(),
+                new: new.discretion.clone(),
+            });
+        }
+
+        if old.exceptions != new.exceptions {
+            changes.push(StatuteChange::ExceptionsChanged);
+        }
+
+        if old.amendments != new.amendments {
+            changes.push(StatuteChange::AmendmentsChanged);
+        }
+
+        if old.supersedes != new.supersedes {
+            changes.push(StatuteChange::SupersedesChanged {
+                old: old.supersedes.clone(),
+                new: new.supersedes.clone(),
+            });
+        }
+
+        if old.defaults != new.defaults {
+            changes.push(StatuteChange::DefaultsChanged);
+        }
+
+        if old.requires != new.requires {
+            changes.push(StatuteChange::RequiresChanged {
+                old: old.requires.clone(),
+                new: new.requires.clone(),
+            });
+        }
+
+        StatuteDiff { changes }
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -874,6 +1147,163 @@ pub mod transform {
                 optimized.conditions[0],
                 ConditionNode::HasAttribute { .. }
             ));
+        }
+
+        #[test]
+        fn test_diff_documents_no_changes() {
+            let doc = LegalDocument {
+                imports: vec![],
+                statutes: vec![StatuteNode {
+                    id: "test".to_string(),
+                    title: "Test".to_string(),
+                    conditions: vec![],
+                    effects: vec![],
+                    discretion: None,
+                    exceptions: vec![],
+                    amendments: vec![],
+                    supersedes: vec![],
+                    defaults: vec![],
+                    requires: vec![],
+                }],
+            };
+
+            let diff = diff_documents(&doc, &doc);
+            assert!(!diff.has_changes());
+            assert_eq!(diff.summary(), "No changes");
+        }
+
+        #[test]
+        fn test_diff_documents_added_statute() {
+            let old_doc = LegalDocument {
+                imports: vec![],
+                statutes: vec![],
+            };
+
+            let new_doc = LegalDocument {
+                imports: vec![],
+                statutes: vec![StatuteNode {
+                    id: "new-statute".to_string(),
+                    title: "New Statute".to_string(),
+                    conditions: vec![],
+                    effects: vec![],
+                    discretion: None,
+                    exceptions: vec![],
+                    amendments: vec![],
+                    supersedes: vec![],
+                    defaults: vec![],
+                    requires: vec![],
+                }],
+            };
+
+            let diff = diff_documents(&old_doc, &new_doc);
+            assert!(diff.has_changes());
+            assert_eq!(diff.added_statutes.len(), 1);
+            assert_eq!(diff.added_statutes[0].id, "new-statute");
+        }
+
+        #[test]
+        fn test_diff_documents_removed_import() {
+            let old_doc = LegalDocument {
+                imports: vec![ImportNode {
+                    path: "old.legalis".to_string(),
+                    alias: None,
+                }],
+                statutes: vec![],
+            };
+
+            let new_doc = LegalDocument {
+                imports: vec![],
+                statutes: vec![],
+            };
+
+            let diff = diff_documents(&old_doc, &new_doc);
+            assert!(diff.has_changes());
+            assert_eq!(diff.removed_imports.len(), 1);
+            assert_eq!(diff.removed_imports[0].path, "old.legalis");
+        }
+
+        #[test]
+        fn test_diff_statutes_title_changed() {
+            let old_statute = StatuteNode {
+                id: "test".to_string(),
+                title: "Old Title".to_string(),
+                conditions: vec![],
+                effects: vec![],
+                discretion: None,
+                exceptions: vec![],
+                amendments: vec![],
+                supersedes: vec![],
+                defaults: vec![],
+                requires: vec![],
+            };
+
+            let new_statute = StatuteNode {
+                id: "test".to_string(),
+                title: "New Title".to_string(),
+                conditions: vec![],
+                effects: vec![],
+                discretion: None,
+                exceptions: vec![],
+                amendments: vec![],
+                supersedes: vec![],
+                defaults: vec![],
+                requires: vec![],
+            };
+
+            let diff = diff_statutes(&old_statute, &new_statute);
+            assert!(diff.has_changes());
+            assert_eq!(diff.changes.len(), 1);
+            match &diff.changes[0] {
+                StatuteChange::TitleChanged { old, new } => {
+                    assert_eq!(old, "Old Title");
+                    assert_eq!(new, "New Title");
+                }
+                _ => panic!("Expected TitleChanged"),
+            }
+        }
+
+        #[test]
+        fn test_diff_statutes_conditions_changed() {
+            let old_statute = StatuteNode {
+                id: "test".to_string(),
+                title: "Test".to_string(),
+                conditions: vec![ConditionNode::HasAttribute {
+                    key: "old_cond".to_string(),
+                }],
+                effects: vec![],
+                discretion: None,
+                exceptions: vec![],
+                amendments: vec![],
+                supersedes: vec![],
+                defaults: vec![],
+                requires: vec![],
+            };
+
+            let new_statute = StatuteNode {
+                id: "test".to_string(),
+                title: "Test".to_string(),
+                conditions: vec![ConditionNode::HasAttribute {
+                    key: "new_cond".to_string(),
+                }],
+                effects: vec![],
+                discretion: None,
+                exceptions: vec![],
+                amendments: vec![],
+                supersedes: vec![],
+                defaults: vec![],
+                requires: vec![],
+            };
+
+            let diff = diff_statutes(&old_statute, &new_statute);
+            assert!(diff.has_changes());
+
+            match &diff.changes[0] {
+                StatuteChange::ConditionsChanged { added, removed } => {
+                    assert_eq!(added.len(), 1);
+                    assert_eq!(removed.len(), 1);
+                }
+                _ => panic!("Expected ConditionsChanged"),
+            }
         }
     }
 }

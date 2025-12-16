@@ -9,12 +9,23 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Load configuration
+    let _config = if let Some(config_path) = &cli.config {
+        legalis_cli::config::Config::from_file(std::path::Path::new(config_path))?
+    } else {
+        legalis_cli::config::Config::load()
+    };
+
     // Initialize logging based on verbosity
-    let log_level = match cli.verbose {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
+    let log_level = if cli.quiet {
+        "error"
+    } else {
+        match cli.verbose {
+            0 => "warn",
+            1 => "info",
+            2 => "debug",
+            _ => "trace",
+        }
     };
 
     tracing_subscriber::registry()
@@ -51,8 +62,8 @@ async fn main() -> Result<()> {
             println!("Server listening on http://{}:{}", host, port);
             axum::serve(listener, app).await?;
         }
-        Commands::Init { path } => {
-            commands::handle_init(path)?;
+        Commands::Init { path, dry_run } => {
+            commands::handle_init(path, *dry_run)?;
         }
         Commands::Diff {
             old,
@@ -118,8 +129,32 @@ async fn main() -> Result<()> {
             output,
             inplace,
             style,
+            dry_run,
         } => {
-            commands::handle_format(input, output.as_deref(), *inplace, style)?;
+            commands::handle_format(input, output.as_deref(), *inplace, style, *dry_run)?;
+        }
+        Commands::Lint { input, fix, strict } => {
+            commands::handle_lint(input, *fix, *strict)?;
+        }
+        Commands::Watch { input, command } => {
+            commands::handle_watch(input, command).await?;
+        }
+        Commands::Test {
+            input,
+            tests,
+            verbose,
+        } => {
+            commands::handle_test(input, tests, *verbose)?;
+        }
+        Commands::New {
+            name,
+            template,
+            output,
+        } => {
+            commands::handle_new(name, template, output.as_deref())?;
+        }
+        Commands::Doctor { verbose } => {
+            commands::handle_doctor(*verbose)?;
         }
     }
 

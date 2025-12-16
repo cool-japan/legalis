@@ -12,3 +12,18 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 petgraph.workspace = true
+
+# Optional dependencies for advanced rendering
+resvg = { version = "0.44", optional = true }
+tiny-skia = { version = "0.11", optional = true }
+usvg = { version = "0.44", optional = true }
+
+[features]
+default = []
+png-export = ["resvg", "tiny-skia", "usvg"]
+pdf-export = []
+
+[[bench]]
+name = "rendering"
+harness = false
+required-features = []

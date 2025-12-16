@@ -168,6 +168,128 @@ impl std::fmt::Display for SourceLocation {
     }
 }
 
+/// Source span representing a range in the source code.
+/// Useful for IDE integration and error highlighting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct SourceSpan {
+    /// Start location
+    pub start: SourceLocation,
+    /// End location
+    pub end: SourceLocation,
+}
+
+impl SourceSpan {
+    /// Creates a new source span.
+    pub fn new(start: SourceLocation, end: SourceLocation) -> Self {
+        Self { start, end }
+    }
+
+    /// Creates a span from a single location (zero-width span).
+    pub fn from_location(loc: SourceLocation) -> Self {
+        Self {
+            start: loc,
+            end: loc,
+        }
+    }
+
+    /// Creates a span from byte offsets by scanning the input.
+    pub fn from_offsets(start_offset: usize, end_offset: usize, input: &str) -> Self {
+        let start = SourceLocation::from_offset(start_offset, input);
+        let end = SourceLocation::from_offset(end_offset, input);
+        Self { start, end }
+    }
+
+    /// Returns the length of the span in bytes.
+    pub fn len(&self) -> usize {
+        self.end.offset.saturating_sub(self.start.offset)
+    }
+
+    /// Returns true if the span is empty (zero-width).
+    pub fn is_empty(&self) -> bool {
+        self.start.offset == self.end.offset
+    }
+
+    /// Extracts the text covered by this span from the input.
+    pub fn text<'a>(&self, input: &'a str) -> &'a str {
+        let start = self.start.offset;
+        let end = self.end.offset.min(input.len());
+        &input[start..end]
+    }
+}
+
+impl std::fmt::Display for SourceSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.start.line == self.end.line {
+            write!(
+                f,
+                "{}:{}-{}",
+                self.start.line, self.start.column, self.end.column
+            )
+        } else {
+            write!(
+                f,
+                "{}:{} to {}:{}",
+                self.start.line, self.start.column, self.end.line, self.end.column
+            )
+        }
+    }
+}
+
+/// Warnings that can be emitted during DSL parsing.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum DslWarning {
+    /// Deprecated syntax warning
+    DeprecatedSyntax {
+        location: SourceLocation,
+        old_syntax: String,
+        new_syntax: String,
+        message: String,
+    },
+    /// Redundant condition warning
+    RedundantCondition {
+        location: SourceLocation,
+        description: String,
+    },
+    /// Unused import warning
+    UnusedImport {
+        location: SourceLocation,
+        import_path: String,
+    },
+}
+
+impl std::fmt::Display for DslWarning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeprecatedSyntax {
+                location,
+                old_syntax,
+                new_syntax,
+                message,
+            } => write!(
+                f,
+                "Warning at {}: Deprecated syntax '{}' used. Use '{}' instead. {}",
+                location, old_syntax, new_syntax, message
+            ),
+            Self::RedundantCondition {
+                location,
+                description,
+            } => write!(
+                f,
+                "Warning at {}: Redundant condition: {}",
+                location, description
+            ),
+            Self::UnusedImport {
+                location,
+                import_path,
+            } => write!(
+                f,
+                "Warning at {}: Unused import '{}'",
+                location, import_path
+            ),
+        }
+    }
+}
+
 /// Errors that can occur during DSL parsing.
 #[derive(Debug, Error)]
 pub enum DslError {
@@ -205,6 +327,13 @@ pub enum DslError {
     UndefinedReference {
         location: SourceLocation,
         name: String,
+        hint: Option<String>,
+    },
+
+    #[error("Syntax error at {span}: {message}{}", hint.as_ref().map(|h| format!("\nHint: {}", h)).unwrap_or_default())]
+    SyntaxErrorWithSpan {
+        span: SourceSpan,
+        message: String,
         hint: Option<String>,
     },
 }
@@ -253,6 +382,37 @@ impl DslError {
             location,
             name: name.into(),
             hint,
+        }
+    }
+
+    /// Creates a syntax error with span for IDE integration.
+    pub fn syntax_error_with_span(
+        span: SourceSpan,
+        message: impl Into<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::SyntaxErrorWithSpan {
+            span,
+            message: message.into(),
+            hint,
+        }
+    }
+
+    /// Extracts the span from this error, if available.
+    pub fn span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::SyntaxErrorWithSpan { span, .. } => Some(*span),
+            Self::SyntaxError { location, .. } | Self::UndefinedReference { location, .. } => {
+                Some(SourceSpan::from_location(*location))
+            }
+            Self::ParseError {
+                location: Some(loc),
+                ..
+            } => Some(SourceSpan::from_location(*loc)),
+            Self::UnclosedComment(Some(loc)) | Self::UnmatchedParen(Some(loc)) => {
+                Some(SourceSpan::from_location(*loc))
+            }
+            _ => None,
         }
     }
 }
@@ -328,12 +488,32 @@ pub type DslResult<T> = Result<T, DslError>;
 /// DISCRETION ::= "DISCRETION" STRING
 /// ```
 #[derive(Debug, Default)]
-pub struct LegalDslParser;
+pub struct LegalDslParser {
+    /// Collected warnings during parsing
+    warnings: std::cell::RefCell<Vec<DslWarning>>,
+}
 
 impl LegalDslParser {
     /// Creates a new parser instance.
     pub fn new() -> Self {
-        Self
+        Self {
+            warnings: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Returns the collected warnings from the last parse operation.
+    pub fn warnings(&self) -> Vec<DslWarning> {
+        self.warnings.borrow().clone()
+    }
+
+    /// Clears all collected warnings.
+    pub fn clear_warnings(&self) {
+        self.warnings.borrow_mut().clear();
+    }
+
+    /// Emits a warning.
+    fn emit_warning(&self, warning: DslWarning) {
+        self.warnings.borrow_mut().push(warning);
     }
 
     /// Parses a statute from DSL text.
@@ -728,6 +908,24 @@ impl LegalDslParser {
                 iter.next();
                 self.parse_field_condition(iter, "income")
             }
+            Some(Token::CurrentDate) => {
+                iter.next();
+                self.parse_temporal_condition(iter, ast::TemporalField::CurrentDate)
+            }
+            Some(Token::DateField) => {
+                iter.next();
+                // Expect field name
+                let field_name = match iter.next() {
+                    Some(Token::Ident(s)) => s.clone(),
+                    Some(Token::StringLit(s)) => s.clone(),
+                    _ => {
+                        return Err(DslError::InvalidCondition(
+                            "Expected field name after DATE_FIELD".to_string(),
+                        ));
+                    }
+                };
+                self.parse_temporal_condition(iter, ast::TemporalField::DateField(field_name))
+            }
             Some(Token::Has) => {
                 iter.next();
                 if let Some(Token::Ident(key)) = iter.peek() {
@@ -758,12 +956,120 @@ impl LegalDslParser {
                     } else {
                         Err(DslError::parse_error("Expected identifier after '.'"))
                     }
+                } else if matches!(
+                    iter.peek(),
+                    Some(Token::Operator(_))
+                        | Some(Token::Between)
+                        | Some(Token::In)
+                        | Some(Token::Like)
+                        | Some(Token::Matches)
+                        | Some(Token::InRange)
+                        | Some(Token::NotInRange)
+                ) {
+                    // This is a field condition (e.g., "email MATCHES pattern")
+                    self.parse_field_condition(iter, &name)
                 } else {
                     Ok(Some(ast::ConditionNode::HasAttribute { key: name }))
                 }
             }
             Some(Token::Then) | Some(Token::RBrace) | Some(Token::Discretion) => Ok(None),
             _ => Ok(None),
+        }
+    }
+
+    /// Parses temporal field conditions (date comparisons).
+    fn parse_temporal_condition<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+        field: ast::TemporalField,
+    ) -> DslResult<Option<ast::ConditionNode>>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        let op = self.parse_comparison_op(iter)?;
+        let value = self.parse_condition_value(iter)?;
+        Ok(Some(ast::ConditionNode::TemporalComparison {
+            field,
+            operator: op.to_string(),
+            value,
+        }))
+    }
+
+    /// Parses numeric range conditions with inclusive/exclusive bounds.
+    /// Syntax: IN_RANGE min..max or IN_RANGE (min..max) or IN_RANGE [min..max]
+    fn parse_range_condition<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+        field: &str,
+        negated: bool,
+    ) -> DslResult<Option<ast::ConditionNode>>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Check for opening bracket/paren to determine inclusivity
+        let mut inclusive_min = true;
+        let mut inclusive_max = true;
+
+        // Look for optional opening bracket
+        if matches!(iter.peek(), Some(Token::LParen)) {
+            iter.next();
+            inclusive_min = false;
+        }
+
+        // Parse min value
+        let min = self.parse_condition_value(iter)?;
+
+        // Expect .. or ...
+        match iter.peek() {
+            Some(Token::Dot) => {
+                iter.next(); // first dot
+                if matches!(iter.peek(), Some(Token::Dot)) {
+                    iter.next(); // second dot
+                    // Check for third dot (exclusive max)
+                    if matches!(iter.peek(), Some(Token::Dot)) {
+                        iter.next();
+                        inclusive_max = false;
+                    }
+                } else {
+                    return Err(DslError::InvalidCondition(
+                        "Expected '..' or '...' in range".to_string(),
+                    ));
+                }
+            }
+            _ => {
+                return Err(DslError::InvalidCondition(
+                    "Expected '..' in range expression".to_string(),
+                ));
+            }
+        }
+
+        // Parse max value
+        let max = self.parse_condition_value(iter)?;
+
+        // Look for closing bracket/paren
+        if matches!(iter.peek(), Some(Token::RParen)) {
+            iter.next();
+            if !inclusive_min {
+                inclusive_max = false; // (min..max) - both exclusive
+            }
+        }
+
+        if negated {
+            Ok(Some(ast::ConditionNode::NotInRange {
+                field: field.to_string(),
+                min,
+                max,
+                inclusive_min,
+                inclusive_max,
+            }))
+        } else {
+            Ok(Some(ast::ConditionNode::InRange {
+                field: field.to_string(),
+                min,
+                max,
+                inclusive_min,
+                inclusive_max,
+            }))
         }
     }
 
@@ -860,6 +1166,37 @@ impl LegalDslParser {
                     pattern,
                 }))
             }
+            Some(Token::Matches) => {
+                iter.next(); // consume MATCHES
+                let regex_pattern = match iter.next() {
+                    Some(Token::StringLit(s)) => s.clone(),
+                    Some(Token::Ident(s)) => s.clone(),
+                    _ => {
+                        return Err(DslError::InvalidCondition(
+                            "Expected regex pattern after MATCHES".to_string(),
+                        ));
+                    }
+                };
+                // Validate regex pattern
+                if let Err(e) = regex::Regex::new(&regex_pattern) {
+                    return Err(DslError::InvalidCondition(format!(
+                        "Invalid regex pattern: {}",
+                        e
+                    )));
+                }
+                Ok(Some(ast::ConditionNode::Matches {
+                    field: field.to_string(),
+                    regex_pattern,
+                }))
+            }
+            Some(Token::InRange) => {
+                iter.next(); // consume IN_RANGE
+                self.parse_range_condition(iter, field, false)
+            }
+            Some(Token::NotInRange) => {
+                iter.next(); // consume NOT_IN_RANGE
+                self.parse_range_condition(iter, field, true)
+            }
             Some(Token::Operator(_)) => {
                 let op = self.parse_comparison_op(iter)?;
                 let value = self.parse_condition_value(iter)?;
@@ -919,6 +1256,101 @@ impl LegalDslParser {
                 "Expected value (number, string, date, or boolean)".to_string(),
             )),
         }
+    }
+
+    /// Parses a set expression for set operations.
+    /// Supports UNION, INTERSECT, and DIFFERENCE operations.
+    /// Example: (1, 2, 3) UNION (4, 5, 6)
+    #[allow(dead_code)]
+    fn parse_set_expression<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::SetExpression>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Parse the initial set (values in parentheses or a single value list)
+        let left = self.parse_simple_set(iter)?;
+
+        // Check for set operations
+        match iter.peek() {
+            Some(Token::Union) => {
+                iter.next(); // consume UNION
+                let right = self.parse_set_expression(iter)?;
+                Ok(ast::SetExpression::Union(Box::new(left), Box::new(right)))
+            }
+            Some(Token::Intersect) => {
+                iter.next(); // consume INTERSECT
+                let right = self.parse_set_expression(iter)?;
+                Ok(ast::SetExpression::Intersect(
+                    Box::new(left),
+                    Box::new(right),
+                ))
+            }
+            Some(Token::Difference) => {
+                iter.next(); // consume DIFFERENCE
+                let right = self.parse_set_expression(iter)?;
+                Ok(ast::SetExpression::Difference(
+                    Box::new(left),
+                    Box::new(right),
+                ))
+            }
+            _ => Ok(left),
+        }
+    }
+
+    /// Parses a simple set of values (without operations).
+    #[allow(dead_code)]
+    fn parse_simple_set<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::SetExpression>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        let mut values = Vec::new();
+
+        // Expect opening paren (optional if already consumed)
+        if matches!(iter.peek(), Some(Token::LParen)) {
+            iter.next(); // consume opening paren
+        }
+
+        // Parse values until we hit a closing paren or set operator
+        loop {
+            if matches!(
+                iter.peek(),
+                Some(Token::RParen)
+                    | Some(Token::Union)
+                    | Some(Token::Intersect)
+                    | Some(Token::Difference)
+            ) {
+                break;
+            }
+
+            // Skip commas
+            if matches!(iter.peek(), Some(Token::Comma)) {
+                iter.next();
+                continue;
+            }
+
+            // Stop at logical operators or statement terminators
+            if matches!(
+                iter.peek(),
+                Some(Token::And) | Some(Token::Or) | Some(Token::Then) | Some(Token::RBrace)
+            ) {
+                break;
+            }
+
+            let value = self.parse_condition_value(iter)?;
+            values.push(value);
+        }
+
+        // Consume closing paren if present
+        if matches!(iter.peek(), Some(Token::RParen)) {
+            iter.next();
+        }
+
+        Ok(ast::SetExpression::Values(values))
     }
 
     /// Parses an effect into an AST EffectNode.
@@ -1263,7 +1695,39 @@ impl LegalDslParser {
                             break;
                         }
                     }
-                    let token = match word.to_uppercase().as_str() {
+                    let upper = word.to_uppercase();
+
+                    // Check for deprecated syntax and emit warnings
+                    match upper.as_str() {
+                        "EXCEPT" => {
+                            self.emit_warning(DslWarning::DeprecatedSyntax {
+                                location: token_start,
+                                old_syntax: "EXCEPT".to_string(),
+                                new_syntax: "EXCEPTION".to_string(),
+                                message: "Please use 'EXCEPTION' instead of 'EXCEPT'".to_string(),
+                            });
+                        }
+                        "AMENDS" => {
+                            self.emit_warning(DslWarning::DeprecatedSyntax {
+                                location: token_start,
+                                old_syntax: "AMENDS".to_string(),
+                                new_syntax: "AMENDMENT".to_string(),
+                                message: "Please use 'AMENDMENT' instead of 'AMENDS'".to_string(),
+                            });
+                        }
+                        "REPLACES" => {
+                            self.emit_warning(DslWarning::DeprecatedSyntax {
+                                location: token_start,
+                                old_syntax: "REPLACES".to_string(),
+                                new_syntax: "SUPERSEDES".to_string(),
+                                message: "Please use 'SUPERSEDES' instead of 'REPLACES'"
+                                    .to_string(),
+                            });
+                        }
+                        _ => {}
+                    }
+
+                    let token = match upper.as_str() {
                         "STATUTE" => Token::Statute,
                         "WHEN" => Token::When,
                         "UNLESS" => Token::Unless,
@@ -1288,11 +1752,19 @@ impl LegalDslParser {
                         "BETWEEN" => Token::Between,
                         "IN" => Token::In,
                         "LIKE" => Token::Like,
+                        "MATCHES" | "MATCH" | "REGEX" => Token::Matches,
+                        "IN_RANGE" | "INRANGE" => Token::InRange,
+                        "NOT_IN_RANGE" | "NOTINRANGE" => Token::NotInRange,
                         "DEFAULT" => Token::Default,
+                        "UNION" => Token::Union,
+                        "INTERSECT" | "INTERSECTION" => Token::Intersect,
+                        "DIFFERENCE" | "SETMINUS" => Token::Difference,
                         "EFFECTIVE_DATE" | "EFFECTIVE" => Token::EffectiveDate,
                         "EXPIRY_DATE" | "EXPIRY" | "EXPIRES" => Token::ExpiryDate,
                         "JURISDICTION" => Token::Jurisdiction,
                         "VERSION" => Token::Version,
+                        "CURRENT_DATE" | "CURRENTDATE" | "NOW" | "TODAY" => Token::CurrentDate,
+                        "DATE_FIELD" | "DATEFIELD" => Token::DateField,
                         _ => Token::Ident(word),
                     };
                     tokens.push(SpannedToken::new(token, token_start));

@@ -1111,7 +1111,7 @@ fn test_requires_and_unless_combined() {
     // However, they might be getting combined. Let's check what we actually have
     // If they're combined into an AND, that's acceptable too
     assert!(
-        statute.conditions.len() >= 1,
+        !statute.conditions.is_empty(),
         "Should have at least one condition"
     );
 }
@@ -1182,4 +1182,698 @@ fn test_levenshtein_distance() {
     assert_eq!(crate::levenshtein_distance("STATUTE", "STAUTE"), 1);
     assert_eq!(crate::levenshtein_distance("WHEN", "WHEM"), 1);
     assert_eq!(crate::levenshtein_distance("abc", "xyz"), 3);
+}
+
+#[test]
+fn test_parse_temporal_condition_current_date() {
+    let input = r#"
+        STATUTE time-limited: "Time Limited Statute" {
+            WHEN CURRENT_DATE >= "2024-01-01"
+            THEN GRANT "Access to new program"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::TemporalComparison {
+            field,
+            operator,
+            value,
+        } => {
+            assert_eq!(field, &ast::TemporalField::CurrentDate);
+            assert_eq!(operator, ">=");
+            match value {
+                ast::ConditionValue::Date(d) => assert_eq!(d, "2024-01-01"),
+                _ => panic!("Expected date value"),
+            }
+        }
+        _ => panic!("Expected TemporalComparison condition"),
+    }
+}
+
+#[test]
+fn test_parse_temporal_condition_date_field() {
+    let input = r#"
+        STATUTE expiring-rights: "Expiring Rights" {
+            WHEN DATE_FIELD expiration < "2025-12-31"
+            THEN GRANT "Must renew before expiration"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::TemporalComparison {
+            field,
+            operator,
+            value,
+        } => {
+            assert_eq!(
+                field,
+                &ast::TemporalField::DateField("expiration".to_string())
+            );
+            assert_eq!(operator, "<");
+            match value {
+                ast::ConditionValue::Date(d) => assert_eq!(d, "2025-12-31"),
+                _ => panic!("Expected date value"),
+            }
+        }
+        _ => panic!("Expected TemporalComparison condition"),
+    }
+}
+
+#[test]
+fn test_parse_temporal_with_aliases() {
+    let input = r#"
+        STATUTE today-check: "Today Check" {
+            WHEN NOW > "2024-06-01" AND TODAY <= "2024-12-31"
+            THEN GRANT "Valid for 2024"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    // Should have AND condition with two temporal comparisons
+    match &statute.conditions[0] {
+        ast::ConditionNode::And(left, right) => {
+            assert!(matches!(
+                left.as_ref(),
+                ast::ConditionNode::TemporalComparison { .. }
+            ));
+            assert!(matches!(
+                right.as_ref(),
+                ast::ConditionNode::TemporalComparison { .. }
+            ));
+        }
+        _ => panic!("Expected AND condition with temporal comparisons"),
+    }
+}
+
+#[test]
+fn test_parse_regex_pattern() {
+    let input = r#"
+        STATUTE email-validation: "Email Validation" {
+            WHEN email MATCHES "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            THEN GRANT "Valid email"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::Matches {
+            field,
+            regex_pattern,
+        } => {
+            assert_eq!(field, "email");
+            assert_eq!(
+                regex_pattern,
+                "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            );
+        }
+        _ => panic!("Expected Matches condition"),
+    }
+}
+
+#[test]
+fn test_parse_regex_match_alias() {
+    let input = r#"
+        STATUTE phone-validation: "Phone Validation" {
+            WHEN phone MATCH "^\\+?[1-9]\\d{1,14}$"
+            THEN GRANT "Valid phone number"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::Matches {
+            field,
+            regex_pattern,
+        } => {
+            assert_eq!(field, "phone");
+            assert!(regex_pattern.contains("\\+"));
+        }
+        _ => panic!("Expected Matches condition"),
+    }
+}
+
+#[test]
+fn test_parse_invalid_regex() {
+    let input = r#"
+        STATUTE bad-regex: "Bad Regex" {
+            WHEN field MATCHES "[invalid(regex"
+            THEN GRANT "Should fail"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_document(input);
+
+    assert!(result.is_err());
+    match result {
+        Err(DslError::InvalidCondition(msg)) => {
+            assert!(msg.contains("Invalid regex pattern"));
+        }
+        _ => panic!("Expected InvalidCondition error"),
+    }
+}
+
+#[test]
+fn test_source_span_creation() {
+    let start = SourceLocation::new(1, 5, 4);
+    let end = SourceLocation::new(1, 10, 9);
+    let span = SourceSpan::new(start, end);
+
+    assert_eq!(span.start, start);
+    assert_eq!(span.end, end);
+    assert_eq!(span.len(), 5);
+    assert!(!span.is_empty());
+}
+
+#[test]
+fn test_source_span_from_location() {
+    let loc = SourceLocation::new(2, 3, 10);
+    let span = SourceSpan::from_location(loc);
+
+    assert_eq!(span.start, loc);
+    assert_eq!(span.end, loc);
+    assert_eq!(span.len(), 0);
+    assert!(span.is_empty());
+}
+
+#[test]
+fn test_source_span_text() {
+    let input = "STATUTE test";
+    let start = SourceLocation::new(1, 1, 0);
+    let end = SourceLocation::new(1, 8, 7);
+    let span = SourceSpan::new(start, end);
+
+    assert_eq!(span.text(input), "STATUTE");
+}
+
+#[test]
+fn test_source_span_display_same_line() {
+    let start = SourceLocation::new(1, 5, 4);
+    let end = SourceLocation::new(1, 10, 9);
+    let span = SourceSpan::new(start, end);
+
+    assert_eq!(span.to_string(), "1:5-10");
+}
+
+#[test]
+fn test_source_span_display_multi_line() {
+    let start = SourceLocation::new(1, 5, 4);
+    let end = SourceLocation::new(3, 2, 25);
+    let span = SourceSpan::new(start, end);
+
+    assert_eq!(span.to_string(), "1:5 to 3:2");
+}
+
+#[test]
+fn test_error_span_extraction() {
+    let span = SourceSpan::new(SourceLocation::new(1, 5, 4), SourceLocation::new(1, 10, 9));
+    let error = DslError::syntax_error_with_span(
+        span,
+        "Invalid syntax",
+        Some("Check your syntax".to_string()),
+    );
+
+    let extracted_span = error.span();
+    assert!(extracted_span.is_some());
+    assert_eq!(extracted_span.unwrap(), span);
+}
+
+#[test]
+fn test_error_span_from_syntax_error() {
+    let loc = SourceLocation::new(2, 3, 10);
+    let error = DslError::syntax_error(loc, "Invalid token", "STATUTE", "STAUTE", None);
+
+    let span = error.span();
+    assert!(span.is_some());
+    let span = span.unwrap();
+    assert_eq!(span.start, loc);
+    assert_eq!(span.end, loc);
+}
+
+#[test]
+fn test_parse_in_range_inclusive() {
+    let input = r#"
+        STATUTE age-range: "Age Range" {
+            WHEN age IN_RANGE 18..65
+            THEN GRANT "Working age"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::InRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            assert_eq!(field, "age");
+            assert_eq!(min, &ast::ConditionValue::Number(18));
+            assert_eq!(max, &ast::ConditionValue::Number(65));
+            assert!(inclusive_min);
+            assert!(inclusive_max);
+        }
+        _ => panic!("Expected InRange condition"),
+    }
+}
+
+#[test]
+fn test_parse_in_range_exclusive() {
+    let input = r#"
+        STATUTE score-range: "Score Range" {
+            WHEN score IN_RANGE (0..100)
+            THEN GRANT "Valid score"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::InRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            assert_eq!(field, "score");
+            assert_eq!(min, &ast::ConditionValue::Number(0));
+            assert_eq!(max, &ast::ConditionValue::Number(100));
+            assert!(!inclusive_min);
+            assert!(!inclusive_max);
+        }
+        _ => panic!("Expected InRange condition"),
+    }
+}
+
+#[test]
+fn test_parse_not_in_range() {
+    let input = r#"
+        STATUTE invalid-range: "Invalid Range" {
+            WHEN temperature NOT_IN_RANGE 0..100
+            THEN GRANT "Out of range"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::NotInRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            assert_eq!(field, "temperature");
+            assert_eq!(min, &ast::ConditionValue::Number(0));
+            assert_eq!(max, &ast::ConditionValue::Number(100));
+            assert!(inclusive_min);
+            assert!(inclusive_max);
+        }
+        _ => panic!("Expected NotInRange condition"),
+    }
+}
+
+#[test]
+fn test_parse_in_range_exclusive_max() {
+    let input = r#"
+        STATUTE range-test: "Range Test" {
+            WHEN value IN_RANGE 10...100
+            THEN GRANT "Valid"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(doc.statutes.len(), 1);
+    let statute = &doc.statutes[0];
+    assert_eq!(statute.conditions.len(), 1);
+
+    match &statute.conditions[0] {
+        ast::ConditionNode::InRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            assert_eq!(field, "value");
+            assert_eq!(min, &ast::ConditionValue::Number(10));
+            assert_eq!(max, &ast::ConditionValue::Number(100));
+            assert!(inclusive_min);
+            assert!(!inclusive_max);
+        }
+        _ => panic!("Expected InRange condition"),
+    }
+}
+
+// ========== Warning System Tests ==========
+
+#[test]
+fn test_deprecated_except_warning() {
+    let input = r#"
+        STATUTE test: "Test" {
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            EXCEPT WHEN AGE < 16 "No rights for minors"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    let warnings = parser.warnings();
+    assert_eq!(warnings.len(), 1);
+
+    match &warnings[0] {
+        DslWarning::DeprecatedSyntax {
+            old_syntax,
+            new_syntax,
+            ..
+        } => {
+            assert_eq!(old_syntax, "EXCEPT");
+            assert_eq!(new_syntax, "EXCEPTION");
+        }
+        _ => panic!("Expected DeprecatedSyntax warning"),
+    }
+}
+
+#[test]
+fn test_deprecated_amends_warning() {
+    let input = r#"
+        STATUTE test: "Test" {
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            AMENDS old-statute "Updates old statute"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    let warnings = parser.warnings();
+    assert_eq!(warnings.len(), 1);
+
+    match &warnings[0] {
+        DslWarning::DeprecatedSyntax {
+            old_syntax,
+            new_syntax,
+            ..
+        } => {
+            assert_eq!(old_syntax, "AMENDS");
+            assert_eq!(new_syntax, "AMENDMENT");
+        }
+        _ => panic!("Expected DeprecatedSyntax warning"),
+    }
+}
+
+#[test]
+fn test_deprecated_replaces_warning() {
+    let input = r#"
+        STATUTE test: "Test" {
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            REPLACES old-statute
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    let warnings = parser.warnings();
+    assert_eq!(warnings.len(), 1);
+
+    match &warnings[0] {
+        DslWarning::DeprecatedSyntax {
+            old_syntax,
+            new_syntax,
+            ..
+        } => {
+            assert_eq!(old_syntax, "REPLACES");
+            assert_eq!(new_syntax, "SUPERSEDES");
+        }
+        _ => panic!("Expected DeprecatedSyntax warning"),
+    }
+}
+
+#[test]
+fn test_multiple_deprecated_warnings() {
+    let input = r#"
+        STATUTE test1: "Test 1" {
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            EXCEPT WHEN AGE < 16 "No rights"
+            REPLACES old-law
+        }
+
+        STATUTE test2: "Test 2" {
+            WHEN AGE >= 21
+            THEN GRANT "More rights"
+            AMENDS test1 "Updates test1"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    let warnings = parser.warnings();
+    assert_eq!(warnings.len(), 3);
+
+    // Verify we have all three deprecated keywords
+    let deprecated_keywords: Vec<String> = warnings
+        .iter()
+        .filter_map(|w| match w {
+            DslWarning::DeprecatedSyntax { old_syntax, .. } => Some(old_syntax.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert!(deprecated_keywords.contains(&"EXCEPT".to_string()));
+    assert!(deprecated_keywords.contains(&"REPLACES".to_string()));
+    assert!(deprecated_keywords.contains(&"AMENDS".to_string()));
+}
+
+#[test]
+fn test_no_warnings_for_modern_syntax() {
+    let input = r#"
+        STATUTE test: "Test" {
+            JURISDICTION "US-CA"
+            VERSION 2
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            EXCEPTION WHEN AGE < 16 "No rights"
+            AMENDMENT old-statute "Updates"
+            SUPERSEDES legacy-law
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    let warnings = parser.warnings();
+    assert_eq!(warnings.len(), 0);
+}
+
+#[test]
+fn test_warning_clear() {
+    let input = r#"
+        STATUTE test: "Test" {
+            WHEN AGE >= 18
+            THEN GRANT "Rights"
+            EXCEPT WHEN AGE < 16 "No rights"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let _doc = parser.parse_document(input).unwrap();
+
+    assert_eq!(parser.warnings().len(), 1);
+
+    parser.clear_warnings();
+    assert_eq!(parser.warnings().len(), 0);
+}
+
+#[test]
+fn test_warning_display() {
+    let warning = DslWarning::DeprecatedSyntax {
+        location: SourceLocation::new(10, 5, 100),
+        old_syntax: "EXCEPT".to_string(),
+        new_syntax: "EXCEPTION".to_string(),
+        message: "Please use 'EXCEPTION' instead".to_string(),
+    };
+
+    let display = format!("{}", warning);
+    assert!(display.contains("10:5"));
+    assert!(display.contains("EXCEPT"));
+    assert!(display.contains("EXCEPTION"));
+}
+
+// ========== Set Operations Tests ==========
+
+#[test]
+fn test_set_expression_values() {
+    let values = vec![
+        ast::ConditionValue::Number(1),
+        ast::ConditionValue::Number(2),
+        ast::ConditionValue::Number(3),
+    ];
+    let set_expr = ast::SetExpression::Values(values.clone());
+
+    match set_expr {
+        ast::SetExpression::Values(v) => {
+            assert_eq!(v.len(), 3);
+            assert_eq!(v[0], ast::ConditionValue::Number(1));
+        }
+        _ => panic!("Expected Values variant"),
+    }
+}
+
+#[test]
+fn test_set_expression_union() {
+    let set1 = ast::SetExpression::Values(vec![
+        ast::ConditionValue::Number(1),
+        ast::ConditionValue::Number(2),
+    ]);
+    let set2 = ast::SetExpression::Values(vec![
+        ast::ConditionValue::Number(3),
+        ast::ConditionValue::Number(4),
+    ]);
+
+    let union = ast::SetExpression::Union(Box::new(set1), Box::new(set2));
+
+    match union {
+        ast::SetExpression::Union(left, right) => match (*left, *right) {
+            (ast::SetExpression::Values(v1), ast::SetExpression::Values(v2)) => {
+                assert_eq!(v1.len(), 2);
+                assert_eq!(v2.len(), 2);
+            }
+            _ => panic!("Expected Values in both sides"),
+        },
+        _ => panic!("Expected Union variant"),
+    }
+}
+
+#[test]
+fn test_set_expression_intersect() {
+    let set1 = ast::SetExpression::Values(vec![ast::ConditionValue::Number(1)]);
+    let set2 = ast::SetExpression::Values(vec![ast::ConditionValue::Number(2)]);
+
+    let intersect = ast::SetExpression::Intersect(Box::new(set1), Box::new(set2));
+
+    match intersect {
+        ast::SetExpression::Intersect(_, _) => {
+            // Successfully created intersection
+        }
+        _ => panic!("Expected Intersect variant"),
+    }
+}
+
+#[test]
+fn test_set_expression_difference() {
+    let set1 = ast::SetExpression::Values(vec![ast::ConditionValue::Number(1)]);
+    let set2 = ast::SetExpression::Values(vec![ast::ConditionValue::Number(2)]);
+
+    let difference = ast::SetExpression::Difference(Box::new(set1), Box::new(set2));
+
+    match difference {
+        ast::SetExpression::Difference(_, _) => {
+            // Successfully created difference
+        }
+        _ => panic!("Expected Difference variant"),
+    }
+}
+
+#[test]
+fn test_set_expression_nested() {
+    // Test (1, 2) UNION ((3, 4) INTERSECT (5, 6))
+    let set1 = ast::SetExpression::Values(vec![
+        ast::ConditionValue::Number(1),
+        ast::ConditionValue::Number(2),
+    ]);
+    let set2 = ast::SetExpression::Values(vec![
+        ast::ConditionValue::Number(3),
+        ast::ConditionValue::Number(4),
+    ]);
+    let set3 = ast::SetExpression::Values(vec![
+        ast::ConditionValue::Number(5),
+        ast::ConditionValue::Number(6),
+    ]);
+
+    let intersect = ast::SetExpression::Intersect(Box::new(set2), Box::new(set3));
+    let union = ast::SetExpression::Union(Box::new(set1), Box::new(intersect));
+
+    match union {
+        ast::SetExpression::Union(left, right) => {
+            assert!(matches!(*left, ast::SetExpression::Values(_)));
+            assert!(matches!(*right, ast::SetExpression::Intersect(_, _)));
+        }
+        _ => panic!("Expected Union with nested Intersect"),
+    }
+}
+
+#[test]
+fn test_condition_value_set_expr() {
+    let set_expr = ast::SetExpression::Values(vec![ast::ConditionValue::Number(42)]);
+    let cond_value = ast::ConditionValue::SetExpr(set_expr);
+
+    match cond_value {
+        ast::ConditionValue::SetExpr(expr) => match expr {
+            ast::SetExpression::Values(v) => {
+                assert_eq!(v.len(), 1);
+            }
+            _ => panic!("Expected Values"),
+        },
+        _ => panic!("Expected SetExpr variant"),
+    }
 }

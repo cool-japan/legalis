@@ -1581,6 +1581,139 @@ impl StatuteRegistry {
             .map(StatuteSummary::from)
             .collect()
     }
+
+    /// Adds a tag to a statute.
+    pub fn add_tag(&mut self, statute_id: &str, tag: impl Into<String>) -> RegistryResult<()> {
+        let tag = tag.into();
+        let entry = self
+            .statutes
+            .get_mut(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        // Only add if not already present
+        if !entry.tags.contains(&tag) {
+            entry.tags.push(tag.clone());
+            entry.modified_at = Utc::now();
+            entry.update_etag();
+
+            // Update tag index
+            self.tag_index
+                .entry(tag.clone())
+                .or_default()
+                .insert(statute_id.to_string());
+
+            // Invalidate cache
+            self.cache.pop(statute_id);
+
+            // Record event and trigger webhooks
+            self.record_event(RegistryEvent::TagAdded {
+                statute_id: statute_id.to_string(),
+                tag,
+                timestamp: Utc::now(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Removes a tag from a statute.
+    pub fn remove_tag(&mut self, statute_id: &str, tag: &str) -> RegistryResult<()> {
+        let entry = self
+            .statutes
+            .get_mut(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        // Remove the tag if present
+        if let Some(pos) = entry.tags.iter().position(|t| t == tag) {
+            entry.tags.remove(pos);
+            entry.modified_at = Utc::now();
+            entry.update_etag();
+
+            // Update tag index
+            if let Some(statute_ids) = self.tag_index.get_mut(tag) {
+                statute_ids.remove(statute_id);
+                // Remove the tag entry if no more statutes have it
+                if statute_ids.is_empty() {
+                    self.tag_index.remove(tag);
+                }
+            }
+
+            // Invalidate cache
+            self.cache.pop(statute_id);
+
+            // Record event and trigger webhooks
+            self.record_event(RegistryEvent::TagRemoved {
+                statute_id: statute_id.to_string(),
+                tag: tag.to_string(),
+                timestamp: Utc::now(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Adds or updates metadata for a statute.
+    pub fn add_metadata(
+        &mut self,
+        statute_id: &str,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> RegistryResult<()> {
+        let key = key.into();
+        let value = value.into();
+
+        let entry = self
+            .statutes
+            .get_mut(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let old_value = entry.metadata.insert(key.clone(), value.clone());
+        entry.modified_at = Utc::now();
+        entry.update_etag();
+
+        // Invalidate cache
+        self.cache.pop(statute_id);
+
+        // Record event and trigger webhooks
+        self.record_event(RegistryEvent::MetadataUpdated {
+            statute_id: statute_id.to_string(),
+            key,
+            old_value,
+            new_value: Some(value),
+            timestamp: Utc::now(),
+        });
+
+        Ok(())
+    }
+
+    /// Removes metadata from a statute.
+    pub fn remove_metadata(&mut self, statute_id: &str, key: &str) -> RegistryResult<()> {
+        let entry = self
+            .statutes
+            .get_mut(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let old_value = entry.metadata.remove(key);
+
+        if old_value.is_some() {
+            entry.modified_at = Utc::now();
+            entry.update_etag();
+
+            // Invalidate cache
+            self.cache.pop(statute_id);
+
+            // Record event and trigger webhooks
+            self.record_event(RegistryEvent::MetadataUpdated {
+                statute_id: statute_id.to_string(),
+                key: key.to_string(),
+                old_value,
+                new_value: None,
+                timestamp: Utc::now(),
+            });
+        }
+
+        Ok(())
+    }
 }
 
 /// Multi-tenant registry manager.
@@ -1856,6 +1989,1491 @@ impl DependencyGraph {
         } else {
             1
         }
+    }
+}
+
+// =============================================================================
+// Async API Support
+// =============================================================================
+
+#[cfg(feature = "async")]
+pub mod async_api {
+    //! Async variants of registry operations.
+    //!
+    //! This module provides async versions of the main registry methods,
+    //! allowing integration with async runtimes like tokio.
+
+    use super::*;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    /// Async-friendly wrapper around StatuteRegistry.
+    pub struct AsyncStatuteRegistry {
+        inner: Arc<RwLock<StatuteRegistry>>,
+    }
+
+    impl AsyncStatuteRegistry {
+        /// Creates a new async registry.
+        pub fn new() -> Self {
+            Self {
+                inner: Arc::new(RwLock::new(StatuteRegistry::new())),
+            }
+        }
+
+        /// Registers a new statute asynchronously.
+        pub async fn register(&self, entry: StatuteEntry) -> RegistryResult<Uuid> {
+            let mut registry = self.inner.write().await;
+            registry.register(entry)
+        }
+
+        /// Updates a statute asynchronously.
+        pub async fn update(&self, statute_id: &str, statute: Statute) -> RegistryResult<u32> {
+            let mut registry = self.inner.write().await;
+            registry.update(statute_id, statute)
+        }
+
+        /// Updates a statute with optimistic concurrency control asynchronously.
+        pub async fn update_with_etag(
+            &self,
+            statute_id: &str,
+            statute: Statute,
+            expected_etag: &str,
+        ) -> RegistryResult<u32> {
+            let mut registry = self.inner.write().await;
+            registry.update_with_etag(statute_id, statute, expected_etag)
+        }
+
+        /// Gets a statute by ID asynchronously.
+        pub async fn get(&self, statute_id: &str) -> Option<StatuteEntry> {
+            let mut registry = self.inner.write().await;
+            registry.get(statute_id)
+        }
+
+        /// Gets a statute without using cache asynchronously.
+        pub async fn get_uncached(&self, statute_id: &str) -> Option<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry.get_uncached(statute_id).cloned()
+        }
+
+        /// Gets a specific version of a statute asynchronously.
+        pub async fn get_version(
+            &self,
+            statute_id: &str,
+            version: u32,
+        ) -> RegistryResult<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry.get_version(statute_id, version).cloned()
+        }
+
+        /// Lists all versions of a statute asynchronously.
+        pub async fn list_versions(&self, statute_id: &str) -> Vec<u32> {
+            let registry = self.inner.read().await;
+            registry.list_versions(statute_id)
+        }
+
+        /// Lists all statutes asynchronously.
+        pub async fn list(&self) -> Vec<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry.list().into_iter().cloned().collect()
+        }
+
+        /// Lists active statutes asynchronously.
+        pub async fn list_active(&self) -> Vec<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry.list_active().into_iter().cloned().collect()
+        }
+
+        /// Queries statutes by tag asynchronously.
+        pub async fn query_by_tag(&self, tag: &str) -> Vec<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry.query_by_tag(tag).into_iter().cloned().collect()
+        }
+
+        /// Queries statutes by jurisdiction asynchronously.
+        pub async fn query_by_jurisdiction(&self, jurisdiction: &str) -> Vec<StatuteEntry> {
+            let registry = self.inner.read().await;
+            registry
+                .query_by_jurisdiction(jurisdiction)
+                .into_iter()
+                .cloned()
+                .collect()
+        }
+
+        /// Sets the status of a statute asynchronously.
+        pub async fn set_status(
+            &self,
+            statute_id: &str,
+            status: StatuteStatus,
+        ) -> RegistryResult<()> {
+            let mut registry = self.inner.write().await;
+            registry.set_status(statute_id, status)
+        }
+
+        /// Searches statutes asynchronously.
+        pub async fn search(&self, query: &SearchQuery) -> Vec<StatuteEntry> {
+            let mut registry = self.inner.write().await;
+            registry.search(query).into_iter().cloned().collect()
+        }
+
+        /// Searches statutes with pagination asynchronously.
+        pub async fn search_paged(
+            &self,
+            query: &SearchQuery,
+            pagination: Pagination,
+        ) -> PagedResult<StatuteEntry> {
+            let mut registry = self.inner.write().await;
+            let result = registry.search_paged(query, pagination);
+            PagedResult::new(
+                result.items.into_iter().cloned().collect(),
+                result.page,
+                result.per_page,
+                result.total,
+            )
+        }
+
+        /// Creates a backup asynchronously.
+        pub async fn create_backup(&self, description: Option<String>) -> RegistryBackup {
+            let registry = self.inner.read().await;
+            registry.create_backup(description)
+        }
+
+        /// Restores from a backup asynchronously.
+        pub async fn restore_from_backup(&self, backup: RegistryBackup) -> RegistryResult<()> {
+            let mut registry = self.inner.write().await;
+            registry.restore_from_backup(backup)
+        }
+
+        /// Batch registers statutes asynchronously.
+        pub async fn batch_register(
+            &self,
+            entries: Vec<StatuteEntry>,
+        ) -> Vec<RegistryResult<Uuid>> {
+            let mut registry = self.inner.write().await;
+            registry.batch_register(entries)
+        }
+
+        /// Subscribes to registry events asynchronously.
+        pub async fn subscribe_webhook<F>(
+            &self,
+            name: Option<String>,
+            filter: Option<WebhookEventFilter>,
+            callback: F,
+        ) -> Uuid
+        where
+            F: Fn(&RegistryEvent) + Send + Sync + 'static,
+        {
+            let registry = self.inner.read().await;
+            registry.subscribe_webhook(name, filter, callback)
+        }
+
+        /// Unsubscribes a webhook asynchronously.
+        pub async fn unsubscribe_webhook(&self, id: Uuid) -> bool {
+            let registry = self.inner.read().await;
+            registry.unsubscribe_webhook(id)
+        }
+    }
+
+    impl Default for AsyncStatuteRegistry {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Clone for AsyncStatuteRegistry {
+        fn clone(&self) -> Self {
+            Self {
+                inner: Arc::clone(&self.inner),
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Streaming Support
+// =============================================================================
+
+#[cfg(all(feature = "async", feature = "async-stream"))]
+pub mod streaming {
+    //! Streaming support for large result sets.
+    //!
+    //! This module provides Stream implementations for efficiently
+    //! iterating over large collections of statutes.
+
+    use super::*;
+    use async_stream::stream;
+    use futures::Stream;
+
+    /// Creates a stream of all statutes.
+    pub fn stream_all(
+        registry: std::sync::Arc<tokio::sync::RwLock<StatuteRegistry>>,
+        chunk_size: usize,
+    ) -> impl Stream<Item = Vec<StatuteEntry>> {
+        stream! {
+            let registry = registry.read().await;
+            let statutes: Vec<StatuteEntry> = registry.list().into_iter().cloned().collect();
+            drop(registry);
+
+            for chunk in statutes.chunks(chunk_size) {
+                yield chunk.to_vec();
+            }
+        }
+    }
+
+    /// Creates a stream of statutes matching a query.
+    pub fn stream_search(
+        registry: std::sync::Arc<tokio::sync::RwLock<StatuteRegistry>>,
+        query: SearchQuery,
+        chunk_size: usize,
+    ) -> impl Stream<Item = Vec<StatuteEntry>> {
+        stream! {
+            let mut registry = registry.write().await;
+            let results: Vec<StatuteEntry> = registry.search(&query).into_iter().cloned().collect();
+            drop(registry);
+
+            for chunk in results.chunks(chunk_size) {
+                yield chunk.to_vec();
+            }
+        }
+    }
+
+    /// Creates a stream of statute summaries.
+    pub fn stream_summaries(
+        registry: std::sync::Arc<tokio::sync::RwLock<StatuteRegistry>>,
+        chunk_size: usize,
+    ) -> impl Stream<Item = Vec<StatuteSummary>> {
+        stream! {
+            let registry = registry.read().await;
+            let summaries: Vec<StatuteSummary> = registry
+                .list_summaries(LazyLoadConfig::all())
+                .into_iter()
+                .collect();
+            drop(registry);
+
+            for chunk in summaries.chunks(chunk_size) {
+                yield chunk.to_vec();
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Transaction Support
+// =============================================================================
+
+/// Transaction support for batch operations.
+pub mod transaction {
+    //! Transaction support for batched registry operations.
+    //!
+    //! This module provides a transaction pattern that allows
+    //! multiple operations to be batched together and committed
+    //! or rolled back as a unit.
+
+    use super::*;
+
+    /// A transaction operation.
+    #[derive(Debug, Clone)]
+    pub enum Operation {
+        /// Register a new statute
+        Register(StatuteEntry),
+        /// Update an existing statute
+        Update {
+            statute_id: String,
+            statute: Statute,
+        },
+        /// Set the status of a statute
+        SetStatus {
+            statute_id: String,
+            status: StatuteStatus,
+        },
+        /// Add a tag to a statute
+        AddTag { statute_id: String, tag: String },
+        /// Remove a tag from a statute
+        RemoveTag { statute_id: String, tag: String },
+        /// Add metadata to a statute
+        AddMetadata {
+            statute_id: String,
+            key: String,
+            value: String,
+        },
+    }
+
+    /// A transaction for batching operations.
+    pub struct Transaction {
+        operations: Vec<Operation>,
+    }
+
+    impl Transaction {
+        /// Creates a new transaction.
+        pub fn new() -> Self {
+            Self {
+                operations: Vec::new(),
+            }
+        }
+
+        /// Adds a register operation.
+        pub fn register(mut self, entry: StatuteEntry) -> Self {
+            self.operations.push(Operation::Register(entry));
+            self
+        }
+
+        /// Adds an update operation.
+        pub fn update(mut self, statute_id: impl Into<String>, statute: Statute) -> Self {
+            self.operations.push(Operation::Update {
+                statute_id: statute_id.into(),
+                statute,
+            });
+            self
+        }
+
+        /// Adds a set status operation.
+        pub fn set_status(mut self, statute_id: impl Into<String>, status: StatuteStatus) -> Self {
+            self.operations.push(Operation::SetStatus {
+                statute_id: statute_id.into(),
+                status,
+            });
+            self
+        }
+
+        /// Adds an add tag operation.
+        pub fn add_tag(mut self, statute_id: impl Into<String>, tag: impl Into<String>) -> Self {
+            self.operations.push(Operation::AddTag {
+                statute_id: statute_id.into(),
+                tag: tag.into(),
+            });
+            self
+        }
+
+        /// Adds a remove tag operation.
+        pub fn remove_tag(mut self, statute_id: impl Into<String>, tag: impl Into<String>) -> Self {
+            self.operations.push(Operation::RemoveTag {
+                statute_id: statute_id.into(),
+                tag: tag.into(),
+            });
+            self
+        }
+
+        /// Adds metadata.
+        pub fn add_metadata(
+            mut self,
+            statute_id: impl Into<String>,
+            key: impl Into<String>,
+            value: impl Into<String>,
+        ) -> Self {
+            self.operations.push(Operation::AddMetadata {
+                statute_id: statute_id.into(),
+                key: key.into(),
+                value: value.into(),
+            });
+            self
+        }
+
+        /// Commits the transaction, applying all operations.
+        pub fn commit(self, registry: &mut StatuteRegistry) -> RegistryResult<TransactionResult> {
+            let mut results = Vec::new();
+            let mut successful = 0;
+            let mut failed = 0;
+
+            for op in self.operations {
+                let result = match op {
+                    Operation::Register(entry) => registry
+                        .register(entry)
+                        .map(|id| OperationResult::Registered(id))
+                        .map_err(OperationError::Registry),
+                    Operation::Update {
+                        statute_id,
+                        statute,
+                    } => registry
+                        .update(&statute_id, statute)
+                        .map(|version| OperationResult::Updated(version))
+                        .map_err(OperationError::Registry),
+                    Operation::SetStatus { statute_id, status } => registry
+                        .set_status(&statute_id, status)
+                        .map(|_| OperationResult::StatusSet)
+                        .map_err(OperationError::Registry),
+                    Operation::AddTag { statute_id, tag } => registry
+                        .add_tag(&statute_id, tag)
+                        .map(|_| OperationResult::TagAdded)
+                        .map_err(OperationError::Registry),
+                    Operation::RemoveTag { statute_id, tag } => registry
+                        .remove_tag(&statute_id, &tag)
+                        .map(|_| OperationResult::TagRemoved)
+                        .map_err(OperationError::Registry),
+                    Operation::AddMetadata {
+                        statute_id,
+                        key,
+                        value,
+                    } => registry
+                        .add_metadata(&statute_id, key, value)
+                        .map(|_| OperationResult::MetadataAdded)
+                        .map_err(OperationError::Registry),
+                };
+
+                match result {
+                    Ok(r) => {
+                        successful += 1;
+                        results.push(Ok(r));
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        results.push(Err(e));
+                    }
+                }
+            }
+
+            Ok(TransactionResult {
+                results,
+                successful,
+                failed,
+            })
+        }
+    }
+
+    impl Default for Transaction {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Result of a transaction operation.
+    #[derive(Debug, Clone)]
+    pub enum OperationResult {
+        /// Statute was registered
+        Registered(Uuid),
+        /// Statute was updated
+        Updated(u32),
+        /// Status was set
+        StatusSet,
+        /// Tag was added
+        TagAdded,
+        /// Tag was removed
+        TagRemoved,
+        /// Metadata was added
+        MetadataAdded,
+    }
+
+    /// Error during a transaction operation.
+    #[derive(Debug, Error)]
+    pub enum OperationError {
+        #[error("Registry error: {0}")]
+        Registry(#[from] RegistryError),
+    }
+
+    /// Result of committing a transaction.
+    #[derive(Debug)]
+    pub struct TransactionResult {
+        /// Results for each operation
+        pub results: Vec<Result<OperationResult, OperationError>>,
+        /// Number of successful operations
+        pub successful: usize,
+        /// Number of failed operations
+        pub failed: usize,
+    }
+
+    impl TransactionResult {
+        /// Returns true if all operations succeeded.
+        pub fn is_success(&self) -> bool {
+            self.failed == 0
+        }
+
+        /// Returns true if any operations failed.
+        pub fn has_failures(&self) -> bool {
+            self.failed > 0
+        }
+    }
+}
+
+// =============================================================================
+// Akoma Ntoso Support
+// =============================================================================
+
+#[cfg(feature = "akoma-ntoso")]
+pub mod akoma_ntoso {
+    //! Import/export support for Akoma Ntoso format.
+    //!
+    //! Akoma Ntoso is an XML standard for parliamentary,
+    //! legislative and judiciary documents.
+
+    use super::*;
+    use quick_xml::de::from_str;
+    use quick_xml::se::to_string;
+
+    /// Akoma Ntoso document wrapper.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename = "akomaNtoso")]
+    pub struct AkomaNtoso {
+        #[serde(rename = "act")]
+        pub act: Act,
+    }
+
+    /// Akoma Ntoso act element.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Act {
+        #[serde(rename = "meta")]
+        pub meta: Meta,
+        #[serde(rename = "body")]
+        pub body: Body,
+    }
+
+    /// Akoma Ntoso metadata.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Meta {
+        #[serde(rename = "identification")]
+        pub identification: Identification,
+        #[serde(rename = "publication")]
+        pub publication: Option<Publication>,
+    }
+
+    /// Akoma Ntoso identification.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Identification {
+        #[serde(rename = "FRBRWork")]
+        pub work: FRBRLevel,
+        #[serde(rename = "FRBRExpression")]
+        pub expression: FRBRLevel,
+    }
+
+    /// Akoma Ntoso FRBR level.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FRBRLevel {
+        #[serde(rename = "FRBRthis")]
+        pub this: FRBRElement,
+        #[serde(rename = "FRBRuri")]
+        pub uri: FRBRElement,
+        #[serde(rename = "FRBRdate")]
+        pub date: FRBRDate,
+        #[serde(rename = "FRBRauthor")]
+        pub author: FRBRElement,
+        #[serde(rename = "FRBRcountry")]
+        pub country: FRBRElement,
+    }
+
+    /// Akoma Ntoso FRBR element.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FRBRElement {
+        #[serde(rename = "@value")]
+        pub value: String,
+    }
+
+    /// Akoma Ntoso FRBR date.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FRBRDate {
+        #[serde(rename = "@date")]
+        pub date: String,
+        #[serde(rename = "@name")]
+        pub name: String,
+    }
+
+    /// Akoma Ntoso publication.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Publication {
+        #[serde(rename = "@date")]
+        pub date: String,
+        #[serde(rename = "@name")]
+        pub name: String,
+        #[serde(rename = "@showAs")]
+        pub show_as: String,
+    }
+
+    /// Akoma Ntoso body.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Body {
+        #[serde(rename = "section", default)]
+        pub sections: Vec<Section>,
+    }
+
+    /// Akoma Ntoso section.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Section {
+        #[serde(rename = "@eId")]
+        pub id: String,
+        #[serde(rename = "num")]
+        pub num: Option<String>,
+        #[serde(rename = "heading")]
+        pub heading: Option<String>,
+        #[serde(rename = "content")]
+        pub content: Option<String>,
+    }
+
+    /// Exports a statute to Akoma Ntoso format.
+    pub fn export_statute(entry: &StatuteEntry) -> Result<String, quick_xml::DeError> {
+        let akoma = statute_to_akoma(entry);
+        to_string(&akoma)
+    }
+
+    /// Imports a statute from Akoma Ntoso format.
+    pub fn import_statute(
+        xml: &str,
+        jurisdiction: &str,
+    ) -> Result<StatuteEntry, quick_xml::DeError> {
+        let akoma: AkomaNtoso = from_str(xml)?;
+        Ok(akoma_to_statute(akoma, jurisdiction))
+    }
+
+    /// Converts a statute to Akoma Ntoso format.
+    fn statute_to_akoma(entry: &StatuteEntry) -> AkomaNtoso {
+        AkomaNtoso {
+            act: Act {
+                meta: Meta {
+                    identification: Identification {
+                        work: FRBRLevel {
+                            this: FRBRElement {
+                                value: format!(
+                                    "/akn/{}/act/{}",
+                                    entry.jurisdiction, entry.statute.id
+                                ),
+                            },
+                            uri: FRBRElement {
+                                value: format!(
+                                    "/akn/{}/act/{}",
+                                    entry.jurisdiction, entry.statute.id
+                                ),
+                            },
+                            date: FRBRDate {
+                                date: entry.created_at.format("%Y-%m-%d").to_string(),
+                                name: "enactment".to_string(),
+                            },
+                            author: FRBRElement {
+                                value: format!("#{}", entry.jurisdiction),
+                            },
+                            country: FRBRElement {
+                                value: entry.jurisdiction.clone(),
+                            },
+                        },
+                        expression: FRBRLevel {
+                            this: FRBRElement {
+                                value: format!(
+                                    "/akn/{}/act/{}/eng@{}",
+                                    entry.jurisdiction,
+                                    entry.statute.id,
+                                    entry.created_at.format("%Y-%m-%d")
+                                ),
+                            },
+                            uri: FRBRElement {
+                                value: format!(
+                                    "/akn/{}/act/{}/eng@",
+                                    entry.jurisdiction, entry.statute.id
+                                ),
+                            },
+                            date: FRBRDate {
+                                date: entry.modified_at.format("%Y-%m-%d").to_string(),
+                                name: "expression".to_string(),
+                            },
+                            author: FRBRElement {
+                                value: "#author".to_string(),
+                            },
+                            country: FRBRElement {
+                                value: entry.jurisdiction.clone(),
+                            },
+                        },
+                    },
+                    publication: entry.effective_date.map(|d| Publication {
+                        date: d.format("%Y-%m-%d").to_string(),
+                        name: "publication".to_string(),
+                        show_as: "Publication Date".to_string(),
+                    }),
+                },
+                body: Body {
+                    sections: vec![Section {
+                        id: "main".to_string(),
+                        num: Some("1".to_string()),
+                        heading: Some(entry.statute.title.clone()),
+                        content: Some(format!("{:?}", entry.statute)),
+                    }],
+                },
+            },
+        }
+    }
+
+    /// Converts Akoma Ntoso format to a statute.
+    fn akoma_to_statute(akoma: AkomaNtoso, jurisdiction: &str) -> StatuteEntry {
+        let statute_id = akoma
+            .act
+            .meta
+            .identification
+            .work
+            .uri
+            .value
+            .split('/')
+            .last()
+            .unwrap_or("unknown")
+            .to_string();
+
+        let title = akoma
+            .act
+            .body
+            .sections
+            .first()
+            .and_then(|s| s.heading.clone())
+            .unwrap_or_else(|| "Untitled".to_string());
+
+        let statute = Statute::new(&statute_id, &title);
+
+        StatuteEntry::new(statute, jurisdiction)
+    }
+}
+
+// =============================================================================
+// Database Backend Support
+// =============================================================================
+
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+pub mod storage {
+    //! Storage backend implementations for persistent statute storage.
+    //!
+    //! This module provides database backends with connection pooling
+    //! for SQLite and PostgreSQL.
+
+    use super::*;
+    use sqlx::{Pool, Row};
+    use std::sync::Arc;
+
+    /// Storage backend trait for statute persistence.
+    #[cfg(feature = "async")]
+    #[async_trait::async_trait]
+    pub trait StorageBackend: Send + Sync {
+        /// Stores a statute entry.
+        async fn store(&self, entry: &StatuteEntry) -> RegistryResult<()>;
+
+        /// Retrieves a statute by ID.
+        async fn get(&self, statute_id: &str) -> RegistryResult<Option<StatuteEntry>>;
+
+        /// Retrieves a specific version of a statute.
+        async fn get_version(
+            &self,
+            statute_id: &str,
+            version: u32,
+        ) -> RegistryResult<Option<StatuteEntry>>;
+
+        /// Lists all statutes.
+        async fn list(&self) -> RegistryResult<Vec<StatuteEntry>>;
+
+        /// Lists all versions of a statute.
+        async fn list_versions(&self, statute_id: &str) -> RegistryResult<Vec<u32>>;
+
+        /// Deletes a statute.
+        async fn delete(&self, statute_id: &str) -> RegistryResult<()>;
+
+        /// Searches statutes by jurisdiction.
+        async fn find_by_jurisdiction(
+            &self,
+            jurisdiction: &str,
+        ) -> RegistryResult<Vec<StatuteEntry>>;
+
+        /// Searches statutes by tag.
+        async fn find_by_tag(&self, tag: &str) -> RegistryResult<Vec<StatuteEntry>>;
+
+        /// Counts total statutes.
+        async fn count(&self) -> RegistryResult<usize>;
+    }
+
+    /// SQLite storage backend with connection pooling.
+    #[cfg(feature = "sqlite")]
+    pub struct SqliteBackend {
+        pool: Arc<Pool<sqlx::Sqlite>>,
+    }
+
+    #[cfg(feature = "sqlite")]
+    impl SqliteBackend {
+        /// Creates a new SQLite backend.
+        pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(10)
+                .connect(database_url)
+                .await?;
+
+            // Run migrations
+            sqlx::query(
+                r#"
+                CREATE TABLE IF NOT EXISTS statutes (
+                    registry_id TEXT PRIMARY KEY,
+                    statute_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    etag TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    effective_date TEXT,
+                    expiry_date TEXT,
+                    amends TEXT,
+                    jurisdiction TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    modified_at TEXT NOT NULL,
+                    statute_data TEXT NOT NULL,
+                    tags TEXT NOT NULL,
+                    references TEXT NOT NULL,
+                    supersedes TEXT NOT NULL,
+                    metadata TEXT NOT NULL,
+                    UNIQUE(statute_id, version)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_statute_id ON statutes(statute_id);
+                CREATE INDEX IF NOT EXISTS idx_jurisdiction ON statutes(jurisdiction);
+                CREATE INDEX IF NOT EXISTS idx_status ON statutes(status);
+                "#,
+            )
+            .execute(&pool)
+            .await?;
+
+            Ok(Self {
+                pool: Arc::new(pool),
+            })
+        }
+
+        /// Gets the connection pool.
+        pub fn pool(&self) -> &Pool<sqlx::Sqlite> {
+            &self.pool
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[async_trait::async_trait]
+    impl StorageBackend for SqliteBackend {
+        async fn store(&self, entry: &StatuteEntry) -> RegistryResult<()> {
+            let statute_json = serde_json::to_string(&entry.statute)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let tags_json = serde_json::to_string(&entry.tags)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let refs_json = serde_json::to_string(&entry.references)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let supersedes_json = serde_json::to_string(&entry.supersedes)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let metadata_json = serde_json::to_string(&entry.metadata)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            sqlx::query(
+                r#"
+                INSERT OR REPLACE INTO statutes (
+                    registry_id, statute_id, version, etag, status,
+                    effective_date, expiry_date, amends, jurisdiction,
+                    created_at, modified_at, statute_data, tags, references,
+                    supersedes, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(entry.registry_id.to_string())
+            .bind(&entry.statute.id)
+            .bind(entry.version as i64)
+            .bind(&entry.etag)
+            .bind(format!("{:?}", entry.status))
+            .bind(entry.effective_date.map(|d| d.to_rfc3339()))
+            .bind(entry.expiry_date.map(|d| d.to_rfc3339()))
+            .bind(&entry.amends)
+            .bind(&entry.jurisdiction)
+            .bind(entry.created_at.to_rfc3339())
+            .bind(entry.modified_at.to_rfc3339())
+            .bind(statute_json)
+            .bind(tags_json)
+            .bind(refs_json)
+            .bind(supersedes_json)
+            .bind(metadata_json)
+            .execute(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn get(&self, statute_id: &str) -> RegistryResult<Option<StatuteEntry>> {
+            let row = sqlx::query(
+                "SELECT * FROM statutes WHERE statute_id = ? ORDER BY version DESC LIMIT 1",
+            )
+            .bind(statute_id)
+            .fetch_optional(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            row.map(|r| self.row_to_entry(&r)).transpose()
+        }
+
+        async fn get_version(
+            &self,
+            statute_id: &str,
+            version: u32,
+        ) -> RegistryResult<Option<StatuteEntry>> {
+            let row = sqlx::query("SELECT * FROM statutes WHERE statute_id = ? AND version = ?")
+                .bind(statute_id)
+                .bind(version as i64)
+                .fetch_optional(&*self.pool)
+                .await
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            row.map(|r| self.row_to_entry(&r)).transpose()
+        }
+
+        async fn list(&self) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT * FROM statutes s1
+                WHERE version = (SELECT MAX(version) FROM statutes s2 WHERE s2.statute_id = s1.statute_id)
+                "#,
+            )
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn list_versions(&self, statute_id: &str) -> RegistryResult<Vec<u32>> {
+            let rows =
+                sqlx::query("SELECT version FROM statutes WHERE statute_id = ? ORDER BY version")
+                    .bind(statute_id)
+                    .fetch_all(&*self.pool)
+                    .await
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(rows.iter().map(|r| r.get::<i64, _>(0) as u32).collect())
+        }
+
+        async fn delete(&self, statute_id: &str) -> RegistryResult<()> {
+            sqlx::query("DELETE FROM statutes WHERE statute_id = ?")
+                .bind(statute_id)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn find_by_jurisdiction(
+            &self,
+            jurisdiction: &str,
+        ) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT * FROM statutes s1
+                WHERE jurisdiction = ?
+                AND version = (SELECT MAX(version) FROM statutes s2 WHERE s2.statute_id = s1.statute_id)
+                "#,
+            )
+            .bind(jurisdiction)
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn find_by_tag(&self, tag: &str) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT * FROM statutes s1
+                WHERE tags LIKE ?
+                AND version = (SELECT MAX(version) FROM statutes s2 WHERE s2.statute_id = s1.statute_id)
+                "#,
+            )
+            .bind(format!("%\"{}\",%", tag))
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn count(&self) -> RegistryResult<usize> {
+            let row = sqlx::query(
+                r#"
+                SELECT COUNT(DISTINCT statute_id) FROM statutes
+                "#,
+            )
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(row.get::<i64, _>(0) as usize)
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    impl SqliteBackend {
+        #[allow(dead_code)]
+        fn row_to_entry(&self, row: &sqlx::sqlite::SqliteRow) -> RegistryResult<StatuteEntry> {
+            let statute_json: String = row.get("statute_data");
+            let tags_json: String = row.get("tags");
+            let refs_json: String = row.get("references");
+            let supersedes_json: String = row.get("supersedes");
+            let metadata_json: String = row.get("metadata");
+
+            Ok(StatuteEntry {
+                registry_id: Uuid::parse_str(row.get("registry_id"))
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                statute: serde_json::from_str(&statute_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                version: row.get::<i64, _>("version") as u32,
+                etag: row.get("etag"),
+                status: match row.get::<String, _>("status").as_str() {
+                    "Draft" => StatuteStatus::Draft,
+                    "UnderReview" => StatuteStatus::UnderReview,
+                    "Approved" => StatuteStatus::Approved,
+                    "Active" => StatuteStatus::Active,
+                    "Repealed" => StatuteStatus::Repealed,
+                    "Superseded" => StatuteStatus::Superseded,
+                    _ => StatuteStatus::Draft,
+                },
+                effective_date: row
+                    .get::<Option<String>, _>("effective_date")
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc)),
+                expiry_date: row
+                    .get::<Option<String>, _>("expiry_date")
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc)),
+                amends: row.get("amends"),
+                supersedes: serde_json::from_str(&supersedes_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                references: serde_json::from_str(&refs_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                tags: serde_json::from_str(&tags_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                jurisdiction: row.get("jurisdiction"),
+                metadata: serde_json::from_str(&metadata_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                created_at: DateTime::parse_from_rfc3339(row.get("created_at"))
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?
+                    .with_timezone(&Utc),
+                modified_at: DateTime::parse_from_rfc3339(row.get("modified_at"))
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?
+                    .with_timezone(&Utc),
+            })
+        }
+    }
+
+    /// PostgreSQL storage backend with connection pooling.
+    #[cfg(feature = "postgres")]
+    pub struct PostgresBackend {
+        pool: Arc<Pool<sqlx::Postgres>>,
+    }
+
+    #[cfg(feature = "postgres")]
+    impl PostgresBackend {
+        /// Creates a new PostgreSQL backend.
+        pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(20)
+                .connect(database_url)
+                .await?;
+
+            // Run migrations
+            sqlx::query(
+                r#"
+                CREATE TABLE IF NOT EXISTS statutes (
+                    registry_id UUID PRIMARY KEY,
+                    statute_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    etag TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    effective_date TIMESTAMPTZ,
+                    expiry_date TIMESTAMPTZ,
+                    amends TEXT,
+                    jurisdiction TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL,
+                    modified_at TIMESTAMPTZ NOT NULL,
+                    statute_data JSONB NOT NULL,
+                    tags JSONB NOT NULL,
+                    references JSONB NOT NULL,
+                    supersedes JSONB NOT NULL,
+                    metadata JSONB NOT NULL,
+                    UNIQUE(statute_id, version)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_statute_id ON statutes(statute_id);
+                CREATE INDEX IF NOT EXISTS idx_jurisdiction ON statutes(jurisdiction);
+                CREATE INDEX IF NOT EXISTS idx_status ON statutes(status);
+                CREATE INDEX IF NOT EXISTS idx_tags ON statutes USING GIN (tags);
+                "#,
+            )
+            .execute(&pool)
+            .await?;
+
+            Ok(Self {
+                pool: Arc::new(pool),
+            })
+        }
+
+        /// Gets the connection pool.
+        pub fn pool(&self) -> &Pool<sqlx::Postgres> {
+            &self.pool
+        }
+    }
+
+    #[cfg(feature = "postgres")]
+    #[async_trait::async_trait]
+    impl StorageBackend for PostgresBackend {
+        async fn store(&self, entry: &StatuteEntry) -> RegistryResult<()> {
+            let statute_json = serde_json::to_value(&entry.statute)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let tags_json = serde_json::to_value(&entry.tags)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let refs_json = serde_json::to_value(&entry.references)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let supersedes_json = serde_json::to_value(&entry.supersedes)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+            let metadata_json = serde_json::to_value(&entry.metadata)
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            sqlx::query(
+                r#"
+                INSERT INTO statutes (
+                    registry_id, statute_id, version, etag, status,
+                    effective_date, expiry_date, amends, jurisdiction,
+                    created_at, modified_at, statute_data, tags, references,
+                    supersedes, metadata
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                ON CONFLICT (statute_id, version)
+                DO UPDATE SET
+                    etag = EXCLUDED.etag,
+                    status = EXCLUDED.status,
+                    modified_at = EXCLUDED.modified_at,
+                    statute_data = EXCLUDED.statute_data,
+                    metadata = EXCLUDED.metadata
+                "#,
+            )
+            .bind(entry.registry_id)
+            .bind(&entry.statute.id)
+            .bind(entry.version as i32)
+            .bind(&entry.etag)
+            .bind(format!("{:?}", entry.status))
+            .bind(entry.effective_date)
+            .bind(entry.expiry_date)
+            .bind(&entry.amends)
+            .bind(&entry.jurisdiction)
+            .bind(entry.created_at)
+            .bind(entry.modified_at)
+            .bind(statute_json)
+            .bind(tags_json)
+            .bind(refs_json)
+            .bind(supersedes_json)
+            .bind(metadata_json)
+            .execute(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn get(&self, statute_id: &str) -> RegistryResult<Option<StatuteEntry>> {
+            let row = sqlx::query(
+                "SELECT * FROM statutes WHERE statute_id = $1 ORDER BY version DESC LIMIT 1",
+            )
+            .bind(statute_id)
+            .fetch_optional(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            row.map(|r| self.row_to_entry(&r)).transpose()
+        }
+
+        async fn get_version(
+            &self,
+            statute_id: &str,
+            version: u32,
+        ) -> RegistryResult<Option<StatuteEntry>> {
+            let row = sqlx::query("SELECT * FROM statutes WHERE statute_id = $1 AND version = $2")
+                .bind(statute_id)
+                .bind(version as i32)
+                .fetch_optional(&*self.pool)
+                .await
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            row.map(|r| self.row_to_entry(&r)).transpose()
+        }
+
+        async fn list(&self) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT DISTINCT ON (statute_id) *
+                FROM statutes
+                ORDER BY statute_id, version DESC
+                "#,
+            )
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn list_versions(&self, statute_id: &str) -> RegistryResult<Vec<u32>> {
+            let rows =
+                sqlx::query("SELECT version FROM statutes WHERE statute_id = $1 ORDER BY version")
+                    .bind(statute_id)
+                    .fetch_all(&*self.pool)
+                    .await
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(rows.iter().map(|r| r.get::<i32, _>(0) as u32).collect())
+        }
+
+        async fn delete(&self, statute_id: &str) -> RegistryResult<()> {
+            sqlx::query("DELETE FROM statutes WHERE statute_id = $1")
+                .bind(statute_id)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn find_by_jurisdiction(
+            &self,
+            jurisdiction: &str,
+        ) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT DISTINCT ON (statute_id) *
+                FROM statutes
+                WHERE jurisdiction = $1
+                ORDER BY statute_id, version DESC
+                "#,
+            )
+            .bind(jurisdiction)
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn find_by_tag(&self, tag: &str) -> RegistryResult<Vec<StatuteEntry>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT DISTINCT ON (statute_id) *
+                FROM statutes
+                WHERE tags ? $1
+                ORDER BY statute_id, version DESC
+                "#,
+            )
+            .bind(tag)
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            rows.iter().map(|r| self.row_to_entry(r)).collect()
+        }
+
+        async fn count(&self) -> RegistryResult<usize> {
+            let row = sqlx::query("SELECT COUNT(DISTINCT statute_id) FROM statutes")
+                .fetch_one(&*self.pool)
+                .await
+                .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?;
+
+            Ok(row.get::<i64, _>(0) as usize)
+        }
+    }
+
+    #[cfg(feature = "postgres")]
+    impl PostgresBackend {
+        #[allow(dead_code)]
+        fn row_to_entry(&self, row: &sqlx::postgres::PgRow) -> RegistryResult<StatuteEntry> {
+            let statute_json: serde_json::Value = row.get("statute_data");
+            let tags_json: serde_json::Value = row.get("tags");
+            let refs_json: serde_json::Value = row.get("references");
+            let supersedes_json: serde_json::Value = row.get("supersedes");
+            let metadata_json: serde_json::Value = row.get("metadata");
+
+            Ok(StatuteEntry {
+                registry_id: row.get("registry_id"),
+                statute: serde_json::from_value(statute_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                version: row.get::<i32, _>("version") as u32,
+                etag: row.get("etag"),
+                status: match row.get::<String, _>("status").as_str() {
+                    "Draft" => StatuteStatus::Draft,
+                    "UnderReview" => StatuteStatus::UnderReview,
+                    "Approved" => StatuteStatus::Approved,
+                    "Active" => StatuteStatus::Active,
+                    "Repealed" => StatuteStatus::Repealed,
+                    "Superseded" => StatuteStatus::Superseded,
+                    _ => StatuteStatus::Draft,
+                },
+                effective_date: row.get("effective_date"),
+                expiry_date: row.get("expiry_date"),
+                amends: row.get("amends"),
+                supersedes: serde_json::from_value(supersedes_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                references: serde_json::from_value(refs_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                tags: serde_json::from_value(tags_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                jurisdiction: row.get("jurisdiction"),
+                metadata: serde_json::from_value(metadata_json)
+                    .map_err(|e| RegistryError::InvalidOperation(e.to_string()))?,
+                created_at: row.get("created_at"),
+                modified_at: row.get("modified_at"),
+            })
+        }
+    }
+}
+
+// =============================================================================
+// GraphQL API Support
+// =============================================================================
+
+#[cfg(feature = "graphql")]
+pub mod graphql {
+    //! GraphQL API for statute registry.
+    //!
+    //! This module provides a GraphQL interface for querying and
+    //! mutating the statute registry.
+
+    use super::*;
+    use async_graphql::{Context, EmptySubscription, FieldResult, Object, Schema, SimpleObject};
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    /// GraphQL-compatible statute entry.
+    #[derive(SimpleObject, Clone)]
+    pub struct GraphQLStatuteEntry {
+        pub registry_id: String,
+        pub statute_id: String,
+        pub title: String,
+        pub version: i32,
+        pub status: String,
+        pub jurisdiction: String,
+        pub tags: Vec<String>,
+        pub created_at: String,
+        pub modified_at: String,
+    }
+
+    impl From<&StatuteEntry> for GraphQLStatuteEntry {
+        fn from(entry: &StatuteEntry) -> Self {
+            Self {
+                registry_id: entry.registry_id.to_string(),
+                statute_id: entry.statute.id.clone(),
+                title: entry.statute.title.clone(),
+                version: entry.version as i32,
+                status: format!("{:?}", entry.status),
+                jurisdiction: entry.jurisdiction.clone(),
+                tags: entry.tags.clone(),
+                created_at: entry.created_at.to_rfc3339(),
+                modified_at: entry.modified_at.to_rfc3339(),
+            }
+        }
+    }
+
+    /// GraphQL query root.
+    pub struct QueryRoot {
+        registry: Arc<RwLock<StatuteRegistry>>,
+    }
+
+    impl QueryRoot {
+        /// Creates a new query root.
+        pub fn new(registry: Arc<RwLock<StatuteRegistry>>) -> Self {
+            Self { registry }
+        }
+    }
+
+    #[Object]
+    impl QueryRoot {
+        /// Gets a statute by ID.
+        async fn statute(&self, id: String) -> FieldResult<Option<GraphQLStatuteEntry>> {
+            let mut registry = self.registry.write().await;
+            Ok(registry.get(&id).map(|e| GraphQLStatuteEntry::from(&e)))
+        }
+
+        /// Lists all statutes.
+        async fn statutes(&self) -> FieldResult<Vec<GraphQLStatuteEntry>> {
+            let registry = self.registry.read().await;
+            Ok(registry
+                .list()
+                .iter()
+                .map(|e| GraphQLStatuteEntry::from(*e))
+                .collect())
+        }
+
+        /// Lists active statutes.
+        async fn active_statutes(&self) -> FieldResult<Vec<GraphQLStatuteEntry>> {
+            let registry = self.registry.read().await;
+            Ok(registry
+                .list_active()
+                .iter()
+                .map(|e| GraphQLStatuteEntry::from(*e))
+                .collect())
+        }
+
+        /// Searches statutes by tag.
+        async fn statutes_by_tag(&self, tag: String) -> FieldResult<Vec<GraphQLStatuteEntry>> {
+            let registry = self.registry.read().await;
+            Ok(registry
+                .query_by_tag(&tag)
+                .iter()
+                .map(|e| GraphQLStatuteEntry::from(*e))
+                .collect())
+        }
+
+        /// Searches statutes by jurisdiction.
+        async fn statutes_by_jurisdiction(
+            &self,
+            jurisdiction: String,
+        ) -> FieldResult<Vec<GraphQLStatuteEntry>> {
+            let registry = self.registry.read().await;
+            Ok(registry
+                .query_by_jurisdiction(&jurisdiction)
+                .iter()
+                .map(|e| GraphQLStatuteEntry::from(*e))
+                .collect())
+        }
+
+        /// Gets statute count.
+        async fn statute_count(&self) -> FieldResult<i32> {
+            let registry = self.registry.read().await;
+            Ok(registry.count() as i32)
+        }
+    }
+
+    /// GraphQL mutation root.
+    pub struct MutationRoot {
+        registry: Arc<RwLock<StatuteRegistry>>,
+    }
+
+    impl MutationRoot {
+        /// Creates a new mutation root.
+        pub fn new(registry: Arc<RwLock<StatuteRegistry>>) -> Self {
+            Self { registry }
+        }
+    }
+
+    #[Object]
+    impl MutationRoot {
+        /// Sets the status of a statute.
+        async fn set_status(&self, id: String, status: String) -> FieldResult<bool> {
+            let mut registry = self.registry.write().await;
+            let status_enum = match status.as_str() {
+                "Draft" => StatuteStatus::Draft,
+                "UnderReview" => StatuteStatus::UnderReview,
+                "Approved" => StatuteStatus::Approved,
+                "Active" => StatuteStatus::Active,
+                "Repealed" => StatuteStatus::Repealed,
+                "Superseded" => StatuteStatus::Superseded,
+                _ => return Ok(false),
+            };
+            registry.set_status(&id, status_enum).ok();
+            Ok(true)
+        }
+
+        /// Adds a tag to a statute.
+        async fn add_tag(&self, id: String, tag: String) -> FieldResult<bool> {
+            let mut registry = self.registry.write().await;
+            registry.add_tag(&id, tag).ok();
+            Ok(true)
+        }
+
+        /// Removes a tag from a statute.
+        async fn remove_tag(&self, id: String, tag: String) -> FieldResult<bool> {
+            let mut registry = self.registry.write().await;
+            registry.remove_tag(&id, &tag).ok();
+            Ok(true)
+        }
+    }
+
+    /// Creates a GraphQL schema for the registry.
+    pub fn create_schema(
+        registry: Arc<RwLock<StatuteRegistry>>,
+    ) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+        Schema::build(
+            QueryRoot::new(Arc::clone(&registry)),
+            MutationRoot::new(registry),
+            EmptySubscription,
+        )
+        .finish()
     }
 }
 
@@ -3391,5 +5009,300 @@ mod tests {
 
         registry.clear_webhooks();
         assert_eq!(registry.webhook_count(), 0);
+    }
+
+    // =============================================================================
+    // Transaction Tests
+    // =============================================================================
+
+    #[test]
+    fn test_transaction_register() {
+        use crate::transaction::Transaction;
+
+        let mut registry = StatuteRegistry::new();
+
+        let entry1 = StatuteEntry::new(test_statute("statute-1"), "JP");
+        let entry2 = StatuteEntry::new(test_statute("statute-2"), "JP");
+
+        let tx = Transaction::new().register(entry1).register(entry2);
+
+        let result = tx.commit(&mut registry).unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.successful, 2);
+        assert_eq!(result.failed, 0);
+        assert_eq!(registry.count(), 2);
+    }
+
+    #[test]
+    fn test_transaction_mixed_operations() {
+        use crate::transaction::Transaction;
+
+        let mut registry = StatuteRegistry::new();
+
+        // Register a statute first
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        // Create a transaction with mixed operations
+        let tx = Transaction::new()
+            .add_tag("statute-1", "test-tag")
+            .add_metadata("statute-1", "key1", "value1")
+            .set_status("statute-1", StatuteStatus::Active);
+
+        let result = tx.commit(&mut registry).unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.successful, 3);
+        assert_eq!(result.failed, 0);
+
+        // Verify the changes
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert!(statute.tags.contains(&"test-tag".to_string()));
+        assert_eq!(statute.metadata.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(statute.status, StatuteStatus::Active);
+    }
+
+    #[test]
+    fn test_transaction_partial_failure() {
+        use crate::transaction::Transaction;
+
+        let mut registry = StatuteRegistry::new();
+
+        // Register one statute
+        let entry1 = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry1).unwrap();
+
+        // Create a transaction that includes an operation on a non-existent statute
+        let tx = Transaction::new()
+            .add_tag("statute-1", "tag1")
+            .add_tag("non-existent", "tag2")
+            .add_metadata("statute-1", "key1", "value1");
+
+        let result = tx.commit(&mut registry).unwrap();
+
+        assert!(result.has_failures());
+        assert_eq!(result.successful, 2); // tag1 and metadata
+        assert_eq!(result.failed, 1); // non-existent statute
+
+        // Verify partial success
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert!(statute.tags.contains(&"tag1".to_string()));
+        assert_eq!(statute.metadata.get("key1"), Some(&"value1".to_string()));
+    }
+
+    #[test]
+    fn test_add_tag() {
+        let mut registry = StatuteRegistry::new();
+
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        // Add a tag
+        registry.add_tag("statute-1", "criminal-law").unwrap();
+
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert!(statute.tags.contains(&"criminal-law".to_string()));
+
+        // Verify tag index
+        let statutes_with_tag = registry.query_by_tag("criminal-law");
+        assert_eq!(statutes_with_tag.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_tag() {
+        let mut registry = StatuteRegistry::new();
+
+        let mut entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        entry = entry.with_tag("criminal-law");
+        registry.register(entry).unwrap();
+
+        // Remove the tag
+        registry.remove_tag("statute-1", "criminal-law").unwrap();
+
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert!(!statute.tags.contains(&"criminal-law".to_string()));
+
+        // Verify tag index
+        let statutes_with_tag = registry.query_by_tag("criminal-law");
+        assert_eq!(statutes_with_tag.len(), 0);
+    }
+
+    #[test]
+    fn test_add_metadata() {
+        let mut registry = StatuteRegistry::new();
+
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        // Add metadata
+        registry
+            .add_metadata("statute-1", "author", "Test Author")
+            .unwrap();
+
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert_eq!(
+            statute.metadata.get("author"),
+            Some(&"Test Author".to_string())
+        );
+    }
+
+    #[test]
+    fn test_remove_metadata() {
+        let mut registry = StatuteRegistry::new();
+
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        // Add and then remove metadata
+        registry
+            .add_metadata("statute-1", "author", "Test Author")
+            .unwrap();
+        registry.remove_metadata("statute-1", "author").unwrap();
+
+        let statute = registry.get_uncached("statute-1").unwrap();
+        assert_eq!(statute.metadata.get("author"), None);
+    }
+
+    // =============================================================================
+    // Concurrent Access Tests
+    // =============================================================================
+
+    #[test]
+    fn test_concurrent_reads() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let mut registry = StatuteRegistry::new();
+
+        // Register some statutes
+        for i in 1..=10 {
+            let entry = StatuteEntry::new(test_statute(&format!("statute-{}", i)), "JP");
+            registry.register(entry).unwrap();
+        }
+
+        let registry = Arc::new(Mutex::new(registry));
+        let mut handles = vec![];
+
+        // Spawn multiple reader threads
+        for _ in 0..5 {
+            let registry_clone = Arc::clone(&registry);
+            let handle = thread::spawn(move || {
+                for i in 1..=10 {
+                    let registry = registry_clone.lock().unwrap();
+                    let statute_id = format!("statute-{}", i);
+                    assert!(registry.get_uncached(&statute_id).is_some());
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_concurrent_writes() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let registry = StatuteRegistry::new();
+        let registry = Arc::new(Mutex::new(registry));
+        let mut handles = vec![];
+
+        // Spawn multiple writer threads
+        for i in 1..=5 {
+            let registry_clone = Arc::clone(&registry);
+            let handle = thread::spawn(move || {
+                let mut registry = registry_clone.lock().unwrap();
+                let entry = StatuteEntry::new(test_statute(&format!("statute-{}", i)), "JP");
+                registry.register(entry).unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify all statutes were registered
+        let registry = registry.lock().unwrap();
+        assert_eq!(registry.count(), 5);
+    }
+
+    #[test]
+    fn test_concurrent_mixed_operations() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let mut registry = StatuteRegistry::new();
+
+        // Register initial statutes
+        for i in 1..=3 {
+            let entry = StatuteEntry::new(test_statute(&format!("statute-{}", i)), "JP");
+            registry.register(entry).unwrap();
+        }
+
+        let registry = Arc::new(Mutex::new(registry));
+        let mut handles = vec![];
+
+        // Reader threads
+        for _ in 0..3 {
+            let registry_clone = Arc::clone(&registry);
+            let handle = thread::spawn(move || {
+                let registry = registry_clone.lock().unwrap();
+                let _count = registry.count();
+                let _list = registry.list();
+            });
+            handles.push(handle);
+        }
+
+        // Writer threads
+        for i in 4..=6 {
+            let registry_clone = Arc::clone(&registry);
+            let handle = thread::spawn(move || {
+                let mut registry = registry_clone.lock().unwrap();
+                let statute_id = format!("statute-{}", i);
+                let entry = StatuteEntry::new(test_statute(&statute_id), "JP");
+                let _ = registry.register(entry);
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Final count should be 6
+        let registry = registry.lock().unwrap();
+        assert_eq!(registry.count(), 6);
+    }
+
+    #[test]
+    fn test_optimistic_concurrency_with_etag() {
+        let mut registry = StatuteRegistry::new();
+
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        // Get the current ETag
+        let statute = registry.get_uncached("statute-1").unwrap();
+        let etag = statute.etag.clone();
+
+        // Successful update with correct ETag
+        let result = registry.update_with_etag("statute-1", test_statute("statute-1"), &etag);
+        assert!(result.is_ok());
+
+        // Failed update with outdated ETag
+        let result = registry.update_with_etag("statute-1", test_statute("statute-1"), &etag);
+        assert!(result.is_err());
+        match result {
+            Err(RegistryError::ConcurrentModification { .. }) => {}
+            _ => panic!("Expected ConcurrentModification error"),
+        }
     }
 }

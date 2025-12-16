@@ -5,6 +5,7 @@ use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
     TextEncoder,
 };
+use std::sync::Once;
 
 lazy_static! {
     /// Global metrics registry.
@@ -43,23 +44,28 @@ lazy_static! {
             .expect("metric can be created");
 }
 
+static INIT: Once = Once::new();
+
 /// Initialize and register all metrics.
+/// This function is idempotent and safe to call multiple times.
 pub fn init() {
-    REGISTRY
-        .register(Box::new(HTTP_REQUESTS_TOTAL.clone()))
-        .expect("metric can be registered");
-    REGISTRY
-        .register(Box::new(HTTP_REQUEST_DURATION.clone()))
-        .expect("metric can be registered");
-    REGISTRY
-        .register(Box::new(STATUTES_TOTAL.clone()))
-        .expect("metric can be registered");
-    REGISTRY
-        .register(Box::new(VERIFICATIONS_TOTAL.clone()))
-        .expect("metric can be registered");
-    REGISTRY
-        .register(Box::new(SIMULATIONS_TOTAL.clone()))
-        .expect("metric can be registered");
+    INIT.call_once(|| {
+        REGISTRY
+            .register(Box::new(HTTP_REQUESTS_TOTAL.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(HTTP_REQUEST_DURATION.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(STATUTES_TOTAL.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(VERIFICATIONS_TOTAL.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(SIMULATIONS_TOTAL.clone()))
+            .expect("metric can be registered");
+    });
 }
 
 /// Encode metrics into Prometheus text format.

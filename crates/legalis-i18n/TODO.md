@@ -51,13 +51,17 @@
 
 ## Integration
 
-- [ ] Integration with external translation services
-- [ ] Machine translation fallback
-- [ ] Translation memory support
-- [ ] Terminology extraction from statutes
+- [x] Integration with external translation services
+- [x] Machine translation fallback
+- [x] Translation memory support
+- [x] Terminology extraction from statutes
 
 ## Testing
 
 - [x] Add translation roundtrip tests
 - [x] Test all supported locales
 - [x] Verify cultural parameter accuracy
+- [x] Test external translation service integration
+- [x] Test machine translation fallback
+- [x] Test translation memory operations
+- [x] Test terminology extraction

@@ -5,17 +5,24 @@
 //! - N-Triples (NT) - Line-based RDF format
 //! - RDF/XML - XML serialization of RDF
 //! - JSON-LD - JSON-based RDF format
+//! - TriG - Named graph format
 //!
 //! Vocabularies supported:
 //! - ELI (European Legislation Identifier)
 //! - FRBR (Functional Requirements for Bibliographic Records)
 //! - Dublin Core (dc, dcterms)
+//! - SKOS (Simple Knowledge Organization System)
+//! - VOID (Vocabulary of Interlinked Datasets)
 //! - Custom Legalis ontology
 
 use chrono::{DateTime, NaiveDate, Utc};
 use legalis_core::{ComparisonOp, Condition, EffectType, Statute};
 use std::collections::HashMap;
 use thiserror::Error;
+
+pub mod sparql;
+pub mod validation;
+pub mod void_desc;
 
 /// Errors during LOD export.
 #[derive(Debug, Error)]
@@ -45,6 +52,8 @@ pub enum RdfFormat {
     RdfXml,
     /// JSON-LD format
     JsonLd,
+    /// TriG format - Turtle with named graphs
+    TriG,
 }
 
 impl RdfFormat {
@@ -55,6 +64,7 @@ impl RdfFormat {
             Self::NTriples => "nt",
             Self::RdfXml => "rdf",
             Self::JsonLd => "jsonld",
+            Self::TriG => "trig",
         }
     }
 
@@ -65,7 +75,55 @@ impl RdfFormat {
             Self::NTriples => "application/n-triples",
             Self::RdfXml => "application/rdf+xml",
             Self::JsonLd => "application/ld+json",
+            Self::TriG => "application/trig",
         }
+    }
+
+    /// Returns all MIME type aliases for this format.
+    pub fn mime_type_aliases(&self) -> Vec<&'static str> {
+        match self {
+            Self::Turtle => vec!["text/turtle", "application/x-turtle", "application/turtle"],
+            Self::NTriples => vec!["application/n-triples", "text/plain"],
+            Self::RdfXml => vec!["application/rdf+xml", "application/xml", "text/xml"],
+            Self::JsonLd => vec!["application/ld+json", "application/json"],
+            Self::TriG => vec!["application/trig", "application/x-trig"],
+        }
+    }
+
+    /// Selects the best format based on HTTP Accept header.
+    /// Returns the default format (Turtle) if no match is found.
+    pub fn from_accept_header(accept: &str) -> Self {
+        // Parse accept header and find best match
+        let accept_lower = accept.to_lowercase();
+
+        // Check each format's MIME types
+        for format in [
+            Self::JsonLd,
+            Self::Turtle,
+            Self::RdfXml,
+            Self::NTriples,
+            Self::TriG,
+        ] {
+            for mime in format.mime_type_aliases() {
+                if accept_lower.contains(mime) {
+                    return format;
+                }
+            }
+        }
+
+        // Default to Turtle
+        Self::Turtle
+    }
+
+    /// Returns all supported formats.
+    pub fn all_formats() -> Vec<Self> {
+        vec![
+            Self::Turtle,
+            Self::NTriples,
+            Self::RdfXml,
+            Self::JsonLd,
+            Self::TriG,
+        ]
     }
 }
 
@@ -112,6 +170,10 @@ impl Namespaces {
             ("dcterms", "http://purl.org/dc/terms/"),
             ("eli", "http://data.europa.eu/eli/ontology#"),
             ("frbr", "http://purl.org/vocab/frbr/core#"),
+            ("skos", "http://www.w3.org/2004/02/skos/core#"),
+            ("void", "http://rdfs.org/ns/void#"),
+            ("prov", "http://www.w3.org/ns/prov#"),
+            ("cc", "http://creativecommons.org/ns#"),
             ("legalis", "https://legalis.dev/ontology#"),
         ]
     }
@@ -175,11 +237,123 @@ impl RdfValue {
     }
 }
 
+/// Provenance information for RDF export.
+#[derive(Debug, Clone)]
+pub struct ProvenanceInfo {
+    /// Agent who generated the data (e.g., organization or person)
+    pub agent: Option<String>,
+    /// Activity that generated the data
+    pub activity: Option<String>,
+    /// Generation time
+    pub generated_at: Option<DateTime<Utc>>,
+    /// Source entity
+    pub derived_from: Option<String>,
+    /// Additional attribution
+    pub attribution: Option<String>,
+}
+
+impl Default for ProvenanceInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProvenanceInfo {
+    /// Creates a new provenance info.
+    pub fn new() -> Self {
+        Self {
+            agent: None,
+            activity: None,
+            generated_at: Some(Utc::now()),
+            derived_from: None,
+            attribution: None,
+        }
+    }
+
+    /// Sets the agent.
+    pub fn with_agent(mut self, agent: impl Into<String>) -> Self {
+        self.agent = Some(agent.into());
+        self
+    }
+
+    /// Sets the activity.
+    pub fn with_activity(mut self, activity: impl Into<String>) -> Self {
+        self.activity = Some(activity.into());
+        self
+    }
+
+    /// Sets the source.
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        self.derived_from = Some(source.into());
+        self
+    }
+
+    /// Sets the attribution.
+    pub fn with_attribution(mut self, attribution: impl Into<String>) -> Self {
+        self.attribution = Some(attribution.into());
+        self
+    }
+}
+
+/// License information for RDF export.
+#[derive(Debug, Clone)]
+pub struct LicenseInfo {
+    /// License URI (e.g., Creative Commons)
+    pub license_uri: String,
+    /// License label
+    pub label: Option<String>,
+    /// Rights holder
+    pub rights_holder: Option<String>,
+}
+
+impl LicenseInfo {
+    /// Creates a new license info.
+    pub fn new(license_uri: impl Into<String>) -> Self {
+        Self {
+            license_uri: license_uri.into(),
+            label: None,
+            rights_holder: None,
+        }
+    }
+
+    /// Sets the label.
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Sets the rights holder.
+    pub fn with_rights_holder(mut self, holder: impl Into<String>) -> Self {
+        self.rights_holder = Some(holder.into());
+        self
+    }
+
+    /// Creates a Creative Commons BY 4.0 license.
+    pub fn cc_by_4_0() -> Self {
+        Self::new("http://creativecommons.org/licenses/by/4.0/")
+            .with_label("Creative Commons Attribution 4.0 International")
+    }
+
+    /// Creates a Creative Commons BY-SA 4.0 license.
+    pub fn cc_by_sa_4_0() -> Self {
+        Self::new("http://creativecommons.org/licenses/by-sa/4.0/")
+            .with_label("Creative Commons Attribution-ShareAlike 4.0 International")
+    }
+
+    /// Creates a Creative Commons Zero (CC0) license.
+    pub fn cc0() -> Self {
+        Self::new("http://creativecommons.org/publicdomain/zero/1.0/")
+            .with_label("Creative Commons Zero v1.0 Universal")
+    }
+}
+
 /// LOD exporter for legal statutes.
 #[derive(Debug)]
 pub struct LodExporter {
     format: RdfFormat,
     namespaces: Namespaces,
+    provenance: Option<ProvenanceInfo>,
+    license: Option<LicenseInfo>,
 }
 
 impl LodExporter {
@@ -188,17 +362,53 @@ impl LodExporter {
         Self {
             format,
             namespaces: Namespaces::default(),
+            provenance: None,
+            license: None,
         }
     }
 
     /// Creates a new exporter with custom namespaces.
     pub fn with_namespaces(format: RdfFormat, namespaces: Namespaces) -> Self {
-        Self { format, namespaces }
+        Self {
+            format,
+            namespaces,
+            provenance: None,
+            license: None,
+        }
     }
 
     /// Sets the base URI.
     pub fn set_base(&mut self, base: impl Into<String>) {
         self.namespaces.base = base.into();
+    }
+
+    /// Sets provenance information.
+    pub fn set_provenance(&mut self, provenance: ProvenanceInfo) {
+        self.provenance = Some(provenance);
+    }
+
+    /// Sets license information.
+    pub fn set_license(&mut self, license: LicenseInfo) {
+        self.license = Some(license);
+    }
+
+    /// Builder method to set provenance.
+    pub fn with_provenance(mut self, provenance: ProvenanceInfo) -> Self {
+        self.provenance = Some(provenance);
+        self
+    }
+
+    /// Builder method to set license.
+    pub fn with_license(mut self, license: LicenseInfo) -> Self {
+        self.license = Some(license);
+        self
+    }
+
+    /// Validates the triples for a statute.
+    pub fn validate_statute(&self, statute: &Statute) -> LodResult<validation::ValidationReport> {
+        let triples = self.statute_to_triples(statute)?;
+        let validator = validation::RdfValidator::new();
+        Ok(validator.validate(&triples))
     }
 
     /// Exports a statute to the configured RDF format.
@@ -210,6 +420,7 @@ impl LodExporter {
             RdfFormat::NTriples => self.to_ntriples(&triples),
             RdfFormat::RdfXml => self.to_rdf_xml(&triples),
             RdfFormat::JsonLd => self.to_json_ld(&triples, statute),
+            RdfFormat::TriG => self.to_trig(&triples, Some(&statute.id)),
         }
     }
 
@@ -225,7 +436,122 @@ impl LodExporter {
             RdfFormat::NTriples => self.to_ntriples(&all_triples),
             RdfFormat::RdfXml => self.to_rdf_xml(&all_triples),
             RdfFormat::JsonLd => self.to_json_ld_batch(&all_triples, statutes),
+            RdfFormat::TriG => self.to_trig_batch(&all_triples, statutes),
         }
+    }
+
+    /// Generates SKOS concept scheme for statute classifications.
+    pub fn generate_concept_scheme(&self, scheme_id: &str, title: &str) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let scheme_uri = format!(
+            "{}concept-scheme/{}",
+            self.namespaces.base,
+            escape_uri(scheme_id)
+        );
+
+        triples.push(Triple {
+            subject: scheme_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("skos:ConceptScheme".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: scheme_uri.clone(),
+            predicate: "skos:prefLabel".to_string(),
+            object: RdfValue::string(title),
+        });
+
+        triples.push(Triple {
+            subject: scheme_uri,
+            predicate: "dcterms:title".to_string(),
+            object: RdfValue::string(title),
+        });
+
+        triples
+    }
+
+    /// Creates a SKOS concept for an effect type.
+    pub fn create_effect_type_concept(
+        &self,
+        effect_type: &str,
+        label: &str,
+        definition: Option<&str>,
+    ) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let concept_uri = format!(
+            "{}concept/effect-type/{}",
+            self.namespaces.base,
+            escape_uri(effect_type)
+        );
+        let scheme_uri = format!("{}concept-scheme/effect-types", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: concept_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("skos:Concept".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: concept_uri.clone(),
+            predicate: "skos:prefLabel".to_string(),
+            object: RdfValue::string(label),
+        });
+
+        triples.push(Triple {
+            subject: concept_uri.clone(),
+            predicate: "skos:inScheme".to_string(),
+            object: RdfValue::Uri(scheme_uri.clone()),
+        });
+
+        if let Some(def) = definition {
+            triples.push(Triple {
+                subject: concept_uri,
+                predicate: "skos:definition".to_string(),
+                object: RdfValue::string(def),
+            });
+        }
+
+        // Add concept to scheme
+        triples.push(Triple {
+            subject: scheme_uri,
+            predicate: "skos:hasTopConcept".to_string(),
+            object: RdfValue::Uri(format!(
+                "{}concept/effect-type/{}",
+                self.namespaces.base,
+                escape_uri(effect_type)
+            )),
+        });
+
+        triples
+    }
+
+    /// Adds SKOS relationships between concepts (broader/narrower).
+    pub fn add_skos_hierarchy(&self, broader_concept: &str, narrower_concept: &str) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let broader_uri = format!(
+            "{}concept/{}",
+            self.namespaces.base,
+            escape_uri(broader_concept)
+        );
+        let narrower_uri = format!(
+            "{}concept/{}",
+            self.namespaces.base,
+            escape_uri(narrower_concept)
+        );
+
+        triples.push(Triple {
+            subject: narrower_uri.clone(),
+            predicate: "skos:broader".to_string(),
+            object: RdfValue::Uri(broader_uri.clone()),
+        });
+
+        triples.push(Triple {
+            subject: broader_uri,
+            predicate: "skos:narrower".to_string(),
+            object: RdfValue::Uri(narrower_uri),
+        });
+
+        triples
     }
 
     fn statute_to_triples(&self, statute: &Statute) -> LodResult<Vec<Triple>> {
@@ -247,6 +573,18 @@ impl LodExporter {
             subject: subject.clone(),
             predicate: "rdf:type".to_string(),
             object: RdfValue::Uri("legalis:Statute".to_string()),
+        });
+
+        // Add SKOS concept for the statute (for classification)
+        let concept_uri = format!(
+            "{}concept/statute-type/{}",
+            self.namespaces.base,
+            escape_uri(&statute.id)
+        );
+        triples.push(Triple {
+            subject: subject.clone(),
+            predicate: "dcterms:subject".to_string(),
+            object: RdfValue::Uri(concept_uri),
         });
 
         // Title (using ELI and Dublin Core)
@@ -352,13 +690,115 @@ impl LodExporter {
         // Discretion indicator
         if statute.discretion_logic.is_some() {
             triples.push(Triple {
-                subject,
+                subject: subject.clone(),
                 predicate: "legalis:hasDiscretion".to_string(),
                 object: RdfValue::boolean(true),
             });
         }
 
+        // Add provenance information if available
+        if let Some(ref prov) = self.provenance {
+            triples.extend(self.add_provenance_triples(&subject, prov));
+        }
+
+        // Add license information if available
+        if let Some(ref lic) = self.license {
+            triples.extend(self.add_license_triples(&subject, lic));
+        }
+
         Ok(triples)
+    }
+
+    fn add_provenance_triples(&self, subject: &str, prov: &ProvenanceInfo) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        // wasGeneratedBy
+        if let Some(ref activity) = prov.activity {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "prov:wasGeneratedBy".to_string(),
+                object: RdfValue::Uri(activity.clone()),
+            });
+        }
+
+        // wasAttributedTo
+        if let Some(ref agent) = prov.agent {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "prov:wasAttributedTo".to_string(),
+                object: RdfValue::Uri(agent.clone()),
+            });
+        }
+
+        // generatedAtTime
+        if let Some(ref time) = prov.generated_at {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "prov:generatedAtTime".to_string(),
+                object: RdfValue::datetime(*time),
+            });
+        }
+
+        // wasDerivedFrom
+        if let Some(ref source) = prov.derived_from {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "prov:wasDerivedFrom".to_string(),
+                object: RdfValue::Uri(source.clone()),
+            });
+        }
+
+        // dcterms:creator (attribution)
+        if let Some(ref attribution) = prov.attribution {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "dcterms:creator".to_string(),
+                object: RdfValue::string(attribution),
+            });
+        }
+
+        triples
+    }
+
+    fn add_license_triples(&self, subject: &str, license: &LicenseInfo) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        // dcterms:license
+        triples.push(Triple {
+            subject: subject.to_string(),
+            predicate: "dcterms:license".to_string(),
+            object: RdfValue::Uri(license.license_uri.clone()),
+        });
+
+        // cc:license (for Creative Commons)
+        if license.license_uri.contains("creativecommons.org") {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "cc:license".to_string(),
+                object: RdfValue::Uri(license.license_uri.clone()),
+            });
+        }
+
+        // License label
+        if let Some(ref label) = license.label {
+            let license_subject = license.license_uri.clone();
+            triples.push(Triple {
+                subject: license_subject.clone(),
+                predicate: "rdfs:label".to_string(),
+                object: RdfValue::string(label),
+            });
+        }
+
+        // Rights holder
+        if let Some(ref holder) = license.rights_holder {
+            triples.push(Triple {
+                subject: subject.to_string(),
+                predicate: "dcterms:rightsHolder".to_string(),
+                object: RdfValue::string(holder),
+            });
+        }
+
+        triples
     }
 
     fn condition_to_triples(&self, uri: &str, condition: &Condition) -> Vec<Triple> {
@@ -627,6 +1067,128 @@ impl LodExporter {
 
             doc.insert(triple.predicate.clone(), value);
         }
+    }
+
+    fn to_trig(&self, triples: &[Triple], graph_name: Option<&str>) -> LodResult<String> {
+        let mut output = String::new();
+
+        // Prefixes
+        for (prefix, uri) in Namespaces::standard_prefixes() {
+            output.push_str(&format!("@prefix {}: <{}> .\n", prefix, uri));
+        }
+        output.push_str(&format!("@base <{}> .\n", self.namespaces.base));
+        for (prefix, uri) in &self.namespaces.custom {
+            output.push_str(&format!("@prefix {}: <{}> .\n", prefix, uri));
+        }
+        output.push('\n');
+
+        // Named graph
+        if let Some(name) = graph_name {
+            output.push_str(&format!(
+                "<{}graph/{}> {{\n",
+                self.namespaces.base,
+                escape_uri(name)
+            ));
+        }
+
+        // Triples (using same logic as Turtle)
+        let mut by_subject: HashMap<&str, Vec<&Triple>> = HashMap::new();
+        for triple in triples {
+            by_subject.entry(&triple.subject).or_default().push(triple);
+        }
+
+        for (subject, subject_triples) in by_subject {
+            let subject_str = if subject.starts_with(&self.namespaces.base) {
+                format!("<{}>", subject)
+            } else if let Some(prefixed) = try_prefix(subject) {
+                prefixed
+            } else {
+                format!("<{}>", subject)
+            };
+
+            let indent = if graph_name.is_some() { "    " } else { "" };
+            output.push_str(indent);
+            output.push_str(&subject_str);
+
+            for (i, triple) in subject_triples.iter().enumerate() {
+                let sep = if i == 0 {
+                    format!("\n{}    ", indent)
+                } else {
+                    format!(" ;\n{}    ", indent)
+                };
+                output.push_str(&sep);
+                output.push_str(&triple.predicate);
+                output.push(' ');
+                output.push_str(&self.value_to_turtle(&triple.object));
+            }
+            output.push_str(&format!(" .\n{}\n", indent));
+        }
+
+        if graph_name.is_some() {
+            output.push_str("}\n");
+        }
+
+        Ok(output)
+    }
+
+    fn to_trig_batch(&self, triples: &[Triple], statutes: &[Statute]) -> LodResult<String> {
+        let mut output = String::new();
+
+        // Prefixes
+        for (prefix, uri) in Namespaces::standard_prefixes() {
+            output.push_str(&format!("@prefix {}: <{}> .\n", prefix, uri));
+        }
+        output.push_str(&format!("@base <{}> .\n", self.namespaces.base));
+        for (prefix, uri) in &self.namespaces.custom {
+            output.push_str(&format!("@prefix {}: <{}> .\n", prefix, uri));
+        }
+        output.push('\n');
+
+        // Each statute gets its own named graph
+        for statute in statutes {
+            let statute_triples: Vec<&Triple> = triples
+                .iter()
+                .filter(|t| t.subject.contains(&statute.id))
+                .collect();
+
+            output.push_str(&format!(
+                "<{}graph/{}> {{\n",
+                self.namespaces.base,
+                escape_uri(&statute.id)
+            ));
+
+            // Group by subject
+            let mut by_subject: HashMap<&str, Vec<&Triple>> = HashMap::new();
+            for triple in &statute_triples {
+                by_subject.entry(&triple.subject).or_default().push(*triple);
+            }
+
+            for (subject, subject_triples) in by_subject {
+                let subject_str = if subject.starts_with(&self.namespaces.base) {
+                    format!("<{}>", subject)
+                } else if let Some(prefixed) = try_prefix(subject) {
+                    prefixed
+                } else {
+                    format!("<{}>", subject)
+                };
+
+                output.push_str("    ");
+                output.push_str(&subject_str);
+
+                for (i, triple) in subject_triples.iter().enumerate() {
+                    let sep = if i == 0 { "\n        " } else { " ;\n        " };
+                    output.push_str(sep);
+                    output.push_str(&triple.predicate);
+                    output.push(' ');
+                    output.push_str(&self.value_to_turtle(&triple.object));
+                }
+                output.push_str(" .\n\n");
+            }
+
+            output.push_str("}\n\n");
+        }
+
+        Ok(output)
     }
 }
 
@@ -970,5 +1532,181 @@ mod tests {
         let output = exporter.export_batch(&statutes).unwrap();
         assert!(output.contains("adult-rights"));
         assert!(output.contains("minor-protection"));
+    }
+
+    #[test]
+    fn test_export_trig() {
+        let exporter = LodExporter::new(RdfFormat::TriG);
+        let statute = sample_statute();
+        let output = exporter.export(&statute).unwrap();
+
+        assert!(output.contains("@prefix eli:"));
+        assert!(output.contains("@prefix legalis:"));
+        assert!(output.contains("graph/adult-rights"));
+        assert!(output.contains("{"));
+        assert!(output.contains("}"));
+        assert!(output.contains("Adult Rights Act"));
+    }
+
+    #[test]
+    fn test_export_trig_batch() {
+        let exporter = LodExporter::new(RdfFormat::TriG);
+        let statutes = vec![
+            sample_statute(),
+            Statute::new(
+                "test-law",
+                "Test Law",
+                Effect::new(EffectType::Grant, "Test rights"),
+            ),
+        ];
+
+        let output = exporter.export_batch(&statutes).unwrap();
+        assert!(output.contains("graph/adult-rights"));
+        assert!(output.contains("graph/test-law"));
+        assert!(output.contains("Adult Rights Act"));
+        assert!(output.contains("Test Law"));
+    }
+
+    #[test]
+    fn test_trig_extension() {
+        assert_eq!(RdfFormat::TriG.extension(), "trig");
+        assert_eq!(RdfFormat::TriG.mime_type(), "application/trig");
+    }
+
+    #[test]
+    fn test_skos_concept_scheme() {
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let triples = exporter.generate_concept_scheme("effect-types", "Legal Effect Types");
+
+        assert!(triples.iter().any(|t| t.predicate == "rdf:type"
+            && matches!(&t.object, RdfValue::Uri(u) if u == "skos:ConceptScheme")));
+        assert!(triples.iter().any(|t| t.predicate == "skos:prefLabel"));
+    }
+
+    #[test]
+    fn test_skos_effect_concept() {
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let triples = exporter.create_effect_type_concept(
+            "grant",
+            "Grant Effect",
+            Some("An effect that grants rights or permissions"),
+        );
+
+        assert!(triples.iter().any(|t| t.predicate == "rdf:type"
+            && matches!(&t.object, RdfValue::Uri(u) if u == "skos:Concept")));
+        assert!(triples.iter().any(|t| t.predicate == "skos:prefLabel"));
+        assert!(triples.iter().any(|t| t.predicate == "skos:definition"));
+        assert!(triples.iter().any(|t| t.predicate == "skos:inScheme"));
+    }
+
+    #[test]
+    fn test_skos_hierarchy() {
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let triples = exporter.add_skos_hierarchy("legal-effect", "grant-effect");
+
+        assert!(triples.iter().any(|t| t.predicate == "skos:broader"));
+        assert!(triples.iter().any(|t| t.predicate == "skos:narrower"));
+        assert_eq!(triples.len(), 2);
+    }
+
+    #[test]
+    fn test_content_negotiation() {
+        assert_eq!(
+            RdfFormat::from_accept_header("application/ld+json"),
+            RdfFormat::JsonLd
+        );
+        assert_eq!(
+            RdfFormat::from_accept_header("text/turtle"),
+            RdfFormat::Turtle
+        );
+        assert_eq!(
+            RdfFormat::from_accept_header("application/rdf+xml"),
+            RdfFormat::RdfXml
+        );
+        assert_eq!(
+            RdfFormat::from_accept_header("application/n-triples"),
+            RdfFormat::NTriples
+        );
+        assert_eq!(
+            RdfFormat::from_accept_header("application/trig"),
+            RdfFormat::TriG
+        );
+        // Default to Turtle for unknown
+        assert_eq!(
+            RdfFormat::from_accept_header("text/html"),
+            RdfFormat::Turtle
+        );
+    }
+
+    #[test]
+    fn test_mime_type_aliases() {
+        let turtle_aliases = RdfFormat::Turtle.mime_type_aliases();
+        assert!(turtle_aliases.contains(&"text/turtle"));
+        assert!(turtle_aliases.contains(&"application/x-turtle"));
+    }
+
+    #[test]
+    fn test_provenance_info() {
+        let prov = ProvenanceInfo::new()
+            .with_agent("https://example.org/agent/legalis")
+            .with_activity("https://example.org/activity/export")
+            .with_source("https://example.org/original")
+            .with_attribution("Legalis Project");
+
+        assert!(prov.agent.is_some());
+        assert!(prov.activity.is_some());
+        assert!(prov.derived_from.is_some());
+        assert!(prov.attribution.is_some());
+    }
+
+    #[test]
+    fn test_license_info() {
+        let license = LicenseInfo::cc_by_4_0().with_rights_holder("Example Organization");
+
+        assert!(license.license_uri.contains("creativecommons.org"));
+        assert!(license.label.is_some());
+        assert_eq!(
+            license.rights_holder,
+            Some("Example Organization".to_string())
+        );
+    }
+
+    #[test]
+    fn test_export_with_provenance() {
+        let prov = ProvenanceInfo::new()
+            .with_agent("https://example.org/agent/legalis")
+            .with_attribution("Legalis Team");
+
+        let exporter = LodExporter::new(RdfFormat::Turtle).with_provenance(prov);
+
+        let statute = sample_statute();
+        let output = exporter.export(&statute).unwrap();
+
+        assert!(output.contains("prov:wasAttributedTo"));
+        assert!(output.contains("dcterms:creator"));
+        assert!(output.contains("prov:generatedAtTime"));
+    }
+
+    #[test]
+    fn test_export_with_license() {
+        let license = LicenseInfo::cc_by_4_0();
+
+        let exporter = LodExporter::new(RdfFormat::Turtle).with_license(license);
+
+        let statute = sample_statute();
+        let output = exporter.export(&statute).unwrap();
+
+        assert!(output.contains("dcterms:license"));
+        assert!(output.contains("cc:license"));
+        assert!(output.contains("creativecommons.org"));
+    }
+
+    #[test]
+    fn test_all_formats() {
+        let formats = RdfFormat::all_formats();
+        assert_eq!(formats.len(), 5);
+        assert!(formats.contains(&RdfFormat::Turtle));
+        assert!(formats.contains(&RdfFormat::JsonLd));
+        assert!(formats.contains(&RdfFormat::TriG));
     }
 }
