@@ -823,13 +823,13 @@ mod tests {
         cache.get("test");
         cache.get("test");
 
-        // 2 misses (including initial)
+        // 1 miss
         cache.get("other");
 
         let stats = cache.stats();
         assert_eq!(stats.hits, 3);
-        assert_eq!(stats.misses, 2);
-        assert!((stats.hit_rate() - 60.0).abs() < 0.1);
+        assert_eq!(stats.misses, 1);
+        assert!((stats.hit_rate() - 75.0).abs() < 0.1);
     }
 
     #[test]

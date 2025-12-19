@@ -3,21 +3,29 @@
 //! This crate provides an abstraction layer for LLM providers,
 //! enabling pluggable AI models (OpenAI, Anthropic, Gemini, Local LLMs).
 
+mod batch;
 mod cache;
 mod cancellation;
 mod compiler;
+mod embeddings;
+mod functions;
 mod providers;
 mod resilience;
+mod router;
 mod templates;
 mod testing;
 mod token_tracker;
 mod validation;
 
+pub use batch::*;
 pub use cache::*;
 pub use cancellation::*;
 pub use compiler::*;
+pub use embeddings::*;
+pub use functions::*;
 pub use providers::*;
 pub use resilience::*;
+pub use router::*;
 pub use templates::*;
 pub use testing::*;
 pub use token_tracker::*;

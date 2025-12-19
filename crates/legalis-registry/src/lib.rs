@@ -77,7 +77,7 @@ pub struct BackupMetadata {
 }
 
 /// Lazy loading configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LazyLoadConfig {
     /// Load statute content on demand
     pub lazy_content: bool,
@@ -85,16 +85,6 @@ pub struct LazyLoadConfig {
     pub lazy_versions: bool,
     /// Load events on demand
     pub lazy_events: bool,
-}
-
-impl Default for LazyLoadConfig {
-    fn default() -> Self {
-        Self {
-            lazy_content: false,
-            lazy_versions: false,
-            lazy_events: false,
-        }
-    }
 }
 
 impl LazyLoadConfig {
@@ -111,6 +101,25 @@ impl LazyLoadConfig {
     pub fn none() -> Self {
         Self::default()
     }
+}
+
+/// Statistics about the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryStatistics {
+    /// Total number of statutes
+    pub total_statutes: usize,
+    /// Total number of versions across all statutes
+    pub total_versions: usize,
+    /// Total number of events
+    pub total_events: usize,
+    /// Total number of unique tags
+    pub total_tags: usize,
+    /// Total number of jurisdictions
+    pub total_jurisdictions: usize,
+    /// Count by status
+    pub by_status: HashMap<StatuteStatus, usize>,
+    /// Count by jurisdiction
+    pub by_jurisdiction: HashMap<String, usize>,
 }
 
 /// Lightweight statute summary for lazy loading.
@@ -170,6 +179,39 @@ impl Pagination {
         Self { page, per_page }
     }
 
+    /// Creates pagination for the first page.
+    pub fn first(per_page: usize) -> Self {
+        Self { page: 0, per_page }
+    }
+
+    /// Returns pagination for the next page.
+    pub fn next(&self) -> Self {
+        Self {
+            page: self.page + 1,
+            per_page: self.per_page,
+        }
+    }
+
+    /// Returns pagination for the previous page (saturating at 0).
+    pub fn prev(&self) -> Self {
+        Self {
+            page: self.page.saturating_sub(1),
+            per_page: self.per_page,
+        }
+    }
+
+    /// Sets the page number.
+    pub fn with_page(mut self, page: usize) -> Self {
+        self.page = page;
+        self
+    }
+
+    /// Sets the items per page.
+    pub fn with_per_page(mut self, per_page: usize) -> Self {
+        self.per_page = per_page;
+        self
+    }
+
     /// Returns the offset for the current page.
     pub fn offset(&self) -> usize {
         self.page * self.per_page
@@ -215,6 +257,62 @@ impl<T> PagedResult<T> {
             per_page,
             total,
             total_pages,
+        }
+    }
+
+    /// Returns whether there is a next page.
+    pub fn has_next(&self) -> bool {
+        self.page + 1 < self.total_pages
+    }
+
+    /// Returns whether there is a previous page.
+    pub fn has_prev(&self) -> bool {
+        self.page > 0
+    }
+
+    /// Returns whether the result is empty.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Returns the number of items in this page.
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Returns the global index of the first item on this page (1-indexed).
+    pub fn first_item_number(&self) -> usize {
+        if self.is_empty() {
+            0
+        } else {
+            self.page * self.per_page + 1
+        }
+    }
+
+    /// Returns the global index of the last item on this page (1-indexed).
+    pub fn last_item_number(&self) -> usize {
+        if self.is_empty() {
+            0
+        } else {
+            self.page * self.per_page + self.items.len()
+        }
+    }
+
+    /// Returns pagination parameters for the next page.
+    pub fn next_page(&self) -> Option<Pagination> {
+        if self.has_next() {
+            Some(Pagination::new(self.page + 1, self.per_page))
+        } else {
+            None
+        }
+    }
+
+    /// Returns pagination parameters for the previous page.
+    pub fn prev_page(&self) -> Option<Pagination> {
+        if self.has_prev() {
+            Some(Pagination::new(self.page - 1, self.per_page))
+        } else {
+            None
         }
     }
 }
@@ -371,6 +469,36 @@ impl StatuteEntry {
         self
     }
 
+    /// Sets the expiry date.
+    pub fn with_expiry_date(mut self, date: DateTime<Utc>) -> Self {
+        self.expiry_date = Some(date);
+        self
+    }
+
+    /// Sets the parent statute (for amendments).
+    pub fn with_amends(mut self, statute_id: impl Into<String>) -> Self {
+        self.amends = Some(statute_id.into());
+        self
+    }
+
+    /// Adds a superseded statute.
+    pub fn with_supersedes(mut self, statute_id: impl Into<String>) -> Self {
+        self.supersedes.push(statute_id.into());
+        self
+    }
+
+    /// Adds metadata key-value pair.
+    pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets the jurisdiction.
+    pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = jurisdiction.into();
+        self
+    }
+
     /// Returns whether this statute is currently active.
     pub fn is_active(&self) -> bool {
         let now = Utc::now();
@@ -381,7 +509,7 @@ impl StatuteEntry {
 }
 
 /// Status of a statute.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StatuteStatus {
     /// Being drafted
     Draft,
@@ -671,7 +799,7 @@ impl WebhookManager {
             if subscription
                 .event_filter
                 .as_ref()
-                .map_or(true, |filter| filter.matches(event))
+                .is_none_or(|filter| filter.matches(event))
             {
                 (subscription.callback)(event);
             }
@@ -757,6 +885,15 @@ impl Default for StatuteRegistry {
 
 impl StatuteRegistry {
     /// Creates a new empty registry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_registry::StatuteRegistry;
+    ///
+    /// let registry = StatuteRegistry::new();
+    /// assert_eq!(registry.count(), 0);
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -801,6 +938,24 @@ impl StatuteRegistry {
     }
 
     /// Registers a new statute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Effect, EffectType, Statute};
+    /// use legalis_registry::{StatuteEntry, StatuteRegistry};
+    ///
+    /// let mut registry = StatuteRegistry::new();
+    /// let statute = Statute::new(
+    ///     "statute-1",
+    ///     "Test Statute",
+    ///     Effect::new(EffectType::Grant, "Grant permission")
+    /// );
+    /// let entry = StatuteEntry::new(statute, "US");
+    ///
+    /// let id = registry.register(entry).unwrap();
+    /// assert_eq!(registry.count(), 1);
+    /// ```
     pub fn register(&mut self, entry: StatuteEntry) -> RegistryResult<Uuid> {
         let statute_id = entry.statute.id.clone();
 
@@ -1045,6 +1200,50 @@ impl StatuteRegistry {
     /// Returns all jurisdictions.
     pub fn all_jurisdictions(&self) -> Vec<&String> {
         self.jurisdiction_index.keys().collect()
+    }
+
+    /// Returns all statute IDs.
+    pub fn all_statute_ids(&self) -> Vec<&String> {
+        self.statutes.keys().collect()
+    }
+
+    /// Checks if a statute exists in the registry.
+    pub fn contains(&self, statute_id: &str) -> bool {
+        self.statutes.contains_key(statute_id)
+    }
+
+    /// Gets multiple statutes by their IDs.
+    pub fn get_many(&mut self, statute_ids: &[&str]) -> Vec<Option<StatuteEntry>> {
+        statute_ids.iter().map(|id| self.get(id)).collect()
+    }
+
+    /// Gets the latest version number for a statute.
+    pub fn latest_version(&self, statute_id: &str) -> Option<u32> {
+        self.statutes.get(statute_id).map(|entry| entry.version)
+    }
+
+    /// Returns statistics about the registry.
+    pub fn statistics(&self) -> RegistryStatistics {
+        let total = self.statutes.len();
+        let mut by_status = HashMap::new();
+        let mut by_jurisdiction = HashMap::new();
+
+        for entry in self.statutes.values() {
+            *by_status.entry(entry.status).or_insert(0) += 1;
+            *by_jurisdiction
+                .entry(entry.jurisdiction.clone())
+                .or_insert(0) += 1;
+        }
+
+        RegistryStatistics {
+            total_statutes: total,
+            total_versions: self.versions.values().map(|v| v.len()).sum(),
+            total_events: self.event_store.count(),
+            total_tags: self.tag_index.len(),
+            total_jurisdictions: self.jurisdiction_index.len(),
+            by_status,
+            by_jurisdiction,
+        }
     }
 
     /// Finds statutes that reference a given statute.
@@ -2111,8 +2310,8 @@ pub mod async_api {
 
         /// Searches statutes asynchronously.
         pub async fn search(&self, query: &SearchQuery) -> Vec<StatuteEntry> {
-            let mut registry = self.inner.write().await;
-            registry.search(query).into_iter().cloned().collect()
+            let registry = self.inner.read().await;
+            registry.search(query).iter().map(|&e| e.clone()).collect()
         }
 
         /// Searches statutes with pagination asynchronously.
@@ -2121,14 +2320,8 @@ pub mod async_api {
             query: &SearchQuery,
             pagination: Pagination,
         ) -> PagedResult<StatuteEntry> {
-            let mut registry = self.inner.write().await;
-            let result = registry.search_paged(query, pagination);
-            PagedResult::new(
-                result.items.into_iter().cloned().collect(),
-                result.page,
-                result.per_page,
-                result.total,
-            )
+            let registry = self.inner.read().await;
+            registry.search_paged(query, pagination)
         }
 
         /// Creates a backup asynchronously.
@@ -2226,8 +2419,8 @@ pub mod streaming {
         chunk_size: usize,
     ) -> impl Stream<Item = Vec<StatuteEntry>> {
         stream! {
-            let mut registry = registry.write().await;
-            let results: Vec<StatuteEntry> = registry.search(&query).into_iter().cloned().collect();
+            let registry = registry.read().await;
+            let results: Vec<StatuteEntry> = registry.search(&query).iter().map(|&e| e.clone()).collect();
             drop(registry);
 
             for chunk in results.chunks(chunk_size) {
@@ -2244,7 +2437,7 @@ pub mod streaming {
         stream! {
             let registry = registry.read().await;
             let summaries: Vec<StatuteSummary> = registry
-                .list_summaries(LazyLoadConfig::all())
+                .list_summaries()
                 .into_iter()
                 .collect();
             drop(registry);
@@ -2260,7 +2453,6 @@ pub mod streaming {
 // Transaction Support
 // =============================================================================
 
-/// Transaction support for batch operations.
 pub mod transaction {
     //! Transaction support for batched registry operations.
     //!
@@ -2274,7 +2466,7 @@ pub mod transaction {
     #[derive(Debug, Clone)]
     pub enum Operation {
         /// Register a new statute
-        Register(StatuteEntry),
+        Register(Box<StatuteEntry>),
         /// Update an existing statute
         Update {
             statute_id: String,
@@ -2312,7 +2504,7 @@ pub mod transaction {
 
         /// Adds a register operation.
         pub fn register(mut self, entry: StatuteEntry) -> Self {
-            self.operations.push(Operation::Register(entry));
+            self.operations.push(Operation::Register(Box::new(entry)));
             self
         }
 
@@ -2376,15 +2568,15 @@ pub mod transaction {
             for op in self.operations {
                 let result = match op {
                     Operation::Register(entry) => registry
-                        .register(entry)
-                        .map(|id| OperationResult::Registered(id))
+                        .register(*entry)
+                        .map(OperationResult::Registered)
                         .map_err(OperationError::Registry),
                     Operation::Update {
                         statute_id,
                         statute,
                     } => registry
                         .update(&statute_id, statute)
-                        .map(|version| OperationResult::Updated(version))
+                        .map(OperationResult::Updated)
                         .map_err(OperationError::Registry),
                     Operation::SetStatus { statute_id, status } => registry
                         .set_status(&statute_id, status)
@@ -2694,7 +2886,7 @@ pub mod akoma_ntoso {
             .uri
             .value
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("unknown")
             .to_string();
 
@@ -2706,7 +2898,13 @@ pub mod akoma_ntoso {
             .and_then(|s| s.heading.clone())
             .unwrap_or_else(|| "Untitled".to_string());
 
-        let statute = Statute::new(&statute_id, &title);
+        // Create a default effect for imported statutes
+        let effect = legalis_core::Effect::new(
+            legalis_core::EffectType::Custom,
+            "Imported from Akoma Ntoso XML",
+        );
+
+        let statute = Statute::new(&statute_id, &title, effect);
 
         StatuteEntry::new(statute, jurisdiction)
     }
@@ -3315,7 +3513,7 @@ pub mod graphql {
     //! mutating the statute registry.
 
     use super::*;
-    use async_graphql::{Context, EmptySubscription, FieldResult, Object, Schema, SimpleObject};
+    use async_graphql::{EmptySubscription, FieldResult, Object, Schema, SimpleObject};
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
@@ -5304,5 +5502,218 @@ mod tests {
             Err(RegistryError::ConcurrentModification { .. }) => {}
             _ => panic!("Expected ConcurrentModification error"),
         }
+    }
+
+    #[test]
+    fn test_statute_entry_builders() {
+        use chrono::Duration;
+
+        let expiry = Utc::now() + Duration::days(365);
+        let effective = Utc::now() - Duration::days(30);
+
+        let entry = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_tag("civil")
+            .with_tag("contract")
+            .with_status(StatuteStatus::Active)
+            .with_reference("ref-statute-1")
+            .with_expiry_date(expiry)
+            .with_effective_date(effective)
+            .with_amends("parent-statute")
+            .with_supersedes("old-statute-1")
+            .with_supersedes("old-statute-2")
+            .with_metadata("author", "Legal Team")
+            .with_metadata("version_notes", "Initial draft")
+            .with_jurisdiction("US");
+
+        assert_eq!(entry.tags, vec!["civil", "contract"]);
+        assert_eq!(entry.status, StatuteStatus::Active);
+        assert_eq!(entry.references, vec!["ref-statute-1"]);
+        assert_eq!(entry.expiry_date, Some(expiry));
+        assert_eq!(entry.effective_date, Some(effective));
+        assert_eq!(entry.amends, Some("parent-statute".to_string()));
+        assert_eq!(entry.supersedes, vec!["old-statute-1", "old-statute-2"]);
+        assert_eq!(
+            entry.metadata.get("author"),
+            Some(&"Legal Team".to_string())
+        );
+        assert_eq!(
+            entry.metadata.get("version_notes"),
+            Some(&"Initial draft".to_string())
+        );
+        assert_eq!(entry.jurisdiction, "US");
+    }
+
+    #[test]
+    fn test_pagination_methods() {
+        // Test first() constructor
+        let page1 = Pagination::first(25);
+        assert_eq!(page1.page, 0);
+        assert_eq!(page1.per_page, 25);
+
+        // Test next() and prev()
+        let page2 = page1.next();
+        assert_eq!(page2.page, 1);
+        assert_eq!(page2.per_page, 25);
+
+        let page1_again = page2.prev();
+        assert_eq!(page1_again.page, 0);
+
+        // Test prev() saturates at 0
+        let page0 = page1.prev();
+        assert_eq!(page0.page, 0);
+
+        // Test builder methods
+        let custom = Pagination::new(0, 10).with_page(5).with_per_page(20);
+        assert_eq!(custom.page, 5);
+        assert_eq!(custom.per_page, 20);
+
+        // Test offset and limit
+        assert_eq!(custom.offset(), 100);
+        assert_eq!(custom.limit(), 20);
+    }
+
+    #[test]
+    fn test_paged_result_methods() {
+        // Create a paged result with items
+        let items = vec![1, 2, 3, 4, 5];
+        let result = PagedResult::new(items, 2, 5, 23);
+
+        // Test navigation helpers
+        assert!(result.has_next());
+        assert!(result.has_prev());
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 5);
+
+        // Test item numbering
+        assert_eq!(result.first_item_number(), 11); // page 2 * 5 per_page + 1
+        assert_eq!(result.last_item_number(), 15); // page 2 * 5 per_page + 5 items
+
+        // Test next/prev page
+        let next = result.next_page();
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().page, 3);
+
+        let prev = result.prev_page();
+        assert!(prev.is_some());
+        assert_eq!(prev.unwrap().page, 1);
+
+        // Test first page
+        let first_result = PagedResult::new(vec![1, 2, 3], 0, 5, 23);
+        assert!(!first_result.has_prev());
+        assert!(first_result.has_next());
+        assert!(first_result.prev_page().is_none());
+
+        // Test last page
+        let last_result = PagedResult::new(vec![21, 22, 23], 4, 5, 23);
+        assert!(last_result.has_prev());
+        assert!(!last_result.has_next());
+        assert!(last_result.next_page().is_none());
+
+        // Test empty result
+        let empty_result: PagedResult<i32> = PagedResult::new(vec![], 0, 5, 0);
+        assert!(empty_result.is_empty());
+        assert_eq!(empty_result.len(), 0);
+        assert_eq!(empty_result.first_item_number(), 0);
+        assert_eq!(empty_result.last_item_number(), 0);
+    }
+
+    #[test]
+    fn test_registry_utility_methods() {
+        let mut registry = StatuteRegistry::new();
+
+        // Test with empty registry
+        assert!(!registry.contains("test-1"));
+        assert_eq!(registry.all_statute_ids().len(), 0);
+        assert_eq!(registry.latest_version("test-1"), None);
+
+        // Add some statutes
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "JP"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-2"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-3"), "UK"))
+            .unwrap();
+
+        // Test contains
+        assert!(registry.contains("test-1"));
+        assert!(registry.contains("test-2"));
+        assert!(!registry.contains("nonexistent"));
+
+        // Test all_statute_ids
+        let ids = registry.all_statute_ids();
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&&"test-1".to_string()));
+        assert!(ids.contains(&&"test-2".to_string()));
+        assert!(ids.contains(&&"test-3".to_string()));
+
+        // Test latest_version
+        assert_eq!(registry.latest_version("test-1"), Some(1));
+        registry.update("test-1", test_statute("test-1")).unwrap();
+        assert_eq!(registry.latest_version("test-1"), Some(2));
+
+        // Test get_many
+        let results = registry.get_many(&["test-1", "test-2", "nonexistent"]);
+        assert_eq!(results.len(), 3);
+        assert!(results[0].is_some());
+        assert!(results[1].is_some());
+        assert!(results[2].is_none());
+    }
+
+    #[test]
+    fn test_registry_statistics() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with different statuses and jurisdictions
+        registry
+            .register(
+                StatuteEntry::new(test_statute("statute-1"), "JP")
+                    .with_status(StatuteStatus::Active)
+                    .with_tag("civil"),
+            )
+            .unwrap();
+
+        registry
+            .register(
+                StatuteEntry::new(test_statute("statute-2"), "JP")
+                    .with_status(StatuteStatus::Draft)
+                    .with_tag("criminal"),
+            )
+            .unwrap();
+
+        registry
+            .register(
+                StatuteEntry::new(test_statute("statute-3"), "US")
+                    .with_status(StatuteStatus::Active)
+                    .with_tag("civil"),
+            )
+            .unwrap();
+
+        // Create a version
+        registry
+            .update("statute-1", test_statute("statute-1"))
+            .unwrap();
+
+        let stats = registry.statistics();
+
+        // Verify counts
+        assert_eq!(stats.total_statutes, 3);
+        // total_versions counts all versions in the version history
+        // Each statute gets its initial version stored (3 total)
+        // statute-1 update adds another version (1 more)
+        assert_eq!(stats.total_versions, 4);
+        assert_eq!(stats.total_tags, 2); // civil, criminal
+        assert_eq!(stats.total_jurisdictions, 2); // JP, US
+
+        // Verify by_status
+        // Note: update() resets status to Draft, so statute-1 becomes Draft after update
+        assert_eq!(stats.by_status.get(&StatuteStatus::Active), Some(&1)); // Only statute-3
+        assert_eq!(stats.by_status.get(&StatuteStatus::Draft), Some(&2)); // statute-1 and statute-2
+
+        // Verify by_jurisdiction
+        assert_eq!(stats.by_jurisdiction.get("JP"), Some(&2));
+        assert_eq!(stats.by_jurisdiction.get("US"), Some(&1));
     }
 }

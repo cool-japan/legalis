@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Represents an amendment to a statute.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Amendment {
     /// Amendment identifier
     pub id: String,
@@ -45,9 +46,20 @@ impl Amendment {
     }
 }
 
+impl std::fmt::Display for Amendment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Amendment {}: {} ({}) by statute {}",
+            self.id, self.description, self.amendment_type, self.amending_statute_id
+        )
+    }
+}
+
 /// Types of amendments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum AmendmentType {
     /// Text modification (rewording)
     Modification,
@@ -79,6 +91,7 @@ impl std::fmt::Display for AmendmentType {
 /// Hierarchical relationship data for a statute.
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StatuteHierarchy {
     /// Parent statute ID (if this is a sub-section or derived statute)
     pub parent_id: Option<String>,
@@ -184,6 +197,42 @@ impl StatuteHierarchy {
     }
 }
 
+impl std::fmt::Display for StatuteHierarchy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut parts = Vec::new();
+
+        if let Some(parent) = &self.parent_id {
+            parts.push(format!("parent: {}", parent));
+        }
+
+        if !self.child_ids.is_empty() {
+            parts.push(format!("{} children", self.child_ids.len()));
+        }
+
+        if !self.supersedes.is_empty() {
+            parts.push(format!("supersedes {} statutes", self.supersedes.len()));
+        }
+
+        if let Some(superseded) = &self.superseded_by {
+            parts.push(format!("superseded by {}", superseded));
+        }
+
+        if !self.amendments.is_empty() {
+            parts.push(format!("{} amendments", self.amendments.len()));
+        }
+
+        if !self.cross_references.is_empty() {
+            parts.push(format!("{} cross-references", self.cross_references.len()));
+        }
+
+        if parts.is_empty() {
+            write!(f, "StatuteHierarchy (no relationships)")
+        } else {
+            write!(f, "StatuteHierarchy: {}", parts.join(", "))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,5 +303,57 @@ mod tests {
         let latest = hierarchy.latest_amendment();
         assert!(latest.is_some());
         assert!(latest.unwrap().id == "amend-1" || latest.unwrap().id == "amend-2");
+    }
+
+    #[test]
+    fn test_amendment_type_display() {
+        assert_eq!(AmendmentType::Modification.to_string(), "Modification");
+        assert_eq!(AmendmentType::Addition.to_string(), "Addition");
+        assert_eq!(AmendmentType::Deletion.to_string(), "Deletion");
+        assert_eq!(AmendmentType::Substitution.to_string(), "Substitution");
+        assert_eq!(AmendmentType::Clarification.to_string(), "Clarification");
+        assert_eq!(AmendmentType::Reorganization.to_string(), "Reorganization");
+    }
+
+    #[test]
+    fn test_amendment_display() {
+        let amendment = Amendment::new(
+            "amend-1",
+            "statute-2",
+            "Updated age requirement",
+            AmendmentType::Modification,
+        );
+        let display = amendment.to_string();
+        assert!(display.contains("amend-1"));
+        assert!(display.contains("statute-2"));
+        assert!(display.contains("Updated age requirement"));
+        assert!(display.contains("Modification"));
+    }
+
+    #[test]
+    fn test_statute_hierarchy_display_empty() {
+        let hierarchy = StatuteHierarchy::new();
+        assert_eq!(hierarchy.to_string(), "StatuteHierarchy (no relationships)");
+    }
+
+    #[test]
+    fn test_statute_hierarchy_display_with_relationships() {
+        let hierarchy = StatuteHierarchy::new()
+            .with_parent("parent-statute")
+            .with_child("child-1")
+            .with_child("child-2")
+            .with_supersedes("old-statute-1");
+
+        let display = hierarchy.to_string();
+        assert!(display.contains("parent: parent-statute"));
+        assert!(display.contains("2 children"));
+        assert!(display.contains("supersedes 1 statutes"));
+    }
+
+    #[test]
+    fn test_amendment_type_ordering() {
+        assert!(AmendmentType::Modification < AmendmentType::Addition);
+        assert!(AmendmentType::Addition < AmendmentType::Deletion);
+        assert!(AmendmentType::Deletion < AmendmentType::Substitution);
     }
 }

@@ -75,7 +75,7 @@ impl<T> BatchIterator<T> {
 
     /// Returns the total number of batches
     pub fn batch_count(&self) -> usize {
-        (self.items.len() + self.batch_size - 1) / self.batch_size
+        self.items.len().div_ceil(self.batch_size)
     }
 }
 
@@ -430,8 +430,7 @@ impl ParallelExecutor {
                     let results_ref = &results;
 
                     s.spawn(move || {
-                        let chunk_results: Vec<R> =
-                            chunk.into_iter().map(|item| worker_fn(item)).collect();
+                        let chunk_results: Vec<R> = chunk.into_iter().map(worker_fn).collect();
                         results_ref.lock().unwrap().extend(chunk_results);
                     })
                 })
@@ -924,13 +923,13 @@ mod tests {
     fn test_entity_pool() {
         let mut pool = EntityPool::new(10);
 
-        let entity1 = pool.acquire(|| BasicEntity::new());
+        let entity1 = pool.acquire(BasicEntity::new);
         let id1 = entity1.id();
 
         pool.release(entity1);
         assert_eq!(pool.size(), 1);
 
-        let entity2 = pool.acquire(|| BasicEntity::new());
+        let entity2 = pool.acquire(BasicEntity::new);
         assert_eq!(entity2.id(), id1); // Should reuse the same entity
 
         pool.clear();

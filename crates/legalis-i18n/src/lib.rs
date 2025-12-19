@@ -17,17 +17,41 @@ use thiserror::Error;
 /// Errors during internationalization operations.
 #[derive(Debug, Error)]
 pub enum I18nError {
-    #[error("Locale not found: {0}")]
-    LocaleNotFound(String),
+    #[error(
+        "Locale not found: '{locale}'. Available locales can be registered using add_locale()."
+    )]
+    LocaleNotFound { locale: String },
 
-    #[error("Translation missing for key '{key}' in locale '{locale}'")]
+    #[error(
+        "Translation missing for key '{key}' in locale '{locale}'. Consider adding the term to the dictionary or using a fallback locale."
+    )]
     TranslationMissing { key: String, locale: String },
 
-    #[error("Invalid locale format: {0}")]
-    InvalidLocale(String),
+    #[error(
+        "Invalid locale format: '{input}'. Expected format: language[-Script][-COUNTRY] (e.g., 'en-US', 'zh-Hans-CN')."
+    )]
+    InvalidLocale { input: String },
 
-    #[error("Jurisdiction not supported: {0}")]
-    UnsupportedJurisdiction(String),
+    #[error(
+        "Jurisdiction '{jurisdiction}' is not supported. Supported jurisdictions: JP, US, GB, DE, FR, ES, IT, CN, TW, KR, CA, AU, IN, BR, RU, SA, NL, CH, MX, SG."
+    )]
+    UnsupportedJurisdiction { jurisdiction: String },
+
+    #[error(
+        "Dictionary for locale '{locale}' not found. Add a dictionary using add_dictionary() before attempting translation."
+    )]
+    DictionaryNotFound { locale: String },
+
+    #[error(
+        "Invalid date: year={year}, month={month}, day={day}. Please provide a valid calendar date."
+    )]
+    InvalidDate { year: i32, month: u32, day: u32 },
+
+    #[error("Cache operation failed: {reason}")]
+    CacheError { reason: String },
+
+    #[error("Translation service unavailable: {service}. {details}")]
+    ServiceUnavailable { service: String, details: String },
 }
 
 /// Result type for i18n operations.
@@ -46,6 +70,16 @@ pub struct Locale {
 
 impl Locale {
     /// Creates a new locale.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::new("ja");
+    /// assert_eq!(locale.language, "ja");
+    /// assert_eq!(locale.tag(), "ja");
+    /// ```
     pub fn new(language: impl Into<String>) -> Self {
         Self {
             language: language.into(),
@@ -55,12 +89,30 @@ impl Locale {
     }
 
     /// Sets the country.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::new("en").with_country("US");
+    /// assert_eq!(locale.tag(), "en-US");
+    /// ```
     pub fn with_country(mut self, country: impl Into<String>) -> Self {
         self.country = Some(country.into());
         self
     }
 
     /// Sets the script.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::new("zh").with_script("Hans").with_country("CN");
+    /// assert_eq!(locale.tag(), "zh-Hans-CN");
+    /// ```
     pub fn with_script(mut self, script: impl Into<String>) -> Self {
         self.script = Some(script.into());
         self
@@ -81,10 +133,27 @@ impl Locale {
     }
 
     /// Parses a locale from a tag string.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::parse("en-US").unwrap();
+    /// assert_eq!(locale.language, "en");
+    /// assert_eq!(locale.country, Some("US".to_string()));
+    ///
+    /// let locale_with_script = Locale::parse("zh-Hans-CN").unwrap();
+    /// assert_eq!(locale_with_script.language, "zh");
+    /// assert_eq!(locale_with_script.script, Some("Hans".to_string()));
+    /// assert_eq!(locale_with_script.country, Some("CN".to_string()));
+    /// ```
     pub fn parse(tag: &str) -> I18nResult<Self> {
         let parts: Vec<&str> = tag.split('-').collect();
         if parts.is_empty() {
-            return Err(I18nError::InvalidLocale(tag.to_string()));
+            return Err(I18nError::InvalidLocale {
+                input: tag.to_string(),
+            });
         }
 
         let mut locale = Self::new(parts[0]);
@@ -101,6 +170,20 @@ impl Locale {
 
     /// Checks if this locale matches another locale (considering regional variations).
     /// Returns true if the locales match exactly or if they share the same language/country.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let en = Locale::new("en");
+    /// let en_us = Locale::new("en").with_country("US");
+    /// let en_gb = Locale::new("en").with_country("GB");
+    ///
+    /// assert!(en.matches(&en_us));  // Base locale matches regional variant
+    /// assert!(en_us.matches(&en_us)); // Exact match
+    /// assert!(!en_us.matches(&en_gb)); // Different countries don't match
+    /// ```
     pub fn matches(&self, other: &Locale) -> bool {
         if self.language != other.language {
             return false;
@@ -116,6 +199,20 @@ impl Locale {
 
     /// Gets the parent locale (removing the most specific part).
     /// For example, "en-US" -> "en", "zh-Hans-CN" -> "zh-Hans"
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::new("en").with_country("US");
+    /// let parent = locale.parent().unwrap();
+    /// assert_eq!(parent.tag(), "en");
+    /// assert!(parent.country.is_none());
+    ///
+    /// let base = Locale::new("en");
+    /// assert!(base.parent().is_none()); // Base locale has no parent
+    /// ```
     pub fn parent(&self) -> Option<Self> {
         if self.country.is_some() {
             Some(Self {
@@ -136,6 +233,19 @@ impl Locale {
 
     /// Gets all fallback locales in order.
     /// For example, "zh-Hans-CN" -> ["zh-Hans-CN", "zh-Hans", "zh"]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::Locale;
+    ///
+    /// let locale = Locale::new("zh").with_script("Hans").with_country("CN");
+    /// let chain = locale.fallback_chain();
+    /// assert_eq!(chain.len(), 3);
+    /// assert_eq!(chain[0].tag(), "zh-Hans-CN");
+    /// assert_eq!(chain[1].tag(), "zh-Hans");
+    /// assert_eq!(chain[2].tag(), "zh");
+    /// ```
     pub fn fallback_chain(&self) -> Vec<Locale> {
         let mut chain = vec![self.clone()];
         let mut current = self.clone();
@@ -438,6 +548,20 @@ pub struct Jurisdiction {
 
 impl Jurisdiction {
     /// Creates a new jurisdiction.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{Jurisdiction, Locale, LegalSystem};
+    ///
+    /// let locale = Locale::new("ja").with_country("JP");
+    /// let jurisdiction = Jurisdiction::new("JP", "Japan", locale)
+    ///     .with_legal_system(LegalSystem::CivilLaw);
+    ///
+    /// assert_eq!(jurisdiction.id, "JP");
+    /// assert_eq!(jurisdiction.name, "Japan");
+    /// assert_eq!(jurisdiction.legal_system, LegalSystem::CivilLaw);
+    /// ```
     pub fn new(id: impl Into<String>, name: impl Into<String>, locale: Locale) -> Self {
         Self {
             id: id.into(),
@@ -494,6 +618,18 @@ impl CulturalParams {
     }
 
     /// Creates default parameters for a given country.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::CulturalParams;
+    ///
+    /// let japan_params = CulturalParams::for_country("JP");
+    /// assert_eq!(japan_params.age_of_majority, Some(18));
+    ///
+    /// let singapore_params = CulturalParams::for_country("SG");
+    /// assert_eq!(singapore_params.age_of_majority, Some(21));
+    /// ```
     pub fn for_country(country_code: &str) -> Self {
         match country_code {
             "JP" => Self::japan(),
@@ -758,6 +894,21 @@ pub struct LegalDictionary {
 
 impl LegalDictionary {
     /// Creates a new dictionary for a locale.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{LegalDictionary, Locale};
+    ///
+    /// let locale = Locale::new("ja").with_country("JP");
+    /// let mut dict = LegalDictionary::new(locale);
+    ///
+    /// dict.add_translation("contract", "契約");
+    /// dict.add_translation("statute", "法律");
+    ///
+    /// assert_eq!(dict.translate("contract"), Some("契約"));
+    /// assert_eq!(dict.translate("statute"), Some("法律"));
+    /// ```
     pub fn new(locale: Locale) -> Self {
         Self {
             locale,
@@ -819,6 +970,78 @@ impl LegalDictionary {
         dict.add_translation("penalty", "penalty");
         dict.add_translation("fine", "fine");
 
+        // Corporate law terms
+        dict.add_translation("corporation", "corporation");
+        dict.add_translation("shareholder", "shareholder");
+        dict.add_translation("director", "director");
+        dict.add_translation("officer", "officer");
+        dict.add_translation("bylaws", "bylaws");
+        dict.add_translation("merger", "merger");
+        dict.add_translation("acquisition", "acquisition");
+        dict.add_translation("dividend", "dividend");
+        dict.add_translation("stock", "stock");
+        dict.add_translation("securities", "securities");
+
+        // Property law terms
+        dict.add_translation("property", "property");
+        dict.add_translation("real_estate", "real estate");
+        dict.add_translation("ownership", "ownership");
+        dict.add_translation("lease", "lease");
+        dict.add_translation("tenant", "tenant");
+        dict.add_translation("landlord", "landlord");
+        dict.add_translation("mortgage", "mortgage");
+        dict.add_translation("deed", "deed");
+        dict.add_translation("title", "title");
+        dict.add_translation("easement", "easement");
+
+        // Criminal law terms
+        dict.add_translation("crime", "crime");
+        dict.add_translation("felony", "felony");
+        dict.add_translation("misdemeanor", "misdemeanor");
+        dict.add_translation("prosecution", "prosecution");
+        dict.add_translation("indictment", "indictment");
+        dict.add_translation("conviction", "conviction");
+        dict.add_translation("sentence", "sentence");
+        dict.add_translation("probation", "probation");
+        dict.add_translation("parole", "parole");
+        dict.add_translation("bail", "bail");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "jurisdiction");
+        dict.add_translation("venue", "venue");
+        dict.add_translation("standing", "standing");
+        dict.add_translation("discovery", "discovery");
+        dict.add_translation("deposition", "deposition");
+        dict.add_translation("motion", "motion");
+        dict.add_translation("injunction", "injunction");
+        dict.add_translation("subpoena", "subpoena");
+        dict.add_translation("hearing", "hearing");
+        dict.add_translation("trial", "trial");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "patent");
+        dict.add_translation("trademark", "trademark");
+        dict.add_translation("copyright", "copyright");
+        dict.add_translation("infringement", "infringement");
+        dict.add_translation("royalty", "royalty");
+        dict.add_translation("license", "license");
+
+        // Family law terms
+        dict.add_translation("marriage", "marriage");
+        dict.add_translation("divorce", "divorce");
+        dict.add_translation("custody", "custody");
+        dict.add_translation("alimony", "alimony");
+        dict.add_translation("adoption", "adoption");
+        dict.add_translation("guardianship", "guardianship");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "arbitration");
+        dict.add_translation("mediation", "mediation");
+        dict.add_translation("settlement", "settlement");
+        dict.add_translation("litigation", "litigation");
+        dict.add_translation("precedent", "precedent");
+        dict.add_translation("statute_of_limitations", "statute of limitations");
+
         dict
     }
 
@@ -854,6 +1077,78 @@ impl LegalDictionary {
         dict.add_translation("damages", "損害賠償");
         dict.add_translation("penalty", "罰則");
         dict.add_translation("fine", "罰金");
+
+        // Corporate law terms
+        dict.add_translation("corporation", "法人");
+        dict.add_translation("shareholder", "株主");
+        dict.add_translation("director", "取締役");
+        dict.add_translation("officer", "役員");
+        dict.add_translation("bylaws", "定款");
+        dict.add_translation("merger", "合併");
+        dict.add_translation("acquisition", "買収");
+        dict.add_translation("dividend", "配当");
+        dict.add_translation("stock", "株式");
+        dict.add_translation("securities", "有価証券");
+
+        // Property law terms
+        dict.add_translation("property", "財産");
+        dict.add_translation("real_estate", "不動産");
+        dict.add_translation("ownership", "所有権");
+        dict.add_translation("lease", "賃貸借");
+        dict.add_translation("tenant", "賃借人");
+        dict.add_translation("landlord", "賃貸人");
+        dict.add_translation("mortgage", "抵当権");
+        dict.add_translation("deed", "証書");
+        dict.add_translation("title", "権原");
+        dict.add_translation("easement", "地役権");
+
+        // Criminal law terms
+        dict.add_translation("crime", "犯罪");
+        dict.add_translation("felony", "重罪");
+        dict.add_translation("misdemeanor", "軽罪");
+        dict.add_translation("prosecution", "起訴");
+        dict.add_translation("indictment", "起訴状");
+        dict.add_translation("conviction", "有罪判決");
+        dict.add_translation("sentence", "刑");
+        dict.add_translation("probation", "執行猶予");
+        dict.add_translation("parole", "仮釈放");
+        dict.add_translation("bail", "保釈");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "管轄");
+        dict.add_translation("venue", "裁判地");
+        dict.add_translation("standing", "当事者適格");
+        dict.add_translation("discovery", "証拠開示");
+        dict.add_translation("deposition", "証言録取");
+        dict.add_translation("motion", "申立て");
+        dict.add_translation("injunction", "差止め");
+        dict.add_translation("subpoena", "召喚状");
+        dict.add_translation("hearing", "審理");
+        dict.add_translation("trial", "裁判");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "特許");
+        dict.add_translation("trademark", "商標");
+        dict.add_translation("copyright", "著作権");
+        dict.add_translation("infringement", "侵害");
+        dict.add_translation("royalty", "使用料");
+        dict.add_translation("license", "ライセンス");
+
+        // Family law terms
+        dict.add_translation("marriage", "婚姻");
+        dict.add_translation("divorce", "離婚");
+        dict.add_translation("custody", "親権");
+        dict.add_translation("alimony", "扶養料");
+        dict.add_translation("adoption", "養子縁組");
+        dict.add_translation("guardianship", "後見");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "仲裁");
+        dict.add_translation("mediation", "調停");
+        dict.add_translation("settlement", "和解");
+        dict.add_translation("litigation", "訴訟");
+        dict.add_translation("precedent", "判例");
+        dict.add_translation("statute_of_limitations", "時効");
 
         dict
     }
@@ -891,6 +1186,78 @@ impl LegalDictionary {
         dict.add_translation("penalty", "Strafe");
         dict.add_translation("fine", "Geldstrafe");
 
+        // Corporate law terms
+        dict.add_translation("corporation", "Gesellschaft");
+        dict.add_translation("shareholder", "Aktionär");
+        dict.add_translation("director", "Direktor");
+        dict.add_translation("officer", "Vorstand");
+        dict.add_translation("bylaws", "Satzung");
+        dict.add_translation("merger", "Fusion");
+        dict.add_translation("acquisition", "Übernahme");
+        dict.add_translation("dividend", "Dividende");
+        dict.add_translation("stock", "Aktie");
+        dict.add_translation("securities", "Wertpapiere");
+
+        // Property law terms
+        dict.add_translation("property", "Eigentum");
+        dict.add_translation("real_estate", "Immobilien");
+        dict.add_translation("ownership", "Eigentum");
+        dict.add_translation("lease", "Miete");
+        dict.add_translation("tenant", "Mieter");
+        dict.add_translation("landlord", "Vermieter");
+        dict.add_translation("mortgage", "Hypothek");
+        dict.add_translation("deed", "Urkunde");
+        dict.add_translation("title", "Titel");
+        dict.add_translation("easement", "Grunddienstbarkeit");
+
+        // Criminal law terms
+        dict.add_translation("crime", "Verbrechen");
+        dict.add_translation("felony", "Verbrechen");
+        dict.add_translation("misdemeanor", "Vergehen");
+        dict.add_translation("prosecution", "Strafverfolgung");
+        dict.add_translation("indictment", "Anklage");
+        dict.add_translation("conviction", "Verurteilung");
+        dict.add_translation("sentence", "Strafe");
+        dict.add_translation("probation", "Bewährung");
+        dict.add_translation("parole", "Bewährung");
+        dict.add_translation("bail", "Kaution");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "Zuständigkeit");
+        dict.add_translation("venue", "Gerichtsstand");
+        dict.add_translation("standing", "Klagebefugnis");
+        dict.add_translation("discovery", "Beweiserhebung");
+        dict.add_translation("deposition", "Zeugenaussage");
+        dict.add_translation("motion", "Antrag");
+        dict.add_translation("injunction", "Einstweilige Verfügung");
+        dict.add_translation("subpoena", "Vorladung");
+        dict.add_translation("hearing", "Anhörung");
+        dict.add_translation("trial", "Verhandlung");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "Patent");
+        dict.add_translation("trademark", "Marke");
+        dict.add_translation("copyright", "Urheberrecht");
+        dict.add_translation("infringement", "Verletzung");
+        dict.add_translation("royalty", "Lizenzgebühr");
+        dict.add_translation("license", "Lizenz");
+
+        // Family law terms
+        dict.add_translation("marriage", "Ehe");
+        dict.add_translation("divorce", "Scheidung");
+        dict.add_translation("custody", "Sorgerecht");
+        dict.add_translation("alimony", "Unterhalt");
+        dict.add_translation("adoption", "Adoption");
+        dict.add_translation("guardianship", "Vormundschaft");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "Schiedsverfahren");
+        dict.add_translation("mediation", "Mediation");
+        dict.add_translation("settlement", "Vergleich");
+        dict.add_translation("litigation", "Rechtsstreit");
+        dict.add_translation("precedent", "Präzedenzfall");
+        dict.add_translation("statute_of_limitations", "Verjährung");
+
         dict
     }
 
@@ -926,6 +1293,78 @@ impl LegalDictionary {
         dict.add_translation("damages", "dommages");
         dict.add_translation("penalty", "pénalité");
         dict.add_translation("fine", "amende");
+
+        // Corporate law terms
+        dict.add_translation("corporation", "société");
+        dict.add_translation("shareholder", "actionnaire");
+        dict.add_translation("director", "directeur");
+        dict.add_translation("officer", "dirigeant");
+        dict.add_translation("bylaws", "statuts");
+        dict.add_translation("merger", "fusion");
+        dict.add_translation("acquisition", "acquisition");
+        dict.add_translation("dividend", "dividende");
+        dict.add_translation("stock", "action");
+        dict.add_translation("securities", "valeurs mobilières");
+
+        // Property law terms
+        dict.add_translation("property", "propriété");
+        dict.add_translation("real_estate", "immobilier");
+        dict.add_translation("ownership", "propriété");
+        dict.add_translation("lease", "bail");
+        dict.add_translation("tenant", "locataire");
+        dict.add_translation("landlord", "bailleur");
+        dict.add_translation("mortgage", "hypothèque");
+        dict.add_translation("deed", "acte");
+        dict.add_translation("title", "titre");
+        dict.add_translation("easement", "servitude");
+
+        // Criminal law terms
+        dict.add_translation("crime", "crime");
+        dict.add_translation("felony", "crime");
+        dict.add_translation("misdemeanor", "délit");
+        dict.add_translation("prosecution", "poursuite");
+        dict.add_translation("indictment", "mise en accusation");
+        dict.add_translation("conviction", "condamnation");
+        dict.add_translation("sentence", "peine");
+        dict.add_translation("probation", "sursis");
+        dict.add_translation("parole", "libération conditionnelle");
+        dict.add_translation("bail", "caution");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "compétence");
+        dict.add_translation("venue", "lieu du procès");
+        dict.add_translation("standing", "qualité pour agir");
+        dict.add_translation("discovery", "communication de pièces");
+        dict.add_translation("deposition", "déposition");
+        dict.add_translation("motion", "requête");
+        dict.add_translation("injunction", "injonction");
+        dict.add_translation("subpoena", "assignation");
+        dict.add_translation("hearing", "audience");
+        dict.add_translation("trial", "procès");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "brevet");
+        dict.add_translation("trademark", "marque");
+        dict.add_translation("copyright", "droit d'auteur");
+        dict.add_translation("infringement", "contrefaçon");
+        dict.add_translation("royalty", "redevance");
+        dict.add_translation("license", "licence");
+
+        // Family law terms
+        dict.add_translation("marriage", "mariage");
+        dict.add_translation("divorce", "divorce");
+        dict.add_translation("custody", "garde");
+        dict.add_translation("alimony", "pension alimentaire");
+        dict.add_translation("adoption", "adoption");
+        dict.add_translation("guardianship", "tutelle");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "arbitrage");
+        dict.add_translation("mediation", "médiation");
+        dict.add_translation("settlement", "règlement");
+        dict.add_translation("litigation", "litige");
+        dict.add_translation("precedent", "précédent");
+        dict.add_translation("statute_of_limitations", "prescription");
 
         dict
     }
@@ -963,6 +1402,78 @@ impl LegalDictionary {
         dict.add_translation("penalty", "pena");
         dict.add_translation("fine", "multa");
 
+        // Corporate law terms
+        dict.add_translation("corporation", "corporación");
+        dict.add_translation("shareholder", "accionista");
+        dict.add_translation("director", "director");
+        dict.add_translation("officer", "funcionario");
+        dict.add_translation("bylaws", "estatutos");
+        dict.add_translation("merger", "fusión");
+        dict.add_translation("acquisition", "adquisición");
+        dict.add_translation("dividend", "dividendo");
+        dict.add_translation("stock", "acción");
+        dict.add_translation("securities", "valores");
+
+        // Property law terms
+        dict.add_translation("property", "propiedad");
+        dict.add_translation("real_estate", "bienes raíces");
+        dict.add_translation("ownership", "propiedad");
+        dict.add_translation("lease", "arrendamiento");
+        dict.add_translation("tenant", "inquilino");
+        dict.add_translation("landlord", "arrendador");
+        dict.add_translation("mortgage", "hipoteca");
+        dict.add_translation("deed", "escritura");
+        dict.add_translation("title", "título");
+        dict.add_translation("easement", "servidumbre");
+
+        // Criminal law terms
+        dict.add_translation("crime", "crimen");
+        dict.add_translation("felony", "delito grave");
+        dict.add_translation("misdemeanor", "delito menor");
+        dict.add_translation("prosecution", "fiscalía");
+        dict.add_translation("indictment", "acusación");
+        dict.add_translation("conviction", "condena");
+        dict.add_translation("sentence", "sentencia");
+        dict.add_translation("probation", "libertad condicional");
+        dict.add_translation("parole", "libertad condicional");
+        dict.add_translation("bail", "fianza");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "jurisdicción");
+        dict.add_translation("venue", "sede");
+        dict.add_translation("standing", "legitimación");
+        dict.add_translation("discovery", "descubrimiento");
+        dict.add_translation("deposition", "declaración");
+        dict.add_translation("motion", "moción");
+        dict.add_translation("injunction", "mandamiento");
+        dict.add_translation("subpoena", "citación");
+        dict.add_translation("hearing", "audiencia");
+        dict.add_translation("trial", "juicio");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "patente");
+        dict.add_translation("trademark", "marca registrada");
+        dict.add_translation("copyright", "derecho de autor");
+        dict.add_translation("infringement", "infracción");
+        dict.add_translation("royalty", "regalía");
+        dict.add_translation("license", "licencia");
+
+        // Family law terms
+        dict.add_translation("marriage", "matrimonio");
+        dict.add_translation("divorce", "divorcio");
+        dict.add_translation("custody", "custodia");
+        dict.add_translation("alimony", "pensión alimenticia");
+        dict.add_translation("adoption", "adopción");
+        dict.add_translation("guardianship", "tutela");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "arbitraje");
+        dict.add_translation("mediation", "mediación");
+        dict.add_translation("settlement", "acuerdo");
+        dict.add_translation("litigation", "litigio");
+        dict.add_translation("precedent", "precedente");
+        dict.add_translation("statute_of_limitations", "prescripción");
+
         dict
     }
 
@@ -998,6 +1509,78 @@ impl LegalDictionary {
         dict.add_translation("damages", "损害赔偿");
         dict.add_translation("penalty", "处罚");
         dict.add_translation("fine", "罚款");
+
+        // Corporate law terms
+        dict.add_translation("corporation", "公司");
+        dict.add_translation("shareholder", "股东");
+        dict.add_translation("director", "董事");
+        dict.add_translation("officer", "高管");
+        dict.add_translation("bylaws", "章程");
+        dict.add_translation("merger", "合并");
+        dict.add_translation("acquisition", "收购");
+        dict.add_translation("dividend", "股息");
+        dict.add_translation("stock", "股票");
+        dict.add_translation("securities", "证券");
+
+        // Property law terms
+        dict.add_translation("property", "财产");
+        dict.add_translation("real_estate", "房地产");
+        dict.add_translation("ownership", "所有权");
+        dict.add_translation("lease", "租赁");
+        dict.add_translation("tenant", "承租人");
+        dict.add_translation("landlord", "出租人");
+        dict.add_translation("mortgage", "抵押");
+        dict.add_translation("deed", "契约");
+        dict.add_translation("title", "产权");
+        dict.add_translation("easement", "地役权");
+
+        // Criminal law terms
+        dict.add_translation("crime", "犯罪");
+        dict.add_translation("felony", "重罪");
+        dict.add_translation("misdemeanor", "轻罪");
+        dict.add_translation("prosecution", "起诉");
+        dict.add_translation("indictment", "起诉书");
+        dict.add_translation("conviction", "定罪");
+        dict.add_translation("sentence", "判刑");
+        dict.add_translation("probation", "缓刑");
+        dict.add_translation("parole", "假释");
+        dict.add_translation("bail", "保释");
+
+        // Procedural law terms
+        dict.add_translation("jurisdiction", "管辖权");
+        dict.add_translation("venue", "审判地");
+        dict.add_translation("standing", "诉讼资格");
+        dict.add_translation("discovery", "证据披露");
+        dict.add_translation("deposition", "证词记录");
+        dict.add_translation("motion", "动议");
+        dict.add_translation("injunction", "禁令");
+        dict.add_translation("subpoena", "传票");
+        dict.add_translation("hearing", "听证");
+        dict.add_translation("trial", "审判");
+
+        // Intellectual property terms
+        dict.add_translation("patent", "专利");
+        dict.add_translation("trademark", "商标");
+        dict.add_translation("copyright", "版权");
+        dict.add_translation("infringement", "侵权");
+        dict.add_translation("royalty", "版税");
+        dict.add_translation("license", "许可");
+
+        // Family law terms
+        dict.add_translation("marriage", "婚姻");
+        dict.add_translation("divorce", "离婚");
+        dict.add_translation("custody", "监护");
+        dict.add_translation("alimony", "赡养费");
+        dict.add_translation("adoption", "收养");
+        dict.add_translation("guardianship", "监护权");
+
+        // Additional procedural terms
+        dict.add_translation("arbitration", "仲裁");
+        dict.add_translation("mediation", "调解");
+        dict.add_translation("settlement", "和解");
+        dict.add_translation("litigation", "诉讼");
+        dict.add_translation("precedent", "判例");
+        dict.add_translation("statute_of_limitations", "诉讼时效");
 
         dict
     }
@@ -1425,15 +2008,48 @@ impl LegalConceptRegistry {
     }
 }
 
-/// Multi-locale translation manager.
-#[derive(Debug, Default)]
+/// Multi-locale translation manager with caching support.
+#[derive(Debug)]
 pub struct TranslationManager {
     dictionaries: HashMap<String, LegalDictionary>,
     fallback_locale: Option<Locale>,
+    /// Cache for translation lookups: (key, locale_tag) -> translation
+    cache: std::cell::RefCell<HashMap<(String, String), String>>,
+    /// Maximum cache size
+    max_cache_size: usize,
+}
+
+impl Default for TranslationManager {
+    fn default() -> Self {
+        Self {
+            dictionaries: HashMap::new(),
+            fallback_locale: None,
+            cache: std::cell::RefCell::new(HashMap::new()),
+            max_cache_size: 1000,
+        }
+    }
 }
 
 impl TranslationManager {
     /// Creates a new translation manager.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{TranslationManager, LegalDictionary, Locale};
+    ///
+    /// let mut manager = TranslationManager::new();
+    ///
+    /// // Add Japanese dictionary
+    /// let mut ja_dict = LegalDictionary::new(Locale::new("ja").with_country("JP"));
+    /// ja_dict.add_translation("contract", "契約");
+    /// manager.add_dictionary(ja_dict);
+    ///
+    /// // Translate
+    /// let locale = Locale::new("ja").with_country("JP");
+    /// let translation = manager.translate("contract", &locale).unwrap();
+    /// assert_eq!(translation, "契約");
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -1449,8 +2065,38 @@ impl TranslationManager {
         self.dictionaries.insert(dict.locale.tag(), dict);
     }
 
-    /// Translates a key for a locale.
+    /// Translates a key for a locale with caching.
     pub fn translate(&self, key: &str, locale: &Locale) -> I18nResult<String> {
+        let cache_key = (key.to_string(), locale.tag());
+
+        // Check cache first
+        {
+            let cache = self.cache.borrow();
+            if let Some(cached) = cache.get(&cache_key) {
+                return Ok(cached.clone());
+            }
+        }
+
+        // Perform translation
+        let result = self.translate_uncached(key, locale);
+
+        // Cache the result if successful
+        if let Ok(ref translation) = result {
+            let mut cache = self.cache.borrow_mut();
+
+            // Simple cache eviction: clear if too large
+            if cache.len() >= self.max_cache_size {
+                cache.clear();
+            }
+
+            cache.insert(cache_key, translation.clone());
+        }
+
+        result
+    }
+
+    /// Translates a key for a locale without using cache.
+    fn translate_uncached(&self, key: &str, locale: &Locale) -> I18nResult<String> {
         // Try exact locale match
         if let Some(dict) = self.dictionaries.get(&locale.tag()) {
             if let Some(translation) = dict.translate(key) {
@@ -1478,6 +2124,25 @@ impl TranslationManager {
             key: key.to_string(),
             locale: locale.tag(),
         })
+    }
+
+    /// Clears the translation cache.
+    pub fn clear_cache(&self) {
+        self.cache.borrow_mut().clear();
+    }
+
+    /// Gets the current cache size.
+    pub fn cache_size(&self) -> usize {
+        self.cache.borrow().len()
+    }
+
+    /// Sets the maximum cache size.
+    pub fn set_max_cache_size(&mut self, size: usize) {
+        self.max_cache_size = size;
+        // Clear cache if it's too large
+        if self.cache.borrow().len() > size {
+            self.cache.borrow_mut().clear();
+        }
     }
 }
 
@@ -1810,6 +2475,21 @@ pub struct DateTimeFormatter {
 
 impl DateTimeFormatter {
     /// Creates a new date/time formatter.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{DateTimeFormatter, Locale};
+    ///
+    /// let locale = Locale::new("ja").with_country("JP");
+    /// let formatter = DateTimeFormatter::new(locale);
+    ///
+    /// let date = formatter.format_date(2024, 12, 19);
+    /// assert_eq!(date, "2024年12月19日");
+    ///
+    /// let time = formatter.format_time(14, 30);
+    /// assert_eq!(time, "14:30");
+    /// ```
     pub fn new(locale: Locale) -> Self {
         Self { locale }
     }
@@ -1873,6 +2553,20 @@ pub struct CurrencyFormatter {
 
 impl CurrencyFormatter {
     /// Creates a new currency formatter.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{CurrencyFormatter, Locale};
+    ///
+    /// let us_locale = Locale::new("en").with_country("US");
+    /// let formatter = CurrencyFormatter::new(us_locale);
+    /// assert!(formatter.format(1234.56, "USD").starts_with("$"));
+    ///
+    /// let jp_locale = Locale::new("ja").with_country("JP");
+    /// let jp_formatter = CurrencyFormatter::new(jp_locale);
+    /// assert!(jp_formatter.format(1234.0, "JPY").starts_with("¥"));
+    /// ```
     pub fn new(locale: Locale) -> Self {
         Self { locale }
     }
@@ -2081,6 +2775,20 @@ pub struct NumberFormatter {
 
 impl NumberFormatter {
     /// Creates a new number formatter.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{NumberFormatter, Locale};
+    ///
+    /// let us_locale = Locale::new("en").with_country("US");
+    /// let formatter = NumberFormatter::new(us_locale);
+    /// assert!(formatter.format_integer(1234567).contains(","));
+    ///
+    /// let de_locale = Locale::new("de").with_country("DE");
+    /// let de_formatter = NumberFormatter::new(de_locale);
+    /// assert!(de_formatter.format_integer(1234567).contains("."));
+    /// ```
     pub fn new(locale: Locale) -> Self {
         Self { locale }
     }
@@ -2505,6 +3213,23 @@ pub struct TranslationMemory {
 
 impl TranslationMemory {
     /// Creates a new translation memory.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_i18n::{TranslationMemory, Locale};
+    ///
+    /// let mut memory = TranslationMemory::new();
+    ///
+    /// let en = Locale::new("en");
+    /// let ja = Locale::new("ja");
+    ///
+    /// memory.add_translation("contract", en.clone(), "契約", ja.clone());
+    ///
+    /// let matches = memory.find_exact("contract", &en, &ja);
+    /// assert_eq!(matches.len(), 1);
+    /// assert_eq!(matches[0].target_text, "契約");
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -2799,6 +3524,153 @@ impl TerminologyExtractor {
     pub fn clear(&mut self) {
         self.extracted.clear();
     }
+}
+
+// ============================================================================
+// Utility Functions for Common I18n Patterns
+// ============================================================================
+
+/// Detects the most likely locale from a text sample.
+/// Uses simple heuristics based on character sets.
+pub fn detect_locale_from_text(text: &str) -> Option<Locale> {
+    let has_cjk = text.chars().any(|c| {
+        matches!(c,
+            '\u{4E00}'..='\u{9FFF}' | // CJK Unified Ideographs
+            '\u{3040}'..='\u{309F}' | // Hiragana
+            '\u{30A0}'..='\u{30FF}'   // Katakana
+        )
+    });
+
+    let has_hiragana = text.chars().any(|c| matches!(c, '\u{3040}'..='\u{309F}'));
+    let has_katakana = text.chars().any(|c| matches!(c, '\u{30A0}'..='\u{30FF}'));
+    let has_cyrillic = text.chars().any(|c| matches!(c, '\u{0400}'..='\u{04FF}'));
+    let has_arabic = text.chars().any(|c| matches!(c, '\u{0600}'..='\u{06FF}'));
+
+    if has_hiragana || has_katakana {
+        Some(Locale::new("ja").with_country("JP"))
+    } else if has_cjk {
+        // Could be Chinese - default to simplified
+        Some(Locale::new("zh").with_country("CN"))
+    } else if has_cyrillic {
+        Some(Locale::new("ru").with_country("RU"))
+    } else if has_arabic {
+        Some(Locale::new("ar"))
+    } else {
+        // Default to English if no specific script detected
+        Some(Locale::new("en").with_country("US"))
+    }
+}
+
+/// Formats a legal date with appropriate context and locale.
+pub fn format_legal_date(
+    year: i32,
+    month: u32,
+    day: u32,
+    locale: &Locale,
+    context: &str,
+) -> String {
+    let formatter = DateTimeFormatter::new(locale.clone());
+    let date = formatter.format_date(year, month, day);
+
+    match context {
+        "effective" => format!("Effective Date: {}", date),
+        "expiration" => format!("Expiration Date: {}", date),
+        "execution" => format!("Date of Execution: {}", date),
+        "filing" => format!("Filing Date: {}", date),
+        _ => date,
+    }
+}
+
+/// Batch translates multiple keys using a translation manager.
+pub fn batch_translate(
+    manager: &TranslationManager,
+    keys: &[&str],
+    locale: &Locale,
+) -> Vec<Result<String, I18nError>> {
+    keys.iter()
+        .map(|key| manager.translate(key, locale))
+        .collect()
+}
+
+/// Creates a locale-aware error message.
+pub fn format_error_message(error_key: &str, locale: &Locale, params: &[(&str, &str)]) -> String {
+    let mut message = match (error_key, locale.language.as_str()) {
+        ("missing_field", "ja") => "必須フィールドが不足しています".to_string(),
+        ("missing_field", _) => "Required field is missing".to_string(),
+        ("invalid_format", "ja") => "形式が無効です".to_string(),
+        ("invalid_format", _) => "Invalid format".to_string(),
+        ("unauthorized", "ja") => "権限がありません".to_string(),
+        ("unauthorized", _) => "Unauthorized".to_string(),
+        ("not_found", "ja") => "見つかりません".to_string(),
+        ("not_found", _) => "Not found".to_string(),
+        _ => error_key.to_string(),
+    };
+
+    // Append parameters
+    for (key, value) in params {
+        message.push_str(&format!(" {}={}", key, value));
+    }
+
+    message
+}
+
+/// Formats a monetary amount in a legal context.
+pub fn format_legal_amount(amount: f64, currency: &str, locale: &Locale, context: &str) -> String {
+    let formatter = CurrencyFormatter::new(locale.clone());
+    let formatted = formatter.format(amount, currency);
+
+    match context {
+        "compensation" => format!("Compensation Amount: {}", formatted),
+        "damages" => format!("Damages: {}", formatted),
+        "fine" => format!("Fine Amount: {}", formatted),
+        "payment" => format!("Payment: {}", formatted),
+        _ => formatted,
+    }
+}
+
+/// Creates a multi-locale translation manager with all standard dictionaries.
+pub fn create_standard_translation_manager() -> TranslationManager {
+    let mut manager = TranslationManager::new();
+
+    manager.add_dictionary(LegalDictionary::english_us());
+    manager.add_dictionary(LegalDictionary::japanese());
+    manager.add_dictionary(LegalDictionary::german());
+    manager.add_dictionary(LegalDictionary::french());
+    manager.add_dictionary(LegalDictionary::spanish());
+    manager.add_dictionary(LegalDictionary::chinese_simplified());
+
+    manager
+}
+
+/// Normalizes a locale string to a standard format.
+/// Examples: "en_US" -> "en-US", "ja" -> "ja", "ZH-HANS-CN" -> "zh-Hans-CN"
+pub fn normalize_locale_string(input: &str) -> String {
+    let parts: Vec<&str> = input.split(['-', '_']).collect();
+
+    if parts.is_empty() {
+        return input.to_lowercase();
+    }
+
+    let mut normalized = parts[0].to_lowercase();
+
+    for part in parts.iter().skip(1) {
+        normalized.push('-');
+        if part.len() == 2 && part.chars().all(|c| c.is_alphabetic()) {
+            // Country code - uppercase
+            normalized.push_str(&part.to_uppercase());
+        } else if part.len() == 4 && part.chars().all(|c| c.is_alphabetic()) {
+            // Script code - title case
+            let mut chars = part.chars();
+            if let Some(first) = chars.next() {
+                normalized.push(first.to_uppercase().next().unwrap());
+                normalized.extend(chars.map(|c| c.to_lowercase().next().unwrap()));
+            }
+        } else {
+            normalized.push_str(&part.to_lowercase());
+        }
+    }
+
+    normalized
 }
 
 #[cfg(test)]

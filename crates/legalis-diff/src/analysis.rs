@@ -4,6 +4,28 @@
 //! - Breaking vs non-breaking change detection
 //! - Condition relaxation/tightening tracking
 //! - Logical equivalence detection
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+//! use legalis_diff::{diff, analysis::analyze_changes};
+//!
+//! let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"))
+//!     .with_precondition(Condition::Age {
+//!         operator: ComparisonOp::GreaterOrEqual,
+//!         value: 21,
+//!     });
+//!
+//! let mut new = old.clone();
+//! new.preconditions.clear(); // Remove precondition
+//!
+//! let diff_result = diff(&old, &new).unwrap();
+//! let analyses = analyze_changes(&diff_result);
+//!
+//! // Check if changes relax conditions
+//! assert!(analyses.iter().any(|a| a.relaxes_conditions));
+//! ```
 
 use crate::{Change, ChangeTarget, ChangeType, StatuteDiff};
 use legalis_core::{ComparisonOp, Condition, Statute};

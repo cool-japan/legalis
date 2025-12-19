@@ -2,6 +2,32 @@
 //!
 //! This module provides functionality for merging concurrent changes
 //! to statutes, detecting conflicts, and applying merge strategies.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType};
+//! use legalis_diff::merge::{three_way_merge, MergeStrategy};
+//!
+//! // Common base version
+//! let base = Statute::new("law", "Original Title", Effect::new(EffectType::Grant, "Benefit"));
+//!
+//! // Our version - change title
+//! let mut ours = base.clone();
+//! ours.title = "Our New Title".to_string();
+//!
+//! // Their version - different title change
+//! let mut theirs = base.clone();
+//! theirs.title = "Their New Title".to_string();
+//!
+//! // Merge with strategy
+//! let result = three_way_merge(&base, &ours, &theirs, MergeStrategy::Ours).unwrap();
+//!
+//! // Check if there were conflicts
+//! if !result.clean {
+//!     println!("Conflicts: {}", result.conflicts.len());
+//! }
+//! ```
 
 use crate::{DiffError, DiffResult};
 use legalis_core::{Effect, Statute};

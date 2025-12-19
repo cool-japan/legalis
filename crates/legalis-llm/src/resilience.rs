@@ -539,6 +539,7 @@ pub struct RateLimiter<P> {
     config: RateLimitConfig,
     tokens: Arc<AtomicUsize>,
     last_refill: Arc<AtomicU64>,
+    start_time: Instant,
 }
 
 impl<P> RateLimiter<P> {
@@ -549,18 +550,20 @@ impl<P> RateLimiter<P> {
 
     /// Creates a new rate limiter with custom configuration.
     pub fn with_config(provider: P, config: RateLimitConfig) -> Self {
+        let start = Instant::now();
         Self {
             provider,
             tokens: Arc::new(AtomicUsize::new(config.max_requests)),
-            last_refill: Arc::new(AtomicU64::new(Instant::now().elapsed().as_millis() as u64)),
+            last_refill: Arc::new(AtomicU64::new(0)),
             config,
+            start_time: start,
         }
     }
 
     async fn acquire_token(&self) -> Result<()> {
         loop {
             // Refill tokens if window has passed
-            let now = Instant::now().elapsed().as_millis() as u64;
+            let now = self.start_time.elapsed().as_millis() as u64;
             let last = self.last_refill.load(Ordering::Relaxed);
             let window_ms = self.config.window.as_millis() as u64;
 
@@ -782,7 +785,7 @@ impl<P> HealthChecker<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MockProvider;
+    use crate::{MockProvider, testing::chaos::*};
 
     #[test]
     fn test_retry_config() {
@@ -825,15 +828,17 @@ mod tests {
             .with_failure_threshold(2)
             .with_timeout(Duration::from_millis(100));
 
-        let provider = MockProvider::new();
-        let breaker = CircuitBreaker::with_config(provider, config);
+        // Use ChaosProvider with 100% failure rate to simulate consistent failures
+        let mock = MockProvider::new();
+        let chaos = ChaosProvider::new(mock, ChaosMode::RandomFailure { probability: 1.0 });
+        let breaker = CircuitBreaker::with_config(chaos, config);
 
         // Initially closed
         assert_eq!(breaker.state().await, CircuitState::Closed);
 
-        // Simulate failures
-        let _ = breaker.generate_text("nonexistent").await;
-        let _ = breaker.generate_text("nonexistent").await;
+        // Simulate failures - these will always fail due to ChaosProvider
+        let _ = breaker.generate_text("test").await;
+        let _ = breaker.generate_text("test").await;
 
         // Should be open now
         assert_eq!(breaker.state().await, CircuitState::Open);

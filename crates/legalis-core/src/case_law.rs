@@ -226,8 +226,19 @@ impl Court {
     }
 }
 
+impl std::fmt::Display for Court {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Court::Supreme => write!(f, "Supreme Court"),
+            Court::Appellate => write!(f, "Court of Appeals"),
+            Court::Trial => write!(f, "Trial Court"),
+            Court::Specialized => write!(f, "Specialized Court"),
+        }
+    }
+}
+
 /// Weight of precedent (先例の拘束力).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentWeight {
@@ -239,6 +250,17 @@ pub enum PrecedentWeight {
     Persuasive,
     /// Distinguished or not applicable - 区別可能
     Distinguished,
+}
+
+impl std::fmt::Display for PrecedentWeight {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrecedentWeight::Binding => write!(f, "Binding"),
+            PrecedentWeight::StronglyPersuasive => write!(f, "Strongly Persuasive"),
+            PrecedentWeight::Persuasive => write!(f, "Persuasive"),
+            PrecedentWeight::Distinguished => write!(f, "Distinguished"),
+        }
+    }
 }
 
 /// Precedent relationship between cases.
@@ -257,7 +279,7 @@ pub struct Precedent {
 }
 
 /// How a precedent was applied.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentApplication {
@@ -271,6 +293,18 @@ pub enum PrecedentApplication {
     Affirmed,
     /// Modified or limited the precedent
     Limited,
+}
+
+impl std::fmt::Display for PrecedentApplication {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrecedentApplication::Followed => write!(f, "Followed"),
+            PrecedentApplication::Distinguished => write!(f, "Distinguished"),
+            PrecedentApplication::Overruled => write!(f, "Overruled"),
+            PrecedentApplication::Affirmed => write!(f, "Affirmed"),
+            PrecedentApplication::Limited => write!(f, "Limited"),
+        }
+    }
 }
 
 /// Damages in Common Law (英米法の損害賠償).
@@ -307,6 +341,27 @@ impl DamageType {
                 noneconomic,
             } => economic + noneconomic,
             DamageType::Nominal(amount) | DamageType::Punitive { amount, .. } => *amount,
+        }
+    }
+}
+
+impl std::fmt::Display for DamageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DamageType::Compensatory {
+                economic,
+                noneconomic,
+            } => write!(
+                f,
+                "Compensatory Damages: ${} (economic: ${}, non-economic: ${})",
+                economic + noneconomic,
+                economic,
+                noneconomic
+            ),
+            DamageType::Nominal(amount) => write!(f, "Nominal Damages: ${}", amount),
+            DamageType::Punitive { amount, rationale } => {
+                write!(f, "Punitive Damages: ${} ({})", amount, rationale)
+            }
         }
     }
 }
@@ -455,5 +510,73 @@ mod tests {
 
         assert!(db.get_case(&case_id).is_some());
         assert_eq!(db.cases_by_jurisdiction("UK").len(), 1);
+    }
+
+    #[test]
+    fn test_court_display() {
+        assert_eq!(Court::Supreme.to_string(), "Supreme Court");
+        assert_eq!(Court::Appellate.to_string(), "Court of Appeals");
+        assert_eq!(Court::Trial.to_string(), "Trial Court");
+        assert_eq!(Court::Specialized.to_string(), "Specialized Court");
+    }
+
+    #[test]
+    fn test_precedent_weight_display() {
+        assert_eq!(PrecedentWeight::Binding.to_string(), "Binding");
+        assert_eq!(
+            PrecedentWeight::StronglyPersuasive.to_string(),
+            "Strongly Persuasive"
+        );
+        assert_eq!(PrecedentWeight::Persuasive.to_string(), "Persuasive");
+        assert_eq!(PrecedentWeight::Distinguished.to_string(), "Distinguished");
+    }
+
+    #[test]
+    fn test_precedent_application_display() {
+        assert_eq!(PrecedentApplication::Followed.to_string(), "Followed");
+        assert_eq!(
+            PrecedentApplication::Distinguished.to_string(),
+            "Distinguished"
+        );
+        assert_eq!(PrecedentApplication::Overruled.to_string(), "Overruled");
+        assert_eq!(PrecedentApplication::Affirmed.to_string(), "Affirmed");
+        assert_eq!(PrecedentApplication::Limited.to_string(), "Limited");
+    }
+
+    #[test]
+    fn test_damage_type_display() {
+        let comp = DamageType::Compensatory {
+            economic: 10000,
+            noneconomic: 5000,
+        };
+        assert_eq!(
+            comp.to_string(),
+            "Compensatory Damages: $15000 (economic: $10000, non-economic: $5000)"
+        );
+
+        let nom = DamageType::Nominal(100);
+        assert_eq!(nom.to_string(), "Nominal Damages: $100");
+
+        let pun = DamageType::Punitive {
+            amount: 100000,
+            rationale: "Gross negligence".to_string(),
+        };
+        assert_eq!(
+            pun.to_string(),
+            "Punitive Damages: $100000 (Gross negligence)"
+        );
+    }
+
+    #[test]
+    fn test_precedent_weight_ordering() {
+        assert!(PrecedentWeight::Binding < PrecedentWeight::StronglyPersuasive);
+        assert!(PrecedentWeight::StronglyPersuasive < PrecedentWeight::Persuasive);
+        assert!(PrecedentWeight::Persuasive < PrecedentWeight::Distinguished);
+    }
+
+    #[test]
+    fn test_precedent_application_ordering() {
+        assert!(PrecedentApplication::Followed < PrecedentApplication::Distinguished);
+        assert!(PrecedentApplication::Distinguished < PrecedentApplication::Overruled);
     }
 }

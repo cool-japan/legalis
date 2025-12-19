@@ -2,6 +2,29 @@
 //!
 //! This module provides different output formats for presenting
 //! statute diffs: JSON, HTML, and Markdown.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType};
+//! use legalis_diff::{diff, formats::{DiffFormatter, MarkdownFormatter, JsonFormatter}};
+//!
+//! let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+//! let mut new = old.clone();
+//! new.title = "New Title".to_string();
+//!
+//! let diff_result = diff(&old, &new).unwrap();
+//!
+//! // Format as Markdown
+//! let md_formatter = MarkdownFormatter::new();
+//! let markdown = md_formatter.format(&diff_result);
+//! assert!(markdown.contains("# Statute Diff"));
+//!
+//! // Format as JSON
+//! let json_formatter = JsonFormatter::new();
+//! let json = json_formatter.format(&diff_result);
+//! assert!(json.contains("statute_id"));
+//! ```
 
 use crate::{ChangeType, StatuteDiff};
 

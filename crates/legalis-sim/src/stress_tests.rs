@@ -20,10 +20,10 @@ mod tests {
         let items: Vec<i32> = (0..100_000).collect();
         let config = BatchConfig::default().with_batch_size(1000);
 
-        let mut batch_iter = BatchIterator::new(items, config.batch_size);
+        let batch_iter = BatchIterator::new(items, config.batch_size);
         let mut total_processed = 0;
 
-        while let Some(batch) = batch_iter.next() {
+        for batch in batch_iter {
             total_processed += batch.len();
         }
 
@@ -38,7 +38,7 @@ mod tests {
 
         // Acquire 1000 entities
         for _ in 0..1000 {
-            entities.push(pool.acquire(|| BasicEntity::new()));
+            entities.push(pool.acquire(BasicEntity::new));
         }
 
         // Release them all back to pool
@@ -52,7 +52,7 @@ mod tests {
         // Acquire and release many more times to verify recycling
         let mut ids_seen = std::collections::HashSet::new();
         for _ in 0..5_000 {
-            let entity = pool.acquire(|| BasicEntity::new());
+            let entity = pool.acquire(BasicEntity::new);
             ids_seen.insert(entity.id());
             pool.release(entity);
         }
@@ -129,7 +129,7 @@ mod tests {
         let mut count = 0;
 
         for _ in 0..1_000_000 {
-            let entity = pool.acquire(|| BasicEntity::new());
+            let entity = pool.acquire(BasicEntity::new);
             count += 1;
             pool.release(entity);
         }

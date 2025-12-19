@@ -233,6 +233,8 @@ impl TokenTracker {
         let mut report = String::from("Token Usage Report\n");
         report.push_str("==================\n\n");
 
+        let mut total_cost = 0.0;
+
         for (model, model_stats) in stats.iter() {
             report.push_str(&format!("Model: {}\n", model));
             report.push_str(&format!("  Requests: {}\n", model_stats.request_count));
@@ -258,12 +260,12 @@ impl TokenTracker {
             if let Some(estimator) = self.estimators.get(model) {
                 let cost = estimator.estimate_cost(&model_stats.total_usage);
                 report.push_str(&format!("  Estimated Cost: ${:.4}\n", cost));
+                total_cost += cost;
             }
 
             report.push('\n');
         }
 
-        let total_cost = self.estimate_total_cost_all();
         report.push_str(&format!("Total Estimated Cost: ${:.4}\n", total_cost));
 
         report

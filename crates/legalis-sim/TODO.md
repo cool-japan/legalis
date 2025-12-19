@@ -96,3 +96,28 @@
 
 - [x] Add stress testing for memory limits
 - [x] Implement simulation verification tests
+
+## Enhancements (2025)
+
+### Error Handling
+- [x] Add comprehensive error types (`SimulationError`)
+- [x] Add `SimResult<T>` type alias for ergonomic error handling
+- [x] Proper error propagation throughout the crate
+
+### Builder Patterns
+- [x] Add `SimEngineBuilder` for flexible simulation configuration
+- [x] Support incremental builder methods (add_statute, add_entity, etc.)
+- [x] Validation support with configurable on/off
+- [x] Comprehensive builder tests
+
+### Utility Functions
+- [x] Add `aggregate_metrics()` for combining multiple simulation runs
+- [x] Add `compare_metrics()` for A/B testing and analysis
+- [x] Add `MetricsDiff` type for metric comparisons
+- [x] Add `SummaryStats` for statistical summaries
+- [x] Add `StatuteMetrics::merge()` for metric aggregation
+
+### Code Quality
+- [x] Fix all clippy warnings (NO warnings policy)
+- [x] Comprehensive test coverage (95 tests)
+- [x] All doc tests passing

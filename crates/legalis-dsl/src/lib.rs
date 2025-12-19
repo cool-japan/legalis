@@ -68,6 +68,9 @@ use legalis_core::{Condition, Effect, EffectType, Statute, TemporalValidity};
 use thiserror::Error;
 
 mod ast;
+pub mod cache;
+pub mod grammar_doc;
+pub mod incremental;
 mod parser;
 mod printer;
 
@@ -75,6 +78,9 @@ mod printer;
 mod tests;
 
 pub use ast::*;
+pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
+pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
+pub use incremental::{IncrementalParser, TextEdit};
 pub use parser::*;
 pub use printer::*;
 
@@ -291,7 +297,7 @@ impl std::fmt::Display for DslWarning {
 }
 
 /// Errors that can occur during DSL parsing.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone, PartialEq)]
 pub enum DslError {
     #[error("Parse error at {}: {message}", location.map(|l| l.to_string()).unwrap_or_else(|| "unknown".to_string()))]
     ParseError {
@@ -477,6 +483,61 @@ pub fn suggest_keyword(input: &str, valid_keywords: &[&str]) -> Option<String> {
 /// Result type for DSL operations.
 pub type DslResult<T> = Result<T, DslError>;
 
+/// A partial parse result that contains both parsed content and errors.
+/// This is used for error recovery, allowing the parser to continue
+/// parsing and collect multiple errors instead of failing at the first one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseResult<T> {
+    /// The partially parsed result (may be incomplete)
+    pub result: Option<T>,
+    /// Errors encountered during parsing
+    pub errors: Vec<DslError>,
+}
+
+impl<T> ParseResult<T> {
+    /// Creates a successful parse result with no errors.
+    pub fn ok(value: T) -> Self {
+        Self {
+            result: Some(value),
+            errors: Vec::new(),
+        }
+    }
+
+    /// Creates a parse result with errors and optionally a partial result.
+    pub fn with_errors(result: Option<T>, errors: Vec<DslError>) -> Self {
+        Self { result, errors }
+    }
+
+    /// Creates a parse result with a single error.
+    pub fn err(error: DslError) -> Self {
+        Self {
+            result: None,
+            errors: vec![error],
+        }
+    }
+
+    /// Returns true if there are no errors.
+    pub fn is_ok(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// Returns true if there are errors.
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    /// Converts to a Result, returning the first error if any exist.
+    pub fn into_result(self) -> DslResult<T> {
+        if let Some(err) = self.errors.into_iter().next() {
+            Err(err)
+        } else if let Some(result) = self.result {
+            Ok(result)
+        } else {
+            Err(DslError::parse_error("No result and no errors"))
+        }
+    }
+}
+
 /// A simple DSL parser for legal rules.
 ///
 /// Grammar (simplified):
@@ -648,6 +709,110 @@ impl LegalDslParser {
         }
 
         Ok(ast::LegalDocument { imports, statutes })
+    }
+
+    /// Parses a complete legal document with error recovery.
+    /// Unlike `parse_document`, this method continues parsing even after
+    /// encountering errors, collecting all errors and returning a partial AST.
+    /// This is useful for IDE integration where you want to show multiple
+    /// errors at once and provide syntax highlighting for valid parts.
+    pub fn parse_document_with_recovery(&self, input: &str) -> ParseResult<ast::LegalDocument> {
+        let spanned_tokens = match self.tokenize(input) {
+            Ok(tokens) => tokens,
+            Err(e) => return ParseResult::err(e),
+        };
+        let tokens: Vec<Token> = spanned_tokens.into_iter().map(|st| st.token).collect();
+        let mut iter = tokens.iter().peekable();
+        let mut errors = Vec::new();
+
+        // Parse imports first
+        let mut imports = Vec::new();
+        while matches!(iter.peek(), Some(Token::Import)) {
+            match self.parse_import(&mut iter) {
+                Ok(import) => imports.push(import),
+                Err(e) => {
+                    errors.push(e);
+                    // Try to recover by skipping to the next IMPORT or STATUTE
+                    self.skip_to_sync_point(&mut iter);
+                }
+            }
+        }
+
+        // Parse statutes with error recovery
+        let mut statutes = Vec::new();
+        while iter.peek().is_some() {
+            // Skip until we find a STATUTE keyword
+            while let Some(token) = iter.peek() {
+                if matches!(token, Token::Statute) {
+                    break;
+                }
+                iter.next();
+            }
+
+            if iter.peek().is_none() {
+                break;
+            }
+
+            // Collect tokens for this statute
+            let mut statute_tokens = Vec::new();
+            let mut brace_depth = 0;
+            let mut started = false;
+
+            while let Some(&token) = iter.peek() {
+                if started && brace_depth == 0 && matches!(token, Token::Statute) {
+                    break;
+                }
+
+                let token = iter.next().unwrap().clone();
+                match &token {
+                    Token::LBrace => {
+                        started = true;
+                        brace_depth += 1;
+                    }
+                    Token::RBrace => {
+                        brace_depth -= 1;
+                    }
+                    _ => {}
+                }
+                statute_tokens.push(token);
+
+                if started && brace_depth == 0 {
+                    break;
+                }
+            }
+
+            if !statute_tokens.is_empty() {
+                match self.parse_statute_node(&statute_tokens) {
+                    Ok(statute_node) => statutes.push(statute_node),
+                    Err(e) => {
+                        errors.push(e);
+                        // Continue to next statute
+                    }
+                }
+            }
+        }
+
+        let doc = ast::LegalDocument { imports, statutes };
+
+        if errors.is_empty() {
+            ParseResult::ok(doc)
+        } else {
+            ParseResult::with_errors(Some(doc), errors)
+        }
+    }
+
+    /// Skips tokens until reaching a synchronization point.
+    /// Synchronization points are: IMPORT, STATUTE, or EOF.
+    fn skip_to_sync_point<'a, I>(&self, iter: &mut std::iter::Peekable<I>)
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        while let Some(token) = iter.peek() {
+            if matches!(token, Token::Import | Token::Statute) {
+                break;
+            }
+            iter.next();
+        }
     }
 
     /// Parses an IMPORT statement.
@@ -1601,7 +1766,7 @@ impl LegalDslParser {
         Ok(result)
     }
 
-    fn tokenize(&self, input: &str) -> DslResult<Vec<SpannedToken>> {
+    pub fn tokenize(&self, input: &str) -> DslResult<Vec<SpannedToken>> {
         let stripped = self.strip_comments(input)?;
         let mut tokens = Vec::new();
         let mut chars = stripped.chars().peekable();

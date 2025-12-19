@@ -49,10 +49,40 @@
 
 - [x] Add property-based tests with proptest (15 property tests covering all major types)
 - [x] Add fuzzing targets for parsing (3 fuzz targets: attribute parsing, statute validation, condition display)
-- [x] Increase test coverage to >90% (59 unit tests + 16 doc tests + 15 property tests)
+- [x] Increase test coverage to >90% (65 unit tests + 16 doc tests + 15 property tests)
 
 ## Documentation
 
 - [x] Add examples for every public type (comprehensive doc examples with doc tests)
 - [x] Document design decisions in module docs (detailed design philosophy and architecture decisions)
-- [ ] Add diagrams for type relationships
+- [x] Add diagrams for type relationships (Mermaid diagrams for core types, conditions, entities, and case law)
+
+## Recent Enhancements (2025-12-19)
+
+### Trait Completeness
+- [x] Add `PartialOrd`/`Ord` for `AmendmentType` (hierarchy module)
+- [x] Add `PartialOrd`/`Ord` for `PrecedentWeight` (case_law module)
+- [x] Add `PartialOrd`/`Ord` for `PrecedentApplication` (case_law module)
+
+### Display Implementations
+- [x] Add `Display` for `Court` (case_law module)
+- [x] Add `Display` for `PrecedentWeight` (case_law module)
+- [x] Add `Display` for `PrecedentApplication` (case_law module)
+- [x] Add `Display` for `DamageType` (case_law module)
+- [x] Add `Display` for `Amendment` (hierarchy module)
+- [x] Add `Display` for `StatuteHierarchy` (hierarchy module)
+
+### Schema Support
+- [x] Add `schemars::JsonSchema` support for all hierarchy types
+- [x] Ensure all public types support the `schema` feature flag
+
+### Testing Enhancements
+- [x] Add unit tests for `Court::Display` implementation
+- [x] Add unit tests for `PrecedentWeight::Display` implementation
+- [x] Add unit tests for `PrecedentApplication::Display` implementation
+- [x] Add unit tests for `DamageType::Display` implementation
+- [x] Add unit tests for `AmendmentType::Display` implementation
+- [x] Add unit tests for `Amendment::Display` implementation
+- [x] Add unit tests for `StatuteHierarchy::Display` implementation
+- [x] Add unit tests for ordering traits (Ord/PartialOrd)
+- [x] Test coverage increased from 59 to 65 unit tests

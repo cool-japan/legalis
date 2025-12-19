@@ -7,6 +7,37 @@
 //!
 //! These algorithms provide more precise and intuitive diffs than simple
 //! element-by-element comparison.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Condition, ComparisonOp};
+//! use legalis_diff::algorithms::{myers_diff, patience_diff, diff_conditions_myers};
+//!
+//! let old = vec![1, 2, 3, 4];
+//! let new = vec![1, 3, 4, 5];
+//!
+//! // Use Myers algorithm
+//! let myers_result = myers_diff(&old, &new);
+//! assert!(myers_result.edit_distance > 0);
+//!
+//! // Use Patience algorithm
+//! let patience_result = patience_diff(&old, &new);
+//! assert!(patience_result.edit_distance > 0);
+//!
+//! // Apply to statute conditions
+//! let old_conds = vec![Condition::Age {
+//!     operator: ComparisonOp::GreaterOrEqual,
+//!     value: 18,
+//! }];
+//! let new_conds = vec![Condition::Age {
+//!     operator: ComparisonOp::GreaterOrEqual,
+//!     value: 21,
+//! }];
+//!
+//! let diff = diff_conditions_myers(&old_conds, &new_conds);
+//! assert!(diff.edit_distance > 0);
+//! ```
 
 use legalis_core::Condition;
 

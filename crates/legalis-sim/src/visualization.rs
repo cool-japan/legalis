@@ -50,7 +50,7 @@ pub fn export_to_graphviz(
     writeln!(dot, "digraph Relationships {{").unwrap();
     writeln!(dot, "  rankdir={};", options.rankdir).unwrap();
     writeln!(dot, "  node [shape={}];", options.node_shape).unwrap();
-    writeln!(dot, "").unwrap();
+    writeln!(dot).unwrap();
 
     // Add nodes
     for entity in entities {
@@ -69,7 +69,7 @@ pub fn export_to_graphviz(
         writeln!(dot, "  \"{}\" [label=\"{}\"];", id, label).unwrap();
     }
 
-    writeln!(dot, "").unwrap();
+    writeln!(dot).unwrap();
 
     // Add edges from graph
     for rel in graph.all_relationships() {

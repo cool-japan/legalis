@@ -2,6 +2,27 @@
 //!
 //! This module provides caching, memoization, and incremental diff support
 //! to improve performance when working with multiple diffs.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType};
+//! use legalis_diff::optimization::{DiffCache, IncrementalDiffer};
+//!
+//! // Using cache for repeated diffs
+//! let mut cache = DiffCache::new(100);
+//! let old = Statute::new("law", "V1", Effect::new(EffectType::Grant, "Benefit"));
+//! let new = Statute::new("law", "V2", Effect::new(EffectType::Grant, "Benefit"));
+//!
+//! let result = cache.get_or_compute(&old, &new, legalis_diff::diff).unwrap();
+//! assert_eq!(cache.stats().misses, 1);
+//!
+//! // Using incremental differ for version tracking
+//! let mut differ = IncrementalDiffer::new();
+//! let _ = differ.add_version(old);
+//! let diff = differ.add_version(new).unwrap();
+//! assert!(diff.is_some());
+//! ```
 
 use crate::{DiffResult, StatuteDiff};
 use legalis_core::Statute;
@@ -34,6 +55,23 @@ fn hash_statute(statute: &Statute) -> u64 {
 }
 
 /// A cache for diff results.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::optimization::DiffCache;
+///
+/// let mut cache = DiffCache::new(10);
+/// let old = Statute::new("test", "Old", Effect::new(EffectType::Grant, "Test"));
+/// let new = Statute::new("test", "New", Effect::new(EffectType::Grant, "Test"));
+///
+/// let result = cache.get_or_compute(&old, &new, legalis_diff::diff).unwrap();
+/// assert_eq!(result.statute_id, "test");
+///
+/// let stats = cache.stats();
+/// assert_eq!(stats.misses, 1);
+/// ```
 pub struct DiffCache {
     cache: HashMap<DiffCacheKey, StatuteDiff>,
     max_size: usize,
@@ -122,6 +160,23 @@ pub struct CacheStats {
 }
 
 /// Incremental diff support.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::optimization::IncrementalDiffer;
+///
+/// let mut differ = IncrementalDiffer::new();
+///
+/// let v1 = Statute::new("law", "V1", Effect::new(EffectType::Grant, "Benefit"));
+/// let result1 = differ.add_version(v1).unwrap();
+/// assert!(result1.is_none()); // First version has no diff
+///
+/// let v2 = Statute::new("law", "V2", Effect::new(EffectType::Grant, "Benefit"));
+/// let result2 = differ.add_version(v2).unwrap();
+/// assert!(result2.is_some()); // Second version has a diff
+/// ```
 pub struct IncrementalDiffer {
     /// Previous statute state.
     previous: Option<Statute>,
@@ -170,6 +225,24 @@ impl Default for IncrementalDiffer {
 }
 
 /// Batch diff computation with optimizations.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::optimization::BatchDiffer;
+///
+/// let mut batch = BatchDiffer::new(100);
+/// let pairs = vec![
+///     (
+///         Statute::new("law1", "Old", Effect::new(EffectType::Grant, "Benefit")),
+///         Statute::new("law1", "New", Effect::new(EffectType::Grant, "Benefit")),
+///     ),
+/// ];
+///
+/// let diffs = batch.compute_batch(&pairs).unwrap();
+/// assert_eq!(diffs.len(), 1);
+/// ```
 pub struct BatchDiffer {
     cache: DiffCache,
 }

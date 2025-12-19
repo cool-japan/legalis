@@ -2,6 +2,31 @@
 //!
 //! This module goes beyond structural differences to understand the
 //! semantic meaning and legal implications of statute changes.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+//! use legalis_diff::{diff, semantic::analyze_semantic_diff};
+//!
+//! let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"))
+//!     .with_precondition(Condition::Age {
+//!         operator: ComparisonOp::GreaterOrEqual,
+//!         value: 21,
+//!     });
+//!
+//! let mut new = old.clone();
+//! new.preconditions[0] = Condition::Age {
+//!     operator: ComparisonOp::GreaterOrEqual,
+//!     value: 18, // Relaxed age requirement
+//! };
+//!
+//! let structural = diff(&old, &new).unwrap();
+//! let semantic = analyze_semantic_diff(&structural);
+//!
+//! // Detects that this is a scope expansion
+//! assert!(semantic.semantic_impact.eligibility_broadened);
+//! ```
 
 use crate::{Change, ChangeTarget, ChangeType, StatuteDiff};
 use legalis_core::{Condition, Effect, Statute};
@@ -77,6 +102,30 @@ pub struct LegalPattern {
 }
 
 /// Performs semantic analysis on a statute diff.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, semantic::analyze_semantic_diff};
+///
+/// let old = Statute::new(
+///     "benefit",
+///     "Old Title",
+///     Effect::new(EffectType::Grant, "Benefit"),
+/// ).with_precondition(Condition::Age {
+///     operator: ComparisonOp::GreaterOrEqual,
+///     value: 18,
+/// });
+///
+/// let mut new = old.clone();
+/// new.preconditions.clear(); // Removing condition = scope expansion
+///
+/// let structural_diff = diff(&old, &new).unwrap();
+/// let semantic = analyze_semantic_diff(&structural_diff);
+///
+/// assert!(semantic.semantic_impact.eligibility_broadened);
+/// ```
 pub fn analyze_semantic_diff(diff: &StatuteDiff) -> SemanticDiff {
     let mut semantic_changes = Vec::new();
     let mut patterns = Vec::new();
@@ -430,6 +479,22 @@ fn compute_semantic_impact(changes: &[SemanticChange]) -> SemanticImpact {
 }
 
 /// Checks if two statutes are semantically equivalent.
+///
+/// Two statutes are considered semantically equivalent if they have the same
+/// legal effect despite potential differences in wording or titles.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::semantic::are_semantically_equivalent;
+///
+/// let statute1 = Statute::new("law", "Title A", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut statute2 = statute1.clone();
+/// statute2.title = "Title B".to_string(); // Different title, same semantics
+///
+/// assert!(are_semantically_equivalent(&statute1, &statute2));
+/// ```
 pub fn are_semantically_equivalent(old: &Statute, new: &Statute) -> bool {
     // Check if statutes have the same ID
     if old.id != new.id {

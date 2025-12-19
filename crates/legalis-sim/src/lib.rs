@@ -50,8 +50,10 @@
 
 mod analysis;
 mod behavior;
+mod builder;
 mod comparison;
 mod engine;
+mod error;
 mod incremental;
 mod metrics;
 mod performance;
@@ -59,16 +61,20 @@ mod population;
 mod relationships;
 mod stress_tests;
 mod temporal;
+mod utils;
 mod visualization;
 
 pub use analysis::*;
 pub use behavior::*;
+pub use builder::*;
 pub use comparison::*;
 pub use engine::*;
+pub use error::*;
 pub use incremental::*;
 pub use metrics::*;
 pub use performance::*;
 pub use population::*;
 pub use relationships::*;
 pub use temporal::*;
+pub use utils::*;
 pub use visualization::*;

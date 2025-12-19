@@ -895,13 +895,13 @@ impl TemporalSimEngine {
             .map(|(id, _)| *id)
             .collect();
 
-        for i in 0..death_count.min(active_ids.len()) {
-            if let Some(agent) = agents.get_mut(&active_ids[i]) {
+        for &agent_id in active_ids.iter().take(death_count) {
+            if let Some(agent) = agents.get_mut(&agent_id) {
                 agent.death_date = Some(current_date);
                 agent.active = false;
 
                 metrics.record_event(TemporalEvent::AgentDeath {
-                    agent_id: active_ids[i],
+                    agent_id,
                     date: current_date,
                 });
             }

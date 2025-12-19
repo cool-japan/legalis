@@ -86,21 +86,21 @@
 - [x] Create HTML report generation (with CSS styling)
 - [x] Implement SARIF output (IDE integration)
 - [x] Add PDF report generation
-- [ ] Create interactive report viewer
+- [x] Create interactive report viewer
 
 ### Content
 - [x] Add fix suggestions for errors (via suggestions field)
 - [x] Implement severity classification (Info, Warning, Error, Critical)
 - [x] Add severity filtering and counting
-- [ ] Add related precedent references
+- [x] Add related precedent references
 - [x] Create impact assessment reports
 
 ## Integration
 
-- [ ] Add CI/CD integration guides
-- [ ] Create pre-commit hooks
-- [ ] Implement watch mode for continuous verification
-- [ ] Add IDE plugin support (VSCode, IntelliJ)
+- [x] Add CI/CD integration guides
+- [x] Create pre-commit hooks
+- [x] Implement watch mode for continuous verification
+- [x] Add IDE plugin support (VSCode, IntelliJ)
 
 ## Performance
 

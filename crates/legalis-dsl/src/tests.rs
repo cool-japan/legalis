@@ -1877,3 +1877,410 @@ fn test_condition_value_set_expr() {
         _ => panic!("Expected SetExpr variant"),
     }
 }
+
+// Error Recovery Tests
+
+#[test]
+fn test_error_recovery_parse_result_ok() {
+    let result = ParseResult::ok(42);
+    assert!(result.is_ok());
+    assert!(!result.has_errors());
+    assert_eq!(result.result, Some(42));
+    assert_eq!(result.errors.len(), 0);
+}
+
+#[test]
+fn test_error_recovery_parse_result_err() {
+    let error = DslError::parse_error("test error");
+    let result: ParseResult<i32> = ParseResult::err(error);
+    assert!(!result.is_ok());
+    assert!(result.has_errors());
+    assert_eq!(result.result, None);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn test_error_recovery_parse_result_with_partial() {
+    let error = DslError::parse_error("partial error");
+    let result = ParseResult::with_errors(Some(42), vec![error]);
+    assert!(result.has_errors());
+    assert_eq!(result.result, Some(42));
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn test_error_recovery_single_bad_statute() {
+    let input = r#"
+        STATUTE good-one: "Good Statute" {
+            WHEN AGE >= 18
+            THEN GRANT "Access"
+        }
+
+        STATUTE bad-one "Missing Colon" {
+            WHEN AGE >= 21
+            THEN GRANT "Other Access"
+        }
+
+        STATUTE another-good: "Another Good Statute" {
+            WHEN AGE >= 25
+            THEN GRANT "More Access"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_document_with_recovery(input);
+
+    // Should have collected the error but continued parsing
+    assert!(result.has_errors());
+    assert_eq!(result.errors.len(), 1);
+
+    // Should have successfully parsed the valid statutes
+    if let Some(doc) = result.result {
+        // Should have at least the good statutes (2 out of 3)
+        assert!(!doc.statutes.is_empty());
+    }
+}
+
+#[test]
+fn test_error_recovery_multiple_errors() {
+    let input = r#"
+        IMPORT "other-statute.dsl"
+
+        STATUTE first "Missing Colon" {
+            WHEN AGE >= 18
+            THEN GRANT "Access"
+        }
+
+        STATUTE second "Another Missing Colon" {
+            WHEN AGE >= 21
+            THEN GRANT "Access"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_document_with_recovery(input);
+
+    // Should have collected multiple errors
+    assert!(result.has_errors());
+    assert!(!result.errors.is_empty());
+
+    // Should have parsed the import
+    if let Some(doc) = result.result {
+        assert_eq!(doc.imports.len(), 1);
+    }
+}
+
+#[test]
+fn test_error_recovery_valid_document() {
+    let input = r#"
+        IMPORT "other.dsl"
+
+        STATUTE test: "Test Statute" {
+            WHEN AGE >= 18
+            THEN GRANT "Access"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_document_with_recovery(input);
+
+    // Should have no errors for valid input
+    assert!(result.is_ok());
+    assert_eq!(result.errors.len(), 0);
+
+    let doc = result.result.unwrap();
+    assert_eq!(doc.imports.len(), 1);
+    assert_eq!(doc.statutes.len(), 1);
+}
+
+#[test]
+fn test_parse_result_into_result_ok() {
+    let result = ParseResult::ok(42);
+    let converted = result.into_result();
+    assert!(converted.is_ok());
+    assert_eq!(converted.unwrap(), 42);
+}
+
+#[test]
+fn test_parse_result_into_result_err() {
+    let error = DslError::parse_error("test error");
+    let result: ParseResult<i32> = ParseResult::err(error);
+    let converted = result.into_result();
+    assert!(converted.is_err());
+}
+
+// Error Message Quality Tests
+
+#[test]
+fn test_error_message_missing_colon() {
+    let input = r#"STATUTE test "Missing Colon" {
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Expected ':'"));
+}
+
+#[test]
+fn test_error_message_missing_brace() {
+    let input = r#"STATUTE test: "Test"
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Expected '{'"));
+}
+
+#[test]
+fn test_error_message_invalid_condition() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN INVALID_FIELD >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    // Should parse successfully since INVALID_FIELD is treated as a custom field
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_error_message_missing_then() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN AGE >= 18
+        GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    // Should parse successfully (effects are optional)
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_error_message_unclosed_comment() {
+    let input = r#"STATUTE test: "Test" {
+        /* This comment is never closed
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Unclosed comment"));
+}
+
+#[test]
+fn test_error_message_empty_input() {
+    let input = "";
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Expected 'STATUTE'"));
+}
+
+#[test]
+fn test_error_message_missing_statute_id() {
+    let input = r#"STATUTE : "Test" {
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Expected statute identifier") || msg.contains("Expected ':'"));
+}
+
+#[test]
+fn test_error_message_missing_statute_title() {
+    let input = r#"STATUTE test: {
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Expected statute title") || msg.contains("Expected '{'"));
+}
+
+#[test]
+fn test_error_message_invalid_operator() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN AGE >> 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    // Parser may interpret >> as two > operators or fail
+    // This tests that we get a reasonable error message
+    if let Err(err) = result {
+        let msg = err.to_string();
+        // Should provide some useful error context
+        assert!(!msg.is_empty());
+    }
+}
+
+#[test]
+fn test_error_message_unmatched_parenthesis() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN (AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("Unmatched") || msg.contains("parenthesis") || msg.contains("paren"));
+}
+
+#[test]
+fn test_error_message_between_without_and() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN AGE BETWEEN 18 65
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    // Check that error message is informative
+    assert!(
+        msg.contains("Expected AND") || msg.contains("BETWEEN") || msg.contains("Invalid"),
+        "Error message was: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_error_span_information() {
+    let input = r#"STATUTE test: "Test" {
+        WHEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    if result.is_ok() {
+        // This input is valid, skip the span test
+        return;
+    }
+
+    let err = result.unwrap_err();
+    // Check that error has location information
+    if let Some(_span) = err.span() {
+        // Good - error has span information for IDE integration
+    } else {
+        // Some errors may not have spans yet, but we're documenting this
+        // Error message should still be useful without spans
+        assert!(!err.to_string().is_empty());
+    }
+}
+
+#[test]
+fn test_error_message_clarity_typo() {
+    let input = r#"STATUTE test: "Test" {
+        WEN AGE >= 18
+        THEN GRANT "Access"
+    }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    // May parse (treating WEN as identifier) or fail
+    // Either way should provide clear feedback
+    if let Err(err) = result {
+        let msg = err.to_string();
+        assert!(!msg.is_empty());
+    }
+}
+
+#[test]
+fn test_multiple_errors_in_document() {
+    let input = r#"
+        STATUTE first "Missing Colon" {
+            WHEN AGE >= 18
+            THEN GRANT "Access"
+        }
+
+        STATUTE second "Also Missing Colon" {
+            WHEN AGE >= 21
+            THEN GRANT "Access"
+        }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_document_with_recovery(input);
+
+    // Should collect multiple errors
+    assert!(result.has_errors());
+    assert!(!result.errors.is_empty());
+
+    // Each error should be informative
+    for error in &result.errors {
+        let msg = error.to_string();
+        assert!(!msg.is_empty());
+        assert!(msg.len() > 10); // Ensure error messages are reasonably descriptive
+    }
+}
+
+#[test]
+fn test_error_message_formatting() {
+    let input = r#"STATUTE test "Missing Colon" { WHEN AGE >= 18 THEN GRANT "Access" }"#;
+
+    let parser = LegalDslParser::new();
+    let result = parser.parse_statute(input);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+
+    // Error message should:
+    // 1. Not be empty
+    assert!(!msg.is_empty());
+
+    // 2. Be reasonably sized (not too short, not too long)
+    assert!(msg.len() > 5);
+    assert!(msg.len() < 500);
+
+    // 3. Contain actionable information
+    assert!(msg.contains("Expected") || msg.contains("error") || msg.contains("Error"));
+}

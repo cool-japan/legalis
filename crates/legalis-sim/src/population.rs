@@ -545,9 +545,12 @@ impl Default for PopulationValidator {
     }
 }
 
+/// Type alias for constraint functions.
+type ConstraintFn = Box<dyn Fn(&[BasicEntity]) -> bool>;
+
 /// Constraint satisfaction checker.
 pub struct ConstraintChecker {
-    constraints: Vec<(String, Box<dyn Fn(&[BasicEntity]) -> bool>)>,
+    constraints: Vec<(String, ConstraintFn)>,
 }
 
 impl ConstraintChecker {
@@ -588,7 +591,7 @@ impl ConstraintChecker {
     /// Creates common demographic constraints.
     pub fn demographic_constraints() -> Self {
         Self::new()
-            .add_constraint("min_population_size", |pop| pop.len() >= 1)
+            .add_constraint("min_population_size", |pop| !pop.is_empty())
             .add_constraint("max_population_size", |pop| pop.len() <= 1_000_000)
             .add_constraint("age_distribution", |pop| {
                 let ages: Vec<f64> = pop
@@ -600,7 +603,7 @@ impl ConstraintChecker {
                     return false;
                 }
                 let mean = ages.iter().sum::<f64>() / ages.len() as f64;
-                mean >= 18.0 && mean <= 65.0
+                (18.0..=65.0).contains(&mean)
             })
     }
 }

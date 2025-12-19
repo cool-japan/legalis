@@ -15,3 +15,10 @@ serde_yaml = "0.9"
 thiserror.workspace = true
 regex = "1"
 rustyline = "14"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "parser_benchmarks"
+harness = false

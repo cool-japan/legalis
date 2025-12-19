@@ -50,7 +50,7 @@
 - [x] Add "did you mean?" suggestions for typos (Levenshtein distance)
 - [x] Create SyntaxError with context (expected vs found)
 - [x] Create UndefinedReference error with hints
-- [ ] Add error recovery for partial parsing
+- [x] Add error recovery for partial parsing
 - [x] Create error spans for IDE integration
 - [x] Add warning system for deprecated syntax
 
@@ -59,18 +59,18 @@
 - [x] Create syntax highlighting definitions (VSCode, vim)
 - [ ] Add LSP (Language Server Protocol) support
 - [x] Add REPL for interactive parsing
-- [ ] Create schema/grammar documentation generator
+- [x] Create schema/grammar documentation generator
 
 ## Performance
 
-- [ ] Benchmark parser performance
+- [x] Benchmark parser performance
 - [ ] Optimize tokenizer for large documents
-- [ ] Add incremental parsing support
-- [ ] Implement parse result caching
+- [x] Add incremental parsing support
+- [x] Implement parse result caching
 
 ## Testing
 
 - [ ] Add corpus of real-world legal document examples
 - [x] Add fuzzing for parser robustness
-- [ ] Test error message quality
+- [x] Test error message quality
 - [x] Add benchmark suite

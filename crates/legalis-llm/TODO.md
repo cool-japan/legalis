@@ -87,3 +87,34 @@
 - [x] Add latency/performance tests
 - [x] Test error handling paths
 - [x] Add chaos testing for resilience
+
+## New Features (2025)
+
+### Embeddings
+- [x] Embedding abstraction trait
+- [x] OpenAI embeddings provider
+- [x] Local embeddings provider (Ollama)
+- [x] Vector similarity operations (cosine, euclidean, dot product)
+- [x] K-means clustering for embeddings
+- [x] Top-k similarity search
+
+### Function Calling
+- [x] Function definition and registration
+- [x] Function parameter schemas (JSON Schema)
+- [x] Function execution and result handling
+- [x] Built-in helper functions (calculator, datetime)
+- [x] Function call orchestration
+
+### Model Routing
+- [x] Routing strategies (cost-optimized, latency-optimized, balanced, complexity-based, round-robin)
+- [x] Task complexity estimation
+- [x] Provider scoring and selection
+- [x] Load balancing across providers
+- [x] Provider capability metadata
+
+### Batch Processing
+- [x] Batch request processing with concurrency control
+- [x] Fail-fast and continue-on-error modes
+- [x] Batch statistics and metrics
+- [x] Parallel map operations
+- [x] Configurable batch sizes and concurrency limits

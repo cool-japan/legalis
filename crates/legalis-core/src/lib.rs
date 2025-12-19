@@ -93,6 +93,184 @@
 //! - Simple serialization format
 //! - Type safety can be added at higher layers if needed
 //!
+//! ## Type Relationships
+//!
+//! The following diagrams illustrate the core type relationships in legalis-core:
+//!
+//! ### Core Legal Types
+//!
+//! ```mermaid
+//! classDiagram
+//!     class Statute {
+//!         +String id
+//!         +String title
+//!         +Effect effect
+//!         +Option~Condition~ precondition
+//!         +Option~TemporalValidity~ temporal
+//!         +Vec~String~ tags
+//!         +validate() Vec~ValidationError~
+//!     }
+//!
+//!     class Effect {
+//!         +EffectType effect_type
+//!         +String description
+//!         +HashMap parameters
+//!     }
+//!
+//!     class EffectType {
+//!         <<enumeration>>
+//!         Grant
+//!         Obligation
+//!         Prohibition
+//!         Conditional
+//!         Delayed
+//!         Compound
+//!     }
+//!
+//!     class LegalResult~T~ {
+//!         <<enumeration>>
+//!         Deterministic(T)
+//!         JudicialDiscretion
+//!         Void
+//!         +map(f) LegalResult~U~
+//!         +and_then(f) LegalResult~U~
+//!     }
+//!
+//!     class TemporalValidity {
+//!         +Option~NaiveDate~ effective_date
+//!         +Option~NaiveDate~ expiry_date
+//!         +Option~DateTime~ enactment_date
+//!         +is_valid_on(date) bool
+//!     }
+//!
+//!     Statute --> Effect : contains
+//!     Statute --> Condition : optional precondition
+//!     Statute --> TemporalValidity : optional temporal
+//!     Effect --> EffectType : has type
+//!     Statute ..> LegalResult : validation returns
+//! ```
+//!
+//! ### Condition Composition
+//!
+//! ```mermaid
+//! classDiagram
+//!     class Condition {
+//!         <<enumeration>>
+//!         Age
+//!         Income
+//!         Geographic
+//!         DateRange
+//!         EntityRelationship
+//!         ResidencyDuration
+//!         And(Vec~Condition~)
+//!         Or(Vec~Condition~)
+//!         Not(Box~Condition~)
+//!         +evaluate(entity) LegalResult~bool~
+//!         +normalize() Condition
+//!     }
+//!
+//!     class ComparisonOp {
+//!         <<enumeration>>
+//!         Equal
+//!         NotEqual
+//!         LessThan
+//!         LessThanOrEqual
+//!         GreaterThan
+//!         GreaterThanOrEqual
+//!     }
+//!
+//!     Condition --> Condition : recursive composition
+//!     Condition --> ComparisonOp : uses for comparisons
+//! ```
+//!
+//! ### Entity Type Hierarchy
+//!
+//! ```mermaid
+//! classDiagram
+//!     class LegalEntity {
+//!         <<trait>>
+//!         +id() String
+//!         +entity_type() String
+//!         +get_attribute(key) Option~String~
+//!         +set_attribute(key, value)
+//!         +attributes() HashMap
+//!     }
+//!
+//!     class BasicEntity {
+//!         +String id
+//!         +String entity_type
+//!         +HashMap attributes
+//!     }
+//!
+//!     class TypedEntity {
+//!         +String id
+//!         +String entity_type
+//!         +TypedAttributes attributes
+//!         +get_typed~T~(key) Result~T~
+//!         +set_typed~T~(key, value)
+//!     }
+//!
+//!     class TypedAttributes {
+//!         +HashMap~String,AttributeValue~ data
+//!         +get~T~(key) Result~T~
+//!         +set~T~(key, value)
+//!     }
+//!
+//!     class AttributeValue {
+//!         <<enumeration>>
+//!         String(String)
+//!         U32(u32)
+//!         Bool(bool)
+//!         Date(NaiveDate)
+//!     }
+//!
+//!     LegalEntity <|.. BasicEntity : implements
+//!     LegalEntity <|.. TypedEntity : implements
+//!     TypedEntity --> TypedAttributes : contains
+//!     TypedAttributes --> AttributeValue : stores
+//! ```
+//!
+//! ### Case Law Structure
+//!
+//! ```mermaid
+//! classDiagram
+//!     class Case {
+//!         +String id
+//!         +String title
+//!         +Court court
+//!         +NaiveDate decision_date
+//!         +Vec~CaseRule~ rules
+//!     }
+//!
+//!     class Court {
+//!         +String name
+//!         +String jurisdiction
+//!         +u8 level
+//!     }
+//!
+//!     class CaseRule {
+//!         +String principle
+//!         +String reasoning
+//!         +Vec~String~ facts
+//!     }
+//!
+//!     class Precedent {
+//!         +String case_id
+//!         +PrecedentWeight weight
+//!     }
+//!
+//!     class PrecedentWeight {
+//!         <<enumeration>>
+//!         Binding
+//!         Persuasive
+//!         Distinguishable
+//!     }
+//!
+//!     Case --> Court : decided by
+//!     Case --> CaseRule : contains
+//!     Precedent --> PrecedentWeight : has
+//! ```
+//!
 //! ## Features
 //!
 //! - `serde` (default): Enable serialization/deserialization support for all types

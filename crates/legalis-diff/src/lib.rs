@@ -7,6 +7,39 @@
 //! - Impact analysis
 //! - Amendment tracking
 //! - Multiple output formats (JSON, HTML, Markdown)
+//!
+//! # Quick Start
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+//! use legalis_diff::{diff, summarize};
+//!
+//! // Create two versions of a statute
+//! let old = Statute::new(
+//!     "benefit-123",
+//!     "Senior Tax Credit",
+//!     Effect::new(EffectType::Grant, "Tax credit granted"),
+//! ).with_precondition(Condition::Age {
+//!     operator: ComparisonOp::GreaterOrEqual,
+//!     value: 65,
+//! });
+//!
+//! let mut new = old.clone();
+//! new.preconditions[0] = Condition::Age {
+//!     operator: ComparisonOp::GreaterOrEqual,
+//!     value: 60, // Lowered age requirement
+//! };
+//!
+//! // Compute the diff
+//! let diff_result = diff(&old, &new).unwrap();
+//!
+//! // Check impact
+//! assert!(diff_result.impact.affects_eligibility);
+//!
+//! // Generate summary
+//! let summary = summarize(&diff_result);
+//! println!("{}", summary);
+//! ```
 
 use legalis_core::{Condition, Statute};
 use serde::{Deserialize, Serialize};
@@ -142,6 +175,33 @@ pub enum Severity {
 }
 
 /// Computes the diff between two statutes.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::diff;
+///
+/// let old = Statute::new(
+///     "tax-credit",
+///     "Tax Credit for Seniors",
+///     Effect::new(EffectType::Grant, "Tax credit granted"),
+/// ).with_precondition(Condition::Age {
+///     operator: ComparisonOp::GreaterOrEqual,
+///     value: 65,
+/// });
+///
+/// let mut new = old.clone();
+/// new.title = "Enhanced Tax Credit for Seniors".to_string();
+///
+/// let result = diff(&old, &new).unwrap();
+/// assert_eq!(result.changes.len(), 1);
+/// assert!(result.changes[0].description.contains("Title"));
+/// ```
+///
+/// # Errors
+///
+/// Returns [`DiffError::IdMismatch`] if the statute IDs don't match.
 pub fn diff(old: &Statute, new: &Statute) -> DiffResult<StatuteDiff> {
     if old.id != new.id {
         return Err(DiffError::IdMismatch(old.id.clone(), new.id.clone()));
@@ -295,6 +355,30 @@ fn diff_preconditions(
 }
 
 /// Summary of changes for display.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, summarize};
+///
+/// let old = Statute::new(
+///     "benefit-123",
+///     "Old Title",
+///     Effect::new(EffectType::Grant, "Benefit granted"),
+/// );
+///
+/// let new = old.clone().with_precondition(Condition::Age {
+///     operator: ComparisonOp::GreaterOrEqual,
+///     value: 18,
+/// });
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let summary = summarize(&diff_result);
+///
+/// assert!(summary.contains("benefit-123"));
+/// assert!(summary.contains("Severity"));
+/// ```
 pub fn summarize(diff: &StatuteDiff) -> String {
     let mut summary = format!("Diff for statute '{}'\n", diff.statute_id);
     summary.push_str(&format!("Severity: {:?}\n", diff.impact.severity));
@@ -315,6 +399,136 @@ pub fn summarize(diff: &StatuteDiff) -> String {
     }
 
     summary
+}
+
+/// Filters changes by type from a diff.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, filter_changes_by_type, ChangeType};
+///
+/// let old = Statute::new("law", "Old", Effect::new(EffectType::Grant, "Benefit"));
+/// let new = old.clone()
+///     .with_precondition(Condition::Age {
+///         operator: ComparisonOp::GreaterOrEqual,
+///         value: 18,
+///     });
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let added = filter_changes_by_type(&diff_result, ChangeType::Added);
+///
+/// assert_eq!(added.len(), 1);
+/// ```
+pub fn filter_changes_by_type(diff: &StatuteDiff, change_type: ChangeType) -> Vec<Change> {
+    diff.changes
+        .iter()
+        .filter(|c| c.change_type == change_type)
+        .cloned()
+        .collect()
+}
+
+/// Checks if a diff contains any breaking changes.
+///
+/// Breaking changes include:
+/// - Effect modifications
+/// - Precondition additions (tightens eligibility)
+/// - Changes in discretion requirements
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, has_breaking_changes};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.effect = Effect::new(EffectType::Revoke, "Revoke benefit"); // Breaking change!
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// assert!(has_breaking_changes(&diff_result));
+/// ```
+pub fn has_breaking_changes(diff: &StatuteDiff) -> bool {
+    use crate::Severity;
+
+    diff.impact.severity >= Severity::Major
+        || diff.impact.affects_outcome
+        || diff.impact.discretion_changed
+}
+
+/// Counts the number of changes by target type.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, count_changes_by_target};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "New Title".to_string();
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let counts = count_changes_by_target(&diff_result);
+///
+/// assert!(counts.contains_key("Title"));
+/// ```
+pub fn count_changes_by_target(diff: &StatuteDiff) -> std::collections::HashMap<String, usize> {
+    use std::collections::HashMap;
+
+    let mut counts: HashMap<String, usize> = HashMap::new();
+
+    for change in &diff.changes {
+        let key = match &change.target {
+            ChangeTarget::Title => "Title".to_string(),
+            ChangeTarget::Precondition { .. } => "Precondition".to_string(),
+            ChangeTarget::Effect => "Effect".to_string(),
+            ChangeTarget::DiscretionLogic => "DiscretionLogic".to_string(),
+            ChangeTarget::Metadata { .. } => "Metadata".to_string(),
+        };
+        *counts.entry(key).or_insert(0) += 1;
+    }
+
+    counts
+}
+
+/// Computes diffs for a sequence of statute versions.
+///
+/// Returns a vector of diffs, where each diff represents the changes from
+/// one version to the next.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::diff_sequence;
+///
+/// let v1 = Statute::new("law", "Version 1", Effect::new(EffectType::Grant, "Benefit"));
+/// let v2 = Statute::new("law", "Version 2", Effect::new(EffectType::Grant, "Benefit"));
+/// let v3 = Statute::new("law", "Version 3", Effect::new(EffectType::Grant, "Benefit"));
+///
+/// let versions = vec![v1, v2, v3];
+/// let diffs = diff_sequence(&versions).unwrap();
+///
+/// // Should have 2 diffs for 3 versions (v1->v2, v2->v3)
+/// assert_eq!(diffs.len(), 2);
+/// ```
+///
+/// # Errors
+///
+/// Returns [`DiffError::IdMismatch`] if any statutes have different IDs.
+pub fn diff_sequence(versions: &[Statute]) -> DiffResult<Vec<StatuteDiff>> {
+    if versions.len() < 2 {
+        return Ok(Vec::new());
+    }
+
+    let mut diffs = Vec::new();
+    for i in 0..versions.len() - 1 {
+        diffs.push(diff(&versions[i], &versions[i + 1])?);
+    }
+
+    Ok(diffs)
 }
 
 #[cfg(test)]

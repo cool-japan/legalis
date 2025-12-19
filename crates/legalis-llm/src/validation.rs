@@ -336,6 +336,11 @@ impl<P: crate::LLMProvider> crate::LLMProvider for ValidatingProvider<P> {
 pub fn calculate_confidence(text: &str) -> f64 {
     let mut score: f64 = 1.0;
 
+    // Empty text has very low confidence
+    if text.is_empty() {
+        return 0.1;
+    }
+
     // Penalize very short responses
     if text.len() < 10 {
         score *= 0.5;

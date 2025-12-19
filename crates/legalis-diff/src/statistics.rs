@@ -2,6 +2,29 @@
 //!
 //! This module provides statistical tools for analyzing change patterns,
 //! frequencies, and trends across single or multiple statute diffs.
+//!
+//! # Example
+//!
+//! ```
+//! use legalis_core::{Statute, Effect, EffectType};
+//! use legalis_diff::{diff, statistics::{compute_statistics, aggregate_statistics}};
+//!
+//! let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+//! let mut new1 = old.clone();
+//! new1.title = "Updated Title".to_string();
+//!
+//! let diff1 = diff(&old, &new1).unwrap();
+//! let stats = compute_statistics(&diff1);
+//! assert_eq!(stats.total_changes, 1);
+//!
+//! // Aggregate across multiple diffs
+//! let mut new2 = old.clone();
+//! new2.title = "Another Title".to_string();
+//! let diff2 = diff(&old, &new2).unwrap();
+//!
+//! let agg = aggregate_statistics(&[diff1, diff2]);
+//! assert_eq!(agg.diff_count, 2);
+//! ```
 
 use crate::{ChangeTarget, ChangeType, Severity, StatuteDiff};
 use serde::{Deserialize, Serialize};
@@ -55,6 +78,22 @@ pub struct ChangePattern {
 }
 
 /// Computes statistics for a single diff.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, statistics::compute_statistics};
+///
+/// let old = Statute::new("law", "Old", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "New Title".to_string();
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let stats = compute_statistics(&diff_result);
+///
+/// assert_eq!(stats.total_changes, 1);
+/// ```
 pub fn compute_statistics(diff: &StatuteDiff) -> DiffStatistics {
     let total_changes = diff.changes.len();
 
@@ -92,6 +131,25 @@ pub fn compute_statistics(diff: &StatuteDiff) -> DiffStatistics {
 }
 
 /// Aggregates statistics across multiple diffs.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, statistics::aggregate_statistics};
+///
+/// let old = Statute::new("law", "Original", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new1 = old.clone();
+/// new1.title = "Version 1".to_string();
+/// let mut new2 = old.clone();
+/// new2.title = "Version 2".to_string();
+///
+/// let diff1 = diff(&old, &new1).unwrap();
+/// let diff2 = diff(&old, &new2).unwrap();
+///
+/// let agg = aggregate_statistics(&[diff1, diff2]);
+/// assert_eq!(agg.diff_count, 2);
+/// ```
 pub fn aggregate_statistics(diffs: &[StatuteDiff]) -> AggregateStatistics {
     let diff_count = diffs.len();
     let total_changes: usize = diffs.iter().map(|d| d.changes.len()).sum();

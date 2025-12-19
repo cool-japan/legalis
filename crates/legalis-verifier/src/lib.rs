@@ -235,17 +235,17 @@ impl VerificationBudget {
 
     /// Checks if the statute limit has been reached.
     pub fn statute_limit_reached(&self, count: usize) -> bool {
-        self.max_statutes.map_or(false, |max| count >= max)
+        self.max_statutes.is_some_and(|max| count >= max)
     }
 
     /// Checks if the check limit has been reached.
     pub fn check_limit_reached(&self, count: usize) -> bool {
-        self.max_checks.map_or(false, |max| count >= max)
+        self.max_checks.is_some_and(|max| count >= max)
     }
 
     /// Checks if the time limit has been reached.
     pub fn time_limit_reached(&self, elapsed_ms: u64) -> bool {
-        self.max_time_ms.map_or(false, |max| elapsed_ms >= max)
+        self.max_time_ms.is_some_and(|max| elapsed_ms >= max)
     }
 }
 
@@ -2358,6 +2358,496 @@ fn html_escape(s: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+/// Generates an interactive HTML report with filtering, search, and sorting capabilities.
+///
+/// This creates a feature-rich HTML report with:
+/// - Severity filtering
+/// - Search functionality
+/// - Expandable/collapsible sections
+/// - Statistics dashboard
+/// - Dark mode toggle
+pub fn generate_interactive_html_report(result: &VerificationResult, title: &str) -> String {
+    let severity_counts = result.severity_counts();
+    let critical_count = severity_counts.get(&Severity::Critical).unwrap_or(&0);
+    let error_count = severity_counts.get(&Severity::Error).unwrap_or(&0);
+    let warning_count = severity_counts.get(&Severity::Warning).unwrap_or(&0);
+    let info_count = severity_counts.get(&Severity::Info).unwrap_or(&0);
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        :root {{
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #ddd;
+            --critical-bg: #fee;
+            --critical-border: #dc3545;
+            --error-bg: #f8d7da;
+            --error-border: #dc3545;
+            --warning-bg: #fff3cd;
+            --warning-border: #ffc107;
+            --info-bg: #d1ecf1;
+            --info-border: #17a2b8;
+            --success-bg: #d4edda;
+            --success-border: #28a745;
+        }}
+
+        body.dark-mode {{
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaa;
+            --border-color: #444;
+            --critical-bg: #4a1f1f;
+            --error-bg: #3a1f1f;
+            --warning-bg: #3a3220;
+            --info-bg: #1f2f3a;
+            --success-bg: #1f3a1f;
+        }}
+
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: background 0.3s, color 0.3s;
+        }}
+
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+
+        header {{
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }}
+
+        h1 {{
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }}
+
+        .controls {{
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }}
+
+        .search-box {{
+            flex: 1;
+            min-width: 200px;
+        }}
+
+        .search-box input {{
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }}
+
+        .filter-buttons {{
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }}
+
+        .filter-btn, .theme-toggle {{
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }}
+
+        .filter-btn:hover, .theme-toggle:hover {{
+            opacity: 0.8;
+        }}
+
+        .filter-btn.active {{
+            background: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }}
+
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }}
+
+        .stat-card {{
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid;
+        }}
+
+        .stat-card.critical {{ border-color: var(--critical-border); }}
+        .stat-card.error {{ border-color: var(--error-border); }}
+        .stat-card.warning {{ border-color: var(--warning-border); }}
+        .stat-card.info {{ border-color: var(--info-border); }}
+        .stat-card.success {{ border-color: var(--success-border); }}
+
+        .stat-value {{
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }}
+
+        .stat-label {{
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }}
+
+        .section {{
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }}
+
+        .section-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 0;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 15px;
+        }}
+
+        .section-header h2 {{
+            color: var(--text-primary);
+        }}
+
+        .toggle-icon {{
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }}
+
+        .toggle-icon.collapsed {{
+            transform: rotate(-90deg);
+        }}
+
+        .item {{
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+            transition: all 0.2s;
+        }}
+
+        .item:hover {{
+            transform: translateX(5px);
+        }}
+
+        .item.critical {{
+            background: var(--critical-bg);
+            border-color: var(--critical-border);
+        }}
+
+        .item.error {{
+            background: var(--error-bg);
+            border-color: var(--error-border);
+        }}
+
+        .item.warning {{
+            background: var(--warning-bg);
+            border-color: var(--warning-border);
+        }}
+
+        .item.info {{
+            background: var(--info-bg);
+            border-color: var(--info-border);
+        }}
+
+        .item.hidden {{
+            display: none;
+        }}
+
+        .severity-badge {{
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-right: 10px;
+        }}
+
+        .severity-badge.critical {{
+            background: var(--critical-border);
+            color: white;
+        }}
+
+        .severity-badge.error {{
+            background: var(--error-border);
+            color: white;
+        }}
+
+        .severity-badge.warning {{
+            background: var(--warning-border);
+            color: #333;
+        }}
+
+        .severity-badge.info {{
+            background: var(--info-border);
+            color: white;
+        }}
+
+        .empty {{
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }}
+
+        .timestamp {{
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{title}</h1>
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search errors, warnings, suggestions...">
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="critical">Critical</button>
+                    <button class="filter-btn" data-filter="error">Errors</button>
+                    <button class="filter-btn" data-filter="warning">Warnings</button>
+                    <button class="filter-btn" data-filter="info">Info</button>
+                    <button class="theme-toggle" id="themeToggle">🌙 Dark Mode</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card success">
+                <div class="stat-value">{status}</div>
+                <div class="stat-label">Status</div>
+            </div>
+            <div class="stat-card critical">
+                <div class="stat-value">{critical_count}</div>
+                <div class="stat-label">Critical</div>
+            </div>
+            <div class="stat-card error">
+                <div class="stat-value">{error_count}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value">{warning_count}</div>
+                <div class="stat-label">Warnings</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{info_count}</div>
+                <div class="stat-label">Info</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('errors')">
+                <h2>Errors ({error_total})</h2>
+                <span class="toggle-icon" id="errors-toggle">▼</span>
+            </div>
+            <div id="errors-content">
+                {errors_html}
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('warnings')">
+                <h2>Warnings ({warnings_total})</h2>
+                <span class="toggle-icon" id="warnings-toggle">▼</span>
+            </div>
+            <div id="warnings-content">
+                {warnings_html}
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header" onclick="toggleSection('suggestions')">
+                <h2>Suggestions ({suggestions_total})</h2>
+                <span class="toggle-icon" id="suggestions-toggle">▼</span>
+            </div>
+            <div id="suggestions-content">
+                {suggestions_html}
+            </div>
+        </div>
+
+        <div class="timestamp">
+            Generated: {timestamp}
+        </div>
+    </div>
+
+    <script>
+        // Dark mode toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+
+        themeToggle.addEventListener('click', () => {{
+            body.classList.toggle('dark-mode');
+            themeToggle.textContent = body.classList.contains('dark-mode') ? '☀️ Light Mode' : '🌙 Dark Mode';
+        }});
+
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', (e) => {{
+            const searchTerm = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.item');
+
+            items.forEach(item => {{
+                const text = item.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {{
+                    item.style.display = 'block';
+                }} else {{
+                    item.style.display = 'none';
+                }}
+            }});
+        }});
+
+        // Filter functionality
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        filterButtons.forEach(button => {{
+            button.addEventListener('click', () => {{
+                // Update active state
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                const filter = button.dataset.filter;
+                const items = document.querySelectorAll('.item');
+
+                items.forEach(item => {{
+                    if (filter === 'all' || item.classList.contains(filter)) {{
+                        item.style.display = 'block';
+                    }} else {{
+                        item.style.display = 'none';
+                    }}
+                }});
+            }});
+        }});
+
+        // Section toggle
+        function toggleSection(sectionId) {{
+            const content = document.getElementById(sectionId + '-content');
+            const toggle = document.getElementById(sectionId + '-toggle');
+
+            if (content.style.display === 'none') {{
+                content.style.display = 'block';
+                toggle.classList.remove('collapsed');
+            }} else {{
+                content.style.display = 'none';
+                toggle.classList.add('collapsed');
+            }}
+        }}
+    </script>
+</body>
+</html>"#,
+        title = html_escape(title),
+        status = if result.passed {
+            "✓ PASS"
+        } else {
+            "✗ FAIL"
+        },
+        critical_count = critical_count,
+        error_count = error_count,
+        warning_count = warning_count,
+        info_count = info_count,
+        error_total = result.errors.len(),
+        warnings_total = result.warnings.len(),
+        suggestions_total = result.suggestions.len(),
+        errors_html = if result.errors.is_empty() {
+            "<p class=\"empty\">No errors found</p>".to_string()
+        } else {
+            result
+                .errors
+                .iter()
+                .map(|e| {
+                    let severity = e.severity();
+                    let severity_str = format!("{}", severity).to_lowercase();
+                    format!(
+                        "<div class=\"item {}\" data-severity=\"{}\"><span class=\"severity-badge {}\">{}</span>{}</div>",
+                        severity_str,
+                        severity_str,
+                        severity_str,
+                        severity,
+                        html_escape(&e.to_string())
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        warnings_html = if result.warnings.is_empty() {
+            "<p class=\"empty\">No warnings found</p>".to_string()
+        } else {
+            result
+                .warnings
+                .iter()
+                .map(|w| {
+                    format!(
+                        "<div class=\"item warning\" data-severity=\"warning\">{}</div>",
+                        html_escape(w)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        suggestions_html = if result.suggestions.is_empty() {
+            "<p class=\"empty\">No suggestions</p>".to_string()
+        } else {
+            result
+                .suggestions
+                .iter()
+                .map(|s| {
+                    format!(
+                        "<div class=\"item info\" data-severity=\"info\">{}</div>",
+                        html_escape(s)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    )
+}
+
 /// Generates a PDF report for verification results (requires 'pdf' feature).
 ///
 /// Creates a professional PDF document with verification results,
@@ -2617,6 +3107,7 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 
     let mut matrix = vec![vec![0usize; len2 + 1]; len1 + 1];
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..=len1 {
         matrix[i][0] = i;
     }
@@ -3310,6 +3801,288 @@ pub fn generate_sarif_report(
 }
 
 // =============================================================================
+// IDE Integration Support
+// =============================================================================
+
+/// Diagnostic location for IDE integration.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiagnosticLocation {
+    /// File path
+    pub file: String,
+    /// Line number (1-based)
+    pub line: usize,
+    /// Column number (1-based)
+    pub column: usize,
+    /// End line (optional, for range)
+    pub end_line: Option<usize>,
+    /// End column (optional, for range)
+    pub end_column: Option<usize>,
+}
+
+impl DiagnosticLocation {
+    /// Creates a new diagnostic location.
+    pub fn new(file: impl Into<String>, line: usize, column: usize) -> Self {
+        Self {
+            file: file.into(),
+            line,
+            column,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    /// Sets the end position for a range.
+    pub fn with_range(mut self, end_line: usize, end_column: usize) -> Self {
+        self.end_line = Some(end_line);
+        self.end_column = Some(end_column);
+        self
+    }
+}
+
+/// LSP-compatible diagnostic for IDE integration.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IdeDiagnostic {
+    /// Diagnostic severity (error, warning, info, hint)
+    pub severity: String,
+    /// Diagnostic message
+    pub message: String,
+    /// Location in source
+    pub location: Option<DiagnosticLocation>,
+    /// Diagnostic code (e.g., "E001")
+    pub code: Option<String>,
+    /// Source of the diagnostic (e.g., "legalis-verifier")
+    pub source: String,
+    /// Related information
+    pub related: Vec<String>,
+    /// Suggested fixes
+    pub fixes: Vec<String>,
+}
+
+impl IdeDiagnostic {
+    /// Creates a new IDE diagnostic.
+    pub fn new(severity: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            severity: severity.into(),
+            message: message.into(),
+            location: None,
+            code: None,
+            source: "legalis-verifier".to_string(),
+            related: Vec::new(),
+            fixes: Vec::new(),
+        }
+    }
+
+    /// Sets the diagnostic location.
+    pub fn with_location(mut self, location: DiagnosticLocation) -> Self {
+        self.location = Some(location);
+        self
+    }
+
+    /// Sets the diagnostic code.
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.code = Some(code.into());
+        self
+    }
+
+    /// Adds related information.
+    pub fn with_related(mut self, info: impl Into<String>) -> Self {
+        self.related.push(info.into());
+        self
+    }
+
+    /// Adds a suggested fix.
+    pub fn with_fix(mut self, fix: impl Into<String>) -> Self {
+        self.fixes.push(fix.into());
+        self
+    }
+}
+
+/// Converts verification results to IDE diagnostics.
+pub fn to_ide_diagnostics(result: &VerificationResult) -> Vec<IdeDiagnostic> {
+    let mut diagnostics = Vec::new();
+
+    // Convert errors
+    for error in &result.errors {
+        let severity_level = match error.severity() {
+            Severity::Critical => "error",
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Info => "information",
+        };
+
+        let code = match error {
+            VerificationError::CircularReference { .. } => "L001",
+            VerificationError::DeadStatute { .. } => "L002",
+            VerificationError::ConstitutionalConflict { .. } => "L003",
+            VerificationError::LogicalContradiction { .. } => "L004",
+            VerificationError::Ambiguity { .. } => "L005",
+            VerificationError::UnreachableCode { .. } => "L006",
+        };
+
+        diagnostics.push(IdeDiagnostic::new(severity_level, error.to_string()).with_code(code));
+    }
+
+    // Convert warnings
+    for warning in &result.warnings {
+        diagnostics.push(IdeDiagnostic::new("warning", warning));
+    }
+
+    // Convert suggestions to hints
+    for suggestion in &result.suggestions {
+        diagnostics.push(IdeDiagnostic::new("hint", suggestion));
+    }
+
+    diagnostics
+}
+
+/// Generates LSP-compatible diagnostic JSON output.
+pub fn generate_lsp_diagnostics(result: &VerificationResult) -> Result<String, serde_json::Error> {
+    let diagnostics = to_ide_diagnostics(result);
+    serde_json::to_string_pretty(&diagnostics)
+}
+
+/// Quick fix suggestion for IDE code actions.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QuickFix {
+    /// Title of the fix
+    pub title: String,
+    /// Description
+    pub description: String,
+    /// Kind of fix (e.g., "quickfix", "refactor")
+    pub kind: String,
+    /// Edits to apply
+    pub edits: Vec<TextEdit>,
+}
+
+/// Text edit for applying quick fixes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TextEdit {
+    /// File to edit
+    pub file: String,
+    /// Start line (1-based)
+    pub start_line: usize,
+    /// Start column (1-based)
+    pub start_column: usize,
+    /// End line (1-based)
+    pub end_line: usize,
+    /// End column (1-based)
+    pub end_column: usize,
+    /// New text to insert
+    pub new_text: String,
+}
+
+impl TextEdit {
+    /// Creates a new text edit.
+    pub fn new(
+        file: impl Into<String>,
+        start_line: usize,
+        start_column: usize,
+        end_line: usize,
+        end_column: usize,
+        new_text: impl Into<String>,
+    ) -> Self {
+        Self {
+            file: file.into(),
+            start_line,
+            start_column,
+            end_line,
+            end_column,
+            new_text: new_text.into(),
+        }
+    }
+}
+
+impl QuickFix {
+    /// Creates a new quick fix.
+    pub fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            description: description.into(),
+            kind: "quickfix".to_string(),
+            edits: Vec::new(),
+        }
+    }
+
+    /// Adds an edit to the quick fix.
+    pub fn with_edit(mut self, edit: TextEdit) -> Self {
+        self.edits.push(edit);
+        self
+    }
+
+    /// Sets the kind of fix.
+    pub fn with_kind(mut self, kind: impl Into<String>) -> Self {
+        self.kind = kind.into();
+        self
+    }
+}
+
+/// Generates quick fixes for common verification errors.
+pub fn generate_quick_fixes(error: &VerificationError) -> Vec<QuickFix> {
+    match error {
+        VerificationError::CircularReference { message } => {
+            vec![
+                QuickFix::new(
+                    "Break circular reference",
+                    format!("Remove circular dependency: {}", message),
+                )
+                .with_kind("refactor.rewrite"),
+            ]
+        }
+        VerificationError::DeadStatute { statute_id } => {
+            vec![
+                QuickFix::new(
+                    "Fix unsatisfiable conditions",
+                    format!("Review and fix conditions in statute {}", statute_id),
+                )
+                .with_kind("quickfix"),
+            ]
+        }
+        VerificationError::ConstitutionalConflict {
+            statute_id,
+            principle,
+        } => {
+            vec![
+                QuickFix::new(
+                    "Resolve constitutional conflict",
+                    format!(
+                        "Update statute {} to comply with principle: {}",
+                        statute_id, principle
+                    ),
+                )
+                .with_kind("quickfix"),
+            ]
+        }
+        VerificationError::LogicalContradiction { message } => {
+            vec![
+                QuickFix::new(
+                    "Resolve logical contradiction",
+                    format!("Fix contradictory logic: {}", message),
+                )
+                .with_kind("refactor.rewrite"),
+            ]
+        }
+        VerificationError::Ambiguity { message } => {
+            vec![
+                QuickFix::new(
+                    "Clarify ambiguous language",
+                    format!("Make language more specific: {}", message),
+                )
+                .with_kind("refactor.rewrite"),
+            ]
+        }
+        VerificationError::UnreachableCode { message } => {
+            vec![
+                QuickFix::new(
+                    "Remove unreachable code",
+                    format!("Delete or refactor unreachable code: {}", message),
+                )
+                .with_kind("refactor.rewrite"),
+            ]
+        }
+    }
+}
+
+// =============================================================================
 // Temporal Logic Support
 // =============================================================================
 
@@ -3345,6 +4118,7 @@ impl LtlFormula {
     }
 
     /// Creates a negation.
+    #[allow(clippy::should_implement_trait)]
     pub fn not(formula: LtlFormula) -> Self {
         Self::Not(Box::new(formula))
     }
@@ -3445,6 +4219,7 @@ impl CtlFormula {
     }
 
     /// Creates a negation.
+    #[allow(clippy::should_implement_trait)]
     pub fn not(formula: CtlFormula) -> Self {
         Self::Not(Box::new(formula))
     }
@@ -3585,7 +4360,7 @@ impl TransitionSystem {
     pub fn add_transition(&mut self, from: impl Into<String>, to: impl Into<String>) {
         self.transitions
             .entry(from.into())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(to.into());
     }
 
@@ -4517,11 +5292,356 @@ impl PrincipleRegistry {
 // =============================================================================
 // Watch Mode for Continuous Verification
 // =============================================================================
-//
-// Note: Watch mode is planned for future implementation.
-// It would require additional dependencies like the `notify` crate for file watching.
-// The implementation would monitor statute files for changes and automatically
-// trigger verification when changes are detected.
+
+#[cfg(feature = "watch")]
+pub mod watch {
+    //! Watch mode for continuous verification of statute files.
+    //!
+    //! This module provides functionality to monitor directories for changes
+    //! and automatically trigger verification when statute files are modified.
+
+    use super::*;
+    use crossbeam_channel::{Receiver, bounded, select};
+    use notify::{
+        Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Result as NotifyResult,
+        Watcher,
+    };
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    /// Configuration for watch mode.
+    #[derive(Debug, Clone)]
+    pub struct WatchConfig {
+        /// Paths to watch
+        pub paths: Vec<PathBuf>,
+        /// File extensions to watch (e.g., ["json", "toml"])
+        pub extensions: Vec<String>,
+        /// Debounce delay in milliseconds
+        pub debounce_ms: u64,
+        /// Whether to watch recursively
+        pub recursive: bool,
+    }
+
+    impl Default for WatchConfig {
+        fn default() -> Self {
+            Self {
+                paths: vec![PathBuf::from(".")],
+                extensions: vec!["json".to_string(), "toml".to_string()],
+                debounce_ms: 500,
+                recursive: true,
+            }
+        }
+    }
+
+    impl WatchConfig {
+        /// Creates a new watch configuration.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Adds a path to watch.
+        pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+            self.paths.push(path.into());
+            self
+        }
+
+        /// Sets the file extensions to watch.
+        pub fn with_extensions(mut self, extensions: Vec<String>) -> Self {
+            self.extensions = extensions;
+            self
+        }
+
+        /// Sets the debounce delay.
+        pub fn with_debounce(mut self, ms: u64) -> Self {
+            self.debounce_ms = ms;
+            self
+        }
+
+        /// Sets whether to watch recursively.
+        pub fn recursive(mut self, recursive: bool) -> Self {
+            self.recursive = recursive;
+            self
+        }
+    }
+
+    /// Statistics about watch mode operations.
+    #[derive(Debug, Clone, Default)]
+    pub struct WatchStats {
+        /// Number of file changes detected
+        pub changes_detected: usize,
+        /// Number of verifications triggered
+        pub verifications_triggered: usize,
+        /// Number of verification errors
+        pub verification_errors: usize,
+    }
+
+    /// A watcher that monitors files and triggers verification on changes.
+    pub struct StatuteWatcher {
+        config: WatchConfig,
+        verifier: Arc<Mutex<StatuteVerifier>>,
+        stats: Arc<Mutex<WatchStats>>,
+    }
+
+    impl StatuteWatcher {
+        /// Creates a new statute watcher.
+        pub fn new(config: WatchConfig, verifier: StatuteVerifier) -> Self {
+            Self {
+                config,
+                verifier: Arc::new(Mutex::new(verifier)),
+                stats: Arc::new(Mutex::new(WatchStats::default())),
+            }
+        }
+
+        /// Checks if a path should be watched based on the configuration.
+        fn should_watch(&self, path: &Path) -> bool {
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy();
+                self.config.extensions.iter().any(|e| e == &*ext_str)
+            } else {
+                false
+            }
+        }
+
+        /// Starts watching and returns when stopped.
+        pub fn watch<F>(&self, mut on_change: F) -> NotifyResult<()>
+        where
+            F: FnMut(&Path, &VerificationResult) + Send + 'static,
+        {
+            let (tx, rx) = bounded(1);
+            let mut watcher = RecommendedWatcher::new(
+                move |res: NotifyResult<Event>| {
+                    if let Ok(event) = res {
+                        let _ = tx.send(event);
+                    }
+                },
+                Config::default(),
+            )?;
+
+            // Watch all configured paths
+            for path in &self.config.paths {
+                let mode = if self.config.recursive {
+                    RecursiveMode::Recursive
+                } else {
+                    RecursiveMode::NonRecursive
+                };
+                watcher.watch(path, mode)?;
+            }
+
+            println!("Watching for changes in {:?}...", self.config.paths);
+            println!("Press Ctrl+C to stop");
+
+            // Process events
+            loop {
+                select! {
+                    recv(rx) -> event => {
+                        if let Ok(event) = event {
+                            self.handle_event(event, &mut on_change);
+                        }
+                    }
+                }
+
+                // Debounce
+                std::thread::sleep(Duration::from_millis(self.config.debounce_ms));
+            }
+        }
+
+        /// Handles a file system event.
+        fn handle_event<F>(&self, event: Event, on_change: &mut F)
+        where
+            F: FnMut(&Path, &VerificationResult),
+        {
+            // Only handle modify and create events
+            if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+                return;
+            }
+
+            for path in event.paths {
+                if !self.should_watch(&path) {
+                    continue;
+                }
+
+                // Update stats
+                {
+                    let mut stats = self.stats.lock().unwrap();
+                    stats.changes_detected += 1;
+                }
+
+                println!("Change detected: {:?}", path);
+
+                // Load and verify the statute
+                match self.load_and_verify(&path) {
+                    Ok(result) => {
+                        let mut stats = self.stats.lock().unwrap();
+                        stats.verifications_triggered += 1;
+                        if !result.passed {
+                            stats.verification_errors += result.errors.len();
+                        }
+                        drop(stats);
+
+                        on_change(&path, &result);
+                    }
+                    Err(e) => {
+                        eprintln!("Error verifying {}: {}", path.display(), e);
+                    }
+                }
+            }
+        }
+
+        /// Loads a statute file and verifies it.
+        fn load_and_verify(&self, path: &Path) -> anyhow::Result<VerificationResult> {
+            // Try to load the statute from JSON
+            let content = std::fs::read_to_string(path)?;
+            let statutes: Vec<Statute> = serde_json::from_str(&content)?;
+
+            // Verify the statutes
+            let verifier = self.verifier.lock().unwrap();
+            Ok(verifier.verify(&statutes))
+        }
+
+        /// Returns the current watch statistics.
+        pub fn stats(&self) -> WatchStats {
+            self.stats.lock().unwrap().clone()
+        }
+
+        /// Resets the watch statistics.
+        pub fn reset_stats(&self) {
+            let mut stats = self.stats.lock().unwrap();
+            *stats = WatchStats::default();
+        }
+    }
+}
+
+// =============================================================================
+// Related Precedent References
+// =============================================================================
+
+/// Represents a legal precedent that may be relevant to a statute.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Precedent {
+    /// Unique identifier for the precedent
+    pub id: String,
+    /// Citation (e.g., case name, statute reference)
+    pub citation: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Year decided/enacted
+    pub year: u32,
+    /// Brief description or holding
+    pub description: String,
+    /// Relevance score (0.0 to 1.0)
+    pub relevance: f64,
+    /// Topics/tags
+    pub topics: Vec<String>,
+}
+
+impl Precedent {
+    /// Creates a new precedent.
+    pub fn new(
+        id: impl Into<String>,
+        citation: impl Into<String>,
+        jurisdiction: impl Into<String>,
+        year: u32,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            citation: citation.into(),
+            jurisdiction: jurisdiction.into(),
+            year,
+            description: description.into(),
+            relevance: 0.0,
+            topics: Vec::new(),
+        }
+    }
+
+    /// Sets the relevance score.
+    pub fn with_relevance(mut self, relevance: f64) -> Self {
+        self.relevance = relevance.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds a topic/tag.
+    pub fn with_topic(mut self, topic: impl Into<String>) -> Self {
+        self.topics.push(topic.into());
+        self
+    }
+}
+
+/// Registry for managing precedents.
+#[derive(Debug, Clone, Default)]
+pub struct PrecedentRegistry {
+    /// All precedents in the registry
+    precedents: Vec<Precedent>,
+    /// Index by topic for fast lookup
+    topic_index: HashMap<String, Vec<usize>>,
+}
+
+impl PrecedentRegistry {
+    /// Creates a new precedent registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a precedent to the registry.
+    pub fn add_precedent(&mut self, precedent: Precedent) {
+        let idx = self.precedents.len();
+
+        // Index by topics
+        for topic in &precedent.topics {
+            self.topic_index.entry(topic.clone()).or_default().push(idx);
+        }
+
+        self.precedents.push(precedent);
+    }
+
+    /// Finds precedents related to a statute based on topics.
+    pub fn find_related(&self, statute: &Statute, min_relevance: f64) -> Vec<&Precedent> {
+        // Extract topics from statute (simplified - in practice would use NLP)
+        let statute_text = format!("{} {}", statute.id, statute.title);
+        let words: HashSet<String> = statute_text
+            .split_whitespace()
+            .map(|s| s.to_lowercase())
+            .collect();
+
+        let mut seen = HashSet::new();
+        let mut results = Vec::new();
+
+        for word in words {
+            if let Some(indices) = self.topic_index.get(&word) {
+                for &idx in indices {
+                    if seen.insert(idx) {
+                        let precedent = &self.precedents[idx];
+                        if precedent.relevance >= min_relevance {
+                            results.push(precedent);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by relevance (descending)
+        results.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap());
+        results
+    }
+
+    /// Returns all precedents for a specific jurisdiction.
+    pub fn by_jurisdiction(&self, jurisdiction: &str) -> Vec<&Precedent> {
+        self.precedents
+            .iter()
+            .filter(|p| p.jurisdiction == jurisdiction)
+            .collect()
+    }
+
+    /// Returns all precedents with a specific topic.
+    pub fn by_topic(&self, topic: &str) -> Vec<&Precedent> {
+        if let Some(indices) = self.topic_index.get(topic) {
+            indices.iter().map(|&idx| &self.precedents[idx]).collect()
+        } else {
+            Vec::new()
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -5775,6 +6895,7 @@ mod tests {
         );
 
         let result = registry.verify_for_jurisdiction(&statute, "US");
-        assert!(result.passed || !result.passed); // Just verify it runs
+        // Just verify it runs without panicking
+        let _ = result.passed;
     }
 }

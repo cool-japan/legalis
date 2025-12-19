@@ -52,3 +52,36 @@
 - [x] Add integration tests with real databases (via storage backend tests)
 - [x] Add performance benchmarks
 - [x] Test concurrent access patterns
+
+## Recent Enhancements (2025-12-19)
+
+### Session 1: Builder Methods & Doctests
+- [x] Fixed doctests (changed `len()` to `count()`)
+- [x] Added comprehensive builder methods for `StatuteEntry`:
+  - `with_expiry_date()` - Set expiry date
+  - `with_amends()` - Set parent statute for amendments
+  - `with_supersedes()` - Add superseded statutes
+  - `with_metadata()` - Add metadata key-value pairs
+  - `with_jurisdiction()` - Override jurisdiction
+- [x] Added comprehensive test for all builder methods
+
+### Session 2: Pagination & Utility Methods
+- [x] Enhanced `Pagination` with convenience methods:
+  - `first()` - Create pagination for first page
+  - `next()` / `prev()` - Navigate between pages
+  - `with_page()` / `with_per_page()` - Builder methods
+- [x] Enhanced `PagedResult<T>` with navigation helpers:
+  - `has_next()` / `has_prev()` - Check for adjacent pages
+  - `is_empty()` / `len()` - Check result size
+  - `first_item_number()` / `last_item_number()` - Global item indices
+  - `next_page()` / `prev_page()` - Get pagination for adjacent pages
+- [x] Added utility methods to `StatuteRegistry`:
+  - `all_statute_ids()` - Get all statute IDs
+  - `contains()` - Check if statute exists
+  - `get_many()` - Batch get multiple statutes
+  - `latest_version()` - Get latest version number
+  - `statistics()` - Get comprehensive registry statistics
+- [x] Added `RegistryStatistics` struct with detailed metrics
+- [x] Added `Hash` derive to `StatuteStatus` for HashMap usage
+- [x] All tests passing (75 tests, +4 new tests)
+- [x] Zero warnings policy maintained (clippy, build, tests)
