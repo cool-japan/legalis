@@ -44,6 +44,14 @@ pub enum SimulationError {
     /// Checkpoint error
     #[error("Checkpoint error: {0}")]
     Checkpoint(String),
+
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+
+    /// Execution error
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
 }
 
 /// Result type for simulation operations.

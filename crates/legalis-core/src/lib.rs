@@ -758,6 +758,94 @@ pub enum Condition {
     Custom { description: String },
 }
 
+impl Condition {
+    /// Returns true if this is a compound condition (AND/OR/NOT).
+    #[must_use]
+    pub const fn is_compound(&self) -> bool {
+        matches!(self, Self::And(..) | Self::Or(..) | Self::Not(..))
+    }
+
+    /// Returns true if this is a simple (non-compound) condition.
+    #[must_use]
+    pub const fn is_simple(&self) -> bool {
+        !self.is_compound()
+    }
+
+    /// Returns true if this is a logical negation.
+    #[must_use]
+    pub const fn is_negation(&self) -> bool {
+        matches!(self, Self::Not(..))
+    }
+
+    /// Counts the total number of conditions (including nested ones).
+    #[must_use]
+    pub fn count_conditions(&self) -> usize {
+        match self {
+            Self::And(left, right) | Self::Or(left, right) => {
+                1 + left.count_conditions() + right.count_conditions()
+            }
+            Self::Not(inner) => 1 + inner.count_conditions(),
+            _ => 1,
+        }
+    }
+
+    /// Returns the depth of nested conditions.
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        match self {
+            Self::And(left, right) | Self::Or(left, right) => 1 + left.depth().max(right.depth()),
+            Self::Not(inner) => 1 + inner.depth(),
+            _ => 1,
+        }
+    }
+
+    /// Creates a new Age condition.
+    pub fn age(operator: ComparisonOp, value: u32) -> Self {
+        Self::Age { operator, value }
+    }
+
+    /// Creates a new Income condition.
+    pub fn income(operator: ComparisonOp, value: u64) -> Self {
+        Self::Income { operator, value }
+    }
+
+    /// Creates a new HasAttribute condition.
+    pub fn has_attribute(key: impl Into<String>) -> Self {
+        Self::HasAttribute { key: key.into() }
+    }
+
+    /// Creates a new AttributeEquals condition.
+    pub fn attribute_equals(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::AttributeEquals {
+            key: key.into(),
+            value: value.into(),
+        }
+    }
+
+    /// Creates a new Custom condition.
+    pub fn custom(description: impl Into<String>) -> Self {
+        Self::Custom {
+            description: description.into(),
+        }
+    }
+
+    /// Combines this condition with another using AND.
+    pub fn and(self, other: Condition) -> Self {
+        Self::And(Box::new(self), Box::new(other))
+    }
+
+    /// Combines this condition with another using OR.
+    pub fn or(self, other: Condition) -> Self {
+        Self::Or(Box::new(self), Box::new(other))
+    }
+
+    /// Negates this condition.
+    #[allow(clippy::should_implement_trait)]
+    pub fn not(self) -> Self {
+        Self::Not(Box::new(self))
+    }
+}
+
 impl fmt::Display for Condition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -796,7 +884,7 @@ impl fmt::Display for Condition {
 }
 
 /// Geographic region types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum RegionType {
@@ -815,7 +903,7 @@ pub enum RegionType {
 }
 
 /// Entity relationship types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum RelationshipType {
@@ -848,7 +936,7 @@ pub enum RelationshipType {
 /// let eq = ComparisonOp::Equal;
 /// assert_eq!(format!("{}", eq), "==");
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum ComparisonOp {
@@ -858,6 +946,42 @@ pub enum ComparisonOp {
     GreaterOrEqual,
     LessThan,
     LessOrEqual,
+}
+
+impl ComparisonOp {
+    /// Returns the inverse of this comparison operator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::ComparisonOp;
+    ///
+    /// assert_eq!(ComparisonOp::GreaterThan.inverse(), ComparisonOp::LessOrEqual);
+    /// assert_eq!(ComparisonOp::Equal.inverse(), ComparisonOp::NotEqual);
+    /// ```
+    #[must_use]
+    pub const fn inverse(&self) -> Self {
+        match self {
+            Self::Equal => Self::NotEqual,
+            Self::NotEqual => Self::Equal,
+            Self::GreaterThan => Self::LessOrEqual,
+            Self::GreaterOrEqual => Self::LessThan,
+            Self::LessThan => Self::GreaterOrEqual,
+            Self::LessOrEqual => Self::GreaterThan,
+        }
+    }
+
+    /// Returns true if this is an equality check (Equal or NotEqual).
+    #[must_use]
+    pub const fn is_equality(&self) -> bool {
+        matches!(self, Self::Equal | Self::NotEqual)
+    }
+
+    /// Returns true if this is an ordering comparison.
+    #[must_use]
+    pub const fn is_ordering(&self) -> bool {
+        !self.is_equality()
+    }
 }
 
 impl fmt::Display for ComparisonOp {
@@ -927,6 +1051,49 @@ impl Effect {
         self.parameters.insert(key.into(), value.into());
         self
     }
+
+    /// Gets a parameter value by key.
+    #[must_use]
+    pub fn get_parameter(&self, key: &str) -> Option<&String> {
+        self.parameters.get(key)
+    }
+
+    /// Checks if a parameter exists.
+    #[must_use]
+    pub fn has_parameter(&self, key: &str) -> bool {
+        self.parameters.contains_key(key)
+    }
+
+    /// Returns the number of parameters.
+    #[must_use]
+    pub fn parameter_count(&self) -> usize {
+        self.parameters.len()
+    }
+
+    /// Removes a parameter by key.
+    pub fn remove_parameter(&mut self, key: &str) -> Option<String> {
+        self.parameters.remove(key)
+    }
+
+    /// Creates a Grant effect.
+    pub fn grant(description: impl Into<String>) -> Self {
+        Self::new(EffectType::Grant, description)
+    }
+
+    /// Creates a Revoke effect.
+    pub fn revoke(description: impl Into<String>) -> Self {
+        Self::new(EffectType::Revoke, description)
+    }
+
+    /// Creates an Obligation effect.
+    pub fn obligation(description: impl Into<String>) -> Self {
+        Self::new(EffectType::Obligation, description)
+    }
+
+    /// Creates a Prohibition effect.
+    pub fn prohibition(description: impl Into<String>) -> Self {
+        Self::new(EffectType::Prohibition, description)
+    }
 }
 
 impl fmt::Display for Effect {
@@ -936,7 +1103,7 @@ impl fmt::Display for Effect {
 }
 
 /// Types of legal effects.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum EffectType {
@@ -1026,11 +1193,59 @@ impl TemporalValidity {
         self
     }
 
+    /// Sets the enacted timestamp.
+    pub fn with_enacted_at(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.enacted_at = Some(timestamp);
+        self
+    }
+
+    /// Sets the amended timestamp.
+    pub fn with_amended_at(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.amended_at = Some(timestamp);
+        self
+    }
+
     /// Checks if the statute is currently active.
     pub fn is_active(&self, as_of: NaiveDate) -> bool {
         let after_effective = self.effective_date.is_none_or(|d| as_of >= d);
         let before_expiry = self.expiry_date.is_none_or(|d| as_of <= d);
         after_effective && before_expiry
+    }
+
+    /// Returns whether this has an effective date set.
+    #[must_use]
+    pub fn has_effective_date(&self) -> bool {
+        self.effective_date.is_some()
+    }
+
+    /// Returns whether this has an expiry date set.
+    #[must_use]
+    pub fn has_expiry_date(&self) -> bool {
+        self.expiry_date.is_some()
+    }
+
+    /// Returns whether this has been enacted (has an enacted_at timestamp).
+    #[must_use]
+    pub fn is_enacted(&self) -> bool {
+        self.enacted_at.is_some()
+    }
+
+    /// Returns whether this has been amended.
+    #[must_use]
+    pub fn is_amended(&self) -> bool {
+        self.amended_at.is_some()
+    }
+
+    /// Returns whether the statute has expired as of the given date.
+    #[must_use]
+    pub fn has_expired(&self, as_of: NaiveDate) -> bool {
+        self.expiry_date.is_some_and(|exp| as_of > exp)
+    }
+
+    /// Returns whether the statute is not yet effective as of the given date.
+    #[must_use]
+    pub fn is_pending(&self, as_of: NaiveDate) -> bool {
+        self.effective_date.is_some_and(|eff| as_of < eff)
     }
 }
 
@@ -1180,6 +1395,35 @@ impl Statute {
     /// Checks if the statute is currently active.
     pub fn is_active(&self, as_of: NaiveDate) -> bool {
         self.temporal_validity.is_active(as_of)
+    }
+
+    /// Returns the number of preconditions.
+    #[must_use]
+    pub fn precondition_count(&self) -> usize {
+        self.preconditions.len()
+    }
+
+    /// Returns whether this statute has any preconditions.
+    #[must_use]
+    pub fn has_preconditions(&self) -> bool {
+        !self.preconditions.is_empty()
+    }
+
+    /// Returns whether this statute has discretion logic.
+    #[must_use]
+    pub fn has_discretion(&self) -> bool {
+        self.discretion_logic.is_some()
+    }
+
+    /// Returns whether this statute has a jurisdiction set.
+    #[must_use]
+    pub fn has_jurisdiction(&self) -> bool {
+        self.jurisdiction.is_some()
+    }
+
+    /// Returns a reference to the preconditions.
+    pub fn preconditions(&self) -> &[Condition] {
+        &self.preconditions
     }
 
     /// Validates the statute and returns a list of validation errors.
@@ -1991,5 +2235,166 @@ mod tests {
             .get_attribute("age")
             .and_then(|v| v.parse::<u32>().ok());
         assert_eq!(age_from_trait, Some(25));
+    }
+
+    #[test]
+    fn test_condition_helpers() {
+        let simple = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+        assert!(simple.is_simple());
+        assert!(!simple.is_compound());
+        assert_eq!(simple.count_conditions(), 1);
+        assert_eq!(simple.depth(), 1);
+
+        let compound = simple
+            .clone()
+            .and(Condition::income(ComparisonOp::LessThan, 50000));
+        assert!(compound.is_compound());
+        assert!(!compound.is_simple());
+        assert_eq!(compound.count_conditions(), 3); // AND + 2 leaves
+        assert_eq!(compound.depth(), 2);
+
+        let negated = simple.clone().not();
+        assert!(negated.is_negation());
+        assert!(negated.is_compound());
+        assert_eq!(negated.count_conditions(), 2); // NOT + 1 leaf
+    }
+
+    #[test]
+    fn test_condition_constructors() {
+        let age_cond = Condition::age(ComparisonOp::GreaterOrEqual, 21);
+        assert!(matches!(age_cond, Condition::Age { value: 21, .. }));
+
+        let income_cond = Condition::income(ComparisonOp::LessThan, 100000);
+        assert!(matches!(
+            income_cond,
+            Condition::Income { value: 100000, .. }
+        ));
+
+        let attr_cond = Condition::has_attribute("license");
+        assert!(matches!(attr_cond, Condition::HasAttribute { .. }));
+
+        let eq_cond = Condition::attribute_equals("status", "active");
+        assert!(matches!(eq_cond, Condition::AttributeEquals { .. }));
+
+        let custom = Condition::custom("Complex eligibility check");
+        assert!(matches!(custom, Condition::Custom { .. }));
+    }
+
+    #[test]
+    fn test_condition_combinators() {
+        let c1 = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+        let c2 = Condition::income(ComparisonOp::LessThan, 50000);
+        let c3 = Condition::has_attribute("citizenship");
+
+        let combined = c1.and(c2).or(c3);
+        assert_eq!(combined.count_conditions(), 5); // OR + (AND + 2 leaves) + 1 leaf
+        assert_eq!(combined.depth(), 3);
+    }
+
+    #[test]
+    fn test_comparison_op_inverse() {
+        assert_eq!(ComparisonOp::Equal.inverse(), ComparisonOp::NotEqual);
+        assert_eq!(ComparisonOp::NotEqual.inverse(), ComparisonOp::Equal);
+        assert_eq!(
+            ComparisonOp::GreaterThan.inverse(),
+            ComparisonOp::LessOrEqual
+        );
+        assert_eq!(
+            ComparisonOp::GreaterOrEqual.inverse(),
+            ComparisonOp::LessThan
+        );
+        assert_eq!(
+            ComparisonOp::LessThan.inverse(),
+            ComparisonOp::GreaterOrEqual
+        );
+        assert_eq!(
+            ComparisonOp::LessOrEqual.inverse(),
+            ComparisonOp::GreaterThan
+        );
+    }
+
+    #[test]
+    fn test_comparison_op_classification() {
+        assert!(ComparisonOp::Equal.is_equality());
+        assert!(ComparisonOp::NotEqual.is_equality());
+        assert!(!ComparisonOp::GreaterThan.is_equality());
+
+        assert!(ComparisonOp::GreaterThan.is_ordering());
+        assert!(ComparisonOp::LessThan.is_ordering());
+        assert!(!ComparisonOp::Equal.is_ordering());
+    }
+
+    #[test]
+    fn test_effect_helpers() {
+        let mut effect = Effect::new(EffectType::Grant, "Test effect")
+            .with_parameter("key1", "value1")
+            .with_parameter("key2", "value2");
+
+        assert_eq!(effect.parameter_count(), 2);
+        assert!(effect.has_parameter("key1"));
+        assert!(!effect.has_parameter("key3"));
+        assert_eq!(effect.get_parameter("key1"), Some(&"value1".to_string()));
+        assert_eq!(effect.get_parameter("key3"), None);
+
+        let removed = effect.remove_parameter("key1");
+        assert_eq!(removed, Some("value1".to_string()));
+        assert_eq!(effect.parameter_count(), 1);
+    }
+
+    #[test]
+    fn test_effect_constructors() {
+        let grant = Effect::grant("Right to vote");
+        assert_eq!(grant.effect_type, EffectType::Grant);
+
+        let revoke = Effect::revoke("Driving privileges");
+        assert_eq!(revoke.effect_type, EffectType::Revoke);
+
+        let obligation = Effect::obligation("Pay taxes");
+        assert_eq!(obligation.effect_type, EffectType::Obligation);
+
+        let prohibition = Effect::prohibition("Smoking in public");
+        assert_eq!(prohibition.effect_type, EffectType::Prohibition);
+    }
+
+    #[test]
+    fn test_statute_helper_methods() {
+        let statute = Statute::new("test-id", "Test Statute", Effect::grant("Test permission"))
+            .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18))
+            .with_precondition(Condition::has_attribute("citizenship"))
+            .with_discretion("Consider special circumstances");
+
+        assert_eq!(statute.precondition_count(), 2);
+        assert!(statute.has_preconditions());
+        assert!(statute.has_discretion());
+        assert!(!statute.has_jurisdiction());
+
+        let with_jurisdiction = statute.clone().with_jurisdiction("US");
+        assert!(with_jurisdiction.has_jurisdiction());
+
+        let conditions = statute.preconditions();
+        assert_eq!(conditions.len(), 2);
+    }
+
+    #[test]
+    fn test_temporal_validity_helpers() {
+        use chrono::Utc;
+
+        let validity = TemporalValidity::new()
+            .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+            .with_expiry_date(NaiveDate::from_ymd_opt(2030, 12, 31).unwrap())
+            .with_enacted_at(Utc::now());
+
+        assert!(validity.has_effective_date());
+        assert!(validity.has_expiry_date());
+        assert!(validity.is_enacted());
+        assert!(!validity.is_amended());
+
+        let test_date_active = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        let test_date_expired = NaiveDate::from_ymd_opt(2031, 1, 1).unwrap();
+        let test_date_pending = NaiveDate::from_ymd_opt(2024, 12, 31).unwrap();
+
+        assert!(validity.is_active(test_date_active));
+        assert!(validity.has_expired(test_date_expired));
+        assert!(validity.is_pending(test_date_pending));
     }
 }

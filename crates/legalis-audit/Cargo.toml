@@ -14,3 +14,10 @@ thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+rusqlite = { version = "0.32", features = ["bundled", "chrono", "uuid"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.9"
+printpdf = "0.7"
+rust_xlsxwriter = "0.80"
+flate2 = "1.1"

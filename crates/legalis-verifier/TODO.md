@@ -72,6 +72,7 @@
 - [x] Add privacy impact assessment
 - [x] Implement proportionality checking
 - [x] Add accessibility verification
+- [x] Implement non-retroactivity (ex post facto) checking
 
 ### Custom Principles
 - [x] Create principle definition DSL
@@ -108,3 +109,40 @@
 - [x] Implement parallel verification (with rayon integration)
 - [x] Add incremental verification
 - [x] Create verification budget management
+
+## Recent Enhancements (December 2025)
+
+### Non-Retroactivity Principle Check
+- [x] Implemented comprehensive `check_retroactivity()` function
+- [x] Detects retroactive application of prohibitions, obligations, and revocations
+- [x] Checks for explicit retroactive language in effect descriptions
+- [x] Validates effect parameters for retroactive flags
+- [x] Compares application dates with effective dates
+- [x] Ensures effective dates don't precede enactment dates
+- [x] Special handling for monetary penalties and fines
+- [x] Suggests grace periods for compliance
+- [x] Added 8 comprehensive unit tests covering various retroactivity scenarios
+- [x] Integrated with `PrincipleCheck::NoRetroactivity` in jurisdiction verification
+
+### Statute Conflict Detection System
+- [x] Implemented `ConflictType` enum with 5 conflict categories
+  - Effect Conflicts (contradictory effects with overlapping conditions)
+  - Jurisdictional Overlaps (multiple statutes in same jurisdiction)
+  - Temporal Conflicts (overlapping validity periods with different versions)
+  - Hierarchy Violations (lower-level contradicting higher-level)
+  - ID Collisions (duplicate statute IDs)
+- [x] Created `StatuteConflict` struct with severity classification and resolution suggestions
+- [x] Implemented `detect_statute_conflicts()` main detection function
+- [x] Added `detect_id_collisions()` for duplicate ID detection
+- [x] Added `detect_effect_conflicts()` for contradictory effect detection
+- [x] Added `detect_jurisdictional_overlaps()` for jurisdiction analysis
+- [x] Added `detect_temporal_conflicts()` for temporal overlap detection
+- [x] Implemented helper functions:
+  - `temporal_validity_overlaps()` - checks temporal period overlap
+  - `conditions_overlap()` - detects overlapping preconditions
+  - `effects_contradict()` - identifies contradictory effects
+  - `title_similarity()` - Jaccard similarity for statute titles
+- [x] Created `conflict_detection_report()` for generating detailed conflict reports
+- [x] Added 10 comprehensive unit tests for conflict detection
+- [x] All tests passing (83 total)
+- [x] No compiler or clippy warnings

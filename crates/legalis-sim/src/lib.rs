@@ -47,15 +47,31 @@
 //! - Stress testing for memory limits
 //! - Simulation verification tests
 //! - Reproducible random testing
+//!
+//! ## Advanced Features (2025-Q4)
+//! - Monte Carlo simulation for probabilistic analysis
+//! - Economic modeling (tax revenue, compliance costs, cost-benefit analysis)
+//! - Network effects and social influence modeling
+//! - Policy optimization (gradient-free, multi-objective)
+//! - Calibration and validation tools
+//! - Impact assessment and equity analysis
+//! - Event-driven simulation and hybrid approaches
 
 mod analysis;
 mod behavior;
 mod builder;
+mod calibration;
 mod comparison;
+mod economic;
 mod engine;
 mod error;
+mod event_driven;
+mod impact;
 mod incremental;
 mod metrics;
+mod monte_carlo;
+mod network_effects;
+mod optimization;
 mod performance;
 mod population;
 mod relationships;
@@ -67,11 +83,18 @@ mod visualization;
 pub use analysis::*;
 pub use behavior::*;
 pub use builder::*;
+pub use calibration::*;
 pub use comparison::*;
+pub use economic::*;
 pub use engine::*;
 pub use error::*;
+pub use event_driven::*;
+pub use impact::*;
 pub use incremental::*;
 pub use metrics::*;
+pub use monte_carlo::*;
+pub use network_effects::*;
+pub use optimization::*;
 pub use performance::*;
 pub use population::*;
 pub use relationships::*;

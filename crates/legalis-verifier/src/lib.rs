@@ -1477,6 +1477,162 @@ pub fn check_accessibility(statute: &Statute) -> PrincipleCheckResult {
     }
 }
 
+/// Checks if the statute violates the principle of non-retroactivity (ex post facto).
+///
+/// The principle of non-retroactivity means laws should not apply to conduct
+/// that occurred before the law came into effect. This is especially important for:
+/// - Criminal laws and prohibitions
+/// - New obligations and duties
+/// - Revocation of rights
+pub fn check_retroactivity(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Check if statute has an effective date
+    if let Some(effective_date) = statute.temporal_validity.effective_date {
+        // Check effect type - prohibitions, obligations, and revocations should not be retroactive
+        let is_restrictive_effect = matches!(
+            statute.effect.effect_type,
+            legalis_core::EffectType::Prohibition
+                | legalis_core::EffectType::Obligation
+                | legalis_core::EffectType::Revoke
+        );
+
+        if is_restrictive_effect {
+            // Check for retroactive application indicators
+            let effect_desc_lower = statute.effect.description.to_lowercase();
+
+            // Check for explicit retroactive language
+            if effect_desc_lower.contains("retroactive")
+                || effect_desc_lower.contains("retrospective")
+                || effect_desc_lower.contains("prior to")
+                || effect_desc_lower.contains("before")
+            {
+                issues.push(format!(
+                    "{:?} effect appears to apply retroactively: '{}'",
+                    statute.effect.effect_type, statute.effect.description
+                ));
+                suggestions.push(
+                    "Consider prospective application only (applying from effective date forward)"
+                        .to_string(),
+                );
+            }
+
+            // Check effect parameters for retroactive indicators
+            if let Some(retroactive_param) = statute.effect.parameters.get("retroactive") {
+                if retroactive_param.to_lowercase() == "true"
+                    || retroactive_param.to_lowercase() == "yes"
+                {
+                    issues.push(format!(
+                        "{:?} effect is marked as retroactive, which may violate ex post facto principles",
+                        statute.effect.effect_type
+                    ));
+                    suggestions.push(format!(
+                        "Ensure effective date ({}) is not applied to conduct before that date",
+                        effective_date
+                    ));
+                }
+            }
+
+            // Check for application_date that precedes effective_date
+            if let Some(application_date_str) = statute.effect.parameters.get("application_date") {
+                // Try to parse the application date
+                if let Ok(application_date) =
+                    chrono::NaiveDate::parse_from_str(application_date_str, "%Y-%m-%d")
+                {
+                    if application_date < effective_date {
+                        issues.push(format!(
+                            "Application date ({}) precedes effective date ({}), creating retroactive effect",
+                            application_date, effective_date
+                        ));
+                        suggestions.push(
+                            "Align application date with or after effective date".to_string(),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Special check for MonetaryTransfer that might be a penalty
+        if matches!(
+            statute.effect.effect_type,
+            legalis_core::EffectType::MonetaryTransfer
+        ) {
+            let effect_desc_lower = statute.effect.description.to_lowercase();
+            let is_penalty = effect_desc_lower.contains("fine")
+                || effect_desc_lower.contains("penalty")
+                || effect_desc_lower.contains("sanction");
+
+            if is_penalty {
+                if let Some(retroactive_param) = statute.effect.parameters.get("retroactive") {
+                    if retroactive_param.to_lowercase() == "true" {
+                        issues.push(
+                            "Monetary penalty appears to apply retroactively, violating ex post facto principles".to_string(),
+                        );
+                        suggestions.push(
+                            "Apply penalties only to violations occurring after the effective date"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+        }
+    } else {
+        // No effective date specified - warn about temporal clarity
+        if matches!(
+            statute.effect.effect_type,
+            legalis_core::EffectType::Prohibition
+                | legalis_core::EffectType::Obligation
+                | legalis_core::EffectType::Revoke
+        ) {
+            suggestions.push(
+                "Consider specifying an effective date to ensure prospective application"
+                    .to_string(),
+            );
+        }
+    }
+
+    // Check enacted_at vs effective_date for grace period
+    if let (Some(enacted_at), Some(effective_date)) = (
+        statute.temporal_validity.enacted_at,
+        statute.temporal_validity.effective_date,
+    ) {
+        let enacted_date = enacted_at.date_naive();
+
+        if effective_date < enacted_date {
+            issues.push(format!(
+                "Effective date ({}) is before enactment date ({}), creating improper retroactive application",
+                effective_date, enacted_date
+            ));
+            suggestions.push("Effective date should be on or after enactment date".to_string());
+        } else if effective_date == enacted_date
+            && matches!(
+                statute.effect.effect_type,
+                legalis_core::EffectType::Prohibition | legalis_core::EffectType::Obligation
+            )
+        {
+            suggestions.push(
+                "Consider providing a grace period between enactment and effective date for compliance"
+                    .to_string(),
+            );
+        }
+    }
+
+    if issues.is_empty() {
+        let mut result = PrincipleCheckResult::pass();
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
 /// Impact assessment for a statute or set of statutes.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImpactAssessment {
@@ -1799,6 +1955,464 @@ pub fn assess_multiple_impacts(statutes: &[Statute]) -> String {
 pub fn verify_integrity(laws: &[Statute]) -> Result<VerificationResult, String> {
     let verifier = StatuteVerifier::new();
     Ok(verifier.verify(laws))
+}
+
+// =============================================================================
+// Statute Conflict Detection
+// =============================================================================
+
+/// Types of conflicts that can occur between statutes.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ConflictType {
+    /// Statutes have overlapping conditions but contradictory effects
+    EffectConflict,
+    /// Multiple statutes claim authority over the same jurisdiction
+    JurisdictionalOverlap,
+    /// Statutes with overlapping temporal validity have conflicting rules
+    TemporalConflict,
+    /// Lower-level statute contradicts higher-level statute
+    HierarchyViolation,
+    /// Statutes with same ID in different jurisdictions
+    IdCollision,
+}
+
+impl std::fmt::Display for ConflictType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EffectConflict => write!(f, "Effect Conflict"),
+            Self::JurisdictionalOverlap => write!(f, "Jurisdictional Overlap"),
+            Self::TemporalConflict => write!(f, "Temporal Conflict"),
+            Self::HierarchyViolation => write!(f, "Hierarchy Violation"),
+            Self::IdCollision => write!(f, "ID Collision"),
+        }
+    }
+}
+
+/// Represents a conflict between two or more statutes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteConflict {
+    /// Type of conflict
+    pub conflict_type: ConflictType,
+    /// IDs of statutes involved in the conflict
+    pub statute_ids: Vec<String>,
+    /// Description of the conflict
+    pub description: String,
+    /// Severity of the conflict
+    pub severity: Severity,
+    /// Suggestions for resolving the conflict
+    pub resolution_suggestions: Vec<String>,
+}
+
+impl StatuteConflict {
+    /// Creates a new statute conflict.
+    pub fn new(
+        conflict_type: ConflictType,
+        statute_ids: Vec<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        let severity = match conflict_type {
+            ConflictType::EffectConflict => Severity::Critical,
+            ConflictType::HierarchyViolation => Severity::Critical,
+            ConflictType::IdCollision => Severity::Error,
+            ConflictType::JurisdictionalOverlap => Severity::Warning,
+            ConflictType::TemporalConflict => Severity::Warning,
+        };
+
+        Self {
+            conflict_type,
+            statute_ids,
+            description: description.into(),
+            severity,
+            resolution_suggestions: Vec::new(),
+        }
+    }
+
+    /// Adds a resolution suggestion.
+    pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
+        self.resolution_suggestions.push(suggestion.into());
+        self
+    }
+}
+
+/// Detects conflicts between statutes.
+pub fn detect_statute_conflicts(statutes: &[Statute]) -> Vec<StatuteConflict> {
+    let mut conflicts = Vec::new();
+
+    // Detect ID collisions
+    conflicts.extend(detect_id_collisions(statutes));
+
+    // Detect effect conflicts
+    conflicts.extend(detect_effect_conflicts(statutes));
+
+    // Detect jurisdictional overlaps
+    conflicts.extend(detect_jurisdictional_overlaps(statutes));
+
+    // Detect temporal conflicts
+    conflicts.extend(detect_temporal_conflicts(statutes));
+
+    conflicts
+}
+
+/// Detects ID collisions (multiple statutes with the same ID).
+fn detect_id_collisions(statutes: &[Statute]) -> Vec<StatuteConflict> {
+    let mut conflicts = Vec::new();
+    let mut id_map: HashMap<String, Vec<usize>> = HashMap::new();
+
+    // Group statutes by ID
+    for (idx, statute) in statutes.iter().enumerate() {
+        id_map.entry(statute.id.clone()).or_default().push(idx);
+    }
+
+    // Find duplicates
+    for (id, indices) in id_map.iter() {
+        if indices.len() > 1 {
+            let statute_ids: Vec<String> = indices
+                .iter()
+                .map(|&i| {
+                    format!(
+                        "{} ({})",
+                        statutes[i].id,
+                        statutes[i]
+                            .jurisdiction
+                            .as_ref()
+                            .unwrap_or(&"no jurisdiction".to_string())
+                    )
+                })
+                .collect();
+
+            conflicts.push(
+                StatuteConflict::new(
+                    ConflictType::IdCollision,
+                    statute_ids.clone(),
+                    format!(
+                        "Multiple statutes share the same ID '{}': found {} instances",
+                        id,
+                        indices.len()
+                    ),
+                )
+                .with_suggestion("Use unique IDs for each statute")
+                .with_suggestion("Consider adding jurisdiction prefix to IDs"),
+            );
+        }
+    }
+
+    conflicts
+}
+
+/// Detects effect conflicts (overlapping conditions with contradictory effects).
+fn detect_effect_conflicts(statutes: &[Statute]) -> Vec<StatuteConflict> {
+    let mut conflicts = Vec::new();
+
+    // Compare each pair of statutes
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let statute1 = &statutes[i];
+            let statute2 = &statutes[j];
+
+            // Check if they have the same jurisdiction or one is None (applies everywhere)
+            let same_jurisdiction = match (&statute1.jurisdiction, &statute2.jurisdiction) {
+                (Some(j1), Some(j2)) => j1 == j2,
+                (None, _) | (_, None) => true, // None means applies everywhere
+            };
+
+            if !same_jurisdiction {
+                continue;
+            }
+
+            // Check if temporal validity overlaps
+            if !temporal_validity_overlaps(&statute1.temporal_validity, &statute2.temporal_validity)
+            {
+                continue;
+            }
+
+            // Check if conditions are similar/overlapping
+            let conditions_overlap =
+                conditions_overlap(&statute1.preconditions, &statute2.preconditions);
+
+            if conditions_overlap {
+                // Check if effects contradict
+                let effects_contradict = effects_contradict(&statute1.effect, &statute2.effect);
+
+                if effects_contradict {
+                    conflicts.push(
+                        StatuteConflict::new(
+                            ConflictType::EffectConflict,
+                            vec![statute1.id.clone(), statute2.id.clone()],
+                            format!(
+                                "Statutes '{}' and '{}' have overlapping conditions but contradictory effects",
+                                statute1.id, statute2.id
+                            ),
+                        )
+                        .with_suggestion("Add more specific conditions to differentiate the statutes")
+                        .with_suggestion("Establish a priority/hierarchy relationship")
+                        .with_suggestion("Use temporal validity to separate their applicability"),
+                    );
+                }
+            }
+        }
+    }
+
+    conflicts
+}
+
+/// Checks if two temporal validity periods overlap.
+fn temporal_validity_overlaps(
+    tv1: &legalis_core::TemporalValidity,
+    tv2: &legalis_core::TemporalValidity,
+) -> bool {
+    use chrono::NaiveDate;
+
+    let start1 = tv1.effective_date;
+    let end1 = tv1.expiry_date;
+    let start2 = tv2.effective_date;
+    let end2 = tv2.expiry_date;
+
+    // If either has no dates, they potentially overlap (eternal validity)
+    if start1.is_none() && end1.is_none() {
+        return true;
+    }
+    if start2.is_none() && end2.is_none() {
+        return true;
+    }
+
+    // Get effective ranges
+    let start1 = start1.unwrap_or(NaiveDate::MIN);
+    let end1 = end1.unwrap_or(NaiveDate::MAX);
+    let start2 = start2.unwrap_or(NaiveDate::MIN);
+    let end2 = end2.unwrap_or(NaiveDate::MAX);
+
+    // Check if ranges overlap
+    start1 <= end2 && start2 <= end1
+}
+
+/// Checks if two sets of conditions overlap (have common scenarios).
+fn conditions_overlap(
+    conds1: &[legalis_core::Condition],
+    conds2: &[legalis_core::Condition],
+) -> bool {
+    // Simplified check: if both are empty or if they share any condition type
+    if conds1.is_empty() && conds2.is_empty() {
+        return true; // Both apply unconditionally
+    }
+
+    if conds1.is_empty() || conds2.is_empty() {
+        return true; // One applies unconditionally, so overlap
+    }
+
+    // Check for overlapping condition types
+    use std::mem::discriminant;
+    for c1 in conds1 {
+        for c2 in conds2 {
+            // If conditions are of the same variant type, they might overlap
+            if discriminant(c1) == discriminant(c2) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Checks if two effects contradict each other.
+fn effects_contradict(effect1: &legalis_core::Effect, effect2: &legalis_core::Effect) -> bool {
+    use legalis_core::EffectType;
+
+    match (&effect1.effect_type, &effect2.effect_type) {
+        // Grant vs Revoke/Prohibition
+        (EffectType::Grant, EffectType::Revoke)
+        | (EffectType::Revoke, EffectType::Grant)
+        | (EffectType::Grant, EffectType::Prohibition)
+        | (EffectType::Prohibition, EffectType::Grant) => true,
+
+        // If same effect type, check descriptions for contradictions
+        (t1, t2) if t1 == t2 => {
+            let desc1_lower = effect1.description.to_lowercase();
+            let desc2_lower = effect2.description.to_lowercase();
+
+            // Look for obvious contradictions in descriptions
+            (desc1_lower.contains("allow") && desc2_lower.contains("prohibit"))
+                || (desc1_lower.contains("prohibit") && desc2_lower.contains("allow"))
+                || (desc1_lower.contains("grant") && desc2_lower.contains("deny"))
+                || (desc1_lower.contains("deny") && desc2_lower.contains("grant"))
+        }
+
+        _ => false,
+    }
+}
+
+/// Detects jurisdictional overlaps.
+fn detect_jurisdictional_overlaps(statutes: &[Statute]) -> Vec<StatuteConflict> {
+    let mut conflicts = Vec::new();
+    let mut jurisdiction_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    // Group statutes by jurisdiction
+    for statute in statutes {
+        if let Some(jurisdiction) = &statute.jurisdiction {
+            jurisdiction_map
+                .entry(jurisdiction.clone())
+                .or_default()
+                .push(statute.id.clone());
+        }
+    }
+
+    // Check for potential overlaps (this is a simplified check)
+    // In a real system, you'd have a jurisdiction hierarchy
+    for (jurisdiction, statute_ids) in jurisdiction_map.iter() {
+        if statute_ids.len() > 20 {
+            // Arbitrary threshold
+            conflicts.push(
+                StatuteConflict::new(
+                    ConflictType::JurisdictionalOverlap,
+                    statute_ids.clone(),
+                    format!(
+                        "Jurisdiction '{}' has {} statutes, which may indicate overlap or redundancy",
+                        jurisdiction,
+                        statute_ids.len()
+                    ),
+                )
+                .with_suggestion("Review statutes for consolidation opportunities")
+                .with_suggestion("Consider creating sub-jurisdictions for better organization"),
+            );
+        }
+    }
+
+    conflicts
+}
+
+/// Detects temporal conflicts (overlapping time periods with conflicting rules).
+fn detect_temporal_conflicts(statutes: &[Statute]) -> Vec<StatuteConflict> {
+    let mut conflicts = Vec::new();
+
+    // Group statutes that might conflict temporally
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let statute1 = &statutes[i];
+            let statute2 = &statutes[j];
+
+            // Check if they're related (similar titles or same jurisdiction)
+            let related = statute1.jurisdiction == statute2.jurisdiction
+                || title_similarity(&statute1.title, &statute2.title) > 0.5;
+
+            if !related {
+                continue;
+            }
+
+            // Check temporal overlap
+            if temporal_validity_overlaps(&statute1.temporal_validity, &statute2.temporal_validity)
+            {
+                // Check if one supersedes the other based on version
+                if statute1.version != statute2.version {
+                    conflicts.push(
+                        StatuteConflict::new(
+                            ConflictType::TemporalConflict,
+                            vec![statute1.id.clone(), statute2.id.clone()],
+                            format!(
+                                "Statutes '{}' (v{}) and '{}' (v{}) have overlapping validity periods",
+                                statute1.id, statute1.version, statute2.id, statute2.version
+                            ),
+                        )
+                        .with_suggestion("Set expiry date on older version when newer version takes effect")
+                        .with_suggestion("Use version control and temporal validity to manage transitions"),
+                    );
+                }
+            }
+        }
+    }
+
+    conflicts
+}
+
+/// Calculates simple title similarity (Jaccard similarity of words).
+fn title_similarity(title1: &str, title2: &str) -> f64 {
+    let words1: HashSet<&str> = title1.split_whitespace().collect();
+    let words2: HashSet<&str> = title2.split_whitespace().collect();
+
+    if words1.is_empty() && words2.is_empty() {
+        return 1.0;
+    }
+
+    let intersection = words1.intersection(&words2).count();
+    let union = words1.union(&words2).count();
+
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f64 / union as f64
+    }
+}
+
+/// Generates a conflict detection report.
+pub fn conflict_detection_report(statutes: &[Statute]) -> String {
+    let conflicts = detect_statute_conflicts(statutes);
+
+    let mut report = String::new();
+    report.push_str("# Statute Conflict Detection Report\n\n");
+    report.push_str(&format!("Analyzed {} statutes\n", statutes.len()));
+    report.push_str(&format!("Found {} conflicts\n\n", conflicts.len()));
+
+    if conflicts.is_empty() {
+        report.push_str("✓ No conflicts detected.\n");
+        return report;
+    }
+
+    // Group by severity
+    let mut critical = Vec::new();
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+
+    for conflict in &conflicts {
+        match conflict.severity {
+            Severity::Critical => critical.push(conflict),
+            Severity::Error => errors.push(conflict),
+            Severity::Warning => warnings.push(conflict),
+            _ => {}
+        }
+    }
+
+    if !critical.is_empty() {
+        report.push_str(&format!("## Critical Conflicts ({})\n\n", critical.len()));
+        for conflict in critical {
+            report.push_str(&format!(
+                "### {} - {}\n",
+                conflict.conflict_type,
+                conflict.statute_ids.join(", ")
+            ));
+            report.push_str(&format!("{}\n\n", conflict.description));
+            if !conflict.resolution_suggestions.is_empty() {
+                report.push_str("**Suggestions:**\n");
+                for suggestion in &conflict.resolution_suggestions {
+                    report.push_str(&format!("- {}\n", suggestion));
+                }
+                report.push('\n');
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        report.push_str(&format!("## Errors ({})\n\n", errors.len()));
+        for conflict in errors {
+            report.push_str(&format!(
+                "### {} - {}\n",
+                conflict.conflict_type,
+                conflict.statute_ids.join(", ")
+            ));
+            report.push_str(&format!("{}\n\n", conflict.description));
+        }
+    }
+
+    if !warnings.is_empty() {
+        report.push_str(&format!("## Warnings ({})\n\n", warnings.len()));
+        for conflict in warnings {
+            report.push_str(&format!(
+                "### {} - {}\n",
+                conflict.conflict_type,
+                conflict.statute_ids.join(", ")
+            ));
+            report.push_str(&format!("{}\n\n", conflict.description));
+        }
+    }
+
+    report
 }
 
 /// Complexity metrics for a statute.
@@ -5211,7 +5825,7 @@ impl PrincipleRegistry {
                     let check_result = match check {
                         PrincipleCheck::NoDiscrimination => check_equality(statute),
                         PrincipleCheck::RequiresProcedure => check_due_process(statute),
-                        PrincipleCheck::NoRetroactivity => PrincipleCheckResult::pass(), // TODO: implement
+                        PrincipleCheck::NoRetroactivity => check_retroactivity(statute),
                         PrincipleCheck::EqualityCheck => check_equality(statute),
                         PrincipleCheck::DueProcess => check_due_process(statute),
                         PrincipleCheck::PrivacyImpact => check_privacy_impact(statute),
@@ -5241,26 +5855,18 @@ impl PrincipleRegistry {
                     .iter()
                     .filter_map(|comp_id| rule_set.principles.iter().find(|p| &p.id == comp_id))
                     .map(|principle_def| {
-                        principle_def.checks.iter().all(|check| {
-                            match check {
-                                PrincipleCheck::NoDiscrimination => check_equality(statute).passed,
-                                PrincipleCheck::RequiresProcedure => {
-                                    check_due_process(statute).passed
-                                }
-                                PrincipleCheck::NoRetroactivity => true, // TODO: implement
-                                PrincipleCheck::EqualityCheck => check_equality(statute).passed,
-                                PrincipleCheck::DueProcess => check_due_process(statute).passed,
-                                PrincipleCheck::PrivacyImpact => {
-                                    check_privacy_impact(statute).passed
-                                }
-                                PrincipleCheck::Proportionality => {
-                                    check_proportionality(statute).passed
-                                }
-                                PrincipleCheck::Accessibility => {
-                                    check_accessibility(statute).passed
-                                }
-                                PrincipleCheck::Custom { .. } => true,
+                        principle_def.checks.iter().all(|check| match check {
+                            PrincipleCheck::NoDiscrimination => check_equality(statute).passed,
+                            PrincipleCheck::RequiresProcedure => check_due_process(statute).passed,
+                            PrincipleCheck::NoRetroactivity => check_retroactivity(statute).passed,
+                            PrincipleCheck::EqualityCheck => check_equality(statute).passed,
+                            PrincipleCheck::DueProcess => check_due_process(statute).passed,
+                            PrincipleCheck::PrivacyImpact => check_privacy_impact(statute).passed,
+                            PrincipleCheck::Proportionality => {
+                                check_proportionality(statute).passed
                             }
+                            PrincipleCheck::Accessibility => check_accessibility(statute).passed,
+                            PrincipleCheck::Custom { .. } => true,
                         })
                     })
                     .collect();
@@ -5646,7 +6252,7 @@ impl PrecedentRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use legalis_core::{ComparisonOp, Condition, Effect, EffectType};
+    use legalis_core::{ComparisonOp, Condition, Effect, EffectType, TemporalValidity};
 
     #[test]
     fn test_verifier_pass() {
@@ -6897,5 +7503,418 @@ mod tests {
         let result = registry.verify_for_jurisdiction(&statute, "US");
         // Just verify it runs without panicking
         let _ = result.passed;
+    }
+
+    #[test]
+    fn test_retroactivity_check_pass() {
+        use chrono::{NaiveDate, Utc};
+
+        // Statute with proper prospective application
+        let statute = Statute::new(
+            "test-1",
+            "Traffic prohibition",
+            Effect::new(EffectType::Prohibition, "Prohibit parking"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap())
+                .with_enacted_at(Utc::now()),
+        );
+
+        let result = check_retroactivity(&statute);
+        assert!(result.passed);
+        assert!(result.issues.is_empty());
+    }
+
+    #[test]
+    fn test_retroactivity_check_retroactive_language() {
+        use chrono::NaiveDate;
+
+        // Prohibition with retroactive language in description
+        let statute = Statute::new(
+            "test-2",
+            "Retroactive ban",
+            Effect::new(
+                EffectType::Prohibition,
+                "Prohibit actions taken retroactively before this date",
+            ),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        );
+
+        let result = check_retroactivity(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(result.issues.iter().any(|i| i.contains("retroactively")));
+    }
+
+    #[test]
+    fn test_retroactivity_check_retroactive_parameter() {
+        use chrono::NaiveDate;
+
+        // Obligation with retroactive parameter
+        let mut effect = Effect::new(EffectType::Obligation, "File report");
+        effect
+            .parameters
+            .insert("retroactive".to_string(), "true".to_string());
+
+        let statute = Statute::new("test-3", "Reporting requirement", effect)
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+            );
+
+        let result = check_retroactivity(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(result.issues.iter().any(|i| i.contains("ex post facto")));
+    }
+
+    #[test]
+    fn test_retroactivity_check_application_before_effective() {
+        use chrono::NaiveDate;
+
+        // Prohibition with application date before effective date
+        let mut effect = Effect::new(EffectType::Prohibition, "Prohibit conduct");
+        effect
+            .parameters
+            .insert("application_date".to_string(), "2024-12-01".to_string());
+
+        let statute = Statute::new("test-4", "Backdated prohibition", effect)
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+            );
+
+        let result = check_retroactivity(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|i| i.contains("precedes effective date"))
+        );
+    }
+
+    #[test]
+    fn test_retroactivity_check_effective_before_enactment() {
+        use chrono::{NaiveDate, Utc};
+
+        // Prohibition with effective date before enactment
+        let statute = Statute::new(
+            "test-5",
+            "Impossible retroactive law",
+            Effect::new(EffectType::Prohibition, "Prohibit action"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap())
+                .with_enacted_at(Utc::now()),
+        );
+
+        let result = check_retroactivity(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|i| i.contains("before enactment date"))
+        );
+    }
+
+    #[test]
+    fn test_retroactivity_check_monetary_penalty() {
+        use chrono::NaiveDate;
+
+        // Fine with retroactive flag
+        let mut effect = Effect::new(EffectType::MonetaryTransfer, "Impose fine for violation");
+        effect
+            .parameters
+            .insert("retroactive".to_string(), "true".to_string());
+
+        let statute = Statute::new("test-6", "Retroactive fine", effect).with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        );
+
+        let result = check_retroactivity(&statute);
+        assert!(!result.passed);
+        assert!(!result.issues.is_empty());
+        assert!(result.issues.iter().any(|i| i.contains("penalty")));
+    }
+
+    #[test]
+    fn test_retroactivity_check_grant_allowed() {
+        use chrono::NaiveDate;
+
+        // Grants can sometimes be retroactive (beneficial to people)
+        let mut effect = Effect::new(EffectType::Grant, "Grant benefit");
+        effect
+            .parameters
+            .insert("retroactive".to_string(), "true".to_string());
+
+        let statute = Statute::new("test-7", "Retroactive benefit", effect).with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        );
+
+        let result = check_retroactivity(&statute);
+        // Grants are not restrictive, so no retroactivity violation
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn test_retroactivity_check_no_effective_date() {
+        // Prohibition without effective date - should suggest adding one
+        let statute = Statute::new(
+            "test-8",
+            "Undated prohibition",
+            Effect::new(EffectType::Prohibition, "Prohibit action"),
+        );
+
+        let result = check_retroactivity(&statute);
+        // No issues but has suggestions
+        assert!(result.passed);
+        assert!(result.issues.is_empty());
+        assert!(!result.suggestions.is_empty());
+        assert!(
+            result
+                .suggestions
+                .iter()
+                .any(|s| s.contains("effective date"))
+        );
+    }
+
+    #[test]
+    fn test_id_collision_detection() {
+        // Create statutes with duplicate IDs
+        let statute1 = Statute::new(
+            "duplicate-id",
+            "First Statute",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_jurisdiction("US");
+
+        let statute2 = Statute::new(
+            "duplicate-id",
+            "Second Statute",
+            Effect::new(EffectType::Grant, "Grant different benefit"),
+        )
+        .with_jurisdiction("UK");
+
+        let conflicts = detect_statute_conflicts(&[statute1, statute2]);
+
+        assert!(!conflicts.is_empty());
+        assert!(
+            conflicts
+                .iter()
+                .any(|c| c.conflict_type == ConflictType::IdCollision)
+        );
+    }
+
+    #[test]
+    fn test_effect_conflict_detection() {
+        use chrono::NaiveDate;
+
+        // Create statutes with overlapping conditions but contradictory effects
+        let statute1 = Statute::new(
+            "grant-benefit",
+            "Grant Benefits",
+            Effect::new(EffectType::Grant, "Grant parking permit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        })
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        );
+
+        let statute2 = Statute::new(
+            "prohibit-benefit",
+            "Prohibit Benefits",
+            Effect::new(EffectType::Prohibition, "Prohibit parking"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        })
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()),
+        );
+
+        let conflicts = detect_statute_conflicts(&[statute1, statute2]);
+
+        assert!(
+            conflicts
+                .iter()
+                .any(|c| c.conflict_type == ConflictType::EffectConflict)
+        );
+    }
+
+    #[test]
+    fn test_temporal_conflict_detection() {
+        use chrono::NaiveDate;
+
+        // Create statutes with overlapping temporal validity
+        let statute1 = Statute::new(
+            "law-v1",
+            "Traffic Law",
+            Effect::new(EffectType::Grant, "Grant permit"),
+        )
+        .with_jurisdiction("US")
+        .with_version(1)
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+                .with_expiry_date(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()),
+        );
+
+        let statute2 = Statute::new(
+            "law-v2",
+            "Traffic Law",
+            Effect::new(EffectType::Grant, "Grant new permit"),
+        )
+        .with_jurisdiction("US")
+        .with_version(2)
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()),
+        );
+
+        let conflicts = detect_statute_conflicts(&[statute1, statute2]);
+
+        assert!(
+            conflicts
+                .iter()
+                .any(|c| c.conflict_type == ConflictType::TemporalConflict)
+        );
+    }
+
+    #[test]
+    fn test_no_conflicts_when_different_jurisdictions() {
+        // Statutes in different jurisdictions should not conflict
+        let statute1 = Statute::new(
+            "law-1",
+            "US Law",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_jurisdiction("US");
+
+        let statute2 = Statute::new(
+            "law-2",
+            "UK Law",
+            Effect::new(EffectType::Prohibition, "Prohibit action"),
+        )
+        .with_jurisdiction("UK");
+
+        let conflicts = detect_effect_conflicts(&[statute1, statute2]);
+
+        assert!(conflicts.is_empty());
+    }
+
+    #[test]
+    fn test_conflict_report_generation() {
+        // Create statutes with a known conflict
+        let statute1 = Statute::new("dup-id", "First", Effect::new(EffectType::Grant, "Grant"));
+
+        let statute2 = Statute::new("dup-id", "Second", Effect::new(EffectType::Grant, "Grant"));
+
+        let report = conflict_detection_report(&[statute1, statute2]);
+
+        assert!(report.contains("Conflict Detection Report"));
+        assert!(report.contains("ID Collision"));
+    }
+
+    #[test]
+    fn test_temporal_validity_overlap() {
+        use chrono::NaiveDate;
+
+        let tv1 = TemporalValidity::new()
+            .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+            .with_expiry_date(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap());
+
+        let tv2 = TemporalValidity::new()
+            .with_effective_date(NaiveDate::from_ymd_opt(2025, 6, 1).unwrap())
+            .with_expiry_date(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap());
+
+        assert!(temporal_validity_overlaps(&tv1, &tv2));
+
+        let tv3 = TemporalValidity::new()
+            .with_effective_date(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap())
+            .with_expiry_date(NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
+
+        let tv4 = TemporalValidity::new()
+            .with_effective_date(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap())
+            .with_expiry_date(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap());
+
+        assert!(!temporal_validity_overlaps(&tv3, &tv4));
+    }
+
+    #[test]
+    fn test_effects_contradict() {
+        let grant = Effect::new(EffectType::Grant, "Grant permission");
+        let revoke = Effect::new(EffectType::Revoke, "Revoke permission");
+        let prohibition = Effect::new(EffectType::Prohibition, "Prohibit action");
+
+        assert!(effects_contradict(&grant, &revoke));
+        assert!(effects_contradict(&grant, &prohibition));
+        assert!(!effects_contradict(&grant, &grant));
+    }
+
+    #[test]
+    fn test_title_similarity() {
+        let sim1 = title_similarity("Traffic Law Amendment", "Traffic Law");
+        assert!(sim1 > 0.5);
+
+        let sim2 = title_similarity("Completely Different", "Another Thing");
+        assert!(sim2 < 0.5);
+
+        let sim3 = title_similarity("Same Title", "Same Title");
+        assert_eq!(sim3, 1.0);
+    }
+
+    #[test]
+    fn test_conditions_overlap() {
+        let cond1 = vec![Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        }];
+
+        let cond2 = vec![Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        }];
+
+        assert!(conditions_overlap(&cond1, &cond2));
+
+        let cond3 = vec![Condition::Income {
+            operator: ComparisonOp::LessThan,
+            value: 50000,
+        }];
+
+        assert!(!conditions_overlap(&cond1, &cond3));
+    }
+
+    #[test]
+    fn test_conflict_with_suggestions() {
+        let conflict = StatuteConflict::new(
+            ConflictType::EffectConflict,
+            vec!["law1".to_string(), "law2".to_string()],
+            "Test conflict",
+        )
+        .with_suggestion("Fix it")
+        .with_suggestion("Or do this");
+
+        assert_eq!(conflict.resolution_suggestions.len(), 2);
+        assert_eq!(conflict.severity, Severity::Critical);
     }
 }

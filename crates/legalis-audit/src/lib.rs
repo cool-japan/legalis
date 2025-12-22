@@ -87,7 +87,10 @@
 //! ```
 
 pub mod analysis;
+pub mod compression;
+pub mod encryption;
 pub mod export;
+pub mod integrity;
 pub mod query;
 pub mod replay;
 pub mod retention;
@@ -125,6 +128,9 @@ pub enum AuditError {
 
     #[error("Query error: {0}")]
     QueryError(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] rusqlite::Error),
 }
 
 /// Result type for audit operations.
@@ -314,6 +320,20 @@ impl AuditTrail {
         })
     }
 
+    /// Creates a new audit trail with SQLite storage.
+    pub fn with_sqlite<P: AsRef<std::path::Path>>(path: P) -> AuditResult<Self> {
+        Ok(Self {
+            storage: Box::new(storage::sqlite::SqliteStorage::new(path)?),
+        })
+    }
+
+    /// Creates a new audit trail with encrypted in-memory storage.
+    pub fn with_encrypted_memory(key: encryption::EncryptionKey) -> Self {
+        Self {
+            storage: Box::new(storage::encrypted::EncryptedStorage::new(key)),
+        }
+    }
+
     /// Records a new decision.
     pub fn record(&mut self, mut record: AuditRecord) -> AuditResult<Uuid> {
         // Get last hash and set previous hash
@@ -440,6 +460,26 @@ impl AuditTrail {
         export::to_json(&records)
     }
 
+    /// Exports all records to Excel format.
+    pub fn export_excel<P: AsRef<std::path::Path>>(&self, path: P) -> AuditResult<()> {
+        let records = self.storage.get_all()?;
+        export::to_excel(&records, path)
+    }
+
+    /// Exports compliance report to PDF format.
+    pub fn export_pdf<P: AsRef<std::path::Path>>(&self, path: P, title: &str) -> AuditResult<()> {
+        let records = self.storage.get_all()?;
+        let report = self.generate_report()?;
+        export::to_pdf(&records, &report, path, title)
+    }
+
+    /// Exports compliance report to HTML format.
+    pub fn export_html(&self, title: &str) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let report = self.generate_report()?;
+        export::to_html(&records, &report, title)
+    }
+
     /// Analyzes decision patterns in the audit trail.
     pub fn analyze_patterns(&self) -> AuditResult<analysis::DecisionAnalysis> {
         let records = self.storage.get_all()?;
@@ -536,6 +576,27 @@ impl AuditTrail {
     pub fn explain_decision(&self, record_id: Uuid) -> AuditResult<retention::DecisionExplanation> {
         let record = self.get(record_id)?;
         Ok(retention::DecisionExplanation::generate(&record))
+    }
+
+    /// Builds a Merkle tree for efficient verification.
+    pub fn build_merkle_tree(&self) -> AuditResult<integrity::MerkleTree> {
+        let records = self.storage.get_all()?;
+        Ok(integrity::MerkleTree::from_records(&records))
+    }
+
+    /// Generates a Merkle proof for a specific record.
+    pub fn generate_merkle_proof(
+        &self,
+        record_id: Uuid,
+    ) -> AuditResult<Option<integrity::MerkleProof>> {
+        let tree = self.build_merkle_tree()?;
+        Ok(tree.generate_proof(record_id))
+    }
+
+    /// Verifies a Merkle proof.
+    pub fn verify_merkle_proof(&self, proof: &integrity::MerkleProof) -> AuditResult<bool> {
+        let tree = self.build_merkle_tree()?;
+        Ok(tree.verify_proof(proof))
     }
 }
 

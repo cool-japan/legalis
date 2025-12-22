@@ -10,6 +10,7 @@
 
 pub mod async_jobs;
 pub mod auth;
+pub mod cache;
 pub mod config;
 pub mod logging;
 mod metrics;
@@ -22,12 +23,19 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     middleware,
-    response::IntoResponse,
+    response::{
+        IntoResponse,
+        sse::{Event, KeepAlive, Sse},
+    },
     routing::{get, post},
 };
+use futures::stream::{self, Stream};
 use legalis_core::Statute;
+use legalis_viz::DecisionTree;
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
@@ -97,6 +105,9 @@ pub struct ResponseMeta {
     pub total: Option<usize>,
     pub page: Option<usize>,
     pub per_page: Option<usize>,
+    pub next_cursor: Option<String>,
+    pub prev_cursor: Option<String>,
+    pub has_more: Option<bool>,
 }
 
 /// Verification job result.
@@ -108,6 +119,24 @@ pub struct VerificationJobResult {
     pub statute_count: usize,
 }
 
+/// Saved simulation result.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SavedSimulation {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub statute_ids: Vec<String>,
+    pub population_size: usize,
+    pub deterministic_outcomes: usize,
+    pub discretionary_outcomes: usize,
+    pub void_outcomes: usize,
+    pub deterministic_rate: f64,
+    pub discretionary_rate: f64,
+    pub void_rate: f64,
+    pub created_at: String,
+    pub created_by: String,
+}
+
 /// Application state.
 pub struct AppState {
     /// In-memory statute storage
@@ -116,6 +145,10 @@ pub struct AppState {
     pub rebac: RwLock<rebac::ReBACEngine>,
     /// Async verification job manager
     pub verification_jobs: async_jobs::JobManager<VerificationJobResult>,
+    /// Saved simulations
+    pub saved_simulations: RwLock<Vec<SavedSimulation>>,
+    /// Response cache
+    pub cache: Arc<cache::CacheStore>,
 }
 
 impl AppState {
@@ -124,6 +157,8 @@ impl AppState {
             statutes: RwLock::new(Vec::new()),
             rebac: RwLock::new(rebac::ReBACEngine::new()),
             verification_jobs: async_jobs::JobManager::new(),
+            saved_simulations: RwLock::new(Vec::new()),
+            cache: Arc::new(cache::CacheStore::new()),
         }
     }
 }
@@ -283,6 +318,8 @@ pub struct StatuteSearchQuery {
     pub limit: Option<usize>,
     /// Offset for pagination
     pub offset: Option<usize>,
+    /// Cursor for cursor-based pagination
+    pub cursor: Option<String>,
 }
 
 /// Statute comparison request.
@@ -395,7 +432,7 @@ pub struct SimulationRequest {
 }
 
 /// Simulation response.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SimulationResponse {
     pub simulation_id: String,
     pub total_entities: usize,
@@ -422,6 +459,59 @@ pub struct SimulationComparisonResponse {
     pub scenario_a: SimulationScenarioResult,
     pub scenario_b: SimulationScenarioResult,
     pub differences: SimulationDifferences,
+}
+
+/// Save simulation request.
+#[derive(Deserialize)]
+pub struct SaveSimulationRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub simulation_result: SimulationResponse,
+}
+
+/// List saved simulations query.
+#[derive(Deserialize)]
+pub struct ListSavedSimulationsQuery {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+/// Visualization format options.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VizFormat {
+    Dot,
+    Ascii,
+    Mermaid,
+    PlantUml,
+    Svg,
+    Html,
+}
+
+impl Default for VizFormat {
+    fn default() -> Self {
+        Self::Svg
+    }
+}
+
+/// Visualization request query parameters.
+#[derive(Deserialize)]
+pub struct VizQuery {
+    /// Output format
+    #[serde(default)]
+    pub format: VizFormat,
+    /// Theme (light, dark, high_contrast, colorblind_friendly)
+    pub theme: Option<String>,
+}
+
+/// Visualization response.
+#[derive(Serialize)]
+pub struct VisualizationResponse {
+    pub statute_id: String,
+    pub format: String,
+    pub content: String,
+    pub node_count: usize,
+    pub discretionary_count: usize,
 }
 
 /// Results for a single simulation scenario.
@@ -476,7 +566,17 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(get_verification_job_status),
         )
         .route("/api/v1/simulate", post(run_simulation))
+        .route("/api/v1/simulate/stream", post(stream_simulation))
         .route("/api/v1/simulate/compare", post(compare_simulations))
+        .route(
+            "/api/v1/simulate/saved",
+            get(list_saved_simulations).post(save_simulation),
+        )
+        .route(
+            "/api/v1/simulate/saved/{id}",
+            get(get_saved_simulation).delete(delete_saved_simulation),
+        )
+        .route("/api/v1/visualize/{id}", get(visualize_statute))
         .route("/api-docs/openapi.json", get(openapi_spec))
         .layer(middleware::from_fn(logging::log_request))
         .layer(CompressionLayer::new())
@@ -580,22 +680,83 @@ async fn search_statutes(
         filtered.retain(|s| s.preconditions.len() <= max);
     }
 
-    // Apply pagination
     let total = filtered.len();
-    let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(100).min(1000); // Cap at 1000
 
-    let paginated = filtered
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .map(StatuteSummary::from)
-        .collect();
+    // Support both cursor-based and offset-based pagination
+    let (paginated, meta) = if let Some(cursor) = query.cursor {
+        // Cursor-based pagination
+        let limit = query.limit.unwrap_or(100).min(1000);
 
-    let meta = ResponseMeta {
-        total: Some(total),
-        page: Some(offset / limit),
-        per_page: Some(limit),
+        // Decode cursor (format: base64(id:version))
+        let cursor_decoded = base64_decode(&cursor)
+            .map_err(|_| ApiError::BadRequest("Invalid cursor".to_string()))?;
+
+        let cursor_parts: Vec<&str> = cursor_decoded.split(':').collect();
+        if cursor_parts.len() != 2 {
+            return Err(ApiError::BadRequest("Invalid cursor format".to_string()));
+        }
+
+        let cursor_id = cursor_parts[0];
+        let cursor_version: u32 = cursor_parts[1]
+            .parse()
+            .map_err(|_| ApiError::BadRequest("Invalid cursor version".to_string()))?;
+
+        // Find position of cursor
+        let cursor_pos = filtered
+            .iter()
+            .position(|s| s.id == cursor_id && s.version == cursor_version);
+
+        let start_pos = cursor_pos.map(|p| p + 1).unwrap_or(0);
+
+        let results: Vec<StatuteSummary> = filtered
+            .iter()
+            .skip(start_pos)
+            .take(limit + 1) // Take one extra to check if there are more
+            .map(|s| StatuteSummary::from(*s))
+            .collect();
+
+        let has_more = results.len() > limit;
+        let mut final_results = results;
+        if has_more {
+            final_results.pop(); // Remove the extra item
+        }
+
+        // Generate next cursor if there are more results
+        let next_cursor = if has_more && !final_results.is_empty() {
+            let last = &final_results[final_results.len() - 1];
+            Some(base64_encode(&format!("{}:{}", last.id, 1))) // Use version 1 as default
+        } else {
+            None
+        };
+
+        let meta = ResponseMeta {
+            total: Some(total),
+            next_cursor,
+            has_more: Some(has_more),
+            ..Default::default()
+        };
+
+        (final_results, meta)
+    } else {
+        // Offset-based pagination
+        let offset = query.offset.unwrap_or(0);
+        let limit = query.limit.unwrap_or(100).min(1000);
+
+        let paginated = filtered
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(StatuteSummary::from)
+            .collect();
+
+        let meta = ResponseMeta {
+            total: Some(total),
+            page: Some(offset / limit),
+            per_page: Some(limit),
+            ..Default::default()
+        };
+
+        (paginated, meta)
     };
 
     Ok(Json(
@@ -604,6 +765,19 @@ async fn search_statutes(
         })
         .with_meta(meta),
     ))
+}
+
+/// Base64 encode a string.
+fn base64_encode(s: &str) -> String {
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.encode(s)
+}
+
+/// Base64 decode a string.
+fn base64_decode(s: &str) -> Result<String, base64::DecodeError> {
+    use base64::{Engine as _, engine::general_purpose};
+    let bytes = general_purpose::STANDARD.decode(s)?;
+    Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
 /// Get a specific statute.
@@ -1408,6 +1582,157 @@ async fn run_simulation(
     })))
 }
 
+/// Stream simulation results in real-time using Server-Sent Events.
+async fn stream_simulation(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SimulationRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    if req.population_size == 0 {
+        return Err(ApiError::BadRequest(
+            "Population size must be greater than 0".to_string(),
+        ));
+    }
+
+    if req.population_size > 10000 {
+        return Err(ApiError::BadRequest(
+            "Population size cannot exceed 10000".to_string(),
+        ));
+    }
+
+    let statutes = state.statutes.read().await;
+
+    let to_simulate: Vec<Statute> = if req.statute_ids.is_empty() {
+        statutes.clone()
+    } else {
+        statutes
+            .iter()
+            .filter(|s| req.statute_ids.contains(&s.id))
+            .cloned()
+            .collect()
+    };
+
+    if to_simulate.is_empty() {
+        return Err(ApiError::BadRequest("No statutes to simulate".to_string()));
+    }
+
+    drop(statutes); // Release the read lock
+
+    // Create population
+    use legalis_core::{LegalEntity, TypedEntity};
+    let mut population: Vec<Box<dyn LegalEntity>> = Vec::new();
+    for i in 0..req.population_size {
+        let mut entity = TypedEntity::new();
+        entity.set_u32("age", 18 + (i % 50) as u32);
+        entity.set_u64("income", 20000 + ((i * 1000) % 80000) as u64);
+
+        for (key, value) in &req.entity_params {
+            entity.set_string(key, value);
+        }
+
+        population.push(Box::new(entity));
+    }
+
+    let simulation_id = uuid::Uuid::new_v4().to_string();
+    let total_entities = req.population_size;
+
+    // Create an async stream
+    let stream = stream::unfold(
+        (
+            to_simulate,
+            population,
+            0usize,
+            simulation_id.clone(),
+            total_entities,
+        ),
+        |(statutes, population, progress, sim_id, total_entities)| async move {
+            if progress == 0 {
+                // Send start event
+                let event = Event::default()
+                    .event("start")
+                    .json_data(serde_json::json!({
+                        "simulation_id": sim_id,
+                        "total_entities": population.len(),
+                        "status": "started"
+                    }))
+                    .ok()?;
+                return Some((
+                    Ok::<_, Infallible>(event),
+                    (statutes, population, 10, sim_id, total_entities),
+                ));
+            }
+
+            if progress < 100 {
+                // Send progress update
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let event = Event::default()
+                    .event("progress")
+                    .json_data(serde_json::json!({
+                        "simulation_id": sim_id,
+                        "progress": progress,
+                        "status": "running"
+                    }))
+                    .ok()?;
+                return Some((
+                    Ok::<_, Infallible>(event),
+                    (statutes, population, progress + 10, sim_id, total_entities),
+                ));
+            }
+
+            if progress == 100 {
+                // Run actual simulation
+                use legalis_sim::SimEngine;
+                let engine = SimEngine::new(statutes.clone(), population);
+                let metrics = engine.run_simulation().await;
+
+                let total = metrics.total_applications as f64;
+                let deterministic_rate = if total > 0.0 {
+                    (metrics.deterministic_count as f64 / total) * 100.0
+                } else {
+                    0.0
+                };
+                let discretionary_rate = if total > 0.0 {
+                    (metrics.discretion_count as f64 / total) * 100.0
+                } else {
+                    0.0
+                };
+                let void_rate = if total > 0.0 {
+                    (metrics.void_count as f64 / total) * 100.0
+                } else {
+                    0.0
+                };
+
+                // Send completion event
+                let event = Event::default()
+                    .event("complete")
+                    .json_data(serde_json::json!({
+                        "simulation_id": sim_id,
+                        "status": "completed",
+                        "total_entities": total_entities,
+                        "deterministic_outcomes": metrics.deterministic_count,
+                        "discretionary_outcomes": metrics.discretion_count,
+                        "void_outcomes": metrics.void_count,
+                        "deterministic_rate": deterministic_rate,
+                        "discretionary_rate": discretionary_rate,
+                        "void_rate": void_rate,
+                        "completed_at": chrono::Utc::now().to_rfc3339()
+                    }))
+                    .ok()?;
+                return Some((
+                    Ok::<_, Infallible>(event),
+                    (statutes, vec![], 101, sim_id, total_entities),
+                ));
+            }
+
+            None
+        },
+    );
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+
 /// Compare two simulation scenarios.
 async fn compare_simulations(
     user: auth::AuthUser,
@@ -1503,6 +1828,156 @@ async fn compare_simulations(
             void_diff,
             significant_change,
         },
+    })))
+}
+
+/// Save a simulation result for later retrieval.
+async fn save_simulation(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SaveSimulationRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::CreateStatutes)?;
+
+    let saved = SavedSimulation {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: req.name,
+        description: req.description,
+        statute_ids: vec![], // Would need to track in SimulationResponse
+        population_size: req.simulation_result.total_entities,
+        deterministic_outcomes: req.simulation_result.deterministic_outcomes,
+        discretionary_outcomes: req.simulation_result.discretionary_outcomes,
+        void_outcomes: req.simulation_result.void_outcomes,
+        deterministic_rate: req.simulation_result.deterministic_rate,
+        discretionary_rate: req.simulation_result.discretionary_rate,
+        void_rate: req.simulation_result.void_rate,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        created_by: user.username.clone(),
+    };
+
+    let mut simulations = state.saved_simulations.write().await;
+    simulations.push(saved.clone());
+
+    info!("Saved simulation: {} by user {}", saved.id, user.username);
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(saved))))
+}
+
+/// List all saved simulations.
+async fn list_saved_simulations(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ListSavedSimulationsQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let simulations = state.saved_simulations.read().await;
+    let total = simulations.len();
+
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(100).min(1000);
+
+    let paginated: Vec<SavedSimulation> = simulations
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect();
+
+    let meta = ResponseMeta {
+        total: Some(total),
+        page: Some(offset / limit),
+        per_page: Some(limit),
+        next_cursor: None,
+        prev_cursor: None,
+        has_more: None,
+    };
+
+    Ok(Json(ApiResponse::new(paginated).with_meta(meta)))
+}
+
+/// Get a specific saved simulation.
+async fn get_saved_simulation(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let simulations = state.saved_simulations.read().await;
+    let simulation = simulations
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| ApiError::NotFound(format!("Saved simulation not found: {}", id)))?;
+
+    Ok(Json(ApiResponse::new(simulation.clone())))
+}
+
+/// Delete a saved simulation.
+async fn delete_saved_simulation(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::DeleteStatutes)?;
+
+    let mut simulations = state.saved_simulations.write().await;
+    let initial_len = simulations.len();
+    simulations.retain(|s| s.id != id);
+
+    if simulations.len() == initial_len {
+        return Err(ApiError::NotFound(format!(
+            "Saved simulation not found: {}",
+            id
+        )));
+    }
+
+    info!("Deleted saved simulation: {} by user {}", id, user.username);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Visualize a statute in various formats.
+async fn visualize_statute(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(query): Query<VizQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    let statutes = state.statutes.read().await;
+    let statute = statutes
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| ApiError::NotFound(format!("Statute not found: {}", id)))?;
+
+    // Create decision tree
+    let tree = DecisionTree::from_statute(statute)
+        .map_err(|e| ApiError::Internal(format!("Visualization error: {}", e)))?;
+
+    // Get theme
+    let theme = match query.theme.as_deref() {
+        Some("dark") => legalis_viz::Theme::dark(),
+        Some("high_contrast") => legalis_viz::Theme::high_contrast(),
+        Some("colorblind_friendly") => legalis_viz::Theme::colorblind_friendly(),
+        _ => legalis_viz::Theme::light(),
+    };
+
+    // Generate visualization based on format
+    let (content, format_str) = match query.format {
+        VizFormat::Dot => (tree.to_dot(), "dot"),
+        VizFormat::Ascii => (tree.to_ascii(), "ascii"),
+        VizFormat::Mermaid => (tree.to_mermaid(), "mermaid"),
+        VizFormat::PlantUml => (tree.to_plantuml(), "plantuml"),
+        VizFormat::Svg => (tree.to_svg_with_theme(&theme), "svg"),
+        VizFormat::Html => (tree.to_html_with_theme(&theme), "html"),
+    };
+
+    Ok(Json(ApiResponse::new(VisualizationResponse {
+        statute_id: id,
+        format: format_str.to_string(),
+        content,
+        node_count: tree.node_count(),
+        discretionary_count: tree.discretionary_count(),
     })))
 }
 

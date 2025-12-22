@@ -277,6 +277,136 @@ impl SparqlTemplates {
         query.push_str("}\n");
         query
     }
+
+    /// CONSTRUCT query to extract all statutes with their basic metadata.
+    pub fn construct_all_statutes_summary() -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX eli: <http://data.europa.eu/eli/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n\n");
+        query.push_str("CONSTRUCT {\n");
+        query.push_str("  ?statute a legalis:Statute .\n");
+        query.push_str("  ?statute eli:title ?title .\n");
+        query.push_str("  ?statute dcterms:identifier ?id .\n");
+        query.push_str("  ?statute eli:jurisdiction ?jurisdiction .\n");
+        query.push_str("  ?statute legalis:hasEffect ?effect .\n");
+        query.push_str("  ?effect legalis:effectType ?effectType .\n");
+        query.push_str("}\n");
+        query.push_str("WHERE {\n");
+        query.push_str("  ?statute a legalis:Statute .\n");
+        query.push_str("  ?statute eli:title ?title .\n");
+        query.push_str("  ?statute dcterms:identifier ?id .\n");
+        query.push_str("  OPTIONAL { ?statute eli:jurisdiction ?jurisdiction . }\n");
+        query.push_str("  ?statute legalis:hasEffect ?effect .\n");
+        query.push_str("  ?effect legalis:effectType ?effectType .\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// CONSTRUCT query to extract condition hierarchies for complex statutes.
+    pub fn construct_condition_hierarchy(statute_id: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n");
+        query.push_str("PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n\n");
+        query.push_str("CONSTRUCT {\n");
+        query.push_str("  ?condition rdf:type ?condType .\n");
+        query.push_str("  ?condition legalis:operator ?operator .\n");
+        query.push_str("  ?condition legalis:value ?value .\n");
+        query.push_str("  ?condition legalis:leftOperand ?left .\n");
+        query.push_str("  ?condition legalis:rightOperand ?right .\n");
+        query.push_str("  ?condition legalis:operand ?operand .\n");
+        query.push_str("}\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!(
+            "  ?statute dcterms:identifier \"{}\" .\n",
+            statute_id
+        ));
+        query.push_str("  ?statute legalis:hasPrecondition ?condition .\n");
+        query.push_str("  ?condition rdf:type ?condType .\n");
+        query.push_str("  OPTIONAL { ?condition legalis:operator ?operator . }\n");
+        query.push_str("  OPTIONAL { ?condition legalis:value ?value . }\n");
+        query.push_str("  OPTIONAL { ?condition legalis:leftOperand ?left . }\n");
+        query.push_str("  OPTIONAL { ?condition legalis:rightOperand ?right . }\n");
+        query.push_str("  OPTIONAL { ?condition legalis:operand ?operand . }\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// CONSTRUCT query to build a complete SKOS concept scheme.
+    pub fn construct_concept_scheme(scheme_id: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n\n");
+        query.push_str("CONSTRUCT {\n");
+        query.push_str("  ?scheme a skos:ConceptScheme .\n");
+        query.push_str("  ?scheme skos:prefLabel ?schemeLabel .\n");
+        query.push_str("  ?scheme skos:hasTopConcept ?concept .\n");
+        query.push_str("  ?concept a skos:Concept .\n");
+        query.push_str("  ?concept skos:prefLabel ?conceptLabel .\n");
+        query.push_str("  ?concept skos:definition ?definition .\n");
+        query.push_str("  ?concept skos:broader ?broader .\n");
+        query.push_str("  ?concept skos:narrower ?narrower .\n");
+        query.push_str("}\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!("  BIND(<{}> AS ?scheme)\n", scheme_id));
+        query.push_str("  ?scheme a skos:ConceptScheme .\n");
+        query.push_str("  ?scheme skos:prefLabel ?schemeLabel .\n");
+        query.push_str("  ?scheme skos:hasTopConcept ?concept .\n");
+        query.push_str("  ?concept a skos:Concept .\n");
+        query.push_str("  ?concept skos:prefLabel ?conceptLabel .\n");
+        query.push_str("  OPTIONAL { ?concept skos:definition ?definition . }\n");
+        query.push_str("  OPTIONAL { ?concept skos:broader ?broader . }\n");
+        query.push_str("  OPTIONAL { ?concept skos:narrower ?narrower . }\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// CONSTRUCT query to extract provenance information for statutes.
+    pub fn construct_provenance_graph() -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX prov: <http://www.w3.org/ns/prov#>\n");
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n\n");
+        query.push_str("CONSTRUCT {\n");
+        query.push_str("  ?statute prov:wasGeneratedBy ?activity .\n");
+        query.push_str("  ?statute prov:wasAttributedTo ?agent .\n");
+        query.push_str("  ?statute prov:generatedAtTime ?time .\n");
+        query.push_str("  ?statute prov:wasDerivedFrom ?source .\n");
+        query.push_str("  ?statute dcterms:creator ?creator .\n");
+        query.push_str("}\n");
+        query.push_str("WHERE {\n");
+        query.push_str("  ?statute a legalis:Statute .\n");
+        query.push_str("  OPTIONAL { ?statute prov:wasGeneratedBy ?activity . }\n");
+        query.push_str("  OPTIONAL { ?statute prov:wasAttributedTo ?agent . }\n");
+        query.push_str("  OPTIONAL { ?statute prov:generatedAtTime ?time . }\n");
+        query.push_str("  OPTIONAL { ?statute prov:wasDerivedFrom ?source . }\n");
+        query.push_str("  OPTIONAL { ?statute dcterms:creator ?creator . }\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// CONSTRUCT query to build a temporal validity graph.
+    pub fn construct_temporal_validity_graph() -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX eli: <http://data.europa.eu/eli/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n\n");
+        query.push_str("CONSTRUCT {\n");
+        query.push_str("  ?statute dcterms:identifier ?id .\n");
+        query.push_str("  ?statute eli:title ?title .\n");
+        query.push_str("  ?statute eli:date_document ?effectiveDate .\n");
+        query.push_str("  ?statute legalis:expiryDate ?expiryDate .\n");
+        query.push_str("}\n");
+        query.push_str("WHERE {\n");
+        query.push_str("  ?statute a legalis:Statute .\n");
+        query.push_str("  ?statute dcterms:identifier ?id .\n");
+        query.push_str("  ?statute eli:title ?title .\n");
+        query.push_str("  OPTIONAL { ?statute eli:date_document ?effectiveDate . }\n");
+        query.push_str("  OPTIONAL { ?statute legalis:expiryDate ?expiryDate . }\n");
+        query.push_str("}\n");
+        query
+    }
 }
 
 #[cfg(test)]
@@ -335,5 +465,46 @@ mod tests {
         let query = SparqlTemplates::count_by_effect_type();
         assert!(query.contains("COUNT(?statute)"));
         assert!(query.contains("GROUP BY"));
+    }
+
+    #[test]
+    fn test_construct_all_statutes_summary() {
+        let query = SparqlTemplates::construct_all_statutes_summary();
+        assert!(query.contains("CONSTRUCT"));
+        assert!(query.contains("eli:title"));
+        assert!(query.contains("dcterms:identifier"));
+    }
+
+    #[test]
+    fn test_construct_condition_hierarchy() {
+        let query = SparqlTemplates::construct_condition_hierarchy("test-123");
+        assert!(query.contains("CONSTRUCT"));
+        assert!(query.contains("test-123"));
+        assert!(query.contains("legalis:leftOperand"));
+        assert!(query.contains("legalis:rightOperand"));
+    }
+
+    #[test]
+    fn test_construct_concept_scheme() {
+        let query = SparqlTemplates::construct_concept_scheme("https://example.org/scheme");
+        assert!(query.contains("CONSTRUCT"));
+        assert!(query.contains("skos:ConceptScheme"));
+        assert!(query.contains("skos:prefLabel"));
+    }
+
+    #[test]
+    fn test_construct_provenance_graph() {
+        let query = SparqlTemplates::construct_provenance_graph();
+        assert!(query.contains("CONSTRUCT"));
+        assert!(query.contains("prov:wasGeneratedBy"));
+        assert!(query.contains("prov:wasAttributedTo"));
+    }
+
+    #[test]
+    fn test_construct_temporal_validity_graph() {
+        let query = SparqlTemplates::construct_temporal_validity_graph();
+        assert!(query.contains("CONSTRUCT"));
+        assert!(query.contains("eli:date_document"));
+        assert!(query.contains("legalis:expiryDate"));
     }
 }

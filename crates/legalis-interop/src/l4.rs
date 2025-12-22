@@ -330,12 +330,57 @@ impl L4Importer {
         None
     }
 
+    /// Finds an operator in an expression, respecting parentheses nesting.
+    /// Returns the position of the operator, or None if not found.
+    fn find_operator(expr: &str, operator: &str) -> Option<usize> {
+        let upper_expr = expr.to_uppercase();
+        let upper_op = operator.to_uppercase();
+        let mut depth = 0;
+
+        for (i, ch) in expr.chars().enumerate() {
+            match ch {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                _ if depth == 0 => {
+                    if upper_expr[i..].starts_with(&upper_op) {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     /// Parses an L4 condition expression.
     fn parse_l4_condition(expr: &str, report: &mut ConversionReport) -> Option<Condition> {
         let expr = expr.trim();
 
-        // Check for AND/OR
-        if let Some(pos) = expr.to_uppercase().find(" AND ") {
+        // Check for NOT (must come before AND/OR to handle "NOT (expr)" correctly)
+        if expr.to_uppercase().starts_with("NOT ") {
+            let inner_expr = &expr[4..].trim();
+            // Handle parentheses if present
+            let inner_expr = if inner_expr.starts_with('(') && inner_expr.ends_with(')') {
+                &inner_expr[1..inner_expr.len() - 1]
+            } else {
+                inner_expr
+            };
+            let inner_cond = Self::parse_l4_condition(inner_expr, report)?;
+            return Some(Condition::Not(Box::new(inner_cond)));
+        }
+
+        // Check for AND/OR (with proper precedence - AND binds tighter than OR)
+        // Find OR that's not inside parentheses
+        if let Some(pos) = Self::find_operator(expr, " OR ") {
+            let left = &expr[..pos];
+            let right = &expr[pos + 4..];
+            let left_cond = Self::parse_l4_condition(left, report)?;
+            let right_cond = Self::parse_l4_condition(right, report)?;
+            return Some(Condition::Or(Box::new(left_cond), Box::new(right_cond)));
+        }
+
+        // Find AND that's not inside parentheses
+        if let Some(pos) = Self::find_operator(expr, " AND ") {
             let left = &expr[..pos];
             let right = &expr[pos + 5..];
             let left_cond = Self::parse_l4_condition(left, report)?;
@@ -343,12 +388,10 @@ impl L4Importer {
             return Some(Condition::And(Box::new(left_cond), Box::new(right_cond)));
         }
 
-        if let Some(pos) = expr.to_uppercase().find(" OR ") {
-            let left = &expr[..pos];
-            let right = &expr[pos + 4..];
-            let left_cond = Self::parse_l4_condition(left, report)?;
-            let right_cond = Self::parse_l4_condition(right, report)?;
-            return Some(Condition::Or(Box::new(left_cond), Box::new(right_cond)));
+        // Handle parenthesized expressions
+        if expr.starts_with('(') && expr.ends_with(')') {
+            let inner = &expr[1..expr.len() - 1];
+            return Self::parse_l4_condition(inner, report);
         }
 
         // Check for comparison: "field IS value" or "field >= value"

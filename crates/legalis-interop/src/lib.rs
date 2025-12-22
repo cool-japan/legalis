@@ -12,6 +12,7 @@
 pub mod akoma_ntoso;
 pub mod cache;
 pub mod catala;
+pub mod compatibility;
 pub mod coverage;
 #[cfg(test)]
 mod edge_cases_tests;
@@ -21,6 +22,7 @@ pub mod legaldocml;
 pub mod legalruleml;
 pub mod lkif;
 pub mod stipula;
+pub mod validation;
 
 use legalis_core::Statute;
 use serde::{Deserialize, Serialize};

@@ -4,8 +4,10 @@ use crate::{AuditRecord, AuditResult};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+pub mod encrypted;
 pub mod jsonl;
 pub mod memory;
+pub mod sqlite;
 
 /// Trait for audit trail storage backends.
 pub trait AuditStorage: Send + Sync {

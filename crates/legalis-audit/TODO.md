@@ -13,6 +13,8 @@
 - [x] Storage abstraction trait (AuditStorage)
 - [x] In-memory storage backend (MemoryStorage)
 - [x] JSONL file-based storage backend with persistence
+- [x] SQLite storage backend with full indexing and transactions
+- [x] Encrypted storage wrapper with AES-256-GCM
 - [x] Flexible storage backend selection
 
 ### Query System
@@ -28,6 +30,9 @@
 - [x] CSV export
 - [x] JSON export
 - [x] JSON-LD export with semantic web compatibility
+- [x] Excel export with formatting (.xlsx)
+- [x] PDF report generation with compliance summary
+- [x] HTML report generation with responsive design
 
 ### Analysis & Reporting
 - [x] Decision pattern analysis
@@ -43,6 +48,15 @@
 - [x] Timeline comparison
 - [x] What-if analysis
 
+### Integrity & Security
+- [x] Hash chain integrity verification
+- [x] Merkle tree for efficient O(log n) verification
+- [x] Merkle proof generation and validation
+- [x] Batch verification support
+- [x] AES-256-GCM encryption at rest
+- [x] Secure key management and derivation
+- [x] Record compression with DEFLATE (multiple levels)
+
 ### GDPR Compliance
 - [x] Data subject access requests (Article 15)
 - [x] Right to explanation (Article 22)
@@ -50,35 +64,38 @@
 - [x] Erasure analysis (right to be forgotten)
 
 ### Testing
-- [x] Comprehensive unit tests for all modules (30 tests)
-- [x] Storage backend tests
+- [x] Comprehensive unit tests for all modules (58 tests)
+- [x] Storage backend tests (memory, JSONL, SQLite, encrypted)
 - [x] Query builder tests
-- [x] Export functionality tests
+- [x] Export functionality tests (CSV, JSON, JSON-LD, Excel, PDF, HTML)
 - [x] Integrity verification tests
 - [x] Analysis tests
 - [x] Replay tests
 - [x] Retention policy tests
-- [x] Zero warnings policy maintained
+- [x] Encryption/decryption tests
+- [x] Merkle tree tests
+- [x] Compression tests (multiple levels, batch operations)
+- [x] Zero warnings policy maintained (cargo clippy clean)
 
 ## Storage
 
 ### Backends
 - [x] Add file-based JSON/JSONL storage
-- [ ] Add SQLite storage backend (trait defined, implementation pending)
+- [x] Add SQLite storage backend with full indexing
 - [ ] Implement PostgreSQL storage
 - [ ] Support S3-compatible object storage
 - [ ] Implement append-only log storage
 
 ### Features
 - [x] Add retention policy support (with exemptions)
-- [ ] Add storage encryption at rest
-- [ ] Implement record compression
+- [x] Add storage encryption at rest (AES-256-GCM)
+- [x] Implement record compression (DEFLATE with multiple compression levels)
 - [ ] Create archival functionality
 - [ ] Support log rotation
 
 ## Integrity
 
-- [ ] Add Merkle tree for efficient verification
+- [x] Add Merkle tree for efficient verification
 - [ ] Implement witness signatures (external notarization)
 - [ ] Add timestamping authority integration
 - [ ] Create blockchain anchoring option
@@ -95,10 +112,10 @@
 ## Reporting
 
 ### Formats
-- [ ] Generate PDF audit reports
+- [x] Generate PDF audit reports with compliance summary
 - [x] Create CSV exports
-- [ ] Create Excel exports
-- [ ] Implement HTML report generation
+- [x] Create Excel exports with formatting
+- [x] Implement HTML report generation with responsive design
 - [x] Add JSON-LD audit trail export
 - [x] Add JSON export
 

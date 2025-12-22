@@ -38,6 +38,18 @@ pub fn generate_spec() -> Value {
             {
                 "name": "verification",
                 "description": "Statute verification and validation"
+            },
+            {
+                "name": "simulation",
+                "description": "Legal system simulation endpoints"
+            },
+            {
+                "name": "visualization",
+                "description": "Statute visualization in various formats"
+            },
+            {
+                "name": "metrics",
+                "description": "Observability and monitoring"
             }
         ],
         "paths": {
@@ -486,6 +498,245 @@ pub fn generate_spec() -> Value {
                         }
                     }
                 }
+            },
+            "/api/v1/visualize/{id}": {
+                "get": {
+                    "tags": ["visualization"],
+                    "summary": "Visualize a statute",
+                    "description": "Generate a visual representation of a statute in various formats (SVG, Mermaid, PlantUML, DOT, ASCII, HTML)",
+                    "operationId": "visualizeStatute",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "path",
+                            "description": "Statute ID to visualize",
+                            "required": true,
+                            "schema": {
+                                "type": "string",
+                                "example": "civil-code-art-1"
+                            }
+                        },
+                        {
+                            "name": "format",
+                            "in": "query",
+                            "description": "Output format",
+                            "required": false,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["svg", "mermaid", "plantuml", "dot", "ascii", "html"],
+                                "default": "svg"
+                            }
+                        },
+                        {
+                            "name": "theme",
+                            "in": "query",
+                            "description": "Color theme",
+                            "required": false,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["light", "dark", "high_contrast", "colorblind_friendly"],
+                                "default": "light"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Visualization generated successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/VisualizationResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/simulate": {
+                "post": {
+                    "tags": ["simulation"],
+                    "summary": "Run a simulation",
+                    "description": "Simulates the application of statutes to a generated population",
+                    "operationId": "runSimulation",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SimulationRequest"
+                                },
+                                "example": {
+                                    "statute_ids": ["tax-code-sec-1", "tax-code-sec-2"],
+                                    "population_size": 1000,
+                                    "entity_params": {
+                                        "region": "EU"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Simulation completed successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/SimulationResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/simulate/stream": {
+                "post": {
+                    "tags": ["simulation"],
+                    "summary": "Stream simulation results",
+                    "description": "Run simulation with real-time progress updates via Server-Sent Events (SSE)",
+                    "operationId": "streamSimulation",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SimulationRequest"
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "SSE stream established",
+                            "content": {
+                                "text/event-stream": {
+                                    "schema": {
+                                        "type": "string",
+                                        "description": "Server-Sent Events stream with progress updates"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/simulate/saved": {
+                "get": {
+                    "tags": ["simulation"],
+                    "summary": "List saved simulations",
+                    "description": "Retrieve a list of saved simulation results",
+                    "operationId": "listSavedSimulations",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "schema": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 1000,
+                                "default": 100
+                            }
+                        },
+                        {
+                            "name": "offset",
+                            "in": "query",
+                            "schema": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "default": 0
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "List of saved simulations",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/SavedSimulation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "tags": ["simulation"],
+                    "summary": "Save a simulation",
+                    "description": "Save simulation results for later retrieval",
+                    "operationId": "saveSimulation",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"ApiKeyHeader": []},
+                        {"BearerAuth": []}
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SaveSimulationRequest"
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Simulation saved successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/SavedSimulation"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/metrics": {
+                "get": {
+                    "tags": ["metrics"],
+                    "summary": "Prometheus metrics",
+                    "description": "Returns metrics in Prometheus format for monitoring",
+                    "operationId": "metrics",
+                    "responses": {
+                        "200": {
+                            "description": "Prometheus metrics",
+                            "content": {
+                                "text/plain": {
+                                    "schema": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "components": {
@@ -682,6 +933,184 @@ pub fn generate_spec() -> Value {
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    }
+                },
+                "VisualizationResponse": {
+                    "type": "object",
+                    "required": ["statute_id", "format", "content", "node_count", "discretionary_count"],
+                    "properties": {
+                        "statute_id": {
+                            "type": "string",
+                            "description": "ID of the visualized statute"
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Output format used"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Generated visualization content"
+                        },
+                        "node_count": {
+                            "type": "integer",
+                            "description": "Number of nodes in the decision tree"
+                        },
+                        "discretionary_count": {
+                            "type": "integer",
+                            "description": "Number of discretionary nodes"
+                        }
+                    }
+                },
+                "SimulationRequest": {
+                    "type": "object",
+                    "required": ["statute_ids", "population_size", "entity_params"],
+                    "properties": {
+                        "statute_ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "IDs of statutes to simulate (empty = all statutes)"
+                        },
+                        "population_size": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 10000,
+                            "description": "Number of entities to generate for simulation"
+                        },
+                        "entity_params": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "description": "Additional parameters for entity generation"
+                        }
+                    }
+                },
+                "SimulationResponse": {
+                    "type": "object",
+                    "required": ["simulation_id", "total_entities", "deterministic_outcomes", "discretionary_outcomes", "void_outcomes", "deterministic_rate", "discretionary_rate", "void_rate", "completed_at"],
+                    "properties": {
+                        "simulation_id": {
+                            "type": "string",
+                            "description": "Unique simulation identifier"
+                        },
+                        "total_entities": {
+                            "type": "integer",
+                            "description": "Total number of entities simulated"
+                        },
+                        "deterministic_outcomes": {
+                            "type": "integer",
+                            "description": "Number of deterministic outcomes"
+                        },
+                        "discretionary_outcomes": {
+                            "type": "integer",
+                            "description": "Number of discretionary outcomes"
+                        },
+                        "void_outcomes": {
+                            "type": "integer",
+                            "description": "Number of void/inapplicable outcomes"
+                        },
+                        "deterministic_rate": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Percentage of deterministic outcomes"
+                        },
+                        "discretionary_rate": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Percentage of discretionary outcomes"
+                        },
+                        "void_rate": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Percentage of void outcomes"
+                        },
+                        "completed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Completion timestamp (RFC3339)"
+                        }
+                    }
+                },
+                "SavedSimulation": {
+                    "type": "object",
+                    "required": ["id", "name", "population_size", "deterministic_rate", "discretionary_rate", "void_rate", "created_at", "created_by"],
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "Unique saved simulation identifier"
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "User-provided name for the simulation"
+                        },
+                        "description": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Optional description"
+                        },
+                        "statute_ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Statute IDs used in simulation"
+                        },
+                        "population_size": {
+                            "type": "integer",
+                            "description": "Population size"
+                        },
+                        "deterministic_outcomes": {
+                            "type": "integer",
+                            "description": "Number of deterministic outcomes"
+                        },
+                        "discretionary_outcomes": {
+                            "type": "integer",
+                            "description": "Number of discretionary outcomes"
+                        },
+                        "void_outcomes": {
+                            "type": "integer",
+                            "description": "Number of void outcomes"
+                        },
+                        "deterministic_rate": {
+                            "type": "number",
+                            "format": "double"
+                        },
+                        "discretionary_rate": {
+                            "type": "number",
+                            "format": "double"
+                        },
+                        "void_rate": {
+                            "type": "number",
+                            "format": "double"
+                        },
+                        "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "created_by": {
+                            "type": "string",
+                            "description": "Username of creator"
+                        }
+                    }
+                },
+                "SaveSimulationRequest": {
+                    "type": "object",
+                    "required": ["name", "simulation_result"],
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Name for the saved simulation"
+                        },
+                        "description": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Optional description"
+                        },
+                        "simulation_result": {
+                            "$ref": "#/components/schemas/SimulationResponse"
                         }
                     }
                 }

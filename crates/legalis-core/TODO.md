@@ -63,6 +63,7 @@
 - [x] Add `PartialOrd`/`Ord` for `AmendmentType` (hierarchy module)
 - [x] Add `PartialOrd`/`Ord` for `PrecedentWeight` (case_law module)
 - [x] Add `PartialOrd`/`Ord` for `PrecedentApplication` (case_law module)
+- [x] Add `Hash` trait to hashable enum types (Court, PrecedentWeight, PrecedentApplication, RegionType, RelationshipType, ComparisonOp, EffectType, AmendmentType)
 
 ### Display Implementations
 - [x] Add `Display` for `Court` (case_law module)
@@ -76,6 +77,70 @@
 - [x] Add `schemars::JsonSchema` support for all hierarchy types
 - [x] Ensure all public types support the `schema` feature flag
 
+### CaseDatabase Enhancements
+- [x] Add `iter()` - iterator over all cases
+- [x] Add `iter_mut()` - mutable iterator over all cases
+- [x] Add `all_cases()` - get all cases as vector
+- [x] Add `cases_by_year_range()` - filter cases by year range
+- [x] Add `cases_by_court()` - filter cases by court type
+- [x] Add `cases_citing()` - find cases that cite a specific case
+- [x] Add `len()` and `is_empty()` - collection size methods
+- [x] Add `precedent_count()` - count precedent relationships
+- [x] Add `precedents()` - iterator over precedents
+
+### Case Builder Methods
+- [x] Add `with_date()` - set decision date
+- [x] Add `with_obiter()` - set obiter dicta
+- [x] Add `overruled_by()` - mark case as overruled
+- [x] Add `is_good_law()` - check if case is not overruled
+
+### Statute Helper Methods
+- [x] Add `precondition_count()` - get number of preconditions
+- [x] Add `has_preconditions()` - check if preconditions exist
+- [x] Add `has_discretion()` - check if discretion logic exists
+- [x] Add `has_jurisdiction()` - check if jurisdiction is set
+- [x] Add `preconditions()` - get reference to preconditions slice
+
+### TemporalValidity Enhancements
+- [x] Add `with_enacted_at()` - set enacted timestamp
+- [x] Add `with_amended_at()` - set amended timestamp
+- [x] Add `has_effective_date()` - check if effective date is set
+- [x] Add `has_expiry_date()` - check if expiry date is set
+- [x] Add `is_enacted()` - check if enacted timestamp exists
+- [x] Add `is_amended()` - check if amended timestamp exists
+- [x] Add `has_expired()` - check if expired as of given date
+- [x] Add `is_pending()` - check if not yet effective as of given date
+
+### Condition Enhancements
+- [x] Add `is_compound()` - check if condition is AND/OR/NOT
+- [x] Add `is_simple()` - check if condition is non-compound
+- [x] Add `is_negation()` - check if condition is NOT
+- [x] Add `count_conditions()` - count total conditions including nested
+- [x] Add `depth()` - calculate nesting depth
+- [x] Add `age()` - convenience constructor for Age conditions
+- [x] Add `income()` - convenience constructor for Income conditions
+- [x] Add `has_attribute()` - convenience constructor for HasAttribute
+- [x] Add `attribute_equals()` - convenience constructor for AttributeEquals
+- [x] Add `custom()` - convenience constructor for Custom conditions
+- [x] Add `and()` - fluent combinator for AND
+- [x] Add `or()` - fluent combinator for OR
+- [x] Add `not()` - fluent combinator for NOT
+
+### ComparisonOp Enhancements
+- [x] Add `inverse()` - get inverse comparison operator
+- [x] Add `is_equality()` - check if operator is == or !=
+- [x] Add `is_ordering()` - check if operator is ordering comparison
+
+### Effect Enhancements
+- [x] Add `get_parameter()` - get parameter value by key
+- [x] Add `has_parameter()` - check if parameter exists
+- [x] Add `parameter_count()` - count parameters
+- [x] Add `remove_parameter()` - remove parameter by key
+- [x] Add `grant()` - convenience constructor for Grant effects
+- [x] Add `revoke()` - convenience constructor for Revoke effects
+- [x] Add `obligation()` - convenience constructor for Obligation effects
+- [x] Add `prohibition()` - convenience constructor for Prohibition effects
+
 ### Testing Enhancements
 - [x] Add unit tests for `Court::Display` implementation
 - [x] Add unit tests for `PrecedentWeight::Display` implementation
@@ -85,4 +150,11 @@
 - [x] Add unit tests for `Amendment::Display` implementation
 - [x] Add unit tests for `StatuteHierarchy::Display` implementation
 - [x] Add unit tests for ordering traits (Ord/PartialOrd)
-- [x] Test coverage increased from 59 to 65 unit tests
+- [x] Add unit tests for CaseDatabase iterators and query methods
+- [x] Add unit tests for Condition helper methods and constructors
+- [x] Add unit tests for ComparisonOp inverse and classification
+- [x] Add unit tests for Effect helpers and constructors
+- [x] Add unit tests for Statute helper methods
+- [x] Add unit tests for TemporalValidity helper methods
+- [x] Test coverage increased from 68 to 77 unit tests (+ 9 tests)
+- [x] Doc test coverage: 17 doc tests

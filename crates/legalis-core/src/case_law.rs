@@ -154,6 +154,34 @@ impl Case {
         self
     }
 
+    /// Sets the decision date.
+    #[must_use]
+    pub fn with_date(mut self, date: NaiveDate) -> Self {
+        self.date = date;
+        self
+    }
+
+    /// Sets the obiter dicta (non-binding remarks).
+    #[must_use]
+    pub fn with_obiter(mut self, obiter: impl Into<String>) -> Self {
+        self.obiter = Some(obiter.into());
+        self
+    }
+
+    /// Marks this case as overruled by another case.
+    #[must_use]
+    pub fn overruled_by(mut self, overruling_case_id: Uuid) -> Self {
+        self.overruled = true;
+        self.overruled_by = Some(overruling_case_id);
+        self
+    }
+
+    /// Returns whether this case is still good law (not overruled).
+    #[must_use]
+    pub fn is_good_law(&self) -> bool {
+        !self.overruled
+    }
+
     /// Determines precedent weight for another case in a given jurisdiction.
     #[must_use]
     pub fn precedent_weight(
@@ -199,7 +227,7 @@ pub struct CaseRule {
 }
 
 /// Court hierarchy (裁判所の階層).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum Court {
@@ -238,7 +266,7 @@ impl std::fmt::Display for Court {
 }
 
 /// Weight of precedent (先例の拘束力).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentWeight {
@@ -279,7 +307,7 @@ pub struct Precedent {
 }
 
 /// How a precedent was applied.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum PrecedentApplication {
@@ -414,6 +442,65 @@ impl CaseDatabase {
     #[must_use]
     pub fn get_case(&self, id: &Uuid) -> Option<&Case> {
         self.cases.get(id)
+    }
+
+    /// Returns an iterator over all cases.
+    pub fn iter(&self) -> impl Iterator<Item = &Case> {
+        self.cases.values()
+    }
+
+    /// Returns a mutable iterator over all cases.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Case> {
+        self.cases.values_mut()
+    }
+
+    /// Returns all cases as a vector.
+    pub fn all_cases(&self) -> Vec<&Case> {
+        self.cases.values().collect()
+    }
+
+    /// Finds cases decided in a specific year range (inclusive).
+    pub fn cases_by_year_range(&self, start_year: u32, end_year: u32) -> Vec<&Case> {
+        self.cases
+            .values()
+            .filter(|c| c.year >= start_year && c.year <= end_year)
+            .collect()
+    }
+
+    /// Finds cases by court type.
+    pub fn cases_by_court(&self, court: &Court) -> Vec<&Case> {
+        self.cases.values().filter(|c| &c.court == court).collect()
+    }
+
+    /// Finds cases that cite a specific case.
+    pub fn cases_citing(&self, cited_case_id: &Uuid) -> Vec<&Case> {
+        self.cases
+            .values()
+            .filter(|c| c.cited_cases.contains(cited_case_id))
+            .collect()
+    }
+
+    /// Returns the number of cases in the database.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.cases.len()
+    }
+
+    /// Returns whether the database is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.cases.is_empty()
+    }
+
+    /// Returns the number of precedent relationships.
+    #[must_use]
+    pub fn precedent_count(&self) -> usize {
+        self.precedents.len()
+    }
+
+    /// Returns an iterator over precedents.
+    pub fn precedents(&self) -> impl Iterator<Item = &Precedent> {
+        self.precedents.iter()
     }
 }
 
@@ -578,5 +665,72 @@ mod tests {
     fn test_precedent_application_ordering() {
         assert!(PrecedentApplication::Followed < PrecedentApplication::Distinguished);
         assert!(PrecedentApplication::Distinguished < PrecedentApplication::Overruled);
+    }
+
+    #[test]
+    fn test_case_database_iterators() {
+        let mut db = CaseDatabase::new();
+        assert!(db.is_empty());
+        assert_eq!(db.len(), 0);
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US-NY");
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US-CA");
+        let case3 = Case::new("Case 3", "Case3", 2020, Court::Trial, "US-NY");
+
+        db.add_case(case1.clone());
+        db.add_case(case2.clone());
+        db.add_case(case3.clone());
+
+        assert_eq!(db.len(), 3);
+        assert!(!db.is_empty());
+
+        let all = db.all_cases();
+        assert_eq!(all.len(), 3);
+
+        let count = db.iter().count();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_case_database_queries() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US-NY");
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US-CA");
+        let case3 = Case::new("Case 3", "Case3", 2022, Court::Supreme, "US-NY");
+
+        db.add_case(case1.clone());
+        db.add_case(case2.clone());
+        db.add_case(case3.clone());
+
+        // Test year range query
+        let cases_2020_2021 = db.cases_by_year_range(2020, 2021);
+        assert_eq!(cases_2020_2021.len(), 2);
+
+        // Test court query
+        let supreme_cases = db.cases_by_court(&Court::Supreme);
+        assert_eq!(supreme_cases.len(), 2);
+
+        // Test jurisdiction query
+        let ny_cases = db.cases_by_jurisdiction("US-NY");
+        assert_eq!(ny_cases.len(), 2);
+    }
+
+    #[test]
+    fn test_case_database_citing() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US-NY");
+        let case1_id = case1.id;
+
+        let mut case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US-CA");
+        case2.cited_cases.push(case1_id);
+
+        db.add_case(case1);
+        db.add_case(case2);
+
+        let citing = db.cases_citing(&case1_id);
+        assert_eq!(citing.len(), 1);
+        assert_eq!(citing[0].short_name, "Case2");
     }
 }

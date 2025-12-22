@@ -3675,6 +3675,1143 @@ pub mod graphql {
     }
 }
 
+// ============================================================================
+// Diff and Comparison
+// ============================================================================
+
+/// Represents a change in a field between two statute versions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FieldChange<T: Clone> {
+    /// Field value changed from old to new
+    Changed { old: T, new: T },
+    /// Field was added (only in new version)
+    Added { value: T },
+    /// Field was removed (only in old version)
+    Removed { value: T },
+    /// Field unchanged
+    Unchanged { value: T },
+}
+
+impl<T: Clone + PartialEq> FieldChange<T> {
+    /// Creates a field change by comparing old and new values.
+    pub fn from_optional(old: Option<&T>, new: Option<&T>) -> Option<Self> {
+        match (old, new) {
+            (Some(o), Some(n)) if o != n => Some(FieldChange::Changed {
+                old: o.clone(),
+                new: n.clone(),
+            }),
+            (Some(o), Some(_)) => Some(FieldChange::Unchanged { value: o.clone() }),
+            (None, Some(n)) => Some(FieldChange::Added { value: n.clone() }),
+            (Some(o), None) => Some(FieldChange::Removed { value: o.clone() }),
+            (None, None) => None,
+        }
+    }
+
+    /// Creates a field change by comparing required values.
+    pub fn from_values(old: &T, new: &T) -> Self {
+        if old != new {
+            FieldChange::Changed {
+                old: old.clone(),
+                new: new.clone(),
+            }
+        } else {
+            FieldChange::Unchanged { value: old.clone() }
+        }
+    }
+
+    /// Returns true if this represents a change.
+    pub fn is_changed(&self) -> bool {
+        matches!(
+            self,
+            FieldChange::Changed { .. } | FieldChange::Added { .. } | FieldChange::Removed { .. }
+        )
+    }
+
+    /// Returns the new value if available.
+    pub fn new_value(&self) -> Option<&T> {
+        match self {
+            FieldChange::Changed { new, .. } => Some(new),
+            FieldChange::Added { value } => Some(value),
+            FieldChange::Unchanged { value } => Some(value),
+            FieldChange::Removed { .. } => None,
+        }
+    }
+}
+
+/// Represents differences between two statute entries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteDiff {
+    /// Statute ID
+    pub statute_id: String,
+    /// Old version number
+    pub old_version: u32,
+    /// New version number
+    pub new_version: u32,
+    /// Title changes
+    pub title: Option<FieldChange<String>>,
+    /// Status changes
+    pub status: Option<FieldChange<StatuteStatus>>,
+    /// Effective date changes
+    pub effective_date: Option<FieldChange<DateTime<Utc>>>,
+    /// Expiry date changes
+    pub expiry_date: Option<FieldChange<DateTime<Utc>>>,
+    /// Jurisdiction changes
+    pub jurisdiction: Option<FieldChange<String>>,
+    /// Tags added
+    pub tags_added: Vec<String>,
+    /// Tags removed
+    pub tags_removed: Vec<String>,
+    /// Metadata added
+    pub metadata_added: HashMap<String, String>,
+    /// Metadata removed
+    pub metadata_removed: HashMap<String, String>,
+    /// Metadata changed
+    pub metadata_changed: HashMap<String, (String, String)>,
+    /// References added
+    pub references_added: Vec<String>,
+    /// References removed
+    pub references_removed: Vec<String>,
+    /// Supersedes added
+    pub supersedes_added: Vec<String>,
+    /// Supersedes removed
+    pub supersedes_removed: Vec<String>,
+    /// Whether the statute content itself changed
+    pub content_changed: bool,
+}
+
+impl StatuteDiff {
+    /// Computes the difference between two statute entries.
+    pub fn compute(old: &StatuteEntry, new: &StatuteEntry) -> Self {
+        // Compare tags
+        let old_tags: HashSet<_> = old.tags.iter().collect();
+        let new_tags: HashSet<_> = new.tags.iter().collect();
+        let tags_added: Vec<_> = new_tags
+            .difference(&old_tags)
+            .map(|s| (*s).clone())
+            .collect();
+        let tags_removed: Vec<_> = old_tags
+            .difference(&new_tags)
+            .map(|s| (*s).clone())
+            .collect();
+
+        // Compare metadata
+        let mut metadata_added = HashMap::new();
+        let mut metadata_removed = HashMap::new();
+        let mut metadata_changed = HashMap::new();
+
+        for (key, new_val) in &new.metadata {
+            match old.metadata.get(key) {
+                Some(old_val) if old_val != new_val => {
+                    metadata_changed.insert(key.clone(), (old_val.clone(), new_val.clone()));
+                }
+                None => {
+                    metadata_added.insert(key.clone(), new_val.clone());
+                }
+                _ => {}
+            }
+        }
+
+        for (key, old_val) in &old.metadata {
+            if !new.metadata.contains_key(key) {
+                metadata_removed.insert(key.clone(), old_val.clone());
+            }
+        }
+
+        // Compare references
+        let old_refs: HashSet<_> = old.references.iter().collect();
+        let new_refs: HashSet<_> = new.references.iter().collect();
+        let references_added: Vec<_> = new_refs
+            .difference(&old_refs)
+            .map(|s| (*s).clone())
+            .collect();
+        let references_removed: Vec<_> = old_refs
+            .difference(&new_refs)
+            .map(|s| (*s).clone())
+            .collect();
+
+        // Compare supersedes
+        let old_supersedes: HashSet<_> = old.supersedes.iter().collect();
+        let new_supersedes: HashSet<_> = new.supersedes.iter().collect();
+        let supersedes_added: Vec<_> = new_supersedes
+            .difference(&old_supersedes)
+            .map(|s| (*s).clone())
+            .collect();
+        let supersedes_removed: Vec<_> = old_supersedes
+            .difference(&new_supersedes)
+            .map(|s| (*s).clone())
+            .collect();
+
+        // Check if statute content changed
+        // We compare the statute's JSON representation for simplicity
+        let content_changed = serde_json::to_string(&old.statute).unwrap_or_default()
+            != serde_json::to_string(&new.statute).unwrap_or_default();
+
+        StatuteDiff {
+            statute_id: new.statute.id.clone(),
+            old_version: old.version,
+            new_version: new.version,
+            title: FieldChange::from_values(&old.statute.title, &new.statute.title)
+                .is_changed()
+                .then(|| FieldChange::from_values(&old.statute.title, &new.statute.title)),
+            status: FieldChange::from_values(&old.status, &new.status)
+                .is_changed()
+                .then(|| FieldChange::from_values(&old.status, &new.status)),
+            effective_date: FieldChange::from_optional(
+                old.effective_date.as_ref(),
+                new.effective_date.as_ref(),
+            ),
+            expiry_date: FieldChange::from_optional(
+                old.expiry_date.as_ref(),
+                new.expiry_date.as_ref(),
+            ),
+            jurisdiction: FieldChange::from_values(&old.jurisdiction, &new.jurisdiction)
+                .is_changed()
+                .then(|| FieldChange::from_values(&old.jurisdiction, &new.jurisdiction)),
+            tags_added,
+            tags_removed,
+            metadata_added,
+            metadata_removed,
+            metadata_changed,
+            references_added,
+            references_removed,
+            supersedes_added,
+            supersedes_removed,
+            content_changed,
+        }
+    }
+
+    /// Returns true if there are any changes.
+    pub fn has_changes(&self) -> bool {
+        self.title.as_ref().is_some_and(|c| c.is_changed())
+            || self.status.as_ref().is_some_and(|c| c.is_changed())
+            || self.effective_date.as_ref().is_some_and(|c| c.is_changed())
+            || self.expiry_date.as_ref().is_some_and(|c| c.is_changed())
+            || self.jurisdiction.as_ref().is_some_and(|c| c.is_changed())
+            || !self.tags_added.is_empty()
+            || !self.tags_removed.is_empty()
+            || !self.metadata_added.is_empty()
+            || !self.metadata_removed.is_empty()
+            || !self.metadata_changed.is_empty()
+            || !self.references_added.is_empty()
+            || !self.references_removed.is_empty()
+            || !self.supersedes_added.is_empty()
+            || !self.supersedes_removed.is_empty()
+            || self.content_changed
+    }
+
+    /// Returns a human-readable summary of changes.
+    pub fn summary(&self) -> String {
+        let mut changes = Vec::new();
+
+        if self.title.as_ref().is_some_and(|c| c.is_changed()) {
+            changes.push("title");
+        }
+        if self.status.as_ref().is_some_and(|c| c.is_changed()) {
+            changes.push("status");
+        }
+        if self.effective_date.as_ref().is_some_and(|c| c.is_changed()) {
+            changes.push("effective date");
+        }
+        if self.expiry_date.as_ref().is_some_and(|c| c.is_changed()) {
+            changes.push("expiry date");
+        }
+        if self.jurisdiction.as_ref().is_some_and(|c| c.is_changed()) {
+            changes.push("jurisdiction");
+        }
+        if !self.tags_added.is_empty() || !self.tags_removed.is_empty() {
+            changes.push("tags");
+        }
+        if !self.metadata_added.is_empty()
+            || !self.metadata_removed.is_empty()
+            || !self.metadata_changed.is_empty()
+        {
+            changes.push("metadata");
+        }
+        if !self.references_added.is_empty() || !self.references_removed.is_empty() {
+            changes.push("references");
+        }
+        if !self.supersedes_added.is_empty() || !self.supersedes_removed.is_empty() {
+            changes.push("supersedes");
+        }
+        if self.content_changed {
+            changes.push("content");
+        }
+
+        if changes.is_empty() {
+            "No changes".to_string()
+        } else {
+            format!("Changed: {}", changes.join(", "))
+        }
+    }
+}
+
+impl StatuteRegistry {
+    /// Computes the difference between two versions of a statute.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either version is not found.
+    pub fn diff(
+        &self,
+        statute_id: &str,
+        old_version: u32,
+        new_version: u32,
+    ) -> RegistryResult<StatuteDiff> {
+        let old = self.get_version(statute_id, old_version)?;
+        let new = self.get_version(statute_id, new_version)?;
+
+        Ok(StatuteDiff::compute(old, new))
+    }
+
+    /// Computes the difference between a version and the latest version.
+    pub fn diff_with_latest(
+        &self,
+        statute_id: &str,
+        old_version: u32,
+    ) -> RegistryResult<StatuteDiff> {
+        let latest_version = self
+            .latest_version(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+        self.diff(statute_id, old_version, latest_version)
+    }
+}
+
+// ============================================================================
+// Validation Framework
+// ============================================================================
+
+/// A validation error.
+#[derive(Debug, Clone, Error)]
+pub enum ValidationError {
+    #[error("Empty statute ID")]
+    EmptyStatuteId,
+
+    #[error("Empty title")]
+    EmptyTitle,
+
+    #[error("Invalid jurisdiction: {0}")]
+    InvalidJurisdiction(String),
+
+    #[error("Invalid effective date: {0}")]
+    InvalidEffectiveDate(String),
+
+    #[error("Expiry date must be after effective date")]
+    ExpiryBeforeEffective,
+
+    #[error("Empty tag")]
+    EmptyTag,
+
+    #[error("Duplicate tag: {0}")]
+    DuplicateTag(String),
+
+    #[error("Custom validation error: {0}")]
+    Custom(String),
+}
+
+/// Result type for validation operations.
+pub type ValidationResult<T> = Result<T, ValidationError>;
+
+/// A validation rule for statute entries.
+pub trait ValidationRule: Send + Sync {
+    /// Validates a statute entry.
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()>;
+
+    /// Returns a description of this validation rule.
+    fn description(&self) -> String;
+}
+
+/// Validates that statute ID is not empty.
+#[derive(Debug, Clone)]
+pub struct NonEmptyIdRule;
+
+impl ValidationRule for NonEmptyIdRule {
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        if entry.statute.id.trim().is_empty() {
+            Err(ValidationError::EmptyStatuteId)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn description(&self) -> String {
+        "Statute ID must not be empty".to_string()
+    }
+}
+
+/// Validates that title is not empty.
+#[derive(Debug, Clone)]
+pub struct NonEmptyTitleRule;
+
+impl ValidationRule for NonEmptyTitleRule {
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        if entry.statute.title.trim().is_empty() {
+            Err(ValidationError::EmptyTitle)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn description(&self) -> String {
+        "Title must not be empty".to_string()
+    }
+}
+
+/// Validates that jurisdiction is valid.
+#[derive(Debug, Clone)]
+pub struct ValidJurisdictionRule {
+    /// Allowed jurisdictions
+    pub allowed: HashSet<String>,
+}
+
+impl ValidJurisdictionRule {
+    /// Creates a new jurisdiction validation rule.
+    pub fn new(allowed: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            allowed: allowed.into_iter().map(|s| s.into()).collect(),
+        }
+    }
+}
+
+impl ValidationRule for ValidJurisdictionRule {
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        if self.allowed.contains(&entry.jurisdiction) {
+            Ok(())
+        } else {
+            Err(ValidationError::InvalidJurisdiction(
+                entry.jurisdiction.clone(),
+            ))
+        }
+    }
+
+    fn description(&self) -> String {
+        format!("Jurisdiction must be one of: {:?}", self.allowed)
+    }
+}
+
+/// Validates that effective and expiry dates are logical.
+#[derive(Debug, Clone)]
+pub struct DateValidationRule;
+
+impl ValidationRule for DateValidationRule {
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        match (entry.effective_date, entry.expiry_date) {
+            (Some(eff), Some(exp)) if exp <= eff => Err(ValidationError::ExpiryBeforeEffective),
+            _ => Ok(()),
+        }
+    }
+
+    fn description(&self) -> String {
+        "Expiry date must be after effective date".to_string()
+    }
+}
+
+/// Validates that tags are not empty and unique.
+#[derive(Debug, Clone)]
+pub struct TagValidationRule;
+
+impl ValidationRule for TagValidationRule {
+    fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        let mut seen = HashSet::new();
+        for tag in &entry.tags {
+            if tag.trim().is_empty() {
+                return Err(ValidationError::EmptyTag);
+            }
+            if !seen.insert(tag) {
+                return Err(ValidationError::DuplicateTag(tag.clone()));
+            }
+        }
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        "Tags must not be empty and must be unique".to_string()
+    }
+}
+
+/// A collection of validation rules.
+#[derive(Default)]
+pub struct Validator {
+    rules: Vec<Box<dyn ValidationRule>>,
+}
+
+impl Validator {
+    /// Creates a new empty validator.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a validator with default rules.
+    pub fn with_defaults() -> Self {
+        let mut validator = Self::new();
+        validator.add_rule(Box::new(NonEmptyIdRule));
+        validator.add_rule(Box::new(NonEmptyTitleRule));
+        validator.add_rule(Box::new(DateValidationRule));
+        validator.add_rule(Box::new(TagValidationRule));
+        validator
+    }
+
+    /// Adds a validation rule.
+    pub fn add_rule(&mut self, rule: Box<dyn ValidationRule>) -> &mut Self {
+        self.rules.push(rule);
+        self
+    }
+
+    /// Validates a statute entry against all rules.
+    pub fn validate(&self, entry: &StatuteEntry) -> ValidationResult<()> {
+        for rule in &self.rules {
+            rule.validate(entry)?;
+        }
+        Ok(())
+    }
+
+    /// Returns all validation rules.
+    pub fn rules(&self) -> &[Box<dyn ValidationRule>] {
+        &self.rules
+    }
+}
+
+// ============================================================================
+// Metrics Collection
+// ============================================================================
+
+/// Operation metrics for the registry.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct OperationMetrics {
+    /// Total number of registrations
+    pub registrations: u64,
+    /// Total number of updates
+    pub updates: u64,
+    /// Total number of reads
+    pub reads: u64,
+    /// Total number of searches
+    pub searches: u64,
+    /// Total number of deletes (if supported)
+    pub deletes: u64,
+    /// Total number of status changes
+    pub status_changes: u64,
+    /// Total number of tag operations
+    pub tag_operations: u64,
+    /// Total number of metadata operations
+    pub metadata_operations: u64,
+    /// Total number of cache hits
+    pub cache_hits: u64,
+    /// Total number of cache misses
+    pub cache_misses: u64,
+    /// Total number of webhook triggers
+    pub webhook_triggers: u64,
+    /// Total number of validation failures
+    pub validation_failures: u64,
+}
+
+impl OperationMetrics {
+    /// Creates new empty metrics.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the cache hit rate (0.0 to 1.0).
+    pub fn cache_hit_rate(&self) -> f64 {
+        let total = self.cache_hits + self.cache_misses;
+        if total == 0 {
+            0.0
+        } else {
+            self.cache_hits as f64 / total as f64
+        }
+    }
+
+    /// Returns the total number of operations.
+    pub fn total_operations(&self) -> u64 {
+        self.registrations
+            + self.updates
+            + self.reads
+            + self.searches
+            + self.deletes
+            + self.status_changes
+            + self.tag_operations
+            + self.metadata_operations
+    }
+
+    /// Resets all metrics to zero.
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+impl StatuteRegistry {
+    /// Returns the current operation metrics.
+    ///
+    /// Note: This requires the registry to track metrics internally.
+    /// This is a placeholder that returns default metrics.
+    pub fn metrics(&self) -> OperationMetrics {
+        // In a real implementation, this would return actual tracked metrics
+        // For now, we return a default instance as a placeholder
+        OperationMetrics::default()
+    }
+}
+
+// ============================================================================
+// Merge Functionality
+// ============================================================================
+
+/// Strategy for resolving conflicts during merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeStrategy {
+    /// Prefer the older version's values
+    PreferOld,
+    /// Prefer the newer version's values
+    PreferNew,
+    /// Fail if there are conflicts
+    FailOnConflict,
+    /// Merge both values (for collections)
+    MergeBoth,
+}
+
+/// A conflict that occurred during merge.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MergeConflict {
+    /// Title conflict
+    Title { old: String, new: String },
+    /// Status conflict
+    Status {
+        old: StatuteStatus,
+        new: StatuteStatus,
+    },
+    /// Jurisdiction conflict
+    Jurisdiction { old: String, new: String },
+    /// Effective date conflict
+    EffectiveDate {
+        old: Option<DateTime<Utc>>,
+        new: Option<DateTime<Utc>>,
+    },
+    /// Expiry date conflict
+    ExpiryDate {
+        old: Option<DateTime<Utc>>,
+        new: Option<DateTime<Utc>>,
+    },
+}
+
+/// Result of a merge operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeResult {
+    /// The merged statute entry
+    pub entry: StatuteEntry,
+    /// Conflicts that were resolved
+    pub conflicts: Vec<MergeConflict>,
+    /// Whether the merge was automatic or had conflicts
+    pub has_conflicts: bool,
+}
+
+impl MergeResult {
+    /// Returns true if the merge was successful without conflicts.
+    pub fn is_clean(&self) -> bool {
+        !self.has_conflicts
+    }
+}
+
+impl StatuteEntry {
+    /// Merges another statute entry into this one using the specified strategy.
+    ///
+    /// This is useful for reconciling concurrent modifications.
+    pub fn merge(&self, other: &StatuteEntry, strategy: MergeStrategy) -> MergeResult {
+        let mut merged = self.clone();
+        let mut conflicts = Vec::new();
+
+        // Merge title
+        if self.statute.title != other.statute.title {
+            match strategy {
+                MergeStrategy::PreferOld => {}
+                MergeStrategy::PreferNew => {
+                    merged.statute.title = other.statute.title.clone();
+                }
+                MergeStrategy::FailOnConflict => {
+                    conflicts.push(MergeConflict::Title {
+                        old: self.statute.title.clone(),
+                        new: other.statute.title.clone(),
+                    });
+                }
+                MergeStrategy::MergeBoth => {
+                    merged.statute.title = other.statute.title.clone();
+                }
+            }
+        }
+
+        // Merge status
+        if self.status != other.status {
+            match strategy {
+                MergeStrategy::PreferOld => {}
+                MergeStrategy::PreferNew => {
+                    merged.status = other.status;
+                }
+                MergeStrategy::FailOnConflict => {
+                    conflicts.push(MergeConflict::Status {
+                        old: self.status,
+                        new: other.status,
+                    });
+                }
+                MergeStrategy::MergeBoth => {
+                    merged.status = other.status;
+                }
+            }
+        }
+
+        // Merge jurisdiction
+        if self.jurisdiction != other.jurisdiction {
+            match strategy {
+                MergeStrategy::PreferOld => {}
+                MergeStrategy::PreferNew => {
+                    merged.jurisdiction = other.jurisdiction.clone();
+                }
+                MergeStrategy::FailOnConflict => {
+                    conflicts.push(MergeConflict::Jurisdiction {
+                        old: self.jurisdiction.clone(),
+                        new: other.jurisdiction.clone(),
+                    });
+                }
+                MergeStrategy::MergeBoth => {
+                    merged.jurisdiction = other.jurisdiction.clone();
+                }
+            }
+        }
+
+        // Merge effective date
+        if self.effective_date != other.effective_date {
+            match strategy {
+                MergeStrategy::PreferOld => {}
+                MergeStrategy::PreferNew => {
+                    merged.effective_date = other.effective_date;
+                }
+                MergeStrategy::FailOnConflict => {
+                    conflicts.push(MergeConflict::EffectiveDate {
+                        old: self.effective_date,
+                        new: other.effective_date,
+                    });
+                }
+                MergeStrategy::MergeBoth => {
+                    merged.effective_date = other.effective_date;
+                }
+            }
+        }
+
+        // Merge expiry date
+        if self.expiry_date != other.expiry_date {
+            match strategy {
+                MergeStrategy::PreferOld => {}
+                MergeStrategy::PreferNew => {
+                    merged.expiry_date = other.expiry_date;
+                }
+                MergeStrategy::FailOnConflict => {
+                    conflicts.push(MergeConflict::ExpiryDate {
+                        old: self.expiry_date,
+                        new: other.expiry_date,
+                    });
+                }
+                MergeStrategy::MergeBoth => {
+                    merged.expiry_date = other.expiry_date;
+                }
+            }
+        }
+
+        // Merge tags (always union)
+        let old_tags: HashSet<_> = self.tags.iter().cloned().collect();
+        let new_tags: HashSet<_> = other.tags.iter().cloned().collect();
+        merged.tags = old_tags.union(&new_tags).cloned().collect();
+
+        // Merge metadata
+        match strategy {
+            MergeStrategy::PreferOld => {}
+            MergeStrategy::PreferNew => {
+                merged.metadata = other.metadata.clone();
+            }
+            MergeStrategy::MergeBoth => {
+                // Merge metadata: new values override old
+                for (k, v) in &other.metadata {
+                    merged.metadata.insert(k.clone(), v.clone());
+                }
+            }
+            MergeStrategy::FailOnConflict => {
+                // Only add new metadata, don't override
+                for (k, v) in &other.metadata {
+                    if !merged.metadata.contains_key(k) {
+                        merged.metadata.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+
+        // Merge references (always union)
+        let old_refs: HashSet<_> = self.references.iter().cloned().collect();
+        let new_refs: HashSet<_> = other.references.iter().cloned().collect();
+        merged.references = old_refs.union(&new_refs).cloned().collect();
+
+        // Merge supersedes (always union)
+        let old_super: HashSet<_> = self.supersedes.iter().cloned().collect();
+        let new_super: HashSet<_> = other.supersedes.iter().cloned().collect();
+        merged.supersedes = old_super.union(&new_super).cloned().collect();
+
+        // Update timestamps
+        merged.modified_at = Utc::now();
+        merged.update_etag();
+
+        MergeResult {
+            entry: merged,
+            has_conflicts: !conflicts.is_empty(),
+            conflicts,
+        }
+    }
+}
+
+// ============================================================================
+// YAML Export/Import
+// ============================================================================
+
+#[cfg(feature = "yaml")]
+impl StatuteRegistry {
+    /// Exports the registry to YAML format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if YAML serialization fails.
+    pub fn export_yaml(&self) -> Result<String, serde_yaml::Error> {
+        let backup = RegistryBackup {
+            statutes: self.statutes.values().cloned().collect(),
+            versions: self.versions.clone(),
+            events: self.event_store.all_events().into_iter().cloned().collect(),
+            metadata: BackupMetadata {
+                created_at: Utc::now(),
+                format_version: "1.0".to_string(),
+                statute_count: self.statutes.len(),
+                event_count: self.event_store.count(),
+                description: Some("YAML export".to_string()),
+            },
+        };
+        serde_yaml::to_string(&backup)
+    }
+
+    /// Imports a registry from YAML format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if YAML deserialization fails or the backup is invalid.
+    pub fn import_yaml(&mut self, yaml: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let backup: RegistryBackup = serde_yaml::from_str(yaml)?;
+        self.restore_from_backup(backup)?;
+        Ok(())
+    }
+
+    /// Exports a single statute entry to YAML.
+    pub fn export_statute_yaml(entry: &StatuteEntry) -> Result<String, serde_yaml::Error> {
+        serde_yaml::to_string(entry)
+    }
+
+    /// Imports a single statute entry from YAML.
+    pub fn import_statute_yaml(yaml: &str) -> Result<StatuteEntry, serde_yaml::Error> {
+        serde_yaml::from_str(yaml)
+    }
+}
+
+// ============================================================================
+// CSV Export
+// ============================================================================
+
+#[cfg(feature = "csv-export")]
+impl StatuteRegistry {
+    /// Exports statute summaries to CSV format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if CSV serialization fails.
+    pub fn export_summaries_csv(&self) -> Result<String, csv::Error> {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+
+        // Write header
+        wtr.write_record([
+            "statute_id",
+            "title",
+            "version",
+            "status",
+            "jurisdiction",
+            "tags",
+            "created_at",
+            "modified_at",
+            "is_active",
+        ])?;
+
+        // Write records
+        for entry in self.statutes.values() {
+            let summary = StatuteSummary::from(entry);
+            wtr.write_record([
+                &summary.statute_id,
+                &summary.title,
+                &summary.version.to_string(),
+                &format!("{:?}", summary.status),
+                &summary.jurisdiction,
+                &summary.tags.join(";"),
+                &summary.created_at.to_rfc3339(),
+                &summary.modified_at.to_rfc3339(),
+                &summary.is_active.to_string(),
+            ])?;
+        }
+
+        let data = wtr
+            .into_inner()
+            .map_err(|e| csv::Error::from(std::io::Error::other(e)))?;
+        Ok(String::from_utf8(data).unwrap_or_default())
+    }
+
+    /// Exports filtered statute summaries to CSV format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if CSV serialization fails.
+    pub fn export_filtered_csv(
+        &self,
+        filter: impl Fn(&StatuteEntry) -> bool,
+    ) -> Result<String, csv::Error> {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+
+        // Write header
+        wtr.write_record([
+            "statute_id",
+            "title",
+            "version",
+            "status",
+            "jurisdiction",
+            "tags",
+            "created_at",
+            "modified_at",
+            "is_active",
+        ])?;
+
+        // Write filtered records
+        for entry in self.statutes.values().filter(|e| filter(e)) {
+            let summary = StatuteSummary::from(entry);
+            wtr.write_record([
+                &summary.statute_id,
+                &summary.title,
+                &summary.version.to_string(),
+                &format!("{:?}", summary.status),
+                &summary.jurisdiction,
+                &summary.tags.join(";"),
+                &summary.created_at.to_rfc3339(),
+                &summary.modified_at.to_rfc3339(),
+                &summary.is_active.to_string(),
+            ])?;
+        }
+
+        let data = wtr
+            .into_inner()
+            .map_err(|e| csv::Error::from(std::io::Error::other(e)))?;
+        Ok(String::from_utf8(data).unwrap_or_default())
+    }
+}
+
+// ============================================================================
+// Backup Compression
+// ============================================================================
+
+#[cfg(feature = "compression")]
+impl StatuteRegistry {
+    /// Exports a compressed backup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if serialization or compression fails.
+    pub fn export_compressed_backup(
+        &self,
+        description: Option<String>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+        use std::io::Write;
+
+        let json = self.export_backup(description)?;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(json.as_bytes())?;
+        Ok(encoder.finish()?)
+    }
+
+    /// Imports a compressed backup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if decompression or deserialization fails.
+    pub fn import_compressed_backup(
+        &mut self,
+        compressed: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use flate2::read::GzDecoder;
+        use std::io::Read;
+
+        let mut decoder = GzDecoder::new(compressed);
+        let mut json = String::new();
+        decoder.read_to_string(&mut json)?;
+        self.import_backup(&json)?;
+        Ok(())
+    }
+
+    /// Returns the compression ratio of a backup (original_size / compressed_size).
+    pub fn compression_ratio(
+        &self,
+        description: Option<String>,
+    ) -> Result<f64, Box<dyn std::error::Error>> {
+        let original = self.export_backup(description)?;
+        let compressed = self.export_compressed_backup(None)?;
+        Ok(original.len() as f64 / compressed.len() as f64)
+    }
+}
+
+// ============================================================================
+// Batch Validation
+// ============================================================================
+
+/// Result of batch validation.
+#[derive(Debug, Clone)]
+pub struct BatchValidationResult {
+    /// Total number of entries validated
+    pub total: usize,
+    /// Number of valid entries
+    pub valid: usize,
+    /// Number of invalid entries
+    pub invalid: usize,
+    /// Validation errors by statute ID
+    pub errors: HashMap<String, ValidationError>,
+}
+
+impl BatchValidationResult {
+    /// Returns true if all entries are valid.
+    pub fn is_all_valid(&self) -> bool {
+        self.invalid == 0
+    }
+
+    /// Returns the validation success rate (0.0 to 1.0).
+    pub fn success_rate(&self) -> f64 {
+        if self.total == 0 {
+            1.0
+        } else {
+            self.valid as f64 / self.total as f64
+        }
+    }
+}
+
+impl Validator {
+    /// Validates multiple statute entries.
+    pub fn validate_batch(&self, entries: &[StatuteEntry]) -> BatchValidationResult {
+        let mut errors = HashMap::new();
+        let mut valid = 0;
+        let mut invalid = 0;
+
+        for entry in entries {
+            match self.validate(entry) {
+                Ok(()) => valid += 1,
+                Err(e) => {
+                    invalid += 1;
+                    errors.insert(entry.statute.id.clone(), e);
+                }
+            }
+        }
+
+        BatchValidationResult {
+            total: entries.len(),
+            valid,
+            invalid,
+            errors,
+        }
+    }
+
+    /// Validates multiple entries and returns only the valid ones.
+    pub fn filter_valid(&self, entries: Vec<StatuteEntry>) -> Vec<StatuteEntry> {
+        entries
+            .into_iter()
+            .filter(|e| self.validate(e).is_ok())
+            .collect()
+    }
+
+    /// Validates multiple entries and returns only the invalid ones with their errors.
+    pub fn filter_invalid(
+        &self,
+        entries: Vec<StatuteEntry>,
+    ) -> Vec<(StatuteEntry, ValidationError)> {
+        entries
+            .into_iter()
+            .filter_map(|e| self.validate(&e).err().map(|err| (e, err)))
+            .collect()
+    }
+}
+
+// ============================================================================
+// Enhanced Search Result Caching
+// ============================================================================
+
+/// Cache entry with TTL (Time To Live).
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct CachedSearchResult {
+    results: Vec<String>,
+    cached_at: DateTime<Utc>,
+    ttl_seconds: i64,
+}
+
+#[allow(dead_code)]
+impl CachedSearchResult {
+    /// Returns true if the cache entry is still valid.
+    fn is_valid(&self) -> bool {
+        let elapsed = Utc::now().signed_duration_since(self.cached_at);
+        elapsed.num_seconds() < self.ttl_seconds
+    }
+}
+
+/// Search cache configuration.
+#[derive(Debug, Clone, Copy)]
+pub struct SearchCacheConfig {
+    /// Maximum number of cached queries
+    pub max_entries: usize,
+    /// Time-to-live for cache entries in seconds
+    pub ttl_seconds: i64,
+}
+
+impl Default for SearchCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: 100,
+            ttl_seconds: 300, // 5 minutes
+        }
+    }
+}
+
+impl SearchCacheConfig {
+    /// Creates a new cache config.
+    pub fn new(max_entries: usize, ttl_seconds: i64) -> Self {
+        Self {
+            max_entries,
+            ttl_seconds,
+        }
+    }
+
+    /// Creates a cache config with no TTL (cache indefinitely).
+    pub fn no_ttl(max_entries: usize) -> Self {
+        Self {
+            max_entries,
+            ttl_seconds: i64::MAX,
+        }
+    }
+
+    /// Creates a cache config with short TTL (1 minute).
+    pub fn short_lived(max_entries: usize) -> Self {
+        Self {
+            max_entries,
+            ttl_seconds: 60,
+        }
+    }
+
+    /// Creates a cache config with long TTL (1 hour).
+    pub fn long_lived(max_entries: usize) -> Self {
+        Self {
+            max_entries,
+            ttl_seconds: 3600,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5715,5 +6852,631 @@ mod tests {
         // Verify by_jurisdiction
         assert_eq!(stats.by_jurisdiction.get("JP"), Some(&2));
         assert_eq!(stats.by_jurisdiction.get("US"), Some(&1));
+    }
+
+    #[test]
+    fn test_statute_diff() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register a statute
+        let entry = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_status(StatuteStatus::Draft)
+            .with_tag("civil")
+            .with_metadata("author", "Alice");
+
+        registry.register(entry).unwrap();
+
+        // Update it with changes
+        let mut updated = test_statute("test-1");
+        updated.title = "Updated Test test-1".to_string();
+
+        let updated_entry = StatuteEntry::new(updated, "US")
+            .with_status(StatuteStatus::Active)
+            .with_tag("criminal")
+            .with_tag("civil") // Keep one tag the same
+            .with_metadata("author", "Bob") // Change metadata
+            .with_metadata("reviewer", "Charlie"); // Add metadata
+
+        // Manually update the registry
+        registry
+            .update("test-1", updated_entry.statute.clone())
+            .unwrap();
+
+        // Compute diff
+        let diff = registry.diff("test-1", 1, 2).unwrap();
+
+        // Verify diff
+        assert_eq!(diff.statute_id, "test-1");
+        assert_eq!(diff.old_version, 1);
+        assert_eq!(diff.new_version, 2);
+        assert!(diff.has_changes());
+        assert!(diff.content_changed); // Title changed
+
+        // Check summary
+        let summary = diff.summary();
+        assert!(summary.contains("title") || summary.contains("content"));
+    }
+
+    #[test]
+    fn test_statute_diff_no_changes() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register a statute
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "JP"))
+            .unwrap();
+
+        // Get version 1 twice and compare
+        let v1_first = registry.get_version("test-1", 1).unwrap().clone();
+        let v1_second = registry.get_version("test-1", 1).unwrap().clone();
+
+        let diff = StatuteDiff::compute(&v1_first, &v1_second);
+
+        assert!(!diff.has_changes());
+        assert_eq!(diff.summary(), "No changes");
+    }
+
+    #[test]
+    fn test_diff_with_latest() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register and update
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "JP"))
+            .unwrap();
+        registry.update("test-1", test_statute("test-1")).unwrap();
+        registry.update("test-1", test_statute("test-1")).unwrap();
+
+        // Diff version 1 with latest (version 3)
+        let diff = registry.diff_with_latest("test-1", 1).unwrap();
+
+        assert_eq!(diff.old_version, 1);
+        assert_eq!(diff.new_version, 3);
+    }
+
+    #[test]
+    fn test_field_change() {
+        // Test Changed
+        let change = FieldChange::from_values(&"old".to_string(), &"new".to_string());
+        assert!(change.is_changed());
+        assert_eq!(change.new_value(), Some(&"new".to_string()));
+
+        // Test Unchanged
+        let same = FieldChange::from_values(&"same".to_string(), &"same".to_string());
+        assert!(!same.is_changed());
+
+        // Test Added
+        let added = FieldChange::from_optional(None, Some(&"new".to_string()));
+        assert!(added.is_some());
+        assert!(added.unwrap().is_changed());
+
+        // Test Removed
+        let removed = FieldChange::from_optional(Some(&"old".to_string()), None);
+        assert!(removed.is_some());
+        assert!(removed.unwrap().is_changed());
+    }
+
+    #[test]
+    fn test_validation_rules() {
+        // Test NonEmptyIdRule
+        let rule = NonEmptyIdRule;
+        let mut entry = StatuteEntry::new(test_statute("test-1"), "JP");
+        assert!(rule.validate(&entry).is_ok());
+
+        entry.statute.id = "".to_string();
+        assert!(rule.validate(&entry).is_err());
+
+        // Test NonEmptyTitleRule
+        let rule = NonEmptyTitleRule;
+        entry.statute.id = "test-1".to_string();
+        entry.statute.title = "".to_string();
+        assert!(rule.validate(&entry).is_err());
+
+        // Test DateValidationRule
+        let rule = DateValidationRule;
+        let now = Utc::now();
+        let future = now + chrono::Duration::days(1);
+        let past = now - chrono::Duration::days(1);
+
+        let mut entry = StatuteEntry::new(test_statute("test-1"), "JP");
+        entry.effective_date = Some(now);
+        entry.expiry_date = Some(future);
+        assert!(rule.validate(&entry).is_ok());
+
+        entry.expiry_date = Some(past);
+        assert!(rule.validate(&entry).is_err());
+
+        // Test TagValidationRule
+        let rule = TagValidationRule;
+        let mut entry = StatuteEntry::new(test_statute("test-1"), "JP").with_tag("valid");
+        assert!(rule.validate(&entry).is_ok());
+
+        entry.tags.push("".to_string());
+        assert!(rule.validate(&entry).is_err());
+
+        entry.tags.clear();
+        entry.tags.push("tag1".to_string());
+        entry.tags.push("tag1".to_string());
+        assert!(rule.validate(&entry).is_err());
+    }
+
+    #[test]
+    fn test_validator() {
+        let validator = Validator::with_defaults();
+
+        // Valid entry
+        let entry = StatuteEntry::new(test_statute("test-1"), "JP");
+        assert!(validator.validate(&entry).is_ok());
+
+        // Invalid entry (empty ID)
+        let mut invalid = StatuteEntry::new(test_statute(""), "JP");
+        invalid.statute.id = "".to_string();
+        assert!(validator.validate(&invalid).is_err());
+
+        // Invalid entry (empty title)
+        let mut invalid = StatuteEntry::new(test_statute("test-1"), "JP");
+        invalid.statute.title = "".to_string();
+        assert!(validator.validate(&invalid).is_err());
+    }
+
+    #[test]
+    fn test_validator_custom_rules() {
+        let mut validator = Validator::new();
+        validator.add_rule(Box::new(NonEmptyIdRule));
+
+        let entry = StatuteEntry::new(test_statute("test-1"), "JP");
+        assert!(validator.validate(&entry).is_ok());
+
+        let mut invalid = StatuteEntry::new(test_statute(""), "JP");
+        invalid.statute.id = "".to_string();
+        assert!(validator.validate(&invalid).is_err());
+
+        assert_eq!(validator.rules().len(), 1);
+    }
+
+    #[test]
+    fn test_valid_jurisdiction_rule() {
+        let rule = ValidJurisdictionRule::new(vec!["JP", "US", "UK"]);
+
+        let entry_jp = StatuteEntry::new(test_statute("test-1"), "JP");
+        assert!(rule.validate(&entry_jp).is_ok());
+
+        let entry_fr = StatuteEntry::new(test_statute("test-2"), "FR");
+        assert!(rule.validate(&entry_fr).is_err());
+    }
+
+    #[test]
+    fn test_operation_metrics() {
+        let mut metrics = OperationMetrics::new();
+
+        assert_eq!(metrics.total_operations(), 0);
+        assert_eq!(metrics.cache_hit_rate(), 0.0);
+
+        metrics.registrations = 10;
+        metrics.reads = 20;
+        assert_eq!(metrics.total_operations(), 30);
+
+        metrics.cache_hits = 80;
+        metrics.cache_misses = 20;
+        assert_eq!(metrics.cache_hit_rate(), 0.8);
+
+        metrics.reset();
+        assert_eq!(metrics.total_operations(), 0);
+    }
+
+    #[test]
+    fn test_merge_prefer_old() {
+        let entry1 = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_status(StatuteStatus::Draft)
+            .with_tag("civil");
+
+        let mut statute2 = test_statute("test-1");
+        statute2.title = "Updated Title".to_string();
+        let entry2 = StatuteEntry::new(statute2, "US")
+            .with_status(StatuteStatus::Active)
+            .with_tag("criminal");
+
+        let result = entry1.merge(&entry2, MergeStrategy::PreferOld);
+
+        assert!(result.is_clean());
+        assert_eq!(result.entry.statute.title, "Test test-1"); // Old title
+        assert_eq!(result.entry.status, StatuteStatus::Draft); // Old status
+        assert_eq!(result.entry.jurisdiction, "JP"); // Old jurisdiction
+        // Tags should be unioned
+        assert!(result.entry.tags.contains(&"civil".to_string()));
+        assert!(result.entry.tags.contains(&"criminal".to_string()));
+    }
+
+    #[test]
+    fn test_merge_prefer_new() {
+        let entry1 = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_status(StatuteStatus::Draft)
+            .with_tag("civil");
+
+        let mut statute2 = test_statute("test-1");
+        statute2.title = "Updated Title".to_string();
+        let entry2 = StatuteEntry::new(statute2, "US")
+            .with_status(StatuteStatus::Active)
+            .with_tag("criminal");
+
+        let result = entry1.merge(&entry2, MergeStrategy::PreferNew);
+
+        assert!(result.is_clean());
+        assert_eq!(result.entry.statute.title, "Updated Title"); // New title
+        assert_eq!(result.entry.status, StatuteStatus::Active); // New status
+        assert_eq!(result.entry.jurisdiction, "US"); // New jurisdiction
+        // Tags should be unioned
+        assert!(result.entry.tags.contains(&"civil".to_string()));
+        assert!(result.entry.tags.contains(&"criminal".to_string()));
+    }
+
+    #[test]
+    fn test_merge_fail_on_conflict() {
+        let entry1 =
+            StatuteEntry::new(test_statute("test-1"), "JP").with_status(StatuteStatus::Draft);
+
+        let mut statute2 = test_statute("test-1");
+        statute2.title = "Updated Title".to_string();
+        let entry2 = StatuteEntry::new(statute2, "US").with_status(StatuteStatus::Active);
+
+        let result = entry1.merge(&entry2, MergeStrategy::FailOnConflict);
+
+        assert!(!result.is_clean());
+        assert!(result.has_conflicts);
+        assert!(!result.conflicts.is_empty());
+
+        // Check that conflicts were recorded
+        let has_title_conflict = result
+            .conflicts
+            .iter()
+            .any(|c| matches!(c, MergeConflict::Title { .. }));
+        let has_status_conflict = result
+            .conflicts
+            .iter()
+            .any(|c| matches!(c, MergeConflict::Status { .. }));
+        let has_jurisdiction_conflict = result
+            .conflicts
+            .iter()
+            .any(|c| matches!(c, MergeConflict::Jurisdiction { .. }));
+
+        assert!(has_title_conflict);
+        assert!(has_status_conflict);
+        assert!(has_jurisdiction_conflict);
+    }
+
+    #[test]
+    fn test_merge_both() {
+        let entry1 = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_metadata("key1", "value1")
+            .with_tag("civil");
+
+        let entry2 = StatuteEntry::new(test_statute("test-1"), "US")
+            .with_metadata("key2", "value2")
+            .with_tag("criminal");
+
+        let result = entry1.merge(&entry2, MergeStrategy::MergeBoth);
+
+        assert!(result.is_clean());
+        // Metadata should be merged
+        assert_eq!(
+            result.entry.metadata.get("key1"),
+            Some(&"value1".to_string())
+        );
+        assert_eq!(
+            result.entry.metadata.get("key2"),
+            Some(&"value2".to_string())
+        );
+        // Tags should be unioned
+        assert!(result.entry.tags.contains(&"civil".to_string()));
+        assert!(result.entry.tags.contains(&"criminal".to_string()));
+    }
+
+    #[test]
+    fn test_merge_metadata_override() {
+        let entry1 =
+            StatuteEntry::new(test_statute("test-1"), "JP").with_metadata("key", "old_value");
+
+        let entry2 =
+            StatuteEntry::new(test_statute("test-1"), "JP").with_metadata("key", "new_value");
+
+        let result = entry1.merge(&entry2, MergeStrategy::MergeBoth);
+
+        // New value should override
+        assert_eq!(
+            result.entry.metadata.get("key"),
+            Some(&"new_value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_registry_metrics() {
+        let registry = StatuteRegistry::new();
+        let metrics = registry.metrics();
+
+        // Currently returns default metrics (placeholder)
+        assert_eq!(metrics.total_operations(), 0);
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn test_yaml_export_import() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "JP").with_tag("civil"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-2"), "US").with_tag("criminal"))
+            .unwrap();
+
+        // Export to YAML
+        let yaml = registry.export_yaml().unwrap();
+        assert!(!yaml.is_empty());
+        assert!(yaml.contains("test-1"));
+        assert!(yaml.contains("test-2"));
+
+        // Import to new registry
+        let mut new_registry = StatuteRegistry::new();
+        new_registry.import_yaml(&yaml).unwrap();
+
+        assert_eq!(new_registry.count(), 2);
+        assert!(new_registry.contains("test-1"));
+        assert!(new_registry.contains("test-2"));
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn test_yaml_statute_export_import() {
+        let entry = StatuteEntry::new(test_statute("test-1"), "JP")
+            .with_tag("civil")
+            .with_metadata("author", "Alice");
+
+        // Export to YAML
+        let yaml = StatuteRegistry::export_statute_yaml(&entry).unwrap();
+        assert!(!yaml.is_empty());
+        assert!(yaml.contains("test-1"));
+
+        // Import back
+        let imported = StatuteRegistry::import_statute_yaml(&yaml).unwrap();
+        assert_eq!(imported.statute.id, "test-1");
+        assert_eq!(imported.jurisdiction, "JP");
+        assert!(imported.tags.contains(&"civil".to_string()));
+    }
+
+    #[test]
+    #[cfg(feature = "csv-export")]
+    fn test_csv_export() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes
+        registry
+            .register(
+                StatuteEntry::new(test_statute("test-1"), "JP")
+                    .with_tag("civil")
+                    .with_status(StatuteStatus::Active),
+            )
+            .unwrap();
+        registry
+            .register(
+                StatuteEntry::new(test_statute("test-2"), "US")
+                    .with_tag("criminal")
+                    .with_status(StatuteStatus::Draft),
+            )
+            .unwrap();
+
+        // Export to CSV
+        let csv = registry.export_summaries_csv().unwrap();
+        assert!(!csv.is_empty());
+
+        // Check header
+        assert!(csv.contains("statute_id"));
+        assert!(csv.contains("title"));
+        assert!(csv.contains("version"));
+        assert!(csv.contains("status"));
+        assert!(csv.contains("jurisdiction"));
+
+        // Check data
+        assert!(csv.contains("test-1"));
+        assert!(csv.contains("test-2"));
+        assert!(csv.contains("JP"));
+        assert!(csv.contains("US"));
+    }
+
+    #[test]
+    #[cfg(feature = "csv-export")]
+    fn test_csv_export_filtered() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with different jurisdictions
+        registry
+            .register(StatuteEntry::new(test_statute("jp-1"), "JP"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("us-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("jp-2"), "JP"))
+            .unwrap();
+
+        // Export only JP statutes
+        let csv = registry
+            .export_filtered_csv(|e| e.jurisdiction == "JP")
+            .unwrap();
+
+        assert!(csv.contains("jp-1"));
+        assert!(csv.contains("jp-2"));
+        assert!(!csv.contains("us-1"));
+    }
+
+    #[test]
+    #[cfg(feature = "compression")]
+    fn test_backup_compression() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes
+        for i in 1..=10 {
+            registry
+                .register(StatuteEntry::new(
+                    test_statute(&format!("test-{}", i)),
+                    "JP",
+                ))
+                .unwrap();
+        }
+
+        // Export compressed
+        let compressed = registry.export_compressed_backup(None).unwrap();
+        assert!(!compressed.is_empty());
+
+        // Import to new registry
+        let mut new_registry = StatuteRegistry::new();
+        new_registry.import_compressed_backup(&compressed).unwrap();
+
+        assert_eq!(new_registry.count(), 10);
+    }
+
+    #[test]
+    #[cfg(feature = "compression")]
+    fn test_compression_ratio() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with repetitive data (compresses well)
+        for i in 1..=20 {
+            registry
+                .register(
+                    StatuteEntry::new(test_statute(&format!("test-{}", i)), "JP")
+                        .with_tag("civil")
+                        .with_tag("criminal")
+                        .with_metadata("key", "value"),
+                )
+                .unwrap();
+        }
+
+        let ratio = registry.compression_ratio(None).unwrap();
+        // Should achieve some compression
+        assert!(ratio > 1.0, "Compression ratio should be > 1.0");
+    }
+
+    #[test]
+    fn test_batch_validation() {
+        let validator = Validator::with_defaults();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("valid-1"), "JP"),
+            StatuteEntry::new(test_statute("valid-2"), "US"),
+            {
+                let mut invalid = StatuteEntry::new(test_statute(""), "JP");
+                invalid.statute.id = "".to_string(); // Invalid
+                invalid
+            },
+            {
+                let mut invalid = StatuteEntry::new(test_statute("invalid-4"), "JP");
+                invalid.statute.title = "".to_string(); // Invalid
+                invalid
+            },
+        ];
+
+        let result = validator.validate_batch(&entries);
+
+        assert_eq!(result.total, 4);
+        assert_eq!(result.valid, 2);
+        assert_eq!(result.invalid, 2);
+        assert!(!result.is_all_valid());
+        assert!(result.success_rate() > 0.4 && result.success_rate() < 0.6);
+        assert_eq!(result.errors.len(), 2);
+    }
+
+    #[test]
+    fn test_batch_validation_all_valid() {
+        let validator = Validator::with_defaults();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("valid-1"), "JP"),
+            StatuteEntry::new(test_statute("valid-2"), "US"),
+            StatuteEntry::new(test_statute("valid-3"), "UK"),
+        ];
+
+        let result = validator.validate_batch(&entries);
+
+        assert_eq!(result.total, 3);
+        assert_eq!(result.valid, 3);
+        assert_eq!(result.invalid, 0);
+        assert!(result.is_all_valid());
+        assert_eq!(result.success_rate(), 1.0);
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_filter_valid() {
+        let validator = Validator::with_defaults();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("valid-1"), "JP"),
+            {
+                let mut invalid = StatuteEntry::new(test_statute(""), "JP");
+                invalid.statute.id = "".to_string();
+                invalid
+            },
+            StatuteEntry::new(test_statute("valid-2"), "US"),
+        ];
+
+        let valid = validator.filter_valid(entries);
+
+        assert_eq!(valid.len(), 2);
+        assert_eq!(valid[0].statute.id, "valid-1");
+        assert_eq!(valid[1].statute.id, "valid-2");
+    }
+
+    #[test]
+    fn test_filter_invalid() {
+        let validator = Validator::with_defaults();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("valid-1"), "JP"),
+            {
+                let mut invalid = StatuteEntry::new(test_statute(""), "JP");
+                invalid.statute.id = "".to_string();
+                invalid
+            },
+            {
+                let mut invalid = StatuteEntry::new(test_statute("invalid-2"), "JP");
+                invalid.statute.title = "".to_string();
+                invalid
+            },
+        ];
+
+        let invalid = validator.filter_invalid(entries);
+
+        assert_eq!(invalid.len(), 2);
+        assert!(matches!(invalid[0].1, ValidationError::EmptyStatuteId));
+        assert!(matches!(invalid[1].1, ValidationError::EmptyTitle));
+    }
+
+    #[test]
+    fn test_search_cache_config() {
+        // Default config
+        let default_config = SearchCacheConfig::default();
+        assert_eq!(default_config.max_entries, 100);
+        assert_eq!(default_config.ttl_seconds, 300);
+
+        // Custom config
+        let custom = SearchCacheConfig::new(50, 600);
+        assert_eq!(custom.max_entries, 50);
+        assert_eq!(custom.ttl_seconds, 600);
+
+        // No TTL
+        let no_ttl = SearchCacheConfig::no_ttl(200);
+        assert_eq!(no_ttl.max_entries, 200);
+        assert_eq!(no_ttl.ttl_seconds, i64::MAX);
+
+        // Short lived
+        let short = SearchCacheConfig::short_lived(150);
+        assert_eq!(short.max_entries, 150);
+        assert_eq!(short.ttl_seconds, 60);
+
+        // Long lived
+        let long = SearchCacheConfig::long_lived(250);
+        assert_eq!(long.max_entries, 250);
+        assert_eq!(long.ttl_seconds, 3600);
     }
 }

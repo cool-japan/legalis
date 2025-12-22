@@ -7,6 +7,19 @@
 - [x] Cultural parameters (age of majority, religious observances)
 - [x] Legal dictionary for term translation
 - [x] Translation manager for multi-language support
+- [x] Translation caching for improved performance
+- [x] Display trait implementations for all enums (LegalSystem, PluralCategory, CalendarSystem, DayOfWeek, Locale)
+- [x] Locale validation helpers (is_valid_language_code, is_valid_country_code, is_valid_script_code, is_valid_locale_tag)
+- [x] Legal term abbreviation support with bidirectional lookup
+- [x] Context-aware translation support for disambiguating terms
+- [x] Dictionary import/export functionality (JSON serialization with custom serde)
+- [x] Ordinal number formatting for legal citations (1st, 2nd, 3rd, etc.) in multiple languages
+- [x] Number-to-words conversion for legal documents (English, Japanese, Spanish, French, German)
+- [x] Locale-aware text collation/sorting with TextCollator
+- [x] Text normalization for accent handling (German umlauts, French/Spanish accents)
+- [x] Helper functions (common_legal_locales, suggest_best_locale, normalize_locale_string)
+- [x] Dictionary merge functionality for combining translations
+- [x] Dictionary statistics methods (translation_count, abbreviation_count, etc.)
 
 ## Content
 

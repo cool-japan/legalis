@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: legalis-api
+  labels:
+    app: legalis-api
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: legalis-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

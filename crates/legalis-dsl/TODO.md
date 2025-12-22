@@ -57,20 +57,33 @@
 ## Tooling
 
 - [x] Create syntax highlighting definitions (VSCode, vim)
-- [ ] Add LSP (Language Server Protocol) support
+- [x] Add LSP (Language Server Protocol) support
 - [x] Add REPL for interactive parsing
 - [x] Create schema/grammar documentation generator
 
 ## Performance
 
 - [x] Benchmark parser performance
-- [ ] Optimize tokenizer for large documents
+- [x] Optimize tokenizer for large documents
 - [x] Add incremental parsing support
 - [x] Implement parse result caching
 
 ## Testing
 
-- [ ] Add corpus of real-world legal document examples
+- [x] Add corpus of real-world legal document examples
 - [x] Add fuzzing for parser robustness
 - [x] Test error message quality
 - [x] Add benchmark suite
+
+## LSP Enhancements (2025-12-20)
+
+### Advanced Features
+- [x] Add code actions for quick fixes (auto-fix deprecated syntax)
+- [x] Add document formatting support using AST pretty-printer
+- [x] Implement AST formatter for LegalDocument nodes
+- [x] Add integration tests for LSP features
+
+### Code Quality
+- [x] Thread-safe LSP backend with async/await
+- [x] Support for workspace edits in code actions
+- [x] Full document formatting with TextEdit generation

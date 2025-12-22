@@ -2127,6 +2127,599 @@ impl LiveVisualization {
     }
 }
 
+/// PowerPoint/Keynote export format (PPTX XML).
+pub struct PresentationExporter {
+    /// Slides in the presentation
+    slides: Vec<Slide>,
+    /// Theme for the presentation
+    theme: Theme,
+}
+
+/// A single slide in a presentation.
+#[derive(Debug, Clone)]
+pub struct Slide {
+    /// Slide title
+    pub title: String,
+    /// Slide content (SVG or text)
+    pub content: SlideContent,
+    /// Animations on this slide
+    pub animations: Vec<Animation>,
+    /// Speaker notes
+    pub notes: Option<String>,
+}
+
+/// Content type for a slide.
+#[derive(Debug, Clone)]
+pub enum SlideContent {
+    /// SVG image content
+    Svg(String),
+    /// HTML content
+    Html(String),
+    /// Plain text content
+    Text(String),
+    /// Decision tree visualization
+    DecisionTree(String),
+    /// Dependency graph visualization
+    DependencyGraph(String),
+}
+
+/// Animation for presentation elements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Animation {
+    /// Target element ID
+    pub target: String,
+    /// Animation type
+    pub animation_type: AnimationType,
+    /// Duration in milliseconds
+    pub duration_ms: u32,
+    /// Delay before animation starts (milliseconds)
+    pub delay_ms: u32,
+}
+
+/// Types of animations available.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AnimationType {
+    /// Fade in
+    FadeIn,
+    /// Fade out
+    FadeOut,
+    /// Slide from left
+    SlideInLeft,
+    /// Slide from right
+    SlideInRight,
+    /// Slide from top
+    SlideInTop,
+    /// Slide from bottom
+    SlideInBottom,
+    /// Zoom in
+    ZoomIn,
+    /// Zoom out
+    ZoomOut,
+    /// Highlight (color pulse)
+    Highlight,
+    /// Progressive reveal (for lists)
+    ProgressiveReveal,
+}
+
+impl PresentationExporter {
+    /// Creates a new presentation exporter.
+    pub fn new() -> Self {
+        Self {
+            slides: Vec::new(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme for the presentation.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Adds a slide to the presentation.
+    pub fn add_slide(&mut self, slide: Slide) {
+        self.slides.push(slide);
+    }
+
+    /// Creates a slide from a decision tree.
+    pub fn add_decision_tree_slide(&mut self, title: &str, tree: &DecisionTree) {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        self.add_slide(Slide {
+            title: title.to_string(),
+            content: SlideContent::DecisionTree(svg),
+            animations: Vec::new(),
+            notes: None,
+        });
+    }
+
+    /// Creates a slide from a dependency graph.
+    pub fn add_dependency_graph_slide(&mut self, title: &str, graph: &DependencyGraph) {
+        let svg = graph.to_svg_with_theme(&self.theme);
+        self.add_slide(Slide {
+            title: title.to_string(),
+            content: SlideContent::DependencyGraph(svg),
+            animations: Vec::new(),
+            notes: None,
+        });
+    }
+
+    /// Exports to PowerPoint Open XML format (PPTX).
+    pub fn to_pptx(&self) -> VizResult<String> {
+        let mut xml = String::new();
+
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
+        xml.push_str(
+            "<p:presentation xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" ",
+        );
+        xml.push_str(
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ",
+        );
+        xml.push_str("xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">\n");
+        xml.push_str("  <p:sldIdLst>\n");
+
+        for (i, _slide) in self.slides.iter().enumerate() {
+            xml.push_str(&format!(
+                "    <p:sldId id=\"{}\" r:id=\"rId{}\"/>\n",
+                256 + i,
+                i + 1
+            ));
+        }
+
+        xml.push_str("  </p:sldIdLst>\n");
+        xml.push_str("  <p:sldSz cx=\"9144000\" cy=\"6858000\"/>\n");
+        xml.push_str("  <p:notesSz cx=\"6858000\" cy=\"9144000\"/>\n");
+        xml.push_str("</p:presentation>\n");
+
+        Ok(xml)
+    }
+
+    /// Exports to Keynote format (iWork format).
+    pub fn to_keynote(&self) -> VizResult<String> {
+        // Keynote uses a similar structure but with Apple-specific XML
+        let mut xml = String::new();
+
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str("<!DOCTYPE key PUBLIC \"-//Apple//DTD KEY 2.0//EN\" \"http://www.apple.com/DTDs/Keynote-2.dtd\">\n");
+        xml.push_str("<key version=\"92.2.1\">\n");
+        xml.push_str("  <presentation>\n");
+        xml.push_str("    <slides>\n");
+
+        for (i, slide) in self.slides.iter().enumerate() {
+            xml.push_str(&format!("      <slide id=\"{}\">\n", i + 1));
+            xml.push_str(&format!("        <title>{}</title>\n", slide.title));
+
+            match &slide.content {
+                SlideContent::Svg(svg) => {
+                    xml.push_str("        <content type=\"image/svg+xml\">\n");
+                    xml.push_str("          <![CDATA[");
+                    xml.push_str(svg);
+                    xml.push_str("]]>\n");
+                    xml.push_str("        </content>\n");
+                }
+                SlideContent::Text(text) => {
+                    xml.push_str(&format!("        <content>{}</content>\n", text));
+                }
+                SlideContent::DecisionTree(svg) | SlideContent::DependencyGraph(svg) => {
+                    xml.push_str("        <content type=\"image/svg+xml\">\n");
+                    xml.push_str("          <![CDATA[");
+                    xml.push_str(svg);
+                    xml.push_str("]]>\n");
+                    xml.push_str("        </content>\n");
+                }
+                SlideContent::Html(_) => {
+                    xml.push_str("        <content type=\"text/html\"/>\n");
+                }
+            }
+
+            if let Some(notes) = &slide.notes {
+                xml.push_str(&format!("        <notes>{}</notes>\n", notes));
+            }
+
+            xml.push_str("      </slide>\n");
+        }
+
+        xml.push_str("    </slides>\n");
+        xml.push_str("  </presentation>\n");
+        xml.push_str("</key>\n");
+
+        Ok(xml)
+    }
+
+    /// Exports to HTML with embedded animations for web-based presentations.
+    pub fn to_animated_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <title>Animated Presentation</title>\n");
+        html.push_str("    <style>\n");
+        html.push_str(&format!(
+            "        body {{ margin: 0; padding: 0; background: {}; color: {}; font-family: Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color
+        ));
+        html.push_str("        .slide { display: none; width: 100vw; height: 100vh; padding: 40px; box-sizing: border-box; }\n");
+        html.push_str("        .slide.active { display: flex; flex-direction: column; }\n");
+        html.push_str("        .slide h1 { margin: 0 0 20px 0; font-size: 2.5em; }\n");
+        html.push_str("        .slide .content { flex: 1; overflow: auto; }\n");
+        html.push_str("        .controls { position: fixed; bottom: 20px; right: 20px; }\n");
+        html.push_str("        .controls button { margin: 0 5px; padding: 10px 20px; font-size: 16px; cursor: pointer; }\n");
+        html.push_str("        .animation-fade-in { animation: fadeIn 0.5s; }\n");
+        html.push_str("        .animation-slide-in-left { animation: slideInLeft 0.5s; }\n");
+        html.push_str("        .animation-slide-in-right { animation: slideInRight 0.5s; }\n");
+        html.push_str("        .animation-zoom-in { animation: zoomIn 0.5s; }\n");
+        html.push_str("        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }\n");
+        html.push_str("        @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }\n");
+        html.push_str("        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }\n");
+        html.push_str("        @keyframes zoomIn { from { transform: scale(0); } to { transform: scale(1); } }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+
+        for (i, slide) in self.slides.iter().enumerate() {
+            html.push_str(&format!(
+                "    <div class=\"slide{}\" id=\"slide-{}\">\n",
+                if i == 0 { " active" } else { "" },
+                i
+            ));
+            html.push_str(&format!("        <h1>{}</h1>\n", slide.title));
+            html.push_str("        <div class=\"content\">\n");
+
+            match &slide.content {
+                SlideContent::Svg(svg)
+                | SlideContent::DecisionTree(svg)
+                | SlideContent::DependencyGraph(svg) => {
+                    html.push_str("            ");
+                    html.push_str(svg);
+                    html.push('\n');
+                }
+                SlideContent::Html(content) => {
+                    html.push_str("            ");
+                    html.push_str(content);
+                    html.push('\n');
+                }
+                SlideContent::Text(text) => {
+                    html.push_str("            <p>");
+                    html.push_str(text);
+                    html.push_str("</p>\n");
+                }
+            }
+
+            html.push_str("        </div>\n");
+            html.push_str("    </div>\n");
+        }
+
+        html.push_str("    <div class=\"controls\">\n");
+        html.push_str("        <button onclick=\"previousSlide()\">Previous</button>\n");
+        html.push_str("        <button onclick=\"nextSlide()\">Next</button>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str("        let currentSlide = 0;\n");
+        html.push_str(&format!(
+            "        const totalSlides = {};\n",
+            self.slides.len()
+        ));
+        html.push_str("        function showSlide(n) {\n");
+        html.push_str("            const slides = document.querySelectorAll('.slide');\n");
+        html.push_str("            if (n >= totalSlides) currentSlide = 0;\n");
+        html.push_str("            if (n < 0) currentSlide = totalSlides - 1;\n");
+        html.push_str("            slides.forEach(s => s.classList.remove('active'));\n");
+        html.push_str("            slides[currentSlide].classList.add('active');\n");
+        html.push_str("        }\n");
+        html.push_str(
+            "        function nextSlide() { currentSlide++; showSlide(currentSlide); }\n",
+        );
+        html.push_str(
+            "        function previousSlide() { currentSlide--; showSlide(currentSlide); }\n",
+        );
+        html.push_str("        document.addEventListener('keydown', function(e) {\n");
+        html.push_str("            if (e.key === 'ArrowRight') nextSlide();\n");
+        html.push_str("            if (e.key === 'ArrowLeft') previousSlide();\n");
+        html.push_str("        });\n");
+        html.push_str("    </script>\n</body>\n</html>");
+
+        html
+    }
+}
+
+impl Default for PresentationExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Document embedding support for various formats.
+pub struct DocumentEmbedder {
+    theme: Theme,
+}
+
+impl DocumentEmbedder {
+    /// Creates a new document embedder.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Embeds a decision tree in Markdown format with SVG data URI.
+    pub fn embed_in_markdown(&self, tree: &DecisionTree) -> String {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        let encoded = base64_encode(&svg);
+        format!("![Decision Tree](data:image/svg+xml;base64,{})", encoded)
+    }
+
+    /// Embeds a decision tree in LaTeX format.
+    pub fn embed_in_latex(&self, tree: &DecisionTree) -> String {
+        let mut latex = String::new();
+        latex.push_str("\\begin{figure}[h]\n");
+        latex.push_str("\\centering\n");
+        latex.push_str("\\begin{tikzpicture}\n");
+
+        // Convert tree structure to TikZ format
+        if let Some(root_idx) = tree.root {
+            self.latex_render_node(tree, root_idx, &mut latex, 0, 0);
+        }
+
+        latex.push_str("\\end{tikzpicture}\n");
+        latex.push_str("\\caption{Decision Tree Visualization}\n");
+        latex.push_str("\\end{figure}\n");
+
+        latex
+    }
+
+    /// Helper to render nodes in LaTeX/TikZ format.
+    #[allow(dead_code)]
+    fn latex_render_node(
+        &self,
+        tree: &DecisionTree,
+        idx: NodeIndex,
+        latex: &mut String,
+        x: i32,
+        y: i32,
+    ) {
+        let node = &tree.graph[idx];
+        let node_text = match node {
+            DecisionNode::Root { title, .. } => title.clone(),
+            DecisionNode::Condition { description, .. } => description.clone(),
+            DecisionNode::Outcome { description } => description.clone(),
+            DecisionNode::Discretion { issue, .. } => issue.clone(),
+        };
+
+        latex.push_str(&format!("\\node at ({},{}) {{{}}};\n", x, y, node_text));
+
+        // Recursively render children
+        let children: Vec<_> = tree.graph.neighbors(idx).collect();
+        for (i, &_child) in children.iter().enumerate() {
+            let child_x = x + (i as i32 - (children.len() as i32 / 2)) * 3;
+            let child_y = y - 2;
+            latex.push_str(&format!(
+                "\\draw ({},{}) -- ({},{});\n",
+                x, y, child_x, child_y
+            ));
+        }
+    }
+
+    /// Embeds a decision tree in reStructuredText format.
+    pub fn embed_in_rst(&self, tree: &DecisionTree) -> String {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        let encoded = base64_encode(&svg);
+        format!(
+            ".. image:: data:image/svg+xml;base64,{}\n   :alt: Decision Tree\n   :align: center\n",
+            encoded
+        )
+    }
+
+    /// Embeds a decision tree in AsciiDoc format.
+    pub fn embed_in_asciidoc(&self, tree: &DecisionTree) -> String {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        let encoded = base64_encode(&svg);
+        format!(
+            "image::data:image/svg+xml;base64,{}[Decision Tree,align=center]\n",
+            encoded
+        )
+    }
+
+    /// Embeds as an HTML iframe snippet.
+    pub fn embed_as_iframe(&self, tree: &DecisionTree, width: u32, height: u32) -> String {
+        let html = tree.to_html_with_theme(&self.theme);
+        let encoded = base64_encode(&html);
+        format!(
+            "<iframe width=\"{}\" height=\"{}\" src=\"data:text/html;base64,{}\" frameborder=\"0\"></iframe>",
+            width, height, encoded
+        )
+    }
+}
+
+impl Default for DocumentEmbedder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Visual regression testing support.
+pub struct VisualRegressionTest {
+    /// Name of the test
+    pub name: String,
+    /// Expected output (baseline)
+    pub baseline: String,
+    /// Actual output
+    pub actual: String,
+    /// Test result
+    pub passed: bool,
+    /// Differences found
+    pub differences: Vec<String>,
+}
+
+impl VisualRegressionTest {
+    /// Creates a new visual regression test.
+    pub fn new(name: &str, baseline: &str, actual: &str) -> Self {
+        let differences = Self::find_differences(baseline, actual);
+        let passed = differences.is_empty();
+
+        Self {
+            name: name.to_string(),
+            baseline: baseline.to_string(),
+            actual: actual.to_string(),
+            passed,
+            differences,
+        }
+    }
+
+    /// Finds differences between baseline and actual output.
+    fn find_differences(baseline: &str, actual: &str) -> Vec<String> {
+        let mut diffs = Vec::new();
+
+        if baseline != actual {
+            // Simple line-by-line comparison
+            let baseline_lines: Vec<&str> = baseline.lines().collect();
+            let actual_lines: Vec<&str> = actual.lines().collect();
+
+            if baseline_lines.len() != actual_lines.len() {
+                diffs.push(format!(
+                    "Line count mismatch: expected {}, got {}",
+                    baseline_lines.len(),
+                    actual_lines.len()
+                ));
+            }
+
+            for (i, (base_line, actual_line)) in
+                baseline_lines.iter().zip(actual_lines.iter()).enumerate()
+            {
+                if base_line != actual_line {
+                    diffs.push(format!(
+                        "Line {} differs:\n  Expected: {}\n  Actual: {}",
+                        i + 1,
+                        base_line,
+                        actual_line
+                    ));
+                }
+            }
+        }
+
+        diffs
+    }
+
+    /// Generates a test report.
+    pub fn report(&self) -> String {
+        let mut report = String::new();
+        report.push_str(&format!("Visual Regression Test: {}\n", self.name));
+        report.push_str(&format!(
+            "Status: {}\n",
+            if self.passed { "PASSED" } else { "FAILED" }
+        ));
+
+        if !self.passed {
+            report.push_str("\nDifferences found:\n");
+            for diff in &self.differences {
+                report.push_str(&format!("  - {}\n", diff));
+            }
+        }
+
+        report
+    }
+}
+
+/// Visual regression test suite.
+pub struct VisualRegressionSuite {
+    tests: Vec<VisualRegressionTest>,
+}
+
+impl VisualRegressionSuite {
+    /// Creates a new test suite.
+    pub fn new() -> Self {
+        Self { tests: Vec::new() }
+    }
+
+    /// Adds a test to the suite.
+    pub fn add_test(&mut self, test: VisualRegressionTest) {
+        self.tests.push(test);
+    }
+
+    /// Runs all tests and returns a summary.
+    pub fn run(&self) -> String {
+        let mut summary = String::new();
+        let total = self.tests.len();
+        let passed = self.tests.iter().filter(|t| t.passed).count();
+        let failed = total - passed;
+
+        summary.push_str("Visual Regression Test Suite\n");
+        summary.push_str("============================\n");
+        summary.push_str(&format!("Total tests: {}\n", total));
+        summary.push_str(&format!("Passed: {}\n", passed));
+        summary.push_str(&format!("Failed: {}\n\n", failed));
+
+        for test in &self.tests {
+            if !test.passed {
+                summary.push_str(&test.report());
+                summary.push('\n');
+            }
+        }
+
+        summary
+    }
+
+    /// Returns true if all tests passed.
+    pub fn all_passed(&self) -> bool {
+        self.tests.iter().all(|t| t.passed)
+    }
+}
+
+impl Default for VisualRegressionSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Helper function for base64 encoding.
+fn base64_encode(data: &str) -> String {
+    // Simple base64 encoding
+    use std::fmt::Write;
+    let bytes = data.as_bytes();
+    let mut result = String::new();
+
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    for chunk in bytes.chunks(3) {
+        let mut buf = [0u8; 3];
+        for (i, &byte) in chunk.iter().enumerate() {
+            buf[i] = byte;
+        }
+
+        let b1 = (buf[0] >> 2) as usize;
+        let b2 = (((buf[0] & 0x03) << 4) | (buf[1] >> 4)) as usize;
+        let b3 = (((buf[1] & 0x0f) << 2) | (buf[2] >> 6)) as usize;
+        let b4 = (buf[2] & 0x3f) as usize;
+
+        write!(&mut result, "{}", CHARS[b1] as char).unwrap();
+        write!(&mut result, "{}", CHARS[b2] as char).unwrap();
+        write!(
+            &mut result,
+            "{}",
+            if chunk.len() > 1 {
+                CHARS[b3] as char
+            } else {
+                '='
+            }
+        )
+        .unwrap();
+        write!(
+            &mut result,
+            "{}",
+            if chunk.len() > 2 {
+                CHARS[b4] as char
+            } else {
+                '='
+            }
+        )
+        .unwrap();
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2792,5 +3385,309 @@ mod tests {
 
         live_viz.clear_history();
         assert_eq!(live_viz.update_history().len(), 0);
+    }
+
+    #[test]
+    fn test_presentation_exporter_creation() {
+        let exporter = PresentationExporter::new();
+        assert_eq!(exporter.slides.len(), 0);
+    }
+
+    #[test]
+    fn test_presentation_exporter_with_theme() {
+        let theme = Theme::dark();
+        let exporter = PresentationExporter::new().with_theme(theme.clone());
+        assert_eq!(exporter.theme.background_color, theme.background_color);
+    }
+
+    #[test]
+    fn test_presentation_add_decision_tree_slide() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let mut exporter = PresentationExporter::new();
+        exporter.add_decision_tree_slide("Test Decision Tree", &tree);
+
+        assert_eq!(exporter.slides.len(), 1);
+        assert_eq!(exporter.slides[0].title, "Test Decision Tree");
+    }
+
+    #[test]
+    fn test_presentation_add_dependency_graph_slide() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-a", "statute-b", "references");
+
+        let mut exporter = PresentationExporter::new();
+        exporter.add_dependency_graph_slide("Test Dependency Graph", &graph);
+
+        assert_eq!(exporter.slides.len(), 1);
+        assert_eq!(exporter.slides[0].title, "Test Dependency Graph");
+    }
+
+    #[test]
+    fn test_presentation_to_pptx() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let mut exporter = PresentationExporter::new();
+        exporter.add_decision_tree_slide("Test Slide", &tree);
+
+        let pptx = exporter.to_pptx().unwrap();
+        assert!(pptx.contains("<?xml version=\"1.0\""));
+        assert!(pptx.contains("<p:presentation"));
+        assert!(pptx.contains("<p:sldIdLst>"));
+    }
+
+    #[test]
+    fn test_presentation_to_keynote() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let mut exporter = PresentationExporter::new();
+        exporter.add_decision_tree_slide("Test Slide", &tree);
+
+        let keynote = exporter.to_keynote().unwrap();
+        assert!(keynote.contains("<?xml version=\"1.0\""));
+        assert!(keynote.contains("<key version="));
+        assert!(keynote.contains("<slides>"));
+        assert!(keynote.contains("<title>Test Slide</title>"));
+    }
+
+    #[test]
+    fn test_presentation_to_animated_html() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let mut exporter = PresentationExporter::new();
+        exporter.add_decision_tree_slide("Slide 1", &tree);
+        exporter.add_decision_tree_slide("Slide 2", &tree);
+
+        let html = exporter.to_animated_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Animated Presentation"));
+        assert!(html.contains("Slide 1"));
+        assert!(html.contains("Slide 2"));
+        assert!(html.contains("nextSlide"));
+        assert!(html.contains("previousSlide"));
+        assert!(html.contains("@keyframes fadeIn"));
+    }
+
+    #[test]
+    fn test_document_embedder_creation() {
+        let embedder = DocumentEmbedder::new();
+        assert_eq!(
+            embedder.theme.background_color,
+            Theme::default().background_color
+        );
+    }
+
+    #[test]
+    fn test_document_embedder_with_theme() {
+        let theme = Theme::dark();
+        let embedder = DocumentEmbedder::new().with_theme(theme.clone());
+        assert_eq!(embedder.theme.background_color, theme.background_color);
+    }
+
+    #[test]
+    fn test_embed_in_markdown() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let embedder = DocumentEmbedder::new();
+        let markdown = embedder.embed_in_markdown(&tree);
+
+        assert!(markdown.starts_with("![Decision Tree](data:image/svg+xml;base64,"));
+        assert!(markdown.contains("base64"));
+    }
+
+    #[test]
+    fn test_embed_in_latex() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let embedder = DocumentEmbedder::new();
+        let latex = embedder.embed_in_latex(&tree);
+
+        assert!(latex.contains("\\begin{figure}"));
+        assert!(latex.contains("\\begin{tikzpicture}"));
+        assert!(latex.contains("\\end{tikzpicture}"));
+        assert!(latex.contains("\\caption{Decision Tree Visualization}"));
+    }
+
+    #[test]
+    fn test_embed_in_rst() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let embedder = DocumentEmbedder::new();
+        let rst = embedder.embed_in_rst(&tree);
+
+        assert!(rst.starts_with(".. image:: data:image/svg+xml;base64,"));
+        assert!(rst.contains(":alt: Decision Tree"));
+        assert!(rst.contains(":align: center"));
+    }
+
+    #[test]
+    fn test_embed_in_asciidoc() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let embedder = DocumentEmbedder::new();
+        let asciidoc = embedder.embed_in_asciidoc(&tree);
+
+        assert!(asciidoc.starts_with("image::data:image/svg+xml;base64,"));
+        assert!(asciidoc.contains("[Decision Tree,align=center]"));
+    }
+
+    #[test]
+    fn test_embed_as_iframe() {
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let embedder = DocumentEmbedder::new();
+        let iframe = embedder.embed_as_iframe(&tree, 800, 600);
+
+        assert!(iframe.starts_with("<iframe"));
+        assert!(iframe.contains("width=\"800\""));
+        assert!(iframe.contains("height=\"600\""));
+        assert!(iframe.contains("data:text/html;base64,"));
+    }
+
+    #[test]
+    fn test_visual_regression_test_passed() {
+        let baseline = "Line 1\nLine 2\nLine 3";
+        let actual = "Line 1\nLine 2\nLine 3";
+
+        let test = VisualRegressionTest::new("test1", baseline, actual);
+        assert!(test.passed);
+        assert_eq!(test.differences.len(), 0);
+    }
+
+    #[test]
+    fn test_visual_regression_test_failed() {
+        let baseline = "Line 1\nLine 2\nLine 3";
+        let actual = "Line 1\nLine X\nLine 3";
+
+        let test = VisualRegressionTest::new("test1", baseline, actual);
+        assert!(!test.passed);
+        assert!(test.differences.len() > 0);
+    }
+
+    #[test]
+    fn test_visual_regression_test_report() {
+        let baseline = "Line 1\nLine 2";
+        let actual = "Line 1\nLine X";
+
+        let test = VisualRegressionTest::new("test1", baseline, actual);
+        let report = test.report();
+
+        assert!(report.contains("Visual Regression Test: test1"));
+        assert!(report.contains("Status: FAILED"));
+        assert!(report.contains("Differences found:"));
+    }
+
+    #[test]
+    fn test_visual_regression_suite() {
+        let mut suite = VisualRegressionSuite::new();
+
+        let test1 = VisualRegressionTest::new("test1", "data1", "data1");
+        let test2 = VisualRegressionTest::new("test2", "data2", "different");
+
+        suite.add_test(test1);
+        suite.add_test(test2);
+
+        let summary = suite.run();
+        assert!(summary.contains("Total tests: 2"));
+        assert!(summary.contains("Passed: 1"));
+        assert!(summary.contains("Failed: 1"));
+        assert!(!suite.all_passed());
+    }
+
+    #[test]
+    fn test_visual_regression_suite_all_passed() {
+        let mut suite = VisualRegressionSuite::new();
+
+        let test1 = VisualRegressionTest::new("test1", "data1", "data1");
+        let test2 = VisualRegressionTest::new("test2", "data2", "data2");
+
+        suite.add_test(test1);
+        suite.add_test(test2);
+
+        assert!(suite.all_passed());
+    }
+
+    #[test]
+    fn test_base64_encode() {
+        let data = "Hello, World!";
+        let encoded = base64_encode(data);
+        assert!(!encoded.is_empty());
+        // Base64 of "Hello, World!" should be "SGVsbG8sIFdvcmxkIQ=="
+        assert_eq!(encoded, "SGVsbG8sIFdvcmxkIQ==");
+    }
+
+    #[test]
+    fn test_animation_types() {
+        let animation = Animation {
+            target: "element1".to_string(),
+            animation_type: AnimationType::FadeIn,
+            duration_ms: 500,
+            delay_ms: 0,
+        };
+
+        assert_eq!(animation.duration_ms, 500);
+        assert_eq!(animation.delay_ms, 0);
+    }
+
+    #[test]
+    fn test_slide_content_types() {
+        let slide = Slide {
+            title: "Test Slide".to_string(),
+            content: SlideContent::Text("Some text".to_string()),
+            animations: Vec::new(),
+            notes: Some("Speaker notes".to_string()),
+        };
+
+        assert_eq!(slide.title, "Test Slide");
+        assert!(slide.notes.is_some());
     }
 }

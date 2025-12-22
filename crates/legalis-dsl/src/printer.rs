@@ -2,6 +2,7 @@
 //!
 //! Converts `Statute` structures back to human-readable DSL format.
 
+use crate::ast::{ConditionNode, ConditionValue, EffectNode, LegalDocument, StatuteNode};
 use legalis_core::{ComparisonOp, Condition, EffectType, Statute};
 
 /// Configuration for the pretty-printer.
@@ -326,6 +327,237 @@ pub fn format_statute(statute: &Statute) -> String {
 /// Formats multiple statutes to DSL string using default configuration.
 pub fn format_statutes(statutes: &[Statute]) -> String {
     DslPrinter::new().format_batch(statutes)
+}
+
+/// Formats a LegalDocument AST back to DSL string.
+pub fn format_document(doc: &LegalDocument) -> String {
+    let mut output = String::new();
+
+    // Format imports
+    for import in &doc.imports {
+        output.push_str("IMPORT \"");
+        output.push_str(&import.path);
+        output.push('"');
+        if let Some(alias) = &import.alias {
+            output.push_str(" AS ");
+            output.push_str(alias);
+        }
+        output.push('\n');
+    }
+
+    if !doc.imports.is_empty() && !doc.statutes.is_empty() {
+        output.push('\n');
+    }
+
+    // Format statutes
+    for (idx, statute) in doc.statutes.iter().enumerate() {
+        if idx > 0 {
+            output.push('\n');
+        }
+        output.push_str(&format_statute_node(statute));
+    }
+
+    output
+}
+
+/// Formats a single StatuteNode back to DSL string.
+fn format_statute_node(statute: &StatuteNode) -> String {
+    let mut output = String::new();
+
+    output.push_str("STATUTE ");
+    output.push_str(&statute.id);
+    output.push_str(": \"");
+    output.push_str(&statute.title);
+    output.push_str("\" {\n");
+
+    // Requirements
+    for req in &statute.requires {
+        output.push_str("    REQUIRES ");
+        output.push_str(req);
+        output.push('\n');
+    }
+
+    // Supersedes
+    if !statute.supersedes.is_empty() {
+        output.push_str("    SUPERSEDES ");
+        output.push_str(&statute.supersedes.join(", "));
+        output.push('\n');
+    }
+
+    // Conditions
+    for cond in &statute.conditions {
+        output.push_str("    WHEN ");
+        output.push_str(&format_condition_node(cond));
+        output.push('\n');
+    }
+
+    // Effects
+    for effect in &statute.effects {
+        output.push_str("    THEN ");
+        output.push_str(&format_effect_node(effect));
+        output.push('\n');
+    }
+
+    // Defaults
+    for default in &statute.defaults {
+        output.push_str("    DEFAULT ");
+        output.push_str(&default.field);
+        output.push_str(" = ");
+        output.push_str(&format_condition_value(&default.value));
+        output.push('\n');
+    }
+
+    // Exceptions
+    for exception in &statute.exceptions {
+        output.push_str("    EXCEPTION");
+        if !exception.conditions.is_empty() {
+            output.push_str(" WHEN ");
+            output.push_str(&format_condition_node(&exception.conditions[0]));
+        }
+        output.push_str(" \"");
+        output.push_str(&exception.description);
+        output.push_str("\"\n");
+    }
+
+    // Amendments
+    for amendment in &statute.amendments {
+        output.push_str("    AMENDMENT ");
+        output.push_str(&amendment.target_id);
+        if let Some(ver) = amendment.version {
+            output.push_str(" VERSION ");
+            output.push_str(&ver.to_string());
+        }
+        output.push_str(" \"");
+        output.push_str(&amendment.description);
+        output.push_str("\"\n");
+    }
+
+    // Discretion
+    if let Some(disc) = &statute.discretion {
+        output.push_str("    DISCRETION \"");
+        output.push_str(disc);
+        output.push_str("\"\n");
+    }
+
+    output.push_str("}\n");
+    output
+}
+
+/// Formats a ConditionNode back to DSL string.
+fn format_condition_node(cond: &ConditionNode) -> String {
+    match cond {
+        ConditionNode::Comparison {
+            field,
+            operator,
+            value,
+        } => {
+            format!("{} {} {}", field, operator, format_condition_value(value))
+        }
+        ConditionNode::HasAttribute { key } => {
+            format!("HAS {}", key)
+        }
+        ConditionNode::Between { field, min, max } => {
+            format!(
+                "{} BETWEEN {} AND {}",
+                field,
+                format_condition_value(min),
+                format_condition_value(max)
+            )
+        }
+        ConditionNode::In { field, values } => {
+            let vals: Vec<String> = values.iter().map(format_condition_value).collect();
+            format!("{} IN ({})", field, vals.join(", "))
+        }
+        ConditionNode::Like { field, pattern } => {
+            format!("{} LIKE \"{}\"", field, pattern)
+        }
+        ConditionNode::Matches {
+            field,
+            regex_pattern,
+        } => {
+            format!("{} MATCHES \"{}\"", field, regex_pattern)
+        }
+        ConditionNode::InRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            let open = if *inclusive_min { "[" } else { "(" };
+            let close = if *inclusive_max { "]" } else { ")" };
+            format!(
+                "{} IN_RANGE {}{}..{}{}",
+                field,
+                open,
+                format_condition_value(min),
+                format_condition_value(max),
+                close
+            )
+        }
+        ConditionNode::NotInRange {
+            field,
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+        } => {
+            let open = if *inclusive_min { "[" } else { "(" };
+            let close = if *inclusive_max { "]" } else { ")" };
+            format!(
+                "{} NOT_IN_RANGE {}{}..{}{}",
+                field,
+                open,
+                format_condition_value(min),
+                format_condition_value(max),
+                close
+            )
+        }
+        ConditionNode::TemporalComparison {
+            field,
+            operator,
+            value,
+        } => {
+            format!("{:?} {} {}", field, operator, format_condition_value(value))
+        }
+        ConditionNode::And(left, right) => {
+            format!(
+                "({}) AND ({})",
+                format_condition_node(left),
+                format_condition_node(right)
+            )
+        }
+        ConditionNode::Or(left, right) => {
+            format!(
+                "({}) OR ({})",
+                format_condition_node(left),
+                format_condition_node(right)
+            )
+        }
+        ConditionNode::Not(inner) => {
+            format!("NOT ({})", format_condition_node(inner))
+        }
+    }
+}
+
+/// Formats a ConditionValue back to DSL string.
+fn format_condition_value(value: &ConditionValue) -> String {
+    match value {
+        ConditionValue::Number(n) => n.to_string(),
+        ConditionValue::String(s) => format!("\"{}\"", s),
+        ConditionValue::Boolean(b) => b.to_string(),
+        ConditionValue::Date(d) => d.clone(),
+        ConditionValue::SetExpr(_) => "SET_EXPR".to_string(), // Simplified
+    }
+}
+
+/// Formats an EffectNode back to DSL string.
+fn format_effect_node(effect: &EffectNode) -> String {
+    let mut output = effect.effect_type.to_uppercase();
+    output.push_str(" \"");
+    output.push_str(&effect.description);
+    output.push('"');
+    output
 }
 
 #[cfg(test)]

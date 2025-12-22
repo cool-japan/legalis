@@ -24,15 +24,15 @@
 - [x] Add batch verification support
 
 ### Simulation
-- [ ] Add simulation trigger endpoints
-- [ ] Implement streaming simulation results
-- [ ] Create simulation comparison endpoints
-- [ ] Add saved simulation management
+- [x] Add simulation trigger endpoints
+- [x] Implement streaming simulation results (SSE)
+- [x] Create simulation comparison endpoints
+- [x] Add saved simulation management
 
 ### Visualization
-- [ ] Add visualization endpoints
-- [ ] Implement dynamic graph generation
-- [ ] Create interactive visualization support
+- [x] Add visualization endpoints
+- [x] Implement dynamic graph generation (SVG, Mermaid, PlantUML, etc.)
+- [x] Create interactive visualization support (HTML output with themes)
 
 ## GraphQL
 
@@ -44,38 +44,38 @@
 
 ## Authentication
 
-- [ ] Add JWT authentication
+- [x] Add JWT authentication (basic extraction)
 - [ ] Implement OAuth2/OIDC support
-- [ ] Add API key authentication
-- [ ] Create role-based access control
-- [ ] Implement rate limiting per user
+- [x] Add API key authentication
+- [x] Create role-based access control (RBAC + ReBAC)
+- [x] Implement rate limiting (global, needs per-user enhancement)
 
 ## Documentation
 
-- [ ] Add OpenAPI/Swagger documentation
-- [ ] Create interactive API explorer
-- [ ] Add request/response examples
+- [x] Add OpenAPI/Swagger documentation (comprehensive with examples)
+- [ ] Create interactive API explorer (Swagger UI)
+- [x] Add request/response examples
 - [ ] Create SDK generation from OpenAPI
 
 ## Real-time
 
 - [ ] Add WebSocket support
-- [ ] Implement Server-Sent Events
-- [ ] Create real-time simulation streaming
+- [x] Implement Server-Sent Events
+- [x] Create real-time simulation streaming
 - [ ] Add notification push support
 
 ## Performance
 
 ### Caching
-- [ ] Add response caching
-- [ ] Implement ETag support
+- [x] Add response caching (in-memory cache store)
+- [x] Implement ETag support
 - [ ] Add Redis caching layer
 - [ ] Create cache invalidation strategy
 
 ### Optimization
 - [x] Add request compression (gzip, brotli)
 - [x] Implement pagination (offset-based, see search endpoint)
-- [ ] Implement pagination with cursors
+- [x] Implement pagination with cursors
 - [ ] Add field selection (GraphQL-style)
 - [ ] Create connection pooling
 
@@ -89,8 +89,9 @@
 
 ## Deployment
 
-- [ ] Add Docker configuration
-- [ ] Create Kubernetes manifests
+- [x] Add Docker configuration
+- [x] Create docker-compose.yml with services (API, Redis, Prometheus, Grafana)
+- [x] Create Kubernetes manifests (Deployment, Service, Ingress, HPA, ConfigMap, ServiceMonitor)
 - [x] Implement graceful shutdown
 - [x] Add configuration via environment variables
 - [ ] Create deployment documentation

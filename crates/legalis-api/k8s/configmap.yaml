@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: legalis-api-config
+  labels:
+    app: legalis-api
+data:
+  RUST_LOG: "info,legalis_api=debug"
+  LEGALIS_HOST: "0.0.0.0"
+  LEGALIS_PORT: "3000"
+  # Add other configuration values as needed

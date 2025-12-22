@@ -11,8 +11,8 @@
 ## Formats
 
 - [x] Add SPARQL query generation for exported data
-- [ ] Implement streaming serialization for large datasets
-- [ ] Add RDFa output for HTML embedding
+- [x] Implement streaming serialization for large datasets
+- [x] Add RDFa output for HTML embedding
 - [x] Support TriG format for named graphs
 
 ## Ontologies
@@ -43,7 +43,7 @@
 ### SPARQL Endpoints
 - [ ] Add SPARQL endpoint integration
 - [ ] Implement federated query support
-- [ ] Create SPARQL CONSTRUCT templates
+- [x] Create SPARQL CONSTRUCT templates
 - [ ] Add graph store protocol support
 
 ### External Services
@@ -54,21 +54,21 @@
 
 ## Validation
 
-- [ ] Add SHACL shape generation
-- [ ] Implement ShEx validation
-- [ ] Create RDF validation reports
-- [ ] Add ontology consistency checking
+- [x] Add SHACL shape generation
+- [x] Implement ShEx validation
+- [x] Create RDF validation reports
+- [x] Add ontology consistency checking
 
 ## Performance
 
-- [ ] Optimize large statute serialization
-- [ ] Add batch export support
-- [ ] Implement incremental graph updates
-- [ ] Create export caching
+- [x] Optimize large statute serialization
+- [x] Add batch export support
+- [x] Implement incremental graph updates
+- [x] Create export caching
 
 ## Testing
 
 - [x] Add RDF validation tests
-- [ ] Create round-trip conversion tests
+- [x] Create round-trip conversion tests
 - [x] Test all output formats
-- [ ] Benchmark serialization performance
+- [x] Benchmark serialization performance

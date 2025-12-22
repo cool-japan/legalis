@@ -6,7 +6,7 @@
 //! - Legal cases and arguments
 //! - Ontologies and domain models
 //!
-//! Reference: http://www.estrellaproject.org/lkif-core/
+//! Reference: <http://www.estrellaproject.org/lkif-core/>
 
 use crate::{
     ConversionReport, FormatExporter, FormatImporter, InteropError, InteropResult, LegalFormat,

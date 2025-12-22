@@ -136,7 +136,7 @@
 
 use async_trait::async_trait;
 use legalis_core::Statute;
-use legalis_i18n::{Jurisdiction, Locale};
+use legalis_i18n::{Jurisdiction, LegalSystem, Locale};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -1853,6 +1853,380 @@ impl PortingEngine {
                 .count(),
         }
     }
+
+    /// Exports compatibility report to specified format.
+    pub fn export_compatibility_report(
+        &self,
+        report: &CompatibilityReport,
+        format: ExportFormat,
+    ) -> PortingResult<String> {
+        match format {
+            ExportFormat::Json => serde_json::to_string_pretty(report).map_err(|e| {
+                PortingError::AdaptationRequired(format!("JSON serialization failed: {}", e))
+            }),
+            ExportFormat::Markdown => Ok(self.format_report_as_markdown(report)),
+        }
+    }
+
+    fn format_report_as_markdown(&self, report: &CompatibilityReport) -> String {
+        let mut md = String::new();
+        md.push_str("# Compatibility Report\n\n");
+        md.push_str(&format!(
+            "**Compatibility Score:** {:.1}%\n\n",
+            report.compatibility_score * 100.0
+        ));
+        md.push_str(&format!(
+            "**Adaptations Required:** {}\n\n",
+            report.adaptations_required
+        ));
+        md.push_str(&format!(
+            "**Incompatibilities:** {}\n\n",
+            report.incompatibilities
+        ));
+
+        if !report.findings.is_empty() {
+            md.push_str("## Findings\n\n");
+            for finding in &report.findings {
+                md.push_str(&format!(
+                    "- **[{:?}]** {}: {}\n",
+                    finding.severity, finding.category, finding.description
+                ));
+            }
+            md.push('\n');
+        }
+
+        if !report.recommendations.is_empty() {
+            md.push_str("## Recommendations\n\n");
+            for rec in &report.recommendations {
+                md.push_str(&format!("- {}\n", rec));
+            }
+        }
+
+        md
+    }
+
+    /// Exports porting output to specified format.
+    pub fn export_porting_output(
+        &self,
+        output: &PortingOutput,
+        format: ExportFormat,
+    ) -> PortingResult<String> {
+        match format {
+            ExportFormat::Json => serde_json::to_string_pretty(output).map_err(|e| {
+                PortingError::AdaptationRequired(format!("JSON serialization failed: {}", e))
+            }),
+            ExportFormat::Markdown => Ok(self.format_output_as_markdown(output)),
+        }
+    }
+
+    fn format_output_as_markdown(&self, output: &PortingOutput) -> String {
+        let mut md = String::new();
+        md.push_str("# Porting Output\n\n");
+        md.push_str(&format!(
+            "**Statutes Ported:** {}\n\n",
+            output.statutes.len()
+        ));
+
+        for (i, statute) in output.statutes.iter().enumerate() {
+            md.push_str(&format!(
+                "## Statute {} of {}\n\n",
+                i + 1,
+                output.statutes.len()
+            ));
+            md.push_str(&format!("**Original ID:** {}\n\n", statute.original_id));
+            md.push_str(&format!("**New ID:** {}\n\n", statute.statute.id));
+            md.push_str(&format!("**Title:** {}\n\n", statute.statute.title));
+            md.push_str(&format!("**Changes:** {}\n\n", statute.changes.len()));
+        }
+
+        if let Some(report) = &output.report {
+            md.push_str(&self.format_report_as_markdown(report));
+        }
+
+        md
+    }
+
+    /// Calculates TF-IDF based similarity between two statutes.
+    pub fn calculate_tfidf_similarity(&self, statute1: &Statute, statute2: &Statute) -> f64 {
+        // Simple TF-IDF implementation
+        let text1 = format!("{} {}", statute1.title, statute1.id);
+        let text2 = format!("{} {}", statute2.title, statute2.id);
+
+        // Tokenize
+        let words1: Vec<&str> = text1.split_whitespace().collect();
+        let words2: Vec<&str> = text2.split_whitespace().collect();
+
+        // Calculate term frequencies
+        let mut tf1 = std::collections::HashMap::new();
+        let mut tf2 = std::collections::HashMap::new();
+
+        for word in &words1 {
+            *tf1.entry(word.to_lowercase()).or_insert(0) += 1;
+        }
+        for word in &words2 {
+            *tf2.entry(word.to_lowercase()).or_insert(0) += 1;
+        }
+
+        // Calculate cosine similarity
+        let mut dot_product = 0.0;
+        let mut norm1 = 0.0;
+        let mut norm2 = 0.0;
+
+        let all_terms: std::collections::HashSet<_> =
+            tf1.keys().chain(tf2.keys()).map(|s| s.as_str()).collect();
+
+        for term in all_terms {
+            let v1 = *tf1.get(term).unwrap_or(&0) as f64;
+            let v2 = *tf2.get(term).unwrap_or(&0) as f64;
+            dot_product += v1 * v2;
+            norm1 += v1 * v1;
+            norm2 += v2 * v2;
+        }
+
+        if norm1 == 0.0 || norm2 == 0.0 {
+            0.0
+        } else {
+            dot_product / (norm1.sqrt() * norm2.sqrt())
+        }
+    }
+
+    /// Creates a porting template from successful porting operations.
+    pub fn create_template(
+        &self,
+        name: String,
+        description: String,
+        statute_types: Vec<String>,
+    ) -> PortingTemplate {
+        PortingTemplate {
+            id: format!("template-{}-{}", self.source.id, self.target.id),
+            name,
+            description,
+            statute_types,
+            term_replacements: self.term_replacements.clone(),
+            contextual_rules: vec![
+                "Adjust age thresholds based on cultural parameters".to_string(),
+                "Replace currency references with local currency".to_string(),
+                "Adapt procedural elements to target legal system".to_string(),
+            ],
+            target_legal_systems: vec![self.target.legal_system],
+        }
+    }
+
+    /// Applies a porting template to a statute.
+    pub fn apply_template(
+        &self,
+        statute: &Statute,
+        template: &PortingTemplate,
+    ) -> PortingResult<PortedStatute> {
+        let options = PortingOptions {
+            apply_cultural_params: true,
+            translate_terms: true,
+            ..Default::default()
+        };
+
+        // Apply template-specific term replacements
+        let engine_with_template = PortingEngine::new(self.source.clone(), self.target.clone())
+            .with_term_replacements(template.term_replacements.clone());
+
+        engine_with_template.port_statute(statute, &options)
+    }
+
+    /// Generates conflict resolution suggestions with priorities.
+    pub fn generate_conflict_resolutions(
+        &self,
+        conflicts: &[ConflictReport],
+    ) -> Vec<ConflictResolution> {
+        let mut resolutions = Vec::new();
+
+        for (i, conflict) in conflicts.iter().enumerate() {
+            let (priority, effort) = match conflict.severity {
+                Severity::Critical => (10, EffortLevel::VeryHigh),
+                Severity::Error => (8, EffortLevel::High),
+                Severity::Warning => (5, EffortLevel::Medium),
+                Severity::Info => (2, EffortLevel::Low),
+            };
+
+            resolutions.push(ConflictResolution {
+                conflict_id: format!("conflict-{}", i),
+                strategy: conflict
+                    .resolutions
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Consult legal expert for resolution strategy".to_string()),
+                priority,
+                effort,
+                steps: conflict.resolutions.clone(),
+                expected_outcome: format!(
+                    "Resolve {:?} conflict for statute {}",
+                    conflict.conflict_type, conflict.statute_id
+                ),
+            });
+        }
+
+        // Sort by priority (highest first)
+        resolutions.sort_by(|a, b| b.priority.cmp(&a.priority));
+        resolutions
+    }
+
+    /// Performs multi-hop porting through intermediate jurisdictions.
+    pub async fn multi_hop_port(
+        &self,
+        statute: &Statute,
+        intermediate_jurisdictions: &[Jurisdiction],
+        options: &PortingOptions,
+    ) -> PortingResult<PortingChain> {
+        let mut hop_results = Vec::new();
+        let mut cumulative_changes = Vec::new();
+        let mut current_statute = statute.clone();
+
+        // Port through each intermediate jurisdiction
+        for intermediate in intermediate_jurisdictions {
+            let hop_engine = PortingEngine::new(self.source.clone(), intermediate.clone());
+            let ported = hop_engine.port_statute(&current_statute, options)?;
+
+            cumulative_changes.extend(ported.changes.clone());
+            current_statute = ported.statute.clone();
+            hop_results.push(ported);
+        }
+
+        // Final hop to target
+        let final_ported = self.port_statute(&current_statute, options)?;
+        cumulative_changes.extend(final_ported.changes.clone());
+        hop_results.push(final_ported);
+
+        // Calculate chain score (average compatibility)
+        let chain_score = 1.0 - (cumulative_changes.len() as f64 * 0.05).min(1.0);
+
+        Ok(PortingChain {
+            id: format!("chain-{}", statute.id),
+            source_jurisdiction: self.source.id.clone(),
+            target_jurisdiction: self.target.id.clone(),
+            intermediate_hops: intermediate_jurisdictions
+                .iter()
+                .map(|j| j.id.clone())
+                .collect(),
+            hop_results,
+            cumulative_changes,
+            chain_score,
+        })
+    }
+
+    /// Records a porting operation in history.
+    pub fn record_history(
+        &self,
+        statute_id: String,
+        user: String,
+        options: &PortingOptions,
+        success: bool,
+        error: Option<String>,
+    ) -> PortingHistoryEntry {
+        PortingHistoryEntry {
+            id: format!("history-{}", chrono::Utc::now().timestamp()),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            source_jurisdiction: self.source.id.clone(),
+            target_jurisdiction: self.target.id.clone(),
+            statute_id,
+            user,
+            options: options.clone(),
+            success,
+            error,
+        }
+    }
+
+    /// Builds lineage tree for a statute across jurisdictions.
+    pub fn build_lineage(
+        &self,
+        original_id: String,
+        original_jurisdiction: String,
+        porting_history: &[PortingHistoryEntry],
+    ) -> StatuteLineage {
+        let mut derived_versions = Vec::new();
+
+        // Build tree from history
+        for entry in porting_history.iter().filter(|e| e.success) {
+            if entry.source_jurisdiction == original_jurisdiction {
+                derived_versions.push(LineageNode {
+                    jurisdiction: entry.target_jurisdiction.clone(),
+                    statute_id: entry.statute_id.clone(),
+                    parent_jurisdiction: Some(entry.source_jurisdiction.clone()),
+                    ported_at: entry.timestamp.clone(),
+                    children: Vec::new(),
+                });
+            }
+        }
+
+        StatuteLineage {
+            original_id,
+            original_jurisdiction,
+            total_ports: derived_versions.len(),
+            derived_versions,
+        }
+    }
+
+    /// Generates diff visualization between original and ported statute.
+    pub fn generate_diff(&self, original: &Statute, ported: &PortedStatute) -> StatuteDiff {
+        let mut differences = Vec::new();
+
+        // Check ID differences
+        if original.id != ported.statute.id {
+            differences.push(FieldDiff {
+                field: "id".to_string(),
+                original: original.id.clone(),
+                new: ported.statute.id.clone(),
+                change_type: DiffChangeType::Modified,
+            });
+        }
+
+        // Check title differences
+        if original.title != ported.statute.title {
+            differences.push(FieldDiff {
+                field: "title".to_string(),
+                original: original.title.clone(),
+                new: ported.statute.title.clone(),
+                change_type: DiffChangeType::Modified,
+            });
+        }
+
+        // Calculate similarity
+        let similarity_score = if differences.is_empty() {
+            1.0
+        } else {
+            1.0 - (differences.len() as f64 * 0.1).min(0.9)
+        };
+
+        StatuteDiff {
+            original_id: original.id.clone(),
+            ported_id: ported.statute.id.clone(),
+            differences,
+            similarity_score,
+        }
+    }
+
+    /// Exports statute diff as markdown visualization.
+    pub fn export_diff_markdown(&self, diff: &StatuteDiff) -> String {
+        let mut md = String::new();
+        md.push_str("# Statute Diff\n\n");
+        md.push_str(&format!("**Original ID:** {}\n\n", diff.original_id));
+        md.push_str(&format!("**Ported ID:** {}\n\n", diff.ported_id));
+        md.push_str(&format!(
+            "**Similarity Score:** {:.1}%\n\n",
+            diff.similarity_score * 100.0
+        ));
+
+        if !diff.differences.is_empty() {
+            md.push_str("## Changes\n\n");
+            for field_diff in &diff.differences {
+                md.push_str(&format!("### {}\n\n", field_diff.field));
+                md.push_str(&format!("**Type:** {:?}\n\n", field_diff.change_type));
+                md.push_str(&format!(
+                    "```diff\n- {}\n+ {}\n```\n\n",
+                    field_diff.original, field_diff.new
+                ));
+            }
+        }
+
+        md
+    }
 }
 
 /// Summary of compliance check results.
@@ -1874,6 +2248,164 @@ pub struct ComplianceSummary {
     pub total_violations: usize,
     /// Critical violations
     pub critical_violations: usize,
+}
+
+/// Export format for reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    /// JSON format
+    Json,
+    /// Markdown format
+    Markdown,
+}
+
+/// Porting template for common patterns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingTemplate {
+    /// Template ID
+    pub id: String,
+    /// Template name
+    pub name: String,
+    /// Description
+    pub description: String,
+    /// Applicable statute types
+    pub statute_types: Vec<String>,
+    /// Pre-configured term replacements
+    pub term_replacements: Vec<TermReplacement>,
+    /// Pre-configured contextual adjustments
+    pub contextual_rules: Vec<String>,
+    /// Target legal systems this template applies to
+    pub target_legal_systems: Vec<LegalSystem>,
+}
+
+/// Conflict resolution suggestion with priority.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictResolution {
+    /// Conflict being resolved
+    pub conflict_id: String,
+    /// Resolution strategy
+    pub strategy: String,
+    /// Priority level (1-10, higher is more important)
+    pub priority: u8,
+    /// Estimated effort
+    pub effort: EffortLevel,
+    /// Implementation steps
+    pub steps: Vec<String>,
+    /// Expected outcome
+    pub expected_outcome: String,
+}
+
+/// Effort level for resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffortLevel {
+    Low,
+    Medium,
+    High,
+    VeryHigh,
+}
+
+/// Multi-hop porting chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingChain {
+    /// Chain ID
+    pub id: String,
+    /// Original source jurisdiction
+    pub source_jurisdiction: String,
+    /// Final target jurisdiction
+    pub target_jurisdiction: String,
+    /// Intermediate jurisdictions
+    pub intermediate_hops: Vec<String>,
+    /// Porting results at each hop
+    pub hop_results: Vec<PortedStatute>,
+    /// Cumulative changes across all hops
+    pub cumulative_changes: Vec<PortingChange>,
+    /// Overall chain compatibility score
+    pub chain_score: f64,
+}
+
+/// Porting history entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingHistoryEntry {
+    /// Entry ID
+    pub id: String,
+    /// Timestamp
+    pub timestamp: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// User who performed porting
+    pub user: String,
+    /// Options used
+    pub options: PortingOptions,
+    /// Success status
+    pub success: bool,
+    /// Error message if failed
+    pub error: Option<String>,
+}
+
+/// Lineage tracking for a statute across jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteLineage {
+    /// Original statute ID
+    pub original_id: String,
+    /// Original jurisdiction
+    pub original_jurisdiction: String,
+    /// All derived versions
+    pub derived_versions: Vec<LineageNode>,
+    /// Total number of ports
+    pub total_ports: usize,
+}
+
+/// Node in statute lineage tree.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LineageNode {
+    /// Jurisdiction this version is in
+    pub jurisdiction: String,
+    /// Statute ID in this jurisdiction
+    pub statute_id: String,
+    /// Parent node (if any)
+    pub parent_jurisdiction: Option<String>,
+    /// Porting timestamp
+    pub ported_at: String,
+    /// Children nodes
+    pub children: Vec<LineageNode>,
+}
+
+/// Diff between original and ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteDiff {
+    /// Original statute ID
+    pub original_id: String,
+    /// Ported statute ID
+    pub ported_id: String,
+    /// Field-level differences
+    pub differences: Vec<FieldDiff>,
+    /// Overall similarity score
+    pub similarity_score: f64,
+}
+
+/// Difference in a specific field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldDiff {
+    /// Field name
+    pub field: String,
+    /// Original value
+    pub original: String,
+    /// New value
+    pub new: String,
+    /// Type of change
+    pub change_type: DiffChangeType,
+}
+
+/// Type of diff change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiffChangeType {
+    Modified,
+    Added,
+    Removed,
 }
 
 #[cfg(test)]
@@ -2360,5 +2892,243 @@ mod tests {
         assert_eq!(summary.total_statutes, 2);
         assert!(summary.average_compliance_score >= 0.0);
         assert!(summary.average_compliance_score <= 1.0);
+    }
+
+    #[test]
+    fn test_export_compatibility_report_json() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+        let report = engine.generate_report(&[statute]);
+
+        let json = engine
+            .export_compatibility_report(&report, ExportFormat::Json)
+            .unwrap();
+
+        assert!(json.contains("compatibility_score"));
+        assert!(json.contains("findings"));
+    }
+
+    #[test]
+    fn test_export_compatibility_report_markdown() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+        let report = engine.generate_report(&[statute]);
+
+        let md = engine
+            .export_compatibility_report(&report, ExportFormat::Markdown)
+            .unwrap();
+
+        assert!(md.contains("# Compatibility Report"));
+        assert!(md.contains("Compatibility Score"));
+    }
+
+    #[tokio::test]
+    async fn test_export_porting_output() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statutes = vec![Statute::new(
+            "test",
+            "Test",
+            Effect::new(EffectType::Grant, "Test"),
+        )];
+
+        let options = PortingOptions::default();
+        let output = engine.batch_port(&statutes, &options).await.unwrap();
+
+        let json = engine
+            .export_porting_output(&output, ExportFormat::Json)
+            .unwrap();
+        assert!(json.contains("statutes"));
+
+        let md = engine
+            .export_porting_output(&output, ExportFormat::Markdown)
+            .unwrap();
+        assert!(md.contains("# Porting Output"));
+    }
+
+    #[test]
+    fn test_tfidf_similarity() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute1 = Statute::new(
+            "test1",
+            "Adult Rights Law",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        let statute2 = Statute::new(
+            "test2",
+            "Adult Rights Act",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        let statute3 = Statute::new(
+            "test3",
+            "Child Protection Law",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let sim12 = engine.calculate_tfidf_similarity(&statute1, &statute2);
+        let sim13 = engine.calculate_tfidf_similarity(&statute1, &statute3);
+
+        assert!(sim12 > sim13);
+        assert!((0.0..=1.0).contains(&sim12));
+        assert!((0.0..=1.0).contains(&sim13));
+    }
+
+    #[test]
+    fn test_create_template() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let template = engine.create_template(
+            "Civil Law Template".to_string(),
+            "Template for civil law statutes".to_string(),
+            vec!["civil".to_string(), "commercial".to_string()],
+        );
+
+        assert_eq!(template.name, "Civil Law Template");
+        assert_eq!(template.statute_types.len(), 2);
+        assert!(!template.contextual_rules.is_empty());
+    }
+
+    #[test]
+    fn test_apply_template() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let template = engine.create_template(
+            "Test Template".to_string(),
+            "Test".to_string(),
+            vec!["test".to_string()],
+        );
+
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+        let ported = engine.apply_template(&statute, &template).unwrap();
+
+        assert!(ported.statute.id.starts_with("us-"));
+    }
+
+    #[test]
+    fn test_generate_conflict_resolutions() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+        let conflicts = engine.detect_conflicts(&statute);
+
+        let resolutions = engine.generate_conflict_resolutions(&conflicts);
+
+        assert!(!resolutions.is_empty());
+        for resolution in &resolutions {
+            assert!(resolution.priority >= 1 && resolution.priority <= 10);
+        }
+
+        // Check that resolutions are sorted by priority (highest first)
+        for i in 1..resolutions.len() {
+            assert!(resolutions[i - 1].priority >= resolutions[i].priority);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multi_hop_port() {
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+        let uk = Jurisdiction::new("UK", "United Kingdom", Locale::new("en").with_country("GB"))
+            .with_legal_system(LegalSystem::CommonLaw)
+            .with_cultural_params(CulturalParams::for_country("GB"));
+
+        let engine = PortingEngine::new(jp, us);
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+
+        let options = PortingOptions {
+            apply_cultural_params: true,
+            ..Default::default()
+        };
+
+        let chain = engine
+            .multi_hop_port(&statute, &[uk], &options)
+            .await
+            .unwrap();
+
+        assert_eq!(chain.hop_results.len(), 2);
+        // Cumulative changes may be empty if no cultural differences between jurisdictions
+        assert!(chain.chain_score >= 0.0 && chain.chain_score <= 1.0);
+        assert_eq!(chain.source_jurisdiction, "JP");
+        assert_eq!(chain.target_jurisdiction, "US");
+        assert_eq!(chain.intermediate_hops.len(), 1);
+    }
+
+    #[test]
+    fn test_record_history() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let options = PortingOptions::default();
+
+        let history = engine.record_history(
+            "test-statute".to_string(),
+            "user-001".to_string(),
+            &options,
+            true,
+            None,
+        );
+
+        assert_eq!(history.statute_id, "test-statute");
+        assert_eq!(history.user, "user-001");
+        assert!(history.success);
+        assert!(history.error.is_none());
+    }
+
+    #[test]
+    fn test_build_lineage() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let options = PortingOptions::default();
+
+        let history = vec![
+            engine.record_history(
+                "statute-1".to_string(),
+                "user".to_string(),
+                &options,
+                true,
+                None,
+            ),
+            engine.record_history(
+                "statute-2".to_string(),
+                "user".to_string(),
+                &options,
+                true,
+                None,
+            ),
+        ];
+
+        let lineage = engine.build_lineage("original-id".to_string(), "JP".to_string(), &history);
+
+        assert_eq!(lineage.original_id, "original-id");
+        assert_eq!(lineage.original_jurisdiction, "JP");
+        assert!(lineage.total_ports <= 2);
+    }
+
+    #[test]
+    fn test_generate_diff() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute = Statute::new(
+            "test",
+            "Original Title",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let options = PortingOptions::default();
+        let ported = engine.port_statute(&statute, &options).unwrap();
+
+        let diff = engine.generate_diff(&statute, &ported);
+
+        assert_eq!(diff.original_id, "test");
+        assert!(diff.similarity_score >= 0.0 && diff.similarity_score <= 1.0);
+        assert!(!diff.differences.is_empty());
+    }
+
+    #[test]
+    fn test_export_diff_markdown() {
+        let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
+        let statute = Statute::new("test", "Original", Effect::new(EffectType::Grant, "Test"));
+
+        let options = PortingOptions::default();
+        let ported = engine.port_statute(&statute, &options).unwrap();
+
+        let diff = engine.generate_diff(&statute, &ported);
+        let md = engine.export_diff_markdown(&diff);
+
+        assert!(md.contains("# Statute Diff"));
+        assert!(md.contains("Similarity Score"));
+        assert!(md.contains("```diff"));
     }
 }

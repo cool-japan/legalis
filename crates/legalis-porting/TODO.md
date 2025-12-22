@@ -67,3 +67,14 @@
 - [x] All clippy warnings fixed
 - [x] Property-based testing for robustness
 - [x] NO WARNINGS policy enforced across all targets
+
+## Advanced Features (Enhancements)
+
+- [x] Report export functionality (JSON, Markdown formats)
+- [x] Advanced similarity algorithms (TF-IDF, cosine similarity)
+- [x] Porting template system for common patterns
+- [x] Conflict resolution suggestions with priorities
+- [x] Multi-hop porting chains (A → B → C)
+- [x] Porting history and lineage tracking
+- [x] Diff visualization for ported statutes
+- [x] Batch export of porting reports (via PortingOutput export)

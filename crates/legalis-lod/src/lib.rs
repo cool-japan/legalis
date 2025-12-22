@@ -20,7 +20,12 @@ use legalis_core::{ComparisonOp, Condition, EffectType, Statute};
 use std::collections::HashMap;
 use thiserror::Error;
 
+pub mod cache;
+pub mod rdfa;
+pub mod shacl;
+pub mod shex;
 pub mod sparql;
+pub mod streaming;
 pub mod validation;
 pub mod void_desc;
 
@@ -1708,5 +1713,329 @@ mod tests {
         assert!(formats.contains(&RdfFormat::Turtle));
         assert!(formats.contains(&RdfFormat::JsonLd));
         assert!(formats.contains(&RdfFormat::TriG));
+    }
+
+    // Round-trip conversion tests
+    #[test]
+    fn test_round_trip_basic_statute() {
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let statute = sample_statute();
+
+        // Export to triples
+        let triples = exporter.statute_to_triples(&statute).unwrap();
+
+        // Verify key information is preserved
+        assert!(triples.iter().any(|t| t.predicate == "eli:title"));
+        assert!(triples.iter().any(|t| t.predicate == "dcterms:identifier"));
+        assert!(triples.iter().any(|t| t.predicate == "legalis:hasEffect"));
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate == "legalis:hasPrecondition")
+        );
+    }
+
+    #[test]
+    fn test_round_trip_with_metadata() {
+        let prov = ProvenanceInfo::new()
+            .with_agent("https://example.org/agent/test")
+            .with_attribution("Test Team");
+
+        let license = LicenseInfo::cc_by_4_0();
+
+        let exporter = LodExporter::new(RdfFormat::Turtle)
+            .with_provenance(prov)
+            .with_license(license);
+
+        let statute = sample_statute();
+        let triples = exporter.statute_to_triples(&statute).unwrap();
+
+        // Verify provenance preserved
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate == "prov:wasAttributedTo")
+        );
+        assert!(triples.iter().any(|t| t.predicate == "dcterms:creator"));
+
+        // Verify license preserved
+        assert!(triples.iter().any(|t| t.predicate == "dcterms:license"));
+    }
+
+    #[test]
+    fn test_round_trip_complex_conditions() {
+        let statute = Statute::new(
+            "complex-law",
+            "Complex Law",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            }),
+        ));
+
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let triples = exporter.statute_to_triples(&statute).unwrap();
+
+        // Verify condition structure preserved
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "legalis:AndCondition"))
+        );
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "legalis:AgeCondition"))
+        );
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "legalis:IncomeCondition"))
+        );
+        assert!(triples.iter().any(|t| t.predicate == "legalis:leftOperand"));
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate == "legalis:rightOperand")
+        );
+    }
+
+    #[test]
+    fn test_round_trip_validation_consistency() {
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let statute = sample_statute();
+
+        // Validate the statute
+        let report = exporter.validate_statute(&statute).unwrap();
+
+        // Should pass validation (no critical errors)
+        assert!(report.triple_count > 0);
+        assert!(report.subject_count > 0);
+    }
+
+    #[test]
+    fn test_round_trip_all_formats_consistency() {
+        let statute = sample_statute();
+
+        // Export to all formats
+        for format in RdfFormat::all_formats() {
+            let exporter = LodExporter::new(format);
+            let output = exporter.export(&statute);
+
+            // All formats should successfully export
+            assert!(output.is_ok(), "Failed to export to {:?}", format);
+
+            let output = output.unwrap();
+            assert!(!output.is_empty(), "{:?} produced empty output", format);
+
+            // All formats should contain the title
+            assert!(
+                output.contains("Adult Rights Act"),
+                "{:?} missing title",
+                format
+            );
+        }
+    }
+
+    #[test]
+    fn test_round_trip_batch_consistency() {
+        let statutes = vec![
+            sample_statute(),
+            Statute::new(
+                "test-law",
+                "Test Law",
+                Effect::new(EffectType::Grant, "Test rights"),
+            ),
+        ];
+
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+        let batch_output = exporter.export_batch(&statutes).unwrap();
+
+        // Should contain both statutes
+        assert!(batch_output.contains("adult-rights"));
+        assert!(batch_output.contains("test-law"));
+        assert!(batch_output.contains("Adult Rights Act"));
+        assert!(batch_output.contains("Test Law"));
+    }
+
+    #[test]
+    fn test_round_trip_special_characters() {
+        let statute = Statute::new(
+            "special-chars",
+            "Law with \"quotes\" and <tags> & symbols",
+            Effect::new(EffectType::Grant, "Special\ncharacters\ttab"),
+        );
+
+        // Test Turtle
+        let exporter_turtle = LodExporter::new(RdfFormat::Turtle);
+        let turtle_output = exporter_turtle.export(&statute).unwrap();
+        assert!(turtle_output.contains("\\\"quotes\\\""));
+        assert!(turtle_output.contains("\\n"));
+
+        // Test RDF/XML
+        let exporter_xml = LodExporter::new(RdfFormat::RdfXml);
+        let xml_output = exporter_xml.export(&statute).unwrap();
+        assert!(xml_output.contains("&lt;tags&gt;") || xml_output.contains("&quot;quotes&quot;"));
+    }
+
+    // Benchmark tests
+    #[test]
+    fn test_benchmark_single_statute_export() {
+        let statute = sample_statute();
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+
+        // Warm up
+        let _ = exporter.export(&statute);
+
+        // Measure
+        let start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = exporter.export(&statute);
+        }
+        let duration = start.elapsed();
+
+        println!("Single statute export (100 iterations): {:?}", duration);
+        println!("Average: {:?}", duration / 100);
+
+        // Sanity check - should be reasonably fast
+        assert!(
+            duration.as_millis() < 10000,
+            "Export too slow: {:?}",
+            duration
+        );
+    }
+
+    #[test]
+    fn test_benchmark_batch_export() {
+        let statutes: Vec<Statute> = (0..100)
+            .map(|i| {
+                Statute::new(
+                    format!("statute-{}", i),
+                    format!("Statute Number {}", i),
+                    Effect::new(EffectType::Grant, format!("Effect {}", i)),
+                )
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18 + (i % 10),
+                })
+            })
+            .collect();
+
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+
+        let start = std::time::Instant::now();
+        let output = exporter.export_batch(&statutes).unwrap();
+        let duration = start.elapsed();
+
+        println!("Batch export (100 statutes): {:?}", duration);
+        println!("Per statute: {:?}", duration / 100);
+
+        // Sanity check
+        assert!(!output.is_empty());
+        assert!(
+            duration.as_millis() < 10000,
+            "Batch export too slow: {:?}",
+            duration
+        );
+    }
+
+    #[test]
+    fn test_benchmark_all_formats() {
+        let statute = sample_statute();
+
+        for format in RdfFormat::all_formats() {
+            let exporter = LodExporter::new(format);
+
+            let start = std::time::Instant::now();
+            for _ in 0..50 {
+                let _ = exporter.export(&statute);
+            }
+            let duration = start.elapsed();
+
+            println!("{:?} format (50 iterations): {:?}", format, duration);
+            println!("Average: {:?}", duration / 50);
+
+            // All formats should be reasonably fast
+            assert!(
+                duration.as_millis() < 5000,
+                "{:?} too slow: {:?}",
+                format,
+                duration
+            );
+        }
+    }
+
+    #[test]
+    fn test_benchmark_validation() {
+        let statute = sample_statute();
+        let exporter = LodExporter::new(RdfFormat::Turtle);
+
+        let start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = exporter.validate_statute(&statute);
+        }
+        let duration = start.elapsed();
+
+        println!("Validation (100 iterations): {:?}", duration);
+        println!("Average: {:?}", duration / 100);
+
+        // Validation should be fast
+        assert!(
+            duration.as_millis() < 5000,
+            "Validation too slow: {:?}",
+            duration
+        );
+    }
+
+    #[test]
+    fn test_benchmark_streaming_export() {
+        use std::io::Cursor;
+
+        let statutes: Vec<Statute> = (0..50)
+            .map(|i| {
+                Statute::new(
+                    format!("statute-{}", i),
+                    format!("Statute {}", i),
+                    Effect::new(EffectType::Grant, format!("Effect {}", i)),
+                )
+            })
+            .collect();
+
+        let mut buffer = Cursor::new(Vec::new());
+        let ns = Namespaces::default();
+
+        let start = std::time::Instant::now();
+        {
+            let mut serializer =
+                streaming::StreamingSerializer::new(&mut buffer, RdfFormat::Turtle, ns);
+            serializer.write_header().unwrap();
+
+            for statute in &statutes {
+                let exporter = LodExporter::new(RdfFormat::Turtle);
+                let triples = exporter.statute_to_triples(statute).unwrap();
+                serializer.write_triples(&triples).unwrap();
+            }
+
+            serializer.finalize().unwrap();
+        }
+        let duration = start.elapsed();
+
+        println!("Streaming export (50 statutes): {:?}", duration);
+        println!("Per statute: {:?}", duration / 50);
+
+        let output = String::from_utf8(buffer.into_inner()).unwrap();
+        assert!(!output.is_empty());
+        assert!(
+            duration.as_millis() < 5000,
+            "Streaming export too slow: {:?}",
+            duration
+        );
     }
 }

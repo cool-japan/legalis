@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legalis-api
+  labels:
+    app: legalis-api
+    version: v0.2.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: legalis-api
+  template:
+    metadata:
+      labels:
+        app: legalis-api
+        version: v0.2.0
+    spec:
+      containers:
+      - name: legalis-api
+        image: legalis/api:0.2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: LEGALIS_HOST
+          value: "0.0.0.0"
+        - name: LEGALIS_PORT
+          value: "3000"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: legalis-api
+  labels:
+    app: legalis-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: legalis-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: legalis-api-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: legalis-api

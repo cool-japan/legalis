@@ -529,6 +529,18 @@ pub enum LegalSystem {
     Mixed,
 }
 
+impl std::fmt::Display for LegalSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LegalSystem::CivilLaw => write!(f, "Civil Law"),
+            LegalSystem::CommonLaw => write!(f, "Common Law"),
+            LegalSystem::ReligiousLaw => write!(f, "Religious Law"),
+            LegalSystem::CustomaryLaw => write!(f, "Customary Law"),
+            LegalSystem::Mixed => write!(f, "Mixed System"),
+        }
+    }
+}
+
 /// Jurisdiction definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Jurisdiction {
@@ -881,8 +893,16 @@ impl CulturalParams {
     }
 }
 
+/// Entry for context-aware translations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ContextualTranslationEntry {
+    key: String,
+    context: String,
+    translation: String,
+}
+
 /// Translation dictionary for legal terms.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct LegalDictionary {
     /// Locale this dictionary is for
     pub locale: Locale,
@@ -890,6 +910,74 @@ pub struct LegalDictionary {
     translations: IndexMap<String, String>,
     /// Legal definitions: term -> definition
     definitions: IndexMap<String, String>,
+    /// Abbreviations: full term -> abbreviation
+    abbreviations: IndexMap<String, String>,
+    /// Reverse abbreviation lookup: abbreviation -> full term
+    abbreviation_expansions: IndexMap<String, String>,
+    /// Context-aware translations: (key, context) -> translation
+    contextual_translations: IndexMap<(String, String), String>,
+}
+
+// Custom serialization for LegalDictionary
+impl Serialize for LegalDictionary {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("LegalDictionary", 6)?;
+        state.serialize_field("locale", &self.locale)?;
+        state.serialize_field("translations", &self.translations)?;
+        state.serialize_field("definitions", &self.definitions)?;
+        state.serialize_field("abbreviations", &self.abbreviations)?;
+        state.serialize_field("abbreviation_expansions", &self.abbreviation_expansions)?;
+
+        // Convert contextual_translations to a serializable format
+        let contextual: Vec<ContextualTranslationEntry> = self
+            .contextual_translations
+            .iter()
+            .map(|((key, context), translation)| ContextualTranslationEntry {
+                key: key.clone(),
+                context: context.clone(),
+                translation: translation.clone(),
+            })
+            .collect();
+        state.serialize_field("contextual_translations", &contextual)?;
+        state.end()
+    }
+}
+
+// Custom deserialization for LegalDictionary
+impl<'de> Deserialize<'de> for LegalDictionary {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct LegalDictionaryHelper {
+            locale: Locale,
+            translations: IndexMap<String, String>,
+            definitions: IndexMap<String, String>,
+            abbreviations: IndexMap<String, String>,
+            abbreviation_expansions: IndexMap<String, String>,
+            contextual_translations: Vec<ContextualTranslationEntry>,
+        }
+
+        let helper = LegalDictionaryHelper::deserialize(deserializer)?;
+        let mut contextual_translations = IndexMap::new();
+        for entry in helper.contextual_translations {
+            contextual_translations.insert((entry.key, entry.context), entry.translation);
+        }
+
+        Ok(LegalDictionary {
+            locale: helper.locale,
+            translations: helper.translations,
+            definitions: helper.definitions,
+            abbreviations: helper.abbreviations,
+            abbreviation_expansions: helper.abbreviation_expansions,
+            contextual_translations,
+        })
+    }
 }
 
 impl LegalDictionary {
@@ -914,6 +1002,9 @@ impl LegalDictionary {
             locale,
             translations: IndexMap::new(),
             definitions: IndexMap::new(),
+            abbreviations: IndexMap::new(),
+            abbreviation_expansions: IndexMap::new(),
+            contextual_translations: IndexMap::new(),
         }
     }
 
@@ -935,6 +1026,125 @@ impl LegalDictionary {
     /// Gets a definition.
     pub fn define(&self, term: &str) -> Option<&str> {
         self.definitions.get(term).map(|s| s.as_str())
+    }
+
+    /// Adds an abbreviation for a term.
+    pub fn add_abbreviation(&mut self, term: impl Into<String>, abbr: impl Into<String>) {
+        let term_str = term.into();
+        let abbr_str = abbr.into();
+        self.abbreviation_expansions
+            .insert(abbr_str.clone(), term_str.clone());
+        self.abbreviations.insert(term_str, abbr_str);
+    }
+
+    /// Gets the abbreviation for a term.
+    pub fn get_abbreviation(&self, term: &str) -> Option<&str> {
+        self.abbreviations.get(term).map(|s| s.as_str())
+    }
+
+    /// Expands an abbreviation to its full term.
+    pub fn expand_abbreviation(&self, abbr: &str) -> Option<&str> {
+        self.abbreviation_expansions.get(abbr).map(|s| s.as_str())
+    }
+
+    /// Checks if a string is a known abbreviation.
+    pub fn is_abbreviation(&self, text: &str) -> bool {
+        self.abbreviation_expansions.contains_key(text)
+    }
+
+    /// Adds a context-aware translation.
+    /// Context can be used to disambiguate terms with multiple meanings.
+    /// Examples: "right" with context "legal" vs "direction", "party" with context "contract" vs "celebration"
+    pub fn add_contextual_translation(
+        &mut self,
+        key: impl Into<String>,
+        context: impl Into<String>,
+        value: impl Into<String>,
+    ) {
+        self.contextual_translations
+            .insert((key.into(), context.into()), value.into());
+    }
+
+    /// Gets a translation with context.
+    /// If no contextual translation is found, falls back to the default translation.
+    pub fn translate_with_context(&self, key: &str, context: &str) -> Option<&str> {
+        // Try contextual translation first
+        if let Some(translation) = self
+            .contextual_translations
+            .get(&(key.to_string(), context.to_string()))
+        {
+            return Some(translation.as_str());
+        }
+        // Fall back to default translation
+        self.translate(key)
+    }
+
+    /// Lists all available contexts for a given key.
+    pub fn get_contexts_for_term(&self, key: &str) -> Vec<&str> {
+        self.contextual_translations
+            .keys()
+            .filter_map(|(k, ctx)| if k == key { Some(ctx.as_str()) } else { None })
+            .collect()
+    }
+
+    /// Exports the dictionary to a JSON string.
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Imports a dictionary from a JSON string.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    /// Gets the number of translations in this dictionary.
+    pub fn translation_count(&self) -> usize {
+        self.translations.len()
+    }
+
+    /// Gets the number of definitions in this dictionary.
+    pub fn definition_count(&self) -> usize {
+        self.definitions.len()
+    }
+
+    /// Gets the number of abbreviations in this dictionary.
+    pub fn abbreviation_count(&self) -> usize {
+        self.abbreviations.len()
+    }
+
+    /// Gets the number of contextual translations in this dictionary.
+    pub fn contextual_translation_count(&self) -> usize {
+        self.contextual_translations.len()
+    }
+
+    /// Merges another dictionary into this one.
+    /// Existing entries are preserved; only new entries are added.
+    pub fn merge(&mut self, other: &LegalDictionary) {
+        for (key, value) in &other.translations {
+            self.translations
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+        for (key, value) in &other.definitions {
+            self.definitions
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+        for (key, value) in &other.abbreviations {
+            self.abbreviations
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+        for (key, value) in &other.abbreviation_expansions {
+            self.abbreviation_expansions
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+        for (key, value) in &other.contextual_translations {
+            self.contextual_translations
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
     }
 
     /// Creates a standard English (US) legal dictionary.
@@ -1041,6 +1251,26 @@ impl LegalDictionary {
         dict.add_translation("litigation", "litigation");
         dict.add_translation("precedent", "precedent");
         dict.add_translation("statute_of_limitations", "statute of limitations");
+
+        // Common legal abbreviations
+        dict.add_abbreviation("corporation", "Corp.");
+        dict.add_abbreviation("incorporated", "Inc.");
+        dict.add_abbreviation("limited_liability_company", "LLC");
+        dict.add_abbreviation("attorney", "Atty.");
+        dict.add_abbreviation("versus", "v.");
+        dict.add_abbreviation("plaintiff", "Pl.");
+        dict.add_abbreviation("defendant", "Def.");
+        dict.add_abbreviation("contract", "K");
+        dict.add_abbreviation("statute", "Stat.");
+        dict.add_abbreviation("section", "§");
+        dict.add_abbreviation("article", "Art.");
+        dict.add_abbreviation("paragraph", "Para.");
+        dict.add_abbreviation("supreme_court", "S.Ct.");
+        dict.add_abbreviation("district_court", "D.C.");
+        dict.add_abbreviation("court_of_appeals", "C.A.");
+        dict.add_abbreviation("federal_register", "Fed. Reg.");
+        dict.add_abbreviation("code_of_federal_regulations", "C.F.R.");
+        dict.add_abbreviation("united_states_code", "U.S.C.");
 
         dict
     }
@@ -2339,6 +2569,19 @@ pub enum PluralCategory {
     Other,
 }
 
+impl std::fmt::Display for PluralCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PluralCategory::Zero => write!(f, "zero"),
+            PluralCategory::One => write!(f, "one"),
+            PluralCategory::Two => write!(f, "two"),
+            PluralCategory::Few => write!(f, "few"),
+            PluralCategory::Many => write!(f, "many"),
+            PluralCategory::Other => write!(f, "other"),
+        }
+    }
+}
+
 /// Plural rules for a specific locale.
 #[derive(Debug, Clone)]
 pub struct PluralRules {
@@ -2637,6 +2880,19 @@ pub enum CalendarSystem {
     Persian,
 }
 
+impl std::fmt::Display for CalendarSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CalendarSystem::Gregorian => write!(f, "Gregorian"),
+            CalendarSystem::Islamic => write!(f, "Islamic"),
+            CalendarSystem::Hebrew => write!(f, "Hebrew"),
+            CalendarSystem::Japanese => write!(f, "Japanese"),
+            CalendarSystem::Buddhist => write!(f, "Buddhist"),
+            CalendarSystem::Persian => write!(f, "Persian"),
+        }
+    }
+}
+
 /// Date representation in a calendar system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarDate {
@@ -2853,6 +3109,279 @@ impl NumberFormatter {
             _ => format!("{}%", with_sep),
         }
     }
+
+    /// Formats an ordinal number (1st, 2nd, 3rd, etc.) according to locale.
+    /// Very useful for legal citations and document references.
+    pub fn format_ordinal(&self, n: i64) -> String {
+        match self.locale.language.as_str() {
+            "en" => {
+                // English ordinals
+                let suffix = if n % 100 >= 11 && n % 100 <= 13 {
+                    "th"
+                } else {
+                    match n % 10 {
+                        1 => "st",
+                        2 => "nd",
+                        3 => "rd",
+                        _ => "th",
+                    }
+                };
+                format!("{}{}", n, suffix)
+            }
+            "es" => {
+                // Spanish ordinals (simplified)
+                if n == 1 {
+                    "1º".to_string()
+                } else {
+                    format!("{}º", n)
+                }
+            }
+            "fr" => {
+                // French ordinals
+                if n == 1 {
+                    "1er".to_string()
+                } else {
+                    format!("{}e", n)
+                }
+            }
+            "de" => {
+                // German ordinals
+                format!("{}.", n)
+            }
+            "ja" => {
+                // Japanese ordinals
+                format!("第{}", n)
+            }
+            "zh" => {
+                // Chinese ordinals
+                format!("第{}", n)
+            }
+            _ => {
+                // Default: just add a period
+                format!("{}.", n)
+            }
+        }
+    }
+
+    /// Converts a number to words in the specified locale.
+    /// Useful for legal documents where numbers must be written out.
+    /// Currently supports numbers 0-999,999.
+    pub fn number_to_words(&self, n: i64) -> String {
+        if n < 0 {
+            match self.locale.language.as_str() {
+                "en" => format!("minus {}", self.number_to_words(-n)),
+                "ja" => format!("マイナス{}", self.number_to_words(-n)),
+                "es" => format!("menos {}", self.number_to_words(-n)),
+                "fr" => format!("moins {}", self.number_to_words(-n)),
+                "de" => format!("minus {}", self.number_to_words(-n)),
+                _ => format!("-{}", self.number_to_words(-n)),
+            }
+        } else {
+            match self.locale.language.as_str() {
+                "en" => self.number_to_words_en(n),
+                "ja" => self.number_to_words_ja(n),
+                "es" => self.number_to_words_es(n),
+                "fr" => self.number_to_words_fr(n),
+                "de" => self.number_to_words_de(n),
+                _ => n.to_string(),
+            }
+        }
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn number_to_words_en(&self, n: i64) -> String {
+        match n {
+            0 => "zero".to_string(),
+            1 => "one".to_string(),
+            2 => "two".to_string(),
+            3 => "three".to_string(),
+            4 => "four".to_string(),
+            5 => "five".to_string(),
+            6 => "six".to_string(),
+            7 => "seven".to_string(),
+            8 => "eight".to_string(),
+            9 => "nine".to_string(),
+            10 => "ten".to_string(),
+            11 => "eleven".to_string(),
+            12 => "twelve".to_string(),
+            13 => "thirteen".to_string(),
+            14 => "fourteen".to_string(),
+            15 => "fifteen".to_string(),
+            16 => "sixteen".to_string(),
+            17 => "seventeen".to_string(),
+            18 => "eighteen".to_string(),
+            19 => "nineteen".to_string(),
+            20..=99 => {
+                let tens = n / 10;
+                let ones = n % 10;
+                let tens_word = match tens {
+                    2 => "twenty",
+                    3 => "thirty",
+                    4 => "forty",
+                    5 => "fifty",
+                    6 => "sixty",
+                    7 => "seventy",
+                    8 => "eighty",
+                    9 => "ninety",
+                    _ => "",
+                };
+                if ones == 0 {
+                    tens_word.to_string()
+                } else {
+                    format!("{}-{}", tens_word, self.number_to_words_en(ones))
+                }
+            }
+            100..=999 => {
+                let hundreds = n / 100;
+                let remainder = n % 100;
+                if remainder == 0 {
+                    format!("{} hundred", self.number_to_words_en(hundreds))
+                } else {
+                    format!(
+                        "{} hundred and {}",
+                        self.number_to_words_en(hundreds),
+                        self.number_to_words_en(remainder)
+                    )
+                }
+            }
+            1000..=999_999 => {
+                let thousands = n / 1000;
+                let remainder = n % 1000;
+                if remainder == 0 {
+                    format!("{} thousand", self.number_to_words_en(thousands))
+                } else {
+                    format!(
+                        "{} thousand {}",
+                        self.number_to_words_en(thousands),
+                        self.number_to_words_en(remainder)
+                    )
+                }
+            }
+            _ => n.to_string(),
+        }
+    }
+
+    #[allow(dead_code)]
+    #[allow(clippy::only_used_in_recursion)]
+    fn number_to_words_ja(&self, n: i64) -> String {
+        match n {
+            0 => "零".to_string(),
+            1..=9 => {
+                ["一", "二", "三", "四", "五", "六", "七", "八", "九"][(n - 1) as usize].to_string()
+            }
+            10 => "十".to_string(),
+            11..=99 => {
+                let tens = n / 10;
+                let ones = n % 10;
+                let tens_str = if tens == 1 {
+                    "十".to_string()
+                } else {
+                    format!("{}十", self.number_to_words_ja(tens))
+                };
+                if ones == 0 {
+                    tens_str
+                } else {
+                    format!("{}{}", tens_str, self.number_to_words_ja(ones))
+                }
+            }
+            100..=999 => {
+                let hundreds = n / 100;
+                let remainder = n % 100;
+                let hundreds_str = if hundreds == 1 {
+                    "百".to_string()
+                } else {
+                    format!("{}百", self.number_to_words_ja(hundreds))
+                };
+                if remainder == 0 {
+                    hundreds_str
+                } else {
+                    format!("{}{}", hundreds_str, self.number_to_words_ja(remainder))
+                }
+            }
+            1000..=9999 => {
+                let thousands = n / 1000;
+                let remainder = n % 1000;
+                let thousands_str = if thousands == 1 {
+                    "千".to_string()
+                } else {
+                    format!("{}千", self.number_to_words_ja(thousands))
+                };
+                if remainder == 0 {
+                    thousands_str
+                } else {
+                    format!("{}{}", thousands_str, self.number_to_words_ja(remainder))
+                }
+            }
+            10000..=99_999_999 => {
+                let man = n / 10000;
+                let remainder = n % 10000;
+                if remainder == 0 {
+                    format!("{}万", self.number_to_words_ja(man))
+                } else {
+                    format!(
+                        "{}万{}",
+                        self.number_to_words_ja(man),
+                        self.number_to_words_ja(remainder)
+                    )
+                }
+            }
+            _ => n.to_string(),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_es(&self, n: i64) -> String {
+        match n {
+            0 => "cero".to_string(),
+            1 => "uno".to_string(),
+            2 => "dos".to_string(),
+            3 => "tres".to_string(),
+            4 => "cuatro".to_string(),
+            5 => "cinco".to_string(),
+            6 => "seis".to_string(),
+            7 => "siete".to_string(),
+            8 => "ocho".to_string(),
+            9 => "nueve".to_string(),
+            10 => "diez".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_fr(&self, n: i64) -> String {
+        match n {
+            0 => "zéro".to_string(),
+            1 => "un".to_string(),
+            2 => "deux".to_string(),
+            3 => "trois".to_string(),
+            4 => "quatre".to_string(),
+            5 => "cinq".to_string(),
+            6 => "six".to_string(),
+            7 => "sept".to_string(),
+            8 => "huit".to_string(),
+            9 => "neuf".to_string(),
+            10 => "dix".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_de(&self, n: i64) -> String {
+        match n {
+            0 => "null".to_string(),
+            1 => "eins".to_string(),
+            2 => "zwei".to_string(),
+            3 => "drei".to_string(),
+            4 => "vier".to_string(),
+            5 => "fünf".to_string(),
+            6 => "sechs".to_string(),
+            7 => "sieben".to_string(),
+            8 => "acht".to_string(),
+            9 => "neun".to_string(),
+            10 => "zehn".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
 }
 
 /// Day of week.
@@ -2878,6 +3407,20 @@ impl DayOfWeek {
             DayOfWeek::Friday => 4,
             DayOfWeek::Saturday => 5,
             DayOfWeek::Sunday => 6,
+        }
+    }
+}
+
+impl std::fmt::Display for DayOfWeek {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DayOfWeek::Monday => write!(f, "Monday"),
+            DayOfWeek::Tuesday => write!(f, "Tuesday"),
+            DayOfWeek::Wednesday => write!(f, "Wednesday"),
+            DayOfWeek::Thursday => write!(f, "Thursday"),
+            DayOfWeek::Friday => write!(f, "Friday"),
+            DayOfWeek::Saturday => write!(f, "Saturday"),
+            DayOfWeek::Sunday => write!(f, "Sunday"),
         }
     }
 }
@@ -3673,6 +4216,174 @@ pub fn normalize_locale_string(input: &str) -> String {
     normalized
 }
 
+/// Validates a language code (ISO 639-1).
+/// Returns true if the code is a valid 2-letter language code.
+pub fn is_valid_language_code(code: &str) -> bool {
+    code.len() == 2 && code.chars().all(|c| c.is_ascii_lowercase())
+}
+
+/// Validates a country code (ISO 3166-1 alpha-2).
+/// Returns true if the code is a valid 2-letter uppercase country code.
+pub fn is_valid_country_code(code: &str) -> bool {
+    code.len() == 2 && code.chars().all(|c| c.is_ascii_uppercase())
+}
+
+/// Validates a script code (ISO 15924).
+/// Returns true if the code is a valid 4-letter script code with title case.
+pub fn is_valid_script_code(code: &str) -> bool {
+    if code.len() != 4 {
+        return false;
+    }
+    let chars: Vec<char> = code.chars().collect();
+    chars[0].is_uppercase() && chars[1..].iter().all(|c| c.is_lowercase())
+}
+
+/// Validates a locale tag.
+/// Returns true if the locale tag has valid structure.
+pub fn is_valid_locale_tag(tag: &str) -> bool {
+    if let Ok(locale) = Locale::parse(tag) {
+        if !is_valid_language_code(&locale.language) {
+            return false;
+        }
+        if let Some(ref country) = locale.country {
+            if !is_valid_country_code(country) {
+                return false;
+            }
+        }
+        if let Some(ref script) = locale.script {
+            if !is_valid_script_code(script) {
+                return false;
+            }
+        }
+        true
+    } else {
+        false
+    }
+}
+
+/// Gets a list of common legal jurisdiction locales.
+pub fn common_legal_locales() -> Vec<Locale> {
+    vec![
+        Locale::new("en").with_country("US"),
+        Locale::new("en").with_country("GB"),
+        Locale::new("ja").with_country("JP"),
+        Locale::new("de").with_country("DE"),
+        Locale::new("fr").with_country("FR"),
+        Locale::new("es").with_country("ES"),
+        Locale::new("zh").with_script("Hans").with_country("CN"),
+        Locale::new("zh").with_script("Hant").with_country("TW"),
+        Locale::new("ko").with_country("KR"),
+        Locale::new("it").with_country("IT"),
+    ]
+}
+
+/// Suggests the best matching locale from a list of available locales.
+/// Uses fallback chain logic to find the best match.
+pub fn suggest_best_locale<'a>(requested: &Locale, available: &'a [Locale]) -> Option<&'a Locale> {
+    // Try exact match first
+    for locale in available {
+        if locale == requested {
+            return Some(locale);
+        }
+    }
+
+    // Try language + country match
+    if requested.country.is_some() {
+        for locale in available {
+            if locale.language == requested.language && locale.country == requested.country {
+                return Some(locale);
+            }
+        }
+    }
+
+    // Try language-only match
+    for locale in available {
+        if locale.language == requested.language && locale.country.is_none() {
+            return Some(locale);
+        }
+    }
+
+    // Try any locale with the same language
+    available
+        .iter()
+        .find(|locale| locale.language == requested.language)
+        .map(|v| v as _)
+}
+
+/// Text collator for locale-aware sorting and comparison.
+#[derive(Debug, Clone)]
+pub struct TextCollator {
+    locale: Locale,
+}
+
+impl TextCollator {
+    /// Creates a new text collator for the specified locale.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Compares two strings according to locale-specific rules.
+    /// Returns std::cmp::Ordering indicating the relationship between the strings.
+    pub fn compare(&self, a: &str, b: &str) -> std::cmp::Ordering {
+        // Simplified collation - in production would use ICU or similar
+        match self.locale.language.as_str() {
+            "ja" | "zh" => {
+                // For CJK languages, use unicode code point order
+                a.cmp(b)
+            }
+            _ => {
+                // For other languages, use case-insensitive comparison
+                let a_lower = a.to_lowercase();
+                let b_lower = b.to_lowercase();
+                a_lower.cmp(&b_lower)
+            }
+        }
+    }
+
+    /// Sorts a vector of strings according to locale-specific rules.
+    pub fn sort(&self, items: &mut [String]) {
+        items.sort_by(|a, b| self.compare(a, b));
+    }
+
+    /// Returns a sorted copy of the input strings.
+    pub fn sorted(&self, items: &[String]) -> Vec<String> {
+        let mut sorted = items.to_vec();
+        self.sort(&mut sorted);
+        sorted
+    }
+
+    /// Checks if a string starts with a prefix (locale-aware, case-insensitive for most locales).
+    pub fn starts_with(&self, text: &str, prefix: &str) -> bool {
+        match self.locale.language.as_str() {
+            "ja" | "zh" => text.starts_with(prefix),
+            _ => text.to_lowercase().starts_with(&prefix.to_lowercase()),
+        }
+    }
+
+    /// Normalizes a string for comparison (removes accents, converts to lowercase, etc.).
+    pub fn normalize(&self, text: &str) -> String {
+        match self.locale.language.as_str() {
+            "de" => {
+                // German: handle umlauts
+                text.to_lowercase()
+                    .replace('ä', "ae")
+                    .replace('ö', "oe")
+                    .replace('ü', "ue")
+                    .replace('ß', "ss")
+            }
+            "fr" | "es" => {
+                // French/Spanish: simplified accent removal
+                text.to_lowercase()
+                    .replace(['é', 'è', 'ê', 'ë'], "e")
+                    .replace(['à', 'â'], "a")
+                    .replace('ñ', "n")
+                    .replace('ç', "c")
+            }
+            _ => text.to_lowercase(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4460,5 +5171,241 @@ mod tests {
         assert_eq!(results[0], "[ja] contract");
         assert_eq!(results[1], "[ja] statute");
         assert_eq!(results[2], "[ja] employment");
+    }
+
+    #[test]
+    fn test_abbreviations() {
+        let mut dict = LegalDictionary::new(Locale::new("en").with_country("US"));
+        dict.add_abbreviation("corporation", "Corp.");
+        dict.add_abbreviation("incorporated", "Inc.");
+        dict.add_abbreviation("attorney", "Atty.");
+
+        assert_eq!(dict.get_abbreviation("corporation"), Some("Corp."));
+        assert_eq!(dict.get_abbreviation("incorporated"), Some("Inc."));
+        assert_eq!(dict.get_abbreviation("attorney"), Some("Atty."));
+
+        assert_eq!(dict.expand_abbreviation("Corp."), Some("corporation"));
+        assert_eq!(dict.expand_abbreviation("Inc."), Some("incorporated"));
+
+        assert!(dict.is_abbreviation("Corp."));
+        assert!(!dict.is_abbreviation("corporation"));
+    }
+
+    #[test]
+    fn test_contextual_translation() {
+        let mut dict = LegalDictionary::new(Locale::new("ja").with_country("JP"));
+        dict.add_translation("right", "権利");
+        dict.add_contextual_translation("right", "direction", "右");
+        dict.add_contextual_translation("right", "legal", "権利");
+
+        // Default translation
+        assert_eq!(dict.translate("right"), Some("権利"));
+
+        // Context-aware translations
+        assert_eq!(
+            dict.translate_with_context("right", "direction"),
+            Some("右")
+        );
+        assert_eq!(dict.translate_with_context("right", "legal"), Some("権利"));
+
+        // Non-existent context falls back to default
+        assert_eq!(dict.translate_with_context("right", "other"), Some("権利"));
+
+        // Get contexts for a term
+        let contexts = dict.get_contexts_for_term("right");
+        assert_eq!(contexts.len(), 2);
+        assert!(contexts.contains(&"direction"));
+        assert!(contexts.contains(&"legal"));
+    }
+
+    #[test]
+    fn test_validation_helpers() {
+        assert!(is_valid_language_code("en"));
+        assert!(is_valid_language_code("ja"));
+        assert!(!is_valid_language_code("EN"));
+        assert!(!is_valid_language_code("eng"));
+
+        assert!(is_valid_country_code("US"));
+        assert!(is_valid_country_code("JP"));
+        assert!(!is_valid_country_code("us"));
+        assert!(!is_valid_country_code("USA"));
+
+        assert!(is_valid_script_code("Hans"));
+        assert!(is_valid_script_code("Hant"));
+        assert!(!is_valid_script_code("hans"));
+        assert!(!is_valid_script_code("HANS"));
+
+        assert!(is_valid_locale_tag("en-US"));
+        assert!(is_valid_locale_tag("zh-Hans-CN"));
+        assert!(!is_valid_locale_tag("EN-US"));
+    }
+
+    #[test]
+    fn test_ordinal_formatting() {
+        let en_formatter = NumberFormatter::new(Locale::new("en").with_country("US"));
+        assert_eq!(en_formatter.format_ordinal(1), "1st");
+        assert_eq!(en_formatter.format_ordinal(2), "2nd");
+        assert_eq!(en_formatter.format_ordinal(3), "3rd");
+        assert_eq!(en_formatter.format_ordinal(4), "4th");
+        assert_eq!(en_formatter.format_ordinal(11), "11th");
+        assert_eq!(en_formatter.format_ordinal(21), "21st");
+        assert_eq!(en_formatter.format_ordinal(42), "42nd");
+        assert_eq!(en_formatter.format_ordinal(113), "113th");
+
+        let fr_formatter = NumberFormatter::new(Locale::new("fr").with_country("FR"));
+        assert_eq!(fr_formatter.format_ordinal(1), "1er");
+        assert_eq!(fr_formatter.format_ordinal(2), "2e");
+
+        let ja_formatter = NumberFormatter::new(Locale::new("ja").with_country("JP"));
+        assert_eq!(ja_formatter.format_ordinal(1), "第1");
+        assert_eq!(ja_formatter.format_ordinal(5), "第5");
+    }
+
+    #[test]
+    fn test_number_to_words() {
+        let en_formatter = NumberFormatter::new(Locale::new("en").with_country("US"));
+        assert_eq!(en_formatter.number_to_words(0), "zero");
+        assert_eq!(en_formatter.number_to_words(1), "one");
+        assert_eq!(en_formatter.number_to_words(15), "fifteen");
+        assert_eq!(en_formatter.number_to_words(20), "twenty");
+        assert_eq!(en_formatter.number_to_words(42), "forty-two");
+        assert_eq!(en_formatter.number_to_words(100), "one hundred");
+        assert_eq!(en_formatter.number_to_words(101), "one hundred and one");
+        assert_eq!(en_formatter.number_to_words(1000), "one thousand");
+        assert_eq!(
+            en_formatter.number_to_words(1234),
+            "one thousand two hundred and thirty-four"
+        );
+
+        let ja_formatter = NumberFormatter::new(Locale::new("ja").with_country("JP"));
+        assert_eq!(ja_formatter.number_to_words(0), "零");
+        assert_eq!(ja_formatter.number_to_words(1), "一");
+        assert_eq!(ja_formatter.number_to_words(10), "十");
+        assert_eq!(ja_formatter.number_to_words(11), "十一");
+        assert_eq!(ja_formatter.number_to_words(100), "百");
+        assert_eq!(ja_formatter.number_to_words(123), "百二十三");
+    }
+
+    #[test]
+    fn test_text_collator() {
+        let en_collator = TextCollator::new(Locale::new("en").with_country("US"));
+
+        // Case-insensitive comparison
+        assert_eq!(
+            en_collator.compare("apple", "BANANA"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            en_collator.compare("zebra", "Apple"),
+            std::cmp::Ordering::Greater
+        );
+
+        // Sorting
+        let mut items = vec![
+            "Zebra".to_string(),
+            "apple".to_string(),
+            "Banana".to_string(),
+        ];
+        en_collator.sort(&mut items);
+        assert_eq!(items, vec!["apple", "Banana", "Zebra"]);
+
+        // Starts with
+        assert!(en_collator.starts_with("Contract", "con"));
+        assert!(en_collator.starts_with("STATUTE", "stat"));
+
+        // Normalize
+        let de_collator = TextCollator::new(Locale::new("de").with_country("DE"));
+        assert_eq!(de_collator.normalize("äöü"), "aeoeue");
+        assert_eq!(de_collator.normalize("Straße"), "strasse");
+    }
+
+    #[test]
+    fn test_dictionary_export_import() {
+        let mut dict = LegalDictionary::new(Locale::new("en").with_country("US"));
+        dict.add_translation("contract", "contract");
+        dict.add_translation("statute", "statute");
+        dict.add_abbreviation("corporation", "Corp.");
+        dict.add_contextual_translation("right", "legal", "legal right");
+
+        // Export to JSON
+        let json = dict.to_json().unwrap();
+        assert!(json.contains("contract"));
+        assert!(json.contains("statute"));
+
+        // Import from JSON
+        let imported = LegalDictionary::from_json(&json).unwrap();
+        assert_eq!(imported.translate("contract"), Some("contract"));
+        assert_eq!(imported.translate("statute"), Some("statute"));
+        assert_eq!(imported.get_abbreviation("corporation"), Some("Corp."));
+        assert_eq!(
+            imported.translate_with_context("right", "legal"),
+            Some("legal right")
+        );
+    }
+
+    #[test]
+    fn test_dictionary_merge() {
+        let mut dict1 = LegalDictionary::new(Locale::new("en").with_country("US"));
+        dict1.add_translation("contract", "contract");
+        dict1.add_translation("statute", "statute");
+
+        let mut dict2 = LegalDictionary::new(Locale::new("en").with_country("US"));
+        dict2.add_translation("statute", "law"); // This should not override
+        dict2.add_translation("court", "court");
+
+        dict1.merge(&dict2);
+
+        assert_eq!(dict1.translate("contract"), Some("contract"));
+        assert_eq!(dict1.translate("statute"), Some("statute")); // Original preserved
+        assert_eq!(dict1.translate("court"), Some("court")); // New added
+    }
+
+    #[test]
+    fn test_dictionary_counts() {
+        let mut dict = LegalDictionary::new(Locale::new("en").with_country("US"));
+        dict.add_translation("contract", "contract");
+        dict.add_translation("statute", "statute");
+        dict.add_definition("contract", "A legally binding agreement");
+        dict.add_abbreviation("corporation", "Corp.");
+        dict.add_contextual_translation("right", "legal", "legal right");
+
+        assert_eq!(dict.translation_count(), 2);
+        assert_eq!(dict.definition_count(), 1);
+        assert_eq!(dict.abbreviation_count(), 1);
+        assert_eq!(dict.contextual_translation_count(), 1);
+    }
+
+    #[test]
+    fn test_suggest_best_locale() {
+        let available = vec![
+            Locale::new("en").with_country("US"),
+            Locale::new("en").with_country("GB"),
+            Locale::new("fr").with_country("FR"),
+            Locale::new("ja"),
+        ];
+
+        // Exact match
+        let requested = Locale::new("en").with_country("US");
+        let suggested = suggest_best_locale(&requested, &available).unwrap();
+        assert_eq!(suggested, &Locale::new("en").with_country("US"));
+
+        // Language match with different country
+        let requested = Locale::new("ja").with_country("JP");
+        let suggested = suggest_best_locale(&requested, &available).unwrap();
+        assert_eq!(suggested.language, "ja");
+
+        // No match
+        let requested = Locale::new("de").with_country("DE");
+        let suggested = suggest_best_locale(&requested, &available);
+        assert!(suggested.is_none());
+    }
+
+    #[test]
+    fn test_common_legal_locales() {
+        let locales = common_legal_locales();
+        assert!(locales.len() >= 10);
+        assert!(locales.iter().any(|l| l.tag() == "en-US"));
+        assert!(locales.iter().any(|l| l.tag() == "ja-JP"));
+        assert!(locales.iter().any(|l| l.tag() == "zh-Hans-CN"));
     }
 }

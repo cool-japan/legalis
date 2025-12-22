@@ -71,6 +71,7 @@ mod ast;
 pub mod cache;
 pub mod grammar_doc;
 pub mod incremental;
+pub mod lsp;
 mod parser;
 mod printer;
 
@@ -261,6 +262,17 @@ pub enum DslWarning {
         location: SourceLocation,
         import_path: String,
     },
+}
+
+impl DslWarning {
+    /// Returns the source location of this warning.
+    pub fn location(&self) -> &SourceLocation {
+        match self {
+            Self::DeprecatedSyntax { location, .. }
+            | Self::RedundantCondition { location, .. }
+            | Self::UnusedImport { location, .. } => location,
+        }
+    }
 }
 
 impl std::fmt::Display for DslWarning {
@@ -1768,7 +1780,9 @@ impl LegalDslParser {
 
     pub fn tokenize(&self, input: &str) -> DslResult<Vec<SpannedToken>> {
         let stripped = self.strip_comments(input)?;
-        let mut tokens = Vec::new();
+        // Pre-allocate capacity: estimate ~10 tokens per 100 bytes
+        let estimated_tokens = (stripped.len() / 10).max(16);
+        let mut tokens = Vec::with_capacity(estimated_tokens);
         let mut chars = stripped.chars().peekable();
         let mut offset = 0;
         let mut line = 1;
@@ -1783,10 +1797,22 @@ impl LegalDslParser {
                     line += 1;
                     column = 1;
                 }
+                // Optimize: skip multiple whitespace characters at once
                 ' ' | '\t' | '\r' => {
                     chars.next();
                     offset += 1;
                     column += 1;
+                    // Fast-path: skip additional whitespace
+                    while let Some(&next_ch) = chars.peek() {
+                        match next_ch {
+                            ' ' | '\t' | '\r' => {
+                                chars.next();
+                                offset += 1;
+                                column += 1;
+                            }
+                            _ => break,
+                        }
+                    }
                 }
                 '(' => {
                     tokens.push(SpannedToken::new(Token::LParen, token_start));
@@ -1828,7 +1854,8 @@ impl LegalDslParser {
                     chars.next();
                     offset += 1;
                     column += 1;
-                    let mut s = String::new();
+                    // Pre-allocate for typical string length
+                    let mut s = String::with_capacity(32);
                     while let Some(&c) = chars.peek() {
                         if c == '"' {
                             chars.next();
@@ -1849,7 +1876,8 @@ impl LegalDslParser {
                     tokens.push(SpannedToken::new(Token::StringLit(s), token_start));
                 }
                 _ if ch.is_alphabetic() || ch == '_' => {
-                    let mut word = String::new();
+                    // Pre-allocate for typical keyword/identifier length
+                    let mut word = String::with_capacity(16);
                     while let Some(&c) = chars.peek() {
                         if c.is_alphanumeric() || c == '_' || c == '-' {
                             word.push(c);
@@ -1935,7 +1963,8 @@ impl LegalDslParser {
                     tokens.push(SpannedToken::new(token, token_start));
                 }
                 _ if ch.is_numeric() => {
-                    let mut num = String::new();
+                    // Pre-allocate for typical number length
+                    let mut num = String::with_capacity(8);
                     while let Some(&c) = chars.peek() {
                         if c.is_numeric() {
                             num.push(c);

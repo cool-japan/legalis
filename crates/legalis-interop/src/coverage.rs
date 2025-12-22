@@ -136,6 +136,9 @@ impl FormatCoverage {
             "Age conditions".to_string(),
             "Boolean conditions".to_string(),
             "Entity-action pairs".to_string(),
+            "Logical operators (AND, OR, NOT)".to_string(),
+            "Parenthesized expressions".to_string(),
+            "Operator precedence".to_string(),
         ];
 
         let unsupported = vec![
@@ -145,11 +148,7 @@ impl FormatCoverage {
             "Complex event patterns".to_string(),
         ];
 
-        let mut partial = HashMap::new();
-        partial.insert(
-            "Condition combinations".to_string(),
-            "AND conditions supported, OR and NOT partially supported".to_string(),
-        );
+        let partial = HashMap::new();
 
         (supported, unsupported, partial)
     }

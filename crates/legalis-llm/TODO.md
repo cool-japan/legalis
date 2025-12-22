@@ -118,3 +118,74 @@
 - [x] Batch statistics and metrics
 - [x] Parallel map operations
 - [x] Configurable batch sizes and concurrency limits
+
+## Future Enhancements (2025+)
+
+### Multi-Modal Support
+- [ ] Vision model support (GPT-4 Vision, Claude 3, Gemini Pro Vision)
+- [ ] Image input handling and encoding
+- [ ] Audio input/output support (Whisper, TTS)
+- [ ] Multi-modal prompt templates
+- [ ] Multi-modal response parsing
+
+### Conversation Management
+- [x] Conversation history tracking
+- [x] Multi-turn conversation context
+- [x] Conversation summarization for long contexts (LLM-based)
+- [x] Conversation branching and forking
+- [x] Conversation persistence and restore
+- [x] Token-aware context window management
+
+### RAG (Retrieval Augmented Generation)
+- [x] Vector database integration (in-memory, file-based)
+- [x] Document chunking strategies (fixed, sliding window, sentences, paragraphs)
+- [ ] Hybrid search (semantic + keyword)
+- [ ] Re-ranking algorithms
+- [ ] Context compression
+- [x] Citation and source tracking (metadata support)
+
+### Safety and Moderation
+- [x] Content filtering (pattern-based moderation)
+- [x] PII detection and redaction (email, phone, SSN, credit card, IP)
+- [x] Toxicity scoring (pattern-based)
+- [x] Custom safety rules engine
+- [x] Guardrails for output validation
+- [ ] Bias detection
+- [ ] OpenAI Moderation API integration
+
+### Observability
+- [x] Basic metrics collection (requests, latency, success rate)
+- [x] Aggregated statistics (p50, p95, p99 latencies)
+- [x] Cost tracking and token usage monitoring
+- [x] Performance profiling (timers, duration tracking)
+- [x] Time-windowed metrics queries
+- [ ] OpenTelemetry integration
+- [ ] Distributed tracing for LLM calls
+- [ ] Prometheus metrics export
+- [ ] Custom metrics dashboards
+
+### Model Evaluation
+- [ ] Automated quality metrics (BLEU, ROUGE, perplexity)
+- [ ] A/B test statistical analysis
+- [ ] Response quality scoring
+- [ ] Human feedback integration (RLHF)
+- [ ] Benchmark suite for model comparison
+- [ ] Regression testing for prompt changes
+
+### Advanced Features
+- [ ] Prompt compression techniques
+- [ ] Chain-of-thought prompting helpers
+- [ ] Tree-of-thought search
+- [ ] Self-consistency decoding
+- [ ] Constitutional AI guardrails
+- [ ] Agent frameworks (ReAct, AutoGPT patterns)
+- [ ] Tool use orchestration improvements
+- [ ] Memory-augmented generation
+
+### Infrastructure
+- [ ] Distributed inference support
+- [ ] Model quantization support (GGUF, AWQ)
+- [ ] GPU scheduling and batching
+- [ ] Edge deployment support
+- [ ] Kubernetes operator for auto-scaling
+- [ ] Hot model swapping without downtime

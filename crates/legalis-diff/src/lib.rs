@@ -48,9 +48,11 @@ use thiserror::Error;
 pub mod algorithms;
 pub mod analysis;
 pub mod formats;
+pub mod fuzzy;
 pub mod git;
 pub mod merge;
 pub mod optimization;
+pub mod recommendation;
 pub mod semantic;
 pub mod statistics;
 pub mod templates;
@@ -66,6 +68,24 @@ pub enum DiffError {
 
     #[error("Invalid comparison: {0}")]
     InvalidComparison(String),
+
+    #[error("Empty statute provided: {0}")]
+    EmptyStatute(String),
+
+    #[error("Version conflict: {old_version} -> {new_version}")]
+    VersionConflict { old_version: u32, new_version: u32 },
+
+    #[error("Merge conflict detected at {location}: {description}")]
+    MergeConflict {
+        location: String,
+        description: String,
+    },
+
+    #[error("Unsupported operation: {0}")]
+    UnsupportedOperation(String),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 
 /// Result type for diff operations.
@@ -531,6 +551,216 @@ pub fn diff_sequence(versions: &[Statute]) -> DiffResult<Vec<StatuteDiff>> {
     Ok(diffs)
 }
 
+/// Detailed summary with confidence scores for each aspect of the diff.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedSummary {
+    /// The statute ID.
+    pub statute_id: String,
+    /// Overall confidence score (0.0 to 1.0).
+    pub overall_confidence: f64,
+    /// Number of changes detected.
+    pub change_count: usize,
+    /// Severity level.
+    pub severity: Severity,
+    /// Summary text.
+    pub summary_text: String,
+    /// Confidence in change detection (0.0 to 1.0).
+    pub change_detection_confidence: f64,
+    /// Confidence in impact assessment (0.0 to 1.0).
+    pub impact_assessment_confidence: f64,
+    /// Key insights from the analysis.
+    pub insights: Vec<String>,
+}
+
+/// Creates a detailed summary with confidence scores.
+///
+/// This provides more information than the basic `summarize` function,
+/// including confidence metrics and analytical insights.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, detailed_summary};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "New Title".to_string();
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let summary = detailed_summary(&diff_result);
+///
+/// assert_eq!(summary.statute_id, "law");
+/// assert!(summary.overall_confidence > 0.0);
+/// ```
+pub fn detailed_summary(diff: &StatuteDiff) -> DetailedSummary {
+    let mut insights = Vec::new();
+    let change_count = diff.changes.len();
+
+    // Calculate change detection confidence
+    let change_detection_confidence = if change_count == 0 {
+        1.0 // High confidence in no changes
+    } else {
+        0.95 // High confidence in detected changes
+    };
+
+    // Calculate impact assessment confidence based on severity and flags
+    let impact_assessment_confidence = if diff.impact.affects_outcome
+        || diff.impact.affects_eligibility
+        || diff.impact.discretion_changed
+    {
+        0.9 // High confidence in significant impact
+    } else if diff.impact.severity >= Severity::Moderate {
+        0.85
+    } else if diff.impact.severity == Severity::Minor {
+        0.8
+    } else {
+        0.95 // Very high confidence in no impact
+    };
+
+    // Generate insights
+    if diff.impact.affects_eligibility {
+        insights
+            .push("This change affects who is eligible for the statute's provisions.".to_string());
+    }
+
+    if diff.impact.affects_outcome {
+        insights.push("This change modifies the outcome or effect of the statute.".to_string());
+    }
+
+    if diff.impact.discretion_changed {
+        insights.push("Discretionary judgment requirements have been modified.".to_string());
+    }
+
+    // Analyze change patterns
+    let added_count = diff
+        .changes
+        .iter()
+        .filter(|c| c.change_type == ChangeType::Added)
+        .count();
+    let removed_count = diff
+        .changes
+        .iter()
+        .filter(|c| c.change_type == ChangeType::Removed)
+        .count();
+    let modified_count = diff
+        .changes
+        .iter()
+        .filter(|c| c.change_type == ChangeType::Modified)
+        .count();
+
+    if added_count > 0 {
+        insights.push(format!("{} new element(s) added.", added_count));
+    }
+    if removed_count > 0 {
+        insights.push(format!("{} element(s) removed.", removed_count));
+    }
+    if modified_count > 0 {
+        insights.push(format!("{} element(s) modified.", modified_count));
+    }
+
+    // Calculate overall confidence
+    let overall_confidence = (change_detection_confidence + impact_assessment_confidence) / 2.0;
+
+    // Build summary text
+    let summary_text = summarize(diff);
+
+    DetailedSummary {
+        statute_id: diff.statute_id.clone(),
+        overall_confidence,
+        change_count,
+        severity: diff.impact.severity,
+        summary_text,
+        change_detection_confidence,
+        impact_assessment_confidence,
+        insights,
+    }
+}
+
+/// Compares only the preconditions of two statutes.
+///
+/// This is useful when you only need to check for eligibility criteria changes
+/// without analyzing the entire statute.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::diff_preconditions_only;
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"))
+///     .with_precondition(Condition::Age {
+///         operator: ComparisonOp::GreaterOrEqual,
+///         value: 65,
+///     });
+///
+/// let new = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"))
+///     .with_precondition(Condition::Age {
+///         operator: ComparisonOp::GreaterOrEqual,
+///         value: 60,
+///     });
+///
+/// let changes = diff_preconditions_only(&old, &new).unwrap();
+/// assert!(!changes.is_empty());
+/// ```
+///
+/// # Errors
+///
+/// Returns [`DiffError::IdMismatch`] if the statute IDs don't match.
+pub fn diff_preconditions_only(old: &Statute, new: &Statute) -> DiffResult<Vec<Change>> {
+    if old.id != new.id {
+        return Err(DiffError::IdMismatch(old.id.clone(), new.id.clone()));
+    }
+
+    let mut changes = Vec::new();
+    let mut impact = ImpactAssessment::default();
+
+    diff_preconditions(
+        &old.preconditions,
+        &new.preconditions,
+        &mut changes,
+        &mut impact,
+    );
+
+    Ok(changes)
+}
+
+/// Compares only the effect of two statutes.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::diff_effect_only;
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Old benefit"));
+/// let new = Statute::new("law", "Title", Effect::new(EffectType::Grant, "New benefit"));
+///
+/// let change = diff_effect_only(&old, &new).unwrap();
+/// assert!(change.is_some());
+/// ```
+///
+/// # Errors
+///
+/// Returns [`DiffError::IdMismatch`] if the statute IDs don't match.
+pub fn diff_effect_only(old: &Statute, new: &Statute) -> DiffResult<Option<Change>> {
+    if old.id != new.id {
+        return Err(DiffError::IdMismatch(old.id.clone(), new.id.clone()));
+    }
+
+    if old.effect != new.effect {
+        Ok(Some(Change {
+            change_type: ChangeType::Modified,
+            target: ChangeTarget::Effect,
+            description: "Effect was modified".to_string(),
+            old_value: Some(format!("{:?}", old.effect)),
+            new_value: Some(format!("{:?}", new.effect)),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -769,5 +999,59 @@ mod tests {
         assert!(result.version_info.is_some());
         assert_eq!(result.version_info.as_ref().unwrap().old_version, Some(1));
         assert_eq!(result.version_info.as_ref().unwrap().new_version, Some(2));
+    }
+
+    #[test]
+    fn test_detailed_summary() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.title = "Modified Title".to_string();
+
+        let diff_result = diff(&old, &new).unwrap();
+        let summary = detailed_summary(&diff_result);
+
+        assert_eq!(summary.statute_id, "test-statute");
+        assert!(summary.overall_confidence > 0.0);
+        assert!(summary.overall_confidence <= 1.0);
+        assert_eq!(summary.change_count, 1);
+        assert!(!summary.insights.is_empty());
+    }
+
+    #[test]
+    fn test_diff_preconditions_only() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.preconditions[0] = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        };
+
+        let changes = diff_preconditions_only(&old, &new).unwrap();
+        assert!(!changes.is_empty());
+        assert!(matches!(
+            changes[0].target,
+            ChangeTarget::Precondition { .. }
+        ));
+    }
+
+    #[test]
+    fn test_diff_effect_only() {
+        let old = test_statute();
+        let mut new = old.clone();
+        new.effect = Effect::new(EffectType::Revoke, "Different effect");
+
+        let change = diff_effect_only(&old, &new).unwrap();
+        assert!(change.is_some());
+        let c = change.unwrap();
+        assert!(matches!(c.target, ChangeTarget::Effect));
+    }
+
+    #[test]
+    fn test_diff_effect_only_no_change() {
+        let old = test_statute();
+        let new = old.clone();
+
+        let change = diff_effect_only(&old, &new).unwrap();
+        assert!(change.is_none());
     }
 }
