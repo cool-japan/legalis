@@ -44,7 +44,10 @@ pub enum OutputFormat {
     Text,
     Json,
     Yaml,
+    Toml,
     Table,
+    Csv,
+    Html,
 }
 
 /// Available commands.
@@ -347,6 +350,40 @@ pub enum Commands {
         /// Verbose diagnostic output
         #[arg(short, long)]
         verbose: bool,
+    },
+
+    /// Start an interactive REPL (Read-Eval-Print Loop)
+    Repl {
+        /// Load a file on startup
+        #[arg(short, long)]
+        load: Option<String>,
+
+        /// Disable colored output
+        #[arg(long)]
+        no_color: bool,
+    },
+
+    /// Search for statutes in a registry
+    Search {
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Search query (statute ID, title, or text)
+        #[arg(short, long)]
+        query: String,
+
+        /// Filter by jurisdiction
+        #[arg(short, long)]
+        jurisdiction: Option<String>,
+
+        /// Filter by tags
+        #[arg(short, long)]
+        tags: Vec<String>,
+
+        /// Maximum number of results
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
     },
 }
 

@@ -55,7 +55,7 @@ mod tests {
         let result = converter.import(malformed, LegalFormat::Catala);
         // Malformed input may error or return empty - both are acceptable
         if let Ok((statutes, _)) = result {
-            assert!(statutes.is_empty() || statutes.len() > 0);
+            assert!(statutes.is_empty() || !statutes.is_empty());
         }
     }
 
@@ -66,7 +66,7 @@ mod tests {
         let result = converter.import(malformed, LegalFormat::L4);
         // Should either error or handle gracefully
         if let Ok((statutes, _)) = result {
-            assert!(statutes.is_empty() || statutes.len() > 0);
+            assert!(statutes.is_empty() || !statutes.is_empty());
         }
     }
 
@@ -297,7 +297,7 @@ scope Rule{}:
             LegalFormat::LegalRuleML,
             LegalFormat::LKIF,
         ] {
-            let result = converter.export(&[statute.clone()], format);
+            let result = converter.export(std::slice::from_ref(&statute), format);
             assert!(result.is_ok(), "Failed to export to {:?}", format);
         }
     }

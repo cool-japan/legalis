@@ -156,6 +156,18 @@ async fn main() -> Result<()> {
         Commands::Doctor { verbose } => {
             commands::handle_doctor(*verbose)?;
         }
+        Commands::Repl { load, no_color } => {
+            commands::handle_repl(load.as_deref(), *no_color)?;
+        }
+        Commands::Search {
+            registry,
+            query,
+            jurisdiction,
+            tags,
+            limit,
+        } => {
+            commands::handle_search(registry, query, jurisdiction.as_deref(), tags, *limit)?;
+        }
     }
 
     Ok(())

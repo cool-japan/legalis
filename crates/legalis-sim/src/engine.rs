@@ -275,6 +275,115 @@ impl SimEngine {
                     ),
                 }
             }
+            Condition::Duration {
+                operator,
+                value,
+                unit,
+            } => {
+                // Convert unit to attribute key (e.g., "duration_days", "duration_months")
+                let attr_key = match unit {
+                    legalis_core::DurationUnit::Days => "duration_days",
+                    legalis_core::DurationUnit::Weeks => "duration_weeks",
+                    legalis_core::DurationUnit::Months => "duration_months",
+                    legalis_core::DurationUnit::Years => "duration_years",
+                };
+                match agent
+                    .get_attribute(attr_key)
+                    .and_then(|v| v.parse::<u32>().ok())
+                {
+                    Some(duration) => {
+                        let result = match operator {
+                            ComparisonOp::Equal => duration == *value,
+                            ComparisonOp::NotEqual => duration != *value,
+                            ComparisonOp::GreaterThan => duration > *value,
+                            ComparisonOp::GreaterOrEqual => duration >= *value,
+                            ComparisonOp::LessThan => duration < *value,
+                            ComparisonOp::LessOrEqual => duration <= *value,
+                        };
+                        if result {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(format!(
+                        "Duration attribute '{}' not found or invalid",
+                        attr_key
+                    )),
+                }
+            }
+            Condition::Percentage {
+                operator,
+                value,
+                context,
+            } => {
+                // Use context as attribute key (e.g., "ownership_percentage")
+                let attr_key = format!("{}_percentage", context);
+                match agent
+                    .get_attribute(&attr_key)
+                    .and_then(|v| v.parse::<u32>().ok())
+                {
+                    Some(percentage) => {
+                        let result = match operator {
+                            ComparisonOp::Equal => percentage == *value,
+                            ComparisonOp::NotEqual => percentage != *value,
+                            ComparisonOp::GreaterThan => percentage > *value,
+                            ComparisonOp::GreaterOrEqual => percentage >= *value,
+                            ComparisonOp::LessThan => percentage < *value,
+                            ComparisonOp::LessOrEqual => percentage <= *value,
+                        };
+                        if result {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(format!(
+                        "Percentage attribute '{}' not found or invalid",
+                        attr_key
+                    )),
+                }
+            }
+            Condition::SetMembership {
+                attribute,
+                values,
+                negated,
+            } => match agent.get_attribute(attribute) {
+                Some(attr_value) => {
+                    let is_member = values.iter().any(|v| v == &attr_value);
+                    let result = if *negated { !is_member } else { is_member };
+                    if result {
+                        ConditionResult::True
+                    } else {
+                        ConditionResult::False
+                    }
+                }
+                None => ConditionResult::Indeterminate(format!(
+                    "Attribute '{}' not found for set membership check",
+                    attribute
+                )),
+            },
+            Condition::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => match agent.get_attribute(attribute) {
+                Some(attr_value) => {
+                    // Simple pattern matching - check if pattern is contained in value
+                    // For full regex support, would need regex crate
+                    let matches = attr_value.contains(pattern);
+                    let result = if *negated { !matches } else { matches };
+                    if result {
+                        ConditionResult::True
+                    } else {
+                        ConditionResult::False
+                    }
+                }
+                None => ConditionResult::Indeterminate(format!(
+                    "Attribute '{}' not found for pattern check",
+                    attribute
+                )),
+            },
         }
     }
 }

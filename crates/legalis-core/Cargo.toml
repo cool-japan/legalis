@@ -22,3 +22,8 @@ regex = "1.11"
 
 [dev-dependencies]
 proptest = "1.5"
+criterion = "0.5"
+
+[[bench]]
+name = "core_benchmarks"
+harness = false

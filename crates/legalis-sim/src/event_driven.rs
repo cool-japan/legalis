@@ -353,7 +353,7 @@ mod tests {
     }
 
     impl EventHandler for TestHandler {
-        fn handle(&mut self, event: &Event, state: &mut SimulationState) -> SimResult<Vec<Event>> {
+        fn handle(&mut self, event: &Event, _state: &mut SimulationState) -> SimResult<Vec<Event>> {
             self.call_count += 1;
 
             // Generate a follow-up event
@@ -437,7 +437,7 @@ mod tests {
         let mut simulator = EventDrivenSimulator::new(10.0);
 
         let handler = Box::new(TestHandler { call_count: 0 });
-        simulator.register_handler("Custom(\"Test\")".to_string(), handler);
+        simulator.register_handler("Test".to_string(), handler);
 
         // Schedule initial event
         simulator
@@ -491,7 +491,7 @@ mod tests {
         simulator.run().unwrap();
 
         // Logger should have recorded events
-        if let Some(handler) = simulator.handlers.get("EntityCreated") {
+        if let Some(_handler) = simulator.handlers.get("EntityCreated") {
             // Can't easily access logger's log, but test passes if no errors
         }
     }

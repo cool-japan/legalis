@@ -547,7 +547,7 @@ impl AzureOpenAiClient {
     /// # Arguments
     /// * `api_key` - Azure OpenAI API key
     /// * `deployment_name` - Name of the deployed model
-    /// * `endpoint` - Azure OpenAI endpoint (e.g., "https://your-resource.openai.azure.com")
+    /// * `endpoint` - Azure OpenAI endpoint (e.g., "<https://your-resource.openai.azure.com>")
     pub fn new(
         api_key: impl Into<String>,
         deployment_name: impl Into<String>,

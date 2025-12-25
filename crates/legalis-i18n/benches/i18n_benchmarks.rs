@@ -44,14 +44,14 @@ fn translation_lookup_benchmark(c: &mut Criterion) {
     let mut manager = TranslationManager::new();
 
     // Add English dictionary
-    let mut en_dict = LegalDictionary::english_us();
+    let en_dict = LegalDictionary::english_us();
     manager.add_dictionary(en_dict);
 
     // Add Japanese dictionary
     let ja_dict = LegalDictionary::japanese();
     manager.add_dictionary(ja_dict);
 
-    let en_locale = Locale::new("en").with_country("US");
+    let _en_locale = Locale::new("en").with_country("US");
     let ja_locale = Locale::new("ja").with_country("JP");
 
     c.bench_function("translation lookup - hit", |b| {

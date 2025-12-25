@@ -129,7 +129,7 @@ pub struct AmendmentNode {
 }
 
 /// AST node for a statute definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct StatuteNode {
     pub id: String,
     pub title: String,

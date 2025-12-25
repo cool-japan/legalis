@@ -30,7 +30,10 @@ pub fn handle_parse(input: &str, output: Option<&str>, format: &OutputFormat) ->
     let output_str = match format {
         OutputFormat::Json => serde_json::to_string_pretty(&statute)?,
         OutputFormat::Yaml => serde_yaml::to_string(&statute)?,
-        OutputFormat::Text | OutputFormat::Table => format!("{:#?}", statute),
+        OutputFormat::Toml => toml::to_string_pretty(&statute)?,
+        OutputFormat::Text | OutputFormat::Table | OutputFormat::Csv | OutputFormat::Html => {
+            format!("{:#?}", statute)
+        }
     };
 
     if let Some(out_path) = output {
@@ -46,10 +49,30 @@ pub fn handle_parse(input: &str, output: Option<&str>, format: &OutputFormat) ->
 
 /// Handles the verify command.
 pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+
     let parser = LegalDslParser::new();
     let mut statutes = Vec::new();
 
+    // Create progress bar for parsing if we have multiple files
+    let pb = if inputs.len() > 1 {
+        let pb = ProgressBar::new(inputs.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+                .unwrap()
+                .progress_chars("=>-"),
+        );
+        Some(pb)
+    } else {
+        None
+    };
+
     for input in inputs {
+        if let Some(ref pb) = pb {
+            pb.set_message(format!("Parsing {}", input));
+        }
+
         let content = fs::read_to_string(input)
             .with_context(|| format!("Failed to read input file: {}", input))?;
 
@@ -58,6 +81,14 @@ pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> 
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", input, e))?;
 
         statutes.push(statute);
+
+        if let Some(ref pb) = pb {
+            pb.inc(1);
+        }
+    }
+
+    if let Some(pb) = pb {
+        pb.finish_with_message("Parsing complete");
     }
 
     let verifier = StatuteVerifier::new();
@@ -72,6 +103,46 @@ pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> 
                     "errors": result.errors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
                     "warnings": result.warnings,
                     "suggestions": result.suggestions
+                }))?
+            );
+        }
+        OutputFormat::Toml => {
+            println!(
+                "{}",
+                toml::to_string_pretty(&toml::Value::Table({
+                    let mut map = toml::map::Map::new();
+                    map.insert("passed".to_string(), toml::Value::Boolean(result.passed));
+                    map.insert(
+                        "errors".to_string(),
+                        toml::Value::Array(
+                            result
+                                .errors
+                                .iter()
+                                .map(|e| toml::Value::String(e.to_string()))
+                                .collect(),
+                        ),
+                    );
+                    map.insert(
+                        "warnings".to_string(),
+                        toml::Value::Array(
+                            result
+                                .warnings
+                                .iter()
+                                .map(|w| toml::Value::String(w.clone()))
+                                .collect(),
+                        ),
+                    );
+                    map.insert(
+                        "suggestions".to_string(),
+                        toml::Value::Array(
+                            result
+                                .suggestions
+                                .iter()
+                                .map(|s| toml::Value::String(s.clone()))
+                                .collect(),
+                        ),
+                    );
+                    map
                 }))?
             );
         }
@@ -126,6 +197,113 @@ pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> 
             }
 
             println!("{}", table);
+        }
+        OutputFormat::Csv => {
+            let mut wtr = csv::Writer::from_writer(std::io::stdout());
+            wtr.write_record(["Type", "Status", "Message"])?;
+
+            // Write verification status
+            wtr.write_record([
+                "Verification",
+                if result.passed { "Passed" } else { "Failed" },
+                &format!("{} statutes verified", statutes.len()),
+            ])?;
+
+            // Write errors
+            for error in &result.errors {
+                wtr.write_record(["Error", "Failed", &error.to_string()])?;
+            }
+
+            // Write warnings
+            for warning in &result.warnings {
+                wtr.write_record(["Warning", "Warning", warning])?;
+            }
+
+            // Write suggestions
+            for suggestion in &result.suggestions {
+                wtr.write_record(["Suggestion", "Suggestion", suggestion])?;
+            }
+
+            wtr.flush()?;
+        }
+        OutputFormat::Html => {
+            println!("<!DOCTYPE html>");
+            println!("<html><head>");
+            println!("<meta charset=\"UTF-8\">");
+            println!("<title>Verification Results</title>");
+            println!("<style>");
+            println!(
+                "  body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}"
+            );
+            println!("  h1 {{ color: #333; }}");
+            println!(
+                "  table {{ width: 100%; border-collapse: collapse; background-color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}"
+            );
+            println!(
+                "  th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}"
+            );
+            println!("  th {{ background-color: #4CAF50; color: white; font-weight: bold; }}");
+            println!("  tr:hover {{ background-color: #f5f5f5; }}");
+            println!("  .status-pass {{ color: #4CAF50; font-weight: bold; }}");
+            println!("  .status-fail {{ color: #f44336; font-weight: bold; }}");
+            println!("  .type-error {{ color: #f44336; }}");
+            println!("  .type-warning {{ color: #ff9800; }}");
+            println!("  .type-suggestion {{ color: #2196F3; }}");
+            println!("</style>");
+            println!("</head><body>");
+
+            println!("<h1>Verification Results</h1>");
+            println!("<table>");
+            println!("  <tr><th>Type</th><th>Status</th><th>Message</th></tr>");
+
+            // Verification status row
+            let status_class = if result.passed {
+                "status-pass"
+            } else {
+                "status-fail"
+            };
+            let status_text = if result.passed {
+                "✓ Passed"
+            } else {
+                "✗ Failed"
+            };
+            println!("  <tr>");
+            println!("    <td>Verification</td>");
+            println!("    <td class=\"{}\">", status_class);
+            println!("      {}", status_text);
+            println!("    </td>");
+            println!("    <td>{} statutes verified</td>", statutes.len());
+            println!("  </tr>");
+
+            // Errors
+            for error in &result.errors {
+                println!("  <tr>");
+                println!("    <td class=\"type-error\">Error</td>");
+                println!("    <td class=\"status-fail\">✗ Failed</td>");
+                println!("    <td>{}</td>", error);
+                println!("  </tr>");
+            }
+
+            // Warnings
+            for warning in &result.warnings {
+                println!("  <tr>");
+                println!("    <td class=\"type-warning\">Warning</td>");
+                println!("    <td>⚠ Warning</td>");
+                println!("    <td>{}</td>", warning);
+                println!("  </tr>");
+            }
+
+            // Suggestions
+            for suggestion in &result.suggestions {
+                println!("  <tr>");
+                println!("    <td class=\"type-suggestion\">Suggestion</td>");
+                println!("    <td>→ Suggestion</td>");
+                println!("    <td>{}</td>", suggestion);
+                println!("  </tr>");
+            }
+
+            println!("</table>");
+            println!("</body></html>");
         }
         OutputFormat::Yaml | OutputFormat::Text => {
             if result.passed {
@@ -296,7 +474,8 @@ output:
     println!("    - legalis.yaml");
     println!(
         "\n{}",
-        format!("Run 'legalis verify -i statutes/sample.legal' to verify the sample statute.")
+        "Run 'legalis verify -i statutes/sample.legal' to verify the sample statute."
+            .to_string()
             .cyan()
     );
 
@@ -369,7 +548,102 @@ pub fn handle_diff(old_path: &str, new_path: &str, format: &DiffFormat) -> Resul
             }
         }
         DiffFormat::Text => {
-            println!("{}", legalis_diff::summarize(&diff));
+            use colored::Colorize;
+
+            // Print header
+            println!("{} {}", "Statute Diff:".bold(), diff.statute_id.cyan());
+
+            // Print severity with color coding
+            let severity_str = format!("{:?}", diff.impact.severity);
+            let colored_severity = match diff.impact.severity {
+                legalis_diff::Severity::None => severity_str.dimmed(),
+                legalis_diff::Severity::Minor => severity_str.green(),
+                legalis_diff::Severity::Moderate => severity_str.yellow(),
+                legalis_diff::Severity::Major => severity_str.red(),
+                legalis_diff::Severity::Breaking => severity_str.red().bold(),
+            };
+            println!("{} {}", "Severity:".bold(), colored_severity);
+
+            // Print changes
+            if !diff.changes.is_empty() {
+                println!("\n{}:", "Changes".bold().underline());
+                for change in &diff.changes {
+                    // Color code change type
+                    let change_type_str = format!("{:?}", change.change_type);
+                    let colored_type = match change.change_type {
+                        legalis_diff::ChangeType::Added => change_type_str.green(),
+                        legalis_diff::ChangeType::Removed => change_type_str.red(),
+                        legalis_diff::ChangeType::Modified => change_type_str.yellow(),
+                        legalis_diff::ChangeType::Reordered => change_type_str.blue(),
+                    };
+
+                    println!(
+                        "  {} {}: {}",
+                        colored_type.bold(),
+                        format!("{:?}", change.target).cyan(),
+                        change.description
+                    );
+
+                    if let Some(ref old) = change.old_value {
+                        println!("    {} {}", "−".red(), old.red());
+                    }
+                    if let Some(ref new) = change.new_value {
+                        println!("    {} {}", "+".green(), new.green());
+                    }
+                }
+            }
+
+            // Print impact notes
+            if !diff.impact.notes.is_empty() {
+                println!("\n{}:", "Impact Notes".bold().underline());
+                for note in &diff.impact.notes {
+                    println!("  {} {}", "•".cyan(), note);
+                }
+            }
+
+            // Print summary statistics
+            println!("\n{}:", "Summary".bold().underline());
+            let added = diff
+                .changes
+                .iter()
+                .filter(|c| matches!(c.change_type, legalis_diff::ChangeType::Added))
+                .count();
+            let removed = diff
+                .changes
+                .iter()
+                .filter(|c| matches!(c.change_type, legalis_diff::ChangeType::Removed))
+                .count();
+            let modified = diff
+                .changes
+                .iter()
+                .filter(|c| matches!(c.change_type, legalis_diff::ChangeType::Modified))
+                .count();
+            let reordered = diff
+                .changes
+                .iter()
+                .filter(|c| matches!(c.change_type, legalis_diff::ChangeType::Reordered))
+                .count();
+
+            if added > 0 {
+                println!("  {} {} additions", "+".green(), added.to_string().green());
+            }
+            if removed > 0 {
+                println!("  {} {} deletions", "−".red(), removed.to_string().red());
+            }
+            if modified > 0 {
+                println!(
+                    "  {} {} modifications",
+                    "~".yellow(),
+                    modified.to_string().yellow()
+                );
+            }
+            if reordered > 0 {
+                println!(
+                    "  {} {} reorderings",
+                    "↕".blue(),
+                    reordered.to_string().blue()
+                );
+            }
         }
     }
 
@@ -382,16 +656,42 @@ pub async fn handle_simulate(
     population_size: usize,
     output: Option<&str>,
 ) -> Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+
     let statutes = parse_statutes(inputs)?;
 
     println!("Running simulation with {} entities...", population_size);
+
+    // Create progress bar for population generation
+    let pb = ProgressBar::new(population_size as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.green/blue} {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    pb.set_message("Generating population...");
 
     let population = legalis_sim::PopulationBuilder::new()
         .generate_random(population_size)
         .build();
 
+    pb.finish_with_message("Population generated");
+
+    // Create spinner for simulation
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} [{elapsed_precise}] {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Running simulation...");
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
     let engine = legalis_sim::SimEngine::new(statutes, population);
     let metrics = engine.run_simulation().await;
+
+    spinner.finish_with_message("Simulation complete");
 
     let summary = metrics.summary();
 
@@ -1178,11 +1478,14 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
                             println!("\n{} changed, running {:?}...", input, command);
                             match command {
                                 WatchCommand::Verify => {
-                                    let _ =
-                                        handle_verify(&[input.clone()], false, &OutputFormat::Text);
+                                    let _ = handle_verify(
+                                        std::slice::from_ref(input),
+                                        false,
+                                        &OutputFormat::Text,
+                                    );
                                 }
                                 WatchCommand::Lint => {
-                                    let _ = handle_lint(&[input.clone()], false, false);
+                                    let _ = handle_lint(std::slice::from_ref(input), false, false);
                                 }
                                 WatchCommand::Test => {
                                     println!("Test command not yet implemented");
@@ -1231,7 +1534,7 @@ pub fn handle_test(inputs: &[String], tests_file: &str, verbose: bool) -> Result
         // Find the statute to test
         let statute = statutes
             .iter()
-            .find(|s| test_case.statute_id.as_ref().map_or(true, |id| &s.id == id))
+            .find(|s| test_case.statute_id.as_ref().is_none_or(|id| &s.id == id))
             .ok_or_else(|| anyhow::anyhow!("Statute not found for test case {}", idx + 1))?;
 
         // Check if conditions match
@@ -1284,7 +1587,7 @@ struct TestCase {
 fn evaluate_test_case(statute: &Statute, _test_case: &TestCase) -> bool {
     // Simple evaluation - just check if statute exists for now
     // In a real implementation, this would evaluate conditions
-    !statute.preconditions.is_empty() || statute.effect.description.len() > 0
+    !statute.preconditions.is_empty() || !statute.effect.description.is_empty()
 }
 
 /// Handles the new command.
@@ -1473,7 +1776,7 @@ pub fn handle_doctor(verbose: bool) -> Result<()> {
 
     // Check 5: Environment variables
     print!("{} ", "Checking environment variables...".dimmed());
-    let env_vars = vec![
+    let env_vars = [
         "LEGALIS_JURISDICTION",
         "LEGALIS_VERIFY_STRICT",
         "LEGALIS_OUTPUT_FORMAT",
@@ -1530,4 +1833,501 @@ pub fn handle_doctor(verbose: bool) -> Result<()> {
             issues.len()
         ))
     }
+}
+
+/// Handles the REPL command.
+pub fn handle_repl(load: Option<&str>, no_color: bool) -> Result<()> {
+    use rustyline::history::DefaultHistory;
+    use rustyline::{Editor, error::ReadlineError};
+
+    let mut rl = Editor::<(), DefaultHistory>::new()?;
+    let history_path = dirs::home_dir()
+        .map(|p| p.join(".legalis_history"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".legalis_history"));
+
+    // Load history if it exists
+    let _ = rl.load_history(&history_path);
+
+    println!(
+        "{}",
+        if !no_color {
+            "Legalis REPL v0.2.0".green().bold().to_string()
+        } else {
+            "Legalis REPL v0.2.0".to_string()
+        }
+    );
+    println!(
+        "{}",
+        if !no_color {
+            "Type 'help' for available commands, 'exit' to quit"
+                .dimmed()
+                .to_string()
+        } else {
+            "Type 'help' for available commands, 'exit' to quit".to_string()
+        }
+    );
+    println!();
+
+    let parser = LegalDslParser::new();
+    let verifier = StatuteVerifier::new();
+    let mut current_statute: Option<Statute> = None;
+    let mut statute_buffer = String::new();
+    let mut in_multiline = false;
+
+    // Load file if specified
+    if let Some(load_path) = load {
+        match fs::read_to_string(load_path) {
+            Ok(content) => match parser.parse_statute(&content) {
+                Ok(statute) => {
+                    println!(
+                        "{}",
+                        if !no_color {
+                            format!("Loaded statute: {}", statute.id)
+                                .green()
+                                .to_string()
+                        } else {
+                            format!("Loaded statute: {}", statute.id)
+                        }
+                    );
+                    current_statute = Some(statute);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        if !no_color {
+                            format!("Failed to parse file: {}", e).red().to_string()
+                        } else {
+                            format!("Failed to parse file: {}", e)
+                        }
+                    );
+                }
+            },
+            Err(e) => {
+                eprintln!(
+                    "{}",
+                    if !no_color {
+                        format!("Failed to load file: {}", e).red().to_string()
+                    } else {
+                        format!("Failed to load file: {}", e)
+                    }
+                );
+            }
+        }
+    }
+
+    loop {
+        let prompt = if in_multiline { "... " } else { "legalis> " };
+
+        match rl.readline(prompt) {
+            Ok(line) => {
+                let trimmed = line.trim();
+
+                // Skip empty lines
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                // Add to history
+                let _ = rl.add_history_entry(trimmed);
+
+                // Check for multiline mode
+                if in_multiline {
+                    if trimmed == "}" {
+                        statute_buffer.push_str(&line);
+                        statute_buffer.push('\n');
+
+                        // Try to parse the buffer
+                        match parser.parse_statute(&statute_buffer) {
+                            Ok(statute) => {
+                                println!(
+                                    "{}",
+                                    if !no_color {
+                                        format!("Parsed statute: {}", statute.id)
+                                            .green()
+                                            .to_string()
+                                    } else {
+                                        format!("Parsed statute: {}", statute.id)
+                                    }
+                                );
+                                current_statute = Some(statute);
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "{}",
+                                    if !no_color {
+                                        format!("Parse error: {}", e).red().to_string()
+                                    } else {
+                                        format!("Parse error: {}", e)
+                                    }
+                                );
+                            }
+                        }
+
+                        statute_buffer.clear();
+                        in_multiline = false;
+                    } else {
+                        statute_buffer.push_str(&line);
+                        statute_buffer.push('\n');
+                    }
+                    continue;
+                }
+
+                // Handle commands
+                match trimmed {
+                    "exit" | "quit" | "q" => {
+                        println!("Goodbye!");
+                        break;
+                    }
+                    "help" | "?" => {
+                        print_repl_help(no_color);
+                    }
+                    "clear" | "cls" => {
+                        print!("\x1B[2J\x1B[1;1H");
+                    }
+                    "show" => {
+                        if let Some(ref statute) = current_statute {
+                            println!("{:#?}", statute);
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    "No statute loaded".yellow().to_string()
+                                } else {
+                                    "No statute loaded".to_string()
+                                }
+                            );
+                        }
+                    }
+                    "verify" => {
+                        if let Some(ref statute) = current_statute {
+                            let result = verifier.verify(std::slice::from_ref(statute));
+                            if result.passed {
+                                println!(
+                                    "{}",
+                                    if !no_color {
+                                        "✓ Verification passed".green().to_string()
+                                    } else {
+                                        "✓ Verification passed".to_string()
+                                    }
+                                );
+                            } else {
+                                println!(
+                                    "{}",
+                                    if !no_color {
+                                        "✗ Verification failed".red().to_string()
+                                    } else {
+                                        "✗ Verification failed".to_string()
+                                    }
+                                );
+                                for error in &result.errors {
+                                    println!("  {}", error);
+                                }
+                            }
+                            if !result.warnings.is_empty() {
+                                println!(
+                                    "{}",
+                                    if !no_color {
+                                        "Warnings:".yellow().to_string()
+                                    } else {
+                                        "Warnings:".to_string()
+                                    }
+                                );
+                                for warning in &result.warnings {
+                                    println!("  {}", warning);
+                                }
+                            }
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    "No statute loaded".yellow().to_string()
+                                } else {
+                                    "No statute loaded".to_string()
+                                }
+                            );
+                        }
+                    }
+                    "json" => {
+                        if let Some(ref statute) = current_statute {
+                            match serde_json::to_string_pretty(statute) {
+                                Ok(json) => println!("{}", json),
+                                Err(e) => eprintln!("JSON serialization error: {}", e),
+                            }
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    "No statute loaded".yellow().to_string()
+                                } else {
+                                    "No statute loaded".to_string()
+                                }
+                            );
+                        }
+                    }
+                    "yaml" => {
+                        if let Some(ref statute) = current_statute {
+                            match serde_yaml::to_string(statute) {
+                                Ok(yaml) => println!("{}", yaml),
+                                Err(e) => eprintln!("YAML serialization error: {}", e),
+                            }
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    "No statute loaded".yellow().to_string()
+                                } else {
+                                    "No statute loaded".to_string()
+                                }
+                            );
+                        }
+                    }
+                    cmd if cmd.starts_with("load ") => {
+                        let path = cmd.strip_prefix("load ").unwrap().trim();
+                        match fs::read_to_string(path) {
+                            Ok(content) => match parser.parse_statute(&content) {
+                                Ok(statute) => {
+                                    println!(
+                                        "{}",
+                                        if !no_color {
+                                            format!("Loaded statute: {}", statute.id)
+                                                .green()
+                                                .to_string()
+                                        } else {
+                                            format!("Loaded statute: {}", statute.id)
+                                        }
+                                    );
+                                    current_statute = Some(statute);
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "{}",
+                                        if !no_color {
+                                            format!("Parse error: {}", e).red().to_string()
+                                        } else {
+                                            format!("Parse error: {}", e)
+                                        }
+                                    );
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!(
+                                    "{}",
+                                    if !no_color {
+                                        format!("Failed to read file: {}", e).red().to_string()
+                                    } else {
+                                        format!("Failed to read file: {}", e)
+                                    }
+                                );
+                            }
+                        }
+                    }
+                    cmd if cmd.starts_with("save ") => {
+                        let path = cmd.strip_prefix("save ").unwrap().trim();
+                        if let Some(ref statute) = current_statute {
+                            match serde_json::to_string_pretty(statute) {
+                                Ok(json) => match fs::write(path, json) {
+                                    Ok(_) => println!(
+                                        "{}",
+                                        if !no_color {
+                                            format!("Saved to: {}", path).green().to_string()
+                                        } else {
+                                            format!("Saved to: {}", path)
+                                        }
+                                    ),
+                                    Err(e) => eprintln!("Write error: {}", e),
+                                },
+                                Err(e) => eprintln!("Serialization error: {}", e),
+                            }
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    "No statute loaded".yellow().to_string()
+                                } else {
+                                    "No statute loaded".to_string()
+                                }
+                            );
+                        }
+                    }
+                    _ => {
+                        // Check if starting a statute definition
+                        if trimmed.starts_with("STATUTE") {
+                            statute_buffer = line.clone();
+                            statute_buffer.push('\n');
+                            in_multiline = true;
+                        } else {
+                            println!(
+                                "{}",
+                                if !no_color {
+                                    format!("Unknown command: {}", trimmed).yellow().to_string()
+                                } else {
+                                    format!("Unknown command: {}", trimmed)
+                                }
+                            );
+                            println!("Type 'help' for available commands");
+                        }
+                    }
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                println!("Use 'exit' or 'quit' to leave the REPL");
+            }
+            Err(ReadlineError::Eof) => {
+                println!("EOF");
+                break;
+            }
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+
+    // Save history
+    let _ = rl.save_history(&history_path);
+
+    Ok(())
+}
+
+/// Prints REPL help information.
+fn print_repl_help(no_color: bool) {
+    let help_text = vec![
+        (
+            "Commands:",
+            vec![
+                ("help, ?", "Show this help message"),
+                ("show", "Display the current statute"),
+                ("verify", "Verify the current statute"),
+                ("json", "Display statute as JSON"),
+                ("yaml", "Display statute as YAML"),
+                ("load <file>", "Load a statute from a file"),
+                ("save <file>", "Save the current statute to a file"),
+                ("clear, cls", "Clear the screen"),
+                ("exit, quit, q", "Exit the REPL"),
+            ],
+        ),
+        (
+            "Multiline Input:",
+            vec![("STATUTE ...", "Start defining a statute (ends with })")],
+        ),
+    ];
+
+    for (section, commands) in help_text {
+        println!(
+            "{}",
+            if !no_color {
+                section.cyan().bold().to_string()
+            } else {
+                section.to_string()
+            }
+        );
+        for (cmd, desc) in commands {
+            println!(
+                "  {:20} {}",
+                if !no_color {
+                    cmd.green().to_string()
+                } else {
+                    cmd.to_string()
+                },
+                desc
+            );
+        }
+        println!();
+    }
+}
+
+/// Handles the search command.
+pub fn handle_search(
+    _registry_path: &str,
+    query: &str,
+    jurisdiction: Option<&str>,
+    tags: &[String],
+    limit: usize,
+) -> Result<()> {
+    use comfy_table::{Cell, Color, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+    use legalis_registry::StatuteRegistry;
+
+    // For now, we'll use an in-memory registry
+    // In the future, this could load from a file or database
+    let mut registry = StatuteRegistry::new();
+
+    // Perform search based on query
+    println!("{}", format!("Searching for: \"{}\"", query).cyan().bold());
+
+    if let Some(jur) = jurisdiction {
+        println!("{}", format!("  Jurisdiction filter: {}", jur).dimmed());
+    }
+
+    if !tags.is_empty() {
+        println!("{}", format!("  Tag filter: {}", tags.join(", ")).dimmed());
+    }
+
+    println!();
+
+    // Try different search strategies
+    let mut results = Vec::new();
+
+    // 1. Try exact ID match
+    if let Some(entry) = registry.get(query) {
+        results.push(entry.clone());
+    } else {
+        // 2. Search by tags
+        for tag in tags {
+            let tag_results = registry.query_by_tag(tag);
+            results.extend(tag_results.into_iter().cloned());
+        }
+
+        // 3. Search by jurisdiction
+        if let Some(jur) = jurisdiction {
+            let jur_results = registry.query_by_jurisdiction(jur);
+            results.extend(jur_results.into_iter().cloned());
+        }
+    }
+
+    // Remove duplicates
+    results.sort_by(|a, b| a.statute.id.cmp(&b.statute.id));
+    results.dedup_by(|a, b| a.statute.id == b.statute.id);
+
+    // Apply limit
+    results.truncate(limit);
+
+    if results.is_empty() {
+        println!("{}", "No results found".yellow());
+        println!("\nTry:");
+        println!("  - Broadening your search query");
+        println!("  - Removing filters");
+        println!("  - Checking your registry path");
+        return Ok(());
+    }
+
+    // Display results in a table
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec![
+            Cell::new("ID").fg(Color::Cyan),
+            Cell::new("Title").fg(Color::Cyan),
+            Cell::new("Version").fg(Color::Cyan),
+            Cell::new("Jurisdiction").fg(Color::Cyan),
+            Cell::new("Tags").fg(Color::Cyan),
+        ]);
+
+    for entry in &results {
+        let statute = &entry.statute;
+        table.add_row(vec![
+            Cell::new(&statute.id),
+            Cell::new(&statute.title),
+            Cell::new(statute.version.to_string()),
+            Cell::new(statute.jurisdiction.as_ref().unwrap_or(&"N/A".to_string())),
+            Cell::new(entry.tags.join(", ")),
+        ]);
+    }
+
+    println!("{}", table);
+    println!();
+    println!("{}", format!("Found {} result(s)", results.len()).green());
+
+    Ok(())
 }

@@ -15,6 +15,8 @@ uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
 rusqlite = { version = "0.32", features = ["bundled", "chrono", "uuid"] }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync"] }
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.9"

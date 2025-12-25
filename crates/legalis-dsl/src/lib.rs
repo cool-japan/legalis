@@ -74,6 +74,9 @@ pub mod incremental;
 pub mod lsp;
 mod parser;
 mod printer;
+pub mod query;
+pub mod tree_view;
+pub mod validation;
 
 #[cfg(test)]
 mod tests;
@@ -84,6 +87,9 @@ pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
 pub use incremental::{IncrementalParser, TextEdit};
 pub use parser::*;
 pub use printer::*;
+pub use query::{ConditionSearch, StatuteQuery};
+pub use tree_view::TreeFormatter;
+pub use validation::{CompletenessChecker, SemanticValidator, ValidationContext, ValidationError};
 
 /// Serializes a LegalDocument AST to JSON string.
 pub fn to_json(doc: &ast::LegalDocument) -> Result<String, serde_json::Error> {

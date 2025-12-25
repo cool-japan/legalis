@@ -118,8 +118,8 @@ mod tests {
         // Should be different for different inputs
         assert_ne!(p1, p2);
         // Should be in valid range
-        assert!(p1 >= 0.0 && p1 <= 1.0);
-        assert!(p2 >= 0.0 && p2 <= 1.0);
+        assert!((0.0..=1.0).contains(&p1));
+        assert!((0.0..=1.0).contains(&p2));
     }
 
     #[test]

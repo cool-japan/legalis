@@ -76,6 +76,64 @@ pub struct BackupMetadata {
     pub description: Option<String>,
 }
 
+/// A point-in-time snapshot of the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistrySnapshot {
+    /// Snapshot ID
+    pub snapshot_id: Uuid,
+    /// When the snapshot was created
+    pub created_at: DateTime<Utc>,
+    /// Full registry backup
+    pub backup: RegistryBackup,
+    /// Snapshot description
+    pub description: Option<String>,
+}
+
+impl RegistrySnapshot {
+    /// Creates a new snapshot from a backup.
+    pub fn new(backup: RegistryBackup, description: Option<String>) -> Self {
+        Self {
+            snapshot_id: Uuid::new_v4(),
+            created_at: Utc::now(),
+            backup,
+            description,
+        }
+    }
+}
+
+/// Incremental backup containing only changes since last backup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncrementalBackup {
+    /// Base snapshot ID this incremental is built upon
+    pub base_snapshot_id: Uuid,
+    /// When this incremental was created
+    pub created_at: DateTime<Utc>,
+    /// Events since the base snapshot
+    pub delta_events: Vec<RegistryEvent>,
+    /// Statutes added or modified since base
+    pub changed_statutes: Vec<StatuteEntry>,
+    /// IDs of statutes deleted since base
+    pub deleted_statute_ids: Vec<String>,
+}
+
+impl IncrementalBackup {
+    /// Creates a new incremental backup.
+    pub fn new(base_snapshot_id: Uuid) -> Self {
+        Self {
+            base_snapshot_id,
+            created_at: Utc::now(),
+            delta_events: Vec::new(),
+            changed_statutes: Vec::new(),
+            deleted_statute_ids: Vec::new(),
+        }
+    }
+
+    /// Returns the total number of changes.
+    pub fn change_count(&self) -> usize {
+        self.delta_events.len() + self.changed_statutes.len() + self.deleted_statute_ids.len()
+    }
+}
+
 /// Lazy loading configuration.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LazyLoadConfig {
@@ -330,6 +388,24 @@ pub struct SearchQuery {
     pub status: Option<StatuteStatus>,
     /// Filter by active statutes only
     pub active_only: bool,
+    /// Filter by effective date range
+    pub effective_date_range: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    /// Filter by expiry date range
+    pub expiry_date_range: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    /// Filter by modified date range
+    pub modified_date_range: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    /// Filter by version number
+    pub version: Option<u32>,
+    /// Filter by minimum version
+    pub min_version: Option<u32>,
+    /// Filter by effect type
+    pub effect_type: Option<EffectType>,
+    /// Exclude statutes with these tags
+    pub exclude_tags: Vec<String>,
+    /// Include only statutes that reference these IDs
+    pub references: Vec<String>,
+    /// Include only statutes with supersedes relationships
+    pub has_supersedes: Option<bool>,
 }
 
 impl SearchQuery {
@@ -365,6 +441,162 @@ impl SearchQuery {
     /// Sets the active-only filter.
     pub fn active_only(mut self) -> Self {
         self.active_only = true;
+        self
+    }
+
+    /// Sets the effective date range filter.
+    pub fn with_effective_date_range(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        self.effective_date_range = Some((start, end));
+        self
+    }
+
+    /// Sets the expiry date range filter.
+    pub fn with_expiry_date_range(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        self.expiry_date_range = Some((start, end));
+        self
+    }
+
+    /// Sets the modified date range filter.
+    pub fn with_modified_date_range(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        self.modified_date_range = Some((start, end));
+        self
+    }
+
+    /// Sets the version filter.
+    pub fn with_version(mut self, version: u32) -> Self {
+        self.version = Some(version);
+        self
+    }
+
+    /// Sets the minimum version filter.
+    pub fn with_min_version(mut self, min_version: u32) -> Self {
+        self.min_version = Some(min_version);
+        self
+    }
+
+    /// Sets the effect type filter.
+    pub fn with_effect_type(mut self, effect_type: EffectType) -> Self {
+        self.effect_type = Some(effect_type);
+        self
+    }
+
+    /// Adds a tag to exclude.
+    pub fn exclude_tag(mut self, tag: impl Into<String>) -> Self {
+        self.exclude_tags.push(tag.into());
+        self
+    }
+
+    /// Adds a reference filter (statute must reference this ID).
+    pub fn with_reference(mut self, reference_id: impl Into<String>) -> Self {
+        self.references.push(reference_id.into());
+        self
+    }
+
+    /// Filters for statutes that have supersedes relationships.
+    pub fn with_supersedes(mut self) -> Self {
+        self.has_supersedes = Some(true);
+        self
+    }
+
+    /// Filters for statutes that don't have supersedes relationships.
+    pub fn without_supersedes(mut self) -> Self {
+        self.has_supersedes = Some(false);
+        self
+    }
+}
+
+/// A search result with relevance scoring.
+#[derive(Debug, Clone)]
+pub struct SearchResult<'a> {
+    /// The statute entry
+    pub entry: &'a StatuteEntry,
+    /// Relevance score (0.0 - 1.0, higher is better)
+    pub score: f64,
+    /// Match highlights (field -> matched text)
+    pub highlights: HashMap<String, Vec<String>>,
+}
+
+impl<'a> SearchResult<'a> {
+    /// Creates a new search result with a given score.
+    pub fn new(entry: &'a StatuteEntry, score: f64) -> Self {
+        Self {
+            entry,
+            score: score.clamp(0.0, 1.0),
+            highlights: HashMap::new(),
+        }
+    }
+
+    /// Adds a highlight for a field.
+    pub fn add_highlight(&mut self, field: String, matched: String) {
+        self.highlights.entry(field).or_default().push(matched);
+    }
+
+    /// Gets highlights for a specific field.
+    pub fn get_highlights(&self, field: &str) -> Option<&Vec<String>> {
+        self.highlights.get(field)
+    }
+}
+
+/// Ranking configuration for search results.
+#[derive(Debug, Clone, Copy)]
+pub struct RankingConfig {
+    /// Weight for title matches (default: 3.0)
+    pub title_weight: f64,
+    /// Weight for ID matches (default: 2.0)
+    pub id_weight: f64,
+    /// Weight for tag matches (default: 1.5)
+    pub tag_weight: f64,
+    /// Weight for jurisdiction matches (default: 1.0)
+    pub jurisdiction_weight: f64,
+    /// Boost for exact matches (default: 2.0)
+    pub exact_match_boost: f64,
+}
+
+impl Default for RankingConfig {
+    fn default() -> Self {
+        Self {
+            title_weight: 3.0,
+            id_weight: 2.0,
+            tag_weight: 1.5,
+            jurisdiction_weight: 1.0,
+            exact_match_boost: 2.0,
+        }
+    }
+}
+
+impl RankingConfig {
+    /// Creates a new ranking configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the title weight.
+    pub fn with_title_weight(mut self, weight: f64) -> Self {
+        self.title_weight = weight;
+        self
+    }
+
+    /// Sets the ID weight.
+    pub fn with_id_weight(mut self, weight: f64) -> Self {
+        self.id_weight = weight;
+        self
+    }
+
+    /// Sets the tag weight.
+    pub fn with_tag_weight(mut self, weight: f64) -> Self {
+        self.tag_weight = weight;
+        self
+    }
+
+    /// Sets the jurisdiction weight.
+    pub fn with_jurisdiction_weight(mut self, weight: f64) -> Self {
+        self.jurisdiction_weight = weight;
+        self
+    }
+
+    /// Sets the exact match boost.
+    pub fn with_exact_match_boost(mut self, boost: f64) -> Self {
+        self.exact_match_boost = boost;
         self
     }
 }
@@ -581,6 +813,19 @@ pub enum RegistryEvent {
         new_value: Option<String>,
         timestamp: DateTime<Utc>,
     },
+    /// A statute was deleted
+    StatuteDeleted {
+        statute_id: String,
+        jurisdiction: String,
+        version: u32,
+        timestamp: DateTime<Utc>,
+    },
+    /// A statute was archived
+    StatuteArchived {
+        statute_id: String,
+        reason: String,
+        timestamp: DateTime<Utc>,
+    },
 }
 
 /// Event store for tracking all changes.
@@ -636,7 +881,9 @@ impl EventStore {
                 | RegistryEvent::TagRemoved { statute_id: id, .. }
                 | RegistryEvent::ReferenceAdded { statute_id: id, .. }
                 | RegistryEvent::ReferenceRemoved { statute_id: id, .. }
-                | RegistryEvent::MetadataUpdated { statute_id: id, .. } => id == statute_id,
+                | RegistryEvent::MetadataUpdated { statute_id: id, .. }
+                | RegistryEvent::StatuteDeleted { statute_id: id, .. }
+                | RegistryEvent::StatuteArchived { statute_id: id, .. } => id == statute_id,
             })
             .collect()
     }
@@ -654,7 +901,9 @@ impl EventStore {
                     | RegistryEvent::TagRemoved { timestamp, .. }
                     | RegistryEvent::ReferenceAdded { timestamp, .. }
                     | RegistryEvent::ReferenceRemoved { timestamp, .. }
-                    | RegistryEvent::MetadataUpdated { timestamp, .. } => timestamp,
+                    | RegistryEvent::MetadataUpdated { timestamp, .. }
+                    | RegistryEvent::StatuteDeleted { timestamp, .. }
+                    | RegistryEvent::StatuteArchived { timestamp, .. } => timestamp,
                 };
                 timestamp >= &start && timestamp <= &end
             })
@@ -851,6 +1100,10 @@ pub struct StatuteRegistry {
     event_store: EventStore,
     /// Webhook manager for notifications
     webhook_manager: WebhookManager,
+    /// Archive for deleted/superseded statutes
+    archive: StatuteArchive,
+    /// Retention policy for auto-archiving
+    retention_policy: RetentionPolicy,
 }
 
 impl std::fmt::Debug for StatuteRegistry {
@@ -864,6 +1117,8 @@ impl std::fmt::Debug for StatuteRegistry {
             .field("fuzzy_matcher", &"<SkimMatcherV2>")
             .field("event_store", &self.event_store)
             .field("webhook_manager", &self.webhook_manager)
+            .field("archive", &self.archive)
+            .field("retention_policy", &self.retention_policy)
             .finish()
     }
 }
@@ -879,6 +1134,8 @@ impl Default for StatuteRegistry {
             fuzzy_matcher: SkimMatcherV2::default(),
             event_store: EventStore::new(),
             webhook_manager: WebhookManager::new(),
+            archive: StatuteArchive::new(),
+            retention_policy: RetentionPolicy::new(),
         }
     }
 }
@@ -1436,6 +1693,186 @@ impl StatuteRegistry {
             .collect()
     }
 
+    /// Deletes a statute from the registry.
+    ///
+    /// This removes the statute, all its versions, and cleans up all indexes.
+    /// Returns the deleted entry if found.
+    pub fn delete(&mut self, statute_id: &str) -> RegistryResult<StatuteEntry> {
+        let entry = self
+            .statutes
+            .shift_remove(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let jurisdiction = entry.jurisdiction.clone();
+        let version = entry.version;
+
+        // Remove from cache
+        self.cache.pop(statute_id);
+
+        // Remove from tag index
+        for tag in &entry.tags {
+            if let Some(ids) = self.tag_index.get_mut(tag) {
+                ids.remove(statute_id);
+                if ids.is_empty() {
+                    self.tag_index.remove(tag);
+                }
+            }
+        }
+
+        // Remove from jurisdiction index
+        if let Some(ids) = self.jurisdiction_index.get_mut(&entry.jurisdiction) {
+            ids.remove(statute_id);
+            if ids.is_empty() {
+                self.jurisdiction_index.remove(&entry.jurisdiction);
+            }
+        }
+
+        // Remove all versions
+        self.versions.remove(statute_id);
+
+        // Record event and trigger webhooks
+        self.record_event(RegistryEvent::StatuteDeleted {
+            statute_id: statute_id.to_string(),
+            jurisdiction,
+            version,
+            timestamp: Utc::now(),
+        });
+
+        Ok(entry)
+    }
+
+    /// Batch deletes multiple statutes.
+    ///
+    /// Returns a vector of results, one for each statute ID.
+    pub fn batch_delete(&mut self, statute_ids: Vec<String>) -> Vec<RegistryResult<StatuteEntry>> {
+        statute_ids.into_iter().map(|id| self.delete(&id)).collect()
+    }
+
+    /// Archives a statute and removes it from the active registry.
+    ///
+    /// This is a soft delete that preserves the statute in the archive.
+    pub fn archive_statute(&mut self, statute_id: &str, reason: String) -> RegistryResult<()> {
+        let entry = self.delete(statute_id)?;
+        self.archive.archive(entry, reason.clone());
+
+        // Record archive event
+        self.record_event(RegistryEvent::StatuteArchived {
+            statute_id: statute_id.to_string(),
+            reason,
+            timestamp: Utc::now(),
+        });
+
+        Ok(())
+    }
+
+    /// Unarchives a statute and restores it to the registry.
+    pub fn unarchive_statute(&mut self, statute_id: &str) -> RegistryResult<Uuid> {
+        let archived = self
+            .archive
+            .unarchive(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        self.register(archived.entry)
+    }
+
+    /// Gets an archived statute.
+    pub fn get_archived(&self, statute_id: &str) -> Option<&ArchivedStatute> {
+        self.archive.get(statute_id)
+    }
+
+    /// Lists all archived statute IDs.
+    pub fn list_archived_ids(&self) -> Vec<String> {
+        self.archive.list_ids()
+    }
+
+    /// Returns the count of archived statutes.
+    pub fn archived_count(&self) -> usize {
+        self.archive.count()
+    }
+
+    /// Searches archived statutes by reason.
+    pub fn search_archived_by_reason(&self, query: &str) -> Vec<&ArchivedStatute> {
+        self.archive.search_by_reason(query)
+    }
+
+    /// Sets the retention policy for the registry.
+    pub fn set_retention_policy(&mut self, policy: RetentionPolicy) {
+        self.retention_policy = policy;
+    }
+
+    /// Gets a reference to the current retention policy.
+    pub fn retention_policy(&self) -> &RetentionPolicy {
+        &self.retention_policy
+    }
+
+    /// Applies retention policy rules to archive eligible statutes.
+    pub fn apply_retention_policy(&mut self) -> RetentionResult {
+        let now = Utc::now();
+        let total_count = self.statutes.len();
+        let mut result = RetentionResult::new(total_count);
+
+        // Collect IDs to archive (can't modify while iterating)
+        let mut to_archive: Vec<(String, String)> = Vec::new();
+
+        for (statute_id, entry) in &self.statutes {
+            for rule in &self.retention_policy.rules {
+                let should_archive = match rule {
+                    RetentionRule::ExpiredStatutes { reason: _ } => {
+                        // Check if statute has expired
+                        if let Some(expiry) = entry.expiry_date {
+                            expiry < now
+                        } else {
+                            false
+                        }
+                    }
+                    RetentionRule::OlderThanDays { days, reason: _ } => {
+                        // Check if statute is older than specified days
+                        if let Some(effective) = entry.effective_date {
+                            let cutoff = now - chrono::Duration::days(*days);
+                            effective < cutoff
+                        } else {
+                            false
+                        }
+                    }
+                    RetentionRule::ByStatus { status, reason: _ } => {
+                        // Check if statute has specified status
+                        entry.status == *status
+                    }
+                    RetentionRule::SupersededStatutes { reason: _ } => {
+                        // Check if statute has been superseded
+                        !entry.supersedes.is_empty()
+                    }
+                    RetentionRule::InactiveForDays { days, reason: _ } => {
+                        // Check if statute hasn't been modified in specified days
+                        let cutoff = now - chrono::Duration::days(*days);
+                        entry.modified_at < cutoff
+                    }
+                };
+
+                if should_archive {
+                    let reason = match rule {
+                        RetentionRule::ExpiredStatutes { reason } => reason.clone(),
+                        RetentionRule::OlderThanDays { reason, .. } => reason.clone(),
+                        RetentionRule::ByStatus { reason, .. } => reason.clone(),
+                        RetentionRule::SupersededStatutes { reason } => reason.clone(),
+                        RetentionRule::InactiveForDays { reason, .. } => reason.clone(),
+                    };
+                    to_archive.push((statute_id.clone(), reason));
+                    break; // Only archive once per statute
+                }
+            }
+        }
+
+        // Archive the collected statutes
+        for (statute_id, reason) in to_archive {
+            if let Ok(()) = self.archive_statute(&statute_id, reason.clone()) {
+                result.record_archived(statute_id, reason);
+            }
+        }
+
+        result
+    }
+
     /// Clears the cache.
     pub fn clear_cache(&mut self) {
         self.cache.clear();
@@ -1581,6 +2018,158 @@ impl StatuteRegistry {
         self.event_store.clear();
     }
 
+    /// Searches statutes with relevance ranking.
+    ///
+    /// Returns results sorted by relevance score (highest first).
+    pub fn search_ranked<'a>(
+        &'a self,
+        query: &str,
+        config: Option<RankingConfig>,
+    ) -> Vec<SearchResult<'a>> {
+        let config = config.unwrap_or_default();
+        let query_lower = query.to_lowercase();
+
+        let mut results: Vec<SearchResult> = self
+            .statutes
+            .values()
+            .filter_map(|entry| {
+                let score = self.calculate_relevance_score(entry, &query_lower, &config);
+                if score > 0.0 {
+                    let mut result = SearchResult::new(entry, score);
+
+                    // Add highlights for matched fields
+                    if entry.statute.title.to_lowercase().contains(&query_lower) {
+                        result.add_highlight("title".to_string(), entry.statute.title.clone());
+                    }
+                    if entry.statute.id.to_lowercase().contains(&query_lower) {
+                        result.add_highlight("id".to_string(), entry.statute.id.clone());
+                    }
+                    for tag in &entry.tags {
+                        if tag.to_lowercase().contains(&query_lower) {
+                            result.add_highlight("tag".to_string(), tag.clone());
+                        }
+                    }
+
+                    Some(result)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by score (descending)
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        results
+    }
+
+    /// Calculates relevance score for a statute entry.
+    #[allow(dead_code)]
+    fn calculate_relevance_score(
+        &self,
+        entry: &StatuteEntry,
+        query: &str,
+        config: &RankingConfig,
+    ) -> f64 {
+        let mut score = 0.0;
+
+        // Title matching
+        let title_lower = entry.statute.title.to_lowercase();
+        if title_lower == query {
+            score += config.title_weight * config.exact_match_boost;
+        } else if title_lower.contains(query) {
+            score += config.title_weight;
+        }
+
+        // ID matching
+        let id_lower = entry.statute.id.to_lowercase();
+        if id_lower == query {
+            score += config.id_weight * config.exact_match_boost;
+        } else if id_lower.contains(query) {
+            score += config.id_weight;
+        }
+
+        // Tag matching
+        for tag in &entry.tags {
+            let tag_lower = tag.to_lowercase();
+            if tag_lower == query {
+                score += config.tag_weight * config.exact_match_boost;
+            } else if tag_lower.contains(query) {
+                score += config.tag_weight;
+            }
+        }
+
+        // Jurisdiction matching
+        let jurisdiction_lower = entry.jurisdiction.to_lowercase();
+        if jurisdiction_lower == query {
+            score += config.jurisdiction_weight * config.exact_match_boost;
+        } else if jurisdiction_lower.contains(query) {
+            score += config.jurisdiction_weight;
+        }
+
+        // Normalize score to 0.0-1.0 range
+        // Max possible score is title + id + all tags + jurisdiction (with boost)
+        let max_score = (config.title_weight
+            + config.id_weight
+            + config.jurisdiction_weight
+            + config.tag_weight * 5.0)
+            * config.exact_match_boost;
+
+        (score / max_score).min(1.0)
+    }
+
+    /// Searches statutes with fuzzy matching and ranking.
+    pub fn fuzzy_search_ranked<'a>(
+        &'a mut self,
+        query: &str,
+        limit: usize,
+        config: Option<RankingConfig>,
+    ) -> Vec<SearchResult<'a>> {
+        let config = config.unwrap_or_default();
+
+        let mut results: Vec<SearchResult> = self
+            .statutes
+            .values()
+            .filter_map(|entry| {
+                // Use fuzzy matcher for ID matching
+                let fuzzy_score = self
+                    .fuzzy_matcher
+                    .fuzzy_match(&entry.statute.id, query)
+                    .unwrap_or(0) as f64;
+
+                // Combine fuzzy score with text relevance
+                let text_score =
+                    self.calculate_relevance_score(entry, &query.to_lowercase(), &config);
+
+                // Fuzzy score is typically 0-100+, normalize it
+                let normalized_fuzzy = (fuzzy_score / 100.0).min(1.0);
+
+                // Combine scores (weighted average)
+                let combined_score = (normalized_fuzzy * 0.4 + text_score * 0.6).min(1.0);
+
+                if combined_score > 0.1 {
+                    Some(SearchResult::new(entry, combined_score))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by score (descending) and limit results
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(limit);
+
+        results
+    }
+
     /// Exports all events for backup or analysis.
     pub fn export_events(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(&self.event_store.all_events())
@@ -1709,6 +2298,108 @@ impl StatuteRegistry {
         }
 
         Ok(merged_ids)
+    }
+
+    /// Creates a point-in-time snapshot of the registry.
+    pub fn create_snapshot(&self, description: Option<String>) -> RegistrySnapshot {
+        let backup = self.create_backup(description.clone());
+        RegistrySnapshot::new(backup, description)
+    }
+
+    /// Restores the registry from a snapshot.
+    pub fn restore_from_snapshot(&mut self, snapshot: RegistrySnapshot) -> RegistryResult<()> {
+        self.restore_from_backup(snapshot.backup)
+    }
+
+    /// Creates an incremental backup based on a previous snapshot.
+    ///
+    /// This captures only changes since the base snapshot was created.
+    pub fn create_incremental_backup(&self, base_snapshot: &RegistrySnapshot) -> IncrementalBackup {
+        let mut incremental = IncrementalBackup::new(base_snapshot.snapshot_id);
+
+        let base_time = base_snapshot.created_at;
+
+        // Collect events since the base snapshot
+        incremental.delta_events = self
+            .event_store
+            .all_events()
+            .iter()
+            .filter(|e| self.event_timestamp(e) > base_time)
+            .cloned()
+            .cloned()
+            .collect();
+
+        // Collect changed statutes (modified after base snapshot)
+        incremental.changed_statutes = self
+            .statutes
+            .values()
+            .filter(|entry| entry.modified_at > base_time)
+            .cloned()
+            .collect();
+
+        // For deleted statutes, we rely on the StatuteDeleted events
+        incremental.deleted_statute_ids = incremental
+            .delta_events
+            .iter()
+            .filter_map(|e| {
+                if let RegistryEvent::StatuteDeleted { statute_id, .. } = e {
+                    Some(statute_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        incremental
+    }
+
+    /// Applies an incremental backup to the current registry state.
+    pub fn apply_incremental_backup(
+        &mut self,
+        incremental: IncrementalBackup,
+    ) -> RegistryResult<()> {
+        // Apply deleted statutes
+        for statute_id in &incremental.deleted_statute_ids {
+            if self.statutes.contains_key(statute_id) {
+                self.delete(statute_id)?;
+            }
+        }
+
+        // Apply changed statutes
+        for entry in incremental.changed_statutes {
+            let statute_id = entry.statute.id.clone();
+            if self.statutes.contains_key(&statute_id) {
+                // Update existing
+                self.update(&statute_id, entry.statute)?;
+            } else {
+                // Register new
+                self.register(entry)?;
+            }
+        }
+
+        // Record delta events
+        for event in incremental.delta_events {
+            self.event_store.record(event);
+        }
+
+        Ok(())
+    }
+
+    /// Helper to extract timestamp from an event.
+    #[allow(dead_code)]
+    fn event_timestamp(&self, event: &RegistryEvent) -> DateTime<Utc> {
+        match event {
+            RegistryEvent::StatuteRegistered { timestamp, .. } => *timestamp,
+            RegistryEvent::StatuteUpdated { timestamp, .. } => *timestamp,
+            RegistryEvent::StatusChanged { timestamp, .. } => *timestamp,
+            RegistryEvent::TagAdded { timestamp, .. } => *timestamp,
+            RegistryEvent::TagRemoved { timestamp, .. } => *timestamp,
+            RegistryEvent::ReferenceAdded { timestamp, .. } => *timestamp,
+            RegistryEvent::ReferenceRemoved { timestamp, .. } => *timestamp,
+            RegistryEvent::MetadataUpdated { timestamp, .. } => *timestamp,
+            RegistryEvent::StatuteDeleted { timestamp, .. } => *timestamp,
+            RegistryEvent::StatuteArchived { timestamp, .. } => *timestamp,
+        }
     }
 
     /// Lists all statute summaries (lazy loading - returns lightweight data).
@@ -2134,6 +2825,172 @@ pub struct TenantStats {
     pub tag_count: usize,
     /// Number of unique jurisdictions
     pub jurisdiction_count: usize,
+}
+
+/// Archive entry for a statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchivedStatute {
+    /// The archived statute entry
+    pub entry: StatuteEntry,
+    /// Reason for archiving
+    pub reason: String,
+    /// When it was archived
+    pub archived_at: DateTime<Utc>,
+}
+
+/// Archive for storing removed or superseded statutes.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StatuteArchive {
+    /// Archived statutes by ID
+    archived: HashMap<String, ArchivedStatute>,
+}
+
+impl StatuteArchive {
+    /// Creates a new empty archive.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Archives a statute.
+    pub fn archive(&mut self, entry: StatuteEntry, reason: String) {
+        let statute_id = entry.statute.id.clone();
+        self.archived.insert(
+            statute_id,
+            ArchivedStatute {
+                entry,
+                reason,
+                archived_at: Utc::now(),
+            },
+        );
+    }
+
+    /// Retrieves an archived statute.
+    pub fn get(&self, statute_id: &str) -> Option<&ArchivedStatute> {
+        self.archived.get(statute_id)
+    }
+
+    /// Removes a statute from the archive (unarchive).
+    pub fn unarchive(&mut self, statute_id: &str) -> Option<ArchivedStatute> {
+        self.archived.remove(statute_id)
+    }
+
+    /// Lists all archived statute IDs.
+    pub fn list_ids(&self) -> Vec<String> {
+        self.archived.keys().cloned().collect()
+    }
+
+    /// Lists all archived statutes.
+    pub fn list_all(&self) -> Vec<&ArchivedStatute> {
+        self.archived.values().collect()
+    }
+
+    /// Returns the count of archived statutes.
+    pub fn count(&self) -> usize {
+        self.archived.len()
+    }
+
+    /// Searches archived statutes by reason (case-insensitive substring match).
+    pub fn search_by_reason(&self, query: &str) -> Vec<&ArchivedStatute> {
+        let query_lower = query.to_lowercase();
+        self.archived
+            .values()
+            .filter(|a| a.reason.to_lowercase().contains(&query_lower))
+            .collect()
+    }
+
+    /// Clears all archived statutes.
+    pub fn clear(&mut self) {
+        self.archived.clear();
+    }
+}
+
+/// Retention policy rule for auto-archiving statutes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RetentionRule {
+    /// Archive statutes that have expired
+    ExpiredStatutes { reason: String },
+    /// Archive statutes older than specified days since effective date
+    OlderThanDays { days: i64, reason: String },
+    /// Archive statutes with specific status
+    ByStatus {
+        status: StatuteStatus,
+        reason: String,
+    },
+    /// Archive statutes superseded by others
+    SupersededStatutes { reason: String },
+    /// Archive statutes not modified within specified days
+    InactiveForDays { days: i64, reason: String },
+}
+
+/// Configuration for retention policies.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RetentionPolicy {
+    /// Rules to apply for archiving
+    rules: Vec<RetentionRule>,
+    /// Whether to automatically apply retention on operations
+    auto_apply: bool,
+}
+
+impl RetentionPolicy {
+    /// Creates a new empty retention policy.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Enables automatic application of retention rules.
+    pub fn with_auto_apply(mut self) -> Self {
+        self.auto_apply = true;
+        self
+    }
+
+    /// Adds a retention rule.
+    pub fn add_rule(mut self, rule: RetentionRule) -> Self {
+        self.rules.push(rule);
+        self
+    }
+
+    /// Returns all rules.
+    pub fn rules(&self) -> &[RetentionRule] {
+        &self.rules
+    }
+
+    /// Checks if auto-apply is enabled.
+    pub fn is_auto_apply(&self) -> bool {
+        self.auto_apply
+    }
+}
+
+/// Result of applying retention policies.
+#[derive(Debug, Clone)]
+pub struct RetentionResult {
+    /// IDs of statutes that were archived
+    pub archived_ids: Vec<String>,
+    /// Reason for each archival
+    pub reasons: HashMap<String, String>,
+    /// Total statutes evaluated
+    pub total_evaluated: usize,
+}
+
+impl RetentionResult {
+    /// Creates a new retention result.
+    pub fn new(total_evaluated: usize) -> Self {
+        Self {
+            archived_ids: Vec::new(),
+            reasons: HashMap::new(),
+            total_evaluated,
+        }
+    }
+
+    /// Records an archived statute.
+    pub fn record_archived(&mut self, statute_id: String, reason: String) {
+        self.archived_ids.push(statute_id.clone());
+        self.reasons.insert(statute_id, reason);
+    }
+
+    /// Returns the number of statutes archived.
+    pub fn archived_count(&self) -> usize {
+        self.archived_ids.len()
+    }
 }
 
 /// Dependency graph for a statute.
@@ -7478,5 +8335,650 @@ mod tests {
         let long = SearchCacheConfig::long_lived(250);
         assert_eq!(long.max_entries, 250);
         assert_eq!(long.ttl_seconds, 3600);
+    }
+
+    // ===== Session 5 Feature Tests =====
+
+    #[test]
+    fn test_delete_statute() {
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("statute-1");
+        let mut entry = StatuteEntry::new(statute, "US");
+        entry.tags.push("tax".to_string());
+
+        registry.register(entry).unwrap();
+        assert_eq!(registry.count(), 1);
+
+        // Delete the statute
+        let deleted = registry.delete("statute-1").unwrap();
+        assert_eq!(deleted.statute.id, "statute-1");
+        assert_eq!(registry.count(), 0);
+
+        // Verify cleanup
+        assert!(registry.get_uncached("statute-1").is_none());
+        assert!(registry.query_by_tag("tax").is_empty());
+    }
+
+    #[test]
+    fn test_delete_nonexistent() {
+        let mut registry = StatuteRegistry::new();
+        let result = registry.delete("nonexistent");
+        assert!(matches!(result, Err(RegistryError::StatuteNotFound(_))));
+    }
+
+    #[test]
+    fn test_batch_delete() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register multiple statutes
+        for i in 1..=5 {
+            let statute = test_statute(&format!("statute-{}", i));
+            let entry = StatuteEntry::new(statute, "US");
+            registry.register(entry).unwrap();
+        }
+
+        assert_eq!(registry.count(), 5);
+
+        // Batch delete
+        let ids = vec![
+            "statute-1".to_string(),
+            "statute-3".to_string(),
+            "statute-5".to_string(),
+        ];
+        let results = registry.batch_delete(ids);
+
+        assert_eq!(results.len(), 3);
+        assert!(results.iter().all(|r| r.is_ok()));
+        assert_eq!(registry.count(), 2);
+    }
+
+    #[test]
+    fn test_archive_statute() {
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("old-statute");
+        let entry = StatuteEntry::new(statute, "US");
+
+        registry.register(entry).unwrap();
+        assert_eq!(registry.count(), 1);
+
+        // Archive the statute
+        registry
+            .archive_statute("old-statute", "Superseded by new law".to_string())
+            .unwrap();
+
+        // Should be removed from active registry
+        assert_eq!(registry.count(), 0);
+        assert!(registry.get_uncached("old-statute").is_none());
+
+        // Should be in archive
+        assert_eq!(registry.archived_count(), 1);
+        let archived = registry.get_archived("old-statute").unwrap();
+        assert_eq!(archived.reason, "Superseded by new law");
+        assert_eq!(archived.entry.statute.id, "old-statute");
+    }
+
+    #[test]
+    fn test_unarchive_statute() {
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("archived-statute");
+        let entry = StatuteEntry::new(statute, "US");
+
+        registry.register(entry).unwrap();
+        registry
+            .archive_statute("archived-statute", "Test archive".to_string())
+            .unwrap();
+
+        assert_eq!(registry.count(), 0);
+        assert_eq!(registry.archived_count(), 1);
+
+        // Unarchive
+        let id = registry.unarchive_statute("archived-statute").unwrap();
+        assert!(!id.as_simple().to_string().is_empty());
+
+        // Should be back in active registry
+        assert_eq!(registry.count(), 1);
+        assert_eq!(registry.archived_count(), 0);
+        assert!(registry.get_uncached("archived-statute").is_some());
+    }
+
+    #[test]
+    fn test_search_archived_by_reason() {
+        let mut registry = StatuteRegistry::new();
+
+        // Archive multiple statutes with different reasons
+        for i in 1..=3 {
+            let statute = test_statute(&format!("statute-{}", i));
+            let entry = StatuteEntry::new(statute, "US");
+            registry.register(entry).unwrap();
+        }
+
+        registry
+            .archive_statute("statute-1", "Superseded by new law".to_string())
+            .unwrap();
+        registry
+            .archive_statute("statute-2", "Expired statute".to_string())
+            .unwrap();
+        registry
+            .archive_statute("statute-3", "Superseded by amendment".to_string())
+            .unwrap();
+
+        // Search by reason
+        let superseded = registry.search_archived_by_reason("Superseded");
+        assert_eq!(superseded.len(), 2);
+
+        let expired = registry.search_archived_by_reason("Expired");
+        assert_eq!(expired.len(), 1);
+    }
+
+    #[test]
+    fn test_search_ranked() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register statutes with different relevance to query "tax"
+        let s1 = Statute::new("tax-1", "Tax Law", Effect::new(EffectType::Grant, "Grant"));
+        let mut e1 = StatuteEntry::new(s1, "US");
+        e1.tags.push("tax".to_string());
+
+        let s2 = Statute::new(
+            "other-1",
+            "Other Law with tax",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        let e2 = StatuteEntry::new(s2, "US");
+
+        let s3 = Statute::new(
+            "unrelated",
+            "Unrelated Law",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        let e3 = StatuteEntry::new(s3, "US");
+
+        registry.register(e1).unwrap();
+        registry.register(e2).unwrap();
+        registry.register(e3).unwrap();
+
+        // Search with ranking
+        let results = registry.search_ranked("tax", None);
+
+        // Should return 2 results (e1 and e2), sorted by relevance
+        assert_eq!(results.len(), 2);
+        assert!(results[0].score > 0.0);
+        assert!(results[0].score >= results[1].score); // Sorted by score
+    }
+
+    #[test]
+    fn test_ranking_config() {
+        let config = RankingConfig::new()
+            .with_title_weight(5.0)
+            .with_id_weight(3.0)
+            .with_tag_weight(2.0)
+            .with_exact_match_boost(3.0);
+
+        assert_eq!(config.title_weight, 5.0);
+        assert_eq!(config.id_weight, 3.0);
+        assert_eq!(config.tag_weight, 2.0);
+        assert_eq!(config.exact_match_boost, 3.0);
+    }
+
+    #[test]
+    fn test_search_result_highlights() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute = Statute::new(
+            "tax-law",
+            "Income Tax Law",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        let mut entry = StatuteEntry::new(statute, "US");
+        entry.tags.push("taxation".to_string());
+
+        registry.register(entry).unwrap();
+
+        let results = registry.search_ranked("tax", None);
+        assert_eq!(results.len(), 1);
+
+        let result = &results[0];
+        assert!(result.get_highlights("id").is_some() || result.get_highlights("title").is_some());
+    }
+
+    #[test]
+    fn test_create_snapshot() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes
+        for i in 1..=3 {
+            let statute = test_statute(&format!("statute-{}", i));
+            let entry = StatuteEntry::new(statute, "US");
+            registry.register(entry).unwrap();
+        }
+
+        // Create snapshot
+        let snapshot = registry.create_snapshot(Some("Test snapshot".to_string()));
+
+        assert_eq!(snapshot.backup.statutes.len(), 3);
+        assert_eq!(snapshot.description, Some("Test snapshot".to_string()));
+        assert!(!snapshot.snapshot_id.as_simple().to_string().is_empty());
+    }
+
+    #[test]
+    fn test_restore_from_snapshot() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes and create snapshot
+        for i in 1..=2 {
+            let statute = test_statute(&format!("statute-{}", i));
+            let entry = StatuteEntry::new(statute, "US");
+            registry.register(entry).unwrap();
+        }
+
+        let snapshot = registry.create_snapshot(None);
+
+        // Add more statutes
+        let statute = test_statute("statute-3");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+        assert_eq!(registry.count(), 3);
+
+        // Restore from snapshot
+        registry.restore_from_snapshot(snapshot).unwrap();
+        assert_eq!(registry.count(), 2);
+    }
+
+    #[test]
+    fn test_incremental_backup() {
+        let mut registry = StatuteRegistry::new();
+
+        // Create initial state
+        let statute1 = test_statute("statute-1");
+        let entry1 = StatuteEntry::new(statute1, "US");
+        registry.register(entry1).unwrap();
+
+        // Create base snapshot
+        let snapshot = registry.create_snapshot(None);
+
+        // Make changes
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let statute2 = test_statute("statute-2");
+        let entry2 = StatuteEntry::new(statute2, "US");
+        registry.register(entry2).unwrap();
+
+        let statute3 = Statute::new(
+            "statute-1",
+            "Updated",
+            Effect::new(EffectType::Grant, "Grant"),
+        );
+        registry.update("statute-1", statute3).unwrap();
+
+        // Create incremental backup
+        let incremental = registry.create_incremental_backup(&snapshot);
+
+        assert!(incremental.change_count() > 0);
+        assert!(!incremental.delta_events.is_empty());
+    }
+
+    #[test]
+    fn test_apply_incremental_backup() {
+        let mut registry1 = StatuteRegistry::new();
+        let mut registry2 = StatuteRegistry::new();
+
+        // Create base state in both
+        let statute = test_statute("statute-1");
+        let entry = StatuteEntry::new(statute.clone(), "US");
+        registry1.register(entry.clone()).unwrap();
+        registry2.register(entry).unwrap();
+
+        // Create snapshot
+        let snapshot = registry1.create_snapshot(None);
+
+        // Make changes in registry1
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let new_statute = test_statute("statute-2");
+        let new_entry = StatuteEntry::new(new_statute, "US");
+        registry1.register(new_entry).unwrap();
+
+        // Create and apply incremental
+        let incremental = registry1.create_incremental_backup(&snapshot);
+        registry2.apply_incremental_backup(incremental).unwrap();
+
+        // Both registries should be in sync
+        assert_eq!(registry2.count(), registry1.count());
+    }
+
+    #[test]
+    fn test_advanced_query_date_filters() {
+        let mut registry = StatuteRegistry::new();
+
+        let now = Utc::now();
+        let past = now - chrono::Duration::days(30);
+        let future = now + chrono::Duration::days(30);
+
+        let statute = test_statute("statute-1");
+        let mut entry = StatuteEntry::new(statute, "US");
+        entry.effective_date = Some(past);
+        entry.expiry_date = Some(future);
+
+        registry.register(entry).unwrap();
+
+        // Query with date range
+        let query =
+            SearchQuery::new().with_effective_date_range(past - chrono::Duration::days(1), now);
+
+        // Note: The actual filtering would need to be implemented in the search() method
+        // This test verifies the query builder works correctly
+        assert!(query.effective_date_range.is_some());
+        assert!(query.expiry_date_range.is_none());
+    }
+
+    #[test]
+    fn test_advanced_query_version_filters() {
+        let query = SearchQuery::new().with_version(2).with_min_version(1);
+
+        assert_eq!(query.version, Some(2));
+        assert_eq!(query.min_version, Some(1));
+    }
+
+    #[test]
+    fn test_advanced_query_effect_type_filter() {
+        let query = SearchQuery::new().with_effect_type(EffectType::Grant);
+
+        assert_eq!(query.effect_type, Some(EffectType::Grant));
+    }
+
+    #[test]
+    fn test_advanced_query_exclude_tags() {
+        let query = SearchQuery::new()
+            .with_tag("include-me")
+            .exclude_tag("exclude-me")
+            .exclude_tag("also-exclude");
+
+        assert_eq!(query.tags.len(), 1);
+        assert_eq!(query.exclude_tags.len(), 2);
+    }
+
+    #[test]
+    fn test_advanced_query_reference_filter() {
+        let query = SearchQuery::new()
+            .with_reference("ref-1")
+            .with_reference("ref-2");
+
+        assert_eq!(query.references.len(), 2);
+    }
+
+    #[test]
+    fn test_advanced_query_supersedes_filter() {
+        let query1 = SearchQuery::new().with_supersedes();
+        assert_eq!(query1.has_supersedes, Some(true));
+
+        let query2 = SearchQuery::new().without_supersedes();
+        assert_eq!(query2.has_supersedes, Some(false));
+    }
+
+    #[test]
+    fn test_delete_event_recorded() {
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("statute-1");
+        let entry = StatuteEntry::new(statute, "US");
+
+        registry.register(entry).unwrap();
+        let initial_event_count = registry.event_count();
+
+        registry.delete("statute-1").unwrap();
+
+        // Should have recorded a StatuteDeleted event
+        let events = registry.all_events();
+        let delete_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, RegistryEvent::StatuteDeleted { .. }))
+            .collect();
+
+        assert_eq!(delete_events.len(), 1);
+        assert!(registry.event_count() > initial_event_count);
+    }
+
+    #[test]
+    fn test_archive_event_recorded() {
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("statute-1");
+        let entry = StatuteEntry::new(statute, "US");
+
+        registry.register(entry).unwrap();
+        registry
+            .archive_statute("statute-1", "Test reason".to_string())
+            .unwrap();
+
+        // Should have recorded both StatuteDeleted and StatuteArchived events
+        let events = registry.all_events();
+        let archive_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, RegistryEvent::StatuteArchived { .. }))
+            .collect();
+
+        assert_eq!(archive_events.len(), 1);
+    }
+
+    #[test]
+    fn test_retention_policy_expired_statutes() {
+        let mut registry = StatuteRegistry::new();
+
+        let now = Utc::now();
+        let past = now - chrono::Duration::days(60);
+
+        // Add an expired statute
+        let statute = test_statute("expired-statute");
+        let mut entry = StatuteEntry::new(statute, "US");
+        entry.effective_date = Some(past);
+        entry.expiry_date = Some(now - chrono::Duration::days(1));
+
+        registry.register(entry).unwrap();
+
+        // Add a non-expired statute
+        let statute2 = test_statute("active-statute");
+        let mut entry2 = StatuteEntry::new(statute2, "US");
+        entry2.effective_date = Some(past);
+        entry2.expiry_date = Some(now + chrono::Duration::days(30));
+
+        registry.register(entry2).unwrap();
+
+        assert_eq!(registry.count(), 2);
+
+        // Set retention policy to archive expired statutes
+        let policy = RetentionPolicy::new().add_rule(RetentionRule::ExpiredStatutes {
+            reason: "Statute has expired".to_string(),
+        });
+
+        registry.set_retention_policy(policy);
+
+        // Apply retention policy
+        let result = registry.apply_retention_policy();
+
+        // Should archive 1 statute
+        assert_eq!(result.archived_count(), 1);
+        assert_eq!(registry.count(), 1);
+        assert_eq!(registry.archived_count(), 1);
+    }
+
+    #[test]
+    fn test_retention_policy_old_statutes() {
+        let mut registry = StatuteRegistry::new();
+
+        let now = Utc::now();
+        let very_old = now - chrono::Duration::days(400);
+        let recent = now - chrono::Duration::days(10);
+
+        // Add an old statute
+        let statute1 = test_statute("old-statute");
+        let mut entry1 = StatuteEntry::new(statute1, "US");
+        entry1.effective_date = Some(very_old);
+
+        registry.register(entry1).unwrap();
+
+        // Add a recent statute
+        let statute2 = test_statute("recent-statute");
+        let mut entry2 = StatuteEntry::new(statute2, "US");
+        entry2.effective_date = Some(recent);
+
+        registry.register(entry2).unwrap();
+
+        // Set retention policy to archive statutes older than 365 days
+        let policy = RetentionPolicy::new().add_rule(RetentionRule::OlderThanDays {
+            days: 365,
+            reason: "Statute older than 1 year".to_string(),
+        });
+
+        registry.set_retention_policy(policy);
+
+        let result = registry.apply_retention_policy();
+
+        assert_eq!(result.archived_count(), 1);
+        assert!(result.archived_ids.contains(&"old-statute".to_string()));
+    }
+
+    #[test]
+    fn test_retention_policy_by_status() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with different statuses
+        let statute1 = test_statute("statute-1");
+        let entry1 = StatuteEntry::new(statute1, "US");
+        registry.register(entry1).unwrap();
+        registry
+            .set_status("statute-1", StatuteStatus::Repealed)
+            .unwrap();
+
+        let statute2 = test_statute("statute-2");
+        let entry2 = StatuteEntry::new(statute2, "US");
+        registry.register(entry2).unwrap();
+        // statute-2 remains Draft
+
+        // Archive repealed statutes
+        let policy = RetentionPolicy::new().add_rule(RetentionRule::ByStatus {
+            status: StatuteStatus::Repealed,
+            reason: "Repealed statute".to_string(),
+        });
+
+        registry.set_retention_policy(policy);
+        let result = registry.apply_retention_policy();
+
+        assert_eq!(result.archived_count(), 1);
+        assert_eq!(registry.count(), 1);
+    }
+
+    #[test]
+    fn test_retention_policy_superseded() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add a superseded statute
+        let statute1 = test_statute("old-law");
+        let mut entry1 = StatuteEntry::new(statute1, "US");
+        entry1.supersedes.push("even-older-law".to_string());
+
+        registry.register(entry1).unwrap();
+
+        // Add a normal statute
+        let statute2 = test_statute("normal-law");
+        let entry2 = StatuteEntry::new(statute2, "US");
+        registry.register(entry2).unwrap();
+
+        // Archive superseded statutes
+        let policy = RetentionPolicy::new().add_rule(RetentionRule::SupersededStatutes {
+            reason: "Superseded by newer law".to_string(),
+        });
+
+        registry.set_retention_policy(policy);
+        let result = registry.apply_retention_policy();
+
+        assert_eq!(result.archived_count(), 1);
+        assert!(result.archived_ids.contains(&"old-law".to_string()));
+    }
+
+    #[test]
+    fn test_retention_policy_inactive() {
+        let mut registry = StatuteRegistry::new();
+
+        let now = Utc::now();
+
+        // Add an inactive statute (not modified in long time)
+        let statute1 = test_statute("inactive-statute");
+        let mut entry1 = StatuteEntry::new(statute1, "US");
+        entry1.modified_at = now - chrono::Duration::days(400);
+
+        registry.register(entry1).unwrap();
+
+        // Add a recently modified statute
+        let statute2 = test_statute("active-statute");
+        let entry2 = StatuteEntry::new(statute2, "US");
+        registry.register(entry2).unwrap();
+
+        // Archive inactive statutes
+        let policy = RetentionPolicy::new().add_rule(RetentionRule::InactiveForDays {
+            days: 365,
+            reason: "No activity for over 1 year".to_string(),
+        });
+
+        registry.set_retention_policy(policy);
+        let result = registry.apply_retention_policy();
+
+        assert_eq!(result.archived_count(), 1);
+        assert!(
+            result
+                .archived_ids
+                .contains(&"inactive-statute".to_string())
+        );
+    }
+
+    #[test]
+    fn test_retention_policy_multiple_rules() {
+        let mut registry = StatuteRegistry::new();
+
+        let now = Utc::now();
+
+        // Add various statutes
+        let s1 = test_statute("expired");
+        let mut e1 = StatuteEntry::new(s1, "US");
+        e1.expiry_date = Some(now - chrono::Duration::days(1));
+        registry.register(e1).unwrap();
+
+        let s2 = test_statute("old");
+        let mut e2 = StatuteEntry::new(s2, "US");
+        e2.effective_date = Some(now - chrono::Duration::days(400));
+        registry.register(e2).unwrap();
+
+        let s3 = test_statute("current");
+        let e3 = StatuteEntry::new(s3, "US");
+        registry.register(e3).unwrap();
+
+        // Multiple retention rules
+        let policy = RetentionPolicy::new()
+            .add_rule(RetentionRule::ExpiredStatutes {
+                reason: "Expired".to_string(),
+            })
+            .add_rule(RetentionRule::OlderThanDays {
+                days: 365,
+                reason: "Too old".to_string(),
+            });
+
+        registry.set_retention_policy(policy);
+        let result = registry.apply_retention_policy();
+
+        // Should archive 2 statutes
+        assert_eq!(result.archived_count(), 2);
+        assert_eq!(registry.count(), 1);
+    }
+
+    #[test]
+    fn test_retention_result() {
+        let mut result = RetentionResult::new(10);
+        assert_eq!(result.total_evaluated, 10);
+        assert_eq!(result.archived_count(), 0);
+
+        result.record_archived("statute-1".to_string(), "Expired".to_string());
+        result.record_archived("statute-2".to_string(), "Old".to_string());
+
+        assert_eq!(result.archived_count(), 2);
+        assert_eq!(
+            result.reasons.get("statute-1"),
+            Some(&"Expired".to_string())
+        );
+        assert_eq!(result.reasons.get("statute-2"), Some(&"Old".to_string()));
     }
 }

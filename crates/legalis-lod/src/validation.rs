@@ -413,8 +413,13 @@ impl RdfValidator {
                     if let RdfValue::Uri(ref target) = triple.object {
                         let mut visited = HashSet::new();
                         let mut path = vec![triple.subject.clone()];
-                        if self.has_cycle(triples, &triple.subject, target, &mut visited, &mut path)
-                        {
+                        if Self::has_cycle(
+                            triples,
+                            &triple.subject,
+                            target,
+                            &mut visited,
+                            &mut path,
+                        ) {
                             issues.push(ValidationIssue::CyclicReference {
                                 subject: triple.subject.clone(),
                                 path,
@@ -434,7 +439,6 @@ impl RdfValidator {
 
     /// Checks for cyclic references in the RDF graph.
     fn has_cycle(
-        &self,
         triples: &[Triple],
         start: &str,
         current: &str,
@@ -458,7 +462,7 @@ impl RdfValidator {
                     || triple.predicate == "legalis:rightOperand")
             {
                 if let RdfValue::Uri(ref next) = triple.object {
-                    if self.has_cycle(triples, start, next, visited, path) {
+                    if Self::has_cycle(triples, start, next, visited, path) {
                         return true;
                     }
                 }

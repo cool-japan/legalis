@@ -21,7 +21,7 @@
 - [x] Add `lint` command for style checking
 - [x] Create `fmt` command for formatting (implemented as `format` command)
 - [x] Add `watch` command for file watching
-- [ ] Implement `repl` command for interactive mode
+- [x] Implement `repl` command for interactive mode
 - [x] Add `test` command for statute testing
 - [ ] Create `publish` command for registry upload
 
@@ -45,15 +45,15 @@
 ### Formatting
 - [x] Add colored output with styles (for verify and lint commands)
 - [x] Implement table output format (--format table)
-- [ ] Create progress bars for long operations
-- [ ] Add spinner for async operations
-- [ ] Implement diff highlighting
+- [x] Create progress bars for long operations
+- [x] Add spinner for async operations
+- [x] Implement diff highlighting
 
 ### Formats
-- [ ] Add YAML output support
-- [ ] Implement TOML output
-- [ ] Create CSV output for reports
-- [ ] Add HTML output option
+- [x] Add YAML output support
+- [x] Implement TOML output
+- [x] Create CSV output for reports
+- [x] Add HTML output option
 
 ## Project Management
 
@@ -65,7 +65,7 @@
 
 ## Registry Integration
 
-- [ ] Add `search` command for registry
+- [x] Add `search` command for registry
 - [ ] Implement `install` command for statutes
 - [ ] Create `list` command for installed statutes
 - [ ] Add `outdated` command for updates
@@ -73,7 +73,7 @@
 
 ## Interop
 
-- [ ] Add `import` command for format conversion
+- [x] Add `import` command for format conversion
 - [ ] Create `convert` command for bidirectional conversion
 - [ ] Implement `validate` command for format validation
 

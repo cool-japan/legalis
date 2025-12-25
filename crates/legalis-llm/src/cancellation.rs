@@ -323,7 +323,7 @@ mod tests {
         let collected: Vec<_> = guarded.collect().await;
 
         // Should get at least one chunk but not all three
-        assert!(collected.len() > 0 && collected.len() < 3);
+        assert!(!collected.is_empty() && collected.len() < 3);
     }
 
     #[tokio::test]

@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub mod encrypted;
 pub mod jsonl;
 pub mod memory;
+pub mod postgres;
 pub mod sqlite;
 
 /// Trait for audit trail storage backends.

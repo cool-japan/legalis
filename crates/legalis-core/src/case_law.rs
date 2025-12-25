@@ -502,6 +502,198 @@ impl CaseDatabase {
     pub fn precedents(&self) -> impl Iterator<Item = &Precedent> {
         self.precedents.iter()
     }
+
+    /// Creates a fluent query builder for complex case queries.
+    pub fn query(&self) -> CaseQuery<'_> {
+        CaseQuery::new(self)
+    }
+}
+
+/// Fluent query builder for case database queries.
+///
+/// Allows chaining multiple filters for complex case searches.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::case_law::{CaseDatabase, Court};
+/// use chrono::NaiveDate;
+///
+/// let db = CaseDatabase::new();
+/// // Add some cases...
+///
+/// // Find all Supreme Court cases from US in 2020-2022 that are still good law
+/// let results = db.query()
+///     .jurisdiction("US")
+///     .court(&Court::Supreme)
+///     .year_range(2020, 2022)
+///     .not_overruled()
+///     .execute();
+/// ```
+#[derive(Clone)]
+pub struct CaseQuery<'a> {
+    db: &'a CaseDatabase,
+    jurisdiction: Option<String>,
+    court: Option<Court>,
+    year_min: Option<u32>,
+    year_max: Option<u32>,
+    date_min: Option<NaiveDate>,
+    date_max: Option<NaiveDate>,
+    only_not_overruled: bool,
+    only_with_rule: bool,
+}
+
+impl<'a> CaseQuery<'a> {
+    /// Creates a new query builder.
+    fn new(db: &'a CaseDatabase) -> Self {
+        Self {
+            db,
+            jurisdiction: None,
+            court: None,
+            year_min: None,
+            year_max: None,
+            date_min: None,
+            date_max: None,
+            only_not_overruled: false,
+            only_with_rule: false,
+        }
+    }
+
+    /// Filters by jurisdiction.
+    #[must_use]
+    pub fn jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+
+    /// Filters by court type.
+    #[must_use]
+    pub fn court(mut self, court: &Court) -> Self {
+        self.court = Some(*court);
+        self
+    }
+
+    /// Filters by year range (inclusive).
+    #[must_use]
+    pub fn year_range(mut self, start: u32, end: u32) -> Self {
+        self.year_min = Some(start);
+        self.year_max = Some(end);
+        self
+    }
+
+    /// Filters by minimum year.
+    #[must_use]
+    pub fn year_min(mut self, year: u32) -> Self {
+        self.year_min = Some(year);
+        self
+    }
+
+    /// Filters by maximum year.
+    #[must_use]
+    pub fn year_max(mut self, year: u32) -> Self {
+        self.year_max = Some(year);
+        self
+    }
+
+    /// Filters by date range (inclusive).
+    #[must_use]
+    pub fn date_range(mut self, start: NaiveDate, end: NaiveDate) -> Self {
+        self.date_min = Some(start);
+        self.date_max = Some(end);
+        self
+    }
+
+    /// Filters by minimum date.
+    #[must_use]
+    pub fn date_min(mut self, date: NaiveDate) -> Self {
+        self.date_min = Some(date);
+        self
+    }
+
+    /// Filters by maximum date.
+    #[must_use]
+    pub fn date_max(mut self, date: NaiveDate) -> Self {
+        self.date_max = Some(date);
+        self
+    }
+
+    /// Only includes cases that have not been overruled.
+    #[must_use]
+    pub fn not_overruled(mut self) -> Self {
+        self.only_not_overruled = true;
+        self
+    }
+
+    /// Only includes cases that established a legal rule.
+    #[must_use]
+    pub fn with_rule(mut self) -> Self {
+        self.only_with_rule = true;
+        self
+    }
+
+    /// Executes the query and returns matching cases.
+    pub fn execute(&self) -> Vec<&Case> {
+        self.db.cases.values().filter(|c| self.matches(c)).collect()
+    }
+
+    /// Counts matching cases without collecting them.
+    pub fn count(&self) -> usize {
+        self.db.cases.values().filter(|c| self.matches(c)).count()
+    }
+
+    /// Returns the first matching case, if any.
+    pub fn first(&self) -> Option<&Case> {
+        self.db.cases.values().find(|c| self.matches(c))
+    }
+
+    /// Checks if a case matches all filters.
+    fn matches(&self, case: &Case) -> bool {
+        if let Some(ref j) = self.jurisdiction {
+            if &case.jurisdiction != j {
+                return false;
+            }
+        }
+
+        if let Some(ref c) = self.court {
+            if &case.court != c {
+                return false;
+            }
+        }
+
+        if let Some(min) = self.year_min {
+            if case.year < min {
+                return false;
+            }
+        }
+
+        if let Some(max) = self.year_max {
+            if case.year > max {
+                return false;
+            }
+        }
+
+        if let Some(min) = self.date_min {
+            if case.date < min {
+                return false;
+            }
+        }
+
+        if let Some(max) = self.date_max {
+            if case.date > max {
+                return false;
+            }
+        }
+
+        if self.only_not_overruled && case.overruled {
+            return false;
+        }
+
+        if self.only_with_rule && case.rule.is_none() {
+            return false;
+        }
+
+        true
+    }
 }
 
 #[cfg(test)]
@@ -732,5 +924,160 @@ mod tests {
         let citing = db.cases_citing(&case1_id);
         assert_eq!(citing.len(), 1);
         assert_eq!(citing[0].short_name, "Case2");
+    }
+
+    #[test]
+    fn test_query_builder_jurisdiction() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US-NY");
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US-CA");
+        let case3 = Case::new("Case 3", "Case3", 2022, Court::Supreme, "US-NY");
+
+        db.add_case(case1);
+        db.add_case(case2);
+        db.add_case(case3);
+
+        let query_ny = db.query().jurisdiction("US-NY");
+        let ny_cases = query_ny.execute();
+        assert_eq!(ny_cases.len(), 2);
+
+        let query_ca = db.query().jurisdiction("US-CA");
+        let ca_cases = query_ca.execute();
+        assert_eq!(ca_cases.len(), 1);
+    }
+
+    #[test]
+    fn test_query_builder_year_range() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US");
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US");
+        let case3 = Case::new("Case 3", "Case3", 2022, Court::Supreme, "US");
+
+        db.add_case(case1);
+        db.add_case(case2);
+        db.add_case(case3);
+
+        let query_2020_2021 = db.query().year_range(2020, 2021);
+        let cases_2020_2021 = query_2020_2021.execute();
+        assert_eq!(cases_2020_2021.len(), 2);
+
+        let query_from_2021 = db.query().year_min(2021);
+        let cases_from_2021 = query_from_2021.execute();
+        assert_eq!(cases_from_2021.len(), 2);
+
+        let query_until_2021 = db.query().year_max(2021);
+        let cases_until_2021 = query_until_2021.execute();
+        assert_eq!(cases_until_2021.len(), 2);
+    }
+
+    #[test]
+    fn test_query_builder_chaining() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US-NY")
+            .with_date(NaiveDate::from_ymd_opt(2020, 5, 15).unwrap());
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US-CA")
+            .with_date(NaiveDate::from_ymd_opt(2021, 3, 10).unwrap());
+        let case3 = Case::new("Case 3", "Case3", 2020, Court::Supreme, "US-NY")
+            .with_date(NaiveDate::from_ymd_opt(2020, 8, 22).unwrap());
+
+        db.add_case(case1);
+        db.add_case(case2);
+        db.add_case(case3);
+
+        // Chain multiple filters
+        let query = db
+            .query()
+            .jurisdiction("US-NY")
+            .court(&Court::Supreme)
+            .year_range(2020, 2021);
+        let results = query.execute();
+
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_builder_not_overruled() {
+        let mut db = CaseDatabase::new();
+
+        let mut case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US");
+        case1.overruled = true;
+
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US");
+
+        db.add_case(case1);
+        db.add_case(case2);
+
+        let query = db.query().not_overruled();
+        let good_law = query.execute();
+        assert_eq!(good_law.len(), 1);
+        assert_eq!(good_law[0].short_name, "Case2");
+    }
+
+    #[test]
+    fn test_query_builder_with_rule() {
+        let mut db = CaseDatabase::new();
+
+        let mut case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US");
+        case1.rule = Some(CaseRule {
+            name: "Test Rule".to_string(),
+            conditions: vec![],
+            effect: Effect::grant("Test effect"),
+            exceptions: vec![],
+        });
+
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US");
+
+        db.add_case(case1);
+        db.add_case(case2);
+
+        let query = db.query().with_rule();
+        let with_rules = query.execute();
+        assert_eq!(with_rules.len(), 1);
+        assert_eq!(with_rules[0].short_name, "Case1");
+    }
+
+    #[test]
+    fn test_query_builder_count_and_first() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US");
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US");
+
+        db.add_case(case1);
+        db.add_case(case2);
+
+        let query = db.query().jurisdiction("US");
+
+        assert_eq!(query.count(), 2);
+
+        let first = query.first();
+        assert!(first.is_some());
+        assert!(first.unwrap().jurisdiction == "US");
+    }
+
+    #[test]
+    fn test_query_builder_date_range() {
+        let mut db = CaseDatabase::new();
+
+        let case1 = Case::new("Case 1", "Case1", 2020, Court::Supreme, "US")
+            .with_date(NaiveDate::from_ymd_opt(2020, 5, 15).unwrap());
+        let case2 = Case::new("Case 2", "Case2", 2021, Court::Appellate, "US")
+            .with_date(NaiveDate::from_ymd_opt(2021, 3, 10).unwrap());
+        let case3 = Case::new("Case 3", "Case3", 2022, Court::Supreme, "US")
+            .with_date(NaiveDate::from_ymd_opt(2022, 8, 22).unwrap());
+
+        db.add_case(case1);
+        db.add_case(case2);
+        db.add_case(case3);
+
+        let start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2021, 12, 31).unwrap();
+
+        let query = db.query().date_range(start, end);
+        let results = query.execute();
+        assert_eq!(results.len(), 2);
     }
 }

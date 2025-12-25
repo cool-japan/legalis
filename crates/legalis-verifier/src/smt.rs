@@ -465,6 +465,79 @@ impl<'ctx> SmtVerifier<'ctx> {
                 self.translate_comparison(&duration_var, operator, *months as i64)
             }
 
+            Condition::Duration {
+                operator,
+                value,
+                unit,
+            } => {
+                // Convert duration to a normalized unit (e.g., days)
+                let normalized_value = match unit {
+                    legalis_core::DurationUnit::Days => *value as i64,
+                    legalis_core::DurationUnit::Weeks => (*value as i64) * 7,
+                    legalis_core::DurationUnit::Months => (*value as i64) * 30,
+                    legalis_core::DurationUnit::Years => (*value as i64) * 365,
+                };
+                let duration_var = self.get_or_create_int_var("duration_days");
+                self.translate_comparison(&duration_var, operator, normalized_value)
+            }
+
+            Condition::Percentage {
+                operator,
+                value,
+                context,
+            } => {
+                // Create a percentage variable specific to the context
+                let percentage_var = self.get_or_create_int_var(&format!("percentage_{}", context));
+                self.translate_comparison(&percentage_var, operator, *value as i64)
+            }
+
+            Condition::SetMembership {
+                attribute,
+                values,
+                negated,
+            } => {
+                // For set membership, we create a disjunction of equality checks
+                let attr_var = self.get_or_create_int_var(&format!("attr_{}", attribute));
+                let mut membership_checks = Vec::new();
+
+                for value in values {
+                    let hash_value = Self::hash_string(value);
+                    let eq_check = attr_var._eq(&Int::from_i64(self.ctx, hash_value));
+                    membership_checks.push(eq_check);
+                }
+
+                let membership = if membership_checks.is_empty() {
+                    Bool::from_bool(self.ctx, false)
+                } else if membership_checks.len() == 1 {
+                    membership_checks[0].clone()
+                } else {
+                    Bool::or(self.ctx, &membership_checks.iter().collect::<Vec<_>>())
+                };
+
+                if *negated {
+                    Ok(membership.not())
+                } else {
+                    Ok(membership)
+                }
+            }
+
+            Condition::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => {
+                // For pattern matching, we use a boolean variable representing the match result
+                let pattern_hash = Self::hash_string(&format!("{}:{}", attribute, pattern));
+                let pattern_var =
+                    self.get_or_create_bool_var(&format!("pattern_match_{}", pattern_hash));
+
+                if *negated {
+                    Ok(pattern_var.not())
+                } else {
+                    Ok(pattern_var.clone())
+                }
+            }
+
             Condition::Custom { description } => {
                 // For custom conditions, create a boolean variable
                 let hash = Self::hash_string(description);
@@ -869,5 +942,278 @@ mod tests {
         // The core should contain at least the two contradicting age conditions
         assert!(!core.is_empty());
         assert!(core.len() <= conditions.len());
+    }
+
+    #[test]
+    fn test_duration_satisfiability() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Test Duration condition with different units
+        let condition = Condition::Duration {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 5,
+            unit: legalis_core::DurationUnit::Years,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_duration_contradiction() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Duration >= 10 years AND Duration < 1 year should be unsatisfiable
+        let cond1 = Condition::Duration {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 10,
+            unit: legalis_core::DurationUnit::Years,
+        };
+
+        let cond2 = Condition::Duration {
+            operator: ComparisonOp::LessThan,
+            value: 1,
+            unit: legalis_core::DurationUnit::Years,
+        };
+
+        let combined = Condition::And(Box::new(cond1), Box::new(cond2));
+        assert!(!verifier.is_satisfiable(&combined).unwrap());
+    }
+
+    #[test]
+    fn test_duration_unit_conversion() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // 365 days should be equivalent to 1 year
+        let cond_days = Condition::Duration {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 365,
+            unit: legalis_core::DurationUnit::Days,
+        };
+
+        let cond_years = Condition::Duration {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 1,
+            unit: legalis_core::DurationUnit::Years,
+        };
+
+        // Both should be satisfiable
+        assert!(verifier.is_satisfiable(&cond_days).unwrap());
+        verifier.reset();
+        assert!(verifier.is_satisfiable(&cond_years).unwrap());
+    }
+
+    #[test]
+    fn test_percentage_satisfiability() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::Percentage {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 25,
+            context: "ownership".to_string(),
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_percentage_contradiction() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let cond1 = Condition::Percentage {
+            operator: ComparisonOp::GreaterThan,
+            value: 75,
+            context: "ownership".to_string(),
+        };
+
+        let cond2 = Condition::Percentage {
+            operator: ComparisonOp::LessThan,
+            value: 25,
+            context: "ownership".to_string(),
+        };
+
+        assert!(verifier.contradict(&cond1, &cond2).unwrap());
+    }
+
+    #[test]
+    fn test_percentage_different_contexts() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Different contexts should not contradict
+        let cond1 = Condition::Percentage {
+            operator: ComparisonOp::GreaterThan,
+            value: 75,
+            context: "ownership".to_string(),
+        };
+
+        let cond2 = Condition::Percentage {
+            operator: ComparisonOp::LessThan,
+            value: 25,
+            context: "voting_rights".to_string(),
+        };
+
+        assert!(!verifier.contradict(&cond1, &cond2).unwrap());
+    }
+
+    #[test]
+    fn test_set_membership_satisfiability() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::SetMembership {
+            attribute: "status".to_string(),
+            values: vec!["active".to_string(), "pending".to_string()],
+            negated: false,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_set_membership_negated() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::SetMembership {
+            attribute: "status".to_string(),
+            values: vec!["inactive".to_string(), "deleted".to_string()],
+            negated: true,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_set_membership_empty_set() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Membership in empty set should be unsatisfiable
+        let condition = Condition::SetMembership {
+            attribute: "status".to_string(),
+            values: vec![],
+            negated: false,
+        };
+
+        assert!(!verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_set_membership_negated_empty_set() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // NOT in empty set should be a tautology (always true)
+        let condition = Condition::SetMembership {
+            attribute: "status".to_string(),
+            values: vec![],
+            negated: true,
+        };
+
+        assert!(verifier.is_tautology(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_pattern_satisfiability() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::Pattern {
+            attribute: "employee_id".to_string(),
+            pattern: r"^E\d{6}$".to_string(),
+            negated: false,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_pattern_negated() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let condition = Condition::Pattern {
+            attribute: "email".to_string(),
+            pattern: r".*@example\.com$".to_string(),
+            negated: true,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_pattern_contradiction() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Same pattern, one positive and one negated should contradict
+        let cond1 = Condition::Pattern {
+            attribute: "code".to_string(),
+            pattern: r"^[A-Z]{3}\d{3}$".to_string(),
+            negated: false,
+        };
+
+        let cond2 = Condition::Pattern {
+            attribute: "code".to_string(),
+            pattern: r"^[A-Z]{3}\d{3}$".to_string(),
+            negated: true,
+        };
+
+        assert!(verifier.contradict(&cond1, &cond2).unwrap());
+    }
+
+    #[test]
+    fn test_complex_new_conditions() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // (Duration >= 5 years AND Percentage >= 25%) should be satisfiable
+        let condition = Condition::And(
+            Box::new(Condition::Duration {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 5,
+                unit: legalis_core::DurationUnit::Years,
+            }),
+            Box::new(Condition::Percentage {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 25,
+                context: "ownership".to_string(),
+            }),
+        );
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_mixed_old_and_new_conditions() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Age >= 18 AND Duration >= 5 years AND SetMembership in {active, pending}
+        let condition = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::And(
+                Box::new(Condition::Duration {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 5,
+                    unit: legalis_core::DurationUnit::Years,
+                }),
+                Box::new(Condition::SetMembership {
+                    attribute: "status".to_string(),
+                    values: vec!["active".to_string(), "pending".to_string()],
+                    negated: false,
+                }),
+            )),
+        );
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
     }
 }

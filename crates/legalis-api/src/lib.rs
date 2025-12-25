@@ -12,6 +12,7 @@ pub mod async_jobs;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod graphql;
 pub mod logging;
 mod metrics;
 mod openapi;
@@ -19,7 +20,7 @@ pub mod rate_limit;
 pub mod rebac;
 
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     middleware,
@@ -532,10 +533,29 @@ pub struct SimulationDifferences {
     pub significant_change: bool,
 }
 
+/// GraphQL handler.
+async fn graphql_handler(
+    schema: axum::extract::Extension<graphql::LegalisSchema>,
+    req: async_graphql_axum::GraphQLRequest,
+) -> async_graphql_axum::GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
+}
+
+/// GraphQL playground handler.
+async fn graphql_playground() -> impl IntoResponse {
+    axum::response::Html(async_graphql::http::playground_source(
+        async_graphql::http::GraphQLPlaygroundConfig::new("/graphql"),
+    ))
+}
+
 /// Creates the API router.
 pub fn create_router(state: Arc<AppState>) -> Router {
     // Initialize metrics
     metrics::init();
+
+    // Create GraphQL schema
+    let graphql_state = graphql::GraphQLState::new();
+    let graphql_schema = graphql::create_schema(graphql_state);
 
     Router::new()
         .route("/health", get(health_check))
@@ -578,6 +598,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v1/visualize/{id}", get(visualize_statute))
         .route("/api-docs/openapi.json", get(openapi_spec))
+        .route("/graphql", post(graphql_handler))
+        .route("/graphql/playground", get(graphql_playground))
+        .layer(Extension(graphql_schema))
         .layer(middleware::from_fn(logging::log_request))
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
@@ -879,7 +902,7 @@ async fn compare_statutes(
         similarity_score -= 20.0;
     }
 
-    similarity_score = similarity_score.max(0.0).min(100.0);
+    similarity_score = similarity_score.clamp(0.0, 100.0);
 
     Ok(Json(ApiResponse::new(StatuteComparisonResponse {
         statute_a: summary_a,

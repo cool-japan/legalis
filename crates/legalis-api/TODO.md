@@ -36,9 +36,9 @@
 
 ## GraphQL
 
-- [ ] Add GraphQL schema
-- [ ] Implement query resolvers
-- [ ] Add mutation resolvers
+- [x] Add GraphQL schema
+- [x] Implement query resolvers
+- [x] Add mutation resolvers
 - [ ] Create subscription support for real-time updates
 - [ ] Add DataLoader for N+1 optimization
 

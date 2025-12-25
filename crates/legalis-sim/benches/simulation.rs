@@ -386,7 +386,7 @@ fn bench_distributed_coordination(c: &mut Criterion) {
         group.bench_function(format!("aggregate_{}nodes", num_nodes), |b| {
             let coordinator = DistributedCoordinator::new(num_nodes);
             let node_results: Vec<Vec<i32>> = (0..num_nodes)
-                .map(|i| (i * 100..(i + 1) * 100).collect())
+                .map(|i| (i * 100..(i + 1) * 100).map(|x| x as i32).collect())
                 .collect();
             b.iter(|| black_box(coordinator.aggregate_results(node_results.clone())));
         });

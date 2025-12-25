@@ -81,7 +81,7 @@ impl RdfaExporter {
                 .map(|(prefix, uri)| format!("{}: {}", prefix, uri))
                 .collect();
             html.push_str(&prefixes.join(" "));
-            html.push_str("\"");
+            html.push('"');
         }
 
         html.push_str(">\n<head>\n");
@@ -128,12 +128,12 @@ impl RdfaExporter {
         // Resource container
         html.push_str("  <div class=\"resource\" about=\"");
         html.push_str(subject);
-        html.push_str("\"");
+        html.push('"');
 
         if let Some(type_uri) = rdf_type {
             html.push_str(" typeof=\"");
             html.push_str(&self.curie_or_uri(type_uri));
-            html.push_str("\"");
+            html.push('"');
         }
 
         html.push_str(">\n");
@@ -279,7 +279,7 @@ impl RdfaExporter {
         let mut html = String::new();
         html.push_str("<span property=\"");
         html.push_str(&self.curie_or_uri(predicate));
-        html.push_str("\"");
+        html.push('"');
 
         match object {
             RdfValue::Uri(uri) => {

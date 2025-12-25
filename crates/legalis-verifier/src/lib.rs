@@ -2541,6 +2541,12 @@ fn analyze_condition(condition: &legalis_core::Condition) -> (usize, usize, Hash
             0,
             ["ResidencyDuration".to_string()].into_iter().collect(),
         ),
+        Condition::Duration { .. } => (1, 0, ["Duration".to_string()].into_iter().collect()),
+        Condition::Percentage { .. } => (1, 0, ["Percentage".to_string()].into_iter().collect()),
+        Condition::SetMembership { .. } => {
+            (1, 0, ["SetMembership".to_string()].into_iter().collect())
+        }
+        Condition::Pattern { .. } => (1, 0, ["Pattern".to_string()].into_iter().collect()),
         Condition::Custom { .. } => (1, 0, ["Custom".to_string()].into_iter().collect()),
         Condition::And(left, right) => {
             let (l_depth, l_ops, l_types) = analyze_condition(left);

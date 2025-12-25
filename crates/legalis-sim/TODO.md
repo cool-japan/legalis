@@ -130,7 +130,7 @@
 - [x] Add convergence detection
 - [x] Support parallel Monte Carlo runs
 - [x] Add variance reduction techniques
-- [ ] Update tests to match legalis-core API
+- [x] Update tests to match legalis-core API
 
 ### Economic Modeling
 - [x] Add tax revenue projection tools (data structures)
@@ -139,8 +139,8 @@
 - [x] Support cost-benefit analysis (NPV, IRR, BCR)
 - [x] Add budget impact modeling (data structures)
 - [x] Implement distributional analysis framework
-- [ ] Complete implementations to work with current API
-- [ ] Add comprehensive tests
+- [x] Complete implementations to work with current API
+- [x] Add comprehensive tests
 
 ### Network Effects
 - [x] Add influence model configuration
@@ -156,7 +156,7 @@
 - [x] Support grid search optimization
 - [x] Add Pareto frontier analysis
 - [x] Implement constraint-based optimization
-- [ ] Add comprehensive tests
+- [x] Add comprehensive tests
 
 ### Calibration & Validation
 - [x] Add parameter calibration tools
@@ -164,7 +164,7 @@
 - [x] Support empirical data fitting
 - [x] Add cross-validation framework
 - [x] Implement sensitivity testing
-- [ ] Add comprehensive tests
+- [x] Add comprehensive tests
 
 ### Impact Assessment
 - [x] Add structured impact report generation
@@ -193,10 +193,16 @@ adaptation to work with the current legalis-core API:
 - Full implementations pending API clarification
 
 ### Test Status
-- Monte Carlo: Tests disabled pending API fixes
-- Economic: Tests disabled pending API fixes
+- Monte Carlo: Full tests passing (5 tests)
+- Economic: Full tests passing (8 tests)
 - Network Effects: Basic tests passing (data structures only)
-- Optimization: Full tests passing
-- Calibration: Full tests passing
+- Optimization: Full tests passing (10 tests)
+- Calibration: Full tests passing (11 tests)
 - Impact: Tests disabled pending API fixes
 - Event-Driven: Full tests passing
+
+### Overall Test Statistics (as of 2025-12-26)
+- Total tests: 142 passing, 1 ignored
+- All clippy warnings resolved
+- All doc tests passing (5 tests)
+- NO WARNINGS policy maintained

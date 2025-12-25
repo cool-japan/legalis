@@ -509,6 +509,281 @@ pub struct RAGStats {
     pub total_chunks: usize,
 }
 
+/// Hybrid search combining semantic and keyword search.
+pub struct HybridSearch {
+    semantic_weight: f32,
+    keyword_weight: f32,
+}
+
+impl HybridSearch {
+    /// Creates a new hybrid search with default weights.
+    pub fn new() -> Self {
+        Self {
+            semantic_weight: 0.7,
+            keyword_weight: 0.3,
+        }
+    }
+
+    /// Sets the semantic search weight (0.0 - 1.0).
+    pub fn with_semantic_weight(mut self, weight: f32) -> Self {
+        self.semantic_weight = weight.clamp(0.0, 1.0);
+        self.keyword_weight = 1.0 - self.semantic_weight;
+        self
+    }
+
+    /// Performs hybrid search combining semantic and keyword matching.
+    pub fn search(
+        &self,
+        query: &str,
+        semantic_results: &[RetrievedChunk],
+        all_chunks: &[DocumentChunk],
+    ) -> Vec<RetrievedChunk> {
+        // Calculate keyword scores
+        let query_lower = query.to_lowercase();
+        let query_terms: Vec<&str> = query_lower.split_whitespace().collect();
+
+        let mut combined_scores: std::collections::HashMap<String, (f32, DocumentChunk)> =
+            std::collections::HashMap::new();
+
+        // Add semantic scores
+        for result in semantic_results {
+            combined_scores.insert(
+                result.chunk.id.clone(),
+                (result.score * self.semantic_weight, result.chunk.clone()),
+            );
+        }
+
+        // Add keyword scores
+        for chunk in all_chunks {
+            let keyword_score = self.calculate_keyword_score(&query_terms, &chunk.content);
+            let weighted_keyword_score = keyword_score * self.keyword_weight;
+
+            combined_scores
+                .entry(chunk.id.clone())
+                .and_modify(|(score, _)| *score += weighted_keyword_score)
+                .or_insert((weighted_keyword_score, chunk.clone()));
+        }
+
+        // Convert to RetrievedChunk and sort by combined score
+        let mut results: Vec<RetrievedChunk> = combined_scores
+            .into_iter()
+            .map(|(_, (score, chunk))| RetrievedChunk { chunk, score })
+            .collect();
+
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        results
+    }
+
+    /// Calculates keyword matching score using TF-IDF approximation.
+    fn calculate_keyword_score(&self, query_terms: &[&str], content: &str) -> f32 {
+        let content_lower = content.to_lowercase();
+        let mut matches = 0;
+
+        for term in query_terms {
+            if content_lower.contains(term) {
+                matches += 1;
+            }
+        }
+
+        if query_terms.is_empty() {
+            0.0
+        } else {
+            matches as f32 / query_terms.len() as f32
+        }
+    }
+}
+
+impl Default for HybridSearch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Re-ranking algorithm for retrieved chunks.
+#[derive(Debug, Clone, Copy)]
+pub enum ReRankingAlgorithm {
+    /// Cross-encoder based re-ranking (placeholder for actual implementation)
+    CrossEncoder,
+    /// Maximal Marginal Relevance for diversity
+    MaximalMarginalRelevance { lambda: f32 },
+    /// Position-based re-ranking
+    PositionBased { decay: f32 },
+}
+
+/// Re-ranker for improving retrieval results.
+pub struct ReRanker {
+    algorithm: ReRankingAlgorithm,
+}
+
+impl ReRanker {
+    /// Creates a new re-ranker with the given algorithm.
+    pub fn new(algorithm: ReRankingAlgorithm) -> Self {
+        Self { algorithm }
+    }
+
+    /// Re-ranks the retrieved chunks.
+    pub fn rerank(&self, _query: &str, mut chunks: Vec<RetrievedChunk>) -> Vec<RetrievedChunk> {
+        match self.algorithm {
+            ReRankingAlgorithm::CrossEncoder => {
+                // Placeholder: In real implementation, use a cross-encoder model
+                chunks
+            }
+            ReRankingAlgorithm::MaximalMarginalRelevance { lambda } => {
+                self.mmr_rerank(lambda, chunks)
+            }
+            ReRankingAlgorithm::PositionBased { decay } => {
+                self.position_rerank(decay, &mut chunks);
+                chunks
+            }
+        }
+    }
+
+    /// Maximal Marginal Relevance re-ranking for diversity.
+    fn mmr_rerank(&self, lambda: f32, chunks: Vec<RetrievedChunk>) -> Vec<RetrievedChunk> {
+        if chunks.is_empty() {
+            return chunks;
+        }
+
+        let mut selected = Vec::new();
+        let mut remaining = chunks;
+
+        // Select first item (highest relevance)
+        if let Some(first) = remaining.first() {
+            selected.push(first.clone());
+            remaining.remove(0);
+        }
+
+        // Iteratively select items balancing relevance and diversity
+        while !remaining.is_empty() {
+            let mut best_idx = 0;
+            let mut best_score = f32::MIN;
+
+            for (idx, candidate) in remaining.iter().enumerate() {
+                let relevance = candidate.score;
+
+                // Calculate similarity to already selected items
+                let max_similarity = selected
+                    .iter()
+                    .map(|s| self.calculate_similarity(&s.chunk, &candidate.chunk))
+                    .fold(0.0f32, |acc, sim| acc.max(sim));
+
+                // MMR score balances relevance and diversity
+                let mmr_score = lambda * relevance - (1.0 - lambda) * max_similarity;
+
+                if mmr_score > best_score {
+                    best_score = mmr_score;
+                    best_idx = idx;
+                }
+            }
+
+            let selected_item = remaining.remove(best_idx);
+            selected.push(selected_item);
+        }
+
+        selected
+    }
+
+    /// Position-based re-ranking with exponential decay.
+    fn position_rerank(&self, decay: f32, chunks: &mut [RetrievedChunk]) {
+        for (idx, chunk) in chunks.iter_mut().enumerate() {
+            let position_factor = (-decay * idx as f32).exp();
+            chunk.score *= position_factor;
+        }
+        chunks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    }
+
+    /// Calculates content similarity (simple approach based on word overlap).
+    fn calculate_similarity(&self, chunk1: &DocumentChunk, chunk2: &DocumentChunk) -> f32 {
+        let content1_lower = chunk1.content.to_lowercase();
+        let content2_lower = chunk2.content.to_lowercase();
+
+        let words1: std::collections::HashSet<_> = content1_lower.split_whitespace().collect();
+        let words2: std::collections::HashSet<_> = content2_lower.split_whitespace().collect();
+
+        let intersection = words1.intersection(&words2).count();
+        let union = words1.union(&words2).count();
+
+        if union == 0 {
+            0.0
+        } else {
+            intersection as f32 / union as f32
+        }
+    }
+}
+
+/// Context compression for reducing token usage.
+pub struct ContextCompressor {
+    max_length: usize,
+    strategy: CompressionStrategy,
+}
+
+/// Strategy for compressing context.
+#[derive(Debug, Clone, Copy)]
+pub enum CompressionStrategy {
+    /// Truncate to max length
+    Truncate,
+    /// Extract key sentences
+    Extractive,
+    /// Keep only highest-scoring chunks
+    TopK { k: usize },
+}
+
+impl ContextCompressor {
+    /// Creates a new context compressor.
+    pub fn new(max_length: usize, strategy: CompressionStrategy) -> Self {
+        Self {
+            max_length,
+            strategy,
+        }
+    }
+
+    /// Compresses retrieved chunks to fit within token budget.
+    pub fn compress(&self, chunks: &[RetrievedChunk]) -> Vec<RetrievedChunk> {
+        match self.strategy {
+            CompressionStrategy::Truncate => self.compress_truncate(chunks),
+            CompressionStrategy::Extractive => self.compress_extractive(chunks),
+            CompressionStrategy::TopK { k } => self.compress_top_k(chunks, k),
+        }
+    }
+
+    /// Truncates chunks to fit max length.
+    fn compress_truncate(&self, chunks: &[RetrievedChunk]) -> Vec<RetrievedChunk> {
+        let mut result = Vec::new();
+        let mut total_length = 0;
+
+        for chunk in chunks {
+            let chunk_length = chunk.chunk.content.len();
+            if total_length + chunk_length <= self.max_length {
+                result.push(chunk.clone());
+                total_length += chunk_length;
+            } else {
+                // Partially include the last chunk if there's space
+                if total_length < self.max_length {
+                    let remaining = self.max_length - total_length;
+                    let mut partial_chunk = chunk.clone();
+                    partial_chunk.chunk.content =
+                        chunk.chunk.content[..remaining.min(chunk.chunk.content.len())].to_string();
+                    result.push(partial_chunk);
+                }
+                break;
+            }
+        }
+
+        result
+    }
+
+    /// Extracts key sentences from chunks.
+    fn compress_extractive(&self, chunks: &[RetrievedChunk]) -> Vec<RetrievedChunk> {
+        // For simplicity, keep highest-scoring chunks
+        self.compress_top_k(chunks, (chunks.len() / 2).max(1))
+    }
+
+    /// Keeps only top-k chunks.
+    fn compress_top_k(&self, chunks: &[RetrievedChunk], k: usize) -> Vec<RetrievedChunk> {
+        chunks.iter().take(k).cloned().collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -259,6 +259,76 @@ impl DslPrinter {
             Condition::Custom { description } => {
                 format!("{} {}", self.kw("CUSTOM"), self.quote(description))
             }
+            Condition::Duration {
+                operator,
+                value,
+                unit,
+            } => {
+                format!(
+                    "{} {} {} {}",
+                    self.kw("DURATION"),
+                    self.format_op(*operator),
+                    value,
+                    unit
+                )
+            }
+            Condition::Percentage {
+                operator,
+                value,
+                context,
+            } => {
+                format!(
+                    "{} {} {}% ({})",
+                    self.kw("PERCENTAGE"),
+                    self.format_op(*operator),
+                    value,
+                    context
+                )
+            }
+            Condition::SetMembership {
+                attribute,
+                values,
+                negated,
+            } => {
+                let values_str = values
+                    .iter()
+                    .map(|v| self.quote(v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if *negated {
+                    format!(
+                        "{} {} {} {{{}}}",
+                        attribute,
+                        self.kw("NOT"),
+                        self.kw("IN"),
+                        values_str
+                    )
+                } else {
+                    format!("{} {} {{{}}}", attribute, self.kw("IN"), values_str)
+                }
+            }
+            Condition::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => {
+                if *negated {
+                    format!(
+                        "{} {} {} {}",
+                        attribute,
+                        self.kw("NOT"),
+                        self.kw("MATCHES"),
+                        self.quote(pattern)
+                    )
+                } else {
+                    format!(
+                        "{} {} {}",
+                        attribute,
+                        self.kw("MATCHES"),
+                        self.quote(pattern)
+                    )
+                }
+            }
         }
     }
 

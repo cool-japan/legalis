@@ -3,13 +3,16 @@
 //! This crate provides an abstraction layer for LLM providers,
 //! enabling pluggable AI models (OpenAI, Anthropic, Gemini, Local LLMs).
 
+mod advanced_prompting;
 mod batch;
 mod cache;
 mod cancellation;
 mod compiler;
 mod conversation;
 mod embeddings;
+mod evaluation;
 mod functions;
+mod multimodal;
 mod observability;
 mod providers;
 mod rag;
@@ -21,13 +24,16 @@ mod testing;
 mod token_tracker;
 mod validation;
 
+pub use advanced_prompting::*;
 pub use batch::*;
 pub use cache::*;
 pub use cancellation::*;
 pub use compiler::*;
 pub use conversation::*;
 pub use embeddings::*;
+pub use evaluation::*;
 pub use functions::*;
+pub use multimodal::*;
 pub use observability::*;
 pub use providers::*;
 pub use rag::*;

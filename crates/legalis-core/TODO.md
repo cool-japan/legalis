@@ -158,3 +158,72 @@
 - [x] Add unit tests for TemporalValidity helper methods
 - [x] Test coverage increased from 68 to 77 unit tests (+ 9 tests)
 - [x] Doc test coverage: 17 doc tests
+- [x] Added 8 tests for new condition types (Duration, Percentage, SetMembership, Pattern)
+- [x] Added 7 tests for fluent query builder (CaseQuery)
+- [x] Added 9 tests for statute conflict resolution
+- [x] Current test coverage: 101 unit tests + 19 doc tests = 120 total tests
+
+## Next Phase Enhancements (2025-12-25)
+
+### Performance & Optimization
+- [x] Add criterion benchmarks for critical operations (Statute::validate, builders, database queries)
+- [ ] Implement lazy evaluation for compound conditions
+- [ ] Add memoization cache for frequently evaluated conditions
+- [ ] Optimize condition normalization algorithm
+- [ ] Add parallel evaluation for independent And/Or conditions
+
+### Advanced Legal Reasoning
+- [x] Implement conflict resolution between statutes (temporal precedence, specificity, hierarchy)
+  - Implements lex posterior (later law prevails)
+  - Implements lex specialis (more specific law prevails)
+  - Implements lex superior (higher authority prevails)
+  - Automatic conflict detection and resolution
+  - Resolves multiple statutes at a given date with precedence ordering
+- [ ] Add subsumption checking (does statute A subsume statute B?)
+- [ ] Implement legal entailment (what follows from a set of rules?)
+- [ ] Add contradiction detection across statute sets
+- [ ] Implement abductive reasoning (explain why an outcome occurred)
+
+### Query & Search DSL
+- [x] Fluent query builder for CaseDatabase (CaseQuery with chaining)
+- [x] Add filter combinators (jurisdiction, court, year_range, date_range, etc.)
+- [x] Add count() and first() query methods
+- [x] Add not_overruled() and with_rule() filters
+- [ ] Implement full-text search for case facts and holdings
+- [ ] Add similarity search for analogical reasoning
+- [ ] Create statute registry query DSL
+
+### Enhanced Condition Types
+- [x] Add `Duration` condition (time periods with units: days, weeks, months, years)
+- [x] Add `Percentage` condition (ownership stakes, voting shares)
+- [x] Add `SetMembership` condition (membership/exclusion with IN/NOT IN operators)
+- [x] Add `Pattern` condition (regex matching for identifiers with =~/!~ operators)
+- [ ] Add `Calculation` condition (derived values, formulas)
+
+### Error Handling & Diagnostics
+- [ ] Add structured error types with error codes
+- [ ] Implement error recovery strategies
+- [ ] Add diagnostic context to validation errors
+- [ ] Create error reporting helpers with suggestions
+- [ ] Add error severity levels (warning, error, critical)
+
+### Integration & Utilities
+- [ ] Add conversion helpers to/from common legal data formats (XML, JSON-LD)
+- [ ] Implement statute diffing (show changes between versions)
+- [ ] Add audit trail for condition evaluations
+- [ ] Create workflow helpers for common legal processes
+- [ ] Add transaction support for batch updates
+
+### Type System Enhancements
+- [ ] Add generic parameter constraints for strongly-typed effects
+- [ ] Implement builder verification at compile time (typestate pattern)
+- [ ] Add phantom types for jurisdiction-specific statutes
+- [ ] Create macro for defining custom condition types
+- [ ] Add const generics for array-based optimizations
+
+### Documentation & Examples
+- [ ] Add runbook for common legal scenarios
+- [ ] Create tutorial for building a complete legal system
+- [ ] Add comparison with other legal reasoning frameworks
+- [ ] Document performance characteristics and complexity
+- [ ] Add architectural decision records (ADRs)

@@ -679,6 +679,32 @@ impl LegalEntity for TypedEntity {
     }
 }
 
+/// Time unit for duration conditions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum DurationUnit {
+    /// Days
+    Days,
+    /// Weeks
+    Weeks,
+    /// Months
+    Months,
+    /// Years
+    Years,
+}
+
+impl fmt::Display for DurationUnit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Days => write!(f, "days"),
+            Self::Weeks => write!(f, "weeks"),
+            Self::Months => write!(f, "months"),
+            Self::Years => write!(f, "years"),
+        }
+    }
+}
+
 /// Condition type for statute preconditions.
 ///
 /// Conditions represent the requirements that must be met for a statute to apply.
@@ -748,6 +774,30 @@ pub enum Condition {
     },
     /// Residency duration check
     ResidencyDuration { operator: ComparisonOp, months: u32 },
+    /// Duration check (time periods, e.g., employment duration >= 5 years)
+    Duration {
+        operator: ComparisonOp,
+        value: u32,
+        unit: DurationUnit,
+    },
+    /// Percentage check (e.g., ownership >= 25%)
+    Percentage {
+        operator: ComparisonOp,
+        value: u32,
+        context: String,
+    },
+    /// Set membership check (e.g., status in {active, pending})
+    SetMembership {
+        attribute: String,
+        values: Vec<String>,
+        negated: bool,
+    },
+    /// Pattern matching check (regex for identifiers, codes, etc.)
+    Pattern {
+        attribute: String,
+        pattern: String,
+        negated: bool,
+    },
     /// Logical AND of conditions
     And(Box<Condition>, Box<Condition>),
     /// Logical OR of conditions
@@ -829,6 +879,60 @@ impl Condition {
         }
     }
 
+    /// Creates a new Duration condition.
+    pub fn duration(operator: ComparisonOp, value: u32, unit: DurationUnit) -> Self {
+        Self::Duration {
+            operator,
+            value,
+            unit,
+        }
+    }
+
+    /// Creates a new Percentage condition.
+    pub fn percentage(operator: ComparisonOp, value: u32, context: impl Into<String>) -> Self {
+        Self::Percentage {
+            operator,
+            value,
+            context: context.into(),
+        }
+    }
+
+    /// Creates a new SetMembership condition (attribute must be in set).
+    pub fn in_set(attribute: impl Into<String>, values: Vec<String>) -> Self {
+        Self::SetMembership {
+            attribute: attribute.into(),
+            values,
+            negated: false,
+        }
+    }
+
+    /// Creates a new SetMembership condition (attribute must NOT be in set).
+    pub fn not_in_set(attribute: impl Into<String>, values: Vec<String>) -> Self {
+        Self::SetMembership {
+            attribute: attribute.into(),
+            values,
+            negated: true,
+        }
+    }
+
+    /// Creates a new Pattern condition (attribute matches regex).
+    pub fn matches_pattern(attribute: impl Into<String>, pattern: impl Into<String>) -> Self {
+        Self::Pattern {
+            attribute: attribute.into(),
+            pattern: pattern.into(),
+            negated: false,
+        }
+    }
+
+    /// Creates a new Pattern condition (attribute does NOT match regex).
+    pub fn not_matches_pattern(attribute: impl Into<String>, pattern: impl Into<String>) -> Self {
+        Self::Pattern {
+            attribute: attribute.into(),
+            pattern: pattern.into(),
+            negated: true,
+        }
+    }
+
     /// Combines this condition with another using AND.
     pub fn and(self, other: Condition) -> Self {
         Self::And(Box::new(self), Box::new(other))
@@ -874,6 +978,36 @@ impl fmt::Display for Condition {
             },
             Self::ResidencyDuration { operator, months } => {
                 write!(f, "residency {} {} months", operator, months)
+            }
+            Self::Duration {
+                operator,
+                value,
+                unit,
+            } => {
+                write!(f, "duration {} {} {}", operator, value, unit)
+            }
+            Self::Percentage {
+                operator,
+                value,
+                context,
+            } => {
+                write!(f, "{} {} {}%", context, operator, value)
+            }
+            Self::SetMembership {
+                attribute,
+                values,
+                negated,
+            } => {
+                let op = if *negated { "NOT IN" } else { "IN" };
+                write!(f, "{} {} {{{}}}", attribute, op, values.join(", "))
+            }
+            Self::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => {
+                let op = if *negated { "!~" } else { "=~" };
+                write!(f, "{} {} /{}/", attribute, op, pattern)
             }
             Self::And(left, right) => write!(f, "({} AND {})", left, right),
             Self::Or(left, right) => write!(f, "({} OR {})", left, right),
@@ -1597,6 +1731,274 @@ impl fmt::Display for Statute {
             writeln!(f, "  DISCRETION: {}", disc)?;
         }
         Ok(())
+    }
+}
+
+/// Represents the outcome of a conflict resolution between two statutes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum ConflictResolution {
+    /// First statute prevails
+    FirstPrevails(ConflictReason),
+    /// Second statute prevails
+    SecondPrevails(ConflictReason),
+    /// No conflict - statutes are compatible
+    NoConflict,
+    /// Statutes conflict but cannot be automatically resolved
+    Unresolvable(String),
+}
+
+/// Reason why one statute prevails over another.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum ConflictReason {
+    /// Later law prevails (lex posterior derogat legi priori)
+    TemporalPrecedence,
+    /// More specific law prevails (lex specialis derogat legi generali)
+    Specificity,
+    /// Higher authority prevails (lex superior derogat legi inferiori)
+    Hierarchy,
+    /// Explicit amendment/repeal relationship
+    ExplicitAmendment,
+}
+
+impl fmt::Display for ConflictReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TemporalPrecedence => write!(f, "lex posterior (later law prevails)"),
+            Self::Specificity => write!(f, "lex specialis (more specific law prevails)"),
+            Self::Hierarchy => write!(f, "lex superior (higher authority prevails)"),
+            Self::ExplicitAmendment => write!(f, "explicit amendment/repeal"),
+        }
+    }
+}
+
+impl fmt::Display for ConflictResolution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FirstPrevails(reason) => write!(f, "First statute prevails: {}", reason),
+            Self::SecondPrevails(reason) => write!(f, "Second statute prevails: {}", reason),
+            Self::NoConflict => write!(f, "No conflict - statutes are compatible"),
+            Self::Unresolvable(msg) => write!(f, "Unresolvable conflict: {}", msg),
+        }
+    }
+}
+
+/// Statute conflict analyzer.
+///
+/// Provides methods to detect and resolve conflicts between statutes
+/// using established legal principles.
+pub struct StatuteConflictAnalyzer;
+
+impl StatuteConflictAnalyzer {
+    /// Analyzes two statutes for conflicts and determines which should prevail.
+    ///
+    /// Uses the following hierarchy of resolution principles:
+    /// 1. Explicit amendment relationships
+    /// 2. Temporal precedence (newer laws)
+    /// 3. Specificity (more specific laws)
+    /// 4. Hierarchy (jurisdictional authority)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, StatuteConflictAnalyzer, TemporalValidity};
+    /// use chrono::NaiveDate;
+    ///
+    /// let old_law = Statute::new("old-1", "Old Law", Effect::new(EffectType::Grant, "Old grant"))
+    ///     .with_temporal_validity(
+    ///         TemporalValidity::new()
+    ///             .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap())
+    ///     )
+    ///     .with_version(1);
+    ///
+    /// let new_law = Statute::new("new-1", "New Law", Effect::new(EffectType::Grant, "New grant"))
+    ///     .with_temporal_validity(
+    ///         TemporalValidity::new()
+    ///             .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+    ///     )
+    ///     .with_version(1);
+    ///
+    /// let resolution = StatuteConflictAnalyzer::resolve(&old_law, &new_law);
+    /// // New law prevails by temporal precedence
+    /// ```
+    pub fn resolve(first: &Statute, second: &Statute) -> ConflictResolution {
+        // Check if statutes actually conflict
+        if !Self::has_conflict(first, second) {
+            return ConflictResolution::NoConflict;
+        }
+
+        // 1. Check for explicit amendments (would require hierarchy module integration)
+        // For now, we'll implement temporal and specificity checks
+
+        // 2. Check temporal precedence
+        if let Some(resolution) = Self::check_temporal_precedence(first, second) {
+            return resolution;
+        }
+
+        // 3. Check specificity
+        if let Some(resolution) = Self::check_specificity(first, second) {
+            return resolution;
+        }
+
+        // 4. Check hierarchy (jurisdiction-based)
+        if let Some(resolution) = Self::check_hierarchy(first, second) {
+            return resolution;
+        }
+
+        // Cannot automatically resolve
+        ConflictResolution::Unresolvable(
+            "Statutes conflict but resolution requires human judgment".to_string(),
+        )
+    }
+
+    /// Checks if two statutes have conflicting effects.
+    fn has_conflict(first: &Statute, second: &Statute) -> bool {
+        // Statutes conflict if they have incompatible effects
+        // For simplicity, we consider Grant vs Prohibition/Revoke as conflicts
+        use EffectType::*;
+
+        matches!(
+            (&first.effect.effect_type, &second.effect.effect_type),
+            (Grant, Prohibition)
+                | (Grant, Revoke)
+                | (Prohibition, Grant)
+                | (Revoke, Grant)
+                | (Obligation, Prohibition)
+                | (Prohibition, Obligation)
+        )
+    }
+
+    /// Applies lex posterior (later law prevails).
+    fn check_temporal_precedence(first: &Statute, second: &Statute) -> Option<ConflictResolution> {
+        let first_date = first.temporal_validity.effective_date?;
+        let second_date = second.temporal_validity.effective_date?;
+
+        if first_date > second_date {
+            Some(ConflictResolution::FirstPrevails(
+                ConflictReason::TemporalPrecedence,
+            ))
+        } else if second_date > first_date {
+            Some(ConflictResolution::SecondPrevails(
+                ConflictReason::TemporalPrecedence,
+            ))
+        } else {
+            None // Same date, cannot resolve by temporal precedence
+        }
+    }
+
+    /// Applies lex specialis (more specific law prevails).
+    ///
+    /// A statute is considered more specific if it has more preconditions.
+    fn check_specificity(first: &Statute, second: &Statute) -> Option<ConflictResolution> {
+        let first_specificity = Self::calculate_specificity(first);
+        let second_specificity = Self::calculate_specificity(second);
+
+        if first_specificity > second_specificity {
+            Some(ConflictResolution::FirstPrevails(
+                ConflictReason::Specificity,
+            ))
+        } else if second_specificity > first_specificity {
+            Some(ConflictResolution::SecondPrevails(
+                ConflictReason::Specificity,
+            ))
+        } else {
+            None // Same specificity
+        }
+    }
+
+    /// Calculates specificity score based on number and complexity of conditions.
+    fn calculate_specificity(statute: &Statute) -> usize {
+        statute
+            .preconditions
+            .iter()
+            .map(|c| c.count_conditions())
+            .sum()
+    }
+
+    /// Applies lex superior (higher authority prevails).
+    ///
+    /// Uses jurisdiction hierarchy: federal > state > local
+    fn check_hierarchy(first: &Statute, second: &Statute) -> Option<ConflictResolution> {
+        let first_level = Self::jurisdiction_level(&first.jurisdiction);
+        let second_level = Self::jurisdiction_level(&second.jurisdiction);
+
+        if first_level > second_level {
+            Some(ConflictResolution::FirstPrevails(ConflictReason::Hierarchy))
+        } else if second_level > first_level {
+            Some(ConflictResolution::SecondPrevails(
+                ConflictReason::Hierarchy,
+            ))
+        } else {
+            None // Same level
+        }
+    }
+
+    /// Determines jurisdiction hierarchy level.
+    ///
+    /// Higher number = higher authority
+    fn jurisdiction_level(jurisdiction: &Option<String>) -> u32 {
+        jurisdiction.as_ref().map_or(0, |j| {
+            if j.to_lowercase().contains("federal") || j.to_lowercase().contains("national") {
+                3
+            } else if j.to_lowercase().contains("state") || j.to_lowercase().contains("provincial")
+            {
+                2
+            } else if j.to_lowercase().contains("local") || j.to_lowercase().contains("municipal") {
+                1
+            } else {
+                // Try to infer from format (e.g., "US" = federal, "US-NY" = state)
+                if j.len() <= 3 && j.chars().all(|c| c.is_ascii_uppercase()) {
+                    3 // Likely national/federal
+                } else if j.contains('-') {
+                    2 // Likely state/provincial
+                } else {
+                    0 // Unknown
+                }
+            }
+        })
+    }
+
+    /// Checks if a statute is still in effect on a given date.
+    pub fn is_in_effect(statute: &Statute, date: NaiveDate) -> bool {
+        statute.temporal_validity.is_active(date)
+    }
+
+    /// Finds which statutes from a set apply to a given date and resolves conflicts.
+    ///
+    /// Returns statutes in order of precedence (highest priority first).
+    pub fn resolve_conflicts_at_date(statutes: &[Statute], date: NaiveDate) -> Vec<&Statute> {
+        // Filter to only in-effect statutes
+        let mut active: Vec<&Statute> = statutes
+            .iter()
+            .filter(|s| Self::is_in_effect(s, date))
+            .collect();
+
+        // Sort by precedence (most specific and recent first)
+        active.sort_by(|a, b| {
+            // First by effective date (newer first)
+            let date_cmp = b
+                .temporal_validity
+                .effective_date
+                .cmp(&a.temporal_validity.effective_date);
+            if date_cmp != std::cmp::Ordering::Equal {
+                return date_cmp;
+            }
+
+            // Then by specificity (more specific first)
+            let spec_cmp = Self::calculate_specificity(b).cmp(&Self::calculate_specificity(a));
+            if spec_cmp != std::cmp::Ordering::Equal {
+                return spec_cmp;
+            }
+
+            // Then by hierarchy
+            Self::jurisdiction_level(&b.jurisdiction)
+                .cmp(&Self::jurisdiction_level(&a.jurisdiction))
+        });
+
+        active
     }
 }
 
@@ -2396,5 +2798,351 @@ mod tests {
         assert!(validity.is_active(test_date_active));
         assert!(validity.has_expired(test_date_expired));
         assert!(validity.is_pending(test_date_pending));
+    }
+
+    #[test]
+    fn test_duration_condition() {
+        let employment = Condition::duration(ComparisonOp::GreaterOrEqual, 5, DurationUnit::Years);
+        assert!(matches!(employment, Condition::Duration { .. }));
+        assert_eq!(format!("{}", employment), "duration >= 5 years");
+
+        let probation = Condition::duration(ComparisonOp::LessThan, 90, DurationUnit::Days);
+        assert_eq!(format!("{}", probation), "duration < 90 days");
+    }
+
+    #[test]
+    fn test_percentage_condition() {
+        let ownership = Condition::percentage(ComparisonOp::GreaterOrEqual, 25, "ownership");
+        assert!(matches!(ownership, Condition::Percentage { .. }));
+        assert_eq!(format!("{}", ownership), "ownership >= 25%");
+
+        let threshold = Condition::percentage(ComparisonOp::LessThan, 50, "voting_power");
+        assert_eq!(format!("{}", threshold), "voting_power < 50%");
+    }
+
+    #[test]
+    fn test_set_membership_condition() {
+        let status_in = Condition::in_set(
+            "status",
+            vec![
+                "active".to_string(),
+                "pending".to_string(),
+                "approved".to_string(),
+            ],
+        );
+        assert!(matches!(status_in, Condition::SetMembership { .. }));
+        assert_eq!(
+            format!("{}", status_in),
+            "status IN {active, pending, approved}"
+        );
+
+        let status_not_in = Condition::not_in_set(
+            "status",
+            vec!["rejected".to_string(), "canceled".to_string()],
+        );
+        assert_eq!(
+            format!("{}", status_not_in),
+            "status NOT IN {rejected, canceled}"
+        );
+    }
+
+    #[test]
+    fn test_pattern_condition() {
+        let matches = Condition::matches_pattern("id", "^[A-Z]{2}[0-9]{6}$");
+        assert!(matches!(matches, Condition::Pattern { .. }));
+        assert_eq!(format!("{}", matches), "id =~ /^[A-Z]{2}[0-9]{6}$/");
+
+        let not_matches = Condition::not_matches_pattern("email", ".*@spam\\.com$");
+        assert_eq!(format!("{}", not_matches), "email !~ /.*@spam\\.com$/");
+    }
+
+    #[test]
+    fn test_duration_unit_display() {
+        assert_eq!(format!("{}", DurationUnit::Days), "days");
+        assert_eq!(format!("{}", DurationUnit::Weeks), "weeks");
+        assert_eq!(format!("{}", DurationUnit::Months), "months");
+        assert_eq!(format!("{}", DurationUnit::Years), "years");
+    }
+
+    #[test]
+    fn test_duration_unit_ordering() {
+        assert!(DurationUnit::Days < DurationUnit::Weeks);
+        assert!(DurationUnit::Weeks < DurationUnit::Months);
+        assert!(DurationUnit::Months < DurationUnit::Years);
+    }
+
+    #[test]
+    fn test_new_conditions_with_combinators() {
+        let employment_eligible =
+            Condition::duration(ComparisonOp::GreaterOrEqual, 1, DurationUnit::Years).and(
+                Condition::percentage(ComparisonOp::GreaterOrEqual, 80, "attendance"),
+            );
+
+        assert!(format!("{}", employment_eligible).contains("AND"));
+        assert!(format!("{}", employment_eligible).contains("duration"));
+        assert!(format!("{}", employment_eligible).contains("attendance"));
+
+        let status_check =
+            Condition::in_set("status", vec!["active".to_string(), "verified".to_string()])
+                .or(Condition::matches_pattern("id", "^VIP-"));
+
+        assert!(format!("{}", status_check).contains("OR"));
+        assert!(format!("{}", status_check).contains("IN"));
+        assert!(format!("{}", status_check).contains("=~"));
+    }
+
+    #[test]
+    fn test_new_conditions_count_and_depth() {
+        let simple = Condition::duration(ComparisonOp::GreaterOrEqual, 5, DurationUnit::Years);
+        assert_eq!(simple.count_conditions(), 1);
+        assert_eq!(simple.depth(), 1);
+        assert!(simple.is_simple());
+        assert!(!simple.is_compound());
+
+        let compound = Condition::percentage(ComparisonOp::GreaterOrEqual, 25, "ownership").and(
+            Condition::in_set("status", vec!["active".to_string(), "verified".to_string()]),
+        );
+        assert_eq!(compound.count_conditions(), 3);
+        assert_eq!(compound.depth(), 2);
+        assert!(!compound.is_simple());
+        assert!(compound.is_compound());
+    }
+
+    #[test]
+    fn test_conflict_resolution_temporal_precedence() {
+        let old_law = Statute::new(
+            "old-1",
+            "Old Law",
+            Effect::new(EffectType::Grant, "Old grant"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        );
+
+        let new_law = Statute::new(
+            "new-1",
+            "New Law",
+            Effect::new(EffectType::Prohibition, "New prohibition"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        );
+
+        let resolution = StatuteConflictAnalyzer::resolve(&old_law, &new_law);
+        assert_eq!(
+            resolution,
+            ConflictResolution::SecondPrevails(ConflictReason::TemporalPrecedence)
+        );
+    }
+
+    #[test]
+    fn test_conflict_resolution_specificity() {
+        let general = Statute::new(
+            "general",
+            "General Law",
+            Effect::new(EffectType::Grant, "General grant"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        );
+
+        let specific = Statute::new(
+            "specific",
+            "Specific Law",
+            Effect::new(EffectType::Prohibition, "Specific prohibition"),
+        )
+        .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18))
+        .with_precondition(Condition::income(ComparisonOp::LessThan, 50000))
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        );
+
+        let resolution = StatuteConflictAnalyzer::resolve(&general, &specific);
+        assert_eq!(
+            resolution,
+            ConflictResolution::SecondPrevails(ConflictReason::Specificity)
+        );
+    }
+
+    #[test]
+    fn test_conflict_resolution_hierarchy() {
+        let state_law = Statute::new(
+            "state-1",
+            "State Law",
+            Effect::new(EffectType::Grant, "State grant"),
+        )
+        .with_jurisdiction("US-NY")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        );
+
+        let federal_law = Statute::new(
+            "fed-1",
+            "Federal Law",
+            Effect::new(EffectType::Prohibition, "Federal prohibition"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        );
+
+        let resolution = StatuteConflictAnalyzer::resolve(&state_law, &federal_law);
+        assert_eq!(
+            resolution,
+            ConflictResolution::SecondPrevails(ConflictReason::Hierarchy)
+        );
+    }
+
+    #[test]
+    fn test_conflict_resolution_no_conflict() {
+        let law1 = Statute::new("law-1", "Law 1", Effect::new(EffectType::Grant, "Grant A"));
+
+        let law2 = Statute::new("law-2", "Law 2", Effect::new(EffectType::Grant, "Grant B"));
+
+        let resolution = StatuteConflictAnalyzer::resolve(&law1, &law2);
+        assert_eq!(resolution, ConflictResolution::NoConflict);
+    }
+
+    #[test]
+    fn test_conflict_resolution_unresolvable() {
+        // Two conflicting statutes with same date, specificity, and jurisdiction
+        let law1 = Statute::new("law-1", "Law 1", Effect::new(EffectType::Grant, "Grant"))
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+            )
+            .with_jurisdiction("US");
+
+        let law2 = Statute::new(
+            "law-2",
+            "Law 2",
+            Effect::new(EffectType::Prohibition, "Prohibition"),
+        )
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+        )
+        .with_jurisdiction("US");
+
+        let resolution = StatuteConflictAnalyzer::resolve(&law1, &law2);
+        assert!(matches!(resolution, ConflictResolution::Unresolvable(_)));
+    }
+
+    #[test]
+    fn test_conflict_resolution_is_in_effect() {
+        let statute = Statute::new("test", "Test", Effect::grant("Test")).with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap())
+                .with_expiry_date(NaiveDate::from_ymd_opt(2030, 12, 31).unwrap()),
+        );
+
+        assert!(StatuteConflictAnalyzer::is_in_effect(
+            &statute,
+            NaiveDate::from_ymd_opt(2025, 6, 15).unwrap()
+        ));
+        assert!(!StatuteConflictAnalyzer::is_in_effect(
+            &statute,
+            NaiveDate::from_ymd_opt(2019, 1, 1).unwrap()
+        ));
+        assert!(!StatuteConflictAnalyzer::is_in_effect(
+            &statute,
+            NaiveDate::from_ymd_opt(2031, 1, 1).unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_conflict_resolution_resolve_conflicts_at_date() {
+        let old_general = Statute::new("old-gen", "Old General", Effect::grant("Grant"))
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2015, 1, 1).unwrap()),
+            );
+
+        let new_specific = Statute::new("new-spec", "New Specific", Effect::grant("Grant"))
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
+            )
+            .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+
+        let federal = Statute::new("federal", "Federal", Effect::grant("Grant"))
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2018, 1, 1).unwrap()),
+            )
+            .with_jurisdiction("US");
+
+        let expired = Statute::new("expired", "Expired", Effect::grant("Grant"))
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_effective_date(NaiveDate::from_ymd_opt(2010, 1, 1).unwrap())
+                    .with_expiry_date(NaiveDate::from_ymd_opt(2015, 12, 31).unwrap()),
+            );
+
+        let statutes = vec![old_general, new_specific, federal, expired];
+        let active = StatuteConflictAnalyzer::resolve_conflicts_at_date(
+            &statutes,
+            NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
+        );
+
+        // Should have 3 active (expired should be filtered out)
+        assert_eq!(active.len(), 3);
+
+        // Most recent and specific should be first
+        assert_eq!(active[0].id, "new-spec");
+    }
+
+    #[test]
+    fn test_conflict_reason_display() {
+        assert_eq!(
+            format!("{}", ConflictReason::TemporalPrecedence),
+            "lex posterior (later law prevails)"
+        );
+        assert_eq!(
+            format!("{}", ConflictReason::Specificity),
+            "lex specialis (more specific law prevails)"
+        );
+        assert_eq!(
+            format!("{}", ConflictReason::Hierarchy),
+            "lex superior (higher authority prevails)"
+        );
+    }
+
+    #[test]
+    fn test_jurisdiction_level_detection() {
+        // Federal/National
+        assert_eq!(
+            StatuteConflictAnalyzer::jurisdiction_level(&Some("US".to_string())),
+            3
+        );
+        assert_eq!(
+            StatuteConflictAnalyzer::jurisdiction_level(&Some("Federal".to_string())),
+            3
+        );
+
+        // State/Provincial
+        assert_eq!(
+            StatuteConflictAnalyzer::jurisdiction_level(&Some("US-NY".to_string())),
+            2
+        );
+        assert_eq!(
+            StatuteConflictAnalyzer::jurisdiction_level(&Some("State-CA".to_string())),
+            2
+        );
+
+        // Local/Municipal
+        assert_eq!(
+            StatuteConflictAnalyzer::jurisdiction_level(&Some("Local-NYC".to_string())),
+            1
+        );
+
+        // Unknown/None
+        assert_eq!(StatuteConflictAnalyzer::jurisdiction_level(&None), 0);
     }
 }

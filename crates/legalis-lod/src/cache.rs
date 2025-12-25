@@ -137,7 +137,7 @@ impl<K: Clone + Eq + Hash, V: Clone> ExportCache<K, V> {
 }
 
 /// Cache statistics.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CacheStats {
     /// Total number of entries in cache
     pub total_entries: usize,
@@ -147,17 +147,6 @@ pub struct CacheStats {
     pub max_size: usize,
     /// TTL in seconds
     pub ttl_seconds: u64,
-}
-
-impl Default for CacheStats {
-    fn default() -> Self {
-        Self {
-            total_entries: 0,
-            expired_entries: 0,
-            max_size: 0,
-            ttl_seconds: 0,
-        }
-    }
 }
 
 /// Generates a cache key for statute exports.

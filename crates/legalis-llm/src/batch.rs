@@ -280,7 +280,7 @@ mod tests {
             .with_batch_size(50);
 
         assert_eq!(config.max_concurrency, 5);
-        assert_eq!(config.fail_fast, true);
+        assert!(config.fail_fast);
         assert_eq!(config.batch_size, 50);
     }
 

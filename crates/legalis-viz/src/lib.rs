@@ -3610,7 +3610,7 @@ mod tests {
 
         let test = VisualRegressionTest::new("test1", baseline, actual);
         assert!(!test.passed);
-        assert!(test.differences.len() > 0);
+        assert!(!test.differences.is_empty());
     }
 
     #[test]

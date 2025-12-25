@@ -82,7 +82,7 @@
 ### Backends
 - [x] Add file-based JSON/JSONL storage
 - [x] Add SQLite storage backend with full indexing
-- [ ] Implement PostgreSQL storage
+- [x] Implement PostgreSQL storage
 - [ ] Support S3-compatible object storage
 - [ ] Implement append-only log storage
 

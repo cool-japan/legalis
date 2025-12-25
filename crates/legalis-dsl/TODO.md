@@ -87,3 +87,28 @@
 - [x] Thread-safe LSP backend with async/await
 - [x] Support for workspace edits in code actions
 - [x] Full document formatting with TextEdit generation
+
+## Advanced Analysis & Tooling (2025-12-25)
+
+### Semantic Validation
+- [x] Add semantic validation module for statute verification
+- [x] Implement circular dependency detection in REQUIRES clauses
+- [x] Add undefined reference checking for statute IDs
+- [x] Validate numeric ranges (min < max in BETWEEN conditions)
+- [x] Check for self-references in REQUIRES and SUPERSEDES
+- [x] Validate amendment targets exist
+- [x] Add completeness checker for required fields
+
+### Query API
+- [x] Implement fluent query API for filtering statutes
+- [x] Add jurisdiction, version, and date filtering
+- [x] Support filtering by title patterns
+- [x] Add REQUIRES/SUPERSEDES relationship queries
+- [x] Implement condition search within statutes
+- [x] Add count() and exists() helper methods
+
+### Visualization
+- [x] Create tree-view formatter for statute structure
+- [x] Add color-coded terminal output support
+- [x] Hierarchical display of conditions, effects, and metadata
+- [x] Support for imports, amendments, and exceptions visualization
