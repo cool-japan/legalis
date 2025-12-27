@@ -12,12 +12,14 @@ pub mod async_jobs;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod field_selection;
 pub mod graphql;
 pub mod logging;
 mod metrics;
 mod openapi;
 pub mod rate_limit;
 pub mod rebac;
+pub mod websocket;
 
 use axum::{
     Extension, Json, Router,
@@ -150,6 +152,8 @@ pub struct AppState {
     pub saved_simulations: RwLock<Vec<SavedSimulation>>,
     /// Response cache
     pub cache: Arc<cache::CacheStore>,
+    /// WebSocket broadcaster for real-time notifications
+    pub ws_broadcaster: websocket::WsBroadcaster,
 }
 
 impl AppState {
@@ -160,6 +164,7 @@ impl AppState {
             verification_jobs: async_jobs::JobManager::new(),
             saved_simulations: RwLock::new(Vec::new()),
             cache: Arc::new(cache::CacheStore::new()),
+            ws_broadcaster: websocket::WsBroadcaster::new(),
         }
     }
 }
@@ -321,6 +326,8 @@ pub struct StatuteSearchQuery {
     pub offset: Option<usize>,
     /// Cursor for cursor-based pagination
     pub cursor: Option<String>,
+    /// Field selection (comma-separated list of fields)
+    pub fields: Option<String>,
 }
 
 /// Statute comparison request.
@@ -553,8 +560,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Initialize metrics
     metrics::init();
 
-    // Create GraphQL schema
-    let graphql_state = graphql::GraphQLState::new();
+    // Create GraphQL schema with shared WebSocket broadcaster
+    let graphql_state = graphql::GraphQLState::with_broadcaster(state.ws_broadcaster.clone());
     let graphql_schema = graphql::create_schema(graphql_state);
 
     Router::new()
@@ -600,6 +607,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api-docs/openapi.json", get(openapi_spec))
         .route("/graphql", post(graphql_handler))
         .route("/graphql/playground", get(graphql_playground))
+        .route("/ws", get(websocket::ws_handler))
         .layer(Extension(graphql_schema))
         .layer(middleware::from_fn(logging::log_request))
         .layer(CompressionLayer::new())
@@ -677,6 +685,11 @@ async fn search_statutes(
     Query(query): Query<StatuteSearchQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     user.require_permission(auth::Permission::ReadStatutes)?;
+
+    // Parse field selection
+    let _field_query = field_selection::FieldsQuery {
+        fields: query.fields.clone(),
+    };
 
     let statutes = state.statutes.read().await;
 
@@ -842,7 +855,17 @@ async fn create_statute(
         "Creating statute: {} by user {}",
         req.statute.id, user.username
     );
+
+    let statute_id = req.statute.id.clone();
+    let statute_title = req.statute.title.clone();
     statutes.push(req.statute.clone());
+
+    // Broadcast WebSocket notification
+    state.ws_broadcaster.broadcast(websocket::WsNotification::StatuteCreated {
+        statute_id: statute_id.clone(),
+        title: statute_title,
+        created_by: user.username.clone(),
+    });
 
     Ok((StatusCode::CREATED, Json(ApiResponse::new(req.statute))))
 }
@@ -1010,6 +1033,13 @@ async fn delete_statute(
     }
 
     info!("Deleted statute: {} by user {}", id, user.username);
+
+    // Broadcast WebSocket notification
+    state.ws_broadcaster.broadcast(websocket::WsNotification::StatuteDeleted {
+        statute_id: id.clone(),
+        deleted_by: user.username.clone(),
+    });
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1230,12 +1260,24 @@ async fn verify_statutes_async(
             statute_count,
         };
 
+        let passed = job_result.passed;
+        let errors_count = job_result.errors.len();
+        let warnings_count = job_result.warnings.len();
+
         state_clone
             .verification_jobs
             .update_job(&job_id, |job| {
                 job.complete(job_result);
             })
             .await;
+
+        // Broadcast WebSocket notification
+        state_clone.ws_broadcaster.broadcast(websocket::WsNotification::VerificationCompleted {
+            job_id: job_id.clone(),
+            passed,
+            errors_count,
+            warnings_count,
+        });
     });
 
     let poll_url = format!("/api/v1/verify/async/{}", job_id);
@@ -2090,5 +2132,113 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_statute_search() {
+        let state = Arc::new(AppState::new());
+
+        // Add test statute directly to state
+        {
+            let mut statutes = state.statutes.write().await;
+            statutes.push(
+                Statute::new(
+                    "search-test-1",
+                    "Searchable Statute",
+                    Effect::new(EffectType::Grant, "Test grant"),
+                )
+                .with_jurisdiction("TEST"),
+            );
+        }
+
+        let app = create_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/statutes/search?title=Searchable")
+                    .header("Authorization", "ApiKey lgl_12345678901234567890")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["data"]["statutes"].as_array().unwrap().len() > 0);
+    }
+
+    #[tokio::test]
+    async fn test_graphql_integration() {
+        // GraphQL create and query test - uses GraphQL schema
+        let state = graphql::GraphQLState::new();
+        let schema = graphql::create_schema(state);
+
+        let mutation = r#"
+            mutation {
+                createStatute(input: {
+                    id: "graphql-test-1"
+                    title: "GraphQL Test Statute"
+                    effectDescription: "Test benefit"
+                    effectType: "Grant"
+                    jurisdiction: "TEST"
+                }) {
+                    id
+                    title
+                }
+            }
+        "#;
+
+        let result = schema.execute(mutation).await;
+        assert!(result.errors.is_empty());
+
+        let query = r#"
+            {
+                statutes {
+                    id
+                    title
+                }
+            }
+        "#;
+
+        let result = schema.execute(query).await;
+        assert!(result.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_readiness_check() {
+        let app = create_test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health/ready")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_metrics_endpoint() {
+        let app = create_test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

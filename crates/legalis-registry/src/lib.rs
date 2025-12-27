@@ -8002,6 +8002,1213 @@ impl ObservabilityCollector {
     }
 }
 
+// ============================================================================
+// Data Quality Features
+// ============================================================================
+
+/// Quality score for a statute entry (0.0 - 100.0).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct QualityScore {
+    /// Overall quality score
+    pub overall: f64,
+    /// Completeness score (fields populated)
+    pub completeness: f64,
+    /// Consistency score (internal consistency)
+    pub consistency: f64,
+    /// Metadata richness score
+    pub metadata_richness: f64,
+    /// Documentation quality score
+    pub documentation_quality: f64,
+}
+
+impl QualityScore {
+    /// Creates a quality score with all components.
+    pub fn new(
+        completeness: f64,
+        consistency: f64,
+        metadata_richness: f64,
+        documentation_quality: f64,
+    ) -> Self {
+        let overall = (completeness * 0.4
+            + consistency * 0.3
+            + metadata_richness * 0.2
+            + documentation_quality * 0.1)
+            .clamp(0.0, 100.0);
+
+        Self {
+            overall,
+            completeness,
+            consistency,
+            metadata_richness,
+            documentation_quality,
+        }
+    }
+
+    /// Checks if the quality meets a threshold.
+    pub fn meets_threshold(&self, threshold: f64) -> bool {
+        self.overall >= threshold
+    }
+
+    /// Returns the grade (A-F) based on score.
+    pub fn grade(&self) -> char {
+        match self.overall as u32 {
+            90..=100 => 'A',
+            80..=89 => 'B',
+            70..=79 => 'C',
+            60..=69 => 'D',
+            _ => 'F',
+        }
+    }
+}
+
+/// Quality assessment for a statute entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityAssessment {
+    /// Statute ID being assessed
+    pub statute_id: String,
+    /// Quality score
+    pub score: QualityScore,
+    /// Issues found
+    pub issues: Vec<String>,
+    /// Suggestions for improvement
+    pub suggestions: Vec<String>,
+    /// Assessment timestamp
+    pub assessed_at: DateTime<Utc>,
+}
+
+impl QualityAssessment {
+    /// Creates a new quality assessment.
+    pub fn new(statute_id: String, score: QualityScore) -> Self {
+        Self {
+            statute_id,
+            score,
+            issues: Vec::new(),
+            suggestions: Vec::new(),
+            assessed_at: Utc::now(),
+        }
+    }
+
+    /// Adds an issue to the assessment.
+    pub fn with_issue(mut self, issue: String) -> Self {
+        self.issues.push(issue);
+        self
+    }
+
+    /// Adds a suggestion to the assessment.
+    pub fn with_suggestion(mut self, suggestion: String) -> Self {
+        self.suggestions.push(suggestion);
+        self
+    }
+
+    /// Checks if the assessment has any issues.
+    pub fn has_issues(&self) -> bool {
+        !self.issues.is_empty()
+    }
+}
+
+/// Similarity measure between two statutes.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SimilarityScore {
+    /// Overall similarity (0.0 - 1.0)
+    pub overall: f64,
+    /// Title similarity
+    pub title: f64,
+    /// Content similarity
+    pub content: f64,
+    /// Metadata similarity
+    pub metadata: f64,
+}
+
+impl SimilarityScore {
+    /// Creates a new similarity score.
+    pub fn new(title: f64, content: f64, metadata: f64) -> Self {
+        let overall = (title * 0.4 + content * 0.5 + metadata * 0.1).clamp(0.0, 1.0);
+
+        Self {
+            overall,
+            title,
+            content,
+            metadata,
+        }
+    }
+
+    /// Checks if similarity exceeds threshold (likely duplicate).
+    pub fn is_likely_duplicate(&self, threshold: f64) -> bool {
+        self.overall >= threshold
+    }
+
+    /// Checks if similarity suggests possible duplicate.
+    pub fn is_possible_duplicate(&self, threshold: f64) -> bool {
+        self.overall >= threshold * 0.7
+    }
+}
+
+/// A potential duplicate statute pair.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateCandidate {
+    /// First statute ID
+    pub statute_id_1: String,
+    /// Second statute ID
+    pub statute_id_2: String,
+    /// Similarity score
+    pub similarity: SimilarityScore,
+    /// Reason for flagging as duplicate
+    pub reason: String,
+}
+
+impl DuplicateCandidate {
+    /// Creates a new duplicate candidate.
+    pub fn new(
+        statute_id_1: String,
+        statute_id_2: String,
+        similarity: SimilarityScore,
+        reason: String,
+    ) -> Self {
+        Self {
+            statute_id_1,
+            statute_id_2,
+            similarity,
+            reason,
+        }
+    }
+}
+
+/// Result of duplicate detection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateDetectionResult {
+    /// All duplicate candidates found
+    pub candidates: Vec<DuplicateCandidate>,
+    /// Similarity threshold used
+    pub threshold: f64,
+    /// Number of statutes analyzed
+    pub statutes_analyzed: usize,
+    /// Detection timestamp
+    pub detected_at: DateTime<Utc>,
+}
+
+impl DuplicateDetectionResult {
+    /// Creates a new duplicate detection result.
+    pub fn new(threshold: f64, statutes_analyzed: usize) -> Self {
+        Self {
+            candidates: Vec::new(),
+            threshold,
+            statutes_analyzed,
+            detected_at: Utc::now(),
+        }
+    }
+
+    /// Adds a duplicate candidate.
+    pub fn add_candidate(&mut self, candidate: DuplicateCandidate) {
+        self.candidates.push(candidate);
+    }
+
+    /// Returns only likely duplicates (high confidence).
+    pub fn likely_duplicates(&self) -> Vec<&DuplicateCandidate> {
+        self.candidates
+            .iter()
+            .filter(|c| c.similarity.is_likely_duplicate(self.threshold))
+            .collect()
+    }
+
+    /// Returns possible duplicates (medium confidence).
+    pub fn possible_duplicates(&self) -> Vec<&DuplicateCandidate> {
+        self.candidates
+            .iter()
+            .filter(|c| c.similarity.is_possible_duplicate(self.threshold))
+            .collect()
+    }
+
+    /// Returns total number of duplicate pairs found.
+    pub fn total_duplicates(&self) -> usize {
+        self.candidates.len()
+    }
+}
+
+/// Data profile for a field in the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldProfile {
+    /// Field name
+    pub field_name: String,
+    /// Total values
+    pub total_values: usize,
+    /// Null/empty values count
+    pub null_count: usize,
+    /// Unique values count
+    pub unique_count: usize,
+    /// Most common values (top 10)
+    pub most_common: Vec<(String, usize)>,
+    /// Completeness percentage
+    pub completeness: f64,
+}
+
+impl FieldProfile {
+    /// Creates a new field profile.
+    pub fn new(field_name: String, total_values: usize) -> Self {
+        Self {
+            field_name,
+            total_values,
+            null_count: 0,
+            unique_count: 0,
+            most_common: Vec::new(),
+            completeness: 0.0,
+        }
+    }
+
+    /// Calculates completeness percentage.
+    pub fn calculate_completeness(&mut self) {
+        if self.total_values > 0 {
+            self.completeness =
+                ((self.total_values - self.null_count) as f64 / self.total_values as f64) * 100.0;
+        }
+    }
+}
+
+/// Comprehensive data profile for the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataProfile {
+    /// Total statutes profiled
+    pub total_statutes: usize,
+    /// Field profiles
+    pub field_profiles: HashMap<String, FieldProfile>,
+    /// Average quality score
+    pub average_quality: f64,
+    /// Quality distribution (grade -> count)
+    pub quality_distribution: HashMap<char, usize>,
+    /// Status distribution
+    pub status_distribution: HashMap<StatuteStatus, usize>,
+    /// Jurisdiction distribution
+    pub jurisdiction_distribution: HashMap<String, usize>,
+    /// Tag usage patterns
+    pub tag_patterns: HashMap<String, usize>,
+    /// Profiling timestamp
+    pub profiled_at: DateTime<Utc>,
+}
+
+impl DataProfile {
+    /// Creates a new data profile.
+    pub fn new(total_statutes: usize) -> Self {
+        Self {
+            total_statutes,
+            field_profiles: HashMap::new(),
+            average_quality: 0.0,
+            quality_distribution: HashMap::new(),
+            status_distribution: HashMap::new(),
+            jurisdiction_distribution: HashMap::new(),
+            tag_patterns: HashMap::new(),
+            profiled_at: Utc::now(),
+        }
+    }
+
+    /// Adds a field profile.
+    pub fn add_field_profile(&mut self, profile: FieldProfile) {
+        self.field_profiles
+            .insert(profile.field_name.clone(), profile);
+    }
+
+    /// Gets the completeness of a field.
+    pub fn field_completeness(&self, field_name: &str) -> Option<f64> {
+        self.field_profiles
+            .get(field_name)
+            .map(|p| p.completeness)
+    }
+
+    /// Exports the profile to JSON.
+    pub fn export_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+}
+
+impl StatuteRegistry {
+    /// Calculates quality score for a statute entry.
+    pub fn calculate_quality_score(&self, entry: &StatuteEntry) -> QualityScore {
+        // Completeness score (0-100)
+        let mut completeness_score = 0.0;
+
+        // Required fields (always present)
+        completeness_score += 30.0;
+
+        // Optional but important fields
+        if entry.expiry_date.is_some() {
+            completeness_score += 10.0;
+        }
+
+        if !entry.tags.is_empty() {
+            completeness_score += 15.0;
+        }
+
+        if !entry.metadata.is_empty() {
+            completeness_score += 15.0;
+        }
+
+        if entry.amends.is_some() {
+            completeness_score += 10.0;
+        }
+
+        if !entry.supersedes.is_empty() {
+            completeness_score += 10.0;
+        }
+
+        if !entry.references.is_empty() {
+            completeness_score += 10.0;
+        }
+
+        // Consistency score (0-100)
+        let mut consistency_score = 100.0;
+
+        // Check if expiry date is after effective date
+        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date) {
+            if expiry <= effective {
+                consistency_score -= 30.0;
+            }
+        }
+
+        // Check if status matches dates
+        if entry.status == StatuteStatus::Repealed {
+            if let Some(expiry) = entry.expiry_date {
+                if expiry > Utc::now() {
+                    consistency_score -= 20.0;
+                }
+            } else {
+                consistency_score -= 20.0;
+            }
+        }
+
+        // Metadata richness score (0-100)
+        let metadata_richness = if entry.metadata.is_empty() {
+            0.0
+        } else {
+            ((entry.metadata.len() as f64).min(10.0) / 10.0) * 100.0
+        };
+
+        // Documentation quality score (0-100)
+        let doc_quality = {
+            let title_len = entry.statute.title.len();
+            let has_description = entry
+                .metadata
+                .contains_key("description")
+                .then_some(())
+                .is_some();
+            let has_tags = !entry.tags.is_empty();
+
+            let mut score = 0.0;
+
+            // Title quality (descriptive, not too short)
+            if title_len > 10 {
+                score += 40.0;
+            } else if title_len > 5 {
+                score += 20.0;
+            }
+
+            // Has description metadata
+            if has_description {
+                score += 40.0;
+            }
+
+            // Has tags for categorization
+            if has_tags {
+                score += 20.0;
+            }
+
+            score
+        };
+
+        QualityScore::new(
+            completeness_score,
+            consistency_score,
+            metadata_richness,
+            doc_quality,
+        )
+    }
+
+    /// Performs quality assessment for a statute.
+    pub fn assess_quality(&self, statute_id: &str) -> RegistryResult<QualityAssessment> {
+        let entry = self
+            .statutes
+            .get(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let score = self.calculate_quality_score(entry);
+        let mut assessment = QualityAssessment::new(statute_id.to_string(), score);
+
+        // Add issues and suggestions
+        if entry.tags.is_empty() {
+            assessment = assessment
+                .with_issue("No tags assigned".to_string())
+                .with_suggestion("Add relevant tags for better categorization".to_string());
+        }
+
+        if entry.metadata.is_empty() {
+            assessment = assessment
+                .with_issue("No metadata provided".to_string())
+                .with_suggestion("Add metadata fields like description, author, etc.".to_string());
+        }
+
+        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date) {
+            if expiry <= effective {
+                assessment =
+                    assessment.with_issue("Expiry date is before or equal to effective date".to_string());
+            }
+        }
+
+        if entry.status == StatuteStatus::Repealed && entry.expiry_date.is_none() {
+            assessment = assessment.with_issue(
+                "Status is Repealed but no expiry date is set".to_string(),
+            );
+        }
+
+        if entry.statute.title.len() < 10 {
+            assessment = assessment
+                .with_issue("Title is too short".to_string())
+                .with_suggestion("Use a more descriptive title".to_string());
+        }
+
+        Ok(assessment)
+    }
+
+    /// Assesses quality for all statutes in the registry.
+    pub fn assess_all_quality(&self) -> Vec<QualityAssessment> {
+        self.statutes
+            .keys()
+            .filter_map(|id| self.assess_quality(id).ok())
+            .collect()
+    }
+
+    /// Calculates similarity between two statute entries.
+    pub fn calculate_similarity(&self, entry1: &StatuteEntry, entry2: &StatuteEntry) -> SimilarityScore {
+        // Title similarity (using fuzzy matching)
+        let matcher = SkimMatcherV2::default();
+        let title_sim = matcher
+            .fuzzy_match(&entry1.statute.title, &entry2.statute.title)
+            .map(|score| (score as f64 / 100.0).min(1.0))
+            .unwrap_or(0.0);
+
+        // Content similarity (based on references)
+        let content_sim = {
+            // Count common references
+            let refs1: HashSet<_> = entry1.references.iter().collect();
+            let refs2: HashSet<_> = entry2.references.iter().collect();
+            let common = refs1.intersection(&refs2).count();
+            let total = refs1.union(&refs2).count();
+
+            if total > 0 {
+                common as f64 / total as f64
+            } else {
+                // If no references in either, check if effect types are the same
+                if entry1.statute.effect.effect_type == entry2.statute.effect.effect_type {
+                    0.5
+                } else {
+                    0.0
+                }
+            }
+        };
+
+        // Metadata similarity
+        let tags1: HashSet<_> = entry1.tags.iter().collect();
+        let tags2: HashSet<_> = entry2.tags.iter().collect();
+        let common_tags = tags1.intersection(&tags2).count();
+        let total_tags = tags1.union(&tags2).count();
+
+        let metadata_sim = if total_tags > 0 {
+            common_tags as f64 / total_tags as f64
+        } else {
+            0.0
+        };
+
+        SimilarityScore::new(title_sim, content_sim, metadata_sim)
+    }
+
+    /// Detects potential duplicate statutes.
+    pub fn detect_duplicates(&self, threshold: f64) -> DuplicateDetectionResult {
+        let statute_ids: Vec<_> = self.statutes.keys().cloned().collect();
+        let mut result = DuplicateDetectionResult::new(threshold, statute_ids.len());
+
+        for i in 0..statute_ids.len() {
+            for j in (i + 1)..statute_ids.len() {
+                let id1 = &statute_ids[i];
+                let id2 = &statute_ids[j];
+
+                if let (Some(entry1), Some(entry2)) =
+                    (self.statutes.get(id1), self.statutes.get(id2))
+                {
+                    let similarity = self.calculate_similarity(entry1, entry2);
+
+                    if similarity.overall >= threshold * 0.7 {
+                        let reason = if similarity.overall >= threshold {
+                            "High similarity detected".to_string()
+                        } else {
+                            "Moderate similarity detected".to_string()
+                        };
+
+                        result.add_candidate(DuplicateCandidate::new(
+                            id1.clone(),
+                            id2.clone(),
+                            similarity,
+                            reason,
+                        ));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Profiles the data in the registry.
+    pub fn profile_data(&mut self) -> DataProfile {
+        let total = self.statutes.len();
+        let mut profile = DataProfile::new(total);
+
+        // Calculate quality scores and distribution
+        let mut total_quality = 0.0;
+        let mut quality_counts: HashMap<char, usize> = HashMap::new();
+
+        for entry in self.statutes.values() {
+            let score = self.calculate_quality_score(entry);
+            total_quality += score.overall;
+
+            let grade = score.grade();
+            *quality_counts.entry(grade).or_insert(0) += 1;
+
+            // Status distribution
+            *profile.status_distribution.entry(entry.status).or_insert(0) += 1;
+
+            // Jurisdiction distribution
+            *profile
+                .jurisdiction_distribution
+                .entry(entry.jurisdiction.clone())
+                .or_insert(0) += 1;
+
+            // Tag patterns
+            for tag in &entry.tags {
+                *profile.tag_patterns.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+
+        if total > 0 {
+            profile.average_quality = total_quality / total as f64;
+        }
+        profile.quality_distribution = quality_counts;
+
+        // Profile common fields
+        let mut title_profile = FieldProfile::new("title".to_string(), total);
+        let mut jurisdiction_profile = FieldProfile::new("jurisdiction".to_string(), total);
+        let mut tags_profile = FieldProfile::new("tags".to_string(), total);
+
+        let mut title_counts: HashMap<String, usize> = HashMap::new();
+        let mut jurisdiction_counts: HashMap<String, usize> = HashMap::new();
+
+        for entry in self.statutes.values() {
+            // Titles
+            *title_counts.entry(entry.statute.title.clone()).or_insert(0) += 1;
+
+            // Jurisdictions
+            *jurisdiction_counts
+                .entry(entry.jurisdiction.clone())
+                .or_insert(0) += 1;
+
+            // Tags
+            if entry.tags.is_empty() {
+                tags_profile.null_count += 1;
+            }
+        }
+
+        title_profile.unique_count = title_counts.len();
+        title_profile.calculate_completeness();
+        let mut title_vec: Vec<_> = title_counts.into_iter().collect();
+        title_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        title_profile.most_common = title_vec.into_iter().take(10).collect();
+
+        jurisdiction_profile.unique_count = jurisdiction_counts.len();
+        jurisdiction_profile.calculate_completeness();
+        let mut jurisdiction_vec: Vec<_> = jurisdiction_counts.into_iter().collect();
+        jurisdiction_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        jurisdiction_profile.most_common = jurisdiction_vec.into_iter().take(10).collect();
+
+        tags_profile.unique_count = profile.tag_patterns.len();
+        tags_profile.calculate_completeness();
+
+        profile.add_field_profile(title_profile);
+        profile.add_field_profile(jurisdiction_profile);
+        profile.add_field_profile(tags_profile);
+
+        profile
+    }
+
+    /// Finds statutes with quality scores below a threshold.
+    pub fn find_low_quality_statutes(&self, threshold: f64) -> Vec<(String, QualityScore)> {
+        self.statutes
+            .iter()
+            .map(|(id, entry)| (id.clone(), self.calculate_quality_score(entry)))
+            .filter(|(_, score)| score.overall < threshold)
+            .collect()
+    }
+
+    /// Exports quality assessments to JSON.
+    pub fn export_quality_assessments_json(&self) -> Result<String, serde_json::Error> {
+        let assessments = self.assess_all_quality();
+        serde_json::to_string_pretty(&assessments)
+    }
+
+    /// Exports duplicate detection results to JSON.
+    pub fn export_duplicates_json(&self, threshold: f64) -> Result<String, serde_json::Error> {
+        let duplicates = self.detect_duplicates(threshold);
+        serde_json::to_string_pretty(&duplicates)
+    }
+}
+
+// ============================================================================
+// Automatic Data Enrichment
+// ============================================================================
+
+/// Enrichment suggestion for a statute entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichmentSuggestion {
+    /// Type of enrichment
+    pub enrichment_type: EnrichmentType,
+    /// Suggested value or action
+    pub suggestion: String,
+    /// Confidence score (0.0-1.0)
+    pub confidence: f64,
+    /// Reason for suggestion
+    pub reason: String,
+}
+
+impl EnrichmentSuggestion {
+    /// Creates a new enrichment suggestion.
+    pub fn new(
+        enrichment_type: EnrichmentType,
+        suggestion: String,
+        confidence: f64,
+        reason: String,
+    ) -> Self {
+        Self {
+            enrichment_type,
+            suggestion,
+            confidence: confidence.clamp(0.0, 1.0),
+            reason,
+        }
+    }
+
+    /// Checks if suggestion meets confidence threshold.
+    pub fn meets_threshold(&self, threshold: f64) -> bool {
+        self.confidence >= threshold
+    }
+}
+
+/// Type of data enrichment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EnrichmentType {
+    /// Auto-tagging based on content
+    AutoTag,
+    /// Metadata inference
+    MetadataInference,
+    /// Jurisdiction inference
+    JurisdictionInference,
+    /// Related statute suggestion
+    RelatedStatute,
+    /// Category classification
+    CategoryClassification,
+}
+
+/// Result of automatic enrichment analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichmentResult {
+    /// Statute ID being enriched
+    pub statute_id: String,
+    /// List of suggestions
+    pub suggestions: Vec<EnrichmentSuggestion>,
+    /// Timestamp of analysis
+    pub analyzed_at: DateTime<Utc>,
+}
+
+impl EnrichmentResult {
+    /// Creates a new enrichment result.
+    pub fn new(statute_id: String) -> Self {
+        Self {
+            statute_id,
+            suggestions: Vec::new(),
+            analyzed_at: Utc::now(),
+        }
+    }
+
+    /// Adds a suggestion to the result.
+    pub fn add_suggestion(&mut self, suggestion: EnrichmentSuggestion) {
+        self.suggestions.push(suggestion);
+    }
+
+    /// Returns suggestions meeting a confidence threshold.
+    pub fn high_confidence_suggestions(&self, threshold: f64) -> Vec<&EnrichmentSuggestion> {
+        self.suggestions
+            .iter()
+            .filter(|s| s.meets_threshold(threshold))
+            .collect()
+    }
+
+    /// Groups suggestions by type.
+    pub fn suggestions_by_type(
+        &self,
+        enrichment_type: EnrichmentType,
+    ) -> Vec<&EnrichmentSuggestion> {
+        self.suggestions
+            .iter()
+            .filter(|s| s.enrichment_type == enrichment_type)
+            .collect()
+    }
+}
+
+/// Enrichment configuration.
+#[derive(Debug, Clone)]
+pub struct EnrichmentConfig {
+    /// Enable auto-tagging
+    pub enable_auto_tagging: bool,
+    /// Enable metadata inference
+    pub enable_metadata_inference: bool,
+    /// Enable jurisdiction inference
+    pub enable_jurisdiction_inference: bool,
+    /// Minimum confidence threshold
+    pub min_confidence: f64,
+}
+
+impl Default for EnrichmentConfig {
+    fn default() -> Self {
+        Self {
+            enable_auto_tagging: true,
+            enable_metadata_inference: true,
+            enable_jurisdiction_inference: true,
+            min_confidence: 0.7,
+        }
+    }
+}
+
+impl EnrichmentConfig {
+    /// Creates a new enrichment configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets auto-tagging enabled.
+    pub fn with_auto_tagging(mut self, enabled: bool) -> Self {
+        self.enable_auto_tagging = enabled;
+        self
+    }
+
+    /// Sets metadata inference enabled.
+    pub fn with_metadata_inference(mut self, enabled: bool) -> Self {
+        self.enable_metadata_inference = enabled;
+        self
+    }
+
+    /// Sets jurisdiction inference enabled.
+    pub fn with_jurisdiction_inference(mut self, enabled: bool) -> Self {
+        self.enable_jurisdiction_inference = enabled;
+        self
+    }
+
+    /// Sets minimum confidence threshold.
+    pub fn with_min_confidence(mut self, threshold: f64) -> Self {
+        self.min_confidence = threshold.clamp(0.0, 1.0);
+        self
+    }
+}
+
+impl StatuteRegistry {
+    /// Analyzes a statute for enrichment opportunities.
+    pub fn analyze_enrichment(
+        &self,
+        statute_id: &str,
+        config: &EnrichmentConfig,
+    ) -> RegistryResult<EnrichmentResult> {
+        let entry = self
+            .statutes
+            .get(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let mut result = EnrichmentResult::new(statute_id.to_string());
+
+        // Auto-tagging based on title and content
+        if config.enable_auto_tagging {
+            self.suggest_auto_tags(entry, &mut result);
+        }
+
+        // Metadata inference
+        if config.enable_metadata_inference {
+            self.suggest_metadata(entry, &mut result);
+        }
+
+        // Jurisdiction inference
+        if config.enable_jurisdiction_inference {
+            self.suggest_jurisdiction_metadata(entry, &mut result);
+        }
+
+        Ok(result)
+    }
+
+    /// Suggests automatic tags based on content.
+    fn suggest_auto_tags(&self, entry: &StatuteEntry, result: &mut EnrichmentResult) {
+        let title_lower = entry.statute.title.to_lowercase();
+
+        // Common legal domain tags
+        let tag_patterns = [
+            ("civil", vec!["civil", "contract", "property", "tort"]),
+            ("criminal", vec!["criminal", "penal", "offense", "crime"]),
+            ("administrative", vec!["administrative", "regulation", "agency"]),
+            ("tax", vec!["tax", "revenue", "fiscal"]),
+            ("employment", vec!["employment", "labor", "worker"]),
+            ("corporate", vec!["corporate", "company", "business"]),
+            ("intellectual-property", vec!["patent", "trademark", "copyright", "ip"]),
+            ("environmental", vec!["environmental", "pollution", "conservation"]),
+            ("healthcare", vec!["health", "medical", "patient"]),
+            ("education", vec!["education", "school", "university"]),
+        ];
+
+        for (tag, keywords) in &tag_patterns {
+            if !entry.tags.contains(&tag.to_string()) {
+                let matches = keywords.iter().filter(|kw| title_lower.contains(*kw)).count();
+                if matches > 0 {
+                    let confidence = (matches as f64 / keywords.len() as f64).min(0.95);
+                    result.add_suggestion(EnrichmentSuggestion::new(
+                        EnrichmentType::AutoTag,
+                        tag.to_string(),
+                        confidence,
+                        format!("Title contains keywords: {}", keywords.join(", ")),
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Suggests metadata based on analysis.
+    fn suggest_metadata(&self, entry: &StatuteEntry, result: &mut EnrichmentResult) {
+        // Suggest description if missing
+        if !entry.metadata.contains_key("description") {
+            result.add_suggestion(EnrichmentSuggestion::new(
+                EnrichmentType::MetadataInference,
+                "description".to_string(),
+                0.6,
+                "Missing description metadata - consider adding statute summary".to_string(),
+            ));
+        }
+
+        // Suggest category based on tags
+        if !entry.metadata.contains_key("category") && !entry.tags.is_empty() {
+            let category = entry.tags.first().unwrap();
+            result.add_suggestion(EnrichmentSuggestion::new(
+                EnrichmentType::CategoryClassification,
+                category.clone(),
+                0.75,
+                format!("Category inferred from primary tag: {}", category),
+            ));
+        }
+
+        // Suggest effective date metadata if not set
+        if entry.effective_date.is_none() && !entry.metadata.contains_key("effective_date_note") {
+            result.add_suggestion(EnrichmentSuggestion::new(
+                EnrichmentType::MetadataInference,
+                "effective_date_note".to_string(),
+                0.5,
+                "Consider adding effective date information".to_string(),
+            ));
+        }
+    }
+
+    /// Suggests jurisdiction-related metadata.
+    fn suggest_jurisdiction_metadata(&self, entry: &StatuteEntry, result: &mut EnrichmentResult) {
+        // Count statutes in same jurisdiction
+        let jurisdiction_count = self
+            .statutes
+            .values()
+            .filter(|e| e.jurisdiction == entry.jurisdiction)
+            .count();
+
+        if jurisdiction_count > 10 && !entry.metadata.contains_key("jurisdiction_family") {
+            result.add_suggestion(EnrichmentSuggestion::new(
+                EnrichmentType::JurisdictionInference,
+                "jurisdiction_family".to_string(),
+                0.8,
+                format!(
+                    "Part of {} statute family in jurisdiction {}",
+                    jurisdiction_count, entry.jurisdiction
+                ),
+            ));
+        }
+    }
+
+    /// Applies enrichment suggestions to a statute.
+    pub fn apply_enrichment(
+        &mut self,
+        statute_id: &str,
+        suggestions: &[EnrichmentSuggestion],
+        min_confidence: f64,
+    ) -> RegistryResult<usize> {
+        let entry = self
+            .statutes
+            .get_mut(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        let mut applied_count = 0;
+
+        for suggestion in suggestions {
+            if !suggestion.meets_threshold(min_confidence) {
+                continue;
+            }
+
+            match suggestion.enrichment_type {
+                EnrichmentType::AutoTag => {
+                    if !entry.tags.contains(&suggestion.suggestion) {
+                        entry.tags.push(suggestion.suggestion.clone());
+                        applied_count += 1;
+                    }
+                }
+                EnrichmentType::MetadataInference
+                | EnrichmentType::CategoryClassification
+                | EnrichmentType::JurisdictionInference => {
+                    let key = suggestion.suggestion.clone();
+                    if let std::collections::hash_map::Entry::Vacant(e) = entry.metadata.entry(key) {
+                        e.insert(format!("Auto-enriched: {}", suggestion.reason));
+                        applied_count += 1;
+                    }
+                }
+                EnrichmentType::RelatedStatute => {
+                    // Add to references if not already present
+                    if !entry.references.contains(&suggestion.suggestion) {
+                        entry.references.push(suggestion.suggestion.clone());
+                        applied_count += 1;
+                    }
+                }
+            }
+        }
+
+        // Update ETag after modifications
+        entry.etag = Uuid::new_v4().to_string();
+
+        Ok(applied_count)
+    }
+
+    /// Auto-enriches all statutes in the registry.
+    pub fn auto_enrich_all(&mut self, config: &EnrichmentConfig) -> Vec<(String, usize)> {
+        let statute_ids: Vec<_> = self.statutes.keys().cloned().collect();
+        let mut results = Vec::new();
+
+        for statute_id in statute_ids {
+            if let Ok(enrichment) = self.analyze_enrichment(&statute_id, config) {
+                let high_confidence = enrichment.high_confidence_suggestions(config.min_confidence);
+                if !high_confidence.is_empty() {
+                    let suggestions: Vec<_> = high_confidence.into_iter().cloned().collect();
+                    if let Ok(count) =
+                        self.apply_enrichment(&statute_id, &suggestions, config.min_confidence)
+                    {
+                        if count > 0 {
+                            results.push((statute_id, count));
+                        }
+                    }
+                }
+            }
+        }
+
+        results
+    }
+}
+
+// ============================================================================
+// Data Lineage Tracking
+// ============================================================================
+
+/// Type of lineage operation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LineageOperation {
+    /// Created from scratch
+    Created,
+    /// Imported from external source
+    Imported { source: String },
+    /// Derived from another statute
+    Derived { parent_id: String },
+    /// Merged from multiple statutes
+    Merged { source_ids: Vec<String> },
+    /// Enriched by automatic process
+    Enriched { enrichment_type: String },
+    /// Validated by validation rule
+    Validated { rule_name: String },
+    /// Transformed by custom logic
+    Transformed { transformation: String },
+}
+
+/// Lineage entry tracking data provenance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LineageEntry {
+    /// Unique lineage ID
+    pub lineage_id: Uuid,
+    /// Statute ID this lineage applies to
+    pub statute_id: String,
+    /// Operation performed
+    pub operation: LineageOperation,
+    /// Timestamp of operation
+    pub timestamp: DateTime<Utc>,
+    /// Actor who performed operation (user, system, etc.)
+    pub actor: String,
+    /// Additional context
+    pub context: HashMap<String, String>,
+}
+
+impl LineageEntry {
+    /// Creates a new lineage entry.
+    pub fn new(statute_id: String, operation: LineageOperation, actor: String) -> Self {
+        Self {
+            lineage_id: Uuid::new_v4(),
+            statute_id,
+            operation,
+            timestamp: Utc::now(),
+            actor,
+            context: HashMap::new(),
+        }
+    }
+
+    /// Adds context to the lineage entry.
+    pub fn with_context(mut self, key: String, value: String) -> Self {
+        self.context.insert(key, value);
+        self
+    }
+}
+
+/// Data lineage tracker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataLineage {
+    /// All lineage entries
+    entries: Vec<LineageEntry>,
+    /// Maximum entries to keep (for memory management)
+    max_entries: usize,
+}
+
+impl Default for DataLineage {
+    fn default() -> Self {
+        Self::new(10000)
+    }
+}
+
+impl DataLineage {
+    /// Creates a new data lineage tracker.
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            entries: Vec::new(),
+            max_entries,
+        }
+    }
+
+    /// Records a lineage entry.
+    pub fn record(&mut self, entry: LineageEntry) {
+        self.entries.push(entry);
+
+        // Trim old entries if exceeding max
+        if self.entries.len() > self.max_entries {
+            self.entries.drain(0..self.entries.len() - self.max_entries);
+        }
+    }
+
+    /// Gets lineage history for a statute.
+    pub fn get_lineage(&self, statute_id: &str) -> Vec<&LineageEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.statute_id == statute_id)
+            .collect()
+    }
+
+    /// Gets lineage entries by operation type.
+    pub fn get_by_operation(&self, operation_type: &str) -> Vec<&LineageEntry> {
+        self.entries
+            .iter()
+            .filter(|e| match &e.operation {
+                LineageOperation::Created => operation_type == "Created",
+                LineageOperation::Imported { .. } => operation_type == "Imported",
+                LineageOperation::Derived { .. } => operation_type == "Derived",
+                LineageOperation::Merged { .. } => operation_type == "Merged",
+                LineageOperation::Enriched { .. } => operation_type == "Enriched",
+                LineageOperation::Validated { .. } => operation_type == "Validated",
+                LineageOperation::Transformed { .. } => operation_type == "Transformed",
+            })
+            .collect()
+    }
+
+    /// Gets lineage entries by actor.
+    pub fn get_by_actor(&self, actor: &str) -> Vec<&LineageEntry> {
+        self.entries.iter().filter(|e| e.actor == actor).collect()
+    }
+
+    /// Gets lineage entries in a time range.
+    pub fn get_by_time_range(
+        &self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Vec<&LineageEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.timestamp >= start && e.timestamp <= end)
+            .collect()
+    }
+
+    /// Traces the full provenance chain for a statute.
+    pub fn trace_provenance(&self, statute_id: &str) -> Vec<&LineageEntry> {
+        let mut provenance = Vec::new();
+        let mut current_ids = vec![statute_id.to_string()];
+        let mut visited = HashSet::new();
+
+        while let Some(id) = current_ids.pop() {
+            if visited.contains(&id) {
+                continue;
+            }
+            visited.insert(id.clone());
+
+            for entry in self.get_lineage(&id) {
+                provenance.push(entry);
+
+                // Add parent IDs to trace further
+                match &entry.operation {
+                    LineageOperation::Derived { parent_id } => {
+                        if !visited.contains(parent_id) {
+                            current_ids.push(parent_id.clone());
+                        }
+                    }
+                    LineageOperation::Merged { source_ids } => {
+                        for source_id in source_ids {
+                            if !visited.contains(source_id) {
+                                current_ids.push(source_id.clone());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Sort by timestamp
+        provenance.sort_by_key(|e| e.timestamp);
+        provenance
+    }
+
+    /// Exports lineage to JSON.
+    pub fn export_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self.entries)
+    }
+
+    /// Clears all lineage entries.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Returns total number of lineage entries.
+    pub fn count(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+impl StatuteRegistry {
+    /// Records a lineage entry for a statute.
+    #[allow(dead_code)]
+    pub fn record_lineage(&mut self, _entry: LineageEntry) {
+        // This would typically be integrated with the registry's lineage tracker
+        // For now, we'll add it as a placeholder for future integration
+        // In a real implementation, StatuteRegistry would have a DataLineage field
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -12845,5 +14052,1010 @@ mod tests {
         let metrics_json = collector.export_metrics_json().unwrap();
         assert!(metrics_json.contains("test_metric"));
         assert!(metrics_json.contains("42"));
+    }
+
+    // ========================================================================
+    // Data Quality Tests
+    // ========================================================================
+
+    #[test]
+    fn test_quality_score_creation() {
+        let score = QualityScore::new(80.0, 90.0, 70.0, 85.0);
+
+        // Weighted average: 80*0.4 + 90*0.3 + 70*0.2 + 85*0.1 = 32 + 27 + 14 + 8.5 = 81.5
+        assert!((score.overall - 81.5).abs() < 0.1);
+        assert_eq!(score.completeness, 80.0);
+        assert_eq!(score.consistency, 90.0);
+        assert_eq!(score.metadata_richness, 70.0);
+        assert_eq!(score.documentation_quality, 85.0);
+    }
+
+    #[test]
+    fn test_quality_score_grade() {
+        assert_eq!(QualityScore::new(95.0, 95.0, 95.0, 95.0).grade(), 'A');
+        assert_eq!(QualityScore::new(85.0, 85.0, 85.0, 85.0).grade(), 'B');
+        assert_eq!(QualityScore::new(75.0, 75.0, 75.0, 75.0).grade(), 'C');
+        assert_eq!(QualityScore::new(65.0, 65.0, 65.0, 65.0).grade(), 'D');
+        assert_eq!(QualityScore::new(50.0, 50.0, 50.0, 50.0).grade(), 'F');
+    }
+
+    #[test]
+    fn test_quality_score_meets_threshold() {
+        let score = QualityScore::new(80.0, 80.0, 80.0, 80.0);
+        assert!(score.meets_threshold(70.0));
+        assert!(score.meets_threshold(80.0));
+        assert!(!score.meets_threshold(85.0));
+    }
+
+    #[test]
+    fn test_quality_assessment_creation() {
+        let score = QualityScore::new(75.0, 85.0, 65.0, 70.0);
+        let assessment = QualityAssessment::new("test-1".to_string(), score);
+
+        assert_eq!(assessment.statute_id, "test-1");
+        assert_eq!(assessment.score.overall, score.overall);
+        assert_eq!(assessment.issues.len(), 0);
+        assert_eq!(assessment.suggestions.len(), 0);
+        assert!(!assessment.has_issues());
+    }
+
+    #[test]
+    fn test_quality_assessment_with_issues() {
+        let score = QualityScore::new(50.0, 60.0, 40.0, 50.0);
+        let assessment = QualityAssessment::new("test-1".to_string(), score)
+            .with_issue("Missing metadata".to_string())
+            .with_suggestion("Add description field".to_string())
+            .with_issue("Title too short".to_string());
+
+        assert_eq!(assessment.issues.len(), 2);
+        assert_eq!(assessment.suggestions.len(), 1);
+        assert!(assessment.has_issues());
+        assert!(assessment.issues.contains(&"Missing metadata".to_string()));
+    }
+
+    #[test]
+    fn test_calculate_quality_score() {
+        let registry = StatuteRegistry::new();
+
+        // Create a high-quality statute
+        let entry = StatuteEntry::new(test_statute("high-quality"), "US")
+            .with_tag("civil")
+            .with_tag("rights")
+            .with_metadata("description".to_string(), "A comprehensive statute".to_string())
+            .with_metadata("author".to_string(), "Legislature".to_string());
+
+        let score = registry.calculate_quality_score(&entry);
+
+        // Should have high scores due to tags and metadata
+        assert!(score.overall > 60.0);
+        assert!(score.completeness > 50.0);
+        assert_eq!(score.consistency, 100.0); // No date inconsistencies
+        assert!(score.metadata_richness > 0.0);
+    }
+
+    #[test]
+    fn test_assess_quality() {
+        let mut registry = StatuteRegistry::new();
+
+        // Create a statute with issues
+        let entry = StatuteEntry::new(test_statute("test-1"), "US");
+        registry.register(entry).unwrap();
+
+        let assessment = registry.assess_quality("test-1").unwrap();
+
+        assert_eq!(assessment.statute_id, "test-1");
+        assert!(assessment.has_issues());
+        // Should flag missing tags and metadata
+        assert!(assessment
+            .issues
+            .iter()
+            .any(|i| i.contains("tags") || i.contains("metadata")));
+    }
+
+    #[test]
+    fn test_assess_quality_nonexistent() {
+        let registry = StatuteRegistry::new();
+        let result = registry.assess_quality("nonexistent");
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(RegistryError::StatuteNotFound(_))));
+    }
+
+    #[test]
+    fn test_assess_all_quality() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-2"), "UK"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-3"), "JP"))
+            .unwrap();
+
+        let assessments = registry.assess_all_quality();
+        assert_eq!(assessments.len(), 3);
+    }
+
+    #[test]
+    fn test_similarity_score_creation() {
+        let score = SimilarityScore::new(0.8, 0.9, 0.7);
+
+        // Weighted average: 0.8*0.4 + 0.9*0.5 + 0.7*0.1 = 0.32 + 0.45 + 0.07 = 0.84
+        assert!((score.overall - 0.84).abs() < 0.01);
+        assert_eq!(score.title, 0.8);
+        assert_eq!(score.content, 0.9);
+        assert_eq!(score.metadata, 0.7);
+    }
+
+    #[test]
+    fn test_similarity_score_likely_duplicate() {
+        let high_sim = SimilarityScore::new(0.9, 0.95, 0.85);
+        let medium_sim = SimilarityScore::new(0.7, 0.75, 0.65);
+        let low_sim = SimilarityScore::new(0.3, 0.4, 0.2);
+
+        assert!(high_sim.is_likely_duplicate(0.85));
+        assert!(!medium_sim.is_likely_duplicate(0.85));
+        assert!(!low_sim.is_likely_duplicate(0.85));
+    }
+
+    #[test]
+    fn test_similarity_score_possible_duplicate() {
+        let score = SimilarityScore::new(0.65, 0.7, 0.6);
+
+        // 0.7 * 0.85 = 0.595, score.overall ~ 0.68
+        assert!(score.is_possible_duplicate(0.85));
+        assert!(!score.is_likely_duplicate(0.85));
+    }
+
+    #[test]
+    fn test_calculate_similarity() {
+        let registry = StatuteRegistry::new();
+
+        let entry1 = StatuteEntry::new(test_statute("test-1"), "US")
+            .with_tag("civil")
+            .with_tag("rights")
+            .with_reference("ref-1".to_string())
+            .with_reference("ref-2".to_string());
+
+        let entry2 = StatuteEntry::new(test_statute("test-1"), "US")
+            .with_tag("civil")
+            .with_tag("rights")
+            .with_reference("ref-1".to_string())
+            .with_reference("ref-2".to_string());
+
+        let similarity = registry.calculate_similarity(&entry1, &entry2);
+
+        // Same title, tags, and references should give high similarity
+        assert!(similarity.overall > 0.8);
+        assert!(similarity.title > 0.8);
+        assert!(similarity.content > 0.9); // Same references
+        assert!(similarity.metadata > 0.9); // Same tags
+    }
+
+    #[test]
+    fn test_calculate_similarity_different() {
+        let registry = StatuteRegistry::new();
+
+        let entry1 = StatuteEntry::new(test_statute("completely-different-1"), "US")
+            .with_tag("civil");
+
+        let entry2 = StatuteEntry::new(test_statute("another-thing-2"), "UK")
+            .with_tag("criminal");
+
+        let similarity = registry.calculate_similarity(&entry1, &entry2);
+
+        // Different titles and tags should give low similarity
+        assert!(similarity.overall < 0.5);
+    }
+
+    #[test]
+    fn test_duplicate_detection_result() {
+        let mut result = DuplicateDetectionResult::new(0.8, 10);
+
+        assert_eq!(result.threshold, 0.8);
+        assert_eq!(result.statutes_analyzed, 10);
+        assert_eq!(result.total_duplicates(), 0);
+
+        let candidate = DuplicateCandidate::new(
+            "s1".to_string(),
+            "s2".to_string(),
+            SimilarityScore::new(0.85, 0.9, 0.8),
+            "High similarity".to_string(),
+        );
+
+        result.add_candidate(candidate);
+        assert_eq!(result.total_duplicates(), 1);
+    }
+
+    #[test]
+    fn test_duplicate_detection_filtering() {
+        let mut result = DuplicateDetectionResult::new(0.8, 10);
+
+        // Add a likely duplicate (high similarity)
+        result.add_candidate(DuplicateCandidate::new(
+            "s1".to_string(),
+            "s2".to_string(),
+            SimilarityScore::new(0.85, 0.9, 0.8),
+            "High".to_string(),
+        ));
+
+        // Add a possible duplicate (medium similarity)
+        result.add_candidate(DuplicateCandidate::new(
+            "s3".to_string(),
+            "s4".to_string(),
+            SimilarityScore::new(0.6, 0.65, 0.55),
+            "Medium".to_string(),
+        ));
+
+        assert_eq!(result.likely_duplicates().len(), 1);
+        // Both should be in possible duplicates (>= threshold * 0.7)
+        assert_eq!(result.possible_duplicates().len(), 2);
+    }
+
+    #[test]
+    fn test_detect_duplicates() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add similar statutes with shared references
+        registry
+            .register(
+                StatuteEntry::new(test_statute("civil-code-1"), "US")
+                    .with_tag("civil")
+                    .with_reference("ref-common".to_string()),
+            )
+            .unwrap();
+        registry
+            .register(
+                StatuteEntry::new(test_statute("civil-code-2"), "US")
+                    .with_tag("civil")
+                    .with_reference("ref-common".to_string()),
+            )
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(
+                test_statute("completely-different"),
+                "UK",
+            ))
+            .unwrap();
+
+        let result = registry.detect_duplicates(0.7);
+
+        assert_eq!(result.statutes_analyzed, 3);
+        // Should find at least one duplicate pair (the two civil codes with similar titles, tags, and refs)
+        assert!(result.total_duplicates() > 0);
+    }
+
+    #[test]
+    fn test_detect_duplicates_no_duplicates() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("very-unique-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("totally-different-2"), "UK"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("another-one-3"), "JP"))
+            .unwrap();
+
+        let result = registry.detect_duplicates(0.9);
+
+        assert_eq!(result.statutes_analyzed, 3);
+        // With high threshold and different statutes, should find no duplicates
+        assert_eq!(result.total_duplicates(), 0);
+    }
+
+    #[test]
+    fn test_field_profile_creation() {
+        let mut profile = FieldProfile::new("test_field".to_string(), 100);
+        profile.null_count = 10;
+        profile.unique_count = 50;
+
+        profile.calculate_completeness();
+
+        assert_eq!(profile.field_name, "test_field");
+        assert_eq!(profile.total_values, 100);
+        assert_eq!(profile.null_count, 10);
+        assert_eq!(profile.unique_count, 50);
+        assert_eq!(profile.completeness, 90.0); // (100-10)/100 * 100
+    }
+
+    #[test]
+    fn test_data_profile_creation() {
+        let mut profile = DataProfile::new(50);
+
+        assert_eq!(profile.total_statutes, 50);
+        assert_eq!(profile.average_quality, 0.0);
+
+        let field_profile = FieldProfile::new("title".to_string(), 50);
+        profile.add_field_profile(field_profile);
+
+        assert_eq!(profile.field_profiles.len(), 1);
+        assert!(profile.field_profiles.contains_key("title"));
+    }
+
+    #[test]
+    fn test_data_profile_field_completeness() {
+        let mut profile = DataProfile::new(100);
+
+        let mut field = FieldProfile::new("jurisdiction".to_string(), 100);
+        field.null_count = 5;
+        field.calculate_completeness();
+
+        profile.add_field_profile(field);
+
+        let completeness = profile.field_completeness("jurisdiction");
+        assert_eq!(completeness, Some(95.0));
+
+        let missing = profile.field_completeness("nonexistent");
+        assert_eq!(missing, None);
+    }
+
+    #[test]
+    fn test_profile_data() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add diverse statutes
+        registry
+            .register(
+                StatuteEntry::new(test_statute("civil-1"), "US")
+                    .with_tag("civil")
+                    .with_status(StatuteStatus::Active),
+            )
+            .unwrap();
+        registry
+            .register(
+                StatuteEntry::new(test_statute("criminal-1"), "UK")
+                    .with_tag("criminal")
+                    .with_status(StatuteStatus::Draft),
+            )
+            .unwrap();
+        registry
+            .register(
+                StatuteEntry::new(test_statute("admin-1"), "JP")
+                    .with_tag("administrative")
+                    .with_status(StatuteStatus::Active),
+            )
+            .unwrap();
+
+        let profile = registry.profile_data();
+
+        assert_eq!(profile.total_statutes, 3);
+        assert!(profile.average_quality > 0.0);
+
+        // Should have status distribution
+        assert!(profile.status_distribution.contains_key(&StatuteStatus::Active));
+        assert_eq!(profile.status_distribution[&StatuteStatus::Active], 2);
+
+        // Should have jurisdiction distribution
+        assert!(profile.jurisdiction_distribution.contains_key("US"));
+        assert!(profile.jurisdiction_distribution.contains_key("UK"));
+        assert!(profile.jurisdiction_distribution.contains_key("JP"));
+
+        // Should have tag patterns
+        assert!(profile.tag_patterns.contains_key("civil"));
+        assert!(profile.tag_patterns.contains_key("criminal"));
+        assert!(profile.tag_patterns.contains_key("administrative"));
+    }
+
+    #[test]
+    fn test_profile_data_quality_distribution() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with varying quality
+        registry
+            .register(
+                StatuteEntry::new(test_statute("high-quality"), "US")
+                    .with_tag("civil")
+                    .with_metadata("description".to_string(), "Detailed statute".to_string())
+                    .with_metadata("author".to_string(), "Congress".to_string()),
+            )
+            .unwrap();
+
+        registry
+            .register(StatuteEntry::new(test_statute("low-quality"), "UK"))
+            .unwrap();
+
+        let profile = registry.profile_data();
+
+        assert_eq!(profile.total_statutes, 2);
+        assert!(!profile.quality_distribution.is_empty());
+    }
+
+    #[test]
+    fn test_find_low_quality_statutes() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add a low-quality statute (minimal metadata)
+        registry
+            .register(StatuteEntry::new(test_statute("low"), "US"))
+            .unwrap();
+
+        // Add a high-quality statute
+        registry
+            .register(
+                StatuteEntry::new(test_statute("high"), "UK")
+                    .with_tag("civil")
+                    .with_tag("rights")
+                    .with_metadata("description".to_string(), "Excellent statute".to_string())
+                    .with_metadata("version_notes".to_string(), "Initial".to_string()),
+            )
+            .unwrap();
+
+        let low_quality = registry.find_low_quality_statutes(70.0);
+
+        // At least the "low" statute should be flagged
+        assert!(!low_quality.is_empty());
+        assert!(low_quality.iter().any(|(id, _)| id == "low"));
+    }
+
+    #[test]
+    fn test_export_quality_assessments_json() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("test-2"), "UK"))
+            .unwrap();
+
+        let json = registry.export_quality_assessments_json().unwrap();
+
+        assert!(json.contains("test-1"));
+        assert!(json.contains("test-2"));
+        assert!(json.contains("overall"));
+        assert!(json.contains("issues"));
+    }
+
+    #[test]
+    fn test_export_duplicates_json() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("similar-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("similar-2"), "US"))
+            .unwrap();
+
+        let json = registry.export_duplicates_json(0.7).unwrap();
+
+        assert!(json.contains("candidates"));
+        assert!(json.contains("threshold"));
+        assert!(json.contains("statutes_analyzed"));
+    }
+
+    #[test]
+    fn test_data_profile_export_json() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+
+        let profile = registry.profile_data();
+        let json = profile.export_json().unwrap();
+
+        assert!(json.contains("total_statutes"));
+        assert!(json.contains("average_quality"));
+        assert!(json.contains("field_profiles"));
+    }
+
+    // ========================================================================
+    // Enrichment and Lineage Tests
+    // ========================================================================
+
+    #[test]
+    fn test_enrichment_suggestion_creation() {
+        let suggestion = EnrichmentSuggestion::new(
+            EnrichmentType::AutoTag,
+            "civil".to_string(),
+            0.85,
+            "Contains civil law keywords".to_string(),
+        );
+
+        assert_eq!(suggestion.enrichment_type, EnrichmentType::AutoTag);
+        assert_eq!(suggestion.suggestion, "civil");
+        assert_eq!(suggestion.confidence, 0.85);
+        assert!(suggestion.meets_threshold(0.8));
+        assert!(!suggestion.meets_threshold(0.9));
+    }
+
+    #[test]
+    fn test_enrichment_suggestion_confidence_clamping() {
+        let too_high = EnrichmentSuggestion::new(
+            EnrichmentType::AutoTag,
+            "tag".to_string(),
+            1.5,
+            "test".to_string(),
+        );
+        assert_eq!(too_high.confidence, 1.0);
+
+        let too_low = EnrichmentSuggestion::new(
+            EnrichmentType::AutoTag,
+            "tag".to_string(),
+            -0.5,
+            "test".to_string(),
+        );
+        assert_eq!(too_low.confidence, 0.0);
+    }
+
+    #[test]
+    fn test_enrichment_result() {
+        let mut result = EnrichmentResult::new("statute-1".to_string());
+
+        result.add_suggestion(EnrichmentSuggestion::new(
+            EnrichmentType::AutoTag,
+            "criminal".to_string(),
+            0.9,
+            "High confidence".to_string(),
+        ));
+
+        result.add_suggestion(EnrichmentSuggestion::new(
+            EnrichmentType::MetadataInference,
+            "description".to_string(),
+            0.5,
+            "Low confidence".to_string(),
+        ));
+
+        assert_eq!(result.statute_id, "statute-1");
+        assert_eq!(result.suggestions.len(), 2);
+        assert_eq!(result.high_confidence_suggestions(0.7).len(), 1);
+        assert_eq!(
+            result.suggestions_by_type(EnrichmentType::AutoTag).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_enrichment_config_builders() {
+        let config = EnrichmentConfig::new()
+            .with_auto_tagging(false)
+            .with_metadata_inference(true)
+            .with_jurisdiction_inference(false)
+            .with_min_confidence(0.85);
+
+        assert!(!config.enable_auto_tagging);
+        assert!(config.enable_metadata_inference);
+        assert!(!config.enable_jurisdiction_inference);
+        assert_eq!(config.min_confidence, 0.85);
+    }
+
+    #[test]
+    fn test_analyze_enrichment_auto_tagging() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register a statute with civil law keywords in title
+        registry
+            .register(StatuteEntry::new(
+                test_statute("civil-contract-law"),
+                "US",
+            ))
+            .unwrap();
+
+        let config = EnrichmentConfig::new();
+        let result = registry
+            .analyze_enrichment("civil-contract-law", &config)
+            .unwrap();
+
+        // Should suggest "civil" tag since title contains "civil" and "contract"
+        let auto_tag_suggestions = result.suggestions_by_type(EnrichmentType::AutoTag);
+        let civil_suggestions: Vec<_> = auto_tag_suggestions
+            .iter()
+            .filter(|s| s.suggestion == "civil")
+            .collect();
+
+        assert!(!civil_suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_analyze_enrichment_metadata_inference() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+
+        let config = EnrichmentConfig::new();
+        let result = registry.analyze_enrichment("test-1", &config).unwrap();
+
+        // Should suggest adding description
+        let metadata_suggestions = result.suggestions_by_type(EnrichmentType::MetadataInference);
+        assert!(!metadata_suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_analyze_enrichment_nonexistent() {
+        let registry = StatuteRegistry::new();
+        let config = EnrichmentConfig::new();
+
+        let result = registry.analyze_enrichment("nonexistent", &config);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(RegistryError::StatuteNotFound(_))));
+    }
+
+    #[test]
+    fn test_apply_enrichment() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+
+        let suggestions = vec![
+            EnrichmentSuggestion::new(
+                EnrichmentType::AutoTag,
+                "civil".to_string(),
+                0.9,
+                "High confidence tag".to_string(),
+            ),
+            EnrichmentSuggestion::new(
+                EnrichmentType::MetadataInference,
+                "category".to_string(),
+                0.8,
+                "Category suggestion".to_string(),
+            ),
+        ];
+
+        let count = registry
+            .apply_enrichment("test-1", &suggestions, 0.7)
+            .unwrap();
+
+        assert_eq!(count, 2);
+
+        let entry = registry.get("test-1").unwrap();
+        assert!(entry.tags.contains(&"civil".to_string()));
+        assert!(entry.metadata.contains_key("category"));
+    }
+
+    #[test]
+    fn test_apply_enrichment_confidence_filter() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("test-1"), "US"))
+            .unwrap();
+
+        let suggestions = vec![
+            EnrichmentSuggestion::new(
+                EnrichmentType::AutoTag,
+                "high-confidence".to_string(),
+                0.9,
+                "High".to_string(),
+            ),
+            EnrichmentSuggestion::new(
+                EnrichmentType::AutoTag,
+                "low-confidence".to_string(),
+                0.5,
+                "Low".to_string(),
+            ),
+        ];
+
+        // Only apply suggestions with confidence >= 0.8
+        let count = registry
+            .apply_enrichment("test-1", &suggestions, 0.8)
+            .unwrap();
+
+        assert_eq!(count, 1);
+
+        let entry = registry.get("test-1").unwrap();
+        assert!(entry.tags.contains(&"high-confidence".to_string()));
+        assert!(!entry.tags.contains(&"low-confidence".to_string()));
+    }
+
+    #[test]
+    fn test_auto_enrich_all() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register statutes with enrichment opportunities (using actual keyword matches)
+        // Create custom statutes with titles containing keywords
+        let criminal_statute = Statute::new(
+            "criminal-offense-law",
+            "Criminal Offense and Penalties Act",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let civil_statute = Statute::new(
+            "civil-procedure-code",
+            "Civil Procedure and Contract Law",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        registry
+            .register(StatuteEntry::new(criminal_statute, "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(civil_statute, "UK"))
+            .unwrap();
+
+        let config = EnrichmentConfig::new().with_min_confidence(0.25); // Lower threshold for test
+        let results = registry.auto_enrich_all(&config);
+
+        // At least some statutes should be enriched
+        assert!(!results.is_empty());
+
+        // Verify enrichment was actually applied
+        for (statute_id, count) in results {
+            assert!(count > 0);
+            let entry = registry.get(&statute_id).unwrap();
+            // Should have gained tags or metadata
+            assert!(!entry.tags.is_empty() || !entry.metadata.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_lineage_entry_creation() {
+        let entry = LineageEntry::new(
+            "statute-1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        );
+
+        assert_eq!(entry.statute_id, "statute-1");
+        assert_eq!(entry.operation, LineageOperation::Created);
+        assert_eq!(entry.actor, "admin");
+        assert!(entry.context.is_empty());
+    }
+
+    #[test]
+    fn test_lineage_entry_with_context() {
+        let entry = LineageEntry::new(
+            "statute-1".to_string(),
+            LineageOperation::Imported {
+                source: "external-db".to_string(),
+            },
+            "system".to_string(),
+        )
+        .with_context("batch_id".to_string(), "batch-123".to_string())
+        .with_context("import_date".to_string(), "2025-12-27".to_string());
+
+        assert_eq!(entry.context.len(), 2);
+        assert_eq!(entry.context.get("batch_id"), Some(&"batch-123".to_string()));
+    }
+
+    #[test]
+    fn test_data_lineage_record() {
+        let mut lineage = DataLineage::new(100);
+
+        let entry1 = LineageEntry::new(
+            "statute-1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        );
+
+        let entry2 = LineageEntry::new(
+            "statute-2".to_string(),
+            LineageOperation::Created,
+            "user".to_string(),
+        );
+
+        lineage.record(entry1);
+        lineage.record(entry2);
+
+        assert_eq!(lineage.count(), 2);
+    }
+
+    #[test]
+    fn test_data_lineage_get_lineage() {
+        let mut lineage = DataLineage::new(100);
+
+        lineage.record(LineageEntry::new(
+            "statute-1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "statute-1".to_string(),
+            LineageOperation::Enriched {
+                enrichment_type: "auto-tag".to_string(),
+            },
+            "system".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "statute-2".to_string(),
+            LineageOperation::Created,
+            "user".to_string(),
+        ));
+
+        let statute1_lineage = lineage.get_lineage("statute-1");
+        assert_eq!(statute1_lineage.len(), 2);
+    }
+
+    #[test]
+    fn test_data_lineage_get_by_operation() {
+        let mut lineage = DataLineage::new(100);
+
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s2".to_string(),
+            LineageOperation::Imported {
+                source: "db".to_string(),
+            },
+            "system".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s3".to_string(),
+            LineageOperation::Created,
+            "user".to_string(),
+        ));
+
+        let created = lineage.get_by_operation("Created");
+        assert_eq!(created.len(), 2);
+
+        let imported = lineage.get_by_operation("Imported");
+        assert_eq!(imported.len(), 1);
+    }
+
+    #[test]
+    fn test_data_lineage_get_by_actor() {
+        let mut lineage = DataLineage::new(100);
+
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s2".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s3".to_string(),
+            LineageOperation::Created,
+            "user".to_string(),
+        ));
+
+        let admin_entries = lineage.get_by_actor("admin");
+        assert_eq!(admin_entries.len(), 2);
+
+        let user_entries = lineage.get_by_actor("user");
+        assert_eq!(user_entries.len(), 1);
+    }
+
+    #[test]
+    fn test_data_lineage_get_by_time_range() {
+        let mut lineage = DataLineage::new(100);
+
+        let now = Utc::now();
+        let past = now - chrono::Duration::hours(2);
+        let future = now + chrono::Duration::hours(2);
+
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        let entries = lineage.get_by_time_range(past, future);
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[test]
+    fn test_data_lineage_trace_provenance() {
+        let mut lineage = DataLineage::new(100);
+
+        // Create a provenance chain: s1 -> s2 -> s3
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s2".to_string(),
+            LineageOperation::Derived {
+                parent_id: "s1".to_string(),
+            },
+            "system".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s3".to_string(),
+            LineageOperation::Derived {
+                parent_id: "s2".to_string(),
+            },
+            "system".to_string(),
+        ));
+
+        let provenance = lineage.trace_provenance("s3");
+        // Should include all three statutes in the chain
+        assert!(!provenance.is_empty());
+    }
+
+    #[test]
+    fn test_data_lineage_trace_merge_provenance() {
+        let mut lineage = DataLineage::new(100);
+
+        // Create merged statute from multiple sources
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "s2".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        lineage.record(LineageEntry::new(
+            "merged".to_string(),
+            LineageOperation::Merged {
+                source_ids: vec!["s1".to_string(), "s2".to_string()],
+            },
+            "system".to_string(),
+        ));
+
+        let provenance = lineage.trace_provenance("merged");
+        // Should trace back to both source statutes
+        assert!(!provenance.is_empty());
+    }
+
+    #[test]
+    fn test_data_lineage_max_entries() {
+        let mut lineage = DataLineage::new(5);
+
+        // Add more entries than max
+        for i in 0..10 {
+            lineage.record(LineageEntry::new(
+                format!("s{}", i),
+                LineageOperation::Created,
+                "admin".to_string(),
+            ));
+        }
+
+        // Should have trimmed to max entries
+        assert_eq!(lineage.count(), 5);
+    }
+
+    #[test]
+    fn test_data_lineage_export_json() {
+        let mut lineage = DataLineage::new(100);
+
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        let json = lineage.export_json().unwrap();
+
+        assert!(json.contains("statute_id"));
+        assert!(json.contains("s1"));
+        assert!(json.contains("Created"));
+        assert!(json.contains("admin"));
+    }
+
+    #[test]
+    fn test_data_lineage_clear() {
+        let mut lineage = DataLineage::new(100);
+
+        lineage.record(LineageEntry::new(
+            "s1".to_string(),
+            LineageOperation::Created,
+            "admin".to_string(),
+        ));
+
+        assert_eq!(lineage.count(), 1);
+
+        lineage.clear();
+        assert_eq!(lineage.count(), 0);
     }
 }

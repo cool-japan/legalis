@@ -70,20 +70,27 @@ use thiserror::Error;
 mod ast;
 pub mod cache;
 pub mod codegen;
+pub mod compliance;
+pub mod diff;
 pub mod docgen;
 pub mod grammar_doc;
 pub mod graph;
+pub mod htmlgen;
 pub mod import_resolver;
 pub mod incremental;
 pub mod lsp;
+pub mod metadata;
 mod parser;
 mod printer;
+pub mod profiler;
 pub mod query;
 pub mod statistics;
+pub mod templates;
 pub mod transform;
 pub mod tree_view;
 pub mod type_checker;
 pub mod validation;
+pub mod watch;
 
 #[cfg(test)]
 mod tests;
@@ -91,19 +98,28 @@ mod tests;
 pub use ast::*;
 pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
 pub use codegen::{CodeGenerator, PythonGenerator, SqlGenerator};
+pub use compliance::{ComplianceMatrix, ComplianceStats};
+pub use diff::{Change, DocumentDiff, StatuteDiff};
 pub use docgen::{DocGenerator, MarkdownGenerator};
 pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
 pub use graph::{
     DependencyGraph, GraphFormat, GraphOptions, generate_dot_graph, generate_mermaid_graph,
 };
+pub use htmlgen::{HtmlGenerator, HtmlTheme};
 pub use import_resolver::{ImportResolver, detect_circular_imports, validate_import_paths};
 pub use incremental::{IncrementalParser, TextEdit};
+pub use metadata::{
+    AmendmentAuditTrail, AuditEntry, EntityRelationships, JurisdictionHierarchy, VersionEntry,
+    VersionHistory,
+};
 pub use parser::*;
 pub use printer::*;
+pub use profiler::{ParseProfiler, ProfileComparison, ProfileReport, Profiler};
 pub use query::{ConditionSearch, StatuteQuery};
 pub use statistics::{
     ComplexityMetrics, DependencyAnalysis, DocumentStatistics, analyze_complexity,
 };
+pub use templates::{StatuteTemplate, TemplateBuilder, TemplateLibrary};
 pub use transform::{
     ConditionTransform, DeduplicateStatutes, DocumentTransform, NormalizeIds, RemoveEmptyStatutes,
     SimplifyConditions, SortByDependencies, StatuteTransform, TransformPipeline,
@@ -111,6 +127,7 @@ pub use transform::{
 pub use tree_view::TreeFormatter;
 pub use type_checker::{Type, TypeChecker, TypeContext, TypeError};
 pub use validation::{CompletenessChecker, SemanticValidator, ValidationContext, ValidationError};
+pub use watch::{FileWatcher, ValidationResult, WatchConfig};
 
 /// Serializes a LegalDocument AST to JSON string.
 pub fn to_json(doc: &ast::LegalDocument) -> Result<String, serde_json::Error> {

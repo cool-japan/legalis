@@ -699,3 +699,84 @@
 - Cross-referenced between documents
 - Practical, user-focused content
 - Suitable for both beginners and advanced users
+
+## Roadmap for 0.1.0 Series
+
+### Advanced Condition Types (v0.1.1) - COMPLETED
+- [x] Add `Composite` condition - combines multiple condition types with weights
+- [x] Add `Threshold` condition - aggregate scoring across multiple attributes
+- [x] Add `Fuzzy` condition - support for fuzzy logic membership functions
+- [x] Add `Probabilistic` condition - probability-based condition evaluation
+- [x] Add `Temporal` condition - time-sensitive condition with decay/growth functions
+- [x] Added Display implementations for all new condition types
+- [x] Added evaluation logic with linear interpolation for fuzzy membership
+- [x] Added parallel evaluation support for Composite and Probabilistic conditions
+- [x] Added helper constructor methods: composite(), threshold(), fuzzy(), probabilistic(), temporal()
+- [x] Updated count_conditions() and depth() to handle nested conditions
+- [x] Added get_current_timestamp() method to EvaluationContext trait
+- [x] All doc tests passing (5 new doc tests)
+
+### Case Law Integration (v0.1.2) - COMPLETED
+- [x] Add `Precedent::distinguish()` - distinguish current case from precedent
+- [x] Add `Precedent::follow()` - follow ratio decidendi with modifications
+- [x] Add `CaseDatabase::find_conflicting_precedents()` - detect conflicting rulings
+- [x] Add `CaseDatabase::binding_precedents_by_issue()` - find binding precedents by legal issue
+- [x] Add hierarchical court binding rules (Supreme → Appellate → Trial)
+- [x] Added helper methods: `is_binding()`, `was_distinguished()`, `was_overruled()`
+- [x] Implemented `issues_similar()` private method for keyword-based issue similarity
+- [x] Automatic precedent weight determination based on court hierarchy
+- [x] Support for Limited application when following with modifications
+- [x] All doc tests passing (4 new doc tests)
+
+### Evaluation Enhancements (v0.1.3) - PARTIALLY COMPLETED
+- [x] Add `DefaultValueContext` - wrapper providing default values for missing attributes
+- [x] Add `FallbackContext` - wrapper providing fallback evaluation strategies
+- [x] Added `with_default()` builder method for adding individual defaults
+- [x] Implemented full `EvaluationContext` trait for both wrappers
+- [x] Fallback uses OR logic for geographic and relationship checks
+- [x] All doc tests passing (2 new doc tests)
+- [ ] Add `Condition::evaluate_with_explanation()` - detailed step-by-step explanation
+- [ ] Add `Condition::partial_evaluate()` - partial evaluation with unknowns
+- [ ] Add uncertainty propagation in compound conditions
+
+### Effect System Extensions (v0.1.4)
+- [ ] Add `Effect::compose()` - compose multiple effects with priority ordering
+- [ ] Add `Effect::inverse()` - compute inverse effect for rollback
+- [ ] Add `TemporalEffect` - effects with start/end times and recurrence
+- [ ] Add `ConditionalEffect` - effects that depend on runtime conditions
+- [ ] Add effect dependency tracking and cycle detection
+
+### Statute Relationship Improvements (v0.1.5)
+- [ ] Add `Statute::derives_from()` - track derivation relationships
+- [ ] Add `Statute::applies_to()` - specify applicable entity types
+- [ ] Add `Statute::exceptions()` - structured exception handling
+- [ ] Add `StatuteGraph` - full dependency graph with visualization hooks
+- [ ] Add cross-jurisdiction statute equivalence detection
+
+### Builder Pattern Extensions (v0.1.6)
+- [ ] Add `StatuteBuilder::from_template()` - build from statute templates
+- [ ] Add `StatuteBuilder::validate_progressive()` - validation at each step
+- [ ] Add `ConditionBuilder` - fluent API for complex condition construction
+- [ ] Add `EffectBuilder` - fluent API for effect construction
+- [ ] Add macro `statute!` for declarative statute definition
+
+### Serialization & Interoperability (v0.1.7)
+- [ ] Add `Statute::to_yaml()` / `from_yaml()` - YAML serialization
+- [ ] Add `Statute::to_toml()` / `from_toml()` - TOML serialization
+- [ ] Add streaming deserialization for large statute collections
+- [ ] Add schema migration support for version changes
+- [ ] Add `Statute::hash()` - content-addressable statute hashing
+
+### Testing Utilities (v0.1.8)
+- [ ] Add `StatuteTestBuilder` - test fixture generation
+- [ ] Add `ConditionGenerator` - random condition generation for property tests
+- [ ] Add `EvaluationContextMock` - mock context for testing
+- [ ] Add snapshot testing utilities for statute serialization
+- [ ] Add mutation testing support for condition logic
+
+### Performance & Memory (v0.1.9)
+- [ ] Add arena allocator for bulk statute operations
+- [ ] Add string interning for repeated identifiers
+- [ ] Add `CompactStatute` - memory-optimized statute representation
+- [ ] Add lazy loading for statute preconditions and effects
+- [ ] Add parallel batch evaluation with work stealing

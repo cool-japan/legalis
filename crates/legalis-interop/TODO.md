@@ -104,3 +104,68 @@
 - **Zero compiler warnings**
 - **Zero clippy warnings**
 - **Clean release build**
+
+## Roadmap for 0.1.0 Series
+
+### New Format Support (v0.1.1)
+- [ ] Add OASIS LegalCite import/export
+- [ ] Add CEN MetaLex support
+- [ ] Add MPEG-21 REL (Rights Expression Language)
+- [ ] Add Creative Commons license format
+- [ ] Add SPDX license expression format
+
+### Conversion Quality (v0.1.2)
+- [ ] Add semantic loss quantification (0-100%)
+- [ ] Add structure preservation scoring
+- [ ] Add metadata completeness analysis
+- [ ] Add round-trip fidelity testing
+- [ ] Add conversion confidence calibration
+
+### Schema Support (v0.1.3)
+- [ ] Add XML Schema validation during import
+- [ ] Add JSON Schema validation for outputs
+- [ ] Add custom schema extension points
+- [ ] Add schema migration utilities
+- [ ] Add schema compatibility checking
+
+### Format Detection (v0.1.4)
+- [ ] Add automatic format detection
+- [ ] Add encoding detection (UTF-8, UTF-16, etc.)
+- [ ] Add format version detection
+- [ ] Add mixed format handling
+- [ ] Add format recommendation based on content
+
+### Batch Processing (v0.1.5)
+- [ ] Add directory-based batch conversion
+- [ ] Add watch mode for continuous conversion
+- [ ] Add parallel multi-format export
+- [ ] Add conversion pipeline configuration
+- [ ] Add resume capability for interrupted conversions
+
+### Error Handling (v0.1.6)
+- [ ] Add graceful degradation for unsupported features
+- [ ] Add partial conversion with warnings
+- [ ] Add error recovery strategies
+- [ ] Add interactive error resolution
+- [ ] Add error pattern analysis
+
+### Transformation Pipeline (v0.1.7)
+- [ ] Add custom transformation hooks
+- [ ] Add pre/post processing plugins
+- [ ] Add content normalization rules
+- [ ] Add identifier mapping tables
+- [ ] Add conditional transformation logic
+
+### Performance (v0.1.8)
+- [ ] Add lazy parsing for large documents
+- [ ] Add memory-mapped file support
+- [ ] Add conversion result caching
+- [ ] Add incremental re-conversion
+- [ ] Add parallel parsing with work stealing
+
+### Integration (v0.1.9)
+- [ ] Add CLI tool for standalone conversion
+- [ ] Add REST API for conversion service
+- [ ] Add webhook notifications for conversions
+- [ ] Add conversion metrics and logging
+- [ ] Add integration with document management systems

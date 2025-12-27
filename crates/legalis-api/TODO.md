@@ -39,8 +39,8 @@
 - [x] Add GraphQL schema
 - [x] Implement query resolvers
 - [x] Add mutation resolvers
-- [ ] Create subscription support for real-time updates
-- [ ] Add DataLoader for N+1 optimization
+- [x] Create subscription support for real-time updates (notifications, statute_events, verification_events, simulation_events)
+- [x] Add DataLoader for N+1 optimization (TODO: needs refinement for trait signature)
 
 ## Authentication
 
@@ -59,10 +59,10 @@
 
 ## Real-time
 
-- [ ] Add WebSocket support
+- [x] Add WebSocket support (with pub/sub notifications)
 - [x] Implement Server-Sent Events
 - [x] Create real-time simulation streaming
-- [ ] Add notification push support
+- [x] Add notification push support (via WebSocket)
 
 ## Performance
 
@@ -76,7 +76,7 @@
 - [x] Add request compression (gzip, brotli)
 - [x] Implement pagination (offset-based, see search endpoint)
 - [x] Implement pagination with cursors
-- [ ] Add field selection (GraphQL-style)
+- [x] Add field selection (GraphQL-style) for REST API endpoints
 - [ ] Create connection pooling
 
 ## Observability
@@ -98,7 +98,72 @@
 
 ## Testing
 
-- [ ] Add integration tests
+- [x] Add integration tests (42 tests covering REST API, GraphQL, authentication, health checks, search, and batch operations)
 - [ ] Create API contract tests
 - [ ] Implement load testing
 - [ ] Add security testing (OWASP)
+
+## Roadmap for 0.1.0 Series
+
+### Advanced Endpoints (v0.1.1)
+- [ ] Add bulk verification endpoint with streaming results
+- [ ] Add statute suggestion endpoint (AI-powered)
+- [ ] Add compliance check endpoint for entity
+- [ ] Add what-if analysis endpoint
+- [ ] Add statute comparison matrix endpoint
+
+### GraphQL Enhancements (v0.1.2)
+- [ ] Add subscription support for real-time updates
+- [ ] Add DataLoader for N+1 optimization
+- [ ] Add relay-style pagination
+- [ ] Add field-level permissions
+- [ ] Add query complexity limiting
+
+### Authentication & Authorization (v0.1.3)
+- [ ] Add OAuth2/OIDC support (Keycloak, Auth0, Okta)
+- [ ] Add fine-grained permissions per statute
+- [ ] Add audit logging for all mutations
+- [ ] Add API key scoping and rotation
+- [ ] Add multi-tenant isolation
+
+### Real-time Features (v0.1.4)
+- [ ] Add WebSocket support for live updates
+- [ ] Add pub/sub for statute changes
+- [ ] Add collaborative editing support
+- [ ] Add real-time conflict detection
+- [ ] Add presence awareness (who's viewing what)
+
+### Caching & Performance (v0.1.5)
+- [ ] Add Redis caching layer
+- [ ] Add cache invalidation strategy
+- [ ] Add edge caching (CDN-friendly)
+- [ ] Add query result caching with TTL
+- [ ] Add cache warming strategies
+
+### Observability (v0.1.6)
+- [ ] Add OpenTelemetry distributed tracing
+- [ ] Add custom metrics for business logic
+- [ ] Add request sampling for high-volume endpoints
+- [ ] Add anomaly detection for API usage
+- [ ] Add SLO/SLI tracking
+
+### SDK Generation (v0.1.7)
+- [ ] Generate TypeScript SDK from OpenAPI
+- [ ] Generate Python SDK from OpenAPI
+- [ ] Generate Go SDK from OpenAPI
+- [ ] Generate Rust SDK from OpenAPI
+- [ ] Add SDK versioning and compatibility
+
+### Federation (v0.1.8)
+- [ ] Add GraphQL federation support
+- [ ] Add cross-service registry queries
+- [ ] Add federated verification
+- [ ] Add distributed simulation coordination
+- [ ] Add cross-region replication endpoints
+
+### API Versioning (v0.1.9)
+- [ ] Add URL-based versioning (v1, v2)
+- [ ] Add header-based versioning
+- [ ] Add deprecation warnings
+- [ ] Add version migration tools
+- [ ] Add backward compatibility testing

@@ -683,3 +683,240 @@
 - [x] Proper error handling in all new functions
 - [x] Total codebase: 11,855 lines (lib.rs) + 406 lines (benchmarks) + 1,646 lines (smt.rs)
 - [x] Added ~887 new lines for evolution, patterns, and dashboard
+
+## Latest Enhancements (December 27, 2025) - Part 3: Extended Quality Metrics
+
+### New Condition Type Support
+- [x] **Extended Condition Variants in SMT Solver** (`smt.rs:552-700`):
+  - Added support for `Composite` conditions with weighted scoring and threshold checking
+  - Added support for `Threshold` conditions with attribute aggregation
+  - Added support for `Fuzzy` conditions with membership degree evaluation
+  - Added support for `Probabilistic` conditions (simplified to base condition)
+  - Added support for `Temporal` conditions with time-based value computation
+- [x] **Extended Condition Variants in Complexity Analysis** (`lib.rs:2551-2580`):
+  - Added recursive analysis for `Composite` conditions
+  - Added attribute-based analysis for `Threshold` conditions
+  - Added proper handling for `Fuzzy`, `Probabilistic`, and `Temporal` conditions
+
+### Enhanced Quality Metrics System
+- [x] **Legislative Drafting Quality Score** (`lib.rs:6773-6866`):
+  - Evaluates statute against legislative drafting best practices
+  - Checks title descriptiveness (10 points)
+  - Evaluates effect description clarity (15 points)
+  - Validates temporal validity completeness (15 points)
+  - Verifies jurisdiction specification (10 points)
+  - Assesses appropriate precondition count (15 points)
+  - Checks discretion logic presence (10 points)
+  - Validates effect type consistency with description (10 points)
+  - Evaluates metadata completeness (15 points)
+  - Returns score 0-100
+- [x] **Clarity Index** (`lib.rs:6868-6914`):
+  - Measures how clear and understandable the statute is
+  - Evaluates title clarity based on word count (15 points)
+  - Assesses effect description verbosity (20 points)
+  - Analyzes condition complexity impact on clarity (15 points)
+  - Rewards discretion logic presence (10 points)
+  - Baseline score of 50 points
+  - Returns score 0-100
+- [x] **Testability Assessment** (`lib.rs:6916-6967`):
+  - Evaluates how testable and verifiable statute conditions are
+  - Checks for concrete, measurable conditions (30 points)
+  - Validates clear effect descriptions (20 points)
+  - Assesses temporal validity for time-based testing (15 points)
+  - Checks jurisdiction for context testing (15 points)
+  - Includes helper function `is_testable_condition()` to identify testable condition types
+  - Returns score 0-100
+- [x] **Maintainability Score** (`lib.rs:6969-7023`):
+  - Assesses how easy it would be to modify or extend the statute
+  - Evaluates complexity impact on maintainability (25 points)
+  - Checks documentation quality via discretion logic (20 points)
+  - Validates reasonable precondition count (15 points)
+  - Assesses metadata clarity (20 points)
+  - Baseline score of 30 points
+  - Returns score 0-100
+
+### Supporting Functions
+- [x] **Helper Functions**:
+  - `count_all_conditions()` - Recursively counts all conditions including nested ones
+  - `count_condition_recursive()` - Counts a single condition and its children
+  - `is_testable_condition()` - Determines if a condition has concrete, measurable criteria
+
+### Updated Data Structures
+- [x] **QualityMetrics Struct** (`lib.rs:6678-6703`):
+  - Added `drafting_quality_score: f64` field
+  - Added `clarity_index: f64` field
+  - Added `testability_score: f64` field
+  - Added `maintainability_score: f64` field
+  - Updated `overall_score` calculation to average all 8 metrics
+  - Updated constructor to accept all 8 metric scores
+- [x] **Quality Report Enhancement** (`lib.rs:7211-7243`):
+  - Updated to display all 4 new quality metrics
+  - Shows detailed scores for all 8 dimensions
+
+### Comprehensive Test Coverage
+- [x] Added 9 new comprehensive tests (133 total tests passing):
+  - **Drafting Quality Tests**:
+    - `test_drafting_quality_score_high` - validates high-quality drafting
+    - `test_drafting_quality_score_low` - validates poor drafting detection
+  - **Clarity Index Tests**:
+    - `test_clarity_index_high` - validates clear, simple statutes
+    - `test_clarity_index_low` - validates complex, verbose statute detection
+  - **Testability Tests**:
+    - `test_testability_score_high` - validates testable conditions
+    - `test_testability_score_low` - validates fuzzy/custom condition detection
+  - **Maintainability Tests**:
+    - `test_maintainability_score_high` - validates well-maintained statutes
+    - `test_maintainability_score_low` - validates complex statute detection
+  - **Integration Test**:
+    - `test_comprehensive_quality_metrics` - validates all 8 metrics and overall score calculation
+
+### Build Quality
+- [x] All 133 tests passing (9 new tests added, 0 failures)
+- [x] Zero compiler warnings (NO WARNINGS POLICY compliance)
+- [x] Zero clippy warnings
+- [x] Fixed all new Condition variant support in both SMT and complexity analysis
+- [x] Comprehensive quality assessment across 8 dimensions
+- [x] Added ~319 new lines for quality metrics enhancements
+
+## Latest Enhancements (December 27, 2025) - Part 4: Ambiguity Detection
+
+### Ambiguity Detection System
+- [x] **AmbiguityType Enum** (`lib.rs:7193-7224`):
+  - `VagueTerm` - Vague or undefined terms in descriptions
+  - `OverlappingConditions` - Overlapping or conflicting conditions
+  - `UnclearEffect` - Unclear effect description
+  - `MissingDiscretion` - Missing discretion logic for complex conditions
+  - `TemporalAmbiguity` - Ambiguous temporal scope
+  - `ImplicitAssumption` - Implicit assumptions not stated
+  - `QuantifierAmbiguity` - Quantifier ambiguity (e.g., "all", "some", "any")
+  - Implements `Display` trait for user-friendly output
+  - Fully serializable with serde
+
+- [x] **Ambiguity Struct** (`lib.rs:7226-7258`):
+  - Stores detected ambiguity type
+  - Records location in statute (field name)
+  - Provides description of the ambiguity
+  - Suggests clarification
+  - Severity rating (1-10, higher is more severe)
+  - Fully serializable for export/reporting
+
+- [x] **Ambiguity Detection Function** (`lib.rs:7260-7397`):
+  - `detect_ambiguities()` - Comprehensive ambiguity detection
+  - Detects vague terms in titles and descriptions (23+ vague term patterns)
+  - Identifies unclear or empty effect descriptions
+  - Flags missing discretion logic for complex statutes (>3 conditions)
+  - Detects temporal ambiguities (missing dates)
+  - Identifies ambiguous quantifiers (8+ quantifier patterns)
+  - Detects implicit assumptions in custom conditions
+  - Optional SMT-based overlapping condition detection
+  - Automatically sorts ambiguities by severity (descending)
+
+- [x] **Helper Functions** (`lib.rs:7399-7483`):
+  - `contains_vague_terms()` - Checks for 23 vague/ambiguous terms
+  - `contains_ambiguous_quantifiers()` - Checks for 8 ambiguous quantifiers
+  - `detect_overlapping_conditions()` - SMT-based redundancy detection (optional with z3-solver feature)
+
+- [x] **Reporting Functions** (`lib.rs:7485-7595`):
+  - `ambiguity_report()` - Generates formatted report for single statute
+  - `batch_ambiguity_report()` - Batch analysis for multiple statutes
+  - Severity-based grouping (Critical 8-10, High 6-7, Medium 1-5)
+  - Detailed suggestions for each ambiguity
+  - Markdown-formatted output for readability
+
+### Comprehensive Test Coverage
+- [x] Added 13 new comprehensive tests (146 total tests passing):
+  - **Vague Term Detection**:
+    - `test_detect_vague_terms_in_title` - validates vague term detection in titles
+    - `test_detect_vague_terms_in_description` - validates vague term detection in descriptions
+  - **Unclear Effect Detection**:
+    - `test_detect_unclear_effect_empty` - validates empty effect detection
+    - `test_detect_unclear_effect_too_brief` - validates brief effect detection
+  - **Missing Discretion Detection**:
+    - `test_detect_missing_discretion` - validates complex statute discretion requirement
+  - **Temporal Ambiguity Detection**:
+    - `test_detect_temporal_ambiguity_no_dates` - validates temporal date requirement
+    - `test_detect_temporal_ambiguity_missing_effective_date` - validates effective date requirement
+  - **Quantifier Ambiguity Detection**:
+    - `test_detect_quantifier_ambiguity` - validates ambiguous quantifier detection
+  - **Implicit Assumption Detection**:
+    - `test_detect_implicit_assumption_custom_condition` - validates custom condition clarity
+  - **Well-Defined Statute Validation**:
+    - `test_no_ambiguities_well_defined_statute` - validates clean statute handling
+  - **Report Generation**:
+    - `test_ambiguity_report_generation` - validates single statute reporting
+    - `test_batch_ambiguity_report` - validates batch statute reporting
+  - **Severity Sorting**:
+    - `test_ambiguity_severity_sorting` - validates severity-based ordering
+
+### Build Quality
+- [x] All 146 tests passing (13 new ambiguity detection tests, 0 failures)
+- [x] Zero compiler warnings (NO WARNINGS POLICY compliance)
+- [x] Zero clippy warnings
+- [x] Ambiguity detection with 7 distinct ambiguity types
+- [x] Comprehensive vague term and quantifier detection
+- [x] Added ~407 new lines for ambiguity detection system
+
+## Roadmap for 0.1.0 Series
+
+### SMT Solver Enhancements (v0.1.1)
+- [ ] Add quantifier support (forall, exists)
+- [ ] Add array theory for collection conditions
+- [ ] Add bitvector theory for precise numeric modeling
+- [ ] Add uninterpreted functions for custom predicates
+- [ ] Add incremental SMT solving for performance
+
+### Temporal Verification (v0.1.2)
+- [ ] Add full LTL model checking
+- [ ] Add CTL* model checking
+- [ ] Add timed automata verification
+- [ ] Add deadline satisfaction checking
+- [ ] Add temporal property synthesis
+
+### Constitutional Principles (v0.1.3)
+- [ ] Add freedom of expression analysis
+- [ ] Add property rights verification
+- [ ] Add procedural due process checking
+- [ ] Add equal protection analysis
+- [ ] Add jurisdictional constitutionality matrix
+
+### Cross-Statute Analysis (v0.1.4)
+- [ ] Add statute interaction analysis
+- [ ] Add regulatory overlap detection
+- [ ] Add conflict cascade prediction
+- [ ] Add gap coverage analysis
+- [ ] Add redundancy elimination suggestions
+
+### Proof Generation (v0.1.5)
+- [ ] Add human-readable proof output
+- [ ] Add proof certificate export
+- [ ] Add proof visualization
+- [ ] Add interactive proof exploration
+- [ ] Add proof compression
+
+### Quality Metrics (v0.1.6)
+- [x] Add legislative drafting quality score
+- [x] Add clarity index calculation
+- [x] Add ambiguity detection
+- [x] Add testability assessment
+- [x] Add maintainability scoring
+
+### Verification Performance (v0.1.7)
+- [ ] Add incremental verification
+- [ ] Add verification caching with invalidation
+- [ ] Add parallel verification scheduling
+- [ ] Add verification budget allocation
+- [ ] Add early termination for timeouts
+
+### Reporting Extensions (v0.1.8)
+- [ ] Add compliance certification generation
+- [ ] Add regulatory filing reports
+- [ ] Add executive summary generation
+- [ ] Add custom report templates
+- [ ] Add scheduled report generation
+
+### Integration (v0.1.9)
+- [ ] Add CI/CD verification plugins
+- [ ] Add IDE integration (VS Code, IntelliJ)
+- [ ] Add Git pre-commit hooks
+- [ ] Add verification API service
+- [ ] Add verification result notifications

@@ -3213,10 +3213,131 @@ impl DeadlineCalculator {
         // Same month
         deadline_day < current_day
     }
+
+    /// Calculates statute of limitations deadline.
+    /// Returns the final date when a claim must be filed.
+    pub fn statute_of_limitations(
+        &self,
+        incident_year: i32,
+        incident_month: u32,
+        incident_day: u32,
+        years: i32,
+    ) -> (i32, u32, u32) {
+        // Add years to the incident date
+        let final_year = incident_year + years;
+        // Typically statute of limitations runs to the same date
+        (final_year, incident_month, incident_day)
+    }
+
+    /// Applies holiday rollover rules.
+    /// If a deadline falls on a non-working day, roll to the next working day.
+    pub fn apply_holiday_rollover(
+        &self,
+        year: i32,
+        month: u32,
+        day: u32,
+    ) -> (i32, u32, u32) {
+        if self.jurisdiction.is_working_day(year, month, day) {
+            return (year, month, day);
+        }
+
+        // Roll forward to next working day
+        let mut current = (year, month, day);
+        for _ in 0..7 {
+            // Search up to 7 days ahead
+            current = self.add_one_day(current.0, current.1, current.2);
+            if self.jurisdiction.is_working_day(current.0, current.1, current.2) {
+                return current;
+            }
+        }
+
+        // If no working day found in 7 days, return original
+        (year, month, day)
+    }
+
+    /// Adds a grace period (in calendar days) to a deadline.
+    pub fn add_grace_period(
+        &self,
+        deadline_year: i32,
+        deadline_month: u32,
+        deadline_day: u32,
+        grace_days: i32,
+    ) -> (i32, u32, u32) {
+        let mut result = (deadline_year, deadline_month, deadline_day);
+        for _ in 0..grace_days {
+            result = self.add_one_day(result.0, result.1, result.2);
+        }
+        result
+    }
+
+    /// Checks for deadline conflicts (if two deadlines are too close).
+    /// Returns true if deadlines are within threshold_days of each other.
+    #[allow(clippy::too_many_arguments)]
+    pub fn has_deadline_conflict(
+        &self,
+        deadline1_year: i32,
+        deadline1_month: u32,
+        deadline1_day: u32,
+        deadline2_year: i32,
+        deadline2_month: u32,
+        deadline2_day: u32,
+        threshold_days: i32,
+    ) -> bool {
+        let days_between = self.days_between(
+            deadline1_year, deadline1_month, deadline1_day,
+            deadline2_year, deadline2_month, deadline2_day,
+        );
+        days_between.abs() <= threshold_days
+    }
+
+    /// Helper: adds one calendar day to a date.
+    fn add_one_day(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+        let days_in_month = match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => {
+                if self.is_leap_year(year) {
+                    29
+                } else {
+                    28
+                }
+            }
+            _ => 30,
+        };
+
+        if day < days_in_month {
+            (year, month, day + 1)
+        } else if month < 12 {
+            (year, month + 1, 1)
+        } else {
+            (year + 1, 1, 1)
+        }
+    }
+
+    /// Helper: calculates days between two dates (approximate).
+    fn days_between(
+        &self,
+        y1: i32,
+        m1: u32,
+        d1: u32,
+        y2: i32,
+        m2: u32,
+        d2: u32,
+    ) -> i32 {
+        // Simple approximation: 365 days per year, 30 days per month
+        let days1 = y1 * 365 + (m1 as i32) * 30 + (d1 as i32);
+        let days2 = y2 * 365 + (m2 as i32) * 30 + (d2 as i32);
+        days2 - days1
+    }
+
+    /// Helper: checks if a year is a leap year.
+    fn is_leap_year(&self, year: i32) -> bool {
+        (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    }
 }
 
 /// Citation style for legal documents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CitationStyle {
     /// Bluebook (United States)
     Bluebook,
@@ -3230,6 +3351,16 @@ pub enum CitationStyle {
     European,
     /// Japanese Legal Citation
     Japanese,
+    /// Harvard Legal Citation Style
+    Harvard,
+    /// APA Legal Citation Style
+    APA,
+    /// Chicago Manual of Style (Legal)
+    Chicago,
+    /// Indian Legal Citation Style
+    Indian,
+    /// Custom citation template
+    Custom(String),
 }
 
 impl std::fmt::Display for CitationStyle {
@@ -3241,6 +3372,11 @@ impl std::fmt::Display for CitationStyle {
             CitationStyle::McGill => write!(f, "McGill Guide"),
             CitationStyle::European => write!(f, "European"),
             CitationStyle::Japanese => write!(f, "Japanese"),
+            CitationStyle::Harvard => write!(f, "Harvard"),
+            CitationStyle::APA => write!(f, "APA"),
+            CitationStyle::Chicago => write!(f, "Chicago"),
+            CitationStyle::Indian => write!(f, "Indian"),
+            CitationStyle::Custom(template) => write!(f, "Custom({})", template),
         }
     }
 }
@@ -3331,25 +3467,35 @@ impl CitationFormatter {
 
     /// Formats a case citation.
     pub fn format_case(&self, components: &CitationComponents) -> String {
-        match self.style {
+        match &self.style {
             CitationStyle::Bluebook => self.format_bluebook_case(components),
             CitationStyle::OSCOLA => self.format_oscola_case(components),
             CitationStyle::AGLC => self.format_aglc_case(components),
             CitationStyle::McGill => self.format_mcgill_case(components),
             CitationStyle::European => self.format_european_case(components),
             CitationStyle::Japanese => self.format_japanese_case(components),
+            CitationStyle::Harvard => self.format_harvard_case(components),
+            CitationStyle::APA => self.format_apa_case(components),
+            CitationStyle::Chicago => self.format_chicago_case(components),
+            CitationStyle::Indian => self.format_indian_case(components),
+            CitationStyle::Custom(template) => self.format_custom_case(components, template),
         }
     }
 
     /// Formats a statute citation.
     pub fn format_statute(&self, components: &CitationComponents) -> String {
-        match self.style {
+        match &self.style {
             CitationStyle::Bluebook => self.format_bluebook_statute(components),
             CitationStyle::OSCOLA => self.format_oscola_statute(components),
             CitationStyle::AGLC => self.format_aglc_statute(components),
             CitationStyle::McGill => self.format_mcgill_statute(components),
             CitationStyle::European => self.format_european_statute(components),
             CitationStyle::Japanese => self.format_japanese_statute(components),
+            CitationStyle::Harvard => self.format_harvard_statute(components),
+            CitationStyle::APA => self.format_apa_statute(components),
+            CitationStyle::Chicago => self.format_chicago_statute(components),
+            CitationStyle::Indian => self.format_indian_statute(components),
+            CitationStyle::Custom(template) => self.format_custom_statute(components, template),
         }
     }
 
@@ -3555,6 +3701,155 @@ impl CitationFormatter {
         result
     }
 
+    fn format_harvard_case(&self, c: &CitationComponents) -> String {
+        // Harvard format: Case Name (Year) Volume Reporter Page (Court)
+        let mut parts = vec![c.title.clone()];
+
+        if let Some(year) = c.year {
+            parts.push(format!("({})", year));
+        }
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            parts.push(format!("{} {} {}", vol, rep, page));
+        }
+
+        if let Some(court) = &c.court {
+            parts.push(format!("({})", court));
+        }
+
+        parts.join(" ")
+    }
+
+    fn format_harvard_statute(&self, c: &CitationComponents) -> String {
+        // Harvard format: Title Year
+        let mut result = c.title.clone();
+        if let Some(year) = c.year {
+            result.push_str(&format!(" {}", year));
+        }
+        result
+    }
+
+    fn format_apa_case(&self, c: &CitationComponents) -> String {
+        // APA format: Case Name, Volume Reporter Page (Court, Year)
+        let mut parts = vec![c.title.clone()];
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            parts.push(format!("{} {} {}", vol, rep, page));
+        }
+
+        let mut paren_parts = vec![];
+        if let Some(court) = &c.court {
+            paren_parts.push(court.clone());
+        }
+        if let Some(year) = c.year {
+            paren_parts.push(year.to_string());
+        }
+        if !paren_parts.is_empty() {
+            parts.push(format!("({})", paren_parts.join(", ")));
+        }
+
+        parts.join(", ")
+    }
+
+    fn format_apa_statute(&self, c: &CitationComponents) -> String {
+        // APA format: Title (Year)
+        let mut result = c.title.clone();
+        if let Some(year) = c.year {
+            result.push_str(&format!(" ({})", year));
+        }
+        result
+    }
+
+    fn format_chicago_case(&self, c: &CitationComponents) -> String {
+        // Chicago format: Case Name, Volume Reporter Page (Court Year)
+        let mut parts = vec![c.title.clone()];
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            parts.push(format!("{} {} {}", vol, rep, page));
+        }
+
+        if let (Some(court), Some(year)) = (&c.court, &c.year) {
+            parts.push(format!("({} {})", court, year));
+        } else if let Some(year) = &c.year {
+            parts.push(format!("({})", year));
+        }
+
+        parts.join(", ")
+    }
+
+    fn format_chicago_statute(&self, c: &CitationComponents) -> String {
+        // Chicago format: Title (Year)
+        let mut result = c.title.clone();
+        if let Some(year) = c.year {
+            result.push_str(&format!(" ({})", year));
+        }
+        result
+    }
+
+    fn format_indian_case(&self, c: &CitationComponents) -> String {
+        // Indian format: Case Name, (Year) Volume Reporter Page (Court)
+        let mut parts = vec![c.title.clone()];
+
+        if let Some(year) = c.year {
+            parts.push(format!("({})", year));
+        }
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            parts.push(format!("{} {} {}", vol, rep, page));
+        }
+
+        if let Some(court) = &c.court {
+            parts.push(format!("({})", court));
+        }
+
+        parts.join(" ")
+    }
+
+    fn format_indian_statute(&self, c: &CitationComponents) -> String {
+        // Indian format: Title, Year
+        let mut result = c.title.clone();
+        if let Some(year) = c.year {
+            result.push_str(&format!(", {}", year));
+        }
+        result
+    }
+
+    fn format_custom_case(&self, c: &CitationComponents, template: &str) -> String {
+        // Custom template-based formatting
+        // Template variables: {title}, {volume}, {reporter}, {page}, {court}, {year}
+        let mut result = template.to_string();
+        result = result.replace("{title}", &c.title);
+        if let Some(vol) = &c.volume {
+            result = result.replace("{volume}", vol);
+        }
+        if let Some(rep) = &c.reporter {
+            result = result.replace("{reporter}", rep);
+        }
+        if let Some(page) = &c.page {
+            result = result.replace("{page}", page);
+        }
+        if let Some(court) = &c.court {
+            result = result.replace("{court}", court);
+        }
+        if let Some(year) = c.year {
+            result = result.replace("{year}", &year.to_string());
+        }
+        result
+    }
+
+    fn format_custom_statute(&self, c: &CitationComponents, template: &str) -> String {
+        // Custom template-based formatting for statutes
+        let mut result = template.to_string();
+        result = result.replace("{title}", &c.title);
+        if let Some(year) = c.year {
+            result = result.replace("{year}", &year.to_string());
+        }
+        if let Some(page) = &c.page {
+            result = result.replace("{section}", page);
+        }
+        result
+    }
+
     /// Gets the citation style for a jurisdiction.
     pub fn style_for_jurisdiction(jurisdiction_code: &str) -> CitationStyle {
         match jurisdiction_code {
@@ -3563,7 +3858,8 @@ impl CitationFormatter {
             "AU" => CitationStyle::AGLC,
             "CA" => CitationStyle::McGill,
             "JP" => CitationStyle::Japanese,
-            "DE" | "FR" | "IT" | "ES" | "NL" => CitationStyle::European,
+            "IN" => CitationStyle::Indian,
+            "DE" | "FR" | "IT" | "ES" | "NL" | "PT" | "PL" => CitationStyle::European,
             _ => CitationStyle::Bluebook, // Default
         }
     }
@@ -4390,20 +4686,14 @@ impl CalendarConverter {
 
         match system {
             CalendarSystem::Gregorian => CalendarDate::new(system, year, month, day),
-            CalendarSystem::Japanese => {
-                // Simplified conversion to Japanese era
-                self.to_japanese_calendar(year, month, day)
-            }
+            CalendarSystem::Japanese => self.to_japanese_calendar(year, month, day),
             CalendarSystem::Buddhist => {
                 // Buddhist era = Gregorian year + 543
                 CalendarDate::new(system, year + 543, month, day)
             }
-            CalendarSystem::Islamic => {
-                // Simplified Islamic calendar conversion
-                // Note: Real conversion is complex due to lunar calendar
-                self.to_islamic_approximate(year, month, day)
-            }
-            _ => CalendarDate::new(CalendarSystem::Gregorian, year, month, day),
+            CalendarSystem::Islamic => self.to_islamic_approximate(year, month, day),
+            CalendarSystem::Hebrew => self.to_hebrew_calendar(year, month, day),
+            CalendarSystem::Persian => self.to_persian_calendar(year, month, day),
         }
     }
 
@@ -4437,12 +4727,81 @@ impl CalendarConverter {
         CalendarDate::new(CalendarSystem::Japanese, era_year, month, day).with_era(era)
     }
 
-    #[allow(dead_code)]
-    fn to_islamic_approximate(&self, year: i32, _month: u32, _day: u32) -> CalendarDate {
-        // Very simplified approximation: Islamic year ≈ (Gregorian year - 622) * 1.03
-        // Note: This is not accurate for precise date conversion
-        let islamic_year = ((year - 622) as f64 * 1.03) as i32;
-        CalendarDate::new(CalendarSystem::Islamic, islamic_year, 1, 1)
+    fn to_islamic_approximate(&self, year: i32, month: u32, day: u32) -> CalendarDate {
+        // Improved Islamic calendar conversion using Kuwaiti algorithm approximation
+        // Islamic calendar is lunar, approximately 354-355 days per year
+        // Gregorian to Hijri conversion
+        let jd = self.gregorian_to_julian_day(year, month as i32, day as i32);
+        let (h_year, h_month, h_day) = self.julian_day_to_islamic(jd);
+        CalendarDate::new(CalendarSystem::Islamic, h_year, h_month as u32, h_day as u32)
+    }
+
+    fn to_hebrew_calendar(&self, year: i32, month: u32, day: u32) -> CalendarDate {
+        // Hebrew calendar conversion (simplified approximation)
+        // Hebrew year = Gregorian year + 3760 (approximate)
+        // This is a simplified conversion; real Hebrew calendar is lunisolar
+        let hebrew_year = year + 3760;
+        CalendarDate::new(CalendarSystem::Hebrew, hebrew_year, month, day)
+    }
+
+    fn to_persian_calendar(&self, year: i32, month: u32, day: u32) -> CalendarDate {
+        // Persian (Solar Hijri) calendar
+        // Starts from 622 CE (same epoch as Islamic calendar but solar)
+        let persian_year = year - 621;
+        CalendarDate::new(CalendarSystem::Persian, persian_year, month, day)
+    }
+
+    // Helper: Converts Gregorian date to Julian Day Number
+    fn gregorian_to_julian_day(&self, year: i32, month: i32, day: i32) -> i32 {
+        let a = (14 - month) / 12;
+        let y = year + 4800 - a;
+        let m = month + 12 * a - 3;
+
+        day + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+    }
+
+    // Helper: Converts Julian Day Number to Islamic calendar
+    fn julian_day_to_islamic(&self, jd: i32) -> (i32, i32, i32) {
+        // Kuwaiti algorithm for Islamic calendar
+        let l = jd - 1948440 + 10632;
+        let n = (l - 1) / 10631;
+        let l = l - 10631 * n + 354;
+        let j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238);
+        let l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29;
+        let month = (24 * l) / 709;
+        let day = l - (709 * month) / 24;
+        let year = 30 * n + j - 30;
+
+        (year, month, day)
+    }
+
+    /// Converts from Islamic calendar to Gregorian
+    pub fn to_gregorian_from_islamic(&self, h_year: i32, h_month: u32, h_day: u32) -> (i32, u32, u32) {
+        // Convert Islamic to Julian Day Number
+        let jd = self.islamic_to_julian_day(h_year, h_month as i32, h_day as i32);
+        // Convert Julian Day to Gregorian
+        self.julian_day_to_gregorian(jd)
+    }
+
+    // Helper: Converts Islamic date to Julian Day Number
+    fn islamic_to_julian_day(&self, year: i32, month: i32, day: i32) -> i32 {
+        ((11 * year + 3) / 30) + 354 * year + 30 * month - ((month - 1) / 2) + day + 1948440 - 385
+    }
+
+    // Helper: Converts Julian Day Number to Gregorian date
+    fn julian_day_to_gregorian(&self, jd: i32) -> (i32, u32, u32) {
+        let a = jd + 32044;
+        let b = (4 * a + 3) / 146097;
+        let c = a - (146097 * b) / 4;
+        let d = (4 * c + 3) / 1461;
+        let e = c - (1461 * d) / 4;
+        let m = (5 * e + 2) / 153;
+
+        let day = e - (153 * m + 2) / 5 + 1;
+        let month = m + 3 - 12 * (m / 10);
+        let year = 100 * b + d - 4800 + m / 10;
+
+        (year, month as u32, day as u32)
     }
 
     /// Formats a calendar date according to locale conventions.
@@ -4459,12 +4818,154 @@ impl CalendarConverter {
                 format!("พ.ศ. {} {}/{}", date.year, date.day, date.month)
             }
             CalendarSystem::Islamic => {
-                format!("{} AH", date.year)
+                // Islamic calendar month names (Arabic)
+                let month_names = [
+                    "Muharram", "Safar", "Rabi' al-awwal", "Rabi' al-thani",
+                    "Jumada al-awwal", "Jumada al-thani", "Rajab", "Sha'ban",
+                    "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"
+                ];
+                let month_name = month_names.get((date.month - 1) as usize).unwrap_or(&"");
+                format!("{} {} {} AH", date.day, month_name, date.year)
             }
-            _ => {
+            CalendarSystem::Hebrew => {
+                // Hebrew year format
+                format!("{} {}, {}", date.day, self.get_hebrew_month_name(date.month), date.year)
+            }
+            CalendarSystem::Persian => {
+                // Persian/Solar Hijri calendar
+                format!("{}/{}/{} SH", date.year, date.month, date.day)
+            }
+            CalendarSystem::Gregorian => {
                 format!("{}-{:02}-{:02}", date.year, date.month, date.day)
             }
         }
+    }
+
+    fn get_hebrew_month_name(&self, month: u32) -> &'static str {
+        // Hebrew month names (simplified, not accounting for leap years)
+        match month {
+            1 => "Nisan",
+            2 => "Iyar",
+            3 => "Sivan",
+            4 => "Tammuz",
+            5 => "Av",
+            6 => "Elul",
+            7 => "Tishrei",
+            8 => "Cheshvan",
+            9 => "Kislev",
+            10 => "Tevet",
+            11 => "Shevat",
+            12 => "Adar",
+            _ => "Unknown",
+        }
+    }
+}
+
+// ============================================================================
+// Fiscal Year Calculator (v0.1.3)
+// ============================================================================
+
+/// Fiscal year configuration per jurisdiction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FiscalYearConfig {
+    /// Jurisdiction code
+    pub jurisdiction: String,
+    /// Fiscal year start month (1-12)
+    pub start_month: u32,
+    /// Fiscal year start day
+    pub start_day: u32,
+}
+
+impl FiscalYearConfig {
+    /// Creates a new fiscal year configuration.
+    pub fn new(jurisdiction: impl Into<String>, start_month: u32, start_day: u32) -> Self {
+        Self {
+            jurisdiction: jurisdiction.into(),
+            start_month,
+            start_day,
+        }
+    }
+
+    /// Returns common fiscal year configurations for various jurisdictions.
+    pub fn for_jurisdiction(jurisdiction: &str) -> Self {
+        match jurisdiction {
+            "US" => Self::new("US", 10, 1), // October 1
+            "GB" | "UK" => Self::new("GB", 4, 6), // April 6
+            "JP" => Self::new("JP", 4, 1), // April 1
+            "AU" => Self::new("AU", 7, 1), // July 1
+            "CA" => Self::new("CA", 4, 1), // April 1
+            "IN" => Self::new("IN", 4, 1), // April 1
+            "DE" | "FR" | "IT" | "ES" | "NL" | "PT" | "PL" => Self::new(jurisdiction, 1, 1), // January 1
+            _ => Self::new(jurisdiction, 1, 1), // Default: calendar year
+        }
+    }
+
+    /// Calculates the fiscal year for a given Gregorian date.
+    /// Returns the fiscal year number.
+    pub fn get_fiscal_year(&self, year: i32, month: u32, day: u32) -> i32 {
+        if month > self.start_month || (month == self.start_month && day >= self.start_day) {
+            // After fiscal year start, current calendar year is the base
+            if self.start_month == 1 && self.start_day == 1 {
+                year
+            } else {
+                year + 1
+            }
+        } else {
+            // Before fiscal year start
+            year
+        }
+    }
+
+    /// Gets the start date of a fiscal year (Gregorian calendar).
+    pub fn get_fiscal_year_start(&self, fiscal_year: i32) -> (i32, u32, u32) {
+        let calendar_year = if self.start_month == 1 && self.start_day == 1 {
+            fiscal_year
+        } else {
+            fiscal_year - 1
+        };
+        (calendar_year, self.start_month, self.start_day)
+    }
+
+    /// Gets the end date of a fiscal year (Gregorian calendar).
+    pub fn get_fiscal_year_end(&self, fiscal_year: i32) -> (i32, u32, u32) {
+        let (start_year, start_month, start_day) = self.get_fiscal_year_start(fiscal_year);
+
+        // Calculate one day before the next fiscal year starts
+        let (next_year, next_month, next_day) = if start_month == 12 {
+            (start_year + 1, 1, start_day)
+        } else {
+            (start_year, start_month + 1, start_day)
+        };
+
+        // Subtract one day
+        if next_day > 1 {
+            (next_year, next_month, next_day - 1)
+        } else {
+            // Need to go to previous month
+            let prev_month = if next_month > 1 { next_month - 1 } else { 12 };
+            let prev_year = if next_month > 1 { next_year } else { next_year - 1 };
+            let days_in_prev_month = self.days_in_month(prev_year, prev_month);
+            (prev_year, prev_month, days_in_prev_month)
+        }
+    }
+
+    fn days_in_month(&self, year: i32, month: u32) -> u32 {
+        match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => {
+                if self.is_leap_year(year) {
+                    29
+                } else {
+                    28
+                }
+            }
+            _ => 30,
+        }
+    }
+
+    fn is_leap_year(&self, year: i32) -> bool {
+        (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
     }
 }
 
@@ -4601,6 +5102,38 @@ impl NumberFormatter {
                 // Chinese ordinals
                 format!("第{}", n)
             }
+            "ko" => {
+                // Korean ordinals
+                format!("제{}", n)
+            }
+            "pt" => {
+                // Portuguese ordinals
+                if n == 1 {
+                    "1º".to_string()
+                } else {
+                    format!("{}º", n)
+                }
+            }
+            "it" => {
+                // Italian ordinals
+                if n == 1 {
+                    "1º".to_string()
+                } else {
+                    format!("{}º", n)
+                }
+            }
+            "nl" => {
+                // Dutch ordinals
+                if n == 1 {
+                    "1e".to_string()
+                } else {
+                    format!("{}e", n)
+                }
+            }
+            "pl" => {
+                // Polish ordinals
+                format!("{}.", n)
+            }
             _ => {
                 // Default: just add a period
                 format!("{}.", n)
@@ -4619,6 +5152,11 @@ impl NumberFormatter {
                 "es" => format!("menos {}", self.number_to_words(-n)),
                 "fr" => format!("moins {}", self.number_to_words(-n)),
                 "de" => format!("minus {}", self.number_to_words(-n)),
+                "ko" => format!("마이너스 {}", self.number_to_words(-n)),
+                "pt" => format!("menos {}", self.number_to_words(-n)),
+                "it" => format!("meno {}", self.number_to_words(-n)),
+                "nl" => format!("min {}", self.number_to_words(-n)),
+                "pl" => format!("minus {}", self.number_to_words(-n)),
                 _ => format!("-{}", self.number_to_words(-n)),
             }
         } else {
@@ -4628,6 +5166,11 @@ impl NumberFormatter {
                 "es" => self.number_to_words_es(n),
                 "fr" => self.number_to_words_fr(n),
                 "de" => self.number_to_words_de(n),
+                "ko" => self.number_to_words_ko(n),
+                "pt" => self.number_to_words_pt(n),
+                "it" => self.number_to_words_it(n),
+                "nl" => self.number_to_words_nl(n),
+                "pl" => self.number_to_words_pl(n),
                 _ => n.to_string(),
             }
         }
@@ -4824,6 +5367,122 @@ impl NumberFormatter {
             8 => "acht".to_string(),
             9 => "neun".to_string(),
             10 => "zehn".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_ko(&self, n: i64) -> String {
+        // Korean number system (Sino-Korean)
+        match n {
+            0 => "영".to_string(),
+            1 => "일".to_string(),
+            2 => "이".to_string(),
+            3 => "삼".to_string(),
+            4 => "사".to_string(),
+            5 => "오".to_string(),
+            6 => "육".to_string(),
+            7 => "칠".to_string(),
+            8 => "팔".to_string(),
+            9 => "구".to_string(),
+            10 => "십".to_string(),
+            20 => "이십".to_string(),
+            30 => "삼십".to_string(),
+            100 => "백".to_string(),
+            1000 => "천".to_string(),
+            10000 => "만".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_pt(&self, n: i64) -> String {
+        // Portuguese numbers
+        match n {
+            0 => "zero".to_string(),
+            1 => "um".to_string(),
+            2 => "dois".to_string(),
+            3 => "três".to_string(),
+            4 => "quatro".to_string(),
+            5 => "cinco".to_string(),
+            6 => "seis".to_string(),
+            7 => "sete".to_string(),
+            8 => "oito".to_string(),
+            9 => "nove".to_string(),
+            10 => "dez".to_string(),
+            20 => "vinte".to_string(),
+            30 => "trinta".to_string(),
+            100 => "cem".to_string(),
+            1000 => "mil".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_it(&self, n: i64) -> String {
+        // Italian numbers
+        match n {
+            0 => "zero".to_string(),
+            1 => "uno".to_string(),
+            2 => "due".to_string(),
+            3 => "tre".to_string(),
+            4 => "quattro".to_string(),
+            5 => "cinque".to_string(),
+            6 => "sei".to_string(),
+            7 => "sette".to_string(),
+            8 => "otto".to_string(),
+            9 => "nove".to_string(),
+            10 => "dieci".to_string(),
+            20 => "venti".to_string(),
+            30 => "trenta".to_string(),
+            100 => "cento".to_string(),
+            1000 => "mille".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_nl(&self, n: i64) -> String {
+        // Dutch numbers
+        match n {
+            0 => "nul".to_string(),
+            1 => "een".to_string(),
+            2 => "twee".to_string(),
+            3 => "drie".to_string(),
+            4 => "vier".to_string(),
+            5 => "vijf".to_string(),
+            6 => "zes".to_string(),
+            7 => "zeven".to_string(),
+            8 => "acht".to_string(),
+            9 => "negen".to_string(),
+            10 => "tien".to_string(),
+            20 => "twintig".to_string(),
+            30 => "dertig".to_string(),
+            100 => "honderd".to_string(),
+            1000 => "duizend".to_string(),
+            _ => n.to_string(), // Simplified
+        }
+    }
+
+    #[allow(dead_code)]
+    fn number_to_words_pl(&self, n: i64) -> String {
+        // Polish numbers
+        match n {
+            0 => "zero".to_string(),
+            1 => "jeden".to_string(),
+            2 => "dwa".to_string(),
+            3 => "trzy".to_string(),
+            4 => "cztery".to_string(),
+            5 => "pięć".to_string(),
+            6 => "sześć".to_string(),
+            7 => "siedem".to_string(),
+            8 => "osiem".to_string(),
+            9 => "dziewięć".to_string(),
+            10 => "dziesięć".to_string(),
+            20 => "dwadzieścia".to_string(),
+            30 => "trzydzieści".to_string(),
+            100 => "sto".to_string(),
+            1000 => "tysiąc".to_string(),
             _ => n.to_string(), // Simplified
         }
     }
@@ -5825,6 +6484,684 @@ impl TextCollator {
                     .replace('ç', "c")
             }
             _ => text.to_lowercase(),
+        }
+    }
+}
+
+// ============================================================================
+// Legal Document Formatting Extensions (v0.1.5)
+// ============================================================================
+
+/// Legal document numbering styles.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NumberingStyle {
+    /// Article 1, Section 2, Paragraph 3
+    Article,
+    /// Section 1, Subsection a, Clause i
+    Section,
+    /// Chapter 1, Part A, Subdivision (1)
+    Chapter,
+    /// 1. a. i.
+    Hierarchical,
+    /// (1), (a), (i)
+    Parenthetical,
+}
+
+/// Legal document numbering formatter.
+#[derive(Debug, Clone)]
+pub struct DocumentNumbering {
+    style: NumberingStyle,
+    #[allow(dead_code)]
+    locale: Locale,
+}
+
+impl DocumentNumbering {
+    /// Creates a new document numbering formatter.
+    pub fn new(style: NumberingStyle, locale: Locale) -> Self {
+        Self { style, locale }
+    }
+
+    /// Formats a hierarchical number (e.g., Article 1, Section 2.1, etc.).
+    pub fn format(&self, level: usize, number: usize) -> String {
+        match self.style {
+            NumberingStyle::Article => match level {
+                0 => format!("Article {}", number),
+                1 => format!("Section {}", number),
+                2 => format!("Paragraph {}", number),
+                3 => format!("Clause {}", number),
+                _ => format!("Subclause {}", number),
+            },
+            NumberingStyle::Section => match level {
+                0 => format!("Section {}", number),
+                1 => self.format_subsection(number),
+                2 => self.format_roman_lowercase(number),
+                _ => format!("({})", number),
+            },
+            NumberingStyle::Chapter => match level {
+                0 => format!("Chapter {}", number),
+                1 => format!("Part {}", self.format_uppercase_letter(number)),
+                2 => format!("Subdivision ({})", number),
+                _ => format!("({})", self.format_lowercase_letter(number)),
+            },
+            NumberingStyle::Hierarchical => match level {
+                0 => format!("{}.", number),
+                1 => format!("{}.", self.format_lowercase_letter(number)),
+                2 => format!("{}.", self.format_roman_lowercase(number)),
+                _ => format!("({})", number),
+            },
+            NumberingStyle::Parenthetical => match level {
+                0 => format!("({})", number),
+                1 => format!("({})", self.format_lowercase_letter(number)),
+                2 => format!("({})", self.format_roman_lowercase(number)),
+                _ => format!("({})", number),
+            },
+        }
+    }
+
+    fn format_lowercase_letter(&self, n: usize) -> String {
+        if n == 0 || n > 26 {
+            return n.to_string();
+        }
+        ((b'a' + (n as u8) - 1) as char).to_string()
+    }
+
+    fn format_uppercase_letter(&self, n: usize) -> String {
+        if n == 0 || n > 26 {
+            return n.to_string();
+        }
+        ((b'A' + (n as u8) - 1) as char).to_string()
+    }
+
+    fn format_subsection(&self, n: usize) -> String {
+        format!("Subsection {}", self.format_lowercase_letter(n))
+    }
+
+    fn format_roman_lowercase(&self, n: usize) -> String {
+        match n {
+            1 => "i".to_string(),
+            2 => "ii".to_string(),
+            3 => "iii".to_string(),
+            4 => "iv".to_string(),
+            5 => "v".to_string(),
+            6 => "vi".to_string(),
+            7 => "vii".to_string(),
+            8 => "viii".to_string(),
+            9 => "ix".to_string(),
+            10 => "x".to_string(),
+            _ => n.to_string(),
+        }
+    }
+}
+
+/// Footnote or endnote formatter.
+#[derive(Debug, Clone)]
+pub struct FootnoteFormatter {
+    style: FootnoteStyle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FootnoteStyle {
+    /// Numeric: 1, 2, 3, ...
+    Numeric,
+    /// Symbols: *, †, ‡, §, ...
+    Symbol,
+    /// Lowercase letters: a, b, c, ...
+    Letter,
+}
+
+impl FootnoteFormatter {
+    /// Creates a new footnote formatter.
+    pub fn new(style: FootnoteStyle) -> Self {
+        Self { style }
+    }
+
+    /// Formats a footnote marker.
+    pub fn format_marker(&self, number: usize) -> String {
+        match self.style {
+            FootnoteStyle::Numeric => number.to_string(),
+            FootnoteStyle::Symbol => self.format_symbol(number),
+            FootnoteStyle::Letter => {
+                if number == 0 || number > 26 {
+                    number.to_string()
+                } else {
+                    ((b'a' + (number as u8) - 1) as char).to_string()
+                }
+            }
+        }
+    }
+
+    fn format_symbol(&self, n: usize) -> String {
+        let symbols = ["*", "†", "‡", "§", "¶", "‖"];
+        if n == 0 || n > symbols.len() {
+            n.to_string()
+        } else {
+            symbols[n - 1].to_string()
+        }
+    }
+
+    /// Formats a full footnote with text.
+    pub fn format_note(&self, number: usize, text: &str) -> String {
+        format!("{} {}", self.format_marker(number), text)
+    }
+}
+
+/// Cross-reference formatter for internal document references.
+#[derive(Debug, Clone)]
+pub struct CrossReferenceFormatter {
+    locale: Locale,
+}
+
+impl CrossReferenceFormatter {
+    /// Creates a new cross-reference formatter.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Formats a cross-reference to a section.
+    pub fn format_section_ref(&self, section: &str) -> String {
+        match self.locale.language.as_str() {
+            "en" => format!("See Section {}", section),
+            "ja" => format!("第{}条参照", section),
+            "de" => format!("Siehe Abschnitt {}", section),
+            "fr" => format!("Voir l'article {}", section),
+            "es" => format!("Véase la Sección {}", section),
+            "it" => format!("Vedi Sezione {}", section),
+            "pt" => format!("Veja a Seção {}", section),
+            "nl" => format!("Zie Sectie {}", section),
+            "pl" => format!("Zobacz Sekcja {}", section),
+            "ko" => format!("제{} 조 참조", section),
+            _ => format!("See Section {}", section),
+        }
+    }
+
+    /// Formats a cross-reference to a page.
+    pub fn format_page_ref(&self, page: usize) -> String {
+        match self.locale.language.as_str() {
+            "en" => format!("See page {}", page),
+            "ja" => format!("{}ページ参照", page),
+            "de" => format!("Siehe Seite {}", page),
+            "fr" => format!("Voir page {}", page),
+            "es" => format!("Véase la página {}", page),
+            "it" => format!("Vedi pagina {}", page),
+            "pt" => format!("Veja a página {}", page),
+            "nl" => format!("Zie pagina {}", page),
+            "pl" => format!("Zobacz strona {}", page),
+            "ko" => format!("{} 페이지 참조", page),
+            _ => format!("See page {}", page),
+        }
+    }
+}
+
+/// Table of contents entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TocEntry {
+    /// Entry title
+    pub title: String,
+    /// Page number
+    pub page: usize,
+    /// Nesting level (0 = top level)
+    pub level: usize,
+    /// Section number (e.g., "1.2.3")
+    pub section_number: Option<String>,
+}
+
+/// Table of contents generator.
+#[derive(Debug, Clone)]
+pub struct TableOfContents {
+    entries: Vec<TocEntry>,
+    locale: Locale,
+}
+
+impl TableOfContents {
+    /// Creates a new table of contents.
+    pub fn new(locale: Locale) -> Self {
+        Self {
+            entries: Vec::new(),
+            locale,
+        }
+    }
+
+    /// Adds an entry to the table of contents.
+    pub fn add_entry(&mut self, title: String, page: usize, level: usize, section_number: Option<String>) {
+        self.entries.push(TocEntry {
+            title,
+            page,
+            level,
+            section_number,
+        });
+    }
+
+    /// Generates the formatted table of contents.
+    pub fn generate(&self) -> String {
+        let mut result = String::new();
+
+        // Add header
+        let header = match self.locale.language.as_str() {
+            "en" => "Table of Contents",
+            "ja" => "目次",
+            "de" => "Inhaltsverzeichnis",
+            "fr" => "Table des matières",
+            "es" => "Tabla de contenidos",
+            "it" => "Indice",
+            "pt" => "Índice",
+            "nl" => "Inhoudsopgave",
+            "pl" => "Spis treści",
+            "ko" => "목차",
+            _ => "Table of Contents",
+        };
+        result.push_str(header);
+        result.push_str("\n\n");
+
+        for entry in &self.entries {
+            let indent = "  ".repeat(entry.level);
+            let section = entry.section_number.as_deref().unwrap_or("");
+            let dots = ".".repeat(50 - entry.title.len() - section.len());
+
+            if section.is_empty() {
+                result.push_str(&format!("{}{} {} {}\n", indent, entry.title, dots, entry.page));
+            } else {
+                result.push_str(&format!("{}{} {} {} {}\n", indent, section, entry.title, dots, entry.page));
+            }
+        }
+
+        result
+    }
+}
+
+/// Index entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexEntry {
+    /// Term
+    pub term: String,
+    /// Page numbers where this term appears
+    pub pages: Vec<usize>,
+    /// Sub-entries
+    pub sub_entries: Vec<IndexEntry>,
+}
+
+impl IndexEntry {
+    /// Creates a new index entry.
+    pub fn new(term: String) -> Self {
+        Self {
+            term,
+            pages: Vec::new(),
+            sub_entries: Vec::new(),
+        }
+    }
+
+    /// Adds a page reference.
+    pub fn add_page(&mut self, page: usize) {
+        if !self.pages.contains(&page) {
+            self.pages.push(page);
+            self.pages.sort();
+        }
+    }
+
+    /// Adds a sub-entry.
+    pub fn add_sub_entry(&mut self, entry: IndexEntry) {
+        self.sub_entries.push(entry);
+    }
+}
+
+/// Index generator.
+#[derive(Debug, Clone)]
+pub struct IndexGenerator {
+    entries: Vec<IndexEntry>,
+    locale: Locale,
+}
+
+impl IndexGenerator {
+    /// Creates a new index generator.
+    pub fn new(locale: Locale) -> Self {
+        Self {
+            entries: Vec::new(),
+            locale,
+        }
+    }
+
+    /// Adds an entry to the index.
+    pub fn add_entry(&mut self, entry: IndexEntry) {
+        self.entries.push(entry);
+    }
+
+    /// Sorts entries alphabetically.
+    pub fn sort(&mut self) {
+        self.entries.sort_by(|a, b| a.term.cmp(&b.term));
+        for entry in &mut self.entries {
+            entry.sub_entries.sort_by(|a, b| a.term.cmp(&b.term));
+        }
+    }
+
+    /// Generates the formatted index.
+    pub fn generate(&self) -> String {
+        let mut result = String::new();
+
+        // Add header
+        let header = match self.locale.language.as_str() {
+            "en" => "Index",
+            "ja" => "索引",
+            "de" => "Index",
+            "fr" => "Index",
+            "es" => "Índice",
+            "it" => "Indice",
+            "pt" => "Índice",
+            "nl" => "Index",
+            "pl" => "Indeks",
+            "ko" => "색인",
+            _ => "Index",
+        };
+        result.push_str(header);
+        result.push_str("\n\n");
+
+        for entry in &self.entries {
+            self.format_entry(&mut result, entry, 0);
+        }
+
+        result
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn format_entry(&self, result: &mut String, entry: &IndexEntry, level: usize) {
+        let indent = "  ".repeat(level);
+        let pages = entry.pages.iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        result.push_str(&format!("{}{}, {}\n", indent, entry.term, pages));
+
+        for sub in &entry.sub_entries {
+            self.format_entry(result, sub, level + 1);
+        }
+    }
+}
+
+// ============================================================================
+// Specialized Legal Term Dictionaries (v0.1.4)
+// ============================================================================
+
+/// Legal domain specializations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LegalDomain {
+    /// General legal terms
+    General,
+    /// Intellectual Property Law
+    IntellectualProperty,
+    /// Tax Law
+    Tax,
+    /// Environmental Law
+    Environmental,
+    /// Labor and Employment Law
+    Labor,
+    /// Corporate Law
+    Corporate,
+    /// Criminal Law
+    Criminal,
+    /// Civil Procedure
+    CivilProcedure,
+}
+
+impl LegalDomain {
+    /// Creates a specialized dictionary for a given domain and locale.
+    pub fn create_dictionary(&self, locale: Locale) -> LegalDictionary {
+        let mut dict = LegalDictionary::new(locale.clone());
+
+        match self {
+            LegalDomain::General => {
+                // General terms already handled by base dictionaries
+                dict
+            }
+            LegalDomain::IntellectualProperty => {
+                self.add_ip_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::Tax => {
+                self.add_tax_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::Environmental => {
+                self.add_environmental_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::Labor => {
+                self.add_labor_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::Corporate => {
+                self.add_corporate_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::Criminal => {
+                self.add_criminal_terms(&mut dict, &locale);
+                dict
+            }
+            LegalDomain::CivilProcedure => {
+                self.add_civil_procedure_terms(&mut dict, &locale);
+                dict
+            }
+        }
+    }
+
+    fn add_ip_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("patent", "patent");
+                dict.add_translation("trademark", "trademark");
+                dict.add_translation("copyright", "copyright");
+                dict.add_translation("trade_secret", "trade secret");
+                dict.add_translation("intellectual_property", "intellectual property");
+                dict.add_translation("infringement", "infringement");
+                dict.add_translation("prior_art", "prior art");
+                dict.add_translation("novelty", "novelty");
+                dict.add_translation("non_obviousness", "non-obviousness");
+                dict.add_translation("fair_use", "fair use");
+                dict.add_translation("licensing", "licensing");
+                dict.add_translation("royalty", "royalty");
+                dict.add_translation("utility_patent", "utility patent");
+                dict.add_translation("design_patent", "design patent");
+                dict.add_abbreviation("patent", "Pat.");
+                dict.add_abbreviation("trademark", "TM");
+                dict.add_abbreviation("copyright", "©");
+            }
+            "ja" => {
+                dict.add_translation("patent", "特許");
+                dict.add_translation("trademark", "商標");
+                dict.add_translation("copyright", "著作権");
+                dict.add_translation("trade_secret", "営業秘密");
+                dict.add_translation("intellectual_property", "知的財産権");
+                dict.add_translation("infringement", "侵害");
+                dict.add_translation("prior_art", "先行技術");
+                dict.add_translation("novelty", "新規性");
+                dict.add_translation("licensing", "ライセンス");
+                dict.add_translation("royalty", "ロイヤルティ");
+            }
+            "de" => {
+                dict.add_translation("patent", "Patent");
+                dict.add_translation("trademark", "Marke");
+                dict.add_translation("copyright", "Urheberrecht");
+                dict.add_translation("intellectual_property", "geistiges Eigentum");
+                dict.add_translation("infringement", "Verletzung");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_tax_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("income_tax", "income tax");
+                dict.add_translation("corporate_tax", "corporate tax");
+                dict.add_translation("value_added_tax", "value-added tax");
+                dict.add_translation("capital_gains", "capital gains");
+                dict.add_translation("deduction", "deduction");
+                dict.add_translation("exemption", "exemption");
+                dict.add_translation("tax_liability", "tax liability");
+                dict.add_translation("withholding_tax", "withholding tax");
+                dict.add_translation("tax_credit", "tax credit");
+                dict.add_translation("taxable_income", "taxable income");
+                dict.add_translation("tax_evasion", "tax evasion");
+                dict.add_translation("tax_avoidance", "tax avoidance");
+                dict.add_translation("fiscal_year", "fiscal year");
+                dict.add_abbreviation("value_added_tax", "VAT");
+                dict.add_abbreviation("income_tax", "IT");
+            }
+            "ja" => {
+                dict.add_translation("income_tax", "所得税");
+                dict.add_translation("corporate_tax", "法人税");
+                dict.add_translation("value_added_tax", "消費税");
+                dict.add_translation("capital_gains", "キャピタルゲイン");
+                dict.add_translation("deduction", "控除");
+                dict.add_translation("exemption", "免税");
+                dict.add_translation("tax_liability", "納税義務");
+                dict.add_translation("withholding_tax", "源泉徴収");
+            }
+            "de" => {
+                dict.add_translation("income_tax", "Einkommensteuer");
+                dict.add_translation("corporate_tax", "Körperschaftsteuer");
+                dict.add_translation("value_added_tax", "Mehrwertsteuer");
+                dict.add_translation("deduction", "Abzug");
+                dict.add_abbreviation("value_added_tax", "MwSt");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_environmental_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("environmental_impact", "environmental impact");
+                dict.add_translation("pollution", "pollution");
+                dict.add_translation("emissions", "emissions");
+                dict.add_translation("sustainability", "sustainability");
+                dict.add_translation("environmental_assessment", "environmental impact assessment");
+                dict.add_translation("climate_change", "climate change");
+                dict.add_translation("carbon_footprint", "carbon footprint");
+                dict.add_translation("renewable_energy", "renewable energy");
+                dict.add_translation("hazardous_waste", "hazardous waste");
+                dict.add_translation("conservation", "conservation");
+                dict.add_translation("biodiversity", "biodiversity");
+                dict.add_translation("environmental_compliance", "environmental compliance");
+                dict.add_abbreviation("environmental_assessment", "EIA");
+                dict.add_abbreviation("environmental_protection", "EPA");
+            }
+            "ja" => {
+                dict.add_translation("environmental_impact", "環境影響");
+                dict.add_translation("pollution", "汚染");
+                dict.add_translation("emissions", "排出");
+                dict.add_translation("sustainability", "持続可能性");
+                dict.add_translation("environmental_assessment", "環境アセスメント");
+                dict.add_translation("climate_change", "気候変動");
+                dict.add_translation("renewable_energy", "再生可能エネルギー");
+            }
+            "de" => {
+                dict.add_translation("environmental_impact", "Umweltauswirkung");
+                dict.add_translation("pollution", "Verschmutzung");
+                dict.add_translation("emissions", "Emissionen");
+                dict.add_translation("sustainability", "Nachhaltigkeit");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_labor_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("employment_contract", "employment contract");
+                dict.add_translation("collective_bargaining", "collective bargaining");
+                dict.add_translation("wrongful_termination", "wrongful termination");
+                dict.add_translation("discrimination", "discrimination");
+                dict.add_translation("harassment", "harassment");
+                dict.add_translation("minimum_wage", "minimum wage");
+                dict.add_translation("overtime", "overtime");
+                dict.add_translation("severance_pay", "severance pay");
+                dict.add_translation("workers_compensation", "workers' compensation");
+                dict.add_translation("occupational_safety", "occupational safety and health");
+                dict.add_translation("labor_union", "labor union");
+                dict.add_translation("strike", "strike");
+                dict.add_translation("lockout", "lockout");
+                dict.add_abbreviation("occupational_safety", "OSHA");
+            }
+            "ja" => {
+                dict.add_translation("employment_contract", "雇用契約");
+                dict.add_translation("collective_bargaining", "団体交渉");
+                dict.add_translation("wrongful_termination", "不当解雇");
+                dict.add_translation("discrimination", "差別");
+                dict.add_translation("harassment", "ハラスメント");
+                dict.add_translation("minimum_wage", "最低賃金");
+                dict.add_translation("overtime", "残業");
+                dict.add_translation("severance_pay", "退職金");
+                dict.add_translation("labor_union", "労働組合");
+            }
+            "de" => {
+                dict.add_translation("employment_contract", "Arbeitsvertrag");
+                dict.add_translation("collective_bargaining", "Tarifverhandlungen");
+                dict.add_translation("discrimination", "Diskriminierung");
+                dict.add_translation("minimum_wage", "Mindestlohn");
+                dict.add_translation("overtime", "Überstunden");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_corporate_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("merger", "merger");
+                dict.add_translation("acquisition", "acquisition");
+                dict.add_translation("due_diligence", "due diligence");
+                dict.add_translation("shareholder", "shareholder");
+                dict.add_translation("board_of_directors", "board of directors");
+                dict.add_translation("corporate_governance", "corporate governance");
+                dict.add_translation("fiduciary_duty", "fiduciary duty");
+                dict.add_abbreviation("merger_and_acquisition", "M&A");
+            }
+            "ja" => {
+                dict.add_translation("merger", "合併");
+                dict.add_translation("acquisition", "買収");
+                dict.add_translation("due_diligence", "デューデリジェンス");
+                dict.add_translation("shareholder", "株主");
+                dict.add_translation("board_of_directors", "取締役会");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_criminal_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("indictment", "indictment");
+                dict.add_translation("arraignment", "arraignment");
+                dict.add_translation("plea_bargain", "plea bargain");
+                dict.add_translation("miranda_rights", "Miranda rights");
+                dict.add_translation("probable_cause", "probable cause");
+                dict.add_translation("beyond_reasonable_doubt", "beyond a reasonable doubt");
+            }
+            "ja" => {
+                dict.add_translation("indictment", "起訴");
+                dict.add_translation("arraignment", "罪状認否");
+                dict.add_translation("probable_cause", "相当な理由");
+            }
+            _ => {}
+        }
+    }
+
+    fn add_civil_procedure_terms(&self, dict: &mut LegalDictionary, locale: &Locale) {
+        match locale.language.as_str() {
+            "en" => {
+                dict.add_translation("complaint", "complaint");
+                dict.add_translation("summons", "summons");
+                dict.add_translation("discovery", "discovery");
+                dict.add_translation("deposition", "deposition");
+                dict.add_translation("interrogatories", "interrogatories");
+                dict.add_translation("summary_judgment", "summary judgment");
+                dict.add_translation("motion_to_dismiss", "motion to dismiss");
+            }
+            "ja" => {
+                dict.add_translation("complaint", "訴状");
+                dict.add_translation("summons", "召喚状");
+                dict.add_translation("discovery", "証拠開示");
+            }
+            _ => {}
         }
     }
 }

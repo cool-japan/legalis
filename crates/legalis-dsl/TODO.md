@@ -154,7 +154,7 @@
 - [x] Implement SQL DDL/DQL generator for statute rules
 - [x] Add Prolog predicate generator
 - [x] Create Python function generator
-- [ ] Support custom templates for code generation
+- [x] Support custom templates for code generation (via template system)
 - [x] Add roundtrip testing for generated code
 
 ### Advanced Semantic Analysis
@@ -165,34 +165,34 @@
 - [x] Value range analysis for numeric conditions
 - [ ] Consistency checking across related statutes
 
-### Performance & Profiling
-- [ ] Add detailed performance profiling utilities
-- [ ] Implement parse time breakdown by component
-- [ ] Create memory usage profiler
-- [ ] Add benchmark comparison tools
-- [ ] Optimize hot paths identified by profiling
+### Performance & Profiling (2025-12-27)
+- [x] Add detailed performance profiling utilities
+- [x] Implement parse time breakdown by component
+- [x] Create memory usage profiler
+- [x] Add benchmark comparison tools
+- [x] Optimize hot paths identified by profiling
 
-### Statute Templates & Macros
-- [ ] Design template/macro system for common patterns
-- [ ] Support parameterized statute templates
-- [ ] Add template expansion and instantiation
-- [ ] Create standard template library
-- [ ] Implement template validation
+### Statute Templates & Macros (2025-12-27)
+- [x] Design template/macro system for common patterns
+- [x] Support parameterized statute templates
+- [x] Add template expansion and instantiation
+- [x] Create standard template library
+- [x] Implement template validation
 
-### Documentation Generation
-- [ ] Generate HTML documentation from AST
+### Documentation Generation (2025-12-27)
+- [x] Generate HTML documentation from AST
 - [ ] Create PDF export using LaTeX
 - [x] Add Markdown documentation generator
 - [x] Generate statute dependency diagrams
 - [x] Create cross-reference tables
 - [ ] Add search index generation
 
-### Metadata & Extraction
-- [ ] Extract jurisdiction hierarchy
-- [ ] Build temporal version history
-- [ ] Generate compliance matrices
-- [ ] Extract entity relationships
-- [ ] Create audit trail from amendments
+### Metadata & Extraction (2025-12-27)
+- [x] Extract jurisdiction hierarchy
+- [x] Build temporal version history
+- [x] Generate compliance matrices
+- [x] Extract entity relationships
+- [x] Create audit trail from amendments
 
 ### Testing & Quality
 - [x] Add property-based testing with proptest
@@ -201,9 +201,74 @@
 - [x] Implement snapshot testing for AST
 - [x] Create test case generators
 
-### Integration & Tooling
+### Integration & Tooling (2025-12-27)
 - [ ] Add GitHub Actions workflow support
 - [ ] Create pre-commit hooks for validation
 - [ ] Add VS Code extension improvements
-- [ ] Implement watch mode for continuous validation
-- [ ] Create diff tool for statute comparison
+- [x] Implement watch mode for continuous validation
+- [x] Create diff tool for statute comparison
+
+## Roadmap for 0.1.0 Series
+
+### Grammar Extensions (v0.1.1)
+- [ ] Add `DELEGATE` clause - delegation of authority to other statutes
+- [ ] Add `PRIORITY` clause - explicit priority ordering for conflicts
+- [ ] Add `SCOPE` clause - define applicable entity types
+- [ ] Add `CONSTRAINT` clause - invariant expressions that must hold
+- [ ] Add string interpolation in effect descriptions `${variable}`
+
+### Advanced Parsing (v0.1.2)
+- [ ] Add Unicode identifier support (Japanese, Chinese legal terms)
+- [ ] Add heredoc syntax for multi-line strings
+- [ ] Add escape sequences in string literals
+- [ ] Add scientific notation for numeric literals
+- [ ] Add binary/hex/octal numeric literals for technical codes
+
+### Type System (v0.1.3)
+- [ ] Add type annotations for condition values `age: Integer`
+- [ ] Add type inference for unannotated conditions
+- [ ] Add type checking for comparison operators
+- [ ] Add enum types for constrained values `status: Active | Inactive`
+- [ ] Add type aliases `type Currency = Decimal`
+
+### Module System (v0.1.4)
+- [ ] Add namespace support `namespace tax.income.2024`
+- [ ] Add wildcard imports `IMPORT tax.income.*`
+- [ ] Add selective imports `IMPORT { credit, deduction } FROM tax.income`
+- [ ] Add re-exports for public API curation
+- [ ] Add private/public visibility modifiers
+
+### Macro System (v0.1.5)
+- [ ] Add macro definition syntax `MACRO benefit_eligibility($age, $income)`
+- [ ] Add macro expansion with hygiene
+- [ ] Add variadic macro parameters
+- [ ] Add conditional macro expansion `#IF`, `#ELSE`
+- [ ] Add built-in macros for common patterns
+
+### Error Recovery (v0.1.6)
+- [ ] Add panic mode recovery for syntax errors
+- [ ] Add missing delimiter insertion
+- [ ] Add typo correction with Levenshtein distance
+- [ ] Add contextual error messages based on parser state
+- [ ] Add multi-error reporting per parse
+
+### LSP Enhancements (v0.1.7)
+- [ ] Add semantic tokens for syntax highlighting
+- [ ] Add inlay hints for inferred types
+- [ ] Add code lens for statute references count
+- [ ] Add signature help for condition constructors
+- [ ] Add document symbols hierarchy
+
+### Optimization (v0.1.8)
+- [ ] Add condition hoisting (move invariant conditions up)
+- [ ] Add common subexpression elimination
+- [ ] Add dead condition elimination
+- [ ] Add condition reordering for short-circuit optimization
+- [ ] Add constant folding for static expressions
+
+### Code Generation Targets (v0.1.9)
+- [ ] Add TypeScript/JavaScript generator
+- [ ] Add Go generator
+- [ ] Add Rust generator (for embedding)
+- [ ] Add Java generator
+- [ ] Add C# generator

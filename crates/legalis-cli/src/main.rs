@@ -168,6 +168,69 @@ async fn main() -> Result<()> {
         } => {
             commands::handle_search(registry, query, jurisdiction.as_deref(), tags, *limit)?;
         }
+        Commands::Publish {
+            input,
+            registry,
+            tags,
+            dry_run,
+        } => {
+            commands::handle_publish(input, registry, tags, *dry_run)?;
+        }
+        Commands::Validate {
+            input,
+            format,
+            strict,
+        } => {
+            commands::handle_validate(input, format.as_ref(), *strict)?;
+        }
+        Commands::Install {
+            statute_id,
+            registry,
+            output,
+            force,
+        } => {
+            commands::handle_install(statute_id, registry, output, *force)?;
+        }
+        Commands::List { directory, verbose } => {
+            commands::handle_list(directory, *verbose)?;
+        }
+        Commands::Add {
+            statute_id,
+            registry,
+            config,
+        } => {
+            commands::handle_add(statute_id, registry, config)?;
+        }
+        Commands::Update {
+            statute_id,
+            registry,
+            dry_run,
+        } => {
+            commands::handle_update(statute_id.as_deref(), registry, *dry_run)?;
+        }
+        Commands::Clean {
+            all,
+            cache,
+            temp,
+            dry_run,
+        } => {
+            commands::handle_clean(*all, *cache, *temp, *dry_run)?;
+        }
+        Commands::Outdated {
+            directory,
+            registry,
+            all,
+        } => {
+            commands::handle_outdated(directory, registry, *all)?;
+        }
+        Commands::Uninstall {
+            statute_id,
+            directory,
+            force,
+            dry_run,
+        } => {
+            commands::handle_uninstall(statute_id, directory, *force, *dry_run)?;
+        }
     }
 
     Ok(())

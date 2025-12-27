@@ -78,3 +78,68 @@
 - [x] Porting history and lineage tracking
 - [x] Diff visualization for ported statutes
 - [x] Batch export of porting reports (via PortingOutput export)
+
+## Roadmap for 0.1.0 Series
+
+### Jurisdiction Database (v0.1.1)
+- [ ] Add comprehensive jurisdiction profiles (50+ countries)
+- [ ] Add legal system type classification (common law, civil law, etc.)
+- [ ] Add court hierarchy per jurisdiction
+- [ ] Add legislative process mapping
+- [ ] Add constitutional framework comparison
+
+### Semantic Mapping (v0.1.2)
+- [ ] Add concept equivalence database
+- [ ] Add legal term translation matrix
+- [ ] Add semantic distance scoring
+- [ ] Add context-aware term mapping
+- [ ] Add jurisdiction-specific legal dictionaries
+
+### Cultural Adaptation (v0.1.3)
+- [ ] Add religious/cultural exception handling
+- [ ] Add holiday/calendar adaptation
+- [ ] Add monetary unit conversion with legal implications
+- [ ] Add age of majority mapping
+- [ ] Add legal capacity rules adaptation
+
+### Conflict Resolution (v0.1.4)
+- [ ] Add automated conflict detection with severity
+- [ ] Add resolution strategy recommendation
+- [ ] Add human-in-the-loop review workflow
+- [ ] Add conflict precedent database
+- [ ] Add negotiated resolution templates
+
+### AI-Assisted Porting (v0.1.5)
+- [ ] Add LLM-based adaptation suggestions
+- [ ] Add similar statute discovery across jurisdictions
+- [ ] Add automatic gap analysis
+- [ ] Add cultural sensitivity checking
+- [ ] Add plain language explanation generation
+
+### Validation Framework (v0.1.6)
+- [ ] Add target jurisdiction compliance checking
+- [ ] Add constitutional compatibility analysis
+- [ ] Add treaty/international law compliance
+- [ ] Add human rights impact assessment
+- [ ] Add enforceability prediction
+
+### Workflow Management (v0.1.7)
+- [ ] Add porting project management
+- [ ] Add stakeholder review workflow
+- [ ] Add version control for porting iterations
+- [ ] Add approval chain configuration
+- [ ] Add notification and deadline tracking
+
+### Reporting (v0.1.8)
+- [ ] Add executive summary generation
+- [ ] Add risk assessment reports
+- [ ] Add implementation roadmap
+- [ ] Add cost-benefit analysis integration
+- [ ] Add compliance certification
+
+### Integration (v0.1.9)
+- [ ] Add REST API for porting service
+- [ ] Add bilateral agreement template library
+- [ ] Add regulatory sandbox integration
+- [ ] Add notification to affected parties
+- [ ] Add public comment period management

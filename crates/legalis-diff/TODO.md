@@ -186,3 +186,68 @@
 - [x] Export to all formats simultaneously
 - [x] Single diff multi-format export
 - [x] ExportFormat enum for type-safe format selection
+
+## Roadmap for 0.1.0 Series
+
+### Semantic Diff Improvements (v0.1.1)
+- [x] Add semantic equivalence detection (same meaning, different syntax)
+- [x] Add intent-preserving refactoring detection
+- [x] Add condition relaxation/tightening metrics
+- [x] Add effect scope change quantification
+- [x] Add breaking change classification
+
+### Advanced Merge (v0.1.2)
+- [x] Add semantic merge for compatible changes
+- [x] Add conflict resolution suggestions
+- [x] Add merge preview with impact assessment
+- [x] Add interactive merge mode
+- [x] Add merge history tracking
+
+### Change Analysis (v0.1.3)
+- [x] Add change impact scoring (0-100 scale)
+- [x] Add stakeholder impact analysis
+- [x] Add regulatory compliance impact
+- [x] Add backward compatibility scoring
+- [x] Add migration effort estimation
+
+### Visualization Enhancements (v0.1.4)
+- [ ] Add interactive HTML diff viewer
+- [ ] Add syntax-highlighted diff output
+- [ ] Add inline annotations for change explanations
+- [ ] Add diff animation for presentations
+- [ ] Add three-way diff visualization
+
+### Pattern Recognition (v0.1.5)
+- [ ] Add common amendment pattern library
+- [ ] Add pattern-based change suggestions
+- [ ] Add anti-pattern detection
+- [ ] Add best practice recommendations
+- [ ] Add historical pattern learning
+
+### Audit Trail (v0.1.6)
+- [ ] Add change attribution (who changed what)
+- [ ] Add change justification tracking
+- [ ] Add approval workflow integration
+- [ ] Add change lifecycle tracking (proposed → approved → enacted)
+- [ ] Add rollback planning from diffs
+
+### Performance (v0.1.7)
+- [ ] Add streaming diff for large statutes
+- [ ] Add incremental diff updates
+- [ ] Add diff result caching
+- [ ] Add parallel diff computation with SIMD
+- [ ] Add memory-efficient diff algorithms
+
+### Export Formats (v0.1.8)
+- [ ] Add Word track-changes format
+- [ ] Add PDF with highlighted changes
+- [ ] Add LaTeX redline format
+- [ ] Add unified diff format (patch files)
+- [ ] Add structured changelog (CHANGELOG.md)
+
+### Integration (v0.1.9)
+- [ ] Add Git integration for version control
+- [ ] Add GitHub/GitLab PR diff integration
+- [ ] Add notification webhooks for changes
+- [ ] Add diff-based CI/CD triggers
+- [ ] Add diff API for external tools

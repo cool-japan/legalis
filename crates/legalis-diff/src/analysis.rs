@@ -902,6 +902,602 @@ pub fn generate_cross_statute_report(impact: &CrossStatuteImpact) -> String {
     report
 }
 
+/// Change impact score (0-100 scale).
+///
+/// This provides a quantitative measure of how impactful a change is.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct ImpactScore {
+    /// Overall impact score (0-100).
+    pub overall: u8,
+    /// Eligibility impact (0-100).
+    pub eligibility: u8,
+    /// Outcome impact (0-100).
+    pub outcome: u8,
+    /// Process impact (0-100).
+    pub process: u8,
+    /// Population impact (0-100).
+    pub population: u8,
+}
+
+impl ImpactScore {
+    /// Creates a new impact score with all values set to zero.
+    pub fn new() -> Self {
+        Self {
+            overall: 0,
+            eligibility: 0,
+            outcome: 0,
+            process: 0,
+            population: 0,
+        }
+    }
+}
+
+impl Default for ImpactScore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Calculates the impact score for a diff (0-100 scale).
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, analysis::calculate_impact_score};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"))
+///     .with_precondition(Condition::Age {
+///         operator: ComparisonOp::GreaterOrEqual,
+///         value: 65,
+///     });
+///
+/// let mut new = old.clone();
+/// new.preconditions[0] = Condition::Age {
+///     operator: ComparisonOp::GreaterOrEqual,
+///     value: 60, // Lowered age requirement - significant impact
+/// };
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let score = calculate_impact_score(&diff_result);
+///
+/// assert!(score.eligibility > 20); // Significant eligibility impact
+/// ```
+pub fn calculate_impact_score(diff: &crate::StatuteDiff) -> ImpactScore {
+    let mut eligibility = 0u8;
+    let mut outcome = 0u8;
+    let mut process = 0u8;
+    let mut population = 0u8;
+
+    // Analyze changes
+    for change in &diff.changes {
+        match &change.target {
+            crate::ChangeTarget::Precondition { .. } => match change.change_type {
+                crate::ChangeType::Added => {
+                    eligibility = eligibility.saturating_add(30);
+                    population = population.saturating_add(20);
+                }
+                crate::ChangeType::Removed => {
+                    eligibility = eligibility.saturating_add(40);
+                    population = population.saturating_add(30);
+                }
+                crate::ChangeType::Modified => {
+                    eligibility = eligibility.saturating_add(25);
+                    population = population.saturating_add(15);
+                }
+                crate::ChangeType::Reordered => {
+                    eligibility = eligibility.saturating_add(5);
+                }
+            },
+            crate::ChangeTarget::Effect => {
+                outcome = outcome.saturating_add(80);
+                population = population.saturating_add(50);
+            }
+            crate::ChangeTarget::DiscretionLogic => {
+                process = process.saturating_add(60);
+                outcome = outcome.saturating_add(20);
+            }
+            crate::ChangeTarget::Title => {
+                process = process.saturating_add(5);
+            }
+            crate::ChangeTarget::Metadata { .. } => {
+                process = process.saturating_add(2);
+            }
+        }
+    }
+
+    // Cap at 100
+    eligibility = eligibility.min(100);
+    outcome = outcome.min(100);
+    process = process.min(100);
+    population = population.min(100);
+
+    // Calculate overall score (weighted average)
+    let overall = ((eligibility as u16 * 30
+        + outcome as u16 * 40
+        + process as u16 * 15
+        + population as u16 * 15)
+        / 100) as u8;
+
+    ImpactScore {
+        overall,
+        eligibility,
+        outcome,
+        process,
+        population,
+    }
+}
+
+/// Stakeholder type affected by statute changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StakeholderType {
+    /// Individual citizens/residents.
+    Citizens,
+    /// Businesses and corporations.
+    Businesses,
+    /// Government agencies.
+    GovernmentAgencies,
+    /// Legal professionals.
+    LegalProfessionals,
+    /// Social service providers.
+    ServiceProviders,
+    /// Advocacy groups.
+    AdvocacyGroups,
+}
+
+/// Impact on a specific stakeholder group.
+#[derive(Debug, Clone)]
+pub struct StakeholderImpact {
+    /// Type of stakeholder.
+    pub stakeholder_type: StakeholderType,
+    /// Impact level (0-100).
+    pub impact_level: u8,
+    /// Description of the impact.
+    pub description: String,
+    /// Estimated number affected.
+    pub estimated_affected: Option<u64>,
+    /// Recommended actions for this stakeholder.
+    pub recommended_actions: Vec<String>,
+}
+
+/// Complete stakeholder impact analysis.
+#[derive(Debug, Clone)]
+pub struct StakeholderAnalysis {
+    /// Impacts by stakeholder type.
+    pub impacts: Vec<StakeholderImpact>,
+    /// Overall stakeholder impact summary.
+    pub summary: String,
+}
+
+/// Analyzes the impact on different stakeholders.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::{diff, analysis::analyze_stakeholder_impact};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.effect = Effect::new(EffectType::Revoke, "Revoke benefit");
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let stakeholder_analysis = analyze_stakeholder_impact(&diff_result);
+///
+/// assert!(!stakeholder_analysis.impacts.is_empty());
+/// ```
+pub fn analyze_stakeholder_impact(diff: &crate::StatuteDiff) -> StakeholderAnalysis {
+    let mut impacts = Vec::new();
+
+    // Analyze citizen impact
+    if diff.impact.affects_eligibility || diff.impact.affects_outcome {
+        let impact_level = if diff.impact.affects_outcome { 80 } else { 50 };
+        impacts.push(StakeholderImpact {
+            stakeholder_type: StakeholderType::Citizens,
+            impact_level,
+            description: "Eligibility or benefits directly affected".to_string(),
+            estimated_affected: None,
+            recommended_actions: vec![
+                "Review eligibility criteria".to_string(),
+                "Update application processes".to_string(),
+            ],
+        });
+    }
+
+    // Analyze business impact
+    if diff.changes.iter().any(|c| {
+        matches!(
+            c.target,
+            crate::ChangeTarget::Precondition { .. } | crate::ChangeTarget::Effect
+        )
+    }) {
+        impacts.push(StakeholderImpact {
+            stakeholder_type: StakeholderType::Businesses,
+            impact_level: 40,
+            description: "Compliance requirements may change".to_string(),
+            estimated_affected: None,
+            recommended_actions: vec![
+                "Review compliance procedures".to_string(),
+                "Update internal policies".to_string(),
+            ],
+        });
+    }
+
+    // Analyze government agency impact
+    if diff.impact.discretion_changed {
+        impacts.push(StakeholderImpact {
+            stakeholder_type: StakeholderType::GovernmentAgencies,
+            impact_level: 70,
+            description: "Administrative procedures affected".to_string(),
+            estimated_affected: None,
+            recommended_actions: vec![
+                "Train staff on new procedures".to_string(),
+                "Update decision-making guidelines".to_string(),
+            ],
+        });
+    }
+
+    // Analyze legal professional impact
+    if !diff.changes.is_empty() {
+        impacts.push(StakeholderImpact {
+            stakeholder_type: StakeholderType::LegalProfessionals,
+            impact_level: 30,
+            description: "Legal interpretation may require update".to_string(),
+            estimated_affected: None,
+            recommended_actions: vec![
+                "Review case precedents".to_string(),
+                "Update legal guidance".to_string(),
+            ],
+        });
+    }
+
+    let summary = format!(
+        "Analysis identified impact on {} stakeholder group(s)",
+        impacts.len()
+    );
+
+    StakeholderAnalysis { impacts, summary }
+}
+
+/// Regulatory compliance impact level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ComplianceImpactLevel {
+    /// No compliance impact.
+    None,
+    /// Minor compliance adjustments needed.
+    Minor,
+    /// Moderate compliance changes required.
+    Moderate,
+    /// Major compliance overhaul needed.
+    Major,
+    /// Critical compliance risk.
+    Critical,
+}
+
+/// Regulatory compliance area.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ComplianceArea {
+    /// Data protection and privacy.
+    DataProtection,
+    /// Financial regulations.
+    Financial,
+    /// Labor and employment.
+    Labor,
+    /// Environmental regulations.
+    Environmental,
+    /// Health and safety.
+    HealthSafety,
+    /// Consumer protection.
+    ConsumerProtection,
+    /// General administrative compliance.
+    Administrative,
+}
+
+/// Impact on regulatory compliance.
+#[derive(Debug, Clone)]
+pub struct ComplianceImpact {
+    /// Affected compliance area.
+    pub area: ComplianceArea,
+    /// Impact level.
+    pub impact_level: ComplianceImpactLevel,
+    /// Description of compliance requirements.
+    pub requirements: Vec<String>,
+    /// Deadline for compliance (if applicable).
+    pub deadline_days: Option<u32>,
+}
+
+/// Complete regulatory compliance analysis.
+#[derive(Debug, Clone)]
+pub struct RegulatoryComplianceAnalysis {
+    /// Overall compliance impact level.
+    pub overall_impact: ComplianceImpactLevel,
+    /// Specific compliance impacts.
+    pub impacts: Vec<ComplianceImpact>,
+    /// Compliance summary.
+    pub summary: String,
+}
+
+/// Analyzes regulatory compliance impact.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, analysis::analyze_regulatory_compliance};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.effect = Effect::new(EffectType::Obligation, "New obligation");
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let compliance = analyze_regulatory_compliance(&diff_result);
+///
+/// assert!(!compliance.impacts.is_empty());
+/// ```
+pub fn analyze_regulatory_compliance(diff: &crate::StatuteDiff) -> RegulatoryComplianceAnalysis {
+    let mut impacts = Vec::new();
+    let mut max_impact = ComplianceImpactLevel::None;
+
+    // Check for administrative compliance impact
+    if !diff.changes.is_empty() {
+        let impact_level = if diff.impact.severity >= crate::Severity::Major {
+            ComplianceImpactLevel::Major
+        } else if diff.impact.severity >= crate::Severity::Moderate {
+            ComplianceImpactLevel::Moderate
+        } else {
+            ComplianceImpactLevel::Minor
+        };
+
+        max_impact = max_impact.max(impact_level);
+
+        impacts.push(ComplianceImpact {
+            area: ComplianceArea::Administrative,
+            impact_level,
+            requirements: vec![
+                "Update internal documentation".to_string(),
+                "Notify affected parties".to_string(),
+                "Review and update procedures".to_string(),
+            ],
+            deadline_days: Some(90),
+        });
+    }
+
+    // Check for data protection impact
+    if diff.impact.affects_eligibility {
+        max_impact = max_impact.max(ComplianceImpactLevel::Moderate);
+        impacts.push(ComplianceImpact {
+            area: ComplianceArea::DataProtection,
+            impact_level: ComplianceImpactLevel::Moderate,
+            requirements: vec![
+                "Review data collection requirements".to_string(),
+                "Update privacy policies".to_string(),
+            ],
+            deadline_days: Some(60),
+        });
+    }
+
+    let summary = format!(
+        "Regulatory compliance analysis identified {} area(s) requiring attention",
+        impacts.len()
+    );
+
+    RegulatoryComplianceAnalysis {
+        overall_impact: max_impact,
+        impacts,
+        summary,
+    }
+}
+
+/// Backward compatibility score (0-100, where 100 is fully compatible).
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct BackwardCompatibilityScore {
+    /// Overall compatibility score (0-100).
+    pub overall: u8,
+    /// Data compatibility (0-100).
+    pub data: u8,
+    /// API compatibility (0-100).
+    pub api: u8,
+    /// Behavioral compatibility (0-100).
+    pub behavioral: u8,
+}
+
+/// Calculates backward compatibility score.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, analysis::calculate_backward_compatibility};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "New Title".to_string(); // Non-breaking change
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let compat = calculate_backward_compatibility(&diff_result);
+///
+/// assert!(compat.overall >= 90); // High compatibility for title-only change
+/// ```
+pub fn calculate_backward_compatibility(diff: &crate::StatuteDiff) -> BackwardCompatibilityScore {
+    let analyses = analyze_changes(diff);
+    let summary = summarize_compatibility(&analyses);
+
+    // Calculate scores based on compatibility analysis
+    let breaking_ratio = summary.breaking_changes as f64 / summary.total_changes.max(1) as f64;
+    let backward_ratio =
+        summary.backward_compatible_changes as f64 / summary.total_changes.max(1) as f64;
+    let non_breaking_ratio =
+        summary.non_breaking_changes as f64 / summary.total_changes.max(1) as f64;
+
+    // Overall score (inverse of breaking changes)
+    let overall = ((1.0 - breaking_ratio) * 100.0) as u8;
+
+    // Data compatibility (based on precondition changes)
+    let data = if diff.impact.affects_eligibility {
+        if backward_ratio > 0.5 {
+            80 // Relaxed conditions maintain data compat
+        } else {
+            40 // Tightened conditions reduce data compat
+        }
+    } else {
+        100
+    };
+
+    // API compatibility (based on effect changes)
+    let api = if diff.impact.affects_outcome {
+        20 // Effect changes break API
+    } else {
+        100
+    };
+
+    // Behavioral compatibility
+    let behavioral = if diff.impact.discretion_changed {
+        50 // Discretion changes affect behavior
+    } else if non_breaking_ratio > 0.8 {
+        100
+    } else {
+        70
+    };
+
+    BackwardCompatibilityScore {
+        overall,
+        data,
+        api,
+        behavioral,
+    }
+}
+
+/// Migration complexity level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MigrationComplexity {
+    /// No migration needed.
+    None,
+    /// Trivial migration (documentation update only).
+    Trivial,
+    /// Simple migration (minor code changes).
+    Simple,
+    /// Moderate migration (significant changes required).
+    Moderate,
+    /// Complex migration (major refactoring required).
+    Complex,
+    /// Very complex migration (complete redesign may be needed).
+    VeryComplex,
+}
+
+/// Migration effort estimation.
+#[derive(Debug, Clone)]
+pub struct MigrationEffort {
+    /// Complexity level.
+    pub complexity: MigrationComplexity,
+    /// Estimated effort in person-hours.
+    pub estimated_hours: f64,
+    /// Migration steps required.
+    pub migration_steps: Vec<String>,
+    /// Risks associated with migration.
+    pub risks: Vec<String>,
+    /// Recommended migration strategy.
+    pub strategy: String,
+}
+
+/// Estimates migration effort for a diff.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, analysis::estimate_migration_effort};
+///
+/// let old = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.effect = Effect::new(EffectType::Revoke, "Revoke"); // Major change
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let effort = estimate_migration_effort(&diff_result);
+///
+/// assert!(effort.estimated_hours > 0.0);
+/// ```
+pub fn estimate_migration_effort(diff: &crate::StatuteDiff) -> MigrationEffort {
+    let impact_score = calculate_impact_score(diff);
+    let compat_score = calculate_backward_compatibility(diff);
+
+    // Determine complexity based on impact and compatibility
+    let complexity = if diff.changes.is_empty() {
+        MigrationComplexity::None
+    } else if impact_score.overall < 20 && compat_score.overall > 90 {
+        MigrationComplexity::Trivial
+    } else if impact_score.overall < 40 && compat_score.overall > 70 {
+        MigrationComplexity::Simple
+    } else if impact_score.overall < 60 {
+        MigrationComplexity::Moderate
+    } else if impact_score.overall < 80 {
+        MigrationComplexity::Complex
+    } else {
+        MigrationComplexity::VeryComplex
+    };
+
+    // Estimate hours based on complexity and number of changes
+    let base_hours = match complexity {
+        MigrationComplexity::None => 0.0,
+        MigrationComplexity::Trivial => 2.0,
+        MigrationComplexity::Simple => 8.0,
+        MigrationComplexity::Moderate => 40.0,
+        MigrationComplexity::Complex => 120.0,
+        MigrationComplexity::VeryComplex => 320.0,
+    };
+
+    let estimated_hours = base_hours * (1.0 + diff.changes.len() as f64 * 0.1);
+
+    // Generate migration steps
+    let mut migration_steps = Vec::new();
+    let mut risks = Vec::new();
+
+    if diff.impact.affects_eligibility {
+        migration_steps.push("Update eligibility verification logic".to_string());
+        migration_steps.push("Migrate existing eligibility records".to_string());
+        risks.push("Existing users may lose eligibility".to_string());
+    }
+
+    if diff.impact.affects_outcome {
+        migration_steps.push("Update outcome processing logic".to_string());
+        migration_steps.push("Test all outcome scenarios".to_string());
+        risks.push("Outcomes may differ for existing cases".to_string());
+    }
+
+    if diff.impact.discretion_changed {
+        migration_steps.push("Train staff on new discretion guidelines".to_string());
+        migration_steps.push("Update decision-making workflows".to_string());
+        risks.push("Inconsistent decisions during transition".to_string());
+    }
+
+    if !diff.changes.is_empty() {
+        migration_steps.push("Update documentation and training materials".to_string());
+        migration_steps.push("Communicate changes to stakeholders".to_string());
+    }
+
+    let strategy = match complexity {
+        MigrationComplexity::None => "No migration required".to_string(),
+        MigrationComplexity::Trivial => "Update documentation only".to_string(),
+        MigrationComplexity::Simple => "Phased rollout with monitoring".to_string(),
+        MigrationComplexity::Moderate => {
+            "Staged migration with parallel operation period".to_string()
+        }
+        MigrationComplexity::Complex => {
+            "Multi-phase migration with extensive testing".to_string()
+        }
+        MigrationComplexity::VeryComplex => {
+            "Complete redesign with gradual transition".to_string()
+        }
+    };
+
+    MigrationEffort {
+        complexity,
+        estimated_hours,
+        migration_steps,
+        risks,
+        strategy,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

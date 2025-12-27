@@ -60,8 +60,12 @@
 //! - Portfolio analysis (efficient frontier, diversification, correlation)
 //! - Scenario planning (scenario trees, probability weighting, sensitivity)
 //! - Forecasting (linear trends, moving average, exponential smoothing)
+//! - Agent Intelligence (reinforcement learning, game theory, BDI, bounded rationality)
+//! - Demographic Modeling (census data, mortality/fertility rates, migration, households, income mobility)
 
+mod agent_intelligence;
 mod analysis;
+mod demographic_modeling;
 mod behavior;
 mod builder;
 mod calibration;
@@ -88,8 +92,10 @@ mod temporal;
 mod utils;
 mod visualization;
 
+pub use agent_intelligence::*;
 pub use analysis::*;
 pub use behavior::*;
+pub use demographic_modeling::*;
 pub use builder::*;
 pub use calibration::*;
 pub use comparison::*;

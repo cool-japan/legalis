@@ -217,3 +217,68 @@ let visualizer = AuditTrailVisualizer::new()
 let html = visualizer.to_html(&audit_trail);
 let ascii = visualizer.to_ascii(&audit_trail);
 ```
+
+## Roadmap for 0.1.0 Series
+
+### Interactive Visualizations (v0.1.1)
+- [ ] Add zoom and pan controls for large graphs
+- [ ] Add node/edge hover tooltips
+- [ ] Add click-to-expand for condition trees
+- [ ] Add search and highlight functionality
+- [ ] Add mini-map for navigation
+
+### 3D Visualization (v0.1.2)
+- [ ] Add 3D dependency graph using WebGL
+- [ ] Add 3D timeline visualization
+- [ ] Add VR/AR support for immersive exploration
+- [ ] Add force-directed 3D layout
+- [ ] Add depth-based coloring
+
+### Accessibility (v0.1.3)
+- [ ] Add WCAG 2.1 AA compliance
+- [ ] Add screen reader descriptions
+- [ ] Add keyboard navigation
+- [ ] Add high contrast mode improvements
+- [ ] Add reduced motion option
+
+### Export Formats (v0.1.4)
+- [ ] Add animated GIF export
+- [ ] Add video export (MP4, WebM)
+- [ ] Add print-optimized PDF
+- [ ] Add vector PDF export
+- [ ] Add poster-size output
+
+### Real-Time Features (v0.1.5)
+- [ ] Add live simulation visualization
+- [ ] Add streaming data updates
+- [ ] Add collaborative viewing
+- [ ] Add annotation sharing
+- [ ] Add cursor presence indicators
+
+### Embedding (v0.1.6)
+- [ ] Add React component wrapper
+- [ ] Add Vue.js component wrapper
+- [ ] Add Angular component wrapper
+- [ ] Add Web Component standard
+- [ ] Add WordPress plugin
+
+### Theming (v0.1.7)
+- [ ] Add custom theme builder
+- [ ] Add organization branding support
+- [ ] Add seasonal/event themes
+- [ ] Add theme import/export
+- [ ] Add CSS variable customization
+
+### Performance (v0.1.8)
+- [ ] Add virtualization for large datasets
+- [ ] Add WebWorker rendering
+- [ ] Add progressive loading
+- [ ] Add level-of-detail rendering
+- [ ] Add canvas fallback for performance
+
+### Domain-Specific Visualizations (v0.1.9)
+- [ ] Add court hierarchy visualization
+- [ ] Add legislative process flowchart
+- [ ] Add case citation network
+- [ ] Add regulatory landscape map
+- [ ] Add compliance status dashboard

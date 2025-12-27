@@ -141,6 +141,195 @@ pub enum ProxyPattern {
     Beacon,
 }
 
+/// Token standard types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenStandard {
+    /// ERC-20 fungible token
+    Erc20,
+    /// ERC-721 non-fungible token
+    Erc721,
+    /// ERC-1155 multi-token
+    Erc1155,
+    /// ERC-20 with additional features (pausable, burnable, mintable)
+    Erc20Extended,
+    /// ERC-721 with enumeration and URI storage
+    Erc721Extended,
+}
+
+/// Token configuration for generation.
+#[derive(Debug, Clone)]
+pub struct TokenConfig {
+    /// Token name
+    pub name: String,
+    /// Token symbol
+    pub symbol: String,
+    /// Initial supply (for ERC-20)
+    pub initial_supply: Option<u64>,
+    /// Token standard to use
+    pub standard: TokenStandard,
+    /// Include pausable functionality
+    pub pausable: bool,
+    /// Include burnable functionality
+    pub burnable: bool,
+    /// Include mintable functionality (with access control)
+    pub mintable: bool,
+    /// Include snapshot functionality
+    pub snapshot: bool,
+    /// Base URI for metadata (for NFTs)
+    pub base_uri: Option<String>,
+}
+
+impl Default for TokenConfig {
+    fn default() -> Self {
+        Self {
+            name: "MyToken".to_string(),
+            symbol: "MTK".to_string(),
+            initial_supply: Some(1000000),
+            standard: TokenStandard::Erc20,
+            pausable: false,
+            burnable: false,
+            mintable: false,
+            snapshot: false,
+            base_uri: None,
+        }
+    }
+}
+
+/// DAO (Decentralized Autonomous Organization) configuration.
+#[derive(Debug, Clone)]
+pub struct DaoConfig {
+    /// DAO name
+    pub name: String,
+    /// Governance token address
+    pub governance_token: String,
+    /// Minimum quorum percentage (0-100)
+    pub quorum_percentage: u8,
+    /// Voting period in blocks
+    pub voting_period: u64,
+    /// Execution delay in blocks
+    pub execution_delay: u64,
+    /// Proposal threshold (minimum tokens needed to propose)
+    pub proposal_threshold: u64,
+}
+
+impl Default for DaoConfig {
+    fn default() -> Self {
+        Self {
+            name: "MyDAO".to_string(),
+            governance_token: "0x0000000000000000000000000000000000000000".to_string(),
+            quorum_percentage: 4,
+            voting_period: 17280, // ~3 days at 15s/block
+            execution_delay: 172800, // ~30 days
+            proposal_threshold: 1000,
+        }
+    }
+}
+
+/// Cross-chain bridge configuration.
+#[derive(Debug, Clone)]
+pub struct BridgeConfig {
+    /// Bridge name
+    pub name: String,
+    /// Source chain ID
+    pub source_chain_id: u64,
+    /// Destination chain ID
+    pub destination_chain_id: u64,
+    /// Supported token addresses
+    pub supported_tokens: Vec<String>,
+    /// Bridge fee percentage (basis points, e.g., 30 = 0.3%)
+    pub fee_basis_points: u16,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        Self {
+            name: "MyBridge".to_string(),
+            source_chain_id: 1,
+            destination_chain_id: 137,
+            supported_tokens: vec![],
+            fee_basis_points: 30,
+        }
+    }
+}
+
+/// Treasury management configuration.
+#[derive(Debug, Clone)]
+pub struct TreasuryConfig {
+    /// Treasury name
+    pub name: String,
+    /// Authorized spenders (addresses with spending permission)
+    pub authorized_spenders: Vec<String>,
+    /// Daily spending limit in wei
+    pub daily_limit: u64,
+    /// Require multiple approvals for large transactions
+    pub multi_approval_threshold: u64,
+}
+
+impl Default for TreasuryConfig {
+    fn default() -> Self {
+        Self {
+            name: "MyTreasury".to_string(),
+            authorized_spenders: vec![],
+            daily_limit: 1_000_000_000_000_000_000, // 1 ETH
+            multi_approval_threshold: 10_000_000_000_000_000_000, // 10 ETH
+        }
+    }
+}
+
+/// Vesting schedule configuration.
+#[derive(Debug, Clone)]
+pub struct VestingConfig {
+    /// Contract name
+    pub name: String,
+    /// Beneficiary address
+    pub beneficiary: String,
+    /// Start timestamp (Unix time)
+    pub start: u64,
+    /// Cliff duration in seconds
+    pub cliff_duration: u64,
+    /// Total vesting duration in seconds
+    pub duration: u64,
+    /// Whether vesting is revocable
+    pub revocable: bool,
+}
+
+impl Default for VestingConfig {
+    fn default() -> Self {
+        Self {
+            name: "TokenVesting".to_string(),
+            beneficiary: "0x0000000000000000000000000000000000000000".to_string(),
+            start: 0,
+            cliff_duration: 31536000, // 1 year
+            duration: 126144000,      // 4 years
+            revocable: true,
+        }
+    }
+}
+
+/// Multisig wallet configuration.
+#[derive(Debug, Clone)]
+pub struct MultisigConfig {
+    /// Wallet name
+    pub name: String,
+    /// List of owner addresses
+    pub owners: Vec<String>,
+    /// Number of required confirmations
+    pub required_confirmations: usize,
+    /// Daily withdrawal limit in wei
+    pub daily_limit: Option<u64>,
+}
+
+impl Default for MultisigConfig {
+    fn default() -> Self {
+        Self {
+            name: "MultiSigWallet".to_string(),
+            owners: vec![],
+            required_confirmations: 2,
+            daily_limit: Some(1_000_000_000_000_000_000), // 1 ETH
+        }
+    }
+}
+
 /// Test suite configuration.
 #[derive(Debug, Clone)]
 pub struct TestSuiteConfig {
@@ -332,6 +521,214 @@ impl ContractGenerator {
             TargetPlatform::Solidity => self.generate_solidity_governance(),
             _ => Err(ChainError::GenerationError(format!(
                 "Governance generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a token contract based on the specified standard.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, TokenConfig, TokenStandard};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = TokenConfig {
+    ///     name: "MyToken".to_string(),
+    ///     symbol: "MTK".to_string(),
+    ///     initial_supply: Some(1000000),
+    ///     standard: TokenStandard::Erc20,
+    ///     pausable: true,
+    ///     burnable: true,
+    ///     mintable: true,
+    ///     snapshot: false,
+    ///     base_uri: None,
+    /// };
+    /// let contract = generator.generate_token(&config).unwrap();
+    /// assert!(contract.source.contains("ERC20"));
+    /// ```
+    pub fn generate_token(&self, config: &TokenConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_token(config),
+            TargetPlatform::Vyper => self.generate_vyper_token(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "Token generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a DAO (Decentralized Autonomous Organization) contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, DaoConfig};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = DaoConfig {
+    ///     name: "MyDAO".to_string(),
+    ///     governance_token: "0x1234567890123456789012345678901234567890".to_string(),
+    ///     quorum_percentage: 4,
+    ///     voting_period: 17280,
+    ///     execution_delay: 172800,
+    ///     proposal_threshold: 1000,
+    /// };
+    /// let contract = generator.generate_dao(&config).unwrap();
+    /// assert!(contract.source.contains("Governor"));
+    /// ```
+    pub fn generate_dao(&self, config: &DaoConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_dao(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "DAO generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a cross-chain bridge contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, BridgeConfig};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = BridgeConfig {
+    ///     name: "EthPolygonBridge".to_string(),
+    ///     source_chain_id: 1,
+    ///     destination_chain_id: 137,
+    ///     supported_tokens: vec!["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_string()],
+    ///     fee_basis_points: 30,
+    /// };
+    /// let contract = generator.generate_bridge(&config).unwrap();
+    /// assert!(contract.source.contains("Bridge"));
+    /// ```
+    pub fn generate_bridge(&self, config: &BridgeConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_bridge(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "Bridge generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a treasury management contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, TreasuryConfig};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = TreasuryConfig {
+    ///     name: "DAOTreasury".to_string(),
+    ///     authorized_spenders: vec!["0x1234567890123456789012345678901234567890".to_string()],
+    ///     daily_limit: 1_000_000_000_000_000_000,
+    ///     multi_approval_threshold: 10_000_000_000_000_000_000,
+    /// };
+    /// let contract = generator.generate_treasury(&config).unwrap();
+    /// assert!(contract.source.contains("Treasury"));
+    /// ```
+    pub fn generate_treasury(&self, config: &TreasuryConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_treasury(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "Treasury generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a token vesting contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, VestingConfig};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = VestingConfig {
+    ///     name: "TeamVesting".to_string(),
+    ///     beneficiary: "0x1234567890123456789012345678901234567890".to_string(),
+    ///     start: 1640995200,
+    ///     cliff_duration: 31536000,
+    ///     duration: 126144000,
+    ///     revocable: true,
+    /// };
+    /// let contract = generator.generate_vesting(&config).unwrap();
+    /// assert!(contract.source.contains("Vesting"));
+    /// ```
+    pub fn generate_vesting(&self, config: &VestingConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_vesting(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "Vesting generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates a multisig wallet contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform, MultisigConfig};
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let config = MultisigConfig {
+    ///     name: "TeamMultiSig".to_string(),
+    ///     owners: vec![
+    ///         "0x1234567890123456789012345678901234567890".to_string(),
+    ///         "0x2345678901234567890123456789012345678901".to_string(),
+    ///         "0x3456789012345678901234567890123456789012".to_string(),
+    ///     ],
+    ///     required_confirmations: 2,
+    ///     daily_limit: Some(1_000_000_000_000_000_000),
+    /// };
+    /// let contract = generator.generate_multisig(&config).unwrap();
+    /// assert!(contract.source.contains("MultiSig"));
+    /// ```
+    pub fn generate_multisig(&self, config: &MultisigConfig) -> ChainResult<GeneratedContract> {
+        match self.platform {
+            TargetPlatform::Solidity => self.generate_solidity_multisig(config),
+            _ => Err(ChainError::GenerationError(format!(
+                "Multisig generation not supported for {:?}",
+                self.platform
+            ))),
+        }
+    }
+
+    /// Generates an automated audit report for a contract.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use legalis_chain::{ContractGenerator, TargetPlatform};
+    /// use legalis_core::{Statute, Effect, EffectType};
+    ///
+    /// let statute = Statute::new(
+    ///     "TestStatute".to_string(),
+    ///     "Test Statute".to_string(),
+    ///     Effect::new(EffectType::Grant, "Grant permission")
+    /// );
+    ///
+    /// let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    /// let contract = generator.generate(&statute).unwrap();
+    /// let report = generator.generate_audit_report(&contract).unwrap();
+    /// assert!(report.contains("Audit Report"));
+    /// ```
+    pub fn generate_audit_report(&self, contract: &GeneratedContract) -> ChainResult<String> {
+        match self.platform {
+            TargetPlatform::Solidity | TargetPlatform::Vyper => {
+                self.generate_comprehensive_audit_report(contract)
+            }
+            _ => Err(ChainError::GenerationError(format!(
+                "Audit report generation not supported for {:?}",
                 self.platform
             ))),
         }
@@ -3747,6 +4144,1149 @@ impl ContractGenerator {
         tests.push_str("});\n");
 
         Ok(tests)
+    }
+
+    fn generate_solidity_token(&self, config: &TokenConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+
+        match config.standard {
+            TokenStandard::Erc20 | TokenStandard::Erc20Extended => {
+                source.push_str("import \"@openzeppelin/contracts/token/ERC20/ERC20.sol\";\n");
+                if config.burnable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol\";\n");
+                }
+                if config.pausable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol\";\n");
+                    source.push_str("import \"@openzeppelin/contracts/access/Ownable.sol\";\n");
+                }
+                if config.snapshot {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol\";\n");
+                }
+                if config.mintable {
+                    source.push_str("import \"@openzeppelin/contracts/access/AccessControl.sol\";\n");
+                }
+            }
+            TokenStandard::Erc721 | TokenStandard::Erc721Extended => {
+                source.push_str("import \"@openzeppelin/contracts/token/ERC721/ERC721.sol\";\n");
+                if config.burnable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol\";\n");
+                }
+                if config.pausable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol\";\n");
+                    source.push_str("import \"@openzeppelin/contracts/access/Ownable.sol\";\n");
+                }
+                source.push_str("import \"@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol\";\n");
+                source.push_str("import \"@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol\";\n");
+                if config.mintable {
+                    source.push_str("import \"@openzeppelin/contracts/access/AccessControl.sol\";\n");
+                }
+            }
+            TokenStandard::Erc1155 => {
+                source.push_str("import \"@openzeppelin/contracts/token/ERC1155/ERC1155.sol\";\n");
+                if config.burnable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol\";\n");
+                }
+                if config.pausable {
+                    source.push_str("import \"@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Pausable.sol\";\n");
+                    source.push_str("import \"@openzeppelin/contracts/access/Ownable.sol\";\n");
+                }
+                source.push_str("import \"@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol\";\n");
+                if config.mintable {
+                    source.push_str("import \"@openzeppelin/contracts/access/AccessControl.sol\";\n");
+                }
+            }
+        }
+
+        source.push_str("\n/// @title ");
+        source.push_str(&config.name);
+        source.push_str("\n/// @notice ");
+        match config.standard {
+            TokenStandard::Erc20 | TokenStandard::Erc20Extended => {
+                source.push_str("ERC-20 token implementation");
+            }
+            TokenStandard::Erc721 | TokenStandard::Erc721Extended => {
+                source.push_str("ERC-721 NFT implementation");
+            }
+            TokenStandard::Erc1155 => {
+                source.push_str("ERC-1155 multi-token implementation");
+            }
+        }
+        source.push_str("\n/// @dev Generated by Legalis-Chain\n");
+        source.push_str("contract ");
+        source.push_str(&config.name);
+        source.push_str(" is ");
+
+        let mut inherits = Vec::new();
+        match config.standard {
+            TokenStandard::Erc20 | TokenStandard::Erc20Extended => {
+                inherits.push("ERC20");
+                if config.burnable {
+                    inherits.push("ERC20Burnable");
+                }
+                if config.pausable {
+                    inherits.push("ERC20Pausable");
+                    inherits.push("Ownable");
+                }
+                if config.snapshot {
+                    inherits.push("ERC20Snapshot");
+                }
+            }
+            TokenStandard::Erc721 | TokenStandard::Erc721Extended => {
+                inherits.push("ERC721");
+                inherits.push("ERC721Enumerable");
+                inherits.push("ERC721URIStorage");
+                if config.burnable {
+                    inherits.push("ERC721Burnable");
+                }
+                if config.pausable {
+                    inherits.push("ERC721Pausable");
+                    inherits.push("Ownable");
+                }
+            }
+            TokenStandard::Erc1155 => {
+                inherits.push("ERC1155");
+                inherits.push("ERC1155Supply");
+                if config.burnable {
+                    inherits.push("ERC1155Burnable");
+                }
+                if config.pausable {
+                    inherits.push("ERC1155Pausable");
+                    inherits.push("Ownable");
+                }
+            }
+        }
+        if config.mintable {
+            inherits.push("AccessControl");
+        }
+        source.push_str(&inherits.join(", "));
+        source.push_str(" {\n");
+
+        if config.mintable {
+            source.push_str("    bytes32 public constant MINTER_ROLE = keccak256(\"MINTER_ROLE\");\n\n");
+        }
+
+        if matches!(config.standard, TokenStandard::Erc721 | TokenStandard::Erc721Extended) {
+            source.push_str("    uint256 private _nextTokenId;\n\n");
+        }
+
+        source.push_str("    constructor()\n");
+        match config.standard {
+            TokenStandard::Erc20 | TokenStandard::Erc20Extended => {
+                source.push_str(&format!("        ERC20(\"{}\", \"{}\")\n", config.name, config.symbol));
+            }
+            TokenStandard::Erc721 | TokenStandard::Erc721Extended => {
+                source.push_str(&format!("        ERC721(\"{}\", \"{}\")\n", config.name, config.symbol));
+            }
+            TokenStandard::Erc1155 => {
+                let base_uri = config.base_uri.as_deref().unwrap_or("https://token-cdn.domain/{id}.json");
+                source.push_str(&format!("        ERC1155(\"{}\")\n", base_uri));
+            }
+        }
+        if config.pausable {
+            source.push_str("        Ownable(msg.sender)\n");
+        }
+        source.push_str("    {\n");
+
+        if config.mintable {
+            source.push_str("        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);\n");
+            source.push_str("        _grantRole(MINTER_ROLE, msg.sender);\n");
+        }
+
+        if let Some(initial_supply) = config.initial_supply {
+            if matches!(config.standard, TokenStandard::Erc20 | TokenStandard::Erc20Extended) {
+                source.push_str(&format!("        _mint(msg.sender, {} * 10 ** decimals());\n", initial_supply));
+            }
+        }
+
+        source.push_str("    }\n\n");
+
+        if config.mintable {
+            match config.standard {
+                TokenStandard::Erc20 | TokenStandard::Erc20Extended => {
+                    source.push_str("    function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {\n");
+                    source.push_str("        _mint(to, amount);\n");
+                    source.push_str("    }\n\n");
+                }
+                TokenStandard::Erc721 | TokenStandard::Erc721Extended => {
+                    source.push_str("    function safeMint(address to, string memory uri) public onlyRole(MINTER_ROLE) {\n");
+                    source.push_str("        uint256 tokenId = _nextTokenId++;\n");
+                    source.push_str("        _safeMint(to, tokenId);\n");
+                    source.push_str("        _setTokenURI(tokenId, uri);\n");
+                    source.push_str("    }\n\n");
+                }
+                TokenStandard::Erc1155 => {
+                    source.push_str("    function mint(address to, uint256 id, uint256 amount, bytes memory data) public onlyRole(MINTER_ROLE) {\n");
+                    source.push_str("        _mint(to, id, amount, data);\n");
+                    source.push_str("    }\n\n");
+                    source.push_str("    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) public onlyRole(MINTER_ROLE) {\n");
+                    source.push_str("        _mintBatch(to, ids, amounts, data);\n");
+                    source.push_str("    }\n\n");
+                }
+            }
+        }
+
+        if config.pausable {
+            source.push_str("    function pause() public onlyOwner {\n");
+            source.push_str("        _pause();\n");
+            source.push_str("    }\n\n");
+            source.push_str("    function unpause() public onlyOwner {\n");
+            source.push_str("        _unpause();\n");
+            source.push_str("    }\n\n");
+        }
+
+        if config.snapshot && matches!(config.standard, TokenStandard::Erc20 | TokenStandard::Erc20Extended) {
+            source.push_str("    function snapshot() public onlyOwner {\n");
+            source.push_str("        _snapshot();\n");
+            source.push_str("    }\n\n");
+        }
+
+        if matches!(config.standard, TokenStandard::Erc721 | TokenStandard::Erc721Extended) {
+            source.push_str("    function _update(address to, uint256 tokenId, address auth)\n");
+            source.push_str("        internal\n");
+            source.push_str("        override(ERC721, ERC721Enumerable");
+            if config.pausable {
+                source.push_str(", ERC721Pausable");
+            }
+            source.push_str(")\n");
+            source.push_str("        returns (address)\n");
+            source.push_str("    {\n");
+            source.push_str("        return super._update(to, tokenId, auth);\n");
+            source.push_str("    }\n\n");
+
+            source.push_str("    function _increaseBalance(address account, uint128 value)\n");
+            source.push_str("        internal\n");
+            source.push_str("        override(ERC721, ERC721Enumerable)\n");
+            source.push_str("    {\n");
+            source.push_str("        super._increaseBalance(account, value);\n");
+            source.push_str("    }\n\n");
+
+            source.push_str("    function tokenURI(uint256 tokenId)\n");
+            source.push_str("        public\n");
+            source.push_str("        view\n");
+            source.push_str("        override(ERC721, ERC721URIStorage)\n");
+            source.push_str("        returns (string memory)\n");
+            source.push_str("    {\n");
+            source.push_str("        return super.tokenURI(tokenId);\n");
+            source.push_str("    }\n\n");
+
+            source.push_str("    function supportsInterface(bytes4 interfaceId)\n");
+            source.push_str("        public\n");
+            source.push_str("        view\n");
+            source.push_str("        override(ERC721, ERC721Enumerable, ERC721URIStorage");
+            if config.mintable {
+                source.push_str(", AccessControl");
+            }
+            source.push_str(")\n");
+            source.push_str("        returns (bool)\n");
+            source.push_str("    {\n");
+            source.push_str("        return super.supportsInterface(interfaceId);\n");
+            source.push_str("    }\n");
+        }
+
+        if matches!(config.standard, TokenStandard::Erc1155) {
+            source.push_str("    function _update(address from, address to, uint256[] memory ids, uint256[] memory values)\n");
+            source.push_str("        internal\n");
+            source.push_str("        override(ERC1155, ERC1155Supply");
+            if config.pausable {
+                source.push_str(", ERC1155Pausable");
+            }
+            source.push_str(")\n");
+            source.push_str("    {\n");
+            source.push_str("        super._update(from, to, ids, values);\n");
+            source.push_str("    }\n\n");
+
+            source.push_str("    function supportsInterface(bytes4 interfaceId)\n");
+            source.push_str("        public\n");
+            source.push_str("        view\n");
+            source.push_str("        override(ERC1155");
+            if config.mintable {
+                source.push_str(", AccessControl");
+            }
+            source.push_str(")\n");
+            source.push_str("        returns (bool)\n");
+            source.push_str("    {\n");
+            source.push_str("        return super.supportsInterface(interfaceId);\n");
+            source.push_str("    }\n");
+        }
+
+        if matches!(config.standard, TokenStandard::Erc20 | TokenStandard::Erc20Extended) && (config.pausable || config.snapshot) {
+            source.push_str("    function _update(address from, address to, uint256 value)\n");
+            source.push_str("        internal\n");
+            source.push_str("        override(ERC20");
+            if config.pausable {
+                source.push_str(", ERC20Pausable");
+            }
+            if config.snapshot {
+                source.push_str(", ERC20Snapshot");
+            }
+            source.push_str(")\n");
+            source.push_str("    {\n");
+            source.push_str("        super._update(from, to, value);\n");
+            source.push_str("    }\n");
+        }
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_vyper_token(&self, config: &TokenConfig) -> ChainResult<GeneratedContract> {
+        if !matches!(config.standard, TokenStandard::Erc20 | TokenStandard::Erc20Extended) {
+            return Err(ChainError::GenerationError(
+                "Vyper currently only supports ERC-20 tokens".to_string(),
+            ));
+        }
+
+        let mut source = String::new();
+
+        source.push_str("# @version ^0.3.0\n\n");
+        source.push_str("from vyper.interfaces import ERC20\n\n");
+
+        source.push_str(&format!("name: public(String[64]) = \"{}\"\n", config.name));
+        source.push_str(&format!("symbol: public(String[32]) = \"{}\"\n", config.symbol));
+        source.push_str("decimals: public(uint8) = 18\n");
+        source.push_str("totalSupply: public(uint256)\n");
+        source.push_str("balanceOf: public(HashMap[address, uint256])\n");
+        source.push_str("allowance: public(HashMap[address, HashMap[address, uint256]])\n\n");
+
+        if config.pausable {
+            source.push_str("owner: public(address)\n");
+            source.push_str("paused: public(bool)\n\n");
+        }
+
+        source.push_str("event Transfer:\n");
+        source.push_str("    sender: indexed(address)\n");
+        source.push_str("    receiver: indexed(address)\n");
+        source.push_str("    value: uint256\n\n");
+
+        source.push_str("event Approval:\n");
+        source.push_str("    owner: indexed(address)\n");
+        source.push_str("    spender: indexed(address)\n");
+        source.push_str("    value: uint256\n\n");
+
+        source.push_str("@external\n");
+        source.push_str("def __init__():\n");
+        if let Some(initial_supply) = config.initial_supply {
+            source.push_str(&format!("    self.totalSupply = {} * 10 ** 18\n", initial_supply));
+            source.push_str("    self.balanceOf[msg.sender] = self.totalSupply\n");
+        }
+        if config.pausable {
+            source.push_str("    self.owner = msg.sender\n");
+            source.push_str("    self.paused = False\n");
+        }
+        source.push('\n');
+
+        source.push_str("@external\n");
+        source.push_str("def transfer(_to: address, _value: uint256) -> bool:\n");
+        if config.pausable {
+            source.push_str("    assert not self.paused, \"Token is paused\"\n");
+        }
+        source.push_str("    self.balanceOf[msg.sender] -= _value\n");
+        source.push_str("    self.balanceOf[_to] += _value\n");
+        source.push_str("    log Transfer(msg.sender, _to, _value)\n");
+        source.push_str("    return True\n\n");
+
+        source.push_str("@external\n");
+        source.push_str("def approve(_spender: address, _value: uint256) -> bool:\n");
+        source.push_str("    self.allowance[msg.sender][_spender] = _value\n");
+        source.push_str("    log Approval(msg.sender, _spender, _value)\n");
+        source.push_str("    return True\n\n");
+
+        source.push_str("@external\n");
+        source.push_str("def transferFrom(_from: address, _to: address, _value: uint256) -> bool:\n");
+        if config.pausable {
+            source.push_str("    assert not self.paused, \"Token is paused\"\n");
+        }
+        source.push_str("    self.balanceOf[_from] -= _value\n");
+        source.push_str("    self.balanceOf[_to] += _value\n");
+        source.push_str("    self.allowance[_from][msg.sender] -= _value\n");
+        source.push_str("    log Transfer(_from, _to, _value)\n");
+        source.push_str("    return True\n");
+
+        if config.pausable {
+            source.push_str("\n@external\n");
+            source.push_str("def pause():\n");
+            source.push_str("    assert msg.sender == self.owner, \"Only owner\"\n");
+            source.push_str("    self.paused = True\n\n");
+
+            source.push_str("@external\n");
+            source.push_str("def unpause():\n");
+            source.push_str("    assert msg.sender == self.owner, \"Only owner\"\n");
+            source.push_str("    self.paused = False\n");
+        }
+
+        if config.mintable {
+            source.push_str("\n@external\n");
+            source.push_str("def mint(_to: address, _value: uint256):\n");
+            source.push_str("    assert msg.sender == self.owner, \"Only owner\"\n");
+            source.push_str("    self.totalSupply += _value\n");
+            source.push_str("    self.balanceOf[_to] += _value\n");
+            source.push_str("    log Transfer(empty(address), _to, _value)\n");
+        }
+
+        if config.burnable {
+            source.push_str("\n@external\n");
+            source.push_str("def burn(_value: uint256):\n");
+            source.push_str("    self.balanceOf[msg.sender] -= _value\n");
+            source.push_str("    self.totalSupply -= _value\n");
+            source.push_str("    log Transfer(msg.sender, empty(address), _value)\n");
+        }
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Vyper,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_solidity_dao(&self, config: &DaoConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/Governor.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/extensions/GovernorSettings.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/extensions/GovernorVotes.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/governance/TimelockController.sol\";\n\n");
+
+        source.push_str(&format!("/// @title {}\n", config.name));
+        source.push_str("/// @notice DAO governance contract\n");
+        source.push_str("/// @dev Uses OpenZeppelin Governor framework\n");
+        source.push_str(&format!("contract {} is Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {{\n", config.name));
+
+        source.push_str("    constructor(IVotes _token, TimelockController _timelock)\n");
+        source.push_str(&format!("        Governor(\"{}\")\n", config.name));
+        source.push_str(&format!("        GovernorSettings({}, {}, {})\n",
+            1, // voting delay
+            config.voting_period,
+            config.proposal_threshold
+        ));
+        source.push_str("        GovernorVotes(_token)\n");
+        source.push_str(&format!("        GovernorVotesQuorumFraction({})\n", config.quorum_percentage));
+        source.push_str("        GovernorTimelockControl(_timelock)\n");
+        source.push_str("    {}\n\n");
+
+        source.push_str("    function votingDelay()\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorSettings)\n");
+        source.push_str("        returns (uint256)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.votingDelay();\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function votingPeriod()\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorSettings)\n");
+        source.push_str("        returns (uint256)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.votingPeriod();\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function quorum(uint256 blockNumber)\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorVotesQuorumFraction)\n");
+        source.push_str("        returns (uint256)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.quorum(blockNumber);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function state(uint256 proposalId)\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("        returns (ProposalState)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.state(proposalId);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function proposalNeedsQueuing(uint256 proposalId)\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("        returns (bool)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.proposalNeedsQueuing(proposalId);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function proposalThreshold()\n");
+        source.push_str("        public\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorSettings)\n");
+        source.push_str("        returns (uint256)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super.proposalThreshold();\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _queueOperations(uint256 proposalId, address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash)\n");
+        source.push_str("        internal\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("        returns (uint48)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _executeOperations(uint256 proposalId, address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash)\n");
+        source.push_str("        internal\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("    {\n");
+        source.push_str("        super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _cancel(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash)\n");
+        source.push_str("        internal\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("        returns (uint256)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super._cancel(targets, values, calldatas, descriptionHash);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _executor()\n");
+        source.push_str("        internal\n");
+        source.push_str("        view\n");
+        source.push_str("        override(Governor, GovernorTimelockControl)\n");
+        source.push_str("        returns (address)\n");
+        source.push_str("    {\n");
+        source.push_str("        return super._executor();\n");
+        source.push_str("    }\n");
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_solidity_bridge(&self, config: &BridgeConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/IERC20.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/access/Ownable.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/security/Pausable.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/security/ReentrancyGuard.sol\";\n\n");
+
+        source.push_str(&format!("/// @title {}\n", config.name));
+        source.push_str("/// @notice Cross-chain bridge for token transfers\n");
+        source.push_str("/// @dev Implements lock-and-mint bridge pattern\n");
+        source.push_str(&format!("contract {} is Ownable, Pausable, ReentrancyGuard {{\n", config.name));
+        source.push_str("    using SafeERC20 for IERC20;\n\n");
+
+        source.push_str("    struct Transfer {\n");
+        source.push_str("        address token;\n");
+        source.push_str("        address from;\n");
+        source.push_str("        address to;\n");
+        source.push_str("        uint256 amount;\n");
+        source.push_str("        uint256 nonce;\n");
+        source.push_str("        uint256 timestamp;\n");
+        source.push_str("        bool processed;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str(&format!("    uint256 public constant SOURCE_CHAIN_ID = {};\n", config.source_chain_id));
+        source.push_str(&format!("    uint256 public constant DESTINATION_CHAIN_ID = {};\n", config.destination_chain_id));
+        source.push_str(&format!("    uint256 public constant FEE_BASIS_POINTS = {};  // {}%\n",
+            config.fee_basis_points,
+            config.fee_basis_points as f64 / 100.0
+        ));
+        source.push_str("    uint256 public constant BASIS_POINTS_DIVISOR = 10000;\n\n");
+
+        source.push_str("    mapping(address => bool) public supportedTokens;\n");
+        source.push_str("    mapping(bytes32 => bool) public processedTransfers;\n");
+        source.push_str("    mapping(address => uint256) public nonces;\n");
+        source.push_str("    uint256 public totalValueLocked;\n\n");
+
+        source.push_str("    event TokensLocked(bytes32 indexed transferId, address indexed token, address indexed from, address to, uint256 amount, uint256 nonce);\n");
+        source.push_str("    event TokensReleased(bytes32 indexed transferId, address indexed token, address indexed to, uint256 amount);\n");
+        source.push_str("    event TokenAdded(address indexed token);\n");
+        source.push_str("    event TokenRemoved(address indexed token);\n");
+        source.push_str("    event FeesCollected(address indexed token, uint256 amount);\n\n");
+
+        source.push_str("    constructor() Ownable(msg.sender) {\n");
+        for token in &config.supported_tokens {
+            source.push_str(&format!("        supportedTokens[{}] = true;\n", token));
+        }
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Lock tokens to transfer to destination chain\n");
+        source.push_str("    /// @param token Token contract address\n");
+        source.push_str("    /// @param to Recipient address on destination chain\n");
+        source.push_str("    /// @param amount Amount to transfer\n");
+        source.push_str("    function lockTokens(address token, address to, uint256 amount) external whenNotPaused nonReentrant returns (bytes32) {\n");
+        source.push_str("        require(supportedTokens[token], \"Token not supported\");\n");
+        source.push_str("        require(amount > 0, \"Amount must be positive\");\n");
+        source.push_str("        require(to != address(0), \"Invalid recipient\");\n\n");
+
+        source.push_str("        uint256 fee = (amount * FEE_BASIS_POINTS) / BASIS_POINTS_DIVISOR;\n");
+        source.push_str("        uint256 amountAfterFee = amount - fee;\n\n");
+
+        source.push_str("        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);\n");
+        source.push_str("        totalValueLocked += amountAfterFee;\n\n");
+
+        source.push_str("        uint256 nonce = nonces[msg.sender]++;\n");
+        source.push_str("        bytes32 transferId = keccak256(abi.encodePacked(token, msg.sender, to, amount, nonce, block.chainid));\n\n");
+
+        source.push_str("        emit TokensLocked(transferId, token, msg.sender, to, amountAfterFee, nonce);\n");
+        source.push_str("        if (fee > 0) {\n");
+        source.push_str("            emit FeesCollected(token, fee);\n");
+        source.push_str("        }\n\n");
+
+        source.push_str("        return transferId;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Release tokens on destination chain (only owner/validator)\n");
+        source.push_str("    /// @param token Token contract address\n");
+        source.push_str("    /// @param to Recipient address\n");
+        source.push_str("    /// @param amount Amount to release\n");
+        source.push_str("    /// @param transferId Original transfer ID from source chain\n");
+        source.push_str("    function releaseTokens(address token, address to, uint256 amount, bytes32 transferId) external onlyOwner whenNotPaused nonReentrant {\n");
+        source.push_str("        require(!processedTransfers[transferId], \"Transfer already processed\");\n");
+        source.push_str("        require(supportedTokens[token], \"Token not supported\");\n");
+        source.push_str("        require(amount > 0, \"Amount must be positive\");\n");
+        source.push_str("        require(to != address(0), \"Invalid recipient\");\n\n");
+
+        source.push_str("        processedTransfers[transferId] = true;\n");
+        source.push_str("        totalValueLocked -= amount;\n\n");
+
+        source.push_str("        IERC20(token).safeTransfer(to, amount);\n\n");
+
+        source.push_str("        emit TokensReleased(transferId, token, to, amount);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Add supported token\n");
+        source.push_str("    function addSupportedToken(address token) external onlyOwner {\n");
+        source.push_str("        require(!supportedTokens[token], \"Token already supported\");\n");
+        source.push_str("        supportedTokens[token] = true;\n");
+        source.push_str("        emit TokenAdded(token);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Remove supported token\n");
+        source.push_str("    function removeSupportedToken(address token) external onlyOwner {\n");
+        source.push_str("        require(supportedTokens[token], \"Token not supported\");\n");
+        source.push_str("        supportedTokens[token] = false;\n");
+        source.push_str("        emit TokenRemoved(token);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Withdraw collected fees\n");
+        source.push_str("    function withdrawFees(address token, uint256 amount) external onlyOwner {\n");
+        source.push_str("        IERC20(token).safeTransfer(msg.sender, amount);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Pause bridge operations\n");
+        source.push_str("    function pause() external onlyOwner {\n");
+        source.push_str("        _pause();\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    /// @notice Unpause bridge operations\n");
+        source.push_str("    function unpause() external onlyOwner {\n");
+        source.push_str("        _unpause();\n");
+        source.push_str("    }\n");
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_solidity_treasury(&self, config: &TreasuryConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+        source.push_str("import \"@openzeppelin/contracts/access/AccessControl.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/security/ReentrancyGuard.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/IERC20.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\";\n\n");
+
+        source.push_str(&format!("/// @title {}\n", config.name));
+        source.push_str("/// @notice Treasury management contract with spending limits and multi-approval\n");
+        source.push_str("/// @dev Implements role-based access control and daily spending limits\n");
+        source.push_str(&format!("contract {} is AccessControl, ReentrancyGuard {{\n", config.name));
+        source.push_str("    using SafeERC20 for IERC20;\n\n");
+
+        source.push_str("    bytes32 public constant SPENDER_ROLE = keccak256(\"SPENDER_ROLE\");\n");
+        source.push_str("    bytes32 public constant APPROVER_ROLE = keccak256(\"APPROVER_ROLE\");\n\n");
+
+        source.push_str(&format!("    uint256 public dailyLimit = {};  // Daily spending limit in wei\n", config.daily_limit));
+        source.push_str(&format!("    uint256 public multiApprovalThreshold = {};  // Threshold requiring multiple approvals\n", config.multi_approval_threshold));
+        source.push_str("    uint256 public spentToday;\n");
+        source.push_str("    uint256 public lastDay;\n\n");
+
+        source.push_str("    struct Proposal {\n");
+        source.push_str("        address to;\n");
+        source.push_str("        uint256 amount;\n");
+        source.push_str("        bytes data;\n");
+        source.push_str("        uint256 approvals;\n");
+        source.push_str("        bool executed;\n");
+        source.push_str("        mapping(address => bool) approved;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    mapping(uint256 => Proposal) public proposals;\n");
+        source.push_str("    uint256 public proposalCount;\n\n");
+
+        source.push_str("    event Deposit(address indexed sender, uint256 amount);\n");
+        source.push_str("    event Withdrawal(address indexed to, uint256 amount);\n");
+        source.push_str("    event ProposalCreated(uint256 indexed proposalId, address indexed to, uint256 amount);\n");
+        source.push_str("    event ProposalApproved(uint256 indexed proposalId, address indexed approver);\n");
+        source.push_str("    event ProposalExecuted(uint256 indexed proposalId);\n\n");
+
+        source.push_str("    constructor() {\n");
+        source.push_str("        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);\n");
+        source.push_str("        _grantRole(APPROVER_ROLE, msg.sender);\n");
+        for spender in &config.authorized_spenders {
+            source.push_str(&format!("        _grantRole(SPENDER_ROLE, {});\n", spender));
+        }
+        source.push_str("        lastDay = block.timestamp / 1 days;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    receive() external payable {\n");
+        source.push_str("        emit Deposit(msg.sender, msg.value);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function withdraw(address payable to, uint256 amount) external onlyRole(SPENDER_ROLE) nonReentrant {\n");
+        source.push_str("        require(amount <= dailyLimit, \"Exceeds daily limit\");\n");
+        source.push_str("        _resetDailyLimitIfNeeded();\n");
+        source.push_str("        require(spentToday + amount <= dailyLimit, \"Daily limit exceeded\");\n");
+        source.push_str("        spentToday += amount;\n");
+        source.push_str("        (bool success, ) = to.call{value: amount}(\"\");\n");
+        source.push_str("        require(success, \"Transfer failed\");\n");
+        source.push_str("        emit Withdrawal(to, amount);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function proposeWithdrawal(address to, uint256 amount, bytes memory data) external onlyRole(SPENDER_ROLE) returns (uint256) {\n");
+        source.push_str("        require(amount >= multiApprovalThreshold, \"Amount below threshold\");\n");
+        source.push_str("        uint256 proposalId = proposalCount++;\n");
+        source.push_str("        Proposal storage proposal = proposals[proposalId];\n");
+        source.push_str("        proposal.to = to;\n");
+        source.push_str("        proposal.amount = amount;\n");
+        source.push_str("        proposal.data = data;\n");
+        source.push_str("        proposal.approvals = 0;\n");
+        source.push_str("        proposal.executed = false;\n");
+        source.push_str("        emit ProposalCreated(proposalId, to, amount);\n");
+        source.push_str("        return proposalId;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function approveProposal(uint256 proposalId) external onlyRole(APPROVER_ROLE) {\n");
+        source.push_str("        Proposal storage proposal = proposals[proposalId];\n");
+        source.push_str("        require(!proposal.executed, \"Already executed\");\n");
+        source.push_str("        require(!proposal.approved[msg.sender], \"Already approved\");\n");
+        source.push_str("        proposal.approved[msg.sender] = true;\n");
+        source.push_str("        proposal.approvals++;\n");
+        source.push_str("        emit ProposalApproved(proposalId, msg.sender);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function executeProposal(uint256 proposalId) external onlyRole(SPENDER_ROLE) nonReentrant {\n");
+        source.push_str("        Proposal storage proposal = proposals[proposalId];\n");
+        source.push_str("        require(!proposal.executed, \"Already executed\");\n");
+        source.push_str("        require(proposal.approvals >= 2, \"Insufficient approvals\");\n");
+        source.push_str("        proposal.executed = true;\n");
+        source.push_str("        (bool success, ) = proposal.to.call{value: proposal.amount}(proposal.data);\n");
+        source.push_str("        require(success, \"Execution failed\");\n");
+        source.push_str("        emit ProposalExecuted(proposalId);\n");
+        source.push_str("        emit Withdrawal(proposal.to, proposal.amount);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _resetDailyLimitIfNeeded() private {\n");
+        source.push_str("        uint256 today = block.timestamp / 1 days;\n");
+        source.push_str("        if (today > lastDay) {\n");
+        source.push_str("            spentToday = 0;\n");
+        source.push_str("            lastDay = today;\n");
+        source.push_str("        }\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function withdrawToken(address token, address to, uint256 amount) external onlyRole(SPENDER_ROLE) nonReentrant {\n");
+        source.push_str("        IERC20(token).safeTransfer(to, amount);\n");
+        source.push_str("        emit Withdrawal(to, amount);\n");
+        source.push_str("    }\n");
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_solidity_vesting(&self, config: &VestingConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/IERC20.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\";\n");
+        source.push_str("import \"@openzeppelin/contracts/access/Ownable.sol\";\n\n");
+
+        source.push_str(&format!("/// @title {}\n", config.name));
+        source.push_str("/// @notice Token vesting contract with cliff and linear vesting\n");
+        source.push_str("/// @dev Based on OpenZeppelin VestingWallet pattern\n");
+        source.push_str(&format!("contract {} is Ownable {{\n", config.name));
+        source.push_str("    using SafeERC20 for IERC20;\n\n");
+
+        source.push_str(&format!("    address public immutable beneficiary = {};\n", config.beneficiary));
+        source.push_str(&format!("    uint256 public immutable start = {};\n", config.start));
+        source.push_str(&format!("    uint256 public immutable cliffDuration = {};\n", config.cliff_duration));
+        source.push_str(&format!("    uint256 public immutable duration = {};\n", config.duration));
+        source.push_str(&format!("    bool public immutable revocable = {};\n\n", config.revocable));
+
+        source.push_str("    mapping(address => uint256) public released;\n");
+        source.push_str("    mapping(address => bool) public revoked;\n\n");
+
+        source.push_str("    event TokensReleased(address indexed token, uint256 amount);\n");
+        source.push_str("    event VestingRevoked(address indexed token);\n\n");
+
+        source.push_str("    constructor() Ownable(msg.sender) {}\n\n");
+
+        source.push_str("    function release(address token) external {\n");
+        source.push_str("        require(!revoked[token], \"Vesting revoked\");\n");
+        source.push_str("        uint256 releasable = _releasableAmount(token);\n");
+        source.push_str("        require(releasable > 0, \"No tokens to release\");\n");
+        source.push_str("        released[token] += releasable;\n");
+        source.push_str("        IERC20(token).safeTransfer(beneficiary, releasable);\n");
+        source.push_str("        emit TokensReleased(token, releasable);\n");
+        source.push_str("    }\n\n");
+
+        if config.revocable {
+            source.push_str("    function revoke(address token) external onlyOwner {\n");
+            source.push_str("        require(!revoked[token], \"Already revoked\");\n");
+            source.push_str("        uint256 balance = IERC20(token).balanceOf(address(this));\n");
+            source.push_str("        uint256 releasable = _releasableAmount(token);\n");
+            source.push_str("        uint256 refund = balance - releasable;\n");
+            source.push_str("        revoked[token] = true;\n");
+            source.push_str("        IERC20(token).safeTransfer(owner(), refund);\n");
+            source.push_str("        emit VestingRevoked(token);\n");
+            source.push_str("    }\n\n");
+        }
+
+        source.push_str("    function vestedAmount(address token) public view returns (uint256) {\n");
+        source.push_str("        if (block.timestamp < start + cliffDuration) {\n");
+        source.push_str("            return 0;\n");
+        source.push_str("        }\n");
+        source.push_str("        uint256 totalAllocation = IERC20(token).balanceOf(address(this)) + released[token];\n");
+        source.push_str("        if (block.timestamp >= start + duration) {\n");
+        source.push_str("            return totalAllocation;\n");
+        source.push_str("        }\n");
+        source.push_str("        return (totalAllocation * (block.timestamp - start)) / duration;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function _releasableAmount(address token) private view returns (uint256) {\n");
+        source.push_str("        return vestedAmount(token) - released[token];\n");
+        source.push_str("    }\n");
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_solidity_multisig(&self, config: &MultisigConfig) -> ChainResult<GeneratedContract> {
+        let mut source = String::new();
+
+        source.push_str("// SPDX-License-Identifier: MIT\n");
+        source.push_str("pragma solidity ^0.8.20;\n\n");
+
+        source.push_str(&format!("/// @title {}\n", config.name));
+        source.push_str("/// @notice Multi-signature wallet requiring multiple confirmations\n");
+        source.push_str("/// @dev Implements daily limits and transaction confirmation system\n");
+        source.push_str(&format!("contract {} {{\n", config.name));
+
+        source.push_str("    struct Transaction {\n");
+        source.push_str("        address to;\n");
+        source.push_str("        uint256 value;\n");
+        source.push_str("        bytes data;\n");
+        source.push_str("        bool executed;\n");
+        source.push_str("        uint256 confirmations;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    address[] public owners;\n");
+        source.push_str("    mapping(address => bool) public isOwner;\n");
+        source.push_str(&format!("    uint256 public required = {};\n", config.required_confirmations));
+        if let Some(limit) = config.daily_limit {
+            source.push_str(&format!("    uint256 public dailyLimit = {};\n", limit));
+        }
+        source.push_str("    uint256 public spentToday;\n");
+        source.push_str("    uint256 public lastDay;\n\n");
+
+        source.push_str("    Transaction[] public transactions;\n");
+        source.push_str("    mapping(uint256 => mapping(address => bool)) public confirmations;\n\n");
+
+        source.push_str("    event Deposit(address indexed sender, uint256 value);\n");
+        source.push_str("    event Submission(uint256 indexed transactionId);\n");
+        source.push_str("    event Confirmation(address indexed sender, uint256 indexed transactionId);\n");
+        source.push_str("    event Execution(uint256 indexed transactionId);\n");
+        source.push_str("    event ExecutionFailure(uint256 indexed transactionId);\n");
+        source.push_str("    event Revocation(address indexed sender, uint256 indexed transactionId);\n\n");
+
+        source.push_str("    modifier onlyOwner() {\n");
+        source.push_str("        require(isOwner[msg.sender], \"Not owner\");\n");
+        source.push_str("        _;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    modifier transactionExists(uint256 transactionId) {\n");
+        source.push_str("        require(transactionId < transactions.length, \"Transaction does not exist\");\n");
+        source.push_str("        _;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    modifier notExecuted(uint256 transactionId) {\n");
+        source.push_str("        require(!transactions[transactionId].executed, \"Transaction already executed\");\n");
+        source.push_str("        _;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    modifier notConfirmed(uint256 transactionId) {\n");
+        source.push_str("        require(!confirmations[transactionId][msg.sender], \"Transaction already confirmed\");\n");
+        source.push_str("        _;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    constructor() {\n");
+        source.push_str(&format!("        require({} <= {}, \"Invalid required confirmations\");\n",
+            config.required_confirmations, config.owners.len()));
+        for (idx, owner) in config.owners.iter().enumerate() {
+            source.push_str(&format!("        address owner{} = {};\n", idx, owner));
+            source.push_str(&format!("        require(owner{} != address(0), \"Invalid owner\");\n", idx));
+            source.push_str(&format!("        require(!isOwner[owner{}], \"Duplicate owner\");\n", idx));
+            source.push_str(&format!("        isOwner[owner{}] = true;\n", idx));
+            source.push_str(&format!("        owners.push(owner{});\n", idx));
+        }
+        source.push_str("        lastDay = block.timestamp / 1 days;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    receive() external payable {\n");
+        source.push_str("        if (msg.value > 0) {\n");
+        source.push_str("            emit Deposit(msg.sender, msg.value);\n");
+        source.push_str("        }\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function submitTransaction(address to, uint256 value, bytes memory data) external onlyOwner returns (uint256) {\n");
+        source.push_str("        uint256 transactionId = transactions.length;\n");
+        source.push_str("        transactions.push(Transaction({\n");
+        source.push_str("            to: to,\n");
+        source.push_str("            value: value,\n");
+        source.push_str("            data: data,\n");
+        source.push_str("            executed: false,\n");
+        source.push_str("            confirmations: 0\n");
+        source.push_str("        }));\n");
+        source.push_str("        emit Submission(transactionId);\n");
+        source.push_str("        confirmTransaction(transactionId);\n");
+        source.push_str("        return transactionId;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function confirmTransaction(uint256 transactionId)\n");
+        source.push_str("        public\n");
+        source.push_str("        onlyOwner\n");
+        source.push_str("        transactionExists(transactionId)\n");
+        source.push_str("        notExecuted(transactionId)\n");
+        source.push_str("        notConfirmed(transactionId)\n");
+        source.push_str("    {\n");
+        source.push_str("        confirmations[transactionId][msg.sender] = true;\n");
+        source.push_str("        transactions[transactionId].confirmations++;\n");
+        source.push_str("        emit Confirmation(msg.sender, transactionId);\n");
+        source.push_str("        executeTransaction(transactionId);\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function executeTransaction(uint256 transactionId)\n");
+        source.push_str("        public\n");
+        source.push_str("        onlyOwner\n");
+        source.push_str("        transactionExists(transactionId)\n");
+        source.push_str("        notExecuted(transactionId)\n");
+        source.push_str("    {\n");
+        source.push_str("        Transaction storage txn = transactions[transactionId];\n");
+        source.push_str("        if (txn.confirmations >= required) {\n");
+        if config.daily_limit.is_some() {
+            source.push_str("            if (isUnderLimit(txn.value)) {\n");
+            source.push_str("                spentToday += txn.value;\n");
+        }
+        source.push_str("            txn.executed = true;\n");
+        source.push_str("            (bool success, ) = txn.to.call{value: txn.value}(txn.data);\n");
+        source.push_str("            if (success) {\n");
+        source.push_str("                emit Execution(transactionId);\n");
+        source.push_str("            } else {\n");
+        source.push_str("                txn.executed = false;\n");
+        source.push_str("                emit ExecutionFailure(transactionId);\n");
+        source.push_str("            }\n");
+        if config.daily_limit.is_some() {
+            source.push_str("            }\n");
+        }
+        source.push_str("        }\n");
+        source.push_str("    }\n\n");
+
+        if config.daily_limit.is_some() {
+            source.push_str("    function isUnderLimit(uint256 amount) public returns (bool) {\n");
+            source.push_str("        uint256 today = block.timestamp / 1 days;\n");
+            source.push_str("        if (today > lastDay) {\n");
+            source.push_str("            spentToday = 0;\n");
+            source.push_str("            lastDay = today;\n");
+            source.push_str("        }\n");
+            source.push_str("        return spentToday + amount <= dailyLimit;\n");
+            source.push_str("    }\n\n");
+        }
+
+        source.push_str("    function getOwners() external view returns (address[] memory) {\n");
+        source.push_str("        return owners;\n");
+        source.push_str("    }\n\n");
+
+        source.push_str("    function getTransactionCount() external view returns (uint256) {\n");
+        source.push_str("        return transactions.length;\n");
+        source.push_str("    }\n");
+
+        source.push_str("}\n");
+
+        Ok(GeneratedContract {
+            name: config.name.clone(),
+            source,
+            platform: TargetPlatform::Solidity,
+            abi: None,
+            deployment_script: None,
+        })
+    }
+
+    fn generate_comprehensive_audit_report(&self, contract: &GeneratedContract) -> ChainResult<String> {
+        let mut report = String::new();
+
+        report.push_str("# Smart Contract Audit Report\n\n");
+        report.push_str(&format!("## Contract: {}\n", contract.name));
+        report.push_str(&format!("## Platform: {:?}\n", contract.platform));
+        report.push_str(&format!("## Date: {}\n\n", chrono::Utc::now().format("%Y-%m-%d")));
+
+        report.push_str("---\n\n");
+
+        report.push_str("## Executive Summary\n\n");
+        report.push_str(&format!("This report presents the findings of an automated security audit performed on the {} smart contract.\n\n", contract.name));
+
+        let analysis = SecurityAnalyzer::analyze(contract);
+        report.push_str(&format!("**Overall Security Score: {}/100**\n\n", analysis.score));
+
+        if analysis.score >= 80 {
+            report.push_str("The contract demonstrates a strong security posture with minimal vulnerabilities.\n\n");
+        } else if analysis.score >= 60 {
+            report.push_str("The contract shows moderate security with some areas requiring attention.\n\n");
+        } else {
+            report.push_str("The contract has significant security concerns that should be addressed before deployment.\n\n");
+        }
+
+        report.push_str("## Vulnerability Summary\n\n");
+        let mut critical_count = 0;
+        let mut high_count = 0;
+        let mut medium_count = 0;
+        let mut low_count = 0;
+
+        for vuln in &analysis.vulnerabilities {
+            match vuln.severity {
+                Severity::Critical => critical_count += 1,
+                Severity::High => high_count += 1,
+                Severity::Medium => medium_count += 1,
+                Severity::Low => low_count += 1,
+            }
+        }
+
+        report.push_str("| Severity | Count |\n");
+        report.push_str("|----------|-------|\n");
+        report.push_str(&format!("| Critical | {} |\n", critical_count));
+        report.push_str(&format!("| High     | {} |\n", high_count));
+        report.push_str(&format!("| Medium   | {} |\n", medium_count));
+        report.push_str(&format!("| Low      | {} |\n\n", low_count));
+
+        report.push_str("## Detailed Findings\n\n");
+
+        for (idx, vuln) in analysis.vulnerabilities.iter().enumerate() {
+            report.push_str(&format!("### Finding #{}: {:?}\n\n", idx + 1, vuln.vulnerability_type));
+            report.push_str(&format!("**Severity:** {:?}\n\n", vuln.severity));
+            report.push_str(&format!("**Description:** {}\n\n", vuln.description));
+
+            if let Some(line) = vuln.line {
+                report.push_str(&format!("**Location:** Line {}\n\n", line));
+            }
+
+            report.push_str(&format!("**Recommendation:** {}\n\n", vuln.recommendation));
+            report.push_str("---\n\n");
+        }
+
+        report.push_str("## Code Quality Analysis\n\n");
+        report.push_str("### Metrics\n\n");
+        let lines = contract.source.lines().count();
+        report.push_str(&format!("- Total Lines of Code: {}\n", lines));
+        report.push_str(&format!("- Functions: {}\n", contract.source.matches("function ").count()));
+        report.push_str(&format!("- Events: {}\n", contract.source.matches("event ").count()));
+        report.push_str(&format!("- Modifiers: {}\n\n", contract.source.matches("modifier ").count()));
+
+        report.push_str("### Best Practices\n\n");
+        let has_natspec = contract.source.contains("/// @");
+        let has_spdx = contract.source.contains("SPDX-License-Identifier");
+        let has_pragma = contract.source.contains("pragma solidity");
+
+        report.push_str(&format!("- [{}] SPDX License Identifier\n", if has_spdx { "x" } else { " " }));
+        report.push_str(&format!("- [{}] Solidity Version Pragma\n", if has_pragma { "x" } else { " " }));
+        report.push_str(&format!("- [{}] NatSpec Documentation\n\n", if has_natspec { "x" } else { " " }));
+
+        report.push_str("## Recommendations\n\n");
+
+        if analysis.score < 100 {
+            report.push_str("1. Address all identified vulnerabilities before deployment\n");
+            report.push_str("2. Conduct a professional manual audit\n");
+            report.push_str("3. Implement comprehensive test coverage (>95%)\n");
+            report.push_str("4. Consider formal verification for critical functions\n");
+            report.push_str("5. Set up continuous monitoring post-deployment\n\n");
+        } else {
+            report.push_str("1. Conduct a professional manual audit for additional assurance\n");
+            report.push_str("2. Maintain comprehensive test coverage\n");
+            report.push_str("3. Set up continuous monitoring post-deployment\n\n");
+        }
+
+        report.push_str("## Testing Recommendations\n\n");
+        report.push_str("- **Unit Tests:** Test each function in isolation\n");
+        report.push_str("- **Integration Tests:** Test interactions between functions\n");
+        report.push_str("- **Fuzzing:** Use property-based testing to find edge cases\n");
+        report.push_str("- **Gas Optimization:** Profile and optimize expensive operations\n");
+        report.push_str("- **Security Tools:** Run Slither, Mythril, and other static analyzers\n\n");
+
+        report.push_str("## Deployment Checklist\n\n");
+        report.push_str("- [ ] All vulnerabilities resolved\n");
+        report.push_str("- [ ] Professional audit completed\n");
+        report.push_str("- [ ] Test coverage >95%\n");
+        report.push_str("- [ ] Gas optimization completed\n");
+        report.push_str("- [ ] Deployment scripts tested on testnet\n");
+        report.push_str("- [ ] Emergency pause mechanism verified\n");
+        report.push_str("- [ ] Upgrade mechanism tested (if applicable)\n");
+        report.push_str("- [ ] Documentation completed\n");
+        report.push_str("- [ ] Monitoring and alerting configured\n\n");
+
+        report.push_str("---\n\n");
+        report.push_str("*This is an automated audit report. Professional manual audit is strongly recommended before production deployment.*\n");
+
+        Ok(report)
     }
 }
 

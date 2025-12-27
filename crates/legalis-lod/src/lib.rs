@@ -1,19 +1,44 @@
 //! Legalis-LOD: Linked Open Data (RDF/TTL) export for Legalis-RS.
 //!
-//! This crate provides export functionality for legal statutes to RDF formats:
+//! This crate provides comprehensive RDF export and Linked Data functionality for legal statutes.
+//!
+//! ## RDF Formats Supported
 //! - Turtle (TTL) - Human-readable RDF format
 //! - N-Triples (NT) - Line-based RDF format
 //! - RDF/XML - XML serialization of RDF
 //! - JSON-LD - JSON-based RDF format
 //! - TriG - Named graph format
 //!
-//! Vocabularies supported:
+//! ## Ontologies and Vocabularies
 //! - ELI (European Legislation Identifier)
+//! - FaBiO (FRBR-aligned Bibliographic Ontology)
+//! - LKIF-Core (Legal Knowledge Interchange Format)
+//! - LegalRuleML (OASIS standard for legal rules)
+//! - Akoma Ntoso (Legal document markup)
 //! - FRBR (Functional Requirements for Bibliographic Records)
 //! - Dublin Core (dc, dcterms)
 //! - SKOS (Simple Knowledge Organization System)
 //! - VOID (Vocabulary of Interlinked Datasets)
+//! - PROV-O (Provenance Ontology)
 //! - Custom Legalis ontology
+//!
+//! ## Linked Data Features
+//! - Cool URIs for legal resources (ELI-style, hierarchical, flat patterns)
+//! - URI dereferencing with content negotiation
+//! - owl:sameAs linking for entity resolution
+//! - rdfs:seeAlso for related resources
+//! - Integration with EUR-Lex, legislation.gov.uk, Wikidata, DBpedia
+//!
+//! ## Additional Features
+//! - SHACL and ShEx validation
+//! - SPARQL query generation
+//! - Streaming serialization for large datasets
+//! - Export caching
+//! - RDFa output for HTML embedding
+//! - Provenance tracking (PROV-O)
+//! - License metadata (Creative Commons, etc.)
+//!
+//! See EXAMPLES.md for detailed usage examples.
 
 use chrono::{DateTime, NaiveDate, Utc};
 use legalis_core::{ComparisonOp, Condition, EffectType, Statute};
@@ -21,6 +46,8 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub mod cache;
+pub mod linked_data;
+pub mod ontology;
 pub mod rdfa;
 pub mod shacl;
 pub mod shex;
@@ -180,6 +207,10 @@ impl Namespaces {
             ("prov", "http://www.w3.org/ns/prov#"),
             ("cc", "http://creativecommons.org/ns#"),
             ("legalis", "https://legalis.dev/ontology#"),
+            ("fabio", ontology::fabio::NAMESPACE),
+            ("lkif", ontology::lkif::NAMESPACE),
+            ("lrml", ontology::legalruleml::NAMESPACE),
+            ("akn", ontology::akoma_ntoso::NAMESPACE),
         ]
     }
 }
@@ -359,6 +390,7 @@ pub struct LodExporter {
     namespaces: Namespaces,
     provenance: Option<ProvenanceInfo>,
     license: Option<LicenseInfo>,
+    include_ontologies: bool,
 }
 
 impl LodExporter {
@@ -369,6 +401,7 @@ impl LodExporter {
             namespaces: Namespaces::default(),
             provenance: None,
             license: None,
+            include_ontologies: false,
         }
     }
 
@@ -379,6 +412,7 @@ impl LodExporter {
             namespaces,
             provenance: None,
             license: None,
+            include_ontologies: false,
         }
     }
 
@@ -407,6 +441,17 @@ impl LodExporter {
     pub fn with_license(mut self, license: LicenseInfo) -> Self {
         self.license = Some(license);
         self
+    }
+
+    /// Builder method to enable ontology triples.
+    pub fn with_ontologies(mut self, include: bool) -> Self {
+        self.include_ontologies = include;
+        self
+    }
+
+    /// Sets whether to include ontology-specific triples.
+    pub fn set_include_ontologies(&mut self, include: bool) {
+        self.include_ontologies = include;
     }
 
     /// Validates the triples for a statute.
@@ -709,6 +754,15 @@ impl LodExporter {
         // Add license information if available
         if let Some(ref lic) = self.license {
             triples.extend(self.add_license_triples(&subject, lic));
+        }
+
+        // Add ontology-specific triples if enabled
+        if self.include_ontologies {
+            triples.extend(ontology::generate_all_ontology_triples(
+                &subject,
+                statute,
+                &self.namespaces.base,
+            ));
         }
 
         Ok(triples)
@@ -1992,6 +2046,19 @@ mod tests {
             "Validation too slow: {:?}",
             duration
         );
+    }
+
+    #[test]
+    fn test_export_with_ontologies() {
+        let exporter = LodExporter::new(RdfFormat::Turtle).with_ontologies(true);
+        let statute = sample_statute();
+        let output = exporter.export(&statute).unwrap();
+
+        // Should contain ontology-specific triples
+        assert!(output.contains("fabio:"));
+        assert!(output.contains("lkif:"));
+        assert!(output.contains("lrml:"));
+        assert!(output.contains("akn:"));
     }
 
     #[test]

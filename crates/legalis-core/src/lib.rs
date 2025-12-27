@@ -811,6 +811,62 @@ pub enum Condition {
         operator: ComparisonOp,
         value: f64,
     },
+    /// Composite condition - combines multiple conditions with weighted scoring
+    /// Useful for complex eligibility where multiple factors contribute to a decision
+    Composite {
+        /// List of weighted conditions (weight, condition)
+        /// Weights should be positive, typically 0.0-1.0 but not enforced
+        conditions: Vec<(f64, Box<Condition>)>,
+        /// Minimum total score required (sum of weights for satisfied conditions)
+        threshold: f64,
+    },
+    /// Threshold condition - aggregate scoring across multiple numeric attributes
+    /// Example: Combined income/asset test where total must exceed threshold
+    Threshold {
+        /// Attributes to sum (with optional multipliers)
+        attributes: Vec<(String, f64)>,
+        /// Comparison operator
+        operator: ComparisonOp,
+        /// Threshold value
+        value: f64,
+    },
+    /// Fuzzy logic condition - membership in fuzzy set
+    /// Supports gradual transitions between true/false
+    Fuzzy {
+        /// Attribute to evaluate
+        attribute: String,
+        /// Fuzzy set definition (value -> membership degree 0.0-1.0)
+        /// For simplicity, uses linear interpolation between points
+        membership_points: Vec<(f64, f64)>,
+        /// Minimum membership degree required (0.0-1.0)
+        min_membership: f64,
+    },
+    /// Probabilistic condition - probability-based evaluation
+    /// Useful for modeling uncertain conditions or risk assessment
+    Probabilistic {
+        /// Base condition to evaluate
+        condition: Box<Condition>,
+        /// Probability that this condition is relevant (0.0-1.0)
+        /// If p < 1.0, condition might be randomly evaluated as uncertain
+        probability: f64,
+        /// Minimum probability to consider condition satisfied
+        threshold: f64,
+    },
+    /// Temporal condition - time-sensitive condition with decay/growth
+    /// Value changes over time according to a decay or growth function
+    Temporal {
+        /// Base value at reference time
+        base_value: f64,
+        /// Reference timestamp (when base_value applies)
+        reference_time: i64,
+        /// Decay/growth rate per time unit (negative for decay, positive for growth)
+        /// Applied as: value = base_value * (1 + rate)^time_elapsed
+        rate: f64,
+        /// Comparison operator
+        operator: ComparisonOp,
+        /// Target value to compare against
+        target_value: f64,
+    },
     /// Logical AND of conditions
     And(Box<Condition>, Box<Condition>),
     /// Logical OR of conditions
@@ -848,6 +904,10 @@ impl Condition {
                 1 + left.count_conditions() + right.count_conditions()
             }
             Self::Not(inner) => 1 + inner.count_conditions(),
+            Self::Composite { conditions, .. } => {
+                1 + conditions.iter().map(|(_, c)| c.count_conditions()).sum::<usize>()
+            }
+            Self::Probabilistic { condition, .. } => 1 + condition.count_conditions(),
             _ => 1,
         }
     }
@@ -858,6 +918,10 @@ impl Condition {
         match self {
             Self::And(left, right) | Self::Or(left, right) => 1 + left.depth().max(right.depth()),
             Self::Not(inner) => 1 + inner.depth(),
+            Self::Composite { conditions, .. } => {
+                1 + conditions.iter().map(|(_, c)| c.depth()).max().unwrap_or(0)
+            }
+            Self::Probabilistic { condition, .. } => 1 + condition.depth(),
             _ => 1,
         }
     }
@@ -959,6 +1023,127 @@ impl Condition {
             formula: formula.into(),
             operator,
             value,
+        }
+    }
+
+    /// Creates a new Composite condition with weighted sub-conditions.
+    ///
+    /// # Arguments
+    /// * `conditions` - Vector of (weight, condition) pairs
+    /// * `threshold` - Minimum total score required
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp};
+    /// let cond = Condition::composite(
+    ///     vec![
+    ///         (0.5, Box::new(Condition::age(ComparisonOp::GreaterOrEqual, 18))),
+    ///         (0.3, Box::new(Condition::income(ComparisonOp::GreaterOrEqual, 30000))),
+    ///     ],
+    ///     0.6
+    /// );
+    /// ```
+    pub fn composite(conditions: Vec<(f64, Box<Condition>)>, threshold: f64) -> Self {
+        Self::Composite { conditions, threshold }
+    }
+
+    /// Creates a new Threshold condition for aggregate scoring.
+    ///
+    /// # Arguments
+    /// * `attributes` - Vector of (attribute_name, multiplier) pairs
+    /// * `operator` - Comparison operator
+    /// * `value` - Threshold value
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp};
+    /// // Total assets (income + 10*savings) must be >= 50000
+    /// let cond = Condition::threshold(
+    ///     vec![("income".to_string(), 1.0), ("savings".to_string(), 10.0)],
+    ///     ComparisonOp::GreaterOrEqual,
+    ///     50000.0
+    /// );
+    /// ```
+    pub fn threshold(attributes: Vec<(String, f64)>, operator: ComparisonOp, value: f64) -> Self {
+        Self::Threshold { attributes, operator, value }
+    }
+
+    /// Creates a new Fuzzy condition for gradual membership.
+    ///
+    /// # Arguments
+    /// * `attribute` - Attribute to evaluate
+    /// * `membership_points` - Vector of (value, membership_degree) pairs for linear interpolation
+    /// * `min_membership` - Minimum membership degree required (0.0-1.0)
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::Condition;
+    /// // Age is "young" with fuzzy membership
+    /// let cond = Condition::fuzzy(
+    ///     "age".to_string(),
+    ///     vec![(0.0, 1.0), (25.0, 0.5), (50.0, 0.0)],
+    ///     0.5
+    /// );
+    /// ```
+    pub fn fuzzy(attribute: String, membership_points: Vec<(f64, f64)>, min_membership: f64) -> Self {
+        Self::Fuzzy { attribute, membership_points, min_membership }
+    }
+
+    /// Creates a new Probabilistic condition.
+    ///
+    /// # Arguments
+    /// * `condition` - Base condition to evaluate
+    /// * `probability` - Probability that this condition is relevant (0.0-1.0)
+    /// * `threshold` - Minimum probability to consider satisfied
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp};
+    /// // 80% chance that age >= 18 is relevant
+    /// let cond = Condition::probabilistic(
+    ///     Box::new(Condition::age(ComparisonOp::GreaterOrEqual, 18)),
+    ///     0.8,
+    ///     0.5
+    /// );
+    /// ```
+    pub fn probabilistic(condition: Box<Condition>, probability: f64, threshold: f64) -> Self {
+        Self::Probabilistic { condition, probability, threshold }
+    }
+
+    /// Creates a new Temporal condition with decay/growth over time.
+    ///
+    /// # Arguments
+    /// * `base_value` - Value at reference time
+    /// * `reference_time` - Reference timestamp
+    /// * `rate` - Decay/growth rate (negative for decay, positive for growth)
+    /// * `operator` - Comparison operator
+    /// * `target_value` - Target value to compare against
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp};
+    /// // Asset value decays 5% per year, must stay above 10000
+    /// let cond = Condition::temporal(
+    ///     100000.0,
+    ///     1609459200, // Jan 1, 2021
+    ///     -0.05,
+    ///     ComparisonOp::GreaterOrEqual,
+    ///     10000.0
+    /// );
+    /// ```
+    pub fn temporal(
+        base_value: f64,
+        reference_time: i64,
+        rate: f64,
+        operator: ComparisonOp,
+        target_value: f64,
+    ) -> Self {
+        Self::Temporal {
+            base_value,
+            reference_time,
+            rate,
+            operator,
+            target_value,
         }
     }
 
@@ -1382,6 +1567,104 @@ impl Condition {
                 let before_end = end.is_none_or(|e| current_date <= e);
                 Ok(after_start && before_end)
             }
+            Self::Composite { conditions, threshold } => {
+                let mut total_score = 0.0;
+                for (weight, condition) in conditions {
+                    let satisfied = condition.evaluate_with_depth(context, depth + 1)?;
+                    if satisfied {
+                        total_score += weight;
+                    }
+                }
+                Ok(total_score >= *threshold)
+            }
+            Self::Threshold { attributes, operator, value } => {
+                let mut total = 0.0;
+                for (attr_name, multiplier) in attributes {
+                    // Try to get attribute as f64
+                    let attr_value = context
+                        .get_attribute(attr_name)
+                        .and_then(|s| s.parse::<f64>().ok())
+                        .ok_or_else(|| EvaluationError::MissingAttribute {
+                            key: attr_name.clone(),
+                        })?;
+                    total += attr_value * multiplier;
+                }
+                Ok(operator.compare_f64(total, *value))
+            }
+            Self::Fuzzy { attribute, membership_points, min_membership } => {
+                // Get attribute value
+                let attr_value = context
+                    .get_attribute(attribute)
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .ok_or_else(|| EvaluationError::MissingAttribute {
+                        key: attribute.clone(),
+                    })?;
+
+                // Linear interpolation of membership degree
+                let membership = if membership_points.is_empty() {
+                    0.0
+                } else if membership_points.len() == 1 {
+                    membership_points[0].1
+                } else {
+                    // Sort points by value
+                    let mut sorted = membership_points.clone();
+                    sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+                    // Find interpolation range
+                    if attr_value <= sorted[0].0 {
+                        sorted[0].1
+                    } else if attr_value >= sorted[sorted.len() - 1].0 {
+                        sorted[sorted.len() - 1].1
+                    } else {
+                        // Linear interpolation
+                        let mut result = 0.0;
+                        for i in 0..sorted.len() - 1 {
+                            if attr_value >= sorted[i].0 && attr_value <= sorted[i + 1].0 {
+                                let (x0, y0) = sorted[i];
+                                let (x1, y1) = sorted[i + 1];
+                                let t = (attr_value - x0) / (x1 - x0);
+                                result = y0 + t * (y1 - y0);
+                                break;
+                            }
+                        }
+                        result
+                    }
+                };
+
+                Ok(membership >= *min_membership)
+            }
+            Self::Probabilistic { condition, probability, threshold } => {
+                // Evaluate the base condition
+                let satisfied = condition.evaluate_with_depth(context, depth + 1)?;
+
+                // If condition is satisfied, check if probability meets threshold
+                // If not satisfied, probability is 0
+                let effective_probability = if satisfied { *probability } else { 0.0 };
+                Ok(effective_probability >= *threshold)
+            }
+            Self::Temporal {
+                base_value,
+                reference_time,
+                rate,
+                operator,
+                target_value,
+            } => {
+                // Get current timestamp from context
+                let current_time = context
+                    .get_current_timestamp()
+                    .ok_or_else(|| EvaluationError::MissingContext {
+                        description: "current timestamp".to_string(),
+                    })?;
+
+                // Calculate time elapsed (in some unit, e.g., years)
+                // Assuming timestamps are Unix timestamps (seconds)
+                let time_elapsed = (current_time - reference_time) as f64 / (365.25 * 24.0 * 3600.0); // Convert to years
+
+                // Apply decay/growth: value = base_value * (1 + rate)^time_elapsed
+                let current_value = base_value * (1.0 + rate).powf(time_elapsed);
+
+                Ok(operator.compare_f64(current_value, *target_value))
+            }
             // For Custom conditions, we can't evaluate without more context
             Self::Custom { description } => Err(EvaluationError::Custom {
                 message: format!("Cannot evaluate custom condition: {}", description),
@@ -1765,6 +2048,64 @@ impl fmt::Display for Condition {
             } => {
                 write!(f, "({}) {} {}", formula, operator, value)
             }
+            Self::Composite {
+                conditions,
+                threshold,
+            } => {
+                write!(f, "composite[")?;
+                for (i, (weight, cond)) in conditions.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}*{}", weight, cond)?;
+                }
+                write!(f, "] >= {}", threshold)
+            }
+            Self::Threshold {
+                attributes,
+                operator,
+                value,
+            } => {
+                write!(f, "sum[")?;
+                for (i, (attr, mult)) in attributes.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " + ")?;
+                    }
+                    if (*mult - 1.0).abs() < f64::EPSILON {
+                        write!(f, "{}", attr)?;
+                    } else {
+                        write!(f, "{}*{}", mult, attr)?;
+                    }
+                }
+                write!(f, "] {} {}", operator, value)
+            }
+            Self::Fuzzy {
+                attribute,
+                membership_points,
+                min_membership,
+            } => {
+                write!(f, "fuzzy({}, membership={:?}) >= {}", attribute, membership_points, min_membership)
+            }
+            Self::Probabilistic {
+                condition,
+                probability,
+                threshold,
+            } => {
+                write!(f, "prob({}, p={}) >= {}", condition, probability, threshold)
+            }
+            Self::Temporal {
+                base_value,
+                reference_time,
+                rate,
+                operator,
+                target_value,
+            } => {
+                write!(
+                    f,
+                    "temporal(base={}, t0={}, rate={}) {} {}",
+                    base_value, reference_time, rate, operator, target_value
+                )
+            }
             Self::And(left, right) => write!(f, "({} AND {})", left, right),
             Self::Or(left, right) => write!(f, "({} OR {})", left, right),
             Self::Not(inner) => write!(f, "NOT {}", inner),
@@ -1985,6 +2326,11 @@ pub trait EvaluationContext {
     /// Get current date for date range checks.
     fn get_current_date(&self) -> Option<NaiveDate>;
 
+    /// Get current timestamp (Unix timestamp in seconds) for temporal conditions.
+    fn get_current_timestamp(&self) -> Option<i64> {
+        None
+    }
+
     /// Check geographic location.
     fn check_geographic(&self, region_type: RegionType, region_id: &str) -> bool;
 
@@ -2047,6 +2393,215 @@ impl fmt::Display for EvaluationError {
 }
 
 impl std::error::Error for EvaluationError {}
+
+/// Context wrapper that provides default values for missing attributes.
+///
+/// This is useful for handling optional attributes with sensible defaults.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Condition, ComparisonOp, AttributeBasedContext, DefaultValueContext};
+/// # use std::collections::HashMap;
+/// let mut attributes = HashMap::new();
+/// attributes.insert("name".to_string(), "Alice".to_string());
+/// // age is missing
+/// let entity = AttributeBasedContext::new(attributes);
+///
+/// let mut defaults = HashMap::new();
+/// defaults.insert("age".to_string(), "18".to_string());
+///
+/// let ctx_with_defaults = DefaultValueContext::new(&entity, defaults);
+///
+/// // Will use default age of 18
+/// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+/// assert!(condition.evaluate(&ctx_with_defaults).unwrap());
+/// ```
+#[derive(Debug)]
+pub struct DefaultValueContext<'a, C: EvaluationContext> {
+    inner: &'a C,
+    defaults: HashMap<String, String>,
+}
+
+impl<'a, C: EvaluationContext> DefaultValueContext<'a, C> {
+    /// Creates a new context with default values.
+    pub fn new(inner: &'a C, defaults: HashMap<String, String>) -> Self {
+        Self { inner, defaults }
+    }
+
+    /// Adds a default value for an attribute.
+    pub fn with_default(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.defaults.insert(key.into(), value.into());
+        self
+    }
+}
+
+impl<'a, C: EvaluationContext> EvaluationContext for DefaultValueContext<'a, C> {
+    fn get_attribute(&self, key: &str) -> Option<String> {
+        self.inner
+            .get_attribute(key)
+            .or_else(|| self.defaults.get(key).cloned())
+    }
+
+    fn get_age(&self) -> Option<u32> {
+        self.inner.get_age().or_else(|| {
+            self.defaults
+                .get("age")
+                .and_then(|s| s.parse::<u32>().ok())
+        })
+    }
+
+    fn get_income(&self) -> Option<u64> {
+        self.inner.get_income().or_else(|| {
+            self.defaults
+                .get("income")
+                .and_then(|s| s.parse::<u64>().ok())
+        })
+    }
+
+    fn get_current_date(&self) -> Option<NaiveDate> {
+        self.inner.get_current_date()
+    }
+
+    fn get_current_timestamp(&self) -> Option<i64> {
+        self.inner.get_current_timestamp()
+    }
+
+    fn check_geographic(&self, region_type: RegionType, region_id: &str) -> bool {
+        self.inner.check_geographic(region_type, region_id)
+    }
+
+    fn check_relationship(
+        &self,
+        relationship_type: RelationshipType,
+        target_id: Option<&str>,
+    ) -> bool {
+        self.inner.check_relationship(relationship_type, target_id)
+    }
+
+    fn get_residency_months(&self) -> Option<u32> {
+        self.inner.get_residency_months()
+    }
+
+    fn get_duration(&self, unit: DurationUnit) -> Option<u32> {
+        self.inner.get_duration(unit)
+    }
+
+    fn get_percentage(&self, context: &str) -> Option<u32> {
+        self.inner.get_percentage(context)
+    }
+
+    fn evaluate_formula(&self, formula: &str) -> Option<f64> {
+        self.inner.evaluate_formula(formula)
+    }
+}
+
+/// Context wrapper that provides fallback evaluation strategies.
+///
+/// When the primary context cannot provide a value, it falls back to a secondary context.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Condition, ComparisonOp, AttributeBasedContext, FallbackContext, EvaluationContext};
+/// # use std::collections::HashMap;
+/// let mut primary_attrs = HashMap::new();
+/// primary_attrs.insert("name".to_string(), "Alice".to_string());
+/// let primary = AttributeBasedContext::new(primary_attrs);
+///
+/// let mut fallback_attrs = HashMap::new();
+/// fallback_attrs.insert("age".to_string(), "25".to_string());
+/// fallback_attrs.insert("name".to_string(), "Bob".to_string()); // Will not be used
+/// let fallback = AttributeBasedContext::new(fallback_attrs);
+///
+/// let ctx = FallbackContext::new(&primary, &fallback);
+///
+/// // name comes from primary
+/// assert_eq!(ctx.get_attribute("name"), Some("Alice".to_string()));
+/// // age comes from fallback
+/// assert_eq!(ctx.get_attribute("age"), Some("25".to_string()));
+/// ```
+#[derive(Debug)]
+pub struct FallbackContext<'a, C1: EvaluationContext, C2: EvaluationContext> {
+    primary: &'a C1,
+    fallback: &'a C2,
+}
+
+impl<'a, C1: EvaluationContext, C2: EvaluationContext> FallbackContext<'a, C1, C2> {
+    /// Creates a new context with fallback.
+    pub fn new(primary: &'a C1, fallback: &'a C2) -> Self {
+        Self { primary, fallback }
+    }
+}
+
+impl<'a, C1: EvaluationContext, C2: EvaluationContext> EvaluationContext
+    for FallbackContext<'a, C1, C2>
+{
+    fn get_attribute(&self, key: &str) -> Option<String> {
+        self.primary
+            .get_attribute(key)
+            .or_else(|| self.fallback.get_attribute(key))
+    }
+
+    fn get_age(&self) -> Option<u32> {
+        self.primary.get_age().or_else(|| self.fallback.get_age())
+    }
+
+    fn get_income(&self) -> Option<u64> {
+        self.primary
+            .get_income()
+            .or_else(|| self.fallback.get_income())
+    }
+
+    fn get_current_date(&self) -> Option<NaiveDate> {
+        self.primary
+            .get_current_date()
+            .or_else(|| self.fallback.get_current_date())
+    }
+
+    fn get_current_timestamp(&self) -> Option<i64> {
+        self.primary
+            .get_current_timestamp()
+            .or_else(|| self.fallback.get_current_timestamp())
+    }
+
+    fn check_geographic(&self, region_type: RegionType, region_id: &str) -> bool {
+        self.primary.check_geographic(region_type, region_id)
+            || self.fallback.check_geographic(region_type, region_id)
+    }
+
+    fn check_relationship(
+        &self,
+        relationship_type: RelationshipType,
+        target_id: Option<&str>,
+    ) -> bool {
+        self.primary
+            .check_relationship(relationship_type, target_id)
+            || self.fallback.check_relationship(relationship_type, target_id)
+    }
+
+    fn get_residency_months(&self) -> Option<u32> {
+        self.primary
+            .get_residency_months()
+            .or_else(|| self.fallback.get_residency_months())
+    }
+
+    fn get_duration(&self, unit: DurationUnit) -> Option<u32> {
+        self.primary
+            .get_duration(unit)
+            .or_else(|| self.fallback.get_duration(unit))
+    }
+
+    fn get_percentage(&self, context: &str) -> Option<u32> {
+        self.primary
+            .get_percentage(context)
+            .or_else(|| self.fallback.get_percentage(context))
+    }
+
+    fn evaluate_formula(&self, formula: &str) -> Option<f64> {
+        self.primary
+            .evaluate_formula(formula)
+            .or_else(|| self.fallback.evaluate_formula(formula))
+    }
+}
 
 /// Implement EvaluationContext for AttributeBasedContext for compatibility.
 impl EvaluationContext for AttributeBasedContext {
@@ -2291,9 +2846,41 @@ impl Condition {
             | Self::SetMembership { .. }
             | Self::Pattern { .. }
             | Self::Calculation { .. }
+            | Self::Threshold { .. }
+            | Self::Fuzzy { .. }
+            | Self::Temporal { .. }
             | Self::Custom { .. } => {
                 // Delegate to sequential evaluation
                 self.evaluate(context)
+            }
+
+            // Composite and Probabilistic have nested conditions, evaluate them recursively
+            Self::Composite { conditions, threshold } => {
+                // Evaluate all conditions in parallel
+                let results: Vec<_> = conditions
+                    .par_iter()
+                    .map(|(weight, cond)| {
+                        cond.evaluate_parallel_with_depth(context, depth + 1, max_depth)
+                            .map(|satisfied| if satisfied { *weight } else { 0.0 })
+                    })
+                    .collect();
+
+                // Check for errors
+                for result in &results {
+                    if let Err(e) = result {
+                        return Err(e.clone());
+                    }
+                }
+
+                // Sum up the scores
+                let total_score: f64 = results.iter().filter_map(|r| r.as_ref().ok()).sum();
+                Ok(total_score >= *threshold)
+            }
+
+            Self::Probabilistic { condition, probability, threshold } => {
+                let satisfied = condition.evaluate_parallel_with_depth(context, depth + 1, max_depth)?;
+                let effective_probability = if satisfied { *probability } else { 0.0 };
+                Ok(effective_probability >= *threshold)
             }
 
             // Parallel evaluation for compound conditions

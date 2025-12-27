@@ -3,26 +3,39 @@
 //! This module provides a GraphQL interface for querying and mutating statutes,
 //! running verifications, and managing the statute registry.
 
-use async_graphql::{Context, EmptySubscription, FieldResult, Object, Schema, SimpleObject};
+use async_graphql::{Context, FieldResult, Object, Schema, SimpleObject, Subscription};
+use futures::{Stream, StreamExt};
 use legalis_core::{Effect, EffectType, Statute};
 use legalis_dsl::LegalDslParser;
 use legalis_verifier::StatuteVerifier;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_stream::wrappers::BroadcastStream;
+
+use crate::websocket::{WsBroadcaster, WsNotification};
 
 /// GraphQL schema type.
-pub type LegalisSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+pub type LegalisSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 
 /// Application state for GraphQL context.
 #[derive(Clone)]
 pub struct GraphQLState {
     pub statutes: Arc<RwLock<Vec<Statute>>>,
+    pub ws_broadcaster: WsBroadcaster,
 }
 
 impl GraphQLState {
     pub fn new() -> Self {
         Self {
             statutes: Arc::new(RwLock::new(Vec::new())),
+            ws_broadcaster: WsBroadcaster::new(),
+        }
+    }
+
+    pub fn with_broadcaster(ws_broadcaster: WsBroadcaster) -> Self {
+        Self {
+            statutes: Arc::new(RwLock::new(Vec::new())),
+            ws_broadcaster,
         }
     }
 }
@@ -335,9 +348,160 @@ impl MutationRoot {
     }
 }
 
-/// Creates a new GraphQL schema.
+/// GraphQL representation of a notification event.
+#[derive(SimpleObject, Clone)]
+pub struct NotificationEvent {
+    /// Event type
+    pub event_type: String,
+    /// Event message
+    pub message: String,
+    /// Related statute ID (if applicable)
+    pub statute_id: Option<String>,
+    /// Timestamp
+    pub timestamp: String,
+}
+
+impl From<WsNotification> for NotificationEvent {
+    fn from(notif: WsNotification) -> Self {
+        match notif {
+            WsNotification::StatuteCreated {
+                statute_id,
+                title,
+                created_by,
+            } => Self {
+                event_type: "statute_created".to_string(),
+                message: format!("Statute '{}' created by {}", title, created_by),
+                statute_id: Some(statute_id),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::StatuteUpdated {
+                statute_id,
+                title,
+                updated_by,
+            } => Self {
+                event_type: "statute_updated".to_string(),
+                message: format!("Statute '{}' updated by {}", title, updated_by),
+                statute_id: Some(statute_id),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::StatuteDeleted {
+                statute_id,
+                deleted_by,
+            } => Self {
+                event_type: "statute_deleted".to_string(),
+                message: format!("Statute '{}' deleted by {}", statute_id, deleted_by),
+                statute_id: Some(statute_id),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::VerificationCompleted {
+                job_id,
+                passed,
+                errors_count,
+                warnings_count,
+            } => Self {
+                event_type: "verification_completed".to_string(),
+                message: format!(
+                    "Verification job {} completed: {} ({} errors, {} warnings)",
+                    job_id,
+                    if passed { "PASSED" } else { "FAILED" },
+                    errors_count,
+                    warnings_count
+                ),
+                statute_id: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::SimulationCompleted {
+                simulation_id,
+                total_entities,
+                deterministic_rate,
+                discretionary_rate,
+                void_rate,
+            } => Self {
+                event_type: "simulation_completed".to_string(),
+                message: format!(
+                    "Simulation {} completed: {} entities (det: {:.1}%, disc: {:.1}%, void: {:.1}%)",
+                    simulation_id, total_entities, deterministic_rate, discretionary_rate, void_rate
+                ),
+                statute_id: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::SystemStatus { status, message } => Self {
+                event_type: "system_status".to_string(),
+                message: format!("System status [{}]: {}", status, message),
+                statute_id: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+        }
+    }
+}
+
+/// Subscription root.
+pub struct SubscriptionRoot;
+
+#[Subscription]
+impl SubscriptionRoot {
+    /// Subscribe to all notifications.
+    async fn notifications(&self, ctx: &Context<'_>) -> impl Stream<Item = NotificationEvent> {
+        let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
+        let rx = state.ws_broadcaster.subscribe();
+
+        BroadcastStream::new(rx).filter_map(|result| async move {
+            result.ok().map(NotificationEvent::from)
+        })
+    }
+
+    /// Subscribe to statute events (created, updated, deleted).
+    async fn statute_events(&self, ctx: &Context<'_>) -> impl Stream<Item = NotificationEvent> {
+        let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
+        let rx = state.ws_broadcaster.subscribe();
+
+        BroadcastStream::new(rx).filter_map(|result| async move {
+            result.ok().and_then(|notif| {
+                match &notif {
+                    WsNotification::StatuteCreated { .. }
+                    | WsNotification::StatuteUpdated { .. }
+                    | WsNotification::StatuteDeleted { .. } => Some(NotificationEvent::from(notif)),
+                    _ => None,
+                }
+            })
+        })
+    }
+
+    /// Subscribe to verification events.
+    async fn verification_events(&self, ctx: &Context<'_>) -> impl Stream<Item = NotificationEvent> {
+        let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
+        let rx = state.ws_broadcaster.subscribe();
+
+        BroadcastStream::new(rx).filter_map(|result| async move {
+            result.ok().and_then(|notif| {
+                match &notif {
+                    WsNotification::VerificationCompleted { .. } => Some(NotificationEvent::from(notif)),
+                    _ => None,
+                }
+            })
+        })
+    }
+
+    /// Subscribe to simulation events.
+    async fn simulation_events(&self, ctx: &Context<'_>) -> impl Stream<Item = NotificationEvent> {
+        let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
+        let rx = state.ws_broadcaster.subscribe();
+
+        BroadcastStream::new(rx).filter_map(|result| async move {
+            result.ok().and_then(|notif| {
+                match &notif {
+                    WsNotification::SimulationCompleted { .. } => Some(NotificationEvent::from(notif)),
+                    _ => None,
+                }
+            })
+        })
+    }
+}
+
+/// Creates a new GraphQL schema with subscription support.
+/// TODO: Add DataLoader support for N+1 optimization
 pub fn create_schema(state: GraphQLState) -> LegalisSchema {
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+    Schema::build(QueryRoot, MutationRoot, SubscriptionRoot)
         .data(state)
         .finish()
 }

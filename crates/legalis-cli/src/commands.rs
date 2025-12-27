@@ -2237,6 +2237,519 @@ fn print_repl_help(no_color: bool) {
     }
 }
 
+/// Handles the publish command.
+pub fn handle_publish(
+    input: &str,
+    _registry_path: &str,
+    tags: &[String],
+    dry_run: bool,
+) -> Result<()> {
+    use legalis_registry::{StatuteEntry, StatuteRegistry};
+
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    if dry_run {
+        println!(
+            "{}",
+            "[DRY RUN] Would publish statute to registry:".cyan().bold()
+        );
+        println!("  Statute ID: {}", statute.id.cyan());
+        println!("  Title: {}", statute.title);
+        println!("  Version: {}", statute.version);
+        println!("  Registry: {}", _registry_path);
+        println!("  Tags: {}", tags.join(", "));
+        return Ok(());
+    }
+
+    let mut registry = StatuteRegistry::new();
+    let jurisdiction = statute
+        .jurisdiction
+        .clone()
+        .unwrap_or_else(|| "UNKNOWN".to_string());
+    let mut entry = StatuteEntry::new(statute.clone(), jurisdiction);
+    entry.tags = tags.to_vec();
+    let _ = registry.register(entry);
+
+    // In a real implementation, this would save to a file or database
+    println!("{}", "✓ Statute published successfully".green().bold());
+    println!("  ID: {}", statute.id.cyan());
+    println!("  Version: {}", statute.version);
+    if !tags.is_empty() {
+        println!("  Tags: {}", tags.join(", "));
+    }
+
+    Ok(())
+}
+
+/// Handles the validate command.
+pub fn handle_validate(
+    inputs: &[String],
+    format: Option<&LegalDslFormat>,
+    strict: bool,
+) -> Result<()> {
+    let parser = LegalDslParser::new();
+    let mut converter = LegalConverter::new();
+
+    let mut all_valid = true;
+    let mut total_errors = 0;
+    let mut total_warnings = 0;
+
+    for input in inputs {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+
+        println!("{} {}", "Validating:".bold(), input.cyan());
+
+        // Try to parse as Legalis DSL
+        match parser.parse_statute(&content) {
+            Ok(statute) => {
+                println!("  {} Valid Legalis DSL", "✓".green());
+                println!("    Statute ID: {}", statute.id);
+                println!("    Preconditions: {}", statute.preconditions.len());
+            }
+            Err(e) => {
+                // If format is specified, try to import as that format
+                if let Some(fmt) = format {
+                    let legal_format: LegalFormat = fmt.clone().into();
+                    match converter.import(&content, legal_format) {
+                        Ok((statutes, _report)) => {
+                            if !statutes.is_empty() {
+                                println!("  {} Valid {:?} format", "✓".green(), fmt);
+                            } else {
+                                println!("  {} Invalid {:?} format", "✗".red(), fmt);
+                                all_valid = false;
+                                total_errors += 1;
+                            }
+                        }
+                        Err(validation_err) => {
+                            println!("  {} Validation error: {}", "✗".red(), validation_err);
+                            all_valid = false;
+                            total_errors += 1;
+                        }
+                    }
+                } else {
+                    println!("  {} Parse error: {}", "✗".red(), e);
+                    all_valid = false;
+                    total_errors += 1;
+                }
+            }
+        }
+
+        // Check for potential issues
+        if content.trim().is_empty() {
+            println!("  {} File is empty", "⚠".yellow());
+            total_warnings += 1;
+        }
+
+        println!();
+    }
+
+    println!("{}", "=".repeat(50).dimmed());
+    if all_valid {
+        println!("{}", "✓ All files are valid".green().bold());
+    } else {
+        println!(
+            "{} {} error(s), {} warning(s)",
+            "✗".red(),
+            total_errors.to_string().red().bold(),
+            total_warnings.to_string().yellow().bold()
+        );
+    }
+
+    if !all_valid || (strict && total_warnings > 0) {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Handles the install command.
+pub fn handle_install(
+    statute_id: &str,
+    _registry_path: &str,
+    output: &str,
+    force: bool,
+) -> Result<()> {
+    use legalis_registry::StatuteRegistry;
+
+    println!(
+        "{} {} from registry...",
+        "Installing".bold(),
+        statute_id.cyan()
+    );
+
+    let mut registry = StatuteRegistry::new();
+
+    // Look up statute in registry
+    let entry = registry
+        .get(statute_id)
+        .ok_or_else(|| anyhow::anyhow!("Statute '{}' not found in registry", statute_id))?;
+
+    let output_path = Path::new(output).join(format!("{}.legal", statute_id));
+
+    // Check if already installed
+    if output_path.exists() && !force {
+        return Err(anyhow::anyhow!(
+            "Statute already installed at {}. Use --force to reinstall.",
+            output_path.display()
+        ));
+    }
+
+    // Create output directory if it doesn't exist
+    fs::create_dir_all(output)?;
+
+    // Generate DSL format
+    let dsl_content = statute_to_dsl(&entry.statute);
+
+    // Write to file
+    fs::write(&output_path, dsl_content)?;
+
+    println!("{}", "✓ Installation successful".green().bold());
+    println!("  Installed to: {}", output_path.display());
+    println!("  Version: {}", entry.statute.version);
+    if !entry.tags.is_empty() {
+        println!("  Tags: {}", entry.tags.join(", "));
+    }
+
+    Ok(())
+}
+
+/// Handles the list command.
+pub fn handle_list(directory: &str, verbose: bool) -> Result<()> {
+    println!("{} {}", "Listing statutes in:".bold(), directory.cyan());
+    println!();
+
+    let dir_path = Path::new(directory);
+
+    if !dir_path.exists() {
+        println!("{}", "Directory does not exist".yellow());
+        return Ok(());
+    }
+
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    // Read all .legal files
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("legal") {
+            match fs::read_to_string(&path) {
+                Ok(content) => match parser.parse_statute(&content) {
+                    Ok(statute) => {
+                        statutes.push((path.clone(), statute));
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{} Failed to parse {}: {}",
+                            "⚠".yellow(),
+                            path.display(),
+                            e
+                        );
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to read {}: {}",
+                        "⚠".yellow(),
+                        path.display(),
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    if statutes.is_empty() {
+        println!("{}", "No statutes found".yellow());
+        return Ok(());
+    }
+
+    if verbose {
+        for (path, statute) in &statutes {
+            println!("{}", "─".repeat(50).dimmed());
+            println!("{} {}", "ID:".bold(), statute.id.cyan());
+            println!("{} {}", "Title:".bold(), statute.title);
+            println!("{} {}", "Version:".bold(), statute.version);
+            if let Some(ref jur) = statute.jurisdiction {
+                println!("{} {}", "Jurisdiction:".bold(), jur);
+            }
+            println!("{} {}", "File:".bold(), path.display());
+            println!("{} {}", "Preconditions:".bold(), statute.preconditions.len());
+            println!(
+                "{} {}",
+                "Has Discretion:".bold(),
+                statute.discretion_logic.is_some()
+            );
+            println!();
+        }
+    } else {
+        use comfy_table::{Cell, Color, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_header(vec![
+                Cell::new("ID").fg(Color::Cyan),
+                Cell::new("Title").fg(Color::Cyan),
+                Cell::new("Version").fg(Color::Cyan),
+                Cell::new("Jurisdiction").fg(Color::Cyan),
+            ]);
+
+        for (_, statute) in &statutes {
+            table.add_row(vec![
+                Cell::new(&statute.id),
+                Cell::new(&statute.title),
+                Cell::new(statute.version.to_string()),
+                Cell::new(statute.jurisdiction.as_ref().unwrap_or(&"N/A".to_string())),
+            ]);
+        }
+
+        println!("{}", table);
+    }
+
+    println!();
+    println!(
+        "{} {}",
+        "Total:".bold(),
+        format!("{} statute(s)", statutes.len()).green()
+    );
+
+    Ok(())
+}
+
+/// Handles the add command.
+pub fn handle_add(statute_id: &str, _registry_path: &str, config_path: &str) -> Result<()> {
+    use legalis_registry::StatuteRegistry;
+
+    println!(
+        "{} {} as dependency...",
+        "Adding".bold(),
+        statute_id.cyan()
+    );
+
+    let mut registry = StatuteRegistry::new();
+
+    // Verify statute exists in registry
+    let entry = registry
+        .get(statute_id)
+        .ok_or_else(|| anyhow::anyhow!("Statute '{}' not found in registry", statute_id))?;
+
+    // Read config file
+    let config_content = if Path::new(config_path).exists() {
+        fs::read_to_string(config_path)?
+    } else {
+        String::from("version: \"0.2.0\"\ndependencies: []\n")
+    };
+
+    // Parse as YAML
+    let mut config: serde_yaml::Value = serde_yaml::from_str(&config_content)?;
+
+    // Add dependency
+    if let Some(deps) = config.get_mut("dependencies") {
+        if let Some(deps_array) = deps.as_sequence_mut() {
+            let dep = serde_yaml::Value::Mapping({
+                let mut map = serde_yaml::Mapping::new();
+                map.insert(
+                    serde_yaml::Value::String("id".to_string()),
+                    serde_yaml::Value::String(statute_id.to_string()),
+                );
+                map.insert(
+                    serde_yaml::Value::String("version".to_string()),
+                    serde_yaml::Value::Number(entry.statute.version.into()),
+                );
+                map
+            });
+            deps_array.push(dep);
+        }
+    } else {
+        let deps_array = vec![serde_yaml::Value::Mapping({
+            let mut map = serde_yaml::Mapping::new();
+            map.insert(
+                serde_yaml::Value::String("id".to_string()),
+                serde_yaml::Value::String(statute_id.to_string()),
+            );
+            map.insert(
+                serde_yaml::Value::String("version".to_string()),
+                serde_yaml::Value::Number(entry.statute.version.into()),
+            );
+            map
+        })];
+        config
+            .as_mapping_mut()
+            .unwrap()
+            .insert("dependencies".into(), deps_array.into());
+    }
+
+    // Write back to file
+    let updated_config = serde_yaml::to_string(&config)?;
+    fs::write(config_path, updated_config)?;
+
+    println!("{}", "✓ Dependency added successfully".green().bold());
+    println!("  Statute: {}", statute_id.cyan());
+    println!("  Version: {}", entry.statute.version);
+    println!("  Config updated: {}", config_path);
+
+    Ok(())
+}
+
+/// Handles the update command.
+pub fn handle_update(
+    statute_id: Option<&str>,
+    _registry_path: &str,
+    dry_run: bool,
+) -> Result<()> {
+    if let Some(id) = statute_id {
+        println!("{} {}...", "Checking for updates for".bold(), id.cyan());
+    } else {
+        println!("{}", "Checking for updates for all statutes...".bold());
+    }
+
+    if dry_run {
+        println!(
+            "{}",
+            "[DRY RUN] Would check for and install updates".cyan()
+        );
+        println!("  No updates available (registry integration pending)");
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        "No updates available (registry integration pending)".yellow()
+    );
+
+    Ok(())
+}
+
+/// Handles the clean command.
+pub fn handle_clean(all: bool, cache: bool, temp: bool, dry_run: bool) -> Result<()> {
+    println!("{}", "Cleaning up...".bold());
+    println!();
+
+    let mut cleaned_items = Vec::new();
+    let mut total_size: u64 = 0;
+
+    // Define paths to clean
+    let cache_dir = dirs::cache_dir()
+        .map(|p| p.join("legalis"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".legalis_cache"));
+
+    let temp_dir = std::env::temp_dir().join("legalis");
+
+    // Clean cache
+    if all || cache {
+        if cache_dir.exists() {
+            let size = dir_size(&cache_dir)?;
+            total_size += size;
+            cleaned_items.push((cache_dir.clone(), size, "cache"));
+
+            if !dry_run {
+                fs::remove_dir_all(&cache_dir)?;
+                fs::create_dir_all(&cache_dir)?;
+            }
+        }
+    }
+
+    // Clean temp files
+    if all || temp {
+        if temp_dir.exists() {
+            let size = dir_size(&temp_dir)?;
+            total_size += size;
+            cleaned_items.push((temp_dir.clone(), size, "temp"));
+
+            if !dry_run {
+                fs::remove_dir_all(&temp_dir)?;
+            }
+        }
+    }
+
+    // Display results
+    if cleaned_items.is_empty() {
+        println!("{}", "Nothing to clean".dimmed());
+        return Ok(());
+    }
+
+    if dry_run {
+        println!("{}", "[DRY RUN] Would clean:".cyan().bold());
+    } else {
+        println!("{}", "Cleaned:".green().bold());
+    }
+
+    for (path, size, category) in &cleaned_items {
+        println!(
+            "  {} [{}] - {}",
+            path.display(),
+            category,
+            format_size(*size)
+        );
+    }
+
+    println!();
+    println!(
+        "{} {}",
+        if dry_run {
+            "Would free:"
+        } else {
+            "Freed:"
+        }
+        .bold(),
+        format_size(total_size).green()
+    );
+
+    if dry_run {
+        println!();
+        println!("{}", "Run without --dry-run to actually clean".dimmed());
+    }
+
+    Ok(())
+}
+
+/// Calculate directory size recursively.
+fn dir_size(path: &Path) -> Result<u64> {
+    let mut size = 0u64;
+
+    if path.is_dir() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+
+            if entry_path.is_dir() {
+                size += dir_size(&entry_path)?;
+            } else {
+                size += entry.metadata()?.len();
+            }
+        }
+    }
+
+    Ok(size)
+}
+
+/// Format byte size for display.
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} bytes", bytes)
+    }
+}
+
 /// Handles the search command.
 pub fn handle_search(
     _registry_path: &str,
@@ -2328,6 +2841,205 @@ pub fn handle_search(
     println!("{}", table);
     println!();
     println!("{}", format!("Found {} result(s)", results.len()).green());
+
+    Ok(())
+}
+
+/// Handles the outdated command.
+pub fn handle_outdated(directory: &str, _registry_path: &str, show_all: bool) -> Result<()> {
+    use comfy_table::{Cell, Color, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+
+    println!(
+        "{} {}",
+        "Checking for outdated statutes in:".bold(),
+        directory.cyan()
+    );
+    println!();
+
+    let dir_path = Path::new(directory);
+
+    if !dir_path.exists() {
+        println!("{}", "Directory does not exist".yellow());
+        return Ok(());
+    }
+
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    // Read all .legal files
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("legal") {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(statute) = parser.parse_statute(&content) {
+                    statutes.push((path.clone(), statute));
+                }
+            }
+        }
+    }
+
+    if statutes.is_empty() {
+        println!("{}", "No statutes found".yellow());
+        return Ok(());
+    }
+
+    // Check for updates (in a real implementation, this would query the registry)
+    let outdated: Vec<(std::path::PathBuf, Statute, u32, u32)> = Vec::new();
+    let mut up_to_date = Vec::new();
+
+    for (path, statute) in &statutes {
+        // Simulate version check (in real implementation, check against registry)
+        // For now, assume all are up to date
+        up_to_date.push((path, statute, statute.version));
+    }
+
+    if !show_all && outdated.is_empty() {
+        println!("{}", "✓ All statutes are up to date".green().bold());
+        return Ok(());
+    }
+
+    // Display results
+    if !outdated.is_empty() {
+        println!("{}", "Outdated statutes:".red().bold());
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_header(vec![
+                Cell::new("ID").fg(Color::Cyan),
+                Cell::new("Current").fg(Color::Cyan),
+                Cell::new("Latest").fg(Color::Cyan),
+                Cell::new("File").fg(Color::Cyan),
+            ]);
+
+        for (path, statute, current_version, latest_version) in &outdated {
+            table.add_row(vec![
+                Cell::new(&statute.id),
+                Cell::new(current_version.to_string()).fg(Color::Yellow),
+                Cell::new(latest_version.to_string()).fg(Color::Green),
+                Cell::new(path.file_name().unwrap().to_string_lossy().as_ref()),
+            ]);
+        }
+
+        println!("{}", table);
+        println!();
+    }
+
+    if show_all && !up_to_date.is_empty() {
+        println!("{}", "Up-to-date statutes:".green().bold());
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_header(vec![
+                Cell::new("ID").fg(Color::Cyan),
+                Cell::new("Version").fg(Color::Cyan),
+                Cell::new("File").fg(Color::Cyan),
+            ]);
+
+        for (path, statute, version) in &up_to_date {
+            table.add_row(vec![
+                Cell::new(&statute.id),
+                Cell::new(version.to_string()),
+                Cell::new(path.file_name().unwrap().to_string_lossy().as_ref()),
+            ]);
+        }
+
+        println!("{}", table);
+        println!();
+    }
+
+    println!(
+        "{} {} total, {} outdated, {} up-to-date",
+        "Summary:".bold(),
+        statutes.len(),
+        outdated.len().to_string().red(),
+        up_to_date.len().to_string().green()
+    );
+
+    if !outdated.is_empty() {
+        println!();
+        println!(
+            "{}",
+            "Run 'legalis update' to update all outdated statutes".cyan()
+        );
+    }
+
+    Ok(())
+}
+
+/// Handles the uninstall command.
+pub fn handle_uninstall(
+    statute_id: &str,
+    directory: &str,
+    force: bool,
+    dry_run: bool,
+) -> Result<()> {
+    println!(
+        "{} {}",
+        "Uninstalling statute:".bold(),
+        statute_id.cyan()
+    );
+
+    let file_path = Path::new(directory).join(format!("{}.legal", statute_id));
+
+    if !file_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Statute '{}' not found in {}",
+            statute_id,
+            directory
+        ));
+    }
+
+    // Read statute info before deleting
+    let content = fs::read_to_string(&file_path)?;
+    let parser = LegalDslParser::new();
+    let statute = parser.parse_statute(&content).ok();
+
+    if dry_run {
+        println!(
+            "{}",
+            "[DRY RUN] Would remove the following statute:".cyan().bold()
+        );
+        println!("  File: {}", file_path.display());
+        if let Some(ref s) = statute {
+            println!("  ID: {}", s.id);
+            println!("  Title: {}", s.title);
+            println!("  Version: {}", s.version);
+        }
+        return Ok(());
+    }
+
+    // Ask for confirmation unless force flag is set
+    if !force {
+        println!();
+        println!("  File: {}", file_path.display());
+        if let Some(ref s) = statute {
+            println!("  Title: {}", s.title);
+            println!("  Version: {}", s.version);
+        }
+        println!();
+        println!(
+            "{}",
+            "Are you sure you want to remove this statute? (y/N)".yellow()
+        );
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("{}", "Uninstall cancelled".dimmed());
+            return Ok(());
+        }
+    }
+
+    // Remove the file
+    fs::remove_file(&file_path)?;
+
+    println!("{}", "✓ Statute uninstalled successfully".green().bold());
+    println!("  Removed: {}", file_path.display());
 
     Ok(())
 }

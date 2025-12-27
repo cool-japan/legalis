@@ -4,6 +4,7 @@ use crate::{AuditRecord, AuditResult};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+pub mod cached;
 pub mod encrypted;
 pub mod jsonl;
 pub mod memory;

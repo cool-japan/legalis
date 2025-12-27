@@ -98,6 +98,110 @@ pub enum ConflictResolution {
     Unresolved,
 }
 
+/// Conflict resolution suggestion.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolutionSuggestion {
+    /// Type of resolution.
+    pub resolution_type: ConflictResolution,
+    /// Confidence in this suggestion (0.0 to 1.0).
+    pub confidence: f64,
+    /// Explanation of why this resolution is suggested.
+    pub rationale: String,
+    /// Potential risks of this resolution.
+    pub risks: Vec<String>,
+}
+
+/// Merge preview with impact assessment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergePreview {
+    /// Predicted conflicts.
+    pub predicted_conflicts: Vec<MergeConflict>,
+    /// Impact assessment of the merge.
+    pub impact: MergeImpact,
+    /// Suggestions for conflict resolution.
+    pub suggestions: Vec<(usize, Vec<ResolutionSuggestion>)>,
+    /// Whether the merge is safe to proceed.
+    pub safe_to_merge: bool,
+}
+
+/// Impact assessment of a merge operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeImpact {
+    /// Number of conflicts.
+    pub conflict_count: usize,
+    /// Severity of the merge.
+    pub severity: crate::Severity,
+    /// Whether eligibility criteria will change.
+    pub affects_eligibility: bool,
+    /// Whether the effect will change.
+    pub affects_outcome: bool,
+    /// Description of the impact.
+    pub description: String,
+}
+
+/// History entry for merge operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeHistoryEntry {
+    /// Timestamp of the merge.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Strategy used for the merge.
+    pub strategy: MergeStrategy,
+    /// Number of conflicts encountered.
+    pub conflict_count: usize,
+    /// Whether the merge was clean.
+    pub was_clean: bool,
+    /// Conflicts encountered.
+    pub conflicts: Vec<MergeConflict>,
+}
+
+/// Merge history tracker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeHistory {
+    /// List of merge operations.
+    pub entries: Vec<MergeHistoryEntry>,
+}
+
+impl MergeHistory {
+    /// Creates a new merge history tracker.
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    /// Adds a merge result to the history.
+    pub fn add_entry(&mut self, result: &MergeResult, strategy: MergeStrategy) {
+        self.entries.push(MergeHistoryEntry {
+            timestamp: chrono::Utc::now(),
+            strategy,
+            conflict_count: result.conflicts.len(),
+            was_clean: result.clean,
+            conflicts: result.conflicts.clone(),
+        });
+    }
+
+    /// Gets the total number of merges.
+    pub fn total_merges(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Gets the number of clean merges.
+    pub fn clean_merges(&self) -> usize {
+        self.entries.iter().filter(|e| e.was_clean).count()
+    }
+
+    /// Gets the number of conflicted merges.
+    pub fn conflicted_merges(&self) -> usize {
+        self.entries.iter().filter(|e| !e.was_clean).count()
+    }
+}
+
+impl Default for MergeHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Performs a three-way merge of statutes.
 ///
 /// # Arguments
@@ -380,6 +484,361 @@ pub fn auto_merge(
     );
 
     three_way_merge(&base, ours, theirs, strategy)
+}
+
+/// Generates a preview of a merge operation with impact assessment.
+///
+/// This allows you to see what would happen if you merged without actually merging.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::merge::preview_merge;
+///
+/// let base = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut ours = base.clone();
+/// ours.title = "Our Title".to_string();
+/// let mut theirs = base.clone();
+/// theirs.title = "Their Title".to_string();
+///
+/// let preview = preview_merge(&base, &ours, &theirs).unwrap();
+/// assert!(!preview.safe_to_merge || !preview.predicted_conflicts.is_empty());
+/// ```
+pub fn preview_merge(
+    base: &Statute,
+    ours: &Statute,
+    theirs: &Statute,
+) -> DiffResult<MergePreview> {
+    // Perform a trial merge with Strict strategy to detect all conflicts
+    let trial_result = three_way_merge(base, ours, theirs, MergeStrategy::Strict)?;
+
+    let conflict_count = trial_result.conflicts.len();
+    let severity = if conflict_count == 0 {
+        crate::Severity::None
+    } else if conflict_count == 1 {
+        crate::Severity::Minor
+    } else if conflict_count <= 3 {
+        crate::Severity::Moderate
+    } else {
+        crate::Severity::Major
+    };
+
+    // Analyze impact
+    let our_diff = crate::diff(base, ours)?;
+    let their_diff = crate::diff(base, theirs)?;
+
+    let affects_eligibility =
+        our_diff.impact.affects_eligibility || their_diff.impact.affects_eligibility;
+    let affects_outcome = our_diff.impact.affects_outcome || their_diff.impact.affects_outcome;
+
+    let description = if conflict_count == 0 {
+        "Merge can proceed cleanly without conflicts.".to_string()
+    } else {
+        format!(
+            "Merge will encounter {} conflict(s). Manual resolution may be required.",
+            conflict_count
+        )
+    };
+
+    // Generate suggestions for each conflict
+    let mut suggestions = Vec::new();
+    for (idx, conflict) in trial_result.conflicts.iter().enumerate() {
+        suggestions.push((idx, generate_resolution_suggestions(conflict)));
+    }
+
+    let safe_to_merge = conflict_count == 0
+        || trial_result
+            .conflicts
+            .iter()
+            .all(|c| !matches!(c.conflict_type, ConflictType::IncompatibleChanges));
+
+    Ok(MergePreview {
+        predicted_conflicts: trial_result.conflicts,
+        impact: MergeImpact {
+            conflict_count,
+            severity,
+            affects_eligibility,
+            affects_outcome,
+            description,
+        },
+        suggestions,
+        safe_to_merge,
+    })
+}
+
+/// Generates resolution suggestions for a conflict.
+fn generate_resolution_suggestions(conflict: &MergeConflict) -> Vec<ResolutionSuggestion> {
+    let mut suggestions = Vec::new();
+
+    match &conflict.conflict_type {
+        ConflictType::TitleConflict => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::UsedOurs,
+                confidence: 0.5,
+                rationale: "Preserve your version of the title".to_string(),
+                risks: vec!["May lose clarity from the other version".to_string()],
+            });
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::UsedTheirs,
+                confidence: 0.5,
+                rationale: "Adopt their version of the title".to_string(),
+                risks: vec!["May lose your intended changes".to_string()],
+            });
+        }
+        ConflictType::EffectConflict => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::UsedOurs,
+                confidence: 0.7,
+                rationale: "Effects are fundamental - prefer the version you control".to_string(),
+                risks: vec!["May create inconsistency with their changes".to_string()],
+            });
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::Unresolved,
+                confidence: 0.9,
+                rationale: "Effect conflicts are critical and should be manually reviewed"
+                    .to_string(),
+                risks: vec!["Requires manual intervention".to_string()],
+            });
+        }
+        ConflictType::PreconditionConflict { .. } => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::Combined,
+                confidence: 0.6,
+                rationale: "Combine both preconditions if they are compatible".to_string(),
+                risks: vec!["May create overly restrictive conditions".to_string()],
+            });
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::Unresolved,
+                confidence: 0.8,
+                rationale: "Precondition conflicts should be carefully reviewed".to_string(),
+                risks: vec!["Requires manual intervention".to_string()],
+            });
+        }
+        ConflictType::DiscretionConflict => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::Combined,
+                confidence: 0.8,
+                rationale: "Combine both discretion requirements for comprehensive judgment"
+                    .to_string(),
+                risks: vec!["May create complex or contradictory guidelines".to_string()],
+            });
+        }
+        ConflictType::PreconditionAddModifyConflict => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::UsedTheirs,
+                confidence: 0.7,
+                rationale: "Include the newly added precondition".to_string(),
+                risks: vec!["May tighten eligibility unexpectedly".to_string()],
+            });
+        }
+        ConflictType::IncompatibleChanges => {
+            suggestions.push(ResolutionSuggestion {
+                resolution_type: ConflictResolution::Unresolved,
+                confidence: 0.95,
+                rationale: "Incompatible changes require manual resolution".to_string(),
+                risks: vec!["Cannot automatically merge".to_string()],
+            });
+        }
+    }
+
+    suggestions
+}
+
+/// Performs a semantic merge that considers the meaning of changes.
+///
+/// This is smarter than a simple three-way merge as it understands when
+/// changes are semantically compatible even if they conflict structurally.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_diff::merge::semantic_merge;
+///
+/// let base = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut ours = base.clone();
+/// ours.title = "Improved Title".to_string();
+/// let mut theirs = base.clone();
+/// theirs.title = "Enhanced Title".to_string();
+///
+/// let result = semantic_merge(&base, &ours, &theirs).unwrap();
+/// // Semantic merge may detect that both changes are just improvements
+/// ```
+pub fn semantic_merge(
+    base: &Statute,
+    ours: &Statute,
+    theirs: &Statute,
+) -> DiffResult<MergeResult> {
+    // First, analyze the semantic differences
+    let our_diff = crate::diff(base, ours)?;
+    let their_diff = crate::diff(base, theirs)?;
+
+    use crate::semantic::analyze_semantic_diff;
+    let our_semantic = analyze_semantic_diff(&our_diff);
+    let their_semantic = analyze_semantic_diff(&their_diff);
+
+    // Check if changes are semantically compatible
+    let both_meaning_preserving = our_semantic.semantic_impact.primarily_clarifying
+        && their_semantic.semantic_impact.primarily_clarifying;
+
+    let both_expand = our_semantic.semantic_impact.eligibility_broadened
+        && their_semantic.semantic_impact.eligibility_broadened;
+
+    let both_contract = our_semantic.semantic_impact.eligibility_narrowed
+        && their_semantic.semantic_impact.eligibility_narrowed;
+
+    // Choose strategy based on semantic analysis
+    let strategy = if both_meaning_preserving {
+        // Both are just clarifications - prefer union
+        MergeStrategy::Union
+    } else if both_expand || both_contract {
+        // Both moving in the same direction - can combine
+        MergeStrategy::Union
+    } else if our_semantic.semantic_impact.intent_changed
+        || their_semantic.semantic_impact.intent_changed
+    {
+        // Intent changes require manual resolution
+        MergeStrategy::Strict
+    } else {
+        // Default to union for compatible changes
+        MergeStrategy::Union
+    };
+
+    three_way_merge(base, ours, theirs, strategy)
+}
+
+/// Interactive merge mode that allows step-by-step conflict resolution.
+///
+/// This returns a series of conflicts with suggestions, allowing for
+/// interactive resolution.
+pub fn interactive_merge_start(
+    base: &Statute,
+    ours: &Statute,
+    theirs: &Statute,
+) -> DiffResult<InteractiveMerge> {
+    let preview = preview_merge(base, ours, theirs)?;
+
+    Ok(InteractiveMerge {
+        base: base.clone(),
+        ours: ours.clone(),
+        theirs: theirs.clone(),
+        conflicts: preview.predicted_conflicts,
+        suggestions: preview.suggestions,
+        resolutions: Vec::new(),
+        current_index: 0,
+    })
+}
+
+/// Interactive merge session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InteractiveMerge {
+    /// Base statute.
+    pub base: Statute,
+    /// Our version.
+    pub ours: Statute,
+    /// Their version.
+    pub theirs: Statute,
+    /// Conflicts to resolve.
+    pub conflicts: Vec<MergeConflict>,
+    /// Suggestions for each conflict.
+    pub suggestions: Vec<(usize, Vec<ResolutionSuggestion>)>,
+    /// User-chosen resolutions.
+    pub resolutions: Vec<ConflictResolution>,
+    /// Current conflict index.
+    pub current_index: usize,
+}
+
+impl InteractiveMerge {
+    /// Gets the current conflict to resolve.
+    pub fn current_conflict(&self) -> Option<&MergeConflict> {
+        self.conflicts.get(self.current_index)
+    }
+
+    /// Gets suggestions for the current conflict.
+    pub fn current_suggestions(&self) -> Option<&Vec<ResolutionSuggestion>> {
+        self.suggestions
+            .iter()
+            .find(|(idx, _)| *idx == self.current_index)
+            .map(|(_, sugs)| sugs)
+    }
+
+    /// Resolves the current conflict with the given resolution.
+    pub fn resolve_current(&mut self, resolution: ConflictResolution) {
+        self.resolutions.push(resolution);
+        self.current_index += 1;
+    }
+
+    /// Checks if all conflicts have been resolved.
+    pub fn is_complete(&self) -> bool {
+        self.current_index >= self.conflicts.len()
+    }
+
+    /// Completes the merge with the chosen resolutions.
+    pub fn finalize(&self) -> DiffResult<MergeResult> {
+        if !self.is_complete() {
+            return Err(DiffError::InvalidComparison(
+                "Not all conflicts have been resolved".to_string(),
+            ));
+        }
+
+        // Apply resolutions manually based on user choices
+        let mut merged = self.base.clone();
+        let mut final_conflicts = Vec::new();
+
+        for (conflict, resolution) in self.conflicts.iter().zip(self.resolutions.iter()) {
+            let mut resolved_conflict = conflict.clone();
+            resolved_conflict.resolution = Some(resolution.clone());
+            final_conflicts.push(resolved_conflict);
+
+            // Apply the resolution to the merged statute
+            apply_resolution(&mut merged, &self.ours, &self.theirs, conflict, resolution);
+        }
+
+        Ok(MergeResult {
+            statute: merged,
+            conflicts: final_conflicts,
+            clean: false, // Interactive merges are never "clean" since they had conflicts
+        })
+    }
+}
+
+/// Applies a conflict resolution to a statute.
+#[allow(dead_code)]
+fn apply_resolution(
+    merged: &mut Statute,
+    ours: &Statute,
+    theirs: &Statute,
+    conflict: &MergeConflict,
+    resolution: &ConflictResolution,
+) {
+    match &conflict.conflict_type {
+        ConflictType::TitleConflict => match resolution {
+            ConflictResolution::UsedOurs => merged.title = ours.title.clone(),
+            ConflictResolution::UsedTheirs => merged.title = theirs.title.clone(),
+            _ => {}
+        },
+        ConflictType::EffectConflict => match resolution {
+            ConflictResolution::UsedOurs => merged.effect = ours.effect.clone(),
+            ConflictResolution::UsedTheirs => merged.effect = theirs.effect.clone(),
+            _ => {}
+        },
+        ConflictType::DiscretionConflict => match resolution {
+            ConflictResolution::UsedOurs => merged.discretion_logic = ours.discretion_logic.clone(),
+            ConflictResolution::UsedTheirs => {
+                merged.discretion_logic = theirs.discretion_logic.clone()
+            }
+            ConflictResolution::Combined => {
+                if let (Some(o), Some(t)) = (&ours.discretion_logic, &theirs.discretion_logic) {
+                    merged.discretion_logic = Some(format!("{} AND {}", o, t));
+                }
+            }
+            _ => {}
+        },
+        _ => {
+            // For other conflict types, basic handling
+        }
+    }
 }
 
 #[cfg(test)]

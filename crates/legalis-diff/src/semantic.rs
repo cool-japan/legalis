@@ -60,6 +60,12 @@ pub struct SemanticDiff {
     pub semantic_impact: SemanticImpact,
     /// Detected legal patterns.
     pub patterns: Vec<LegalPattern>,
+    /// Quantified metrics for condition changes.
+    pub relaxation_metrics: RelaxationMetrics,
+    /// Effect scope quantification.
+    pub scope_metrics: ScopeMetrics,
+    /// Breaking change classification.
+    pub breaking_classification: BreakingChangeClassification,
 }
 
 /// A single semantic change.
@@ -99,6 +105,105 @@ pub struct LegalPattern {
     pub description: String,
     /// Related changes.
     pub related_changes: Vec<usize>,
+}
+
+/// Quantified metrics for condition relaxation/tightening.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelaxationMetrics {
+    /// Total number of conditions relaxed.
+    pub relaxed_count: usize,
+    /// Total number of conditions tightened.
+    pub tightened_count: usize,
+    /// Net relaxation score (-1.0 = fully tightened, +1.0 = fully relaxed).
+    pub net_score: f64,
+    /// Quantified impact per condition.
+    pub per_condition_impact: Vec<ConditionImpact>,
+}
+
+/// Impact of a single condition change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConditionImpact {
+    /// Index of the condition.
+    pub index: usize,
+    /// Relaxation score for this condition (-1.0 to +1.0).
+    pub relaxation_score: f64,
+    /// Estimated percentage change in eligible population.
+    pub estimated_population_change: f64,
+    /// Description of the impact.
+    pub description: String,
+}
+
+/// Quantified metrics for effect scope changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScopeMetrics {
+    /// Whether the effect scope changed.
+    pub scope_changed: bool,
+    /// Scope change magnitude (0.0 to 1.0).
+    pub magnitude: f64,
+    /// Direction of scope change.
+    pub direction: ScopeDirection,
+    /// Description of the scope change.
+    pub description: String,
+}
+
+/// Direction of scope change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScopeDirection {
+    /// No change in scope.
+    Unchanged,
+    /// Scope expanded.
+    Expanded,
+    /// Scope contracted.
+    Contracted,
+    /// Mixed (some expanded, some contracted).
+    Mixed,
+}
+
+/// Breaking change classification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BreakingChangeClassification {
+    /// Whether this is a breaking change.
+    pub is_breaking: bool,
+    /// Breaking change level.
+    pub level: BreakingLevel,
+    /// Specific breaking change types detected.
+    pub breaking_types: Vec<BreakingType>,
+    /// Backward compatibility score (0.0 to 1.0, where 1.0 is fully compatible).
+    pub compatibility_score: f64,
+    /// Migration difficulty (0.0 to 1.0, where 1.0 is extremely difficult).
+    pub migration_difficulty: f64,
+}
+
+/// Breaking change severity level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum BreakingLevel {
+    /// No breaking changes.
+    None,
+    /// Minor breaking changes (edge cases).
+    Minor,
+    /// Moderate breaking changes (some users affected).
+    Moderate,
+    /// Major breaking changes (many users affected).
+    Major,
+    /// Critical breaking changes (all users affected).
+    Critical,
+}
+
+/// Types of breaking changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BreakingType {
+    /// Effect type changed (e.g., Grant to Revoke).
+    EffectTypeChange,
+    /// New mandatory preconditions added.
+    NewMandatoryConditions,
+    /// Existing conditions tightened.
+    TightenedConditions,
+    /// Discretion requirements changed.
+    DiscretionChange,
+    /// Outcome fundamentally altered.
+    OutcomeChange,
+    /// Legal intent changed.
+    IntentChange,
 }
 
 /// Performs semantic analysis on a statute diff.
@@ -143,11 +248,23 @@ pub fn analyze_semantic_diff(diff: &StatuteDiff) -> SemanticDiff {
     // Compute overall impact
     let semantic_impact = compute_semantic_impact(&semantic_changes);
 
+    // Compute relaxation metrics
+    let relaxation_metrics = compute_relaxation_metrics(&diff.changes);
+
+    // Compute scope metrics
+    let scope_metrics = compute_scope_metrics(&diff.changes, &semantic_changes);
+
+    // Classify breaking changes
+    let breaking_classification = classify_breaking_changes(diff, &semantic_changes);
+
     SemanticDiff {
         structural_diff: diff.clone(),
         semantic_changes,
         semantic_impact,
         patterns,
+        relaxation_metrics,
+        scope_metrics,
+        breaking_classification,
     }
 }
 
@@ -542,6 +659,335 @@ fn preconditions_equivalent(old: &[Condition], new: &[Condition]) -> bool {
     }
 
     true
+}
+
+/// Computes relaxation/tightening metrics for condition changes.
+fn compute_relaxation_metrics(changes: &[Change]) -> RelaxationMetrics {
+    let mut relaxed_count = 0;
+    let mut tightened_count = 0;
+    let mut per_condition_impact = Vec::new();
+
+    for change in changes.iter() {
+        if let ChangeTarget::Precondition { index } = &change.target {
+            let impact = match change.change_type {
+                ChangeType::Added => {
+                    tightened_count += 1;
+                    ConditionImpact {
+                        index: *index,
+                        relaxation_score: -0.5, // Adding conditions tightens
+                        estimated_population_change: -10.0, // Rough estimate
+                        description: "New condition added, reducing eligible population".to_string(),
+                    }
+                }
+                ChangeType::Removed => {
+                    relaxed_count += 1;
+                    ConditionImpact {
+                        index: *index,
+                        relaxation_score: 0.5, // Removing conditions relaxes
+                        estimated_population_change: 15.0, // Rough estimate
+                        description: "Condition removed, expanding eligible population".to_string(),
+                    }
+                }
+                ChangeType::Modified => {
+                    // Analyze the modification to determine if it's relaxation or tightening
+                    if let (Some(old), Some(new)) = (&change.old_value, &change.new_value) {
+                        if let Some((old_val, new_val, is_relaxed)) =
+                            detect_threshold_change(old, new)
+                        {
+                            if is_relaxed {
+                                relaxed_count += 1;
+                                let pop_change = estimate_population_change(&old_val, &new_val);
+                                ConditionImpact {
+                                    index: *index,
+                                    relaxation_score: 0.3,
+                                    estimated_population_change: pop_change,
+                                    description: format!(
+                                        "Threshold relaxed from {} to {}, increasing eligibility",
+                                        old_val, new_val
+                                    ),
+                                }
+                            } else {
+                                tightened_count += 1;
+                                let pop_change = estimate_population_change(&old_val, &new_val);
+                                ConditionImpact {
+                                    index: *index,
+                                    relaxation_score: -0.3,
+                                    estimated_population_change: -pop_change,
+                                    description: format!(
+                                        "Threshold tightened from {} to {}, decreasing eligibility",
+                                        old_val, new_val
+                                    ),
+                                }
+                            }
+                        } else {
+                            ConditionImpact {
+                                index: *index,
+                                relaxation_score: 0.0,
+                                estimated_population_change: 0.0,
+                                description: "Condition modified, impact unclear".to_string(),
+                            }
+                        }
+                    } else {
+                        ConditionImpact {
+                            index: *index,
+                            relaxation_score: 0.0,
+                            estimated_population_change: 0.0,
+                            description: "Condition modified".to_string(),
+                        }
+                    }
+                }
+                ChangeType::Reordered => ConditionImpact {
+                    index: *index,
+                    relaxation_score: 0.0,
+                    estimated_population_change: 0.0,
+                    description: "Condition reordered, no impact on eligibility".to_string(),
+                },
+            };
+            per_condition_impact.push(impact);
+        }
+    }
+
+    // Calculate net score
+    let total_changes = relaxed_count + tightened_count;
+    let net_score = if total_changes > 0 {
+        (relaxed_count as f64 - tightened_count as f64) / total_changes as f64
+    } else {
+        0.0
+    };
+
+    RelaxationMetrics {
+        relaxed_count,
+        tightened_count,
+        net_score,
+        per_condition_impact,
+    }
+}
+
+/// Estimates the percentage change in eligible population.
+fn estimate_population_change(old_val: &str, new_val: &str) -> f64 {
+    // Simple heuristic based on the magnitude of change
+    if let (Ok(old_num), Ok(new_num)) = (old_val.parse::<f64>(), new_val.parse::<f64>()) {
+        if old_num != 0.0 {
+            ((new_num - old_num) / old_num).abs() * 10.0 // Rough estimate
+        } else {
+            5.0
+        }
+    } else {
+        5.0 // Default estimate
+    }
+}
+
+/// Computes scope metrics for effect changes.
+fn compute_scope_metrics(changes: &[Change], semantic_changes: &[SemanticChange]) -> ScopeMetrics {
+    let mut scope_changed = false;
+    let mut expansion_count = 0;
+    let mut contraction_count = 0;
+    let mut total_magnitude = 0.0;
+    let mut descriptions = Vec::new();
+
+    for (change, semantic) in changes.iter().zip(semantic_changes.iter()) {
+        match semantic.semantic_type {
+            SemanticChangeType::ScopeExpansion => {
+                scope_changed = true;
+                expansion_count += 1;
+                total_magnitude += 0.5;
+                descriptions.push("Scope expanded".to_string());
+            }
+            SemanticChangeType::ScopeReduction => {
+                scope_changed = true;
+                contraction_count += 1;
+                total_magnitude += 0.5;
+                descriptions.push("Scope contracted".to_string());
+            }
+            SemanticChangeType::IntentChange => {
+                if matches!(change.target, ChangeTarget::Effect) {
+                    scope_changed = true;
+                    total_magnitude += 1.0;
+                    descriptions.push("Effect fundamentally changed".to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let direction = if expansion_count > 0 && contraction_count > 0 {
+        ScopeDirection::Mixed
+    } else if expansion_count > 0 {
+        ScopeDirection::Expanded
+    } else if contraction_count > 0 {
+        ScopeDirection::Contracted
+    } else {
+        ScopeDirection::Unchanged
+    };
+
+    let magnitude = (total_magnitude / (changes.len() as f64 + 1.0)).min(1.0);
+
+    let description = if descriptions.is_empty() {
+        "No scope changes detected".to_string()
+    } else {
+        descriptions.join("; ")
+    };
+
+    ScopeMetrics {
+        scope_changed,
+        magnitude,
+        direction,
+        description,
+    }
+}
+
+/// Classifies breaking changes.
+fn classify_breaking_changes(
+    diff: &StatuteDiff,
+    semantic_changes: &[SemanticChange],
+) -> BreakingChangeClassification {
+    let mut breaking_types = Vec::new();
+    let mut severity_score = 0.0;
+
+    // Check for effect type changes
+    for change in &diff.changes {
+        if matches!(change.target, ChangeTarget::Effect) {
+            if change.change_type == ChangeType::Modified {
+                if let (Some(old), Some(new)) = (&change.old_value, &change.new_value) {
+                    if old.contains("Grant") != new.contains("Grant")
+                        || old.contains("Revoke") != new.contains("Revoke")
+                    {
+                        breaking_types.push(BreakingType::EffectTypeChange);
+                        severity_score += 1.0;
+                    } else {
+                        breaking_types.push(BreakingType::OutcomeChange);
+                        severity_score += 0.6;
+                    }
+                }
+            }
+        }
+    }
+
+    // Check for new mandatory conditions
+    let new_conditions = diff
+        .changes
+        .iter()
+        .filter(|c| {
+            matches!(c.target, ChangeTarget::Precondition { .. })
+                && c.change_type == ChangeType::Added
+        })
+        .count();
+
+    if new_conditions > 0 {
+        breaking_types.push(BreakingType::NewMandatoryConditions);
+        severity_score += 0.7 * new_conditions as f64;
+    }
+
+    // Check for tightened conditions
+    let tightened = semantic_changes
+        .iter()
+        .filter(|sc| {
+            matches!(
+                sc.structural_change.target,
+                ChangeTarget::Precondition { .. }
+            ) && sc.structural_change.change_type == ChangeType::Modified
+                && sc.explanation.contains("tightened")
+        })
+        .count();
+
+    if tightened > 0 {
+        breaking_types.push(BreakingType::TightenedConditions);
+        severity_score += 0.5 * tightened as f64;
+    }
+
+    // Check for discretion changes
+    if diff.impact.discretion_changed {
+        breaking_types.push(BreakingType::DiscretionChange);
+        severity_score += 0.8;
+    }
+
+    // Check for intent changes
+    let has_intent_change = semantic_changes
+        .iter()
+        .any(|sc| sc.semantic_type == SemanticChangeType::IntentChange);
+
+    if has_intent_change {
+        breaking_types.push(BreakingType::IntentChange);
+        severity_score += 0.9;
+    }
+
+    // Determine breaking level
+    let level = if severity_score >= 2.0 {
+        BreakingLevel::Critical
+    } else if severity_score >= 1.5 {
+        BreakingLevel::Major
+    } else if severity_score >= 0.8 {
+        BreakingLevel::Moderate
+    } else if severity_score >= 0.3 {
+        BreakingLevel::Minor
+    } else {
+        BreakingLevel::None
+    };
+
+    let is_breaking = !breaking_types.is_empty();
+
+    // Calculate compatibility score (inverse of severity)
+    let compatibility_score = (1.0 - (severity_score / 3.0).min(1.0)).max(0.0);
+
+    // Calculate migration difficulty
+    let migration_difficulty = if breaking_types.contains(&BreakingType::EffectTypeChange) {
+        0.9
+    } else if breaking_types.len() >= 3 {
+        0.7
+    } else if breaking_types.len() >= 2 {
+        0.5
+    } else if breaking_types.len() == 1 {
+        0.3
+    } else {
+        0.0
+    };
+
+    BreakingChangeClassification {
+        is_breaking,
+        level,
+        breaking_types,
+        compatibility_score,
+        migration_difficulty,
+    }
+}
+
+/// Detects intent-preserving refactoring.
+///
+/// Returns true if changes are purely refactoring without changing legal intent.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, semantic::is_intent_preserving_refactoring};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "Improved Title".to_string(); // Just rewording
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// assert!(is_intent_preserving_refactoring(&diff_result));
+/// ```
+pub fn is_intent_preserving_refactoring(diff: &StatuteDiff) -> bool {
+    let semantic = analyze_semantic_diff(diff);
+
+    // Check if all changes are meaning-preserving or technical corrections
+    let all_preserving = semantic.semantic_changes.iter().all(|sc| {
+        matches!(
+            sc.semantic_type,
+            SemanticChangeType::MeaningPreserving
+                | SemanticChangeType::TechnicalCorrection
+                | SemanticChangeType::Clarification
+        )
+    });
+
+    // Check that there are no breaking changes
+    let no_breaking = !semantic.breaking_classification.is_breaking;
+
+    // Check that intent hasn't changed
+    let intent_preserved = !semantic.semantic_impact.intent_changed;
+
+    all_preserving && no_breaking && intent_preserved
 }
 
 #[cfg(test)]

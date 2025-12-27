@@ -33,3 +33,4 @@ futures = "0.3"
 base64 = "0.22"
 async-graphql = "7.0"
 async-graphql-axum = "7.0"
+tokio-stream = { version = "0.1", features = ["sync"] }

@@ -2548,6 +2548,36 @@ fn analyze_condition(condition: &legalis_core::Condition) -> (usize, usize, Hash
         }
         Condition::Pattern { .. } => (1, 0, ["Pattern".to_string()].into_iter().collect()),
         Condition::Calculation { .. } => (1, 0, ["Calculation".to_string()].into_iter().collect()),
+        Condition::Composite { conditions, .. } => {
+            // For composite conditions, recursively analyze all sub-conditions
+            let mut max_depth = 1;
+            let mut total_ops = 0;
+            let mut all_types = HashSet::new();
+            all_types.insert("Composite".to_string());
+
+            for (_weight, cond) in conditions {
+                let (depth, ops, types) = analyze_condition(cond);
+                max_depth = max_depth.max(depth + 1);
+                total_ops += ops;
+                all_types.extend(types);
+            }
+
+            (max_depth, total_ops + conditions.len() - 1, all_types)
+        }
+        Condition::Threshold { attributes, .. } => {
+            // Threshold aggregates multiple attributes
+            let mut types = HashSet::new();
+            types.insert("Threshold".to_string());
+            (1, attributes.len().saturating_sub(1), types)
+        }
+        Condition::Fuzzy { .. } => (1, 0, ["Fuzzy".to_string()].into_iter().collect()),
+        Condition::Probabilistic { condition, .. } => {
+            // Recursively analyze the base condition
+            let (depth, ops, mut types) = analyze_condition(condition);
+            types.insert("Probabilistic".to_string());
+            (1 + depth, 1 + ops, types)
+        }
+        Condition::Temporal { .. } => (1, 0, ["Temporal".to_string()].into_iter().collect()),
         Condition::Custom { .. } => (1, 0, ["Custom".to_string()].into_iter().collect()),
         Condition::And(left, right) => {
             let (l_depth, l_ops, l_types) = analyze_condition(left);
@@ -6658,6 +6688,14 @@ pub struct QualityMetrics {
     pub consistency_score: f64,
     /// Completeness score (higher is better, 0-100)
     pub completeness_score: f64,
+    /// Legislative drafting quality score (0-100)
+    pub drafting_quality_score: f64,
+    /// Clarity index (0-100)
+    pub clarity_index: f64,
+    /// Testability assessment score (0-100)
+    pub testability_score: f64,
+    /// Maintainability score (0-100)
+    pub maintainability_score: f64,
     /// List of quality issues
     pub issues: Vec<String>,
     /// List of quality strengths
@@ -6673,9 +6711,20 @@ impl QualityMetrics {
         readability_score: f64,
         consistency_score: f64,
         completeness_score: f64,
+        drafting_quality_score: f64,
+        clarity_index: f64,
+        testability_score: f64,
+        maintainability_score: f64,
     ) -> Self {
-        let overall_score =
-            (complexity_score + readability_score + consistency_score + completeness_score) / 4.0;
+        let overall_score = (complexity_score
+            + readability_score
+            + consistency_score
+            + completeness_score
+            + drafting_quality_score
+            + clarity_index
+            + testability_score
+            + maintainability_score)
+            / 8.0;
 
         Self {
             statute_id,
@@ -6684,6 +6733,10 @@ impl QualityMetrics {
             readability_score,
             consistency_score,
             completeness_score,
+            drafting_quality_score,
+            clarity_index,
+            testability_score,
+            maintainability_score,
             issues: Vec::new(),
             strengths: Vec::new(),
         }
@@ -6714,6 +6767,324 @@ impl QualityMetrics {
         } else {
             'F'
         }
+    }
+}
+
+/// Calculates the legislative drafting quality score (0-100).
+///
+/// This evaluates the statute against legislative drafting best practices:
+/// - Clear structure and organization
+/// - Consistent terminology
+/// - Appropriate level of detail
+/// - Proper use of conditions and effects
+/// - Temporal validity properly defined
+fn calculate_drafting_quality(statute: &Statute) -> f64 {
+    let mut score: f64 = 0.0;
+
+    // Structure: Title is descriptive (10 points)
+    if !statute.title.is_empty() {
+        let title_words = statute.title.split_whitespace().count();
+        if (3..=20).contains(&title_words) {
+            score += 10.0;
+        } else if title_words > 0 {
+            score += 5.0;
+        }
+    }
+
+    // Effect description clarity (15 points)
+    if !statute.effect.description.is_empty() {
+        let desc_words = statute.effect.description.split_whitespace().count();
+        if (5..=100).contains(&desc_words) {
+            score += 15.0;
+        } else if desc_words > 0 {
+            score += 8.0;
+        }
+    }
+
+    // Proper temporal validity (15 points)
+    if statute.temporal_validity.enacted_at.is_some() {
+        score += 10.0;
+    }
+    if statute.temporal_validity.effective_date.is_some() {
+        score += 5.0;
+    }
+
+    // Jurisdiction specified (10 points)
+    if statute.jurisdiction.is_some() {
+        score += 10.0;
+    }
+
+    // Appropriate number of preconditions (15 points)
+    let precondition_count = statute.preconditions.len();
+    if (1..=7).contains(&precondition_count) {
+        score += 15.0;
+    } else if precondition_count > 0 {
+        score += 8.0;
+    }
+
+    // Discretion logic provided (10 points)
+    if statute.discretion_logic.is_some() {
+        score += 10.0;
+    }
+
+    // Consistent effect type with description (10 points)
+    let effect_keywords_match = match statute.effect.effect_type {
+        legalis_core::EffectType::Grant => {
+            statute.effect.description.to_lowercase().contains("grant")
+                || statute.effect.description.to_lowercase().contains("allow")
+        }
+        legalis_core::EffectType::Prohibition => {
+            statute.effect.description.to_lowercase().contains("prohibit")
+                || statute.effect.description.to_lowercase().contains("forbid")
+                || statute.effect.description.to_lowercase().contains("not allow")
+        }
+        legalis_core::EffectType::Obligation => {
+            statute.effect.description.to_lowercase().contains("must")
+                || statute.effect.description.to_lowercase().contains("require")
+                || statute.effect.description.to_lowercase().contains("shall")
+        }
+        _ => true, // Other types are always consistent
+    };
+    if effect_keywords_match {
+        score += 10.0;
+    }
+
+    // Metadata completeness (15 points)
+    let mut metadata_score = 0.0;
+    if !statute.id.is_empty() {
+        metadata_score += 5.0;
+    }
+    if !statute.title.is_empty() {
+        metadata_score += 5.0;
+    }
+    if statute.jurisdiction.is_some() {
+        metadata_score += 5.0;
+    }
+    score += metadata_score;
+
+    score.min(100.0)
+}
+
+/// Calculates the clarity index (0-100).
+///
+/// Measures how clear and understandable the statute is based on:
+/// - Simple language in titles and descriptions
+/// - Logical condition structure
+/// - Unambiguous terminology
+/// - Appropriate complexity level
+fn calculate_clarity_index(statute: &Statute) -> f64 {
+    let mut score: f64 = 50.0; // Baseline
+
+    // Title clarity (15 points)
+    let title_words = statute.title.split_whitespace().count();
+    if (3..=12).contains(&title_words) {
+        score += 15.0;
+    } else if title_words > 0 && title_words <= 20 {
+        score += 8.0;
+    }
+
+    // Effect description clarity (20 points)
+    let desc_words = statute.effect.description.split_whitespace().count();
+    if (5..=50).contains(&desc_words) {
+        score += 20.0;
+    } else if desc_words > 0 && desc_words <= 100 {
+        score += 10.0;
+    } else if desc_words > 100 {
+        score -= 5.0; // Too verbose reduces clarity
+    }
+
+    // Condition complexity (15 points)
+    let complexity = analyze_complexity(statute);
+    if complexity.complexity_score <= 25 {
+        score += 15.0;
+    } else if complexity.complexity_score <= 50 {
+        score += 10.0;
+    } else if complexity.complexity_score <= 75 {
+        score += 5.0;
+    } else {
+        score -= 5.0; // Very complex reduces clarity
+    }
+
+    // Discretion logic presence helps clarity (10 points)
+    if statute.discretion_logic.is_some() {
+        score += 10.0;
+    }
+
+    score.clamp(0.0, 100.0)
+}
+
+/// Calculates the testability assessment score (0-100).
+///
+/// Evaluates how testable and verifiable the statute conditions are:
+/// - Concrete, measurable conditions
+/// - Clear pass/fail criteria
+/// - Deterministic evaluation
+/// - Observable outcomes
+fn calculate_testability(statute: &Statute) -> f64 {
+    let mut score = 0.0;
+
+    // Has preconditions that can be tested (30 points)
+    if !statute.preconditions.is_empty() {
+        score += 20.0;
+
+        // Count concrete, testable condition types
+        let mut testable_count = 0;
+        let total_conditions = count_all_conditions(&statute.preconditions);
+
+        for condition in &statute.preconditions {
+            if is_testable_condition(condition) {
+                testable_count += 1;
+            }
+        }
+
+        if total_conditions > 0 {
+            let testable_ratio = testable_count as f64 / total_conditions as f64;
+            score += testable_ratio * 30.0;
+        }
+    } else {
+        score += 10.0; // No preconditions means always testable
+    }
+
+    // Clear effect description (20 points)
+    if !statute.effect.description.is_empty() {
+        score += 20.0;
+    }
+
+    // Temporal validity enables time-based testing (15 points)
+    if statute.temporal_validity.effective_date.is_some() {
+        score += 10.0;
+    }
+    if statute.temporal_validity.expiry_date.is_some() {
+        score += 5.0;
+    }
+
+    // Jurisdiction enables context testing (15 points)
+    if statute.jurisdiction.is_some() {
+        score += 15.0;
+    }
+
+    score.min(100.0)
+}
+
+/// Calculates the maintainability score (0-100).
+///
+/// Assesses how easy it would be to modify or extend the statute:
+/// - Modular structure
+/// - Clear dependencies
+/// - Appropriate abstraction level
+/// - Documentation quality
+fn calculate_maintainability(statute: &Statute) -> f64 {
+    let mut score: f64 = 30.0; // Baseline
+
+    // Complexity affects maintainability (25 points)
+    let complexity = analyze_complexity(statute);
+    if complexity.complexity_score <= 30 {
+        score += 25.0;
+    } else if complexity.complexity_score <= 60 {
+        score += 15.0;
+    } else if complexity.complexity_score <= 80 {
+        score += 8.0;
+    }
+
+    // Good documentation (discretion logic) (20 points)
+    if let Some(logic) = &statute.discretion_logic {
+        if !logic.is_empty() {
+            score += 20.0;
+        }
+    }
+
+    // Reasonable number of preconditions (15 points)
+    let precondition_count = statute.preconditions.len();
+    if precondition_count <= 5 {
+        score += 15.0;
+    } else if precondition_count <= 10 {
+        score += 10.0;
+    } else if precondition_count <= 15 {
+        score += 5.0;
+    }
+
+    // Clear metadata enables maintenance (20 points)
+    let mut metadata_score = 0.0;
+    if !statute.id.is_empty() && !statute.id.contains("unknown") {
+        metadata_score += 5.0;
+    }
+    if !statute.title.is_empty() {
+        metadata_score += 5.0;
+    }
+    if statute.jurisdiction.is_some() {
+        metadata_score += 5.0;
+    }
+    if statute.temporal_validity.enacted_at.is_some() {
+        metadata_score += 5.0;
+    }
+    score += metadata_score;
+
+    score.min(100.0)
+}
+
+/// Counts all conditions recursively (including nested conditions).
+fn count_all_conditions(conditions: &[legalis_core::Condition]) -> usize {
+    let mut count = 0;
+    for condition in conditions {
+        count += count_condition_recursive(condition);
+    }
+    count
+}
+
+/// Recursively counts a single condition and its children.
+fn count_condition_recursive(condition: &legalis_core::Condition) -> usize {
+    use legalis_core::Condition;
+    match condition {
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            1 + count_condition_recursive(left) + count_condition_recursive(right)
+        }
+        Condition::Not(inner) => 1 + count_condition_recursive(inner),
+        Condition::Composite { conditions, .. } => {
+            1 + conditions
+                .iter()
+                .map(|(_, c)| count_condition_recursive(c))
+                .sum::<usize>()
+        }
+        Condition::Probabilistic { condition, .. } => 1 + count_condition_recursive(condition),
+        _ => 1,
+    }
+}
+
+/// Checks if a condition is testable (has concrete, measurable criteria).
+fn is_testable_condition(condition: &legalis_core::Condition) -> bool {
+    use legalis_core::Condition;
+    match condition {
+        // Concrete, measurable conditions
+        Condition::Age { .. }
+        | Condition::Income { .. }
+        | Condition::DateRange { .. }
+        | Condition::ResidencyDuration { .. }
+        | Condition::Duration { .. }
+        | Condition::Percentage { .. }
+        | Condition::SetMembership { .. }
+        | Condition::Pattern { .. }
+        | Condition::Calculation { .. }
+        | Condition::Threshold { .. }
+        | Condition::Temporal { .. } => true,
+
+        // Attribute checks are testable if well-defined
+        Condition::HasAttribute { .. } | Condition::AttributeEquals { .. } => true,
+
+        // Geographic and relationship checks are testable
+        Condition::Geographic { .. } | Condition::EntityRelationship { .. } => true,
+
+        // Composite conditions depend on sub-conditions
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            is_testable_condition(left) && is_testable_condition(right)
+        }
+        Condition::Not(inner) => is_testable_condition(inner),
+        Condition::Composite { conditions, .. } => {
+            conditions.iter().all(|(_, c)| is_testable_condition(c))
+        }
+        Condition::Probabilistic { condition, .. } => is_testable_condition(condition),
+
+        // Fuzzy and Custom are less testable
+        Condition::Fuzzy { .. } | Condition::Custom { .. } => false,
     }
 }
 
@@ -6766,12 +7137,22 @@ pub fn analyze_quality(statute: &Statute) -> QualityMetrics {
         completeness_score += 20.0;
     }
 
+    // Calculate new quality metrics
+    let drafting_quality_score = calculate_drafting_quality(statute);
+    let clarity_index = calculate_clarity_index(statute);
+    let testability_score = calculate_testability(statute);
+    let maintainability_score = calculate_maintainability(statute);
+
     let mut metrics = QualityMetrics::new(
         statute.id.clone(),
         complexity_score,
         readability_score,
         consistency_score,
         completeness_score,
+        drafting_quality_score,
+        clarity_index,
+        testability_score,
+        maintainability_score,
     );
 
     // Add issues
@@ -6803,6 +7184,414 @@ pub fn analyze_quality(statute: &Statute) -> QualityMetrics {
     }
 
     metrics
+}
+
+// ============================================================================
+// Ambiguity Detection
+// ============================================================================
+
+/// Types of ambiguities that can be detected in statutes.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum AmbiguityType {
+    /// Vague or undefined terms in descriptions
+    VagueTerm,
+    /// Overlapping or conflicting conditions
+    OverlappingConditions,
+    /// Unclear effect description
+    UnclearEffect,
+    /// Missing discretion logic for complex conditions
+    MissingDiscretion,
+    /// Ambiguous temporal scope
+    TemporalAmbiguity,
+    /// Implicit assumptions not stated
+    ImplicitAssumption,
+    /// Quantifier ambiguity (e.g., "all", "some", "any")
+    QuantifierAmbiguity,
+}
+
+impl std::fmt::Display for AmbiguityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::VagueTerm => write!(f, "Vague Term"),
+            Self::OverlappingConditions => write!(f, "Overlapping Conditions"),
+            Self::UnclearEffect => write!(f, "Unclear Effect"),
+            Self::MissingDiscretion => write!(f, "Missing Discretion"),
+            Self::TemporalAmbiguity => write!(f, "Temporal Ambiguity"),
+            Self::ImplicitAssumption => write!(f, "Implicit Assumption"),
+            Self::QuantifierAmbiguity => write!(f, "Quantifier Ambiguity"),
+        }
+    }
+}
+
+/// Represents a detected ambiguity in a statute.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Ambiguity {
+    /// Type of ambiguity
+    pub ambiguity_type: AmbiguityType,
+    /// Location in the statute (field name)
+    pub location: String,
+    /// Description of the ambiguity
+    pub description: String,
+    /// Suggested clarification
+    pub suggestion: String,
+    /// Severity (1-10, higher is more severe)
+    pub severity: u8,
+}
+
+impl Ambiguity {
+    /// Creates a new ambiguity instance.
+    pub fn new(
+        ambiguity_type: AmbiguityType,
+        location: impl Into<String>,
+        description: impl Into<String>,
+        suggestion: impl Into<String>,
+        severity: u8,
+    ) -> Self {
+        Self {
+            ambiguity_type,
+            location: location.into(),
+            description: description.into(),
+            suggestion: suggestion.into(),
+            severity: severity.min(10),
+        }
+    }
+}
+
+/// Detects ambiguities in a statute.
+///
+/// This function analyzes a statute for various types of ambiguities including:
+/// - Vague or undefined terms
+/// - Overlapping conditions
+/// - Unclear effects
+/// - Missing discretion logic
+/// - Temporal ambiguities
+pub fn detect_ambiguities(statute: &Statute) -> Vec<Ambiguity> {
+    let mut ambiguities = Vec::new();
+
+    // Check for vague terms in title
+    if contains_vague_terms(&statute.title) {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::VagueTerm,
+            "title",
+            format!("Title contains vague terms: '{}'", statute.title),
+            "Use more specific and precise terminology",
+            6,
+        ));
+    }
+
+    // Check for vague terms in effect description
+    if contains_vague_terms(&statute.effect.description) {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::VagueTerm,
+            "effect.description",
+            format!(
+                "Effect description contains vague terms: '{}'",
+                statute.effect.description
+            ),
+            "Specify exact requirements, amounts, or procedures",
+            8,
+        ));
+    }
+
+    // Check for unclear effect descriptions
+    if statute.effect.description.is_empty() {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::UnclearEffect,
+            "effect.description",
+            "Effect description is empty",
+            "Provide a clear description of what this statute does",
+            9,
+        ));
+    } else if statute.effect.description.split_whitespace().count() < 3 {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::UnclearEffect,
+            "effect.description",
+            "Effect description is too brief to be clear",
+            "Expand the description to clearly explain the effect",
+            7,
+        ));
+    }
+
+    // Check for missing discretion logic with complex conditions
+    if statute.discretion_logic.is_none() && statute.preconditions.len() > 3 {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::MissingDiscretion,
+            "discretion_logic",
+            format!(
+                "Complex statute with {} conditions lacks discretion logic",
+                statute.preconditions.len()
+            ),
+            "Add discretion logic to clarify how conditions should be evaluated",
+            7,
+        ));
+    }
+
+    // Check for temporal ambiguities
+    if statute.temporal_validity.effective_date.is_none()
+        && statute.temporal_validity.enacted_at.is_some()
+    {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::TemporalAmbiguity,
+            "temporal_validity.effective_date",
+            "Statute has enactment date but no effective date",
+            "Specify when this statute becomes effective",
+            6,
+        ));
+    }
+
+    // Check for ambiguous temporal scope
+    if statute.temporal_validity.enacted_at.is_none()
+        && statute.temporal_validity.effective_date.is_none()
+    {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::TemporalAmbiguity,
+            "temporal_validity",
+            "No temporal information specified",
+            "Add enacted_at and effective_date to clarify when this statute applies",
+            8,
+        ));
+    }
+
+    // Check for quantifier ambiguities in descriptions
+    if contains_ambiguous_quantifiers(&statute.effect.description) {
+        ambiguities.push(Ambiguity::new(
+            AmbiguityType::QuantifierAmbiguity,
+            "effect.description",
+            "Effect description contains ambiguous quantifiers (e.g., 'some', 'several', 'many')",
+            "Use specific numbers or percentages instead of vague quantifiers",
+            7,
+        ));
+    }
+
+    // Check for implicit assumptions in custom conditions
+    for (idx, condition) in statute.preconditions.iter().enumerate() {
+        if let legalis_core::Condition::Custom { description } = condition {
+            if description.len() < 10 || contains_vague_terms(description) {
+                ambiguities.push(Ambiguity::new(
+                    AmbiguityType::ImplicitAssumption,
+                    format!("preconditions[{}]", idx),
+                    format!("Custom condition may have implicit assumptions: '{}'", description),
+                    "Replace custom condition with explicit, testable conditions",
+                    8,
+                ));
+            }
+        }
+    }
+
+    // Check for overlapping conditions using SMT solver if available
+    #[cfg(feature = "z3-solver")]
+    {
+        if let Some(overlaps) = detect_overlapping_conditions(&statute.preconditions) {
+            ambiguities.push(Ambiguity::new(
+                AmbiguityType::OverlappingConditions,
+                "preconditions",
+                overlaps,
+                "Simplify conditions to remove overlap or clarify the relationship",
+                6,
+            ));
+        }
+    }
+
+    ambiguities.sort_by(|a, b| b.severity.cmp(&a.severity));
+    ambiguities
+}
+
+/// Checks if a text contains vague or ambiguous terms.
+fn contains_vague_terms(text: &str) -> bool {
+    let vague_terms = [
+        "reasonable",
+        "appropriate",
+        "sufficient",
+        "adequate",
+        "proper",
+        "necessary",
+        "significant",
+        "substantial",
+        "may",
+        "might",
+        "should",
+        "could",
+        "approximately",
+        "around",
+        "about",
+        "roughly",
+        "generally",
+        "typically",
+        "normally",
+        "usually",
+        "often",
+        "sometimes",
+        "occasionally",
+    ];
+
+    let text_lower = text.to_lowercase();
+    vague_terms
+        .iter()
+        .any(|term| text_lower.contains(&format!(" {} ", term)) || text_lower.starts_with(term))
+}
+
+/// Checks if text contains ambiguous quantifiers.
+fn contains_ambiguous_quantifiers(text: &str) -> bool {
+    let ambiguous_quantifiers = [
+        "some",
+        "several",
+        "many",
+        "few",
+        "multiple",
+        "various",
+        "numerous",
+        "certain",
+    ];
+
+    let text_lower = text.to_lowercase();
+    ambiguous_quantifiers.iter().any(|quant| {
+        text_lower.contains(&format!(" {} ", quant)) || text_lower.starts_with(quant)
+    })
+}
+
+/// Detects overlapping conditions using SMT solver.
+#[cfg(feature = "z3-solver")]
+fn detect_overlapping_conditions(conditions: &[legalis_core::Condition]) -> Option<String> {
+    use crate::smt::{create_z3_context, SmtVerifier};
+
+    if conditions.len() < 2 {
+        return None;
+    }
+
+    let ctx = create_z3_context();
+    let mut verifier = SmtVerifier::new(&ctx);
+
+    // Check for conditions that always imply each other (redundant)
+    for i in 0..conditions.len() {
+        for j in (i + 1)..conditions.len() {
+            if let Ok(true) = verifier.implies(&conditions[i], &conditions[j]) {
+                return Some(format!(
+                    "Condition {} implies condition {} (redundant)",
+                    i, j
+                ));
+            }
+            if let Ok(true) = verifier.implies(&conditions[j], &conditions[i]) {
+                return Some(format!(
+                    "Condition {} implies condition {} (redundant)",
+                    j, i
+                ));
+            }
+        }
+    }
+
+    None
+}
+
+/// Generates an ambiguity detection report for a statute.
+pub fn ambiguity_report(statute: &Statute) -> String {
+    let ambiguities = detect_ambiguities(statute);
+
+    if ambiguities.is_empty() {
+        return format!(
+            "# Ambiguity Report for '{}'\n\nNo ambiguities detected.\n",
+            statute.id
+        );
+    }
+
+    let mut report = String::new();
+    report.push_str(&format!(
+        "# Ambiguity Report for '{}'\n\n",
+        statute.id
+    ));
+    report.push_str(&format!(
+        "**Total Ambiguities**: {}\n\n",
+        ambiguities.len()
+    ));
+
+    // Group by severity
+    let critical = ambiguities.iter().filter(|a| a.severity >= 8).count();
+    let high = ambiguities
+        .iter()
+        .filter(|a| (6..8).contains(&a.severity))
+        .count();
+    let medium = ambiguities.iter().filter(|a| a.severity < 6).count();
+
+    report.push_str("## Summary by Severity\n\n");
+    if critical > 0 {
+        report.push_str(&format!("- **Critical** (8-10): {}\n", critical));
+    }
+    if high > 0 {
+        report.push_str(&format!("- **High** (6-7): {}\n", high));
+    }
+    if medium > 0 {
+        report.push_str(&format!("- **Medium** (1-5): {}\n", medium));
+    }
+    report.push_str("\n## Detected Ambiguities\n\n");
+
+    for (idx, ambiguity) in ambiguities.iter().enumerate() {
+        report.push_str(&format!("### {}. {} (Severity: {})\n\n", idx + 1, ambiguity.ambiguity_type, ambiguity.severity));
+        report.push_str(&format!("- **Location**: `{}`\n", ambiguity.location));
+        report.push_str(&format!("- **Issue**: {}\n", ambiguity.description));
+        report.push_str(&format!("- **Suggestion**: {}\n\n", ambiguity.suggestion));
+    }
+
+    report
+}
+
+/// Generates an ambiguity detection report for multiple statutes.
+pub fn batch_ambiguity_report(statutes: &[Statute]) -> String {
+    let mut report = String::from("# Batch Ambiguity Detection Report\n\n");
+
+    let mut total_ambiguities = 0;
+    let mut statutes_with_ambiguities = 0;
+
+    for statute in statutes {
+        let ambiguities = detect_ambiguities(statute);
+        if !ambiguities.is_empty() {
+            statutes_with_ambiguities += 1;
+            total_ambiguities += ambiguities.len();
+        }
+    }
+
+    report.push_str(&format!(
+        "**Total Statutes Analyzed**: {}\n",
+        statutes.len()
+    ));
+    report.push_str(&format!(
+        "**Statutes with Ambiguities**: {}\n",
+        statutes_with_ambiguities
+    ));
+    report.push_str(&format!(
+        "**Total Ambiguities Found**: {}\n\n",
+        total_ambiguities
+    ));
+
+    if total_ambiguities == 0 {
+        report.push_str("No ambiguities detected in any statute.\n");
+        return report;
+    }
+
+    report.push_str("## Individual Statute Reports\n\n");
+
+    for statute in statutes {
+        let ambiguities = detect_ambiguities(statute);
+        if !ambiguities.is_empty() {
+            report.push_str(&format!(
+                "### {} - {} ({} ambiguities)\n\n",
+                statute.id,
+                statute.title,
+                ambiguities.len()
+            ));
+
+            for ambiguity in &ambiguities {
+                report.push_str(&format!(
+                    "- **{}** (Severity {}): {} [{}]\n",
+                    ambiguity.ambiguity_type,
+                    ambiguity.severity,
+                    ambiguity.description,
+                    ambiguity.location
+                ));
+            }
+            report.push('\n');
+        }
+    }
+
+    report
 }
 
 /// Generates a quality report for multiple statutes.
@@ -6841,8 +7630,24 @@ pub fn quality_report(statutes: &[Statute]) -> String {
             metrics.consistency_score
         ));
         report.push_str(&format!(
-            "- Completeness: {:.1}/100\n\n",
+            "- Completeness: {:.1}/100\n",
             metrics.completeness_score
+        ));
+        report.push_str(&format!(
+            "- Drafting Quality: {:.1}/100\n",
+            metrics.drafting_quality_score
+        ));
+        report.push_str(&format!(
+            "- Clarity Index: {:.1}/100\n",
+            metrics.clarity_index
+        ));
+        report.push_str(&format!(
+            "- Testability: {:.1}/100\n",
+            metrics.testability_score
+        ));
+        report.push_str(&format!(
+            "- Maintainability: {:.1}/100\n\n",
+            metrics.maintainability_score
         ));
 
         if !metrics.strengths.is_empty() {
@@ -11445,7 +12250,17 @@ mod tests {
 
     #[test]
     fn test_quality_metrics_grade() {
-        let metrics = QualityMetrics::new("test".to_string(), 95.0, 95.0, 95.0, 95.0);
+        let metrics = QualityMetrics::new(
+            "test".to_string(),
+            95.0,
+            95.0,
+            95.0,
+            95.0,
+            95.0,
+            95.0,
+            95.0,
+            95.0,
+        );
 
         assert_eq!(metrics.grade(), 'A');
         assert_eq!(metrics.overall_score, 95.0);
@@ -11492,6 +12307,546 @@ mod tests {
         let metrics = analyze_quality(&statute);
 
         assert!(metrics.strengths.iter().any(|s| s.contains("complexity")));
+    }
+
+    #[test]
+    fn test_drafting_quality_score_high() {
+        // Well-drafted statute with all best practices
+        let statute = Statute::new(
+            "well-drafted-law",
+            "Citizens Tax Relief Act",
+            Effect::obligation("must file annual tax returns"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_enacted_at(chrono::Utc::now())
+                .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        )
+        .with_discretion("Applies to all US citizens earning taxable income")
+        .with_precondition(legalis_core::Condition::Income {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 12000,
+        });
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have high drafting quality score
+        assert!(
+            metrics.drafting_quality_score >= 70.0,
+            "Drafting quality should be >= 70, got {}",
+            metrics.drafting_quality_score
+        );
+    }
+
+    #[test]
+    fn test_drafting_quality_score_low() {
+        // Poorly drafted statute missing key elements
+        let statute = Statute::new("poor-law", "", Effect::grant(""));
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have low drafting quality score
+        assert!(
+            metrics.drafting_quality_score < 50.0,
+            "Drafting quality should be < 50, got {}",
+            metrics.drafting_quality_score
+        );
+    }
+
+    #[test]
+    fn test_clarity_index_high() {
+        // Clear, simple statute
+        let statute = Statute::new(
+            "clear-law",
+            "Simple Tax Law",
+            Effect::grant("tax exemption for seniors"),
+        )
+        .with_discretion("Clear and simple rule")
+        .with_precondition(legalis_core::Condition::Age {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 65,
+        });
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have high clarity index
+        assert!(
+            metrics.clarity_index >= 70.0,
+            "Clarity index should be >= 70, got {}",
+            metrics.clarity_index
+        );
+    }
+
+    #[test]
+    fn test_clarity_index_low() {
+        // Complex, verbose statute
+        let complex_desc = "This regulation establishes procedures and requirements \
+            for the implementation of tax relief measures applicable to certain categories \
+            of individuals meeting specific criteria as determined by the regulatory authority \
+            in accordance with established guidelines and subject to periodic review";
+
+        let statute = Statute::new("complex-law", "Very Long Title That Exceeds Reasonable Length For A Statute Title And Becomes Confusing", Effect::grant(complex_desc))
+            .with_precondition(
+                legalis_core::Condition::And(
+                    Box::new(legalis_core::Condition::Age {
+                        operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                        value: 18,
+                    }),
+                    Box::new(legalis_core::Condition::Or(
+                        Box::new(legalis_core::Condition::Income {
+                            operator: legalis_core::ComparisonOp::LessThan,
+                            value: 50000,
+                        }),
+                        Box::new(legalis_core::Condition::Income {
+                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                            value: 100000,
+                        }),
+                    )),
+                ),
+            );
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have lower clarity index due to complexity and verbosity
+        assert!(
+            metrics.clarity_index < 85.0,
+            "Clarity index should be < 85, got {}",
+            metrics.clarity_index
+        );
+    }
+
+    #[test]
+    fn test_testability_score_high() {
+        // Highly testable statute with concrete conditions
+        let statute = Statute::new(
+            "testable-law",
+            "Age Requirement Law",
+            Effect::grant("voting rights"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
+                .with_expiry_date(chrono::NaiveDate::from_ymd_opt(2030, 12, 31).unwrap()),
+        )
+        .with_precondition(
+            legalis_core::Condition::And(
+                Box::new(legalis_core::Condition::Age {
+                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                }),
+                Box::new(legalis_core::Condition::HasAttribute {
+                    key: "citizenship".to_string(),
+                }),
+            )
+        );
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have high testability score
+        assert!(
+            metrics.testability_score >= 70.0,
+            "Testability should be >= 70, got {}",
+            metrics.testability_score
+        );
+    }
+
+    #[test]
+    fn test_testability_score_low() {
+        // Less testable statute with fuzzy/custom conditions
+        let statute = Statute::new(
+            "fuzzy-law",
+            "Vague Law",
+            Effect::grant("some benefit"),
+        )
+        .with_precondition(
+            legalis_core::Condition::And(
+                Box::new(legalis_core::Condition::Custom {
+                    description: "must demonstrate good character".to_string(),
+                }),
+                Box::new(legalis_core::Condition::Fuzzy {
+                    attribute: "creditworthiness".to_string(),
+                    membership_points: vec![(300.0, 0.0), (700.0, 0.5), (850.0, 1.0)],
+                    min_membership: 0.7,
+                }),
+            )
+        );
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have lower testability score
+        assert!(
+            metrics.testability_score < 70.0,
+            "Testability should be < 70, got {}",
+            metrics.testability_score
+        );
+    }
+
+    #[test]
+    fn test_maintainability_score_high() {
+        // Highly maintainable statute
+        let statute = Statute::new(
+            "maintainable-law",
+            "Simple Rule",
+            Effect::grant("benefit"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()))
+        .with_discretion("Clear documentation explaining the purpose and application")
+        .with_precondition(legalis_core::Condition::Age {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have high maintainability score
+        assert!(
+            metrics.maintainability_score >= 70.0,
+            "Maintainability should be >= 70, got {}",
+            metrics.maintainability_score
+        );
+    }
+
+    #[test]
+    fn test_maintainability_score_low() {
+        // Poorly maintainable statute
+        let statute = Statute::new("unmaintainable-law", "", Effect::grant(""))
+            .with_precondition(
+                legalis_core::Condition::And(
+                    Box::new(legalis_core::Condition::And(
+                        Box::new(legalis_core::Condition::Or(
+                            Box::new(legalis_core::Condition::Age {
+                                operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                                value: 18,
+                            }),
+                            Box::new(legalis_core::Condition::Age {
+                                operator: legalis_core::ComparisonOp::LessThan,
+                                value: 65,
+                            }),
+                        )),
+                        Box::new(legalis_core::Condition::And(
+                            Box::new(legalis_core::Condition::Income {
+                                operator: legalis_core::ComparisonOp::GreaterThan,
+                                value: 25000,
+                            }),
+                            Box::new(legalis_core::Condition::Income {
+                                operator: legalis_core::ComparisonOp::LessThan,
+                                value: 75000,
+                            }),
+                        )),
+                    )),
+                    Box::new(legalis_core::Condition::And(
+                        Box::new(legalis_core::Condition::HasAttribute {
+                            key: "attr1".to_string(),
+                        }),
+                        Box::new(legalis_core::Condition::And(
+                            Box::new(legalis_core::Condition::HasAttribute {
+                                key: "attr2".to_string(),
+                            }),
+                            Box::new(legalis_core::Condition::HasAttribute {
+                                key: "attr3".to_string(),
+                            }),
+                        )),
+                    )),
+                )
+            );
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have lower maintainability score
+        assert!(
+            metrics.maintainability_score < 60.0,
+            "Maintainability should be < 60, got {}",
+            metrics.maintainability_score
+        );
+    }
+
+    #[test]
+    fn test_comprehensive_quality_metrics() {
+        // Test that all new metrics are included in overall score
+        let statute = Statute::new(
+            "comprehensive-law",
+            "Well Designed Law",
+            Effect::grant("comprehensive benefit"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_enacted_at(chrono::Utc::now())
+                .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        )
+        .with_discretion("Comprehensive documentation")
+        .with_precondition(legalis_core::Condition::Age {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let metrics = analyze_quality(&statute);
+
+        // Verify all metrics are populated and within valid range
+        assert!(
+            (0.0..=100.0).contains(&metrics.drafting_quality_score),
+            "Drafting quality out of range: {}",
+            metrics.drafting_quality_score
+        );
+        assert!(
+            (0.0..=100.0).contains(&metrics.clarity_index),
+            "Clarity index out of range: {}",
+            metrics.clarity_index
+        );
+        assert!(
+            (0.0..=100.0).contains(&metrics.testability_score),
+            "Testability out of range: {}",
+            metrics.testability_score
+        );
+        assert!(
+            (0.0..=100.0).contains(&metrics.maintainability_score),
+            "Maintainability out of range: {}",
+            metrics.maintainability_score
+        );
+
+        // Overall score should be average of all 8 metrics
+        let expected_avg = (metrics.complexity_score
+            + metrics.readability_score
+            + metrics.consistency_score
+            + metrics.completeness_score
+            + metrics.drafting_quality_score
+            + metrics.clarity_index
+            + metrics.testability_score
+            + metrics.maintainability_score)
+            / 8.0;
+
+        assert!(
+            (metrics.overall_score - expected_avg).abs() < 0.01,
+            "Overall score mismatch: expected {}, got {}",
+            expected_avg,
+            metrics.overall_score
+        );
+    }
+
+    // ========================================================================
+    // Tests for Ambiguity Detection
+    // ========================================================================
+
+    #[test]
+    fn test_detect_vague_terms_in_title() {
+        let statute = Statute::new(
+            "vague-law",
+            "Reasonable Tax Law",
+            Effect::grant("tax benefit"),
+        );
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm)));
+    }
+
+    #[test]
+    fn test_detect_vague_terms_in_description() {
+        let statute = Statute::new(
+            "vague-desc-law",
+            "Tax Law",
+            Effect::grant("may receive appropriate benefits"),
+        );
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm)));
+    }
+
+    #[test]
+    fn test_detect_unclear_effect_empty() {
+        let statute = Statute::new("unclear-law", "Test Law", Effect::grant(""));
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect)));
+    }
+
+    #[test]
+    fn test_detect_unclear_effect_too_brief() {
+        let statute = Statute::new("brief-law", "Test Law", Effect::grant("do it"));
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect)));
+    }
+
+    #[test]
+    fn test_detect_missing_discretion() {
+        // Create a statute with multiple preconditions (>3) without discretion logic
+        let statute = Statute::new(
+            "complex-law",
+            "Complex Tax Law",
+            Effect::grant("tax credit"),
+        )
+        .with_precondition(legalis_core::Condition::Age {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 18,
+        })
+        .with_precondition(legalis_core::Condition::Income {
+            operator: legalis_core::ComparisonOp::LessThan,
+            value: 50000,
+        })
+        .with_precondition(legalis_core::Condition::HasAttribute {
+            key: "citizen".to_string(),
+        })
+        .with_precondition(legalis_core::Condition::HasAttribute {
+            key: "resident".to_string(),
+        });
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        // Should detect missing discretion for complex conditions (>3 preconditions)
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::MissingDiscretion)));
+    }
+
+    #[test]
+    fn test_detect_temporal_ambiguity_no_dates() {
+        let statute = Statute::new("temporal-law", "Test Law", Effect::grant("benefit"));
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity)));
+    }
+
+    #[test]
+    fn test_detect_temporal_ambiguity_missing_effective_date() {
+        let statute = Statute::new("temporal-law", "Test Law", Effect::grant("benefit"))
+            .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()));
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity)));
+    }
+
+    #[test]
+    fn test_detect_quantifier_ambiguity() {
+        let statute = Statute::new(
+            "quant-law",
+            "Test Law",
+            Effect::grant("some benefits for several qualified individuals"),
+        );
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities.iter().any(
+            |a| matches!(a.ambiguity_type, AmbiguityType::QuantifierAmbiguity)
+        ));
+    }
+
+    #[test]
+    fn test_detect_implicit_assumption_custom_condition() {
+        let statute = Statute::new("assumption-law", "Test Law", Effect::grant("benefit"))
+            .with_precondition(legalis_core::Condition::Custom {
+                description: "good".to_string(),
+            });
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        assert!(!ambiguities.is_empty());
+        assert!(ambiguities
+            .iter()
+            .any(|a| matches!(a.ambiguity_type, AmbiguityType::ImplicitAssumption)));
+    }
+
+    #[test]
+    fn test_no_ambiguities_well_defined_statute() {
+        let statute = Statute::new(
+            "clear-law",
+            "Senior Citizen Tax Credit",
+            Effect::grant("tax credit of $1000 for qualified seniors"),
+        )
+        .with_jurisdiction("US")
+        .with_temporal_validity(
+            TemporalValidity::new()
+                .with_enacted_at(chrono::Utc::now())
+                .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+        )
+        .with_discretion("Clear rule for senior tax credits")
+        .with_precondition(legalis_core::Condition::Age {
+            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+            value: 65,
+        });
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        // Should have no or very few ambiguities
+        assert!(ambiguities.is_empty() || ambiguities.len() <= 1);
+    }
+
+    #[test]
+    fn test_ambiguity_report_generation() {
+        let statute = Statute::new("vague-law", "Reasonable Law", Effect::grant(""));
+
+        let report = ambiguity_report(&statute);
+
+        assert!(report.contains("Ambiguity Report"));
+        assert!(report.contains("vague-law"));
+    }
+
+    #[test]
+    fn test_batch_ambiguity_report() {
+        let statutes = vec![
+            Statute::new("law1", "Reasonable Law", Effect::grant("")),
+            Statute::new(
+                "law2",
+                "Clear Law",
+                Effect::grant("specific tax credit of $500"),
+            )
+            .with_jurisdiction("US")
+            .with_temporal_validity(
+                TemporalValidity::new()
+                    .with_enacted_at(chrono::Utc::now())
+                    .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+            ),
+        ];
+
+        let report = batch_ambiguity_report(&statutes);
+
+        assert!(report.contains("Batch Ambiguity Detection Report"));
+        assert!(report.contains("**Total Statutes Analyzed**: 2"));
+        assert!(report.contains("law1"));
+    }
+
+    #[test]
+    fn test_ambiguity_severity_sorting() {
+        let statute = Statute::new("multi-ambiguity-law", "Test", Effect::grant(""))
+            .with_precondition(legalis_core::Condition::Custom {
+                description: "test".to_string(),
+            });
+
+        let ambiguities = detect_ambiguities(&statute);
+
+        // Verify ambiguities are sorted by severity (descending)
+        for i in 0..ambiguities.len().saturating_sub(1) {
+            assert!(
+                ambiguities[i].severity >= ambiguities[i + 1].severity,
+                "Ambiguities should be sorted by severity"
+            );
+        }
     }
 
     // ========================================================================

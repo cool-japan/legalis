@@ -390,6 +390,163 @@ impl SimEngine {
                     "Calculation condition requires evaluation: {formula}"
                 ))
             }
+            Condition::Composite {
+                conditions,
+                threshold,
+            } => {
+                // Evaluate all sub-conditions and sum weights of satisfied ones
+                let mut score = 0.0;
+                for (weight, condition) in conditions {
+                    match Self::evaluate_condition(agent, condition) {
+                        ConditionResult::True => score += weight,
+                        ConditionResult::False => {}
+                        ConditionResult::Indeterminate(_) => {
+                            // For composite, treat indeterminate as false
+                        }
+                    }
+                }
+                if score >= *threshold {
+                    ConditionResult::True
+                } else {
+                    ConditionResult::False
+                }
+            }
+            Condition::Threshold {
+                attributes,
+                operator,
+                value,
+            } => {
+                // Sum all attribute values (with multipliers)
+                let mut total = 0.0;
+                let mut has_error = false;
+                for (attr_name, multiplier) in attributes {
+                    match agent
+                        .get_attribute(attr_name)
+                        .and_then(|v| v.parse::<f64>().ok())
+                    {
+                        Some(attr_value) => total += attr_value * multiplier,
+                        None => {
+                            has_error = true;
+                            break;
+                        }
+                    }
+                }
+                if has_error {
+                    ConditionResult::Indeterminate("One or more attributes not found".to_string())
+                } else {
+                    let result = match operator {
+                        ComparisonOp::Equal => (total - value).abs() < 1e-6,
+                        ComparisonOp::NotEqual => (total - value).abs() >= 1e-6,
+                        ComparisonOp::GreaterThan => total > *value,
+                        ComparisonOp::GreaterOrEqual => total >= *value,
+                        ComparisonOp::LessThan => total < *value,
+                        ComparisonOp::LessOrEqual => total <= *value,
+                    };
+                    if result {
+                        ConditionResult::True
+                    } else {
+                        ConditionResult::False
+                    }
+                }
+            }
+            Condition::Fuzzy {
+                attribute,
+                membership_points,
+                min_membership,
+            } => {
+                match agent
+                    .get_attribute(attribute)
+                    .and_then(|v| v.parse::<f64>().ok())
+                {
+                    Some(value) => {
+                        // Linear interpolation between membership points
+                        let membership = if membership_points.is_empty() {
+                            0.0
+                        } else if membership_points.len() == 1 {
+                            if (value - membership_points[0].0).abs() < 1e-6 {
+                                membership_points[0].1
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            // Find surrounding points
+                            let mut lower = None;
+                            let mut upper = None;
+                            for point in membership_points {
+                                if point.0 <= value {
+                                    lower = Some(point);
+                                }
+                                if point.0 >= value && upper.is_none() {
+                                    upper = Some(point);
+                                }
+                            }
+                            match (lower, upper) {
+                                (Some(l), Some(u)) if (l.0 - u.0).abs() < 1e-6 => l.1,
+                                (Some(l), Some(u)) => {
+                                    // Linear interpolation
+                                    let t = (value - l.0) / (u.0 - l.0);
+                                    l.1 + t * (u.1 - l.1)
+                                }
+                                (Some(l), None) => l.1,
+                                (None, Some(u)) => u.1,
+                                (None, None) => 0.0,
+                            }
+                        };
+                        if membership >= *min_membership {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(format!(
+                        "Attribute '{}' not found for fuzzy evaluation",
+                        attribute
+                    )),
+                }
+            }
+            Condition::Probabilistic {
+                condition,
+                probability: _,
+                threshold: _,
+            } => {
+                // For simulation, evaluate the base condition deterministically
+                // A full implementation would use probability and threshold for uncertain evaluation
+                Self::evaluate_condition(agent, condition)
+            }
+            Condition::Temporal {
+                base_value,
+                reference_time,
+                rate,
+                operator,
+                target_value,
+            } => {
+                // Get current time from agent attributes
+                match agent
+                    .get_attribute("current_timestamp")
+                    .and_then(|v| v.parse::<i64>().ok())
+                {
+                    Some(current_time) => {
+                        let time_elapsed = (current_time - reference_time) as f64;
+                        let current_value = base_value * (1.0 + rate).powf(time_elapsed);
+                        let result = match operator {
+                            ComparisonOp::Equal => (current_value - target_value).abs() < 1e-6,
+                            ComparisonOp::NotEqual => (current_value - target_value).abs() >= 1e-6,
+                            ComparisonOp::GreaterThan => current_value > *target_value,
+                            ComparisonOp::GreaterOrEqual => current_value >= *target_value,
+                            ComparisonOp::LessThan => current_value < *target_value,
+                            ComparisonOp::LessOrEqual => current_value <= *target_value,
+                        };
+                        if result {
+                            ConditionResult::True
+                        } else {
+                            ConditionResult::False
+                        }
+                    }
+                    None => ConditionResult::Indeterminate(
+                        "Current timestamp not found for temporal evaluation".to_string(),
+                    ),
+                }
+            }
         }
     }
 }

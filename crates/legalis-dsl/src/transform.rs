@@ -24,7 +24,7 @@ pub trait DocumentTransform: Send + Sync {
     /// Returns an error if the transformation is not reversible.
     fn reverse(&self, doc: &LegalDocument) -> DslResult<LegalDocument> {
         let _ = doc;
-        Err(DslError::parse_error(&format!(
+        Err(DslError::parse_error(format!(
             "Transformation '{}' is not reversible",
             self.description()
         )))

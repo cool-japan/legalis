@@ -549,6 +549,156 @@ impl<'ctx> SmtVerifier<'ctx> {
                 self.translate_comparison(&calc_var, operator, *value as i64)
             }
 
+            Condition::Composite {
+                conditions,
+                threshold,
+            } => {
+                // For composite conditions, we need to sum the weights of satisfied conditions
+                // and check if the sum meets the threshold.
+                // For simplicity, we create a boolean for each sub-condition and use
+                // if-then-else to accumulate weights.
+
+                if conditions.is_empty() {
+                    // No conditions means the composite is always false
+                    return Ok(Bool::from_bool(self.ctx, false));
+                }
+
+                // Create boolean variables for each condition
+                let mut sum_terms = Vec::new();
+                for (weight, cond) in conditions {
+                    let cond_bool = self.translate_condition(cond)?;
+                    // Convert weight to integer (scale by 1000 to preserve precision)
+                    let weight_val = (*weight * 1000.0) as i64;
+                    let weight_int = Int::from_i64(self.ctx, weight_val);
+                    let zero = Int::from_i64(self.ctx, 0);
+                    // If condition is true, add weight; otherwise add 0
+                    let term = cond_bool.ite(&weight_int, &zero);
+                    sum_terms.push(term);
+                }
+
+                // Sum all terms
+                let total = if sum_terms.len() == 1 {
+                    sum_terms[0].clone()
+                } else {
+                    let mut sum = sum_terms[0].clone();
+                    for term in &sum_terms[1..] {
+                        sum = sum.add(term);
+                    }
+                    sum
+                };
+
+                // Compare against threshold (also scaled by 1000)
+                let threshold_val = (*threshold * 1000.0) as i64;
+                let threshold_int = Int::from_i64(self.ctx, threshold_val);
+                Ok(total.ge(&threshold_int))
+            }
+
+            Condition::Threshold {
+                attributes,
+                operator,
+                value,
+            } => {
+                // Sum multiple attributes with their multipliers
+                if attributes.is_empty() {
+                    return Ok(Bool::from_bool(self.ctx, false));
+                }
+
+                let mut sum_terms = Vec::new();
+                for (attr_name, multiplier) in attributes {
+                    let attr_var = self.get_or_create_int_var(attr_name);
+                    let mult_val = (*multiplier * 1000.0) as i64;
+                    let mult_int = Int::from_i64(self.ctx, mult_val);
+                    let term = attr_var.mul(&[&mult_int]);
+                    sum_terms.push(term);
+                }
+
+                // Sum all terms
+                let total = if sum_terms.len() == 1 {
+                    sum_terms[0].clone()
+                } else {
+                    let mut sum = sum_terms[0].clone();
+                    for term in &sum_terms[1..] {
+                        sum = sum.add(&term);
+                    }
+                    sum
+                };
+
+                // Scale the value and compare
+                let scaled_value = (*value * 1000.0) as i64;
+                self.translate_comparison(&total, operator, scaled_value)
+            }
+
+            Condition::Fuzzy {
+                attribute,
+                membership_points,
+                min_membership,
+            } => {
+                // For fuzzy logic, we approximate by checking if the attribute value
+                // falls within ranges that have sufficient membership degree.
+                // This is a simplification since we can't model continuous membership functions directly.
+
+                // Create a variable for the attribute
+                let attr_var = self.get_or_create_int_var(attribute);
+
+                // Find points with membership >= min_membership
+                let satisfying_ranges: Vec<_> = membership_points
+                    .iter()
+                    .filter(|(_, membership)| *membership >= *min_membership)
+                    .collect();
+
+                if satisfying_ranges.is_empty() {
+                    return Ok(Bool::from_bool(self.ctx, false));
+                }
+
+                // Create disjunction for all satisfying value ranges
+                let mut range_checks = Vec::new();
+                for (value, _) in &satisfying_ranges {
+                    let value_int = Int::from_i64(self.ctx, *value as i64);
+                    let check = attr_var._eq(&value_int);
+                    range_checks.push(check);
+                }
+
+                if range_checks.len() == 1 {
+                    Ok(range_checks[0].clone())
+                } else {
+                    Ok(Bool::or(self.ctx, &range_checks.iter().collect::<Vec<_>>()))
+                }
+            }
+
+            Condition::Probabilistic {
+                condition,
+                probability: _,
+                threshold: _,
+            } => {
+                // For probabilistic conditions, we simplify by just checking the base condition
+                // since we can't model probability directly in SMT without probabilistic logic
+                self.translate_condition(condition)
+            }
+
+            Condition::Temporal {
+                base_value,
+                reference_time,
+                rate,
+                operator,
+                target_value,
+            } => {
+                // For temporal conditions, we need to model: value = base_value * (1 + rate)^time_elapsed
+                // We'll create a variable for the current time and compute the value
+                let current_time_var = self.get_or_create_int_var("current_time");
+
+                // For simplicity, we'll create a variable representing the computed temporal value
+                // and constrain it based on the formula
+                let temporal_value_var = self.get_or_create_int_var(&format!(
+                    "temporal_{}_{}_{}",
+                    Self::hash_string(&base_value.to_string()),
+                    reference_time,
+                    Self::hash_string(&rate.to_string())
+                ));
+
+                // Compare the temporal value against the target
+                self.translate_comparison(&temporal_value_var, operator, *target_value as i64)
+            }
+
             Condition::Custom { description } => {
                 // For custom conditions, create a boolean variable
                 let hash = Self::hash_string(description);

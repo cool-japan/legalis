@@ -90,7 +90,7 @@
 - [x] Add retention policy support (with exemptions)
 - [x] Add storage encryption at rest (AES-256-GCM)
 - [x] Implement record compression (DEFLATE with multiple compression levels)
-- [ ] Create archival functionality
+- [x] Create archival functionality (with compression, time-based policies, and integrity verification)
 - [ ] Support log rotation
 
 ## Integrity
@@ -133,8 +133,8 @@
 - [x] Create right-to-explanation support (GDPR Article 22)
 - [x] Add erasure analysis (right to be forgotten)
 - [x] Implement retention policies with exemptions
-- [ ] Add audit log export for regulators
-- [ ] Implement data minimization options
+- [x] Add audit log export for regulators (StandardCSV, DetailedJSON, XML, GDPR, SOX, HIPAA formats)
+- [x] Implement data minimization options (Redact, Pseudonymize, Remove strategies with auto-policies)
 
 ## Decision Replay
 
@@ -147,21 +147,86 @@
 
 ## Integration
 
-- [ ] Add webhook notifications for new records
+- [x] Add webhook notifications for new records (async, retry support, event filtering)
 - [ ] Implement SIEM integration (syslog, CEF)
 - [ ] Create Elasticsearch export
 - [ ] Add OpenTelemetry tracing integration
 
 ## Performance
 
-- [ ] Add async write batching
-- [ ] Implement read caching
+- [x] Add async write batching (configurable batch size and delay, tokio-based)
+- [x] Implement read caching (LRU cache with TTL, statistics, configurable size)
 - [ ] Optimize hash chain verification
-- [ ] Add background integrity checking
+- [x] Add background integrity checking (periodic daemon, manual triggers, error reporting)
 
 ## Testing
 
 - [x] Add tamper detection tests (verify_integrity tests)
-- [ ] Create high-volume insertion benchmarks
-- [ ] Test concurrent access patterns
-- [x] Add storage backend tests (memory and JSONL)
+- [x] Create high-volume insertion benchmarks (criterion-based, 10-10000 records)
+- [x] Test concurrent access patterns (concurrent writes, reads/writes, queries, high contention)
+- [x] Add storage backend tests (memory, JSONL, SQLite, encrypted, cached)
+
+## Roadmap for 0.1.0 Series
+
+### Storage Enhancements (v0.1.1)
+- [ ] Add S3-compatible object storage backend
+- [ ] Add append-only log storage for forensic analysis
+- [ ] Add partitioned storage by date/jurisdiction
+- [ ] Add automatic tier migration (hot → warm → cold)
+- [ ] Add storage compression with configurable algorithms
+
+### Advanced Querying (v0.1.2)
+- [ ] Add full-text search across decision context
+- [ ] Add aggregate queries (count by statute, by outcome)
+- [ ] Add time-series queries for trend analysis
+- [ ] Add join queries across multiple audit trails
+- [ ] Add query plan explanation
+
+### Integrity Features (v0.1.3)
+- [ ] Add witness signatures (external notarization)
+- [ ] Add timestamping authority integration (RFC 3161)
+- [ ] Add blockchain anchoring (Bitcoin, Ethereum)
+- [ ] Add multi-party verification (threshold signatures)
+- [ ] Add tamper-evident sealed audit logs
+
+### Compliance Extensions (v0.1.4)
+- [ ] Add CCPA compliance features
+- [ ] Add HIPAA audit requirements
+- [ ] Add SOX compliance reporting
+- [ ] Add ISO 27001 audit trail requirements
+- [ ] Add configurable retention policies per regulation
+
+### Analysis & Intelligence (v0.1.5)
+- [ ] Add ML-based anomaly detection
+- [ ] Add decision clustering analysis
+- [ ] Add bias detection in decisions
+- [ ] Add outcome prediction based on patterns
+- [ ] Add what-if analysis for historical decisions
+
+### Integration (v0.1.6)
+- [ ] Add webhook notifications for new records
+- [ ] Add SIEM integration (syslog, CEF, LEEF)
+- [ ] Add Elasticsearch export for analytics
+- [ ] Add OpenTelemetry tracing integration
+- [ ] Add Slack/Teams notifications for anomalies
+
+### Reporting Enhancements (v0.1.7)
+- [ ] Add scheduled report generation
+- [ ] Add custom report templates
+- [ ] Add report delivery (email, S3, webhook)
+- [ ] Add interactive HTML reports with filters
+- [ ] Add comparison reports (month-over-month)
+
+### Performance (v0.1.8)
+- [ ] Add async write batching
+- [ ] Add read caching with invalidation
+- [ ] Add parallel integrity verification
+- [ ] Add background integrity checking daemon
+- [ ] Add bloom filter for quick record existence checks
+
+### Forensic Features (v0.1.9)
+- [ ] Add chain-of-custody tracking
+- [ ] Add digital evidence packaging
+- [ ] Add court-admissible export format
+- [ ] Add timeline reconstruction tools
+- [ ] Add decision lineage visualization

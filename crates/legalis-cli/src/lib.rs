@@ -385,6 +385,153 @@ pub enum Commands {
         #[arg(short, long, default_value = "10")]
         limit: usize,
     },
+
+    /// Publish a statute to a registry
+    Publish {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Tags to associate with the statute
+        #[arg(short, long)]
+        tags: Vec<String>,
+
+        /// Dry run (show what would be published without actually publishing)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Validate a legal DSL file for format compliance
+    Validate {
+        /// Input file(s) to validate
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Format to validate against (auto-detected if not specified)
+        #[arg(long)]
+        format: Option<LegalDslFormat>,
+
+        /// Strict validation mode
+        #[arg(long)]
+        strict: bool,
+    },
+
+    /// Install a statute from a registry
+    Install {
+        /// Statute ID to install
+        #[arg(short, long)]
+        statute_id: String,
+
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Output directory for installed statute
+        #[arg(short, long, default_value = "./statutes")]
+        output: String,
+
+        /// Force reinstall if already installed
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// List installed statutes
+    List {
+        /// Directory containing installed statutes
+        #[arg(short, long, default_value = "./statutes")]
+        directory: String,
+
+        /// Show detailed information
+        #[arg(long)]
+        verbose: bool,
+    },
+
+    /// Add a dependency statute
+    Add {
+        /// Statute ID to add as dependency
+        #[arg(short, long)]
+        statute_id: String,
+
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Project configuration file to update
+        #[arg(long, default_value = "legalis.yaml")]
+        config: String,
+    },
+
+    /// Update installed statutes to latest versions
+    Update {
+        /// Specific statute ID to update (updates all if not specified)
+        #[arg(short, long)]
+        statute_id: Option<String>,
+
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Check for updates without installing
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Clean cache and temporary files
+    Clean {
+        /// Remove all cached data
+        #[arg(long)]
+        all: bool,
+
+        /// Remove compilation cache
+        #[arg(long)]
+        cache: bool,
+
+        /// Remove temporary files
+        #[arg(long)]
+        temp: bool,
+
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Check for outdated statutes
+    Outdated {
+        /// Directory containing installed statutes
+        #[arg(short, long, default_value = "./statutes")]
+        directory: String,
+
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Show all statutes, not just outdated ones
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Uninstall a statute
+    Uninstall {
+        /// Statute ID to uninstall
+        #[arg(short, long)]
+        statute_id: String,
+
+        /// Directory containing installed statutes
+        #[arg(short, long, default_value = "./statutes")]
+        directory: String,
+
+        /// Remove without confirmation
+        #[arg(long)]
+        force: bool,
+
+        /// Dry run (show what would be removed without actually removing)
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// Statute template options.

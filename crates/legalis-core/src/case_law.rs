@@ -306,6 +306,145 @@ pub struct Precedent {
     pub application: PrecedentApplication,
 }
 
+impl Precedent {
+    /// Creates a new precedent relationship where the current case is distinguished from the precedent.
+    ///
+    /// Distinguishing a case means identifying material differences in facts such that
+    /// the precedent's ratio decidendi doesn't apply to the current case.
+    ///
+    /// # Arguments
+    /// * `precedent_case` - The case to distinguish from
+    /// * `current_case` - The current case being decided
+    /// * `distinguishing_factors` - Reasons why the cases differ materially
+    ///
+    /// # Returns
+    /// A `Precedent` with application set to `Distinguished`
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::case_law::{Case, Precedent, Court, PrecedentWeight};
+    /// # use chrono::NaiveDate;
+    /// # use uuid::Uuid;
+    /// let precedent_case = Case::new(
+    ///     "Smith v. Jones, 100 F.2d 200 (1950)",
+    ///     "Smith v. Jones",
+    ///     1950,
+    ///     Court::Supreme,
+    ///     "US-NY"
+    /// ).with_facts("Contract dispute over sale of goods");
+    ///
+    /// let current_case = Case::new(
+    ///     "Doe v. Roe, 200 F.2d 400 (2020)",
+    ///     "Doe v. Roe",
+    ///     2020,
+    ///     Court::Trial,
+    ///     "US-NY"
+    /// ).with_facts("Contract dispute over sale of services");
+    ///
+    /// let distinguished = Precedent::distinguish(
+    ///     &precedent_case,
+    ///     &current_case,
+    ///     vec!["Precedent involved goods, current case involves services".to_string()],
+    /// );
+    /// ```
+    #[must_use]
+    pub fn distinguish(
+        precedent_case: &Case,
+        current_case: &Case,
+        _distinguishing_factors: Vec<String>,
+    ) -> Self {
+        Self {
+            case_id: precedent_case.id,
+            target_case_id: current_case.id,
+            weight: PrecedentWeight::Persuasive,
+            application: PrecedentApplication::Distinguished,
+        }
+    }
+
+    /// Creates a new precedent relationship where the current case follows the precedent's ratio decidendi.
+    ///
+    /// Following a precedent means applying its legal reasoning to the current case,
+    /// optionally with modifications to adapt to the specific circumstances.
+    ///
+    /// # Arguments
+    /// * `precedent_case` - The case to follow
+    /// * `current_case` - The current case being decided
+    /// * `modifications` - Optional modifications or clarifications to the precedent's rule
+    ///
+    /// # Returns
+    /// A `Precedent` with application set to `Followed` or `Limited` (if modifications provided)
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::case_law::{Case, Precedent, Court, PrecedentWeight};
+    /// # use chrono::NaiveDate;
+    /// # use uuid::Uuid;
+    /// let precedent_case = Case::new(
+    ///     "Brown v. Board, 347 U.S. 483 (1954)",
+    ///     "Brown v. Board",
+    ///     1954,
+    ///     Court::Supreme,
+    ///     "US"
+    /// ).with_holding("Separate educational facilities are inherently unequal");
+    ///
+    /// let current_case = Case::new(
+    ///     "Similar Case, 400 U.S. 100 (1970)",
+    ///     "Similar Case",
+    ///     1970,
+    ///     Court::Appellate,
+    ///     "US"
+    /// );
+    ///
+    /// let followed = Precedent::follow(&precedent_case, &current_case, None);
+    /// ```
+    #[must_use]
+    pub fn follow(
+        precedent_case: &Case,
+        current_case: &Case,
+        modifications: Option<Vec<String>>,
+    ) -> Self {
+        // Determine weight based on court hierarchy
+        let weight = if precedent_case.court.level() > current_case.court.level() {
+            PrecedentWeight::Binding
+        } else if precedent_case.court == current_case.court {
+            PrecedentWeight::StronglyPersuasive
+        } else {
+            PrecedentWeight::Persuasive
+        };
+
+        let application = if modifications.is_some() {
+            PrecedentApplication::Limited
+        } else {
+            PrecedentApplication::Followed
+        };
+
+        Self {
+            case_id: precedent_case.id,
+            target_case_id: current_case.id,
+            weight,
+            application,
+        }
+    }
+
+    /// Checks if this precedent is binding (must be followed).
+    #[must_use]
+    pub const fn is_binding(&self) -> bool {
+        matches!(self.weight, PrecedentWeight::Binding)
+    }
+
+    /// Checks if this precedent was distinguished.
+    #[must_use]
+    pub const fn was_distinguished(&self) -> bool {
+        matches!(self.application, PrecedentApplication::Distinguished)
+    }
+
+    /// Checks if this precedent was overruled.
+    #[must_use]
+    pub const fn was_overruled(&self) -> bool {
+        matches!(self.application, PrecedentApplication::Overruled)
+    }
+}
+
 /// How a precedent was applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -506,6 +645,152 @@ impl CaseDatabase {
     /// Creates a fluent query builder for complex case queries.
     pub fn query(&self) -> CaseQuery<'_> {
         CaseQuery::new(self)
+    }
+
+    /// Finds conflicting precedents - cases that are binding but reach different conclusions.
+    ///
+    /// This is useful for detecting circuit splits or conflicting case law within a jurisdiction.
+    /// Returns pairs of case IDs where both are non-overruled, binding precedents that conflict.
+    ///
+    /// # Arguments
+    /// * `jurisdiction` - Jurisdiction to check for conflicts
+    /// * `court_level` - Minimum court level to consider (e.g., `Court::Appellate`)
+    ///
+    /// # Returns
+    /// Vector of (case_id1, case_id2, reason) tuples for conflicting precedents
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::case_law::{CaseDatabase, Case, Court, CaseRule};
+    /// # use legalis_core::{Condition, Effect};
+    /// # use chrono::NaiveDate;
+    /// let mut db = CaseDatabase::new();
+    ///
+    /// let case1 = Case::new("Case 1", "First", 2010, Court::Appellate, "US-CA")
+    ///     .with_holding("Software is patentable");
+    /// db.add_case(case1);
+    ///
+    /// let case2 = Case::new("Case 2", "Second", 2015, Court::Appellate, "US-CA")
+    ///     .with_holding("Software is not patentable");
+    /// db.add_case(case2);
+    ///
+    /// let conflicts = db.find_conflicting_precedents("US-CA", Court::Appellate);
+    /// ```
+    pub fn find_conflicting_precedents(
+        &self,
+        jurisdiction: &str,
+        court_level: Court,
+    ) -> Vec<(Uuid, Uuid, String)> {
+        let mut conflicts = Vec::new();
+
+        // Get all binding precedents in the jurisdiction
+        let binding_cases: Vec<&Case> = self
+            .cases
+            .values()
+            .filter(|c| {
+                c.jurisdiction == jurisdiction
+                    && c.court.level() >= court_level.level()
+                    && !c.overruled
+            })
+            .collect();
+
+        // Compare pairs of cases
+        for (i, case1) in binding_cases.iter().enumerate() {
+            for case2 in binding_cases.iter().skip(i + 1) {
+                // Check if they address similar issues but reach different conclusions
+                let has_common_issue = case1
+                    .issues
+                    .iter()
+                    .any(|issue1| case2.issues.iter().any(|issue2| Self::issues_similar(issue1, issue2)));
+
+                if has_common_issue {
+                    // Simple heuristic: check if holdings contain opposing keywords
+                    let holding1_lower = case1.holding.to_lowercase();
+                    let holding2_lower = case2.holding.to_lowercase();
+
+                    let conflict_detected = (holding1_lower.contains("not")
+                        && !holding2_lower.contains("not"))
+                        || (!holding1_lower.contains("not") && holding2_lower.contains("not"))
+                        || (holding1_lower.contains("liable") && holding2_lower.contains("not liable"))
+                        || (holding1_lower.contains("valid") && holding2_lower.contains("invalid"));
+
+                    if conflict_detected {
+                        conflicts.push((
+                            case1.id,
+                            case2.id,
+                            format!(
+                                "Potential conflict: {} ({}) vs {} ({})",
+                                case1.short_name, case1.year, case2.short_name, case2.year
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+
+        conflicts
+    }
+
+    /// Checks if two legal issues are similar enough to be considered related.
+    fn issues_similar(issue1: &str, issue2: &str) -> bool {
+        // Simple keyword-based similarity
+        let issue1_lower = issue1.to_lowercase();
+        let issue2_lower = issue2.to_lowercase();
+
+        let words1: std::collections::HashSet<_> = issue1_lower
+            .split_whitespace()
+            .filter(|w| w.len() > 3) // Only significant words
+            .collect();
+        let words2: std::collections::HashSet<_> = issue2_lower
+            .split_whitespace()
+            .filter(|w| w.len() > 3)
+            .collect();
+
+        let common_words = words1.intersection(&words2).count();
+        let total_words = words1.len().min(words2.len());
+
+        // Consider similar if >50% of words overlap
+        total_words > 0 && common_words as f64 / total_words as f64 > 0.5
+    }
+
+    /// Finds binding precedents by legal issue.
+    ///
+    /// Returns cases that:
+    /// - Are from higher courts (binding)
+    /// - Address the specified legal issue
+    /// - Have not been overruled
+    /// - Are in the same jurisdiction
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::case_law::{CaseDatabase, Case, Court};
+    /// # use chrono::NaiveDate;
+    /// let mut db = CaseDatabase::new();
+    ///
+    /// let case = Case::new("Case", "Test Case", 2020, Court::Supreme, "US")
+    ///     .with_issue("contract formation");
+    /// db.add_case(case);
+    ///
+    /// let binding = db.binding_precedents_by_issue("US", Court::Trial, "contract formation");
+    /// assert_eq!(binding.len(), 1);
+    /// ```
+    pub fn binding_precedents_by_issue(
+        &self,
+        jurisdiction: &str,
+        current_court: Court,
+        issue: &str,
+    ) -> Vec<&Case> {
+        self.cases
+            .values()
+            .filter(|c| {
+                c.jurisdiction == jurisdiction
+                    && c.court.level() > current_court.level()
+                    && !c.overruled
+                    && c.issues
+                        .iter()
+                        .any(|case_issue| Self::issues_similar(case_issue, issue))
+            })
+            .collect()
     }
 
     /// Finds cases similar to the given case using text similarity.

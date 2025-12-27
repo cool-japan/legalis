@@ -342,6 +342,70 @@ impl DslPrinter {
                     value
                 )
             }
+            Condition::Composite { conditions, threshold } => {
+                let conditions_str = conditions
+                    .iter()
+                    .map(|(weight, cond)| {
+                        format!("{:.2} * ({})", weight, self.format_condition(cond))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                format!("{} [{}] >= {}", self.kw("COMPOSITE"), conditions_str, threshold)
+            }
+            Condition::Threshold { attributes, operator, value } => {
+                let attrs_str = attributes
+                    .iter()
+                    .map(|(attr, multiplier)| {
+                        if (*multiplier - 1.0).abs() < 0.0001 {
+                            attr.clone()
+                        } else {
+                            format!("{:.2} * {}", multiplier, attr)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                format!(
+                    "{} [{}] {} {}",
+                    self.kw("THRESHOLD"),
+                    attrs_str,
+                    self.format_op(*operator),
+                    value
+                )
+            }
+            Condition::Fuzzy { attribute, membership_points, min_membership } => {
+                let points_str = membership_points
+                    .iter()
+                    .map(|(val, membership)| format!("({}, {:.2})", val, membership))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "{} {} [{}] >= {:.2}",
+                    self.kw("FUZZY"),
+                    attribute,
+                    points_str,
+                    min_membership
+                )
+            }
+            Condition::Probabilistic { condition, probability, threshold } => {
+                format!(
+                    "{} ({}) p={:.2} >= {:.2}",
+                    self.kw("PROBABILISTIC"),
+                    self.format_condition(condition),
+                    probability,
+                    threshold
+                )
+            }
+            Condition::Temporal { base_value, reference_time, rate, operator, target_value } => {
+                format!(
+                    "{} base={} ref={} rate={:.4} {} {}",
+                    self.kw("TEMPORAL"),
+                    base_value,
+                    reference_time,
+                    rate,
+                    self.format_op(*operator),
+                    target_value
+                )
+            }
         }
     }
 

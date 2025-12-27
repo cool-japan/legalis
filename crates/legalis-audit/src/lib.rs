@@ -87,14 +87,19 @@
 //! ```
 
 pub mod analysis;
+pub mod archival;
+pub mod batch;
 pub mod compression;
 pub mod encryption;
 pub mod export;
 pub mod integrity;
+pub mod integrity_checker;
 pub mod query;
+pub mod regulator;
 pub mod replay;
 pub mod retention;
 pub mod storage;
+pub mod webhook;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -331,6 +336,16 @@ impl AuditTrail {
     pub fn with_encrypted_memory(key: encryption::EncryptionKey) -> Self {
         Self {
             storage: Box::new(storage::encrypted::EncryptedStorage::new(key)),
+        }
+    }
+
+    /// Creates a new audit trail with cached storage.
+    pub fn with_cached_storage(
+        storage: Box<dyn storage::AuditStorage>,
+        config: storage::cached::CacheConfig,
+    ) -> Self {
+        Self {
+            storage: Box::new(storage::cached::CachedStorage::new(storage, config)),
         }
     }
 
@@ -597,6 +612,27 @@ impl AuditTrail {
     pub fn verify_merkle_proof(&self, proof: &integrity::MerkleProof) -> AuditResult<bool> {
         let tree = self.build_merkle_tree()?;
         Ok(tree.verify_proof(proof))
+    }
+
+    /// Archives records that match the policy.
+    pub fn archive_records(
+        &self,
+        policy: &archival::ArchivePolicy,
+        archive_dir: &std::path::Path,
+    ) -> AuditResult<archival::ArchiveMetadata> {
+        let records = self.storage.get_all()?;
+        let mut manager = archival::ArchiveManager::new(archive_dir, policy.clone())?;
+        manager.archive_records(&records)
+    }
+
+    /// Exports audit trail for regulatory compliance.
+    pub fn export_regulatory(
+        &self,
+        config: &regulator::ExportConfig,
+    ) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let report = self.generate_report()?;
+        regulator::RegulatoryExporter::export(&records, config, &report)
     }
 }
 

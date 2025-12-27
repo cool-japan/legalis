@@ -2616,6 +2616,7 @@ mod proptest_tests {
         use crate::ast::{ConditionNode, ConditionValue, EffectNode, LegalDocument, StatuteNode};
 
         /// Generates arbitrary condition values for testing
+        #[allow(dead_code)]
         pub fn arb_condition_value() -> impl Strategy<Value = ConditionValue> {
             prop_oneof![
                 (0i64..1000000).prop_map(ConditionValue::Number),
@@ -2627,6 +2628,7 @@ mod proptest_tests {
         }
 
         /// Generates arbitrary comparison conditions
+        #[allow(dead_code)]
         pub fn arb_comparison_condition() -> impl Strategy<Value = ConditionNode> {
             (arb_field_name(), arb_operator(), arb_condition_value()).prop_map(
                 |(field, operator, value)| ConditionNode::Comparison {

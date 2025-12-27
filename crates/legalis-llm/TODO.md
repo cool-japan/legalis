@@ -189,3 +189,68 @@
 - [x] Edge deployment support
 - [ ] Kubernetes operator for auto-scaling
 - [x] Hot model swapping without downtime
+
+## Roadmap for 0.1.0 Series
+
+### Provider Extensions (v0.1.1)
+- [x] Add Groq provider for fast inference
+- [x] Add Cohere provider
+- [x] Add Perplexity provider for web-grounded responses
+- [x] Add DeepSeek provider
+- [x] Add custom OpenAI-compatible endpoint support
+
+### Legal-Specific Features (v0.1.2)
+- [x] Add legal document summarization with citation extraction
+- [x] Add case law analysis prompts
+- [x] Add contract clause extraction
+- [x] Add legal argument generation
+- [x] Add jurisdiction-aware prompting
+
+### Prompt Engineering (v0.1.3)
+- [x] Add chain-of-law prompting (legal reasoning chains)
+- [x] Add multi-step legal analysis workflows
+- [x] Add citation-grounded generation
+- [x] Add legal precedent matching prompts
+- [x] Add statutory interpretation prompts
+
+### Fine-Tuning Support (v0.1.4)
+- [ ] Add LoRA adapter support
+- [ ] Add fine-tuning dataset preparation
+- [ ] Add training metrics tracking
+- [ ] Add model evaluation benchmarks
+- [ ] Add A/B testing for fine-tuned models
+
+### Structured Output (v0.1.5)
+- [x] Add statute schema generation
+- [x] Add condition extraction to AST
+- [x] Add effect parsing from natural language
+- [x] Add entity extraction for legal entities
+- [x] Add relationship extraction for statute dependencies
+
+### Context Management (v0.1.6)
+- [x] Add sliding window context for long documents
+- [x] Add hierarchical summarization for context
+- [x] Add retrieval-augmented context building
+- [x] Add context importance scoring
+- [x] Add automatic context pruning
+
+### Multi-Agent (v0.1.7)
+- [x] Add legal expert agent (statute interpretation)
+- [x] Add reviewer agent (verification)
+- [x] Add drafter agent (statute generation)
+- [x] Add researcher agent (case law search)
+- [x] Add agent orchestration framework
+
+### Compliance & Safety (v0.1.8)
+- [x] Add legal disclaimer injection
+- [x] Add jurisdiction-aware safety filters
+- [x] Add unauthorized practice of law detection
+- [x] Add confidentiality protection
+- [x] Add audit logging for all completions
+
+### Integration (v0.1.9)
+- [ ] Add LangChain integration
+- [ ] Add LlamaIndex integration
+- [ ] Add Haystack integration
+- [ ] Add Semantic Kernel integration
+- [ ] Add Vercel AI SDK compatibility
