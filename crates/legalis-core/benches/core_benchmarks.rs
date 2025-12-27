@@ -335,7 +335,7 @@ fn bench_entity_operations(c: &mut Criterion) {
     c.bench_function("entity_set_attribute", |b| {
         b.iter(|| {
             let mut e = BasicEntity::new();
-            black_box(e.set_attribute("test", "value".to_string()));
+            e.set_attribute("test", "value".to_string());
         })
     });
 

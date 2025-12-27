@@ -69,13 +69,20 @@ use thiserror::Error;
 
 mod ast;
 pub mod cache;
+pub mod codegen;
+pub mod docgen;
 pub mod grammar_doc;
+pub mod graph;
+pub mod import_resolver;
 pub mod incremental;
 pub mod lsp;
 mod parser;
 mod printer;
 pub mod query;
+pub mod statistics;
+pub mod transform;
 pub mod tree_view;
+pub mod type_checker;
 pub mod validation;
 
 #[cfg(test)]
@@ -83,12 +90,26 @@ mod tests;
 
 pub use ast::*;
 pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
+pub use codegen::{CodeGenerator, PythonGenerator, SqlGenerator};
+pub use docgen::{DocGenerator, MarkdownGenerator};
 pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
+pub use graph::{
+    DependencyGraph, GraphFormat, GraphOptions, generate_dot_graph, generate_mermaid_graph,
+};
+pub use import_resolver::{ImportResolver, detect_circular_imports, validate_import_paths};
 pub use incremental::{IncrementalParser, TextEdit};
 pub use parser::*;
 pub use printer::*;
 pub use query::{ConditionSearch, StatuteQuery};
+pub use statistics::{
+    ComplexityMetrics, DependencyAnalysis, DocumentStatistics, analyze_complexity,
+};
+pub use transform::{
+    ConditionTransform, DeduplicateStatutes, DocumentTransform, NormalizeIds, RemoveEmptyStatutes,
+    SimplifyConditions, SortByDependencies, StatuteTransform, TransformPipeline,
+};
 pub use tree_view::TreeFormatter;
+pub use type_checker::{Type, TypeChecker, TypeContext, TypeError};
 pub use validation::{CompletenessChecker, SemanticValidator, ValidationContext, ValidationError};
 
 /// Serializes a LegalDocument AST to JSON string.
@@ -129,6 +150,26 @@ pub fn statute_to_yaml(statute: &ast::StatuteNode) -> Result<String, serde_yaml:
 /// Deserializes a StatuteNode AST from YAML string.
 pub fn statute_from_yaml(yaml: &str) -> Result<ast::StatuteNode, serde_yaml::Error> {
     serde_yaml::from_str(yaml)
+}
+
+/// Serializes a LegalDocument AST to TOML string.
+pub fn to_toml(doc: &ast::LegalDocument) -> Result<String, toml::ser::Error> {
+    toml::to_string_pretty(doc)
+}
+
+/// Deserializes a LegalDocument AST from TOML string.
+pub fn from_toml(toml_str: &str) -> Result<ast::LegalDocument, toml::de::Error> {
+    toml::from_str(toml_str)
+}
+
+/// Serializes a StatuteNode AST to TOML string.
+pub fn statute_to_toml(statute: &ast::StatuteNode) -> Result<String, toml::ser::Error> {
+    toml::to_string_pretty(statute)
+}
+
+/// Deserializes a StatuteNode AST from TOML string.
+pub fn statute_from_toml(toml_str: &str) -> Result<ast::StatuteNode, toml::de::Error> {
+    toml::from_str(toml_str)
 }
 
 /// Source location for error reporting.

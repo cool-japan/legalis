@@ -507,6 +507,190 @@ impl CaseDatabase {
     pub fn query(&self) -> CaseQuery<'_> {
         CaseQuery::new(self)
     }
+
+    /// Finds cases similar to the given case using text similarity.
+    ///
+    /// Returns cases sorted by similarity score (highest first), excluding the query case itself.
+    /// Uses a simple term frequency-based similarity measure for analogical reasoning.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::{CaseDatabase, Case, Court};
+    /// use chrono::NaiveDate;
+    ///
+    /// let mut db = CaseDatabase::new();
+    /// let case1 = Case::new("Case 1", "Case One", 2020, Court::Trial, "US")
+    ///     .with_facts("negligence train platform explosion")
+    ///     .with_holding("no duty of care");
+    /// let id1 = case1.id;
+    /// db.add_case(case1);
+    ///
+    /// let case2 = Case::new("Case 2", "Case Two", 2021, Court::Trial, "US")
+    ///     .with_facts("negligence automobile collision")
+    ///     .with_holding("duty of care established");
+    /// db.add_case(case2);
+    ///
+    /// // Find cases similar to case1
+    /// let similar = db.find_similar_cases(&id1, 5);
+    /// assert!(similar.len() <= 5);
+    /// ```
+    pub fn find_similar_cases(&self, case_id: &Uuid, limit: usize) -> Vec<SimilarityResult> {
+        let Some(query_case) = self.get_case(case_id) else {
+            return Vec::new();
+        };
+
+        let query_terms = Self::tokenize_case(query_case);
+        let mut scores: Vec<_> = self
+            .cases
+            .values()
+            .filter(|c| c.id != *case_id && !c.overruled)
+            .map(|c| {
+                let candidate_terms = Self::tokenize_case(c);
+                let score = Self::compute_similarity(&query_terms, &candidate_terms);
+                SimilarityResult {
+                    case_id: c.id,
+                    score,
+                    reason: Self::compute_similarity_reason(query_case, c),
+                }
+            })
+            .collect();
+
+        scores.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        scores.truncate(limit);
+        scores
+    }
+
+    /// Tokenizes case text into normalized terms for similarity computation.
+    fn tokenize_case(case: &Case) -> HashMap<String, usize> {
+        let text = format!(
+            "{} {} {} {}",
+            case.facts,
+            case.holding,
+            case.ratio,
+            case.issues.join(" ")
+        );
+
+        let mut term_freq = HashMap::new();
+        for word in text
+            .to_lowercase()
+            .split_whitespace()
+            .filter(|w| w.len() > 3)
+        {
+            // Simple stopword filtering and term counting
+            if !Self::is_stopword(word) {
+                *term_freq.entry(word.to_string()).or_insert(0) += 1;
+            }
+        }
+        term_freq
+    }
+
+    /// Computes cosine similarity between two term frequency vectors.
+    fn compute_similarity(terms1: &HashMap<String, usize>, terms2: &HashMap<String, usize>) -> f64 {
+        if terms1.is_empty() || terms2.is_empty() {
+            return 0.0;
+        }
+
+        let mut dot_product = 0usize;
+        let mut magnitude1 = 0usize;
+        let mut magnitude2 = 0usize;
+
+        for (term, &freq1) in terms1 {
+            magnitude1 += freq1 * freq1;
+            if let Some(&freq2) = terms2.get(term) {
+                dot_product += freq1 * freq2;
+            }
+        }
+
+        for &freq2 in terms2.values() {
+            magnitude2 += freq2 * freq2;
+        }
+
+        if magnitude1 == 0 || magnitude2 == 0 {
+            return 0.0;
+        }
+
+        #[allow(clippy::cast_precision_loss)]
+        let similarity =
+            dot_product as f64 / ((magnitude1 as f64).sqrt() * (magnitude2 as f64).sqrt());
+        similarity
+    }
+
+    /// Computes a human-readable reason for similarity.
+    fn compute_similarity_reason(case1: &Case, case2: &Case) -> String {
+        let mut reasons = Vec::new();
+
+        if case1.jurisdiction == case2.jurisdiction {
+            reasons.push("same jurisdiction".to_string());
+        }
+        if case1.court == case2.court {
+            reasons.push("same court level".to_string());
+        }
+
+        let terms1 = Self::tokenize_case(case1);
+        let terms2 = Self::tokenize_case(case2);
+        let common_terms: Vec<_> = terms1
+            .keys()
+            .filter(|k| terms2.contains_key(*k))
+            .take(3)
+            .map(|s| s.as_str())
+            .collect();
+
+        if !common_terms.is_empty() {
+            reasons.push(format!("common terms: {}", common_terms.join(", ")));
+        }
+
+        if reasons.is_empty() {
+            "general similarity".to_string()
+        } else {
+            reasons.join("; ")
+        }
+    }
+
+    /// Simple stopword check (common legal and English words to ignore).
+    #[allow(dead_code)]
+    fn is_stopword(word: &str) -> bool {
+        matches!(
+            word,
+            "the"
+                | "and"
+                | "that"
+                | "this"
+                | "with"
+                | "from"
+                | "have"
+                | "has"
+                | "had"
+                | "not"
+                | "but"
+                | "for"
+                | "are"
+                | "was"
+                | "were"
+                | "been"
+                | "being"
+                | "case"
+                | "court"
+                | "held"
+        )
+    }
+}
+
+/// Result of a similarity search for analogical reasoning.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct SimilarityResult {
+    /// ID of the similar case
+    pub case_id: Uuid,
+    /// Similarity score (0.0 to 1.0, higher is more similar)
+    pub score: f64,
+    /// Human-readable explanation of why cases are similar
+    pub reason: String,
 }
 
 /// Fluent query builder for case database queries.
@@ -541,6 +725,12 @@ pub struct CaseQuery<'a> {
     date_max: Option<NaiveDate>,
     only_not_overruled: bool,
     only_with_rule: bool,
+    // Full-text search fields
+    search_facts: Option<String>,
+    search_holding: Option<String>,
+    search_ratio: Option<String>,
+    search_all: Option<String>,
+    search_keywords: Vec<String>,
 }
 
 impl<'a> CaseQuery<'a> {
@@ -556,6 +746,11 @@ impl<'a> CaseQuery<'a> {
             date_max: None,
             only_not_overruled: false,
             only_with_rule: false,
+            search_facts: None,
+            search_holding: None,
+            search_ratio: None,
+            search_all: None,
+            search_keywords: Vec::new(),
         }
     }
 
@@ -631,6 +826,99 @@ impl<'a> CaseQuery<'a> {
         self
     }
 
+    /// Full-text search in case facts (case-insensitive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::{CaseDatabase, Court};
+    ///
+    /// let db = CaseDatabase::new();
+    /// let results = db.query()
+    ///     .search_facts("negligence train platform")
+    ///     .execute();
+    /// ```
+    #[must_use]
+    pub fn search_facts(mut self, query: impl Into<String>) -> Self {
+        self.search_facts = Some(query.into().to_lowercase());
+        self
+    }
+
+    /// Full-text search in case holding (case-insensitive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::CaseDatabase;
+    ///
+    /// let db = CaseDatabase::new();
+    /// let results = db.query()
+    ///     .search_holding("duty of care")
+    ///     .execute();
+    /// ```
+    #[must_use]
+    pub fn search_holding(mut self, query: impl Into<String>) -> Self {
+        self.search_holding = Some(query.into().to_lowercase());
+        self
+    }
+
+    /// Full-text search in case ratio decidendi (case-insensitive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::CaseDatabase;
+    ///
+    /// let db = CaseDatabase::new();
+    /// let results = db.query()
+    ///     .search_ratio("foreseeability")
+    ///     .execute();
+    /// ```
+    #[must_use]
+    pub fn search_ratio(mut self, query: impl Into<String>) -> Self {
+        self.search_ratio = Some(query.into().to_lowercase());
+        self
+    }
+
+    /// Full-text search across all text fields (facts, holding, ratio, issues).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::CaseDatabase;
+    ///
+    /// let db = CaseDatabase::new();
+    /// let results = db.query()
+    ///     .search_all("proximate cause")
+    ///     .execute();
+    /// ```
+    #[must_use]
+    pub fn search_all(mut self, query: impl Into<String>) -> Self {
+        self.search_all = Some(query.into().to_lowercase());
+        self
+    }
+
+    /// Search for multiple keywords (AND logic - all must be present).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::case_law::CaseDatabase;
+    ///
+    /// let db = CaseDatabase::new();
+    /// let results = db.query()
+    ///     .search_keywords(vec!["negligence", "duty", "breach"])
+    ///     .execute();
+    /// ```
+    #[must_use]
+    pub fn search_keywords(mut self, keywords: Vec<impl Into<String>>) -> Self {
+        self.search_keywords = keywords
+            .into_iter()
+            .map(|k| k.into().to_lowercase())
+            .collect();
+        self
+    }
+
     /// Executes the query and returns matching cases.
     pub fn execute(&self) -> Vec<&Case> {
         self.db.cases.values().filter(|c| self.matches(c)).collect()
@@ -690,6 +978,54 @@ impl<'a> CaseQuery<'a> {
 
         if self.only_with_rule && case.rule.is_none() {
             return false;
+        }
+
+        // Full-text search filters
+        if let Some(ref query) = self.search_facts {
+            if !case.facts.to_lowercase().contains(query) {
+                return false;
+            }
+        }
+
+        if let Some(ref query) = self.search_holding {
+            if !case.holding.to_lowercase().contains(query) {
+                return false;
+            }
+        }
+
+        if let Some(ref query) = self.search_ratio {
+            if !case.ratio.to_lowercase().contains(query) {
+                return false;
+            }
+        }
+
+        if let Some(ref query) = self.search_all {
+            let all_text = format!(
+                "{} {} {} {}",
+                case.facts.to_lowercase(),
+                case.holding.to_lowercase(),
+                case.ratio.to_lowercase(),
+                case.issues.join(" ").to_lowercase()
+            );
+            if !all_text.contains(query) {
+                return false;
+            }
+        }
+
+        // Keyword search - all keywords must be present in combined text
+        if !self.search_keywords.is_empty() {
+            let all_text = format!(
+                "{} {} {} {}",
+                case.facts.to_lowercase(),
+                case.holding.to_lowercase(),
+                case.ratio.to_lowercase(),
+                case.issues.join(" ").to_lowercase()
+            );
+            for keyword in &self.search_keywords {
+                if !all_text.contains(keyword) {
+                    return false;
+                }
+            }
         }
 
         true

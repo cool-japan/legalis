@@ -52,11 +52,14 @@ pub mod fuzzy;
 pub mod git;
 pub mod merge;
 pub mod optimization;
+pub mod parallel;
 pub mod recommendation;
+pub mod rollback;
 pub mod semantic;
 pub mod statistics;
 pub mod templates;
 pub mod timeline;
+pub mod validation;
 pub mod vcs;
 pub mod visual;
 

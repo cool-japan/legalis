@@ -1,0 +1,92 @@
+---
+source: crates/legalis-dsl/src/tests.rs
+expression: doc
+---
+{
+  "imports": [],
+  "statutes": [
+    {
+      "id": "complex",
+      "title": "Complex Conditions",
+      "conditions": [
+        {
+          "Or": [
+            {
+              "And": [
+                {
+                  "Comparison": {
+                    "field": "age",
+                    "operator": ">=",
+                    "value": {
+                      "Number": 18
+                    }
+                  }
+                },
+                {
+                  "Comparison": {
+                    "field": "age",
+                    "operator": "<=",
+                    "value": {
+                      "Number": 65
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "HasAttribute": {
+                "key": "disability"
+              }
+            }
+          ]
+        },
+        {
+          "In": {
+            "field": "income",
+            "values": [
+              {
+                "Number": 20000
+              },
+              {
+                "Number": 30000
+              },
+              {
+                "Number": 40000
+              }
+            ]
+          }
+        },
+        {
+          "Like": {
+            "field": "name",
+            "pattern": "Smith%"
+          }
+        },
+        {
+          "Not": {
+            "Comparison": {
+              "field": "status",
+              "operator": "==",
+              "value": {
+                "String": "invalid"
+              }
+            }
+          }
+        }
+      ],
+      "effects": [
+        {
+          "effect_type": "grant",
+          "description": "eligibility",
+          "parameters": []
+        }
+      ],
+      "discretion": null,
+      "exceptions": [],
+      "amendments": [],
+      "supersedes": [],
+      "defaults": [],
+      "requires": []
+    }
+  ]
+}

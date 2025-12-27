@@ -384,6 +384,12 @@ impl SimEngine {
                     attribute
                 )),
             },
+            Condition::Calculation { formula, .. } => {
+                // Calculation conditions require external evaluation
+                ConditionResult::Indeterminate(format!(
+                    "Calculation condition requires evaluation: {formula}"
+                ))
+            }
         }
     }
 }

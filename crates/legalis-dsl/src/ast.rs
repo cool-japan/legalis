@@ -538,6 +538,7 @@ pub mod transform {
     use super::*;
 
     /// Simplifies a condition node by removing redundant operations.
+    #[allow(dead_code)]
     pub fn simplify_condition(cond: &ConditionNode) -> ConditionNode {
         match cond {
             // Double negation: NOT (NOT x) => x
@@ -564,6 +565,7 @@ pub mod transform {
 
     /// Normalizes a condition to Disjunctive Normal Form (DNF) - OR of ANDs.
     /// This is a simplified version that handles basic cases.
+    #[allow(dead_code)]
     pub fn normalize_condition(cond: &ConditionNode) -> ConditionNode {
         // First simplify
         let simplified = simplify_condition(cond);
@@ -597,6 +599,7 @@ pub mod transform {
     }
 
     /// Validates a statute node, checking for common issues.
+    #[allow(dead_code)]
     pub fn validate_statute(statute: &StatuteNode) -> Vec<String> {
         let mut errors = Vec::new();
 
@@ -624,6 +627,7 @@ pub mod transform {
     }
 
     /// Collects all referenced attribute keys from conditions.
+    #[allow(dead_code)]
     pub fn collect_attribute_keys(cond: &ConditionNode) -> Vec<String> {
         let mut keys = Vec::new();
 
@@ -644,6 +648,7 @@ pub mod transform {
     }
 
     /// Collects all field names used in conditions.
+    #[allow(dead_code)]
     pub fn collect_condition_fields(cond: &ConditionNode) -> Vec<String> {
         let mut fields = Vec::new();
 
@@ -670,6 +675,7 @@ pub mod transform {
 
     /// Flattens nested AND/OR chains into a flat list.
     /// For example: (a AND (b AND c)) becomes [a, b, c]
+    #[allow(dead_code)]
     pub fn flatten_condition(cond: &ConditionNode) -> ConditionNode {
         fn flatten_and(cond: &ConditionNode, acc: &mut Vec<ConditionNode>) {
             match cond {
@@ -714,6 +720,7 @@ pub mod transform {
     }
 
     /// Removes duplicate conditions from AND/OR chains.
+    #[allow(dead_code)]
     pub fn remove_duplicate_conditions(cond: &ConditionNode) -> ConditionNode {
         use std::collections::HashSet;
 
@@ -798,6 +805,7 @@ pub mod transform {
     }
 
     /// Applies all optimization passes to a condition.
+    #[allow(dead_code)]
     pub fn optimize_condition(cond: &ConditionNode) -> ConditionNode {
         let simplified = simplify_condition(cond);
         let normalized = normalize_condition(&simplified);
@@ -806,6 +814,7 @@ pub mod transform {
     }
 
     /// Optimizes an entire statute by applying all transformations.
+    #[allow(dead_code)]
     pub fn optimize_statute(statute: &StatuteNode) -> StatuteNode {
         StatuteNode {
             id: statute.id.clone(),
@@ -829,6 +838,7 @@ pub mod transform {
     }
 
     /// Computes differences between two LegalDocuments.
+    #[allow(dead_code)]
     pub fn diff_documents(old: &LegalDocument, new: &LegalDocument) -> DocumentDiff {
         let mut added_imports = Vec::new();
         let mut removed_imports = Vec::new();
@@ -875,6 +885,7 @@ pub mod transform {
     }
 
     /// Computes differences between two StatuteNodes.
+    #[allow(dead_code)]
     pub fn diff_statutes(old: &StatuteNode, new: &StatuteNode) -> StatuteDiff {
         let mut changes = Vec::new();
 

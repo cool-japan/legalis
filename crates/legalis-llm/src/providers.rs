@@ -1286,6 +1286,7 @@ impl LLMProvider for LlamaCppClient {
 }
 
 /// Mock LLM provider for testing.
+#[derive(Clone)]
 pub struct MockProvider {
     responses: std::collections::HashMap<String, String>,
 }

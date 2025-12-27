@@ -328,6 +328,116 @@ impl SensitivityResults {
     }
 }
 
+/// Batch simulation runner for executing multiple scenarios efficiently.
+#[derive(Default)]
+pub struct BatchSimulationRunner {
+    /// Named scenarios to run
+    scenarios: Vec<(String, Vec<Statute>)>,
+}
+
+impl BatchSimulationRunner {
+    /// Creates a new batch runner.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a scenario to run.
+    pub fn add_scenario(mut self, name: impl Into<String>, statutes: Vec<Statute>) -> Self {
+        self.scenarios.push((name.into(), statutes));
+        self
+    }
+
+    /// Runs all scenarios with the given population and returns results.
+    pub async fn run_all(self, population: &[&dyn LegalEntity]) -> BatchSimulationResults {
+        let mut results = HashMap::new();
+
+        for (name, statutes) in self.scenarios {
+            let mut metrics = crate::SimulationMetrics::new();
+            for entity in population {
+                for statute in &statutes {
+                    let result = crate::SimEngine::apply_law(*entity, statute);
+                    metrics.record_result(&crate::LawApplicationResult {
+                        agent_id: entity.id(),
+                        statute_id: statute.id.clone(),
+                        result,
+                    });
+                }
+            }
+            results.insert(name, metrics);
+        }
+
+        BatchSimulationResults { results }
+    }
+}
+
+/// Results from batch simulation.
+#[derive(Debug, Clone)]
+pub struct BatchSimulationResults {
+    /// Results for each scenario
+    pub results: HashMap<String, SimulationMetrics>,
+}
+
+impl BatchSimulationResults {
+    /// Generates a comparison report across all scenarios.
+    pub fn comparison_report(&self) -> String {
+        let mut report = String::new();
+        report.push_str("=== Batch Simulation Results ===\n\n");
+
+        let mut sorted_scenarios: Vec<_> = self.results.iter().collect();
+        sorted_scenarios.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        for (name, metrics) in sorted_scenarios {
+            report.push_str(&format!(
+                "{}: {} applications | D={:.1}% | J={:.1}% | V={:.1}%\n",
+                name,
+                metrics.total_applications,
+                metrics.deterministic_ratio() * 100.0,
+                metrics.discretion_ratio() * 100.0,
+                (metrics.void_count as f64 / metrics.total_applications.max(1) as f64) * 100.0
+            ));
+        }
+
+        report
+    }
+
+    /// Finds the scenario with highest deterministic ratio.
+    pub fn best_scenario(&self) -> Option<(&String, &SimulationMetrics)> {
+        self.results.iter().max_by(|(_, a), (_, b)| {
+            a.deterministic_ratio()
+                .partial_cmp(&b.deterministic_ratio())
+                .unwrap()
+        })
+    }
+
+    /// Exports results to a structured format for further analysis.
+    pub fn to_table(&self) -> Vec<BatchResultRow> {
+        self.results
+            .iter()
+            .map(|(name, metrics)| BatchResultRow {
+                scenario_name: name.clone(),
+                total_applications: metrics.total_applications,
+                deterministic_count: metrics.deterministic_count,
+                discretion_count: metrics.discretion_count,
+                void_count: metrics.void_count,
+                deterministic_ratio: metrics.deterministic_ratio(),
+                discretion_ratio: metrics.discretion_ratio(),
+            })
+            .collect()
+    }
+}
+
+/// A single row in the batch results table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResultRow {
+    pub scenario_name: String,
+    pub total_applications: usize,
+    pub deterministic_count: usize,
+    pub discretion_count: usize,
+    pub void_count: usize,
+    pub deterministic_ratio: f64,
+    pub discretion_ratio: f64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -485,5 +595,84 @@ mod tests {
         assert!((diff.deterministic_delta - 0.1).abs() < 0.01); // +10% deterministic
         assert!((diff.discretion_delta + 0.1).abs() < 0.01); // -10% discretion
         assert!(diff.magnitude > 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_batch_simulation_runner() {
+        let population = create_test_population(50);
+        let pop_refs: Vec<&dyn LegalEntity> = population.iter().map(|e| e.as_ref()).collect();
+
+        let statute1 = Statute::new(
+            "test1",
+            "Test Statute 1",
+            Effect::new(EffectType::Grant, "Grant 1"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let statute2 = Statute::new(
+            "test2",
+            "Test Statute 2",
+            Effect::new(EffectType::Grant, "Grant 2"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        });
+
+        let runner = BatchSimulationRunner::new()
+            .add_scenario("Scenario 1", vec![statute1])
+            .add_scenario("Scenario 2", vec![statute2]);
+
+        let results = runner.run_all(&pop_refs).await;
+
+        assert_eq!(results.results.len(), 2);
+        assert!(results.results.contains_key("Scenario 1"));
+        assert!(results.results.contains_key("Scenario 2"));
+        assert!(results.best_scenario().is_some());
+    }
+
+    #[test]
+    fn test_batch_results_to_table() {
+        let mut results = HashMap::new();
+        let mut metrics = SimulationMetrics::new();
+        metrics.total_applications = 100;
+        metrics.deterministic_count = 80;
+        metrics.discretion_count = 15;
+        metrics.void_count = 5;
+
+        results.insert("Test Scenario".to_string(), metrics);
+
+        let batch_results = BatchSimulationResults { results };
+        let table = batch_results.to_table();
+
+        assert_eq!(table.len(), 1);
+        assert_eq!(table[0].scenario_name, "Test Scenario");
+        assert_eq!(table[0].total_applications, 100);
+        assert_eq!(table[0].deterministic_count, 80);
+    }
+
+    #[test]
+    fn test_batch_results_comparison_report() {
+        let mut results = HashMap::new();
+        let mut metrics1 = SimulationMetrics::new();
+        metrics1.total_applications = 100;
+        metrics1.deterministic_count = 80;
+
+        let mut metrics2 = SimulationMetrics::new();
+        metrics2.total_applications = 100;
+        metrics2.deterministic_count = 90;
+
+        results.insert("Scenario A".to_string(), metrics1);
+        results.insert("Scenario B".to_string(), metrics2);
+
+        let batch_results = BatchSimulationResults { results };
+        let report = batch_results.comparison_report();
+
+        assert!(report.contains("Batch Simulation Results"));
+        assert!(report.contains("Scenario A"));
+        assert!(report.contains("Scenario B"));
     }
 }

@@ -10,11 +10,13 @@ description = "Core types and traits for Legalis-RS legal framework"
 default = ["serde"]
 serde = ["dep:serde", "dep:serde_json", "uuid/serde", "chrono/serde"]
 schema = ["dep:schemars", "serde"]
+parallel = ["dep:rayon"]
 
 [dependencies]
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 schemars = { version = "0.8", features = ["uuid1", "chrono"], optional = true }
+rayon = { version = "1.10", optional = true }
 uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true

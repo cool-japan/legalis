@@ -55,6 +55,13 @@
 - [x] Test all output formats (comprehensive tests added)
 - [x] Benchmark rendering performance (benchmarks/rendering.rs added)
 
+## Advanced Visualizations
+
+- [x] Statute diff visualization (StatuteDiffVisualizer with HTML, Mermaid, ASCII formats)
+- [x] Legal reasoning chain visualization (ReasoningChainVisualizer with HTML, Mermaid, ASCII formats)
+- [x] Evaluation audit trail visualization (AuditTrailVisualizer with HTML, ASCII formats)
+- [x] Comprehensive test coverage for all new visualizers (20 new tests added)
+
 ## Notes
 
 ### PNG Export
@@ -168,4 +175,45 @@ let mut suite = VisualRegressionSuite::new();
 suite.add_test(test);
 let summary = suite.run();
 assert!(suite.all_passed());
+```
+
+### Statute Diff Visualization
+Visualize changes between statute versions:
+```rust
+use legalis_viz::StatuteDiffVisualizer;
+
+let visualizer = StatuteDiffVisualizer::new()
+    .with_theme(Theme::dark());
+
+// Visualize the diff between two statute versions
+let html = visualizer.to_html(&statute_diff);
+let mermaid = visualizer.to_mermaid(&statute_diff);
+let ascii = visualizer.to_ascii(&statute_diff);
+```
+
+### Legal Reasoning Chain Visualization
+Visualize legal reasoning and explanations:
+```rust
+use legalis_viz::ReasoningChainVisualizer;
+
+let visualizer = ReasoningChainVisualizer::new()
+    .with_theme(Theme::colorblind_friendly());
+
+// Visualize a legal explanation with reasoning steps
+let html = visualizer.to_html(&legal_explanation);
+let mermaid = visualizer.to_mermaid(&legal_explanation);
+let ascii = visualizer.to_ascii(&legal_explanation);
+```
+
+### Evaluation Audit Trail Visualization
+Visualize evaluation audit trails with performance metrics:
+```rust
+use legalis_viz::AuditTrailVisualizer;
+
+let visualizer = AuditTrailVisualizer::new()
+    .with_theme(Theme::high_contrast());
+
+// Visualize the audit trail with statistics
+let html = visualizer.to_html(&audit_trail);
+let ascii = visualizer.to_ascii(&audit_trail);
 ```

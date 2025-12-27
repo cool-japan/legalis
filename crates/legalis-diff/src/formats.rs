@@ -580,6 +580,148 @@ fn truncate_for_table(s: &str) -> String {
     }
 }
 
+/// CSV formatter for diff results.
+///
+/// Formats statute diffs as CSV (Comma-Separated Values) for use in
+/// spreadsheet applications or data analysis tools.
+///
+/// # Example
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, formats::{DiffFormatter, CsvFormatter}};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let mut new = old.clone();
+/// new.title = "New Title".to_string();
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let formatter = CsvFormatter::new();
+/// let csv = formatter.format(&diff_result);
+///
+/// assert!(csv.contains("statute_id,change_type,target"));
+/// ```
+pub struct CsvFormatter {
+    /// Include header row.
+    pub include_header: bool,
+}
+
+impl CsvFormatter {
+    /// Create a new CSV formatter.
+    pub fn new() -> Self {
+        Self {
+            include_header: true,
+        }
+    }
+
+    /// Set whether to include header row.
+    pub fn with_header(mut self, include_header: bool) -> Self {
+        self.include_header = include_header;
+        self
+    }
+}
+
+impl Default for CsvFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DiffFormatter for CsvFormatter {
+    fn format(&self, diff: &StatuteDiff) -> String {
+        let mut csv = String::new();
+
+        // Header
+        if self.include_header {
+            csv.push_str("statute_id,change_type,target,description,old_value,new_value,severity,affects_eligibility,affects_outcome,discretion_changed\n");
+        }
+
+        // Rows
+        for change in &diff.changes {
+            csv.push_str(&csv_escape(&diff.statute_id));
+            csv.push(',');
+            csv.push_str(&format!("{:?}", change.change_type));
+            csv.push(',');
+            csv.push_str(&csv_escape(&format!("{}", change.target)));
+            csv.push(',');
+            csv.push_str(&csv_escape(&change.description));
+            csv.push(',');
+            csv.push_str(&csv_escape(change.old_value.as_deref().unwrap_or("")));
+            csv.push(',');
+            csv.push_str(&csv_escape(change.new_value.as_deref().unwrap_or("")));
+            csv.push(',');
+            csv.push_str(&format!("{:?}", diff.impact.severity));
+            csv.push(',');
+            csv.push_str(if diff.impact.affects_eligibility {
+                "true"
+            } else {
+                "false"
+            });
+            csv.push(',');
+            csv.push_str(if diff.impact.affects_outcome {
+                "true"
+            } else {
+                "false"
+            });
+            csv.push(',');
+            csv.push_str(if diff.impact.discretion_changed {
+                "true"
+            } else {
+                "false"
+            });
+            csv.push('\n');
+        }
+
+        csv
+    }
+}
+
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// Formats multiple diffs as a single CSV file.
+///
+/// # Example
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, formats::format_batch_csv};
+///
+/// let old1 = Statute::new("law1", "Title 1", Effect::new(EffectType::Grant, "Benefit"));
+/// let new1 = Statute::new("law1", "New Title 1", Effect::new(EffectType::Grant, "Benefit"));
+///
+/// let old2 = Statute::new("law2", "Title 2", Effect::new(EffectType::Grant, "Benefit"));
+/// let new2 = Statute::new("law2", "New Title 2", Effect::new(EffectType::Grant, "Benefit"));
+///
+/// let diffs = vec![
+///     diff(&old1, &new1).unwrap(),
+///     diff(&old2, &new2).unwrap(),
+/// ];
+///
+/// let csv = format_batch_csv(&diffs);
+/// assert!(csv.contains("law1"));
+/// assert!(csv.contains("law2"));
+/// ```
+pub fn format_batch_csv(diffs: &[StatuteDiff]) -> String {
+    let mut csv = String::new();
+
+    // Header (only once)
+    csv.push_str("statute_id,change_type,target,description,old_value,new_value,severity,affects_eligibility,affects_outcome,discretion_changed\n");
+
+    // Format each diff without headers
+    let formatter = CsvFormatter::new().with_header(false);
+    for diff in diffs {
+        csv.push_str(&formatter.format(diff));
+    }
+
+    csv
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -660,5 +802,296 @@ mod tests {
         let output = formatter.format(&diff);
         assert!(output.contains("<table>"));
         assert!(output.contains("Side-by-Side Diff"));
+    }
+
+    #[test]
+    fn test_csv_formatter() {
+        let diff = test_diff();
+        let formatter = CsvFormatter::new();
+        let output = formatter.format(&diff);
+        assert!(output.contains("statute_id,change_type,target"));
+        assert!(output.contains("test-statute"));
+        assert!(output.contains("Modified"));
+        assert!(output.contains("Added"));
+    }
+
+    #[test]
+    fn test_csv_formatter_no_header() {
+        let diff = test_diff();
+        let formatter = CsvFormatter::new().with_header(false);
+        let output = formatter.format(&diff);
+        assert!(!output.contains("statute_id,change_type,target"));
+        assert!(output.contains("test-statute"));
+    }
+
+    #[test]
+    fn test_format_batch_csv() {
+        let diff1 = test_diff();
+        let mut diff2 = test_diff();
+        diff2.statute_id = "test-statute-2".to_string();
+
+        let csv = format_batch_csv(&[diff1, diff2]);
+        assert!(csv.contains("test-statute"));
+        assert!(csv.contains("test-statute-2"));
+        // Header should only appear once
+        let header_count = csv.matches("statute_id,change_type,target").count();
+        assert_eq!(header_count, 1);
+    }
+
+    #[test]
+    fn test_csv_escape() {
+        assert_eq!(csv_escape("simple"), "simple");
+        assert_eq!(csv_escape("has,comma"), "\"has,comma\"");
+        assert_eq!(csv_escape("has\"quote"), "\"has\"\"quote\"");
+        assert_eq!(csv_escape("has\nnewline"), "\"has\nnewline\"");
+    }
+}
+
+/// Export format type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Json,
+    JsonPretty,
+    Markdown,
+    Html,
+    Csv,
+}
+
+/// Result of a batch export operation.
+#[derive(Debug, Clone)]
+pub struct BatchExportResult {
+    pub format: ExportFormat,
+    pub outputs: Vec<String>,
+}
+
+/// Exports multiple diffs to a specific format in parallel.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, formats::{parallel_export, ExportFormat}};
+///
+/// let pairs: Vec<_> = (0..10)
+///     .map(|i| {
+///         let id = format!("law{}", i);
+///         (
+///             Statute::new(&id, "Old Title", Effect::new(EffectType::Grant, "Benefit")),
+///             Statute::new(&id, "New Title", Effect::new(EffectType::Grant, "Benefit")),
+///         )
+///     })
+///     .collect();
+///
+/// let diffs: Vec<_> = pairs
+///     .iter()
+///     .map(|(old, new)| diff(old, new).unwrap())
+///     .collect();
+///
+/// let result = parallel_export(&diffs, ExportFormat::Json);
+/// assert_eq!(result.outputs.len(), 10);
+/// ```
+pub fn parallel_export(diffs: &[StatuteDiff], format: ExportFormat) -> BatchExportResult {
+    use rayon::prelude::*;
+
+    let outputs: Vec<String> = diffs
+        .par_iter()
+        .map(|diff| match format {
+            ExportFormat::Json => JsonFormatter::new().with_pretty(false).format(diff),
+            ExportFormat::JsonPretty => JsonFormatter::new().with_pretty(true).format(diff),
+            ExportFormat::Markdown => MarkdownFormatter::new().format(diff),
+            ExportFormat::Html => HtmlFormatter::new().format(diff),
+            ExportFormat::Csv => CsvFormatter::new().format(diff),
+        })
+        .collect();
+
+    BatchExportResult { format, outputs }
+}
+
+/// Exports multiple diffs to all formats in parallel.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, formats::parallel_export_all};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let new = Statute::new("law", "New Title", Effect::new(EffectType::Grant, "Benefit"));
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let results = parallel_export_all(&[diff_result]);
+///
+/// // Should have results for all formats
+/// assert_eq!(results.len(), 5);
+/// ```
+pub fn parallel_export_all(diffs: &[StatuteDiff]) -> Vec<BatchExportResult> {
+    use rayon::prelude::*;
+
+    vec![
+        ExportFormat::Json,
+        ExportFormat::JsonPretty,
+        ExportFormat::Markdown,
+        ExportFormat::Html,
+        ExportFormat::Csv,
+    ]
+    .par_iter()
+    .map(|&format| parallel_export(diffs, format))
+    .collect()
+}
+
+/// Exports a single diff to all formats.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, formats::export_to_all_formats};
+///
+/// let old = Statute::new("law", "Old Title", Effect::new(EffectType::Grant, "Benefit"));
+/// let new = Statute::new("law", "New Title", Effect::new(EffectType::Grant, "Benefit"));
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let exports = export_to_all_formats(&diff_result);
+///
+/// assert!(exports.contains_key(&"json"));
+/// assert!(exports.contains_key(&"markdown"));
+/// assert!(exports.contains_key(&"html"));
+/// assert!(exports.contains_key(&"csv"));
+/// ```
+pub fn export_to_all_formats(
+    diff: &StatuteDiff,
+) -> std::collections::HashMap<&'static str, String> {
+    let mut exports = std::collections::HashMap::new();
+
+    exports.insert("json", JsonFormatter::new().with_pretty(false).format(diff));
+    exports.insert(
+        "json_pretty",
+        JsonFormatter::new().with_pretty(true).format(diff),
+    );
+    exports.insert("markdown", MarkdownFormatter::new().format(diff));
+    exports.insert("html", HtmlFormatter::new().format(diff));
+    exports.insert("csv", CsvFormatter::new().format(diff));
+
+    exports
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+    use crate::diff;
+    use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
+
+    fn create_test_statute(id: &str, title: &str) -> Statute {
+        Statute::new(id, title, Effect::new(EffectType::Grant, "Test benefit"))
+    }
+
+    #[test]
+    fn test_parallel_export_json() {
+        let pairs: Vec<_> = (0..20)
+            .map(|i| {
+                let id = format!("law{}", i);
+                (
+                    create_test_statute(&id, "Old Title"),
+                    create_test_statute(&id, "New Title"),
+                )
+            })
+            .collect();
+
+        let diffs: Vec<_> = pairs
+            .iter()
+            .map(|(old, new)| diff(old, new).unwrap())
+            .collect();
+
+        let result = parallel_export(&diffs, ExportFormat::Json);
+        assert_eq!(result.outputs.len(), 20);
+        assert_eq!(result.format, ExportFormat::Json);
+
+        for output in &result.outputs {
+            assert!(output.contains("statute_id"));
+        }
+    }
+
+    #[test]
+    fn test_parallel_export_markdown() {
+        let pairs: Vec<_> = (0..15)
+            .map(|i| {
+                let id = format!("law{}", i);
+                (
+                    create_test_statute(&id, "Old Title"),
+                    create_test_statute(&id, "New Title"),
+                )
+            })
+            .collect();
+
+        let diffs: Vec<_> = pairs
+            .iter()
+            .map(|(old, new)| diff(old, new).unwrap())
+            .collect();
+
+        let result = parallel_export(&diffs, ExportFormat::Markdown);
+        assert_eq!(result.outputs.len(), 15);
+
+        for output in &result.outputs {
+            assert!(output.contains("# Statute Diff"));
+        }
+    }
+
+    #[test]
+    fn test_parallel_export_all() {
+        let old = create_test_statute("law", "Old Title");
+        let new = create_test_statute("law", "New Title");
+        let diff_result = diff(&old, &new).unwrap();
+
+        let results = parallel_export_all(&[diff_result]);
+        assert_eq!(results.len(), 5);
+
+        for result in &results {
+            assert_eq!(result.outputs.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_export_to_all_formats() {
+        let old = create_test_statute("law", "Old Title");
+        let new = create_test_statute("law", "New Title");
+        let diff_result = diff(&old, &new).unwrap();
+
+        let exports = export_to_all_formats(&diff_result);
+
+        assert_eq!(exports.len(), 5);
+        assert!(exports.contains_key("json"));
+        assert!(exports.contains_key("json_pretty"));
+        assert!(exports.contains_key("markdown"));
+        assert!(exports.contains_key("html"));
+        assert!(exports.contains_key("csv"));
+
+        assert!(exports["json"].contains("statute_id"));
+        assert!(exports["markdown"].contains("# Statute Diff"));
+        assert!(exports["html"].contains("<html>"));
+        assert!(exports["csv"].contains("statute_id,change_type"));
+    }
+
+    #[test]
+    fn test_parallel_export_large_batch() {
+        let pairs: Vec<_> = (0..100)
+            .map(|i| {
+                let id = format!("statute-{}", i);
+                let old = create_test_statute(&id, "Old Title").with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 65,
+                });
+                let mut new = old.clone();
+                new.title = format!("New Title {}", i);
+                (old, new)
+            })
+            .collect();
+
+        let diffs: Vec<_> = pairs
+            .iter()
+            .map(|(old, new)| diff(old, new).unwrap())
+            .collect();
+
+        let result = parallel_export(&diffs, ExportFormat::JsonPretty);
+        assert_eq!(result.outputs.len(), 100);
     }
 }

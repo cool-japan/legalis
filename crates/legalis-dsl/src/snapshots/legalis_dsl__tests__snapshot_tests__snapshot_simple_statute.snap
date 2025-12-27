@@ -1,0 +1,46 @@
+---
+source: crates/legalis-dsl/src/tests.rs
+expression: doc
+---
+{
+  "imports": [],
+  "statutes": [
+    {
+      "id": "voting-rights",
+      "title": "Voting Rights Act",
+      "conditions": [
+        {
+          "And": [
+            {
+              "Comparison": {
+                "field": "age",
+                "operator": ">=",
+                "value": {
+                  "Number": 18
+                }
+              }
+            },
+            {
+              "HasAttribute": {
+                "key": "citizenship"
+              }
+            }
+          ]
+        }
+      ],
+      "effects": [
+        {
+          "effect_type": "grant",
+          "description": "right to vote",
+          "parameters": []
+        }
+      ],
+      "discretion": null,
+      "exceptions": [],
+      "amendments": [],
+      "supersedes": [],
+      "defaults": [],
+      "requires": []
+    }
+  ]
+}

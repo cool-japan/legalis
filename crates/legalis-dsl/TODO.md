@@ -112,3 +112,98 @@
 - [x] Add color-coded terminal output support
 - [x] Hierarchical display of conditions, effects, and metadata
 - [x] Support for imports, amendments, and exceptions visualization
+
+## New Enhancements (2025-12-26)
+
+### Serialization & I/O
+- [x] Add TOML serialization/deserialization support
+- [x] Add TOML format validation
+
+### Graph Generation
+- [x] Create dependency graph generator (REQUIRES/SUPERSEDES relationships)
+- [x] Add GraphViz DOT format output
+- [x] Add Mermaid diagram format output
+- [x] Generate visual statute dependency graphs
+- [x] Detect cycles in dependency graphs
+
+### Analytics & Metrics
+- [x] Create statistics module for statute analysis
+- [x] Add complexity metrics (condition depth, effect count)
+- [x] Count statutes, conditions, effects by type
+- [x] Generate reports on statute relationships
+- [x] Add dependency analysis (independent/leaf statutes)
+
+### Import Resolution
+- [x] Add import path validation
+- [x] Implement import path resolution
+- [x] Support relative and absolute import paths
+- [x] Detect circular import dependencies
+- [x] Add document caching for import resolution
+
+## Advanced Features (2025-12-26)
+
+### AST Transformation Pipeline
+- [x] Create composable transformation pipeline
+- [x] Add transformation combinators (sequence, parallel, conditional)
+- [x] Implement reversible transformations with undo support
+- [x] Add transformation validation and verification
+- [x] Create preset transformation recipes for common patterns
+
+### Code Generation Framework
+- [x] Design pluggable code generator architecture
+- [x] Implement SQL DDL/DQL generator for statute rules
+- [x] Add Prolog predicate generator
+- [x] Create Python function generator
+- [ ] Support custom templates for code generation
+- [x] Add roundtrip testing for generated code
+
+### Advanced Semantic Analysis
+- [x] Type inference and checking for condition values
+- [ ] Data flow analysis for statute dependencies
+- [ ] Taint analysis for security-sensitive attributes
+- [x] Dead code detection (unreachable effects)
+- [x] Value range analysis for numeric conditions
+- [ ] Consistency checking across related statutes
+
+### Performance & Profiling
+- [ ] Add detailed performance profiling utilities
+- [ ] Implement parse time breakdown by component
+- [ ] Create memory usage profiler
+- [ ] Add benchmark comparison tools
+- [ ] Optimize hot paths identified by profiling
+
+### Statute Templates & Macros
+- [ ] Design template/macro system for common patterns
+- [ ] Support parameterized statute templates
+- [ ] Add template expansion and instantiation
+- [ ] Create standard template library
+- [ ] Implement template validation
+
+### Documentation Generation
+- [ ] Generate HTML documentation from AST
+- [ ] Create PDF export using LaTeX
+- [x] Add Markdown documentation generator
+- [x] Generate statute dependency diagrams
+- [x] Create cross-reference tables
+- [ ] Add search index generation
+
+### Metadata & Extraction
+- [ ] Extract jurisdiction hierarchy
+- [ ] Build temporal version history
+- [ ] Generate compliance matrices
+- [ ] Extract entity relationships
+- [ ] Create audit trail from amendments
+
+### Testing & Quality
+- [x] Add property-based testing with proptest
+- [ ] Create mutation testing framework
+- [ ] Add coverage-guided fuzzing
+- [x] Implement snapshot testing for AST
+- [x] Create test case generators
+
+### Integration & Tooling
+- [ ] Add GitHub Actions workflow support
+- [ ] Create pre-commit hooks for validation
+- [ ] Add VS Code extension improvements
+- [ ] Implement watch mode for continuous validation
+- [ ] Create diff tool for statute comparison

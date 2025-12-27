@@ -329,6 +329,19 @@ impl DslPrinter {
                     )
                 }
             }
+            Condition::Calculation {
+                formula,
+                operator,
+                value,
+            } => {
+                format!(
+                    "{} {} {} {}",
+                    self.kw("CALC"),
+                    self.quote(formula),
+                    self.format_op(*operator),
+                    value
+                )
+            }
         }
     }
 

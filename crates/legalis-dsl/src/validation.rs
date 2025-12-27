@@ -63,6 +63,15 @@ pub enum ValidationError {
 
     #[error("Self-reference in statute '{statute_id}': statute cannot reference itself")]
     SelfReference { statute_id: String },
+
+    #[error("Dead code detected in statute '{statute_id}': {reason}")]
+    DeadCode { statute_id: String, reason: String },
+
+    #[error("Unreachable effect in statute '{statute_id}': {description}")]
+    UnreachableEffect {
+        statute_id: String,
+        description: String,
+    },
 }
 
 /// Result type for validation operations.
@@ -252,6 +261,7 @@ impl SemanticValidator {
     }
 
     /// Validates a condition node for semantic correctness.
+    #[allow(clippy::only_used_in_recursion)]
     fn validate_condition(
         &self,
         condition: &ConditionNode,
@@ -341,6 +351,7 @@ impl SemanticValidator {
     }
 
     /// Checks for circular dependencies using depth-first search.
+    #[allow(clippy::only_used_in_recursion)]
     fn check_circular_dependencies(
         &self,
         statute_id: &str,
@@ -451,6 +462,187 @@ impl CompletenessChecker {
         } else {
             Err(all_errors)
         }
+    }
+}
+
+/// Detects dead code (unreachable effects) in legal documents.
+#[derive(Debug, Default)]
+pub struct DeadCodeDetector;
+
+impl DeadCodeDetector {
+    /// Creates a new dead code detector.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Detects dead code in a legal document.
+    pub fn detect(&self, doc: &LegalDocument) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        let context = ValidationContext::from_document(doc);
+
+        for statute in &doc.statutes {
+            // Check for contradictory conditions (always false)
+            if let Some(error) = self.check_contradictory_conditions(statute) {
+                errors.push(error);
+            }
+
+            // Check for unreferenced statutes
+            if !self.is_statute_referenced(statute, doc) {
+                errors.push(ValidationError::DeadCode {
+                    statute_id: statute.id.clone(),
+                    reason: "Statute is never referenced by other statutes".to_string(),
+                });
+            }
+
+            // Check for effects that can never be reached
+            errors.extend(self.check_unreachable_effects(statute, &context));
+        }
+
+        errors
+    }
+
+    /// Checks if a statute is referenced by any other statute.
+    fn is_statute_referenced(&self, statute: &StatuteNode, doc: &LegalDocument) -> bool {
+        for other in &doc.statutes {
+            if other.id != statute.id {
+                // Check REQUIRES
+                if other.requires.contains(&statute.id) {
+                    return true;
+                }
+                // Check SUPERSEDES
+                if other.supersedes.contains(&statute.id) {
+                    return true;
+                }
+                // Check AMENDMENTS
+                for amendment in &other.amendments {
+                    if amendment.target_id == statute.id {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Checks for contradictory conditions that make the statute unreachable.
+    fn check_contradictory_conditions(&self, statute: &StatuteNode) -> Option<ValidationError> {
+        for condition in &statute.conditions {
+            if self.is_always_false(condition) {
+                return Some(ValidationError::DeadCode {
+                    statute_id: statute.id.clone(),
+                    reason: "Statute contains contradictory conditions that are always false"
+                        .to_string(),
+                });
+            }
+        }
+        None
+    }
+
+    /// Checks if a condition is always false.
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_always_false(&self, condition: &ConditionNode) -> bool {
+        match condition {
+            ConditionNode::And(left, right) => {
+                // Check for direct contradictions like (x > 5) AND (x < 3)
+                if self.is_always_false(left) || self.is_always_false(right) {
+                    return true;
+                }
+                self.are_contradictory(left, right)
+            }
+            ConditionNode::Between { min, max, .. } => {
+                // Check if min >= max
+                if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) =
+                    (min, max)
+                {
+                    return min_val >= max_val;
+                }
+                false
+            }
+            ConditionNode::InRange {
+                min,
+                max,
+                inclusive_min,
+                inclusive_max,
+                ..
+            } => {
+                // Check impossible ranges
+                if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) =
+                    (min, max)
+                {
+                    if !inclusive_min && !inclusive_max {
+                        return *max_val <= *min_val + 1;
+                    }
+                    return min_val >= max_val;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Checks if two conditions are contradictory.
+    #[allow(dead_code)]
+    fn are_contradictory(&self, left: &ConditionNode, right: &ConditionNode) -> bool {
+        // Simple case: (field > 5) AND (field < 3)
+        match (left, right) {
+            (
+                ConditionNode::Comparison {
+                    field: f1,
+                    operator: op1,
+                    value: v1,
+                },
+                ConditionNode::Comparison {
+                    field: f2,
+                    operator: op2,
+                    value: v2,
+                },
+            ) => {
+                if f1 == f2 {
+                    if let (ConditionValue::Number(n1), ConditionValue::Number(n2)) = (v1, v2) {
+                        // Check for contradictions like (x > 5) AND (x < 3)
+                        if (op1 == ">" || op1 == ">=") && (op2 == "<" || op2 == "<=") {
+                            return n1 >= n2;
+                        }
+                        if (op1 == "<" || op1 == "<=") && (op2 == ">" || op2 == ">=") {
+                            return n1 <= n2;
+                        }
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Checks for effects that can never be reached due to required dependencies.
+    fn check_unreachable_effects(
+        &self,
+        statute: &StatuteNode,
+        context: &ValidationContext,
+    ) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+
+        // Check if required statutes have contradictory conditions
+        for req_id in &statute.requires {
+            if let Some(req_statute) = context.get_statute(req_id) {
+                for condition in &req_statute.conditions {
+                    if self.is_always_false(condition) {
+                        for effect in &statute.effects {
+                            errors.push(ValidationError::UnreachableEffect {
+                                statute_id: statute.id.clone(),
+                                description: format!(
+                                    "Effect '{}' is unreachable because required statute '{}' has contradictory conditions",
+                                    effect.description, req_id
+                                ),
+                            });
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        errors
     }
 }
 
@@ -586,5 +778,128 @@ mod tests {
 
         let result = checker.check_statute(&incomplete_statute);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dead_code_contradictory_conditions() {
+        use crate::ast::EffectNode;
+
+        let doc = LegalDocument {
+            imports: vec![],
+            statutes: vec![StatuteNode {
+                id: "unreachable".to_string(),
+                title: "Unreachable Statute".to_string(),
+                conditions: vec![ConditionNode::Between {
+                    field: "age".to_string(),
+                    min: ConditionValue::Number(50),
+                    max: ConditionValue::Number(30),
+                }],
+                effects: vec![EffectNode {
+                    effect_type: "grant".to_string(),
+                    description: "This will never happen".to_string(),
+                    parameters: vec![],
+                }],
+                ..Default::default()
+            }],
+        };
+
+        let detector = DeadCodeDetector::new();
+        let errors = detector.detect(&doc);
+
+        assert!(!errors.is_empty());
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::DeadCode { .. }))
+        );
+    }
+
+    #[test]
+    fn test_dead_code_unreferenced_statute() {
+        use crate::ast::EffectNode;
+
+        let doc = LegalDocument {
+            imports: vec![],
+            statutes: vec![
+                StatuteNode {
+                    id: "referenced".to_string(),
+                    title: "Referenced Statute".to_string(),
+                    requires: vec!["unreferenced".to_string()],
+                    effects: vec![EffectNode {
+                        effect_type: "grant".to_string(),
+                        description: "Effect".to_string(),
+                        parameters: vec![],
+                    }],
+                    ..Default::default()
+                },
+                StatuteNode {
+                    id: "unreferenced".to_string(),
+                    title: "Unreferenced Statute".to_string(),
+                    effects: vec![EffectNode {
+                        effect_type: "grant".to_string(),
+                        description: "Effect".to_string(),
+                        parameters: vec![],
+                    }],
+                    ..Default::default()
+                },
+            ],
+        };
+
+        let detector = DeadCodeDetector::new();
+        let errors = detector.detect(&doc);
+
+        // "unreferenced" is actually referenced by "referenced", so should not be dead code
+        // Only "referenced" should be reported as unreferenced
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::DeadCode { statute_id, .. } if statute_id == "referenced")));
+    }
+
+    #[test]
+    fn test_dead_code_no_issues() {
+        use crate::ast::EffectNode;
+
+        let doc = LegalDocument {
+            imports: vec![],
+            statutes: vec![
+                StatuteNode {
+                    id: "statute1".to_string(),
+                    title: "Statute 1".to_string(),
+                    conditions: vec![ConditionNode::Comparison {
+                        field: "age".to_string(),
+                        operator: ">=".to_string(),
+                        value: ConditionValue::Number(18),
+                    }],
+                    effects: vec![EffectNode {
+                        effect_type: "grant".to_string(),
+                        description: "Effect".to_string(),
+                        parameters: vec![],
+                    }],
+                    ..Default::default()
+                },
+                StatuteNode {
+                    id: "statute2".to_string(),
+                    title: "Statute 2".to_string(),
+                    requires: vec!["statute1".to_string()],
+                    effects: vec![EffectNode {
+                        effect_type: "grant".to_string(),
+                        description: "Effect 2".to_string(),
+                        parameters: vec![],
+                    }],
+                    ..Default::default()
+                },
+            ],
+        };
+
+        let detector = DeadCodeDetector::new();
+        let errors = detector.detect(&doc);
+
+        // statute2 should be reported as unreferenced since no one references it
+        // But statute1 is referenced by statute2
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            &errors[0],
+            ValidationError::DeadCode { statute_id, .. } if statute_id == "statute2"
+        ));
     }
 }

@@ -273,6 +273,163 @@ fn batch_conversion_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
+fn streaming_benchmark(c: &mut Criterion) {
+    use legalis_core::{Effect, EffectType, Statute};
+    use legalis_interop::streaming::{StreamingConverter, StreamingExporter, StreamingImporter};
+    use std::io::Cursor;
+
+    let mut group = c.benchmark_group("streaming");
+
+    let catala_source = r#"
+declaration scope VotingRights:
+  context input content Input
+  context output content Output
+
+scope VotingRights:
+  definition output.eligible equals
+    input.age >= 18
+"#;
+
+    // Streaming import
+    group.bench_function("import", |b| {
+        b.iter(|| {
+            let reader = Cursor::new(catala_source.as_bytes());
+            let mut importer = StreamingImporter::new(LegalFormat::Catala);
+            importer.import(black_box(reader)).unwrap()
+        })
+    });
+
+    // Streaming export
+    let statute = Statute::new(
+        "test",
+        "Test Statute",
+        Effect::new(EffectType::Grant, "test"),
+    );
+
+    group.bench_function("export", |b| {
+        b.iter(|| {
+            let mut output = Vec::new();
+            let exporter = StreamingExporter::new(LegalFormat::L4);
+            exporter
+                .export(black_box(&[statute.clone()]), &mut output)
+                .unwrap()
+        })
+    });
+
+    // End-to-end streaming conversion
+    group.bench_function("convert", |b| {
+        b.iter(|| {
+            let reader = Cursor::new(catala_source.as_bytes());
+            let mut output = Vec::new();
+            let converter = StreamingConverter::new(LegalFormat::Catala, LegalFormat::L4);
+            converter.convert(black_box(reader), &mut output).unwrap()
+        })
+    });
+
+    group.finish();
+}
+
+fn enhanced_converter_benchmark(c: &mut Criterion) {
+    use legalis_interop::enhanced::EnhancedConverter;
+
+    let mut group = c.benchmark_group("enhanced_converter");
+
+    let catala_source = r#"
+declaration scope VotingRights:
+  context input content Input
+  context output content Output
+
+scope VotingRights:
+  definition output.eligible equals
+    input.age >= 18
+"#;
+
+    // Standard converter
+    group.bench_function("standard_convert", |b| {
+        let mut converter = LegalConverter::new();
+        b.iter(|| {
+            converter
+                .convert(
+                    black_box(catala_source),
+                    LegalFormat::Catala,
+                    LegalFormat::L4,
+                )
+                .unwrap()
+        })
+    });
+
+    // Enhanced converter
+    group.bench_function("enhanced_convert", |b| {
+        let mut converter = EnhancedConverter::new();
+        b.iter(|| {
+            converter
+                .convert(
+                    black_box(catala_source),
+                    LegalFormat::Catala,
+                    LegalFormat::L4,
+                )
+                .unwrap()
+        })
+    });
+
+    // Analysis operation
+    group.bench_function("analyze", |b| {
+        let mut converter = EnhancedConverter::new();
+        b.iter(|| converter.analyze(black_box(catala_source), LegalFormat::Catala))
+    });
+
+    group.finish();
+}
+
+fn optimization_utilities_benchmark(c: &mut Criterion) {
+    use legalis_interop::optimizations::{
+        IdentifierNormalizer, RegexCache, StringInterner, WhitespaceNormalizer,
+    };
+
+    let mut group = c.benchmark_group("optimizations");
+
+    // String interning
+    group.bench_function("string_interning", |b| {
+        let mut interner = StringInterner::new();
+        b.iter(|| {
+            interner.intern(black_box("age"));
+            interner.intern(black_box("income"));
+            interner.intern(black_box("age")); // Duplicate
+        })
+    });
+
+    // Regex cache
+    let catala_text = r#"
+declaration scope VotingRights:
+  context input content Input
+declaration scope TaxBenefit:
+  context output content Output
+"#;
+
+    group.bench_function("regex_cache_scopes", |b| {
+        let cache = RegexCache::new();
+        b.iter(|| cache.find_catala_scopes(black_box(catala_text)))
+    });
+
+    // Whitespace normalization
+    let text_with_whitespace = "  hello   world  \n\n  foo   bar  ";
+
+    group.bench_function("whitespace_normalize", |b| {
+        b.iter(|| WhitespaceNormalizer::normalize(black_box(text_with_whitespace)))
+    });
+
+    // Identifier conversion
+    group.bench_function("camel_to_snake", |b| {
+        b.iter(|| IdentifierNormalizer::camel_to_snake(black_box("VotingRights")))
+    });
+
+    group.bench_function("snake_to_camel", |b| {
+        b.iter(|| IdentifierNormalizer::snake_to_camel(black_box("voting_rights")))
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     catala_import_benchmark,
@@ -280,6 +437,9 @@ criterion_group!(
     stipula_import_benchmark,
     conversion_benchmark,
     caching_benchmark,
-    batch_conversion_benchmark
+    batch_conversion_benchmark,
+    streaming_benchmark,
+    enhanced_converter_benchmark,
+    optimization_utilities_benchmark
 );
 criterion_main!(benches);

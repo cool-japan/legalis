@@ -538,6 +538,17 @@ impl<'ctx> SmtVerifier<'ctx> {
                 }
             }
 
+            Condition::Calculation {
+                formula,
+                operator,
+                value,
+            } => {
+                // For calculations, create a variable representing the formula result
+                let calc_var =
+                    self.get_or_create_int_var(&format!("calc_{}", Self::hash_string(formula)));
+                self.translate_comparison(&calc_var, operator, *value as i64)
+            }
+
             Condition::Custom { description } => {
                 // For custom conditions, create a boolean variable
                 let hash = Self::hash_string(description);
@@ -619,6 +630,191 @@ impl<'ctx> SmtVerifier<'ctx> {
         let mut hasher = DefaultHasher::new();
         s.hash(&mut hasher);
         (hasher.finish() % (i64::MAX as u64)) as i64
+    }
+
+    /// Checks if two conditions are semantically equivalent.
+    ///
+    /// Returns `Ok(true)` if the conditions are logically equivalent,
+    /// meaning they are satisfied by exactly the same set of values.
+    pub fn are_equivalent(&mut self, cond1: &Condition, cond2: &Condition) -> Result<bool> {
+        // Two conditions are equivalent if (cond1 <=> cond2) is a tautology
+        // This is equivalent to checking:
+        // - cond1 => cond2 AND cond2 => cond1
+
+        self.solver.reset();
+        let formula1 = self.translate_condition(cond1)?;
+        let formula2 = self.translate_condition(cond2)?;
+
+        // Check if (cond1 XOR cond2) is unsatisfiable
+        // If they're equivalent, XOR should always be false
+        let xor = formula1._eq(&formula2).not();
+        self.solver.assert(&xor);
+
+        match self.solver.check() {
+            z3::SatResult::Sat => Ok(false),  // Found a difference
+            z3::SatResult::Unsat => Ok(true), // They're equivalent
+            z3::SatResult::Unknown => Err(anyhow::anyhow!("SMT solver returned unknown")),
+        }
+    }
+
+    /// Simplifies a condition to a potentially simpler equivalent form.
+    ///
+    /// This attempts to find a simpler condition that is logically equivalent
+    /// to the given condition. Returns the simplified condition and whether
+    /// any simplification was performed.
+    pub fn simplify(&mut self, condition: &Condition) -> Result<(Condition, bool)> {
+        // For now, implement basic simplifications:
+        // 1. Double negation elimination: NOT(NOT(x)) => x
+        // 2. Identity elimination: x AND TRUE => x, x OR FALSE => x
+        // 3. Contradiction detection: x AND NOT(x) => FALSE
+
+        match condition {
+            // Double negation elimination
+            Condition::Not(inner) => {
+                if let Condition::Not(inner_inner) = inner.as_ref() {
+                    return Ok((inner_inner.as_ref().clone(), true));
+                }
+                // Recursively simplify the inner condition
+                let (simplified_inner, changed) = self.simplify(inner)?;
+                if changed {
+                    Ok((Condition::Not(Box::new(simplified_inner)), true))
+                } else {
+                    Ok((condition.clone(), false))
+                }
+            }
+
+            // AND simplification
+            Condition::And(left, right) => {
+                let (left_simp, left_changed) = self.simplify(left)?;
+                let (right_simp, right_changed) = self.simplify(right)?;
+
+                // Check if they contradict
+                if self.contradict(&left_simp, &right_simp)? {
+                    // This would never be true, but we can't represent FALSE directly
+                    // Return the original for now
+                    return Ok((condition.clone(), false));
+                }
+
+                // Check if left implies right (then AND is just left)
+                if self.implies(&left_simp, &right_simp)? {
+                    return Ok((left_simp, true));
+                }
+
+                // Check if right implies left (then AND is just right)
+                if self.implies(&right_simp, &left_simp)? {
+                    return Ok((right_simp, true));
+                }
+
+                if left_changed || right_changed {
+                    Ok((
+                        Condition::And(Box::new(left_simp), Box::new(right_simp)),
+                        true,
+                    ))
+                } else {
+                    Ok((condition.clone(), false))
+                }
+            }
+
+            // OR simplification
+            Condition::Or(left, right) => {
+                let (left_simp, left_changed) = self.simplify(left)?;
+                let (right_simp, right_changed) = self.simplify(right)?;
+
+                // Check if left implies right (then OR is just right)
+                if self.implies(&left_simp, &right_simp)? {
+                    return Ok((right_simp, true));
+                }
+
+                // Check if right implies left (then OR is just left)
+                if self.implies(&right_simp, &left_simp)? {
+                    return Ok((left_simp, true));
+                }
+
+                if left_changed || right_changed {
+                    Ok((
+                        Condition::Or(Box::new(left_simp), Box::new(right_simp)),
+                        true,
+                    ))
+                } else {
+                    Ok((condition.clone(), false))
+                }
+            }
+
+            // Base conditions don't simplify further
+            _ => Ok((condition.clone(), false)),
+        }
+    }
+
+    /// Analyzes a condition for complexity and suggests simpler alternatives.
+    ///
+    /// Returns a complexity score and suggestions for simplification.
+    pub fn analyze_complexity(&mut self, condition: &Condition) -> (usize, Vec<String>) {
+        let mut suggestions = Vec::new();
+        let complexity = self.count_complexity(condition);
+
+        // Check for double negations
+        if Self::has_double_negation(condition) {
+            suggestions.push("Consider removing double negations for clarity".to_string());
+        }
+
+        // Check for redundant conditions
+        if let Condition::And(left, right) = condition {
+            if let Ok(true) = self.implies(left, right) {
+                suggestions.push(
+                    "Left condition implies right - AND can be simplified to just left condition"
+                        .to_string(),
+                );
+            } else if let Ok(true) = self.implies(right, left) {
+                suggestions.push(
+                    "Right condition implies left - AND can be simplified to just right condition"
+                        .to_string(),
+                );
+            }
+        }
+
+        if let Condition::Or(left, right) = condition {
+            if let Ok(true) = self.implies(left, right) {
+                suggestions.push(
+                    "Left condition implies right - OR can be simplified to just right condition"
+                        .to_string(),
+                );
+            } else if let Ok(true) = self.implies(right, left) {
+                suggestions.push(
+                    "Right condition implies left - OR can be simplified to just left condition"
+                        .to_string(),
+                );
+            }
+        }
+
+        (complexity, suggestions)
+    }
+
+    /// Counts the complexity of a condition (number of nodes in the tree).
+    fn count_complexity(&self, condition: &Condition) -> usize {
+        match condition {
+            Condition::And(left, right) | Condition::Or(left, right) => {
+                1 + self.count_complexity(left) + self.count_complexity(right)
+            }
+            Condition::Not(inner) => 1 + self.count_complexity(inner),
+            _ => 1,
+        }
+    }
+
+    /// Checks if a condition contains double negations.
+    fn has_double_negation(condition: &Condition) -> bool {
+        match condition {
+            Condition::Not(inner) => {
+                if matches!(inner.as_ref(), Condition::Not(_)) {
+                    true
+                } else {
+                    Self::has_double_negation(inner)
+                }
+            }
+            Condition::And(left, right) | Condition::Or(left, right) => {
+                Self::has_double_negation(left) || Self::has_double_negation(right)
+            }
+            _ => false,
+        }
     }
 }
 
@@ -1215,5 +1411,236 @@ mod tests {
         );
 
         assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_calculation_satisfiable() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Calculation: tax_owed = income * 0.2, checking if tax_owed > 1000
+        let condition = Condition::Calculation {
+            formula: "income * 0.2".to_string(),
+            operator: ComparisonOp::Greater,
+            value: 1000.0,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_calculation_different_formulas() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Two different calculations should be treated as different variables
+        let cond1 = Condition::Calculation {
+            formula: "income * 0.2".to_string(),
+            operator: ComparisonOp::Greater,
+            value: 1000.0,
+        };
+
+        let cond2 = Condition::Calculation {
+            formula: "income * 0.3".to_string(),
+            operator: ComparisonOp::Less,
+            value: 2000.0,
+        };
+
+        let combined = Condition::And(Box::new(cond1), Box::new(cond2));
+        assert!(verifier.is_satisfiable(&combined).unwrap());
+    }
+
+    #[test]
+    fn test_calculation_contradiction() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Same formula with contradictory constraints: value > 5000 AND value < 1000
+        let cond1 = Condition::Calculation {
+            formula: "net_worth / 12".to_string(),
+            operator: ComparisonOp::Greater,
+            value: 5000.0,
+        };
+
+        let cond2 = Condition::Calculation {
+            formula: "net_worth / 12".to_string(),
+            operator: ComparisonOp::Less,
+            value: 1000.0,
+        };
+
+        let combined = Condition::And(Box::new(cond1), Box::new(cond2));
+        assert!(!verifier.is_satisfiable(&combined).unwrap());
+    }
+
+    #[test]
+    fn test_calculation_with_age_and_income() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Complex condition: age >= 18 AND income > 50000 AND tax_liability > 10000
+        let condition = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::And(
+                Box::new(Condition::Income {
+                    operator: ComparisonOp::Greater,
+                    value: 50000,
+                }),
+                Box::new(Condition::Calculation {
+                    formula: "income * tax_rate".to_string(),
+                    operator: ComparisonOp::Greater,
+                    value: 10000.0,
+                }),
+            )),
+        );
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_calculation_equality() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Calculation with equality operator
+        let condition = Condition::Calculation {
+            formula: "base_amount + fees".to_string(),
+            operator: ComparisonOp::Equal,
+            value: 1500.0,
+        };
+
+        assert!(verifier.is_satisfiable(&condition).unwrap());
+    }
+
+    #[test]
+    fn test_condition_equivalence() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Two equivalent conditions with different structure
+        let cond1 = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        };
+
+        let cond2 = Condition::Not(Box::new(Condition::Age {
+            operator: ComparisonOp::LessThan,
+            value: 18,
+        }));
+
+        assert!(verifier.are_equivalent(&cond1, &cond2).unwrap());
+    }
+
+    #[test]
+    fn test_condition_not_equivalent() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        let cond1 = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        };
+
+        let cond2 = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 21,
+        };
+
+        assert!(!verifier.are_equivalent(&cond1, &cond2).unwrap());
+    }
+
+    #[test]
+    fn test_double_negation_simplification() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // NOT(NOT(age >= 18))
+        let complex = Condition::Not(Box::new(Condition::Not(Box::new(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        }))));
+
+        let (simplified, changed) = verifier.simplify(&complex).unwrap();
+        assert!(changed);
+
+        // Should simplify to age >= 18
+        if let Condition::Age { operator, value } = simplified {
+            assert_eq!(operator, ComparisonOp::GreaterOrEqual);
+            assert_eq!(value, 18);
+        } else {
+            panic!("Expected Age condition after simplification");
+        }
+    }
+
+    #[test]
+    fn test_redundant_and_simplification() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // age >= 21 AND age >= 18
+        // The first implies the second, so this should simplify to just age >= 21
+        let complex = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 21,
+            }),
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+        );
+
+        let (simplified, changed) = verifier.simplify(&complex).unwrap();
+        assert!(changed);
+
+        // Should simplify to age >= 21
+        if let Condition::Age { operator, value } = simplified {
+            assert_eq!(operator, ComparisonOp::GreaterOrEqual);
+            assert_eq!(value, 21);
+        } else {
+            panic!("Expected simplified to age >= 21");
+        }
+    }
+
+    #[test]
+    fn test_complexity_analysis() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // Complex condition with double negation
+        let condition = Condition::Not(Box::new(Condition::Not(Box::new(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        }))));
+
+        let (complexity, suggestions) = verifier.analyze_complexity(&condition);
+        assert!(complexity >= 3); // At least 3 nodes
+        assert!(!suggestions.is_empty());
+        assert!(suggestions[0].contains("double negation"));
+    }
+
+    #[test]
+    fn test_complexity_analysis_redundant_and() {
+        let ctx = create_z3_context();
+        let mut verifier = SmtVerifier::new(&ctx);
+
+        // age >= 21 AND age >= 18 (redundant)
+        let condition = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 21,
+            }),
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+        );
+
+        let (complexity, suggestions) = verifier.analyze_complexity(&condition);
+        assert!(complexity >= 3);
+        assert!(!suggestions.is_empty());
+        assert!(suggestions.iter().any(|s| s.contains("simplified")));
     }
 }

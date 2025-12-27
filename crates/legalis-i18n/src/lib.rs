@@ -2788,6 +2788,1451 @@ impl DateTimeFormatter {
     }
 }
 
+/// Time zone representation for legal deadlines.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TimeZone {
+    /// Time zone identifier (e.g., "America/New_York", "Asia/Tokyo")
+    pub identifier: String,
+    /// UTC offset in minutes (e.g., -300 for EST, 540 for JST)
+    pub utc_offset_minutes: i32,
+    /// Display name (e.g., "Eastern Standard Time", "Japan Standard Time")
+    pub display_name: String,
+    /// Whether this timezone observes daylight saving time
+    pub has_dst: bool,
+}
+
+impl TimeZone {
+    /// Creates a new time zone.
+    pub fn new(
+        identifier: impl Into<String>,
+        utc_offset_minutes: i32,
+        display_name: impl Into<String>,
+        has_dst: bool,
+    ) -> Self {
+        Self {
+            identifier: identifier.into(),
+            utc_offset_minutes,
+            display_name: display_name.into(),
+            has_dst,
+        }
+    }
+
+    /// Converts UTC time to local time.
+    pub fn utc_to_local(
+        &self,
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+    ) -> (i32, u32, u32, u32, u32) {
+        let total_minutes = (hour * 60 + minute) as i32 + self.utc_offset_minutes;
+        self.adjust_datetime(year, month, day, total_minutes)
+    }
+
+    /// Converts local time to UTC.
+    pub fn local_to_utc(
+        &self,
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+    ) -> (i32, u32, u32, u32, u32) {
+        let total_minutes = (hour * 60 + minute) as i32 - self.utc_offset_minutes;
+        self.adjust_datetime(year, month, day, total_minutes)
+    }
+
+    fn adjust_datetime(
+        &self,
+        year: i32,
+        month: u32,
+        day: u32,
+        total_minutes: i32,
+    ) -> (i32, u32, u32, u32, u32) {
+        let mut current_year = year;
+        let mut current_month = month;
+        let mut current_day = day;
+        let mut minutes = total_minutes;
+
+        // Handle negative minutes (previous day)
+        while minutes < 0 {
+            minutes += 24 * 60;
+            let (y, m, d) = self.previous_day(current_year, current_month, current_day);
+            current_year = y;
+            current_month = m;
+            current_day = d;
+        }
+
+        // Handle overflow minutes (next day)
+        while minutes >= 24 * 60 {
+            minutes -= 24 * 60;
+            let (y, m, d) = self.next_day(current_year, current_month, current_day);
+            current_year = y;
+            current_month = m;
+            current_day = d;
+        }
+
+        let hour = (minutes / 60) as u32;
+        let minute = (minutes % 60) as u32;
+
+        (current_year, current_month, current_day, hour, minute)
+    }
+
+    fn next_day(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+        let days_in_month = self.days_in_month(year, month);
+        if day < days_in_month {
+            (year, month, day + 1)
+        } else if month < 12 {
+            (year, month + 1, 1)
+        } else {
+            (year + 1, 1, 1)
+        }
+    }
+
+    fn previous_day(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+        if day > 1 {
+            (year, month, day - 1)
+        } else if month > 1 {
+            let prev_month = month - 1;
+            let prev_day = self.days_in_month(year, prev_month);
+            (year, prev_month, prev_day)
+        } else {
+            (year - 1, 12, 31)
+        }
+    }
+
+    fn days_in_month(&self, year: i32, month: u32) -> u32 {
+        match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => {
+                if self.is_leap_year(year) {
+                    29
+                } else {
+                    28
+                }
+            }
+            _ => 30,
+        }
+    }
+
+    fn is_leap_year(&self, year: i32) -> bool {
+        (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    }
+
+    /// Formats the UTC offset as a string (e.g., "+09:00", "-05:00").
+    pub fn format_offset(&self) -> String {
+        let sign = if self.utc_offset_minutes >= 0 {
+            "+"
+        } else {
+            "-"
+        };
+        let abs_minutes = self.utc_offset_minutes.abs();
+        let hours = abs_minutes / 60;
+        let minutes = abs_minutes % 60;
+        format!("{}{:02}:{:02}", sign, hours, minutes)
+    }
+}
+
+/// Registry of common time zones used in legal practice.
+#[derive(Debug, Default)]
+pub struct TimeZoneRegistry {
+    zones: HashMap<String, TimeZone>,
+}
+
+impl TimeZoneRegistry {
+    /// Creates a new time zone registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with standard legal time zones.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // US time zones
+        registry.add_zone(TimeZone::new(
+            "America/New_York",
+            -300,
+            "Eastern Standard Time (EST)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "America/Chicago",
+            -360,
+            "Central Standard Time (CST)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "America/Denver",
+            -420,
+            "Mountain Standard Time (MST)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "America/Los_Angeles",
+            -480,
+            "Pacific Standard Time (PST)",
+            true,
+        ));
+
+        // European time zones
+        registry.add_zone(TimeZone::new(
+            "Europe/London",
+            0,
+            "Greenwich Mean Time (GMT)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Europe/Paris",
+            60,
+            "Central European Time (CET)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Europe/Berlin",
+            60,
+            "Central European Time (CET)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Europe/Moscow",
+            180,
+            "Moscow Standard Time (MSK)",
+            false,
+        ));
+
+        // Asian time zones
+        registry.add_zone(TimeZone::new(
+            "Asia/Tokyo",
+            540,
+            "Japan Standard Time (JST)",
+            false,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Asia/Seoul",
+            540,
+            "Korea Standard Time (KST)",
+            false,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Asia/Shanghai",
+            480,
+            "China Standard Time (CST)",
+            false,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Asia/Hong_Kong",
+            480,
+            "Hong Kong Time (HKT)",
+            false,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Asia/Singapore",
+            480,
+            "Singapore Standard Time (SGT)",
+            false,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Asia/Dubai",
+            240,
+            "Gulf Standard Time (GST)",
+            false,
+        ));
+
+        // Other major legal centers
+        registry.add_zone(TimeZone::new(
+            "Australia/Sydney",
+            600,
+            "Australian Eastern Standard Time (AEST)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "Pacific/Auckland",
+            720,
+            "New Zealand Standard Time (NZST)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "America/Sao_Paulo",
+            -180,
+            "Brasília Time (BRT)",
+            true,
+        ));
+        registry.add_zone(TimeZone::new(
+            "America/Toronto",
+            -300,
+            "Eastern Standard Time (EST)",
+            true,
+        ));
+
+        // UTC
+        registry.add_zone(TimeZone::new(
+            "UTC",
+            0,
+            "Coordinated Universal Time (UTC)",
+            false,
+        ));
+
+        registry
+    }
+
+    /// Adds a time zone to the registry.
+    pub fn add_zone(&mut self, zone: TimeZone) {
+        self.zones.insert(zone.identifier.clone(), zone);
+    }
+
+    /// Gets a time zone by identifier.
+    pub fn get_zone(&self, identifier: &str) -> Option<&TimeZone> {
+        self.zones.get(identifier)
+    }
+
+    /// Gets a time zone for a jurisdiction.
+    pub fn zone_for_jurisdiction(&self, jurisdiction_code: &str) -> Option<&TimeZone> {
+        match jurisdiction_code {
+            "US" => self.get_zone("America/New_York"),
+            "GB" => self.get_zone("Europe/London"),
+            "JP" => self.get_zone("Asia/Tokyo"),
+            "DE" | "FR" | "ES" | "IT" | "NL" => self.get_zone("Europe/Paris"),
+            "CN" => self.get_zone("Asia/Shanghai"),
+            "TW" | "HK" => self.get_zone("Asia/Hong_Kong"),
+            "KR" => self.get_zone("Asia/Seoul"),
+            "SG" => self.get_zone("Asia/Singapore"),
+            "AU" => self.get_zone("Australia/Sydney"),
+            "CA" => self.get_zone("America/Toronto"),
+            "BR" => self.get_zone("America/Sao_Paulo"),
+            "RU" => self.get_zone("Europe/Moscow"),
+            "SA" | "AE" => self.get_zone("Asia/Dubai"),
+            _ => self.get_zone("UTC"),
+        }
+    }
+
+    /// Lists all available time zone identifiers.
+    pub fn list_zones(&self) -> Vec<String> {
+        self.zones.keys().cloned().collect()
+    }
+}
+
+/// Legal deadline calculator with time zone and business day support.
+#[derive(Debug, Clone)]
+pub struct DeadlineCalculator {
+    jurisdiction: WorkingDaysConfig,
+    timezone: Option<TimeZone>,
+}
+
+impl DeadlineCalculator {
+    /// Creates a new deadline calculator.
+    pub fn new(jurisdiction: WorkingDaysConfig) -> Self {
+        Self {
+            jurisdiction,
+            timezone: None,
+        }
+    }
+
+    /// Sets the time zone for deadline calculations.
+    pub fn with_timezone(mut self, timezone: TimeZone) -> Self {
+        self.timezone = Some(timezone);
+        self
+    }
+
+    /// Calculates a deadline by adding business days to a start date.
+    pub fn calculate_deadline(
+        &self,
+        start_year: i32,
+        start_month: u32,
+        start_day: u32,
+        business_days: i32,
+    ) -> (i32, u32, u32) {
+        self.jurisdiction
+            .add_working_days(start_year, start_month, start_day, business_days)
+    }
+
+    /// Calculates a deadline with time component and timezone conversion.
+    pub fn calculate_deadline_with_time(
+        &self,
+        start_year: i32,
+        start_month: u32,
+        start_day: u32,
+        start_hour: u32,
+        start_minute: u32,
+        business_days: i32,
+    ) -> (i32, u32, u32, u32, u32) {
+        let (end_year, end_month, end_day) =
+            self.calculate_deadline(start_year, start_month, start_day, business_days);
+
+        // Preserve the time component
+        (end_year, end_month, end_day, start_hour, start_minute)
+    }
+
+    /// Converts a deadline from one timezone to another.
+    #[allow(clippy::too_many_arguments)]
+    pub fn convert_timezone(
+        &self,
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+        from_tz: &TimeZone,
+        to_tz: &TimeZone,
+    ) -> (i32, u32, u32, u32, u32) {
+        // First convert to UTC
+        let (utc_y, utc_m, utc_d, utc_h, utc_min) =
+            from_tz.local_to_utc(year, month, day, hour, minute);
+
+        // Then convert to target timezone
+        to_tz.utc_to_local(utc_y, utc_m, utc_d, utc_h, utc_min)
+    }
+
+    /// Checks if a deadline has passed (considering timezone if set).
+    pub fn is_deadline_passed(
+        &self,
+        deadline_year: i32,
+        deadline_month: u32,
+        deadline_day: u32,
+        current_year: i32,
+        current_month: u32,
+        current_day: u32,
+    ) -> bool {
+        if deadline_year < current_year {
+            return true;
+        }
+        if deadline_year > current_year {
+            return false;
+        }
+
+        // Same year
+        if deadline_month < current_month {
+            return true;
+        }
+        if deadline_month > current_month {
+            return false;
+        }
+
+        // Same month
+        deadline_day < current_day
+    }
+}
+
+/// Citation style for legal documents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CitationStyle {
+    /// Bluebook (United States)
+    Bluebook,
+    /// OSCOLA - Oxford Standard for Citation of Legal Authorities (United Kingdom)
+    OSCOLA,
+    /// Australian Guide to Legal Citation (AGLC)
+    AGLC,
+    /// Canadian Guide to Uniform Legal Citation (McGill Guide)
+    McGill,
+    /// European Citation Style
+    European,
+    /// Japanese Legal Citation
+    Japanese,
+}
+
+impl std::fmt::Display for CitationStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CitationStyle::Bluebook => write!(f, "Bluebook"),
+            CitationStyle::OSCOLA => write!(f, "OSCOLA"),
+            CitationStyle::AGLC => write!(f, "AGLC"),
+            CitationStyle::McGill => write!(f, "McGill Guide"),
+            CitationStyle::European => write!(f, "European"),
+            CitationStyle::Japanese => write!(f, "Japanese"),
+        }
+    }
+}
+
+/// Legal citation components.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CitationComponents {
+    /// Case name or statute title
+    pub title: String,
+    /// Volume number (if applicable)
+    pub volume: Option<String>,
+    /// Reporter or source
+    pub reporter: Option<String>,
+    /// Page number or section
+    pub page: Option<String>,
+    /// Court (for case citations)
+    pub court: Option<String>,
+    /// Year of decision/enactment
+    pub year: Option<i32>,
+    /// Jurisdiction code
+    pub jurisdiction: Option<String>,
+}
+
+impl CitationComponents {
+    /// Creates a new citation with just a title.
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        }
+    }
+
+    /// Sets the volume.
+    pub fn with_volume(mut self, volume: impl Into<String>) -> Self {
+        self.volume = Some(volume.into());
+        self
+    }
+
+    /// Sets the reporter.
+    pub fn with_reporter(mut self, reporter: impl Into<String>) -> Self {
+        self.reporter = Some(reporter.into());
+        self
+    }
+
+    /// Sets the page.
+    pub fn with_page(mut self, page: impl Into<String>) -> Self {
+        self.page = Some(page.into());
+        self
+    }
+
+    /// Sets the court.
+    pub fn with_court(mut self, court: impl Into<String>) -> Self {
+        self.court = Some(court.into());
+        self
+    }
+
+    /// Sets the year.
+    pub fn with_year(mut self, year: i32) -> Self {
+        self.year = Some(year);
+        self
+    }
+
+    /// Sets the jurisdiction.
+    pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+}
+
+/// Citation formatter for legal documents.
+#[derive(Debug, Clone)]
+pub struct CitationFormatter {
+    style: CitationStyle,
+    #[allow(dead_code)]
+    locale: Locale,
+}
+
+impl CitationFormatter {
+    /// Creates a new citation formatter.
+    pub fn new(style: CitationStyle, locale: Locale) -> Self {
+        Self { style, locale }
+    }
+
+    /// Formats a case citation.
+    pub fn format_case(&self, components: &CitationComponents) -> String {
+        match self.style {
+            CitationStyle::Bluebook => self.format_bluebook_case(components),
+            CitationStyle::OSCOLA => self.format_oscola_case(components),
+            CitationStyle::AGLC => self.format_aglc_case(components),
+            CitationStyle::McGill => self.format_mcgill_case(components),
+            CitationStyle::European => self.format_european_case(components),
+            CitationStyle::Japanese => self.format_japanese_case(components),
+        }
+    }
+
+    /// Formats a statute citation.
+    pub fn format_statute(&self, components: &CitationComponents) -> String {
+        match self.style {
+            CitationStyle::Bluebook => self.format_bluebook_statute(components),
+            CitationStyle::OSCOLA => self.format_oscola_statute(components),
+            CitationStyle::AGLC => self.format_aglc_statute(components),
+            CitationStyle::McGill => self.format_mcgill_statute(components),
+            CitationStyle::European => self.format_european_statute(components),
+            CitationStyle::Japanese => self.format_japanese_statute(components),
+        }
+    }
+
+    fn format_bluebook_case(&self, c: &CitationComponents) -> String {
+        // Bluebook format: Case Name, Volume Reporter Page (Court Year)
+        let mut parts = vec![c.title.clone()];
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            parts.push(format!("{} {} {}", vol, rep, page));
+        }
+
+        if let (Some(court), Some(year)) = (&c.court, &c.year) {
+            parts.push(format!("({} {})", court, year));
+        } else if let Some(year) = &c.year {
+            parts.push(format!("({})", year));
+        }
+
+        parts.join(", ")
+    }
+
+    fn format_oscola_case(&self, c: &CitationComponents) -> String {
+        // OSCOLA format: Case Name [Year] Volume Reporter Page
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(" [{}]", year));
+        }
+
+        if let (Some(vol), Some(rep)) = (&c.volume, &c.reporter) {
+            result.push_str(&format!(" {} {}", vol, rep));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(" {}", page));
+        }
+
+        result
+    }
+
+    fn format_aglc_case(&self, c: &CitationComponents) -> String {
+        // AGLC format: Case Name [Year] Volume Reporter Page
+        // Similar to OSCOLA but with Australian conventions
+        self.format_oscola_case(c)
+    }
+
+    fn format_mcgill_case(&self, c: &CitationComponents) -> String {
+        // McGill format: Case Name, [Year] Volume Reporter Page (Court)
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(", [{}]", year));
+        }
+
+        if let (Some(vol), Some(rep), Some(page)) = (&c.volume, &c.reporter, &c.page) {
+            result.push_str(&format!(" {} {} {}", vol, rep, page));
+        }
+
+        if let Some(court) = &c.court {
+            result.push_str(&format!(" ({})", court));
+        }
+
+        result
+    }
+
+    fn format_european_case(&self, c: &CitationComponents) -> String {
+        // European format: Case Name, Court, Year, Reference
+        let mut parts = vec![c.title.clone()];
+
+        if let Some(court) = &c.court {
+            parts.push(court.clone());
+        }
+
+        if let Some(year) = c.year {
+            parts.push(year.to_string());
+        }
+
+        if let (Some(vol), Some(page)) = (&c.volume, &c.page) {
+            parts.push(format!("{}/{}", vol, page));
+        }
+
+        parts.join(", ")
+    }
+
+    fn format_japanese_case(&self, c: &CitationComponents) -> String {
+        // Japanese format: Title 裁判所 Year(Era) Volume 号 Page 頁
+        let mut result = c.title.clone();
+
+        if let Some(court) = &c.court {
+            result.push_str(&format!(" {}", court));
+        }
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(" {}", year));
+        }
+
+        if let Some(vol) = &c.volume {
+            result.push_str(&format!(" {}号", vol));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(" {}頁", page));
+        }
+
+        result
+    }
+
+    fn format_bluebook_statute(&self, c: &CitationComponents) -> String {
+        // Bluebook statute: Title Code § Section (Year)
+        let mut result = c.title.clone();
+
+        if let Some(reporter) = &c.reporter {
+            result.push_str(&format!(" {}", reporter));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(" § {}", page));
+        }
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(" ({})", year));
+        }
+
+        result
+    }
+
+    fn format_oscola_statute(&self, c: &CitationComponents) -> String {
+        // OSCOLA statute: Short Title Year, section
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(" {}", year));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(", s {}", page));
+        }
+
+        result
+    }
+
+    fn format_aglc_statute(&self, c: &CitationComponents) -> String {
+        // AGLC statute: Title Year (Jurisdiction) section
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(" {}", year));
+        }
+
+        if let Some(jur) = &c.jurisdiction {
+            result.push_str(&format!(" ({})", jur));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(" s {}", page));
+        }
+
+        result
+    }
+
+    fn format_mcgill_statute(&self, c: &CitationComponents) -> String {
+        // McGill statute: Title, Code, section
+        let mut result = c.title.clone();
+
+        if let Some(reporter) = &c.reporter {
+            result.push_str(&format!(", {}", reporter));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(", s {}", page));
+        }
+
+        result
+    }
+
+    fn format_european_statute(&self, c: &CitationComponents) -> String {
+        // European format: Title, [Year] Reference
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            result.push_str(&format!(", [{}]", year));
+        }
+
+        if let (Some(vol), Some(page)) = (&c.volume, &c.page) {
+            result.push_str(&format!(" {}/{}", vol, page));
+        }
+
+        result
+    }
+
+    fn format_japanese_statute(&self, c: &CitationComponents) -> String {
+        // Japanese format: Title (Year) 第X条
+        let mut result = c.title.clone();
+
+        if let Some(year) = c.year {
+            // Convert to Japanese era if needed (simplified)
+            result.push_str(&format!("（{}年）", year));
+        }
+
+        if let Some(page) = &c.page {
+            result.push_str(&format!(" 第{}条", page));
+        }
+
+        result
+    }
+
+    /// Gets the citation style for a jurisdiction.
+    pub fn style_for_jurisdiction(jurisdiction_code: &str) -> CitationStyle {
+        match jurisdiction_code {
+            "US" => CitationStyle::Bluebook,
+            "GB" => CitationStyle::OSCOLA,
+            "AU" => CitationStyle::AGLC,
+            "CA" => CitationStyle::McGill,
+            "JP" => CitationStyle::Japanese,
+            "DE" | "FR" | "IT" | "ES" | "NL" => CitationStyle::European,
+            _ => CitationStyle::Bluebook, // Default
+        }
+    }
+}
+
+/// Text direction for layout and display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TextDirection {
+    /// Left-to-Right (e.g., English, French, German)
+    LTR,
+    /// Right-to-Left (e.g., Arabic, Hebrew)
+    RTL,
+}
+
+impl std::fmt::Display for TextDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextDirection::LTR => write!(f, "LTR"),
+            TextDirection::RTL => write!(f, "RTL"),
+        }
+    }
+}
+
+/// RTL (Right-to-Left) text handler for Arabic and Hebrew legal documents.
+#[derive(Debug, Clone)]
+pub struct BidirectionalText {
+    locale: Locale,
+    direction: TextDirection,
+}
+
+impl BidirectionalText {
+    /// Creates a new bidirectional text handler.
+    pub fn new(locale: Locale) -> Self {
+        let direction = Self::detect_direction(&locale);
+        Self { locale, direction }
+    }
+
+    /// Detects text direction from locale.
+    pub fn detect_direction(locale: &Locale) -> TextDirection {
+        match locale.language.as_str() {
+            "ar" | "he" | "fa" | "ur" => TextDirection::RTL,
+            _ => TextDirection::LTR,
+        }
+    }
+
+    /// Gets the text direction.
+    pub fn direction(&self) -> TextDirection {
+        self.direction
+    }
+
+    /// Checks if the text is RTL.
+    pub fn is_rtl(&self) -> bool {
+        self.direction == TextDirection::RTL
+    }
+
+    /// Wraps text with Unicode bidirectional formatting characters.
+    /// This ensures proper rendering in mixed LTR/RTL contexts.
+    pub fn wrap_with_direction_markers(&self, text: &str) -> String {
+        match self.direction {
+            TextDirection::RTL => {
+                // RLE (Right-to-Left Embedding) + text + PDF (Pop Directional Formatting)
+                format!("\u{202B}{}\u{202C}", text)
+            }
+            TextDirection::LTR => {
+                // LRE (Left-to-Right Embedding) + text + PDF
+                format!("\u{202A}{}\u{202C}", text)
+            }
+        }
+    }
+
+    /// Adds Right-to-Left Mark (RLM) for RTL languages.
+    /// Useful for maintaining RTL directionality in mixed content.
+    pub fn add_direction_mark(&self, text: &str) -> String {
+        match self.direction {
+            TextDirection::RTL => format!("{}\u{200F}", text), // Add RLM
+            TextDirection::LTR => format!("{}\u{200E}", text), // Add LRM
+        }
+    }
+
+    /// Reverses logical order for RTL display (for simple cases).
+    /// Note: This is a simplified implementation. For production use,
+    /// consider using the Unicode Bidirectional Algorithm (UAX#9).
+    pub fn reverse_for_display(&self, text: &str) -> String {
+        if self.is_rtl() {
+            text.chars().rev().collect()
+        } else {
+            text.to_string()
+        }
+    }
+
+    /// Formats a legal document paragraph with proper direction.
+    pub fn format_paragraph(&self, text: &str) -> String {
+        let direction_attr = match self.direction {
+            TextDirection::RTL => "rtl",
+            TextDirection::LTR => "ltr",
+        };
+
+        format!("<p dir=\"{}\">{}</p>", direction_attr, text)
+    }
+
+    /// Formats a legal list with proper direction.
+    pub fn format_list(&self, items: &[String]) -> String {
+        let direction_attr = match self.direction {
+            TextDirection::RTL => "rtl",
+            TextDirection::LTR => "ltr",
+        };
+
+        let mut result = format!("<ul dir=\"{}\">", direction_attr);
+        for item in items {
+            result.push_str(&format!("<li>{}</li>", item));
+        }
+        result.push_str("</ul>");
+        result
+    }
+
+    /// Mixes LTR and RTL text properly (e.g., for citations in Arabic documents).
+    pub fn mix_bidirectional(&self, rtl_text: &str, ltr_text: &str) -> String {
+        match self.direction {
+            TextDirection::RTL => {
+                // RTL context: RTL text + LTR embedded text
+                format!("{} \u{202A}{}\u{202C}", rtl_text, ltr_text)
+            }
+            TextDirection::LTR => {
+                // LTR context: LTR text + RTL embedded text
+                format!("{} \u{202B}{}\u{202C}", ltr_text, rtl_text)
+            }
+        }
+    }
+
+    /// Formats a number for RTL context (e.g., Arabic numerals vs Eastern Arabic numerals).
+    pub fn format_number(&self, number: i64) -> String {
+        match self.locale.language.as_str() {
+            "ar" => {
+                // Convert to Eastern Arabic numerals (٠١٢٣٤٥٦٧٨٩)
+                let western = number.to_string();
+                western
+                    .chars()
+                    .map(|c| match c {
+                        '0' => '٠',
+                        '1' => '١',
+                        '2' => '٢',
+                        '3' => '٣',
+                        '4' => '٤',
+                        '5' => '٥',
+                        '6' => '٦',
+                        '7' => '٧',
+                        '8' => '٨',
+                        '9' => '٩',
+                        _ => c,
+                    })
+                    .collect()
+            }
+            "fa" => {
+                // Convert to Persian numerals (۰۱۲۳۴۵۶۷۸۹)
+                let western = number.to_string();
+                western
+                    .chars()
+                    .map(|c| match c {
+                        '0' => '۰',
+                        '1' => '۱',
+                        '2' => '۲',
+                        '3' => '۳',
+                        '4' => '۴',
+                        '5' => '۵',
+                        '6' => '۶',
+                        '7' => '۷',
+                        '8' => '۸',
+                        '9' => '۹',
+                        _ => c,
+                    })
+                    .collect()
+            }
+            _ => number.to_string(), // Western Arabic numerals
+        }
+    }
+
+    /// Formats a date for RTL context.
+    pub fn format_date_rtl(&self, year: i32, month: u32, day: u32) -> String {
+        match self.locale.language.as_str() {
+            "ar" => {
+                // Arabic date format: day/month/year with Eastern Arabic numerals
+                let day_str = self.format_number(day as i64);
+                let month_str = self.format_number(month as i64);
+                let year_str = self.format_number(year as i64);
+                format!("{}/{}/{}", day_str, month_str, year_str)
+            }
+            "he" => {
+                // Hebrew date format: day.month.year
+                format!("{}.{}.{}", day, month, year)
+            }
+            _ => format!("{}-{:02}-{:02}", year, month, day),
+        }
+    }
+}
+
+/// Name order convention for different cultures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NameOrder {
+    /// Given name first, family name last (Western style)
+    GivenFirst,
+    /// Family name first, given name last (East Asian style)
+    FamilyFirst,
+}
+
+/// Personal name components for legal documents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonName {
+    /// Given name (first name in Western cultures)
+    pub given_name: String,
+    /// Family name (last name in Western cultures, first in East Asian)
+    pub family_name: String,
+    /// Middle name(s) if applicable
+    pub middle_name: Option<String>,
+    /// Honorific prefix (Mr., Dr., etc.)
+    pub prefix: Option<String>,
+    /// Suffix (Jr., Sr., III, etc.)
+    pub suffix: Option<String>,
+    /// Patronymic or matronymic (e.g., Russian, Arabic)
+    pub patronymic: Option<String>,
+}
+
+impl PersonName {
+    /// Creates a new person name with given and family names.
+    pub fn new(given_name: impl Into<String>, family_name: impl Into<String>) -> Self {
+        Self {
+            given_name: given_name.into(),
+            family_name: family_name.into(),
+            middle_name: None,
+            prefix: None,
+            suffix: None,
+            patronymic: None,
+        }
+    }
+
+    /// Sets the middle name.
+    pub fn with_middle_name(mut self, middle_name: impl Into<String>) -> Self {
+        self.middle_name = Some(middle_name.into());
+        self
+    }
+
+    /// Sets the prefix.
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = Some(prefix.into());
+        self
+    }
+
+    /// Sets the suffix.
+    pub fn with_suffix(mut self, suffix: impl Into<String>) -> Self {
+        self.suffix = Some(suffix.into());
+        self
+    }
+
+    /// Sets the patronymic.
+    pub fn with_patronymic(mut self, patronymic: impl Into<String>) -> Self {
+        self.patronymic = Some(patronymic.into());
+        self
+    }
+}
+
+/// Name formatter for legal documents following cultural conventions.
+#[derive(Debug, Clone)]
+pub struct NameFormatter {
+    locale: Locale,
+    order: NameOrder,
+}
+
+impl NameFormatter {
+    /// Creates a new name formatter for a locale.
+    pub fn new(locale: Locale) -> Self {
+        let order = Self::detect_name_order(&locale);
+        Self { locale, order }
+    }
+
+    /// Detects the name order convention from locale.
+    pub fn detect_name_order(locale: &Locale) -> NameOrder {
+        match locale.language.as_str() {
+            "ja" | "ko" | "zh" | "vi" | "hu" => NameOrder::FamilyFirst,
+            _ => NameOrder::GivenFirst,
+        }
+    }
+
+    /// Formats a full name according to cultural conventions.
+    pub fn format_full_name(&self, name: &PersonName) -> String {
+        match self.locale.language.as_str() {
+            "ja" => self.format_japanese(name),
+            "ko" => self.format_korean(name),
+            "zh" => self.format_chinese(name),
+            "ar" => self.format_arabic(name),
+            "ru" => self.format_russian(name),
+            _ => self.format_western(name),
+        }
+    }
+
+    /// Formats a name in Western style (Given Middle Family).
+    fn format_western(&self, name: &PersonName) -> String {
+        let mut parts = Vec::new();
+
+        if let Some(prefix) = &name.prefix {
+            parts.push(prefix.clone());
+        }
+
+        parts.push(name.given_name.clone());
+
+        if let Some(middle) = &name.middle_name {
+            parts.push(middle.clone());
+        }
+
+        parts.push(name.family_name.clone());
+
+        if let Some(suffix) = &name.suffix {
+            parts.push(suffix.clone());
+        }
+
+        parts.join(" ")
+    }
+
+    /// Formats a name in Japanese style (Family Given).
+    fn format_japanese(&self, name: &PersonName) -> String {
+        let mut parts = Vec::new();
+
+        if let Some(prefix) = &name.prefix {
+            parts.push(prefix.clone());
+        }
+
+        // Family name first
+        parts.push(name.family_name.clone());
+
+        // Space or no space depending on context (legal docs usually use space)
+        parts.push(name.given_name.clone());
+
+        parts.join(" ")
+    }
+
+    /// Formats a name in Korean style (Family Given).
+    fn format_korean(&self, name: &PersonName) -> String {
+        // Korean names typically don't have spaces between family and given
+        format!("{}{}", name.family_name, name.given_name)
+    }
+
+    /// Formats a name in Chinese style (Family Given).
+    fn format_chinese(&self, name: &PersonName) -> String {
+        match self.locale.country.as_deref() {
+            Some("CN") | Some("SG") => {
+                // Mainland China/Singapore: no space
+                format!("{}{}", name.family_name, name.given_name)
+            }
+            Some("TW") | Some("HK") => {
+                // Taiwan/Hong Kong: sometimes with space
+                format!("{} {}", name.family_name, name.given_name)
+            }
+            _ => format!("{}{}", name.family_name, name.given_name),
+        }
+    }
+
+    /// Formats a name in Arabic style (with patronymic).
+    fn format_arabic(&self, name: &PersonName) -> String {
+        let mut parts = Vec::new();
+
+        parts.push(name.given_name.clone());
+
+        if let Some(patronymic) = &name.patronymic {
+            parts.push(patronymic.clone());
+        }
+
+        parts.push(name.family_name.clone());
+
+        parts.join(" ")
+    }
+
+    /// Formats a name in Russian style (with patronymic).
+    fn format_russian(&self, name: &PersonName) -> String {
+        let mut parts = Vec::new();
+
+        parts.push(name.family_name.clone());
+        parts.push(name.given_name.clone());
+
+        if let Some(patronymic) = &name.patronymic {
+            parts.push(patronymic.clone());
+        }
+
+        parts.join(" ")
+    }
+
+    /// Formats a name for legal citations (typically Family, Given Middle).
+    pub fn format_citation(&self, name: &PersonName) -> String {
+        let mut result = name.family_name.clone();
+        result.push_str(", ");
+        result.push_str(&name.given_name);
+
+        if let Some(middle) = &name.middle_name {
+            result.push(' ');
+            result.push_str(middle);
+        }
+
+        result
+    }
+
+    /// Formats initials (e.g., J. K. for John Kevin).
+    pub fn format_initials(&self, name: &PersonName) -> String {
+        let given_initial = name.given_name.chars().next().unwrap_or('X');
+        let family_initial = name.family_name.chars().next().unwrap_or('X');
+
+        match self.order {
+            NameOrder::GivenFirst => {
+                if let Some(middle) = &name.middle_name {
+                    let middle_initial = middle.chars().next().unwrap_or('X');
+                    format!("{}. {}. {}.", given_initial, middle_initial, family_initial)
+                } else {
+                    format!("{}. {}.", given_initial, family_initial)
+                }
+            }
+            NameOrder::FamilyFirst => {
+                format!("{}. {}.", family_initial, given_initial)
+            }
+        }
+    }
+
+    /// Formats a formal name with all components.
+    pub fn format_formal(&self, name: &PersonName) -> String {
+        let full_name = self.format_full_name(name);
+
+        if let Some(prefix) = &name.prefix {
+            format!("{} {}", prefix, full_name)
+        } else {
+            full_name
+        }
+    }
+}
+
+/// Address components for legal documents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Address {
+    /// Street address line 1
+    pub street1: String,
+    /// Street address line 2 (optional)
+    pub street2: Option<String>,
+    /// City/municipality
+    pub city: String,
+    /// State/province/prefecture
+    pub state: Option<String>,
+    /// Postal/ZIP code
+    pub postal_code: String,
+    /// Country
+    pub country: String,
+    /// Building/apartment number (for some Asian countries)
+    pub building: Option<String>,
+}
+
+impl Address {
+    /// Creates a new address.
+    pub fn new(
+        street1: impl Into<String>,
+        city: impl Into<String>,
+        postal_code: impl Into<String>,
+        country: impl Into<String>,
+    ) -> Self {
+        Self {
+            street1: street1.into(),
+            street2: None,
+            city: city.into(),
+            state: None,
+            postal_code: postal_code.into(),
+            country: country.into(),
+            building: None,
+        }
+    }
+
+    /// Sets the second street line.
+    pub fn with_street2(mut self, street2: impl Into<String>) -> Self {
+        self.street2 = Some(street2.into());
+        self
+    }
+
+    /// Sets the state/province.
+    pub fn with_state(mut self, state: impl Into<String>) -> Self {
+        self.state = Some(state.into());
+        self
+    }
+
+    /// Sets the building number.
+    pub fn with_building(mut self, building: impl Into<String>) -> Self {
+        self.building = Some(building.into());
+        self
+    }
+}
+
+/// Address formatter for legal documents per jurisdiction.
+#[derive(Debug, Clone)]
+pub struct AddressFormatter {
+    locale: Locale,
+}
+
+impl AddressFormatter {
+    /// Creates a new address formatter.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Formats an address according to jurisdiction conventions.
+    pub fn format(&self, address: &Address) -> String {
+        match self.locale.country.as_deref() {
+            Some("US") => self.format_us(address),
+            Some("GB") => self.format_uk(address),
+            Some("JP") => self.format_japan(address),
+            Some("DE") | Some("FR") | Some("IT") | Some("ES") => self.format_european(address),
+            Some("CN") => self.format_china(address),
+            Some("KR") => self.format_korea(address),
+            _ => self.format_default(address),
+        }
+    }
+
+    /// Formats a US address.
+    fn format_us(&self, addr: &Address) -> String {
+        let mut lines = vec![addr.street1.clone()];
+
+        if let Some(street2) = &addr.street2 {
+            lines.push(street2.clone());
+        }
+
+        let city_line = if let Some(state) = &addr.state {
+            format!("{}, {} {}", addr.city, state, addr.postal_code)
+        } else {
+            format!("{} {}", addr.city, addr.postal_code)
+        };
+        lines.push(city_line);
+        lines.push(addr.country.clone());
+
+        lines.join("\n")
+    }
+
+    /// Formats a UK address.
+    fn format_uk(&self, addr: &Address) -> String {
+        let mut lines = vec![addr.street1.clone()];
+
+        if let Some(street2) = &addr.street2 {
+            lines.push(street2.clone());
+        }
+
+        lines.push(addr.city.clone());
+
+        if let Some(state) = &addr.state {
+            lines.push(state.clone());
+        }
+
+        lines.push(addr.postal_code.clone());
+        lines.push(addr.country.clone());
+
+        lines.join("\n")
+    }
+
+    /// Formats a Japanese address (reverse order: country → postal → prefecture → city → street).
+    fn format_japan(&self, addr: &Address) -> String {
+        let mut result = String::new();
+
+        result.push('〒');
+        result.push_str(&addr.postal_code);
+        result.push('\n');
+
+        if let Some(state) = &addr.state {
+            result.push_str(state);
+        }
+
+        result.push_str(&addr.city);
+        result.push_str(&addr.street1);
+
+        if let Some(building) = &addr.building {
+            result.push(' ');
+            result.push_str(building);
+        }
+
+        result
+    }
+
+    /// Formats a European address.
+    fn format_european(&self, addr: &Address) -> String {
+        let mut lines = vec![addr.street1.clone()];
+
+        if let Some(street2) = &addr.street2 {
+            lines.push(street2.clone());
+        }
+
+        lines.push(format!("{} {}", addr.postal_code, addr.city));
+
+        if let Some(state) = &addr.state {
+            lines.push(state.clone());
+        }
+
+        lines.push(addr.country.clone());
+
+        lines.join("\n")
+    }
+
+    /// Formats a Chinese address (reverse order like Japanese).
+    fn format_china(&self, addr: &Address) -> String {
+        let mut result = String::new();
+
+        result.push_str(&addr.country);
+        result.push(' ');
+
+        if let Some(state) = &addr.state {
+            result.push_str(state);
+        }
+
+        result.push_str(&addr.city);
+        result.push_str(&addr.street1);
+
+        if let Some(building) = &addr.building {
+            result.push(' ');
+            result.push_str(building);
+        }
+
+        result.push(' ');
+        result.push_str(&addr.postal_code);
+
+        result
+    }
+
+    /// Formats a Korean address.
+    fn format_korea(&self, addr: &Address) -> String {
+        // Similar to Japanese: reverse order
+        let mut result = String::new();
+
+        if let Some(state) = &addr.state {
+            result.push_str(state);
+            result.push(' ');
+        }
+
+        result.push_str(&addr.city);
+        result.push(' ');
+        result.push_str(&addr.street1);
+
+        if let Some(building) = &addr.building {
+            result.push(' ');
+            result.push_str(building);
+        }
+
+        result.push_str(" (");
+        result.push_str(&addr.postal_code);
+        result.push(')');
+
+        result
+    }
+
+    /// Formats a default international address.
+    fn format_default(&self, addr: &Address) -> String {
+        let mut lines = vec![addr.street1.clone()];
+
+        if let Some(street2) = &addr.street2 {
+            lines.push(street2.clone());
+        }
+
+        let city_line = if let Some(state) = &addr.state {
+            format!("{}, {}", addr.city, state)
+        } else {
+            addr.city.clone()
+        };
+        lines.push(city_line);
+        lines.push(addr.postal_code.clone());
+        lines.push(addr.country.clone());
+
+        lines.join("\n")
+    }
+
+    /// Formats a single-line address (for forms).
+    pub fn format_single_line(&self, address: &Address) -> String {
+        self.format(address).replace('\n', ", ")
+    }
+}
+
 /// Currency formatter for monetary values.
 #[derive(Debug, Clone)]
 pub struct CurrencyFormatter {
@@ -5407,5 +6852,504 @@ mod tests {
         assert!(locales.iter().any(|l| l.tag() == "en-US"));
         assert!(locales.iter().any(|l| l.tag() == "ja-JP"));
         assert!(locales.iter().any(|l| l.tag() == "zh-Hans-CN"));
+    }
+
+    #[test]
+    fn test_timezone_utc_to_local() {
+        let jst = TimeZone::new("Asia/Tokyo", 540, "Japan Standard Time (JST)", false);
+
+        // 00:00 UTC -> 09:00 JST
+        let (y, m, d, h, min) = jst.utc_to_local(2024, 1, 1, 0, 0);
+        assert_eq!((y, m, d, h, min), (2024, 1, 1, 9, 0));
+
+        // 23:00 UTC -> 08:00 JST next day
+        let (y, m, d, h, min) = jst.utc_to_local(2024, 1, 1, 23, 0);
+        assert_eq!((y, m, d, h, min), (2024, 1, 2, 8, 0));
+    }
+
+    #[test]
+    fn test_timezone_local_to_utc() {
+        let est = TimeZone::new(
+            "America/New_York",
+            -300,
+            "Eastern Standard Time (EST)",
+            true,
+        );
+
+        // 09:00 EST -> 14:00 UTC
+        let (y, m, d, h, min) = est.local_to_utc(2024, 1, 1, 9, 0);
+        assert_eq!((y, m, d, h, min), (2024, 1, 1, 14, 0));
+
+        // 02:00 EST -> 07:00 UTC
+        let (y, m, d, h, min) = est.local_to_utc(2024, 1, 1, 2, 0);
+        assert_eq!((y, m, d, h, min), (2024, 1, 1, 7, 0));
+    }
+
+    #[test]
+    fn test_timezone_format_offset() {
+        let jst = TimeZone::new("Asia/Tokyo", 540, "Japan Standard Time (JST)", false);
+        assert_eq!(jst.format_offset(), "+09:00");
+
+        let est = TimeZone::new(
+            "America/New_York",
+            -300,
+            "Eastern Standard Time (EST)",
+            true,
+        );
+        assert_eq!(est.format_offset(), "-05:00");
+
+        let utc = TimeZone::new("UTC", 0, "Coordinated Universal Time (UTC)", false);
+        assert_eq!(utc.format_offset(), "+00:00");
+    }
+
+    #[test]
+    fn test_timezone_registry() {
+        let registry = TimeZoneRegistry::with_defaults();
+
+        // Check some major legal centers
+        assert!(registry.get_zone("Asia/Tokyo").is_some());
+        assert!(registry.get_zone("America/New_York").is_some());
+        assert!(registry.get_zone("Europe/London").is_some());
+        assert!(registry.get_zone("UTC").is_some());
+
+        let jp_tz = registry.zone_for_jurisdiction("JP").unwrap();
+        assert_eq!(jp_tz.identifier, "Asia/Tokyo");
+
+        let us_tz = registry.zone_for_jurisdiction("US").unwrap();
+        assert_eq!(us_tz.identifier, "America/New_York");
+    }
+
+    #[test]
+    fn test_deadline_calculator_basic() {
+        let jp_config = WorkingDaysConfig::japan();
+        let calculator = DeadlineCalculator::new(jp_config);
+
+        // Add 5 business days from Monday, Jan 1, 2024
+        let (y, m, d) = calculator.calculate_deadline(2024, 1, 1, 5);
+        assert_eq!((y, m, d), (2024, 1, 8)); // Should skip weekend
+    }
+
+    #[test]
+    fn test_deadline_calculator_with_time() {
+        let us_config = WorkingDaysConfig::united_states();
+        let calculator = DeadlineCalculator::new(us_config);
+
+        // Add 3 business days with time
+        let (y, m, d, h, min) = calculator.calculate_deadline_with_time(2024, 1, 1, 9, 30, 3);
+        assert_eq!(h, 9);
+        assert_eq!(min, 30);
+    }
+
+    #[test]
+    fn test_deadline_calculator_timezone_conversion() {
+        let jp_config = WorkingDaysConfig::japan();
+        let calculator = DeadlineCalculator::new(jp_config);
+
+        let jst = TimeZone::new("Asia/Tokyo", 540, "Japan Standard Time (JST)", false);
+        let est = TimeZone::new(
+            "America/New_York",
+            -300,
+            "Eastern Standard Time (EST)",
+            true,
+        );
+
+        // Convert 09:00 JST to EST
+        let (y, m, d, h, min) = calculator.convert_timezone(2024, 1, 1, 9, 0, &jst, &est);
+        assert_eq!((y, m, d, h, min), (2023, 12, 31, 19, 0)); // Previous day
+    }
+
+    #[test]
+    fn test_deadline_calculator_is_deadline_passed() {
+        let jp_config = WorkingDaysConfig::japan();
+        let calculator = DeadlineCalculator::new(jp_config);
+
+        // Deadline in the past
+        assert!(calculator.is_deadline_passed(2023, 12, 31, 2024, 1, 1));
+
+        // Deadline in the future
+        assert!(!calculator.is_deadline_passed(2024, 1, 2, 2024, 1, 1));
+
+        // Same date
+        assert!(!calculator.is_deadline_passed(2024, 1, 1, 2024, 1, 1));
+    }
+
+    #[test]
+    fn test_citation_bluebook_case() {
+        let formatter = CitationFormatter::new(
+            CitationStyle::Bluebook,
+            Locale::new("en").with_country("US"),
+        );
+
+        let citation = CitationComponents::new("Brown v. Board of Education")
+            .with_volume("347")
+            .with_reporter("U.S.")
+            .with_page("483")
+            .with_year(1954);
+
+        let formatted = formatter.format_case(&citation);
+        assert!(formatted.contains("Brown v. Board of Education"));
+        assert!(formatted.contains("347 U.S. 483"));
+        assert!(formatted.contains("1954"));
+    }
+
+    #[test]
+    fn test_citation_oscola_case() {
+        let formatter =
+            CitationFormatter::new(CitationStyle::OSCOLA, Locale::new("en").with_country("GB"));
+
+        let citation = CitationComponents::new("Donoghue v Stevenson")
+            .with_volume("1932")
+            .with_reporter("AC")
+            .with_page("562")
+            .with_year(1932);
+
+        let formatted = formatter.format_case(&citation);
+        assert!(formatted.contains("Donoghue v Stevenson"));
+        assert!(formatted.contains("[1932]"));
+        assert!(formatted.contains("1932 AC"));
+    }
+
+    #[test]
+    fn test_citation_bluebook_statute() {
+        let formatter = CitationFormatter::new(
+            CitationStyle::Bluebook,
+            Locale::new("en").with_country("US"),
+        );
+
+        let citation = CitationComponents::new("Civil Rights Act")
+            .with_reporter("U.S.C.")
+            .with_page("2000a")
+            .with_year(1964);
+
+        let formatted = formatter.format_statute(&citation);
+        assert!(formatted.contains("Civil Rights Act"));
+        assert!(formatted.contains("U.S.C."));
+        assert!(formatted.contains("§ 2000a"));
+        assert!(formatted.contains("(1964)"));
+    }
+
+    #[test]
+    fn test_citation_japanese() {
+        let formatter = CitationFormatter::new(
+            CitationStyle::Japanese,
+            Locale::new("ja").with_country("JP"),
+        );
+
+        let citation = CitationComponents::new("最高裁判所判決")
+            .with_court("最高裁")
+            .with_volume("123")
+            .with_page("45")
+            .with_year(2020);
+
+        let formatted = formatter.format_case(&citation);
+        assert!(formatted.contains("最高裁判所判決"));
+        assert!(formatted.contains("最高裁"));
+        assert!(formatted.contains("2020"));
+        assert!(formatted.contains("123号"));
+        assert!(formatted.contains("45頁"));
+    }
+
+    #[test]
+    fn test_citation_style_for_jurisdiction() {
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("US"),
+            CitationStyle::Bluebook
+        );
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("GB"),
+            CitationStyle::OSCOLA
+        );
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("AU"),
+            CitationStyle::AGLC
+        );
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("CA"),
+            CitationStyle::McGill
+        );
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("JP"),
+            CitationStyle::Japanese
+        );
+        assert_eq!(
+            CitationFormatter::style_for_jurisdiction("DE"),
+            CitationStyle::European
+        );
+    }
+
+    #[test]
+    fn test_text_direction_detection() {
+        let arabic = Locale::new("ar");
+        assert_eq!(
+            BidirectionalText::detect_direction(&arabic),
+            TextDirection::RTL
+        );
+
+        let hebrew = Locale::new("he");
+        assert_eq!(
+            BidirectionalText::detect_direction(&hebrew),
+            TextDirection::RTL
+        );
+
+        let english = Locale::new("en");
+        assert_eq!(
+            BidirectionalText::detect_direction(&english),
+            TextDirection::LTR
+        );
+
+        let persian = Locale::new("fa");
+        assert_eq!(
+            BidirectionalText::detect_direction(&persian),
+            TextDirection::RTL
+        );
+    }
+
+    #[test]
+    fn test_bidirectional_text_rtl() {
+        let arabic_locale = Locale::new("ar");
+        let bidi = BidirectionalText::new(arabic_locale);
+
+        assert!(bidi.is_rtl());
+        assert_eq!(bidi.direction(), TextDirection::RTL);
+    }
+
+    #[test]
+    fn test_bidirectional_text_ltr() {
+        let english_locale = Locale::new("en");
+        let bidi = BidirectionalText::new(english_locale);
+
+        assert!(!bidi.is_rtl());
+        assert_eq!(bidi.direction(), TextDirection::LTR);
+    }
+
+    #[test]
+    fn test_direction_markers() {
+        let arabic_locale = Locale::new("ar");
+        let bidi = BidirectionalText::new(arabic_locale);
+
+        let wrapped = bidi.wrap_with_direction_markers("نص عربي");
+        assert!(wrapped.contains('\u{202B}')); // RLE
+        assert!(wrapped.contains('\u{202C}')); // PDF
+    }
+
+    #[test]
+    fn test_arabic_numerals() {
+        let arabic_locale = Locale::new("ar");
+        let bidi = BidirectionalText::new(arabic_locale);
+
+        let formatted = bidi.format_number(123);
+        assert_eq!(formatted, "١٢٣");
+
+        let formatted_year = bidi.format_number(2024);
+        assert_eq!(formatted_year, "٢٠٢٤");
+    }
+
+    #[test]
+    fn test_persian_numerals() {
+        let persian_locale = Locale::new("fa");
+        let bidi = BidirectionalText::new(persian_locale);
+
+        let formatted = bidi.format_number(123);
+        assert_eq!(formatted, "۱۲۳");
+    }
+
+    #[test]
+    fn test_rtl_date_formatting() {
+        let arabic_locale = Locale::new("ar");
+        let bidi = BidirectionalText::new(arabic_locale);
+
+        let date = bidi.format_date_rtl(2024, 1, 15);
+        assert!(date.contains('١'));
+        assert!(date.contains('٥'));
+    }
+
+    #[test]
+    fn test_paragraph_formatting() {
+        let arabic_locale = Locale::new("ar");
+        let bidi = BidirectionalText::new(arabic_locale);
+
+        let paragraph = bidi.format_paragraph("هذا نص عربي");
+        assert!(paragraph.contains("dir=\"rtl\""));
+        assert!(paragraph.starts_with("<p"));
+        assert!(paragraph.ends_with("</p>"));
+    }
+
+    #[test]
+    fn test_list_formatting() {
+        let hebrew_locale = Locale::new("he");
+        let bidi = BidirectionalText::new(hebrew_locale);
+
+        let items = vec!["פריט 1".to_string(), "פריט 2".to_string()];
+        let list = bidi.format_list(&items);
+        assert!(list.contains("dir=\"rtl\""));
+        assert!(list.contains("<ul"));
+        assert!(list.contains("<li>"));
+    }
+
+    #[test]
+    fn test_name_order_detection() {
+        let japanese = Locale::new("ja");
+        assert_eq!(
+            NameFormatter::detect_name_order(&japanese),
+            NameOrder::FamilyFirst
+        );
+
+        let korean = Locale::new("ko");
+        assert_eq!(
+            NameFormatter::detect_name_order(&korean),
+            NameOrder::FamilyFirst
+        );
+
+        let english = Locale::new("en");
+        assert_eq!(
+            NameFormatter::detect_name_order(&english),
+            NameOrder::GivenFirst
+        );
+
+        let chinese = Locale::new("zh");
+        assert_eq!(
+            NameFormatter::detect_name_order(&chinese),
+            NameOrder::FamilyFirst
+        );
+    }
+
+    #[test]
+    fn test_western_name_formatting() {
+        let formatter = NameFormatter::new(Locale::new("en").with_country("US"));
+        let name = PersonName::new("John", "Smith")
+            .with_middle_name("David")
+            .with_prefix("Dr.")
+            .with_suffix("Jr.");
+
+        let formatted = formatter.format_full_name(&name);
+        assert_eq!(formatted, "Dr. John David Smith Jr.");
+    }
+
+    #[test]
+    fn test_japanese_name_formatting() {
+        let formatter = NameFormatter::new(Locale::new("ja").with_country("JP"));
+        let name = PersonName::new("太郎", "山田");
+
+        let formatted = formatter.format_full_name(&name);
+        assert_eq!(formatted, "山田 太郎"); // Family first
+    }
+
+    #[test]
+    fn test_korean_name_formatting() {
+        let formatter = NameFormatter::new(Locale::new("ko").with_country("KR"));
+        let name = PersonName::new("민수", "김");
+
+        let formatted = formatter.format_full_name(&name);
+        assert_eq!(formatted, "김민수"); // No space
+    }
+
+    #[test]
+    fn test_chinese_name_formatting() {
+        let cn_formatter = NameFormatter::new(Locale::new("zh").with_country("CN"));
+        let name = PersonName::new("伟", "李");
+
+        let formatted = cn_formatter.format_full_name(&name);
+        assert_eq!(formatted, "李伟"); // No space for mainland
+
+        let tw_formatter = NameFormatter::new(Locale::new("zh").with_country("TW"));
+        let formatted_tw = tw_formatter.format_full_name(&name);
+        assert_eq!(formatted_tw, "李 伟"); // Space for Taiwan
+    }
+
+    #[test]
+    fn test_russian_name_formatting() {
+        let formatter = NameFormatter::new(Locale::new("ru").with_country("RU"));
+        let name = PersonName::new("Иван", "Иванов").with_patronymic("Иванович");
+
+        let formatted = formatter.format_full_name(&name);
+        assert_eq!(formatted, "Иванов Иван Иванович");
+    }
+
+    #[test]
+    fn test_arabic_name_formatting() {
+        let formatter = NameFormatter::new(Locale::new("ar"));
+        let name = PersonName::new("محمد", "الأحمد").with_patronymic("بن علي");
+
+        let formatted = formatter.format_full_name(&name);
+        assert_eq!(formatted, "محمد بن علي الأحمد");
+    }
+
+    #[test]
+    fn test_name_citation_format() {
+        let formatter = NameFormatter::new(Locale::new("en").with_country("US"));
+        let name = PersonName::new("John", "Smith").with_middle_name("David");
+
+        let citation = formatter.format_citation(&name);
+        assert_eq!(citation, "Smith, John David");
+    }
+
+    #[test]
+    fn test_name_initials() {
+        let formatter = NameFormatter::new(Locale::new("en").with_country("US"));
+        let name = PersonName::new("John", "Smith").with_middle_name("David");
+
+        let initials = formatter.format_initials(&name);
+        assert_eq!(initials, "J. D. S.");
+
+        let name_no_middle = PersonName::new("John", "Smith");
+        let initials_no_middle = formatter.format_initials(&name_no_middle);
+        assert_eq!(initials_no_middle, "J. S.");
+    }
+
+    #[test]
+    fn test_us_address_formatting() {
+        let formatter = AddressFormatter::new(Locale::new("en").with_country("US"));
+        let address = Address::new("123 Main St", "New York", "10001", "USA").with_state("NY");
+
+        let formatted = formatter.format(&address);
+        assert!(formatted.contains("123 Main St"));
+        assert!(formatted.contains("New York, NY 10001"));
+        assert!(formatted.contains("USA"));
+    }
+
+    #[test]
+    fn test_uk_address_formatting() {
+        let formatter = AddressFormatter::new(Locale::new("en").with_country("GB"));
+        let address = Address::new("10 Downing Street", "London", "SW1A 2AA", "United Kingdom");
+
+        let formatted = formatter.format(&address);
+        assert!(formatted.contains("10 Downing Street"));
+        assert!(formatted.contains("London"));
+        assert!(formatted.contains("SW1A 2AA"));
+    }
+
+    #[test]
+    fn test_japanese_address_formatting() {
+        let formatter = AddressFormatter::new(Locale::new("ja").with_country("JP"));
+        let address = Address::new("1-1-1", "千代田区", "100-0001", "日本")
+            .with_state("東京都")
+            .with_building("ビル101");
+
+        let formatted = formatter.format(&address);
+        assert!(formatted.contains("〒100-0001"));
+        assert!(formatted.contains("東京都"));
+        assert!(formatted.contains("千代田区"));
+        assert!(formatted.contains("ビル101"));
+    }
+
+    #[test]
+    fn test_european_address_formatting() {
+        let formatter = AddressFormatter::new(Locale::new("de").with_country("DE"));
+        let address = Address::new("Hauptstraße 1", "Berlin", "10115", "Germany");
+
+        let formatted = formatter.format(&address);
+        assert!(formatted.contains("Hauptstraße 1"));
+        assert!(formatted.contains("10115 Berlin"));
+        assert!(formatted.contains("Germany"));
+    }
+
+    #[test]
+    fn test_address_single_line() {
+        let formatter = AddressFormatter::new(Locale::new("en").with_country("US"));
+        let address = Address::new("123 Main St", "New York", "10001", "USA").with_state("NY");
+
+        let single_line = formatter.format_single_line(&address);
+        assert!(!single_line.contains('\n'));
+        assert!(single_line.contains(", "));
     }
 }

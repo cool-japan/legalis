@@ -1104,6 +1104,8 @@ pub struct StatuteRegistry {
     archive: StatuteArchive,
     /// Retention policy for auto-archiving
     retention_policy: RetentionPolicy,
+    /// Analytics cache with TTL support
+    analytics_cache: CachedAnalytics,
 }
 
 impl std::fmt::Debug for StatuteRegistry {
@@ -1136,6 +1138,7 @@ impl Default for StatuteRegistry {
             webhook_manager: WebhookManager::new(),
             archive: StatuteArchive::new(),
             retention_policy: RetentionPolicy::new(),
+            analytics_cache: CachedAnalytics::new(300), // 5 minute default cache
         }
     }
 }
@@ -1472,6 +1475,26 @@ impl StatuteRegistry {
     /// Gets multiple statutes by their IDs.
     pub fn get_many(&mut self, statute_ids: &[&str]) -> Vec<Option<StatuteEntry>> {
         statute_ids.iter().map(|id| self.get(id)).collect()
+    }
+
+    /// Returns an iterator over all statutes (memory-efficient).
+    ///
+    /// This is more efficient than `all_statute_ids()` for large registries
+    /// as it doesn't allocate a vector.
+    pub fn iter(&self) -> impl Iterator<Item = &StatuteEntry> {
+        self.statutes.values()
+    }
+
+    /// Returns an iterator over active statutes only.
+    pub fn iter_active(&self) -> impl Iterator<Item = &StatuteEntry> {
+        self.statutes
+            .values()
+            .filter(|entry| entry.status == StatuteStatus::Active)
+    }
+
+    /// Returns an iterator over (statute_id, entry) pairs.
+    pub fn iter_with_ids(&self) -> impl Iterator<Item = (&String, &StatuteEntry)> {
+        self.statutes.iter()
     }
 
     /// Gets the latest version number for a statute.
@@ -2604,6 +2627,563 @@ impl StatuteRegistry {
 
         Ok(())
     }
+
+    // =========================================================================
+    // Advanced Analytics Methods
+    // =========================================================================
+
+    /// Computes temporal analytics for the registry.
+    ///
+    /// Analyzes registration patterns, update frequency, and version velocity.
+    /// Results are cached for performance.
+    pub fn temporal_analytics(&mut self) -> TemporalAnalytics {
+        // Check cache first
+        if let Some(cached) = self.analytics_cache.get_temporal() {
+            return cached.clone();
+        }
+
+        // Compute analytics
+        let analytics = self.compute_temporal_analytics();
+
+        // Store in cache
+        self.analytics_cache.set_temporal(analytics.clone());
+
+        analytics
+    }
+
+    /// Computes temporal analytics without using cache.
+    fn compute_temporal_analytics(&self) -> TemporalAnalytics {
+        let mut registrations_per_day: HashMap<String, usize> = HashMap::new();
+        let mut updates_per_day: HashMap<String, usize> = HashMap::new();
+        let mut version_counts: HashMap<String, usize> = HashMap::new();
+
+        // Count registrations per day (from created_at timestamps)
+        for entry in self.statutes.values() {
+            let date = entry.created_at.format("%Y-%m-%d").to_string();
+            *registrations_per_day.entry(date).or_insert(0) += 1;
+        }
+
+        // Count updates per day (from modified_at timestamps)
+        for entry in self.statutes.values() {
+            if entry.modified_at != entry.created_at {
+                let date = entry.modified_at.format("%Y-%m-%d").to_string();
+                *updates_per_day.entry(date).or_insert(0) += 1;
+            }
+        }
+
+        // Count versions per statute
+        for (statute_id, versions) in &self.versions {
+            version_counts.insert(statute_id.clone(), versions.len());
+        }
+
+        // Calculate average versions per statute
+        let avg_versions = if self.statutes.is_empty() {
+            0.0
+        } else {
+            version_counts.values().sum::<usize>() as f64 / self.statutes.len() as f64
+        };
+
+        // Find most versioned statutes (top 10)
+        let mut most_versioned: Vec<(String, usize)> = version_counts.into_iter().collect();
+        most_versioned.sort_by(|a, b| b.1.cmp(&a.1));
+        most_versioned.truncate(10);
+
+        // Calculate growth rate (average statutes per day)
+        let days_count = registrations_per_day.len().max(1);
+        let growth_rate = self.statutes.len() as f64 / days_count as f64;
+
+        // Find peak activity date
+        let peak_activity_date = registrations_per_day
+            .iter()
+            .max_by_key(|&(_, count)| count)
+            .map(|(date, count)| (date.clone(), *count));
+
+        TemporalAnalytics {
+            registrations_per_day,
+            updates_per_day,
+            avg_versions_per_statute: avg_versions,
+            most_versioned_statutes: most_versioned,
+            growth_rate,
+            peak_activity_date,
+        }
+    }
+
+    /// Computes relationship analytics for the registry.
+    ///
+    /// Analyzes statute dependencies, references, and supersession chains.
+    /// Results are cached for performance.
+    pub fn relationship_analytics(&mut self) -> RelationshipAnalytics {
+        // Check cache first
+        if let Some(cached) = self.analytics_cache.get_relationship() {
+            return cached.clone();
+        }
+
+        // Compute analytics
+        let analytics = self.compute_relationship_analytics();
+
+        // Store in cache
+        self.analytics_cache.set_relationship(analytics.clone());
+
+        analytics
+    }
+
+    /// Computes relationship analytics without using cache.
+    fn compute_relationship_analytics(&self) -> RelationshipAnalytics {
+        let mut reference_counts: HashMap<String, usize> = HashMap::new();
+        let mut dependency_counts: HashMap<String, usize> = HashMap::new();
+        let mut supersession_chains: HashMap<String, Vec<String>> = HashMap::new();
+        let mut has_relationships: HashSet<String> = HashSet::new();
+
+        // Count references to each statute
+        for entry in self.statutes.values() {
+            for reference in &entry.references {
+                *reference_counts.entry(reference.clone()).or_insert(0) += 1;
+                has_relationships.insert(entry.statute.id.clone());
+                has_relationships.insert(reference.clone());
+            }
+            dependency_counts.insert(entry.statute.id.clone(), entry.references.len());
+        }
+
+        // Build supersession chains
+        for entry in self.statutes.values() {
+            if !entry.supersedes.is_empty() {
+                let mut chain = Vec::new();
+                let mut current_ids = entry.supersedes.clone();
+                let mut visited = HashSet::new();
+
+                while let Some(id) = current_ids.pop() {
+                    if visited.contains(&id) {
+                        continue;
+                    }
+                    visited.insert(id.clone());
+                    chain.push(id.clone());
+
+                    // Look for what this statute supersedes
+                    if let Some(e) = self.statutes.get(&id) {
+                        for superseded_id in &e.supersedes {
+                            if !visited.contains(superseded_id) {
+                                current_ids.push(superseded_id.clone());
+                            }
+                        }
+                    }
+                }
+
+                if !chain.is_empty() {
+                    supersession_chains.insert(entry.statute.id.clone(), chain);
+                }
+            }
+        }
+
+        // Find most referenced statutes (top 10)
+        let mut most_referenced: Vec<(String, usize)> = reference_counts.into_iter().collect();
+        most_referenced.sort_by(|a, b| b.1.cmp(&a.1));
+        most_referenced.truncate(10);
+
+        // Find statutes with most dependencies (top 10)
+        let mut most_dependencies: Vec<(String, usize)> = dependency_counts.into_iter().collect();
+        most_dependencies.sort_by(|a, b| b.1.cmp(&a.1));
+        most_dependencies.truncate(10);
+
+        // Find orphaned statutes (no references to or from)
+        let orphaned_statutes: Vec<String> = self
+            .statutes
+            .keys()
+            .filter(|id| !has_relationships.contains(*id))
+            .cloned()
+            .collect();
+
+        // Calculate average references per statute
+        let total_refs: usize = self.statutes.values().map(|e| e.references.len()).sum();
+        let avg_references = if self.statutes.is_empty() {
+            0.0
+        } else {
+            total_refs as f64 / self.statutes.len() as f64
+        };
+
+        RelationshipAnalytics {
+            most_referenced,
+            most_dependencies,
+            supersession_chains,
+            orphaned_statutes,
+            avg_references_per_statute: avg_references,
+        }
+    }
+
+    /// Computes tag analytics for the registry.
+    ///
+    /// Analyzes tag usage patterns and co-occurrence.
+    /// Results are cached for performance.
+    pub fn tag_analytics(&mut self) -> TagAnalytics {
+        // Check cache first
+        if let Some(cached) = self.analytics_cache.get_tag() {
+            return cached.clone();
+        }
+
+        // Compute analytics
+        let analytics = self.compute_tag_analytics();
+
+        // Store in cache
+        self.analytics_cache.set_tag(analytics.clone());
+
+        analytics
+    }
+
+    /// Computes tag analytics without using cache.
+    fn compute_tag_analytics(&self) -> TagAnalytics {
+        let mut tag_frequency: HashMap<String, usize> = HashMap::new();
+        let mut tag_cooccurrence: HashMap<String, HashMap<String, usize>> = HashMap::new();
+
+        // Count tag frequency and co-occurrence
+        for entry in self.statutes.values() {
+            // Tag frequency
+            for tag in &entry.tags {
+                *tag_frequency.entry(tag.clone()).or_insert(0) += 1;
+            }
+
+            // Tag co-occurrence
+            for (i, tag1) in entry.tags.iter().enumerate() {
+                for tag2 in entry.tags.iter().skip(i + 1) {
+                    *tag_cooccurrence
+                        .entry(tag1.clone())
+                        .or_default()
+                        .entry(tag2.clone())
+                        .or_insert(0) += 1;
+                    *tag_cooccurrence
+                        .entry(tag2.clone())
+                        .or_default()
+                        .entry(tag1.clone())
+                        .or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Find most used tags (top 10)
+        let mut most_used_tags: Vec<(String, usize)> =
+            tag_frequency.iter().map(|(t, &c)| (t.clone(), c)).collect();
+        most_used_tags.sort_by(|a, b| b.1.cmp(&a.1));
+        let top_most_used = most_used_tags.iter().take(10).cloned().collect();
+
+        // Find least used tags (bottom 10)
+        most_used_tags.sort_by(|a, b| a.1.cmp(&b.1));
+        let least_used_tags = most_used_tags.iter().take(10).cloned().collect();
+
+        // Calculate average tags per statute
+        let total_tags: usize = self.statutes.values().map(|e| e.tags.len()).sum();
+        let avg_tags = if self.statutes.is_empty() {
+            0.0
+        } else {
+            total_tags as f64 / self.statutes.len() as f64
+        };
+
+        TagAnalytics {
+            tag_frequency,
+            tag_cooccurrence,
+            most_used_tags: top_most_used,
+            least_used_tags,
+            avg_tags_per_statute: avg_tags,
+        }
+    }
+
+    /// Computes activity analytics for the registry.
+    ///
+    /// Analyzes modification patterns and status changes.
+    /// Results are cached for performance.
+    pub fn activity_analytics(&mut self) -> ActivityAnalytics {
+        // Check cache first
+        if let Some(cached) = self.analytics_cache.get_activity() {
+            return cached.clone();
+        }
+
+        // Compute analytics
+        let analytics = self.compute_activity_analytics();
+
+        // Store in cache
+        self.analytics_cache.set_activity(analytics.clone());
+
+        analytics
+    }
+
+    /// Computes activity analytics without using cache.
+    fn compute_activity_analytics(&self) -> ActivityAnalytics {
+        let mut modification_counts: HashMap<String, usize> = HashMap::new();
+        let mut status_change_counts: HashMap<String, usize> = HashMap::new();
+
+        // Count modifications per statute (based on version history)
+        for (statute_id, versions) in &self.versions {
+            modification_counts.insert(statute_id.clone(), versions.len());
+        }
+
+        // Count status changes from events
+        for event in self.event_store.all_events() {
+            if let RegistryEvent::StatusChanged { statute_id, .. } = event {
+                *status_change_counts.entry(statute_id.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Find most modified statutes (top 10)
+        let mut most_modified: Vec<(String, usize)> = modification_counts.into_iter().collect();
+        most_modified.sort_by(|a, b| b.1.cmp(&a.1));
+        most_modified.truncate(10);
+
+        // Find recently modified statutes (top 20 by modified_at)
+        let mut recently_modified: Vec<(String, DateTime<Utc>)> = self
+            .statutes
+            .iter()
+            .map(|(id, entry)| (id.clone(), entry.modified_at))
+            .collect();
+        recently_modified.sort_by(|a, b| b.1.cmp(&a.1));
+        recently_modified.truncate(20);
+
+        // Find least modified statutes (bottom 20 by modified_at)
+        let mut least_modified: Vec<(String, DateTime<Utc>)> = self
+            .statutes
+            .iter()
+            .map(|(id, entry)| (id.clone(), entry.modified_at))
+            .collect();
+        least_modified.sort_by(|a, b| a.1.cmp(&b.1));
+        least_modified.truncate(20);
+
+        // Find statutes with frequent status changes (top 10)
+        let mut frequent_status_changes: Vec<(String, usize)> =
+            status_change_counts.into_iter().collect();
+        frequent_status_changes.sort_by(|a, b| b.1.cmp(&a.1));
+        frequent_status_changes.truncate(10);
+
+        // Calculate average modification frequency
+        let total_modifications: usize = self.versions.values().map(|v| v.len()).sum();
+        let avg_mod_frequency = if !recently_modified.is_empty() && total_modifications > 0 {
+            // Calculate average days between modifications based on most recent statutes
+            let now = Utc::now();
+            let avg_days_since_last_mod: f64 = recently_modified
+                .iter()
+                .map(|(_, date)| (now - *date).num_days() as f64)
+                .sum::<f64>()
+                / recently_modified.len() as f64;
+            avg_days_since_last_mod
+        } else {
+            0.0
+        };
+
+        ActivityAnalytics {
+            most_modified,
+            recently_modified,
+            least_modified,
+            frequent_status_changes,
+            avg_modification_frequency_days: avg_mod_frequency,
+        }
+    }
+
+    /// Groups statutes by a specified field and returns counts.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use legalis_registry::*;
+    /// # let registry = StatuteRegistry::new();
+    /// // Group by status
+    /// let by_status = registry.aggregate_by(|entry| format!("{:?}", entry.status));
+    ///
+    /// // Group by jurisdiction
+    /// let by_jurisdiction = registry.aggregate_by(|entry| entry.jurisdiction.clone());
+    /// ```
+    pub fn aggregate_by<F>(&self, key_fn: F) -> AggregationResult
+    where
+        F: Fn(&StatuteEntry) -> String,
+    {
+        let mut counts: HashMap<String, usize> = HashMap::new();
+
+        for entry in self.statutes.values() {
+            let key = key_fn(entry);
+            *counts.entry(key).or_insert(0) += 1;
+        }
+
+        AggregationResult::new(counts)
+    }
+
+    /// Groups statutes by multiple tags and returns counts.
+    pub fn aggregate_by_tags(&self) -> AggregationResult {
+        let mut counts: HashMap<String, usize> = HashMap::new();
+
+        for entry in self.statutes.values() {
+            for tag in &entry.tags {
+                *counts.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+
+        AggregationResult::new(counts)
+    }
+
+    /// Exports temporal analytics to JSON.
+    pub fn export_temporal_analytics_json(&mut self) -> Result<String, serde_json::Error> {
+        let analytics = self.temporal_analytics();
+        serde_json::to_string_pretty(&analytics)
+    }
+
+    /// Exports relationship analytics to JSON.
+    pub fn export_relationship_analytics_json(&mut self) -> Result<String, serde_json::Error> {
+        let analytics = self.relationship_analytics();
+        serde_json::to_string_pretty(&analytics)
+    }
+
+    /// Exports tag analytics to JSON.
+    pub fn export_tag_analytics_json(&mut self) -> Result<String, serde_json::Error> {
+        let analytics = self.tag_analytics();
+        serde_json::to_string_pretty(&analytics)
+    }
+
+    /// Exports activity analytics to JSON.
+    pub fn export_activity_analytics_json(&mut self) -> Result<String, serde_json::Error> {
+        let analytics = self.activity_analytics();
+        serde_json::to_string_pretty(&analytics)
+    }
+
+    /// Exports all analytics to a combined JSON structure.
+    pub fn export_all_analytics_json(&mut self) -> Result<String, serde_json::Error> {
+        #[derive(Serialize)]
+        struct AllAnalytics {
+            temporal: TemporalAnalytics,
+            relationship: RelationshipAnalytics,
+            tag: TagAnalytics,
+            activity: ActivityAnalytics,
+            generated_at: DateTime<Utc>,
+        }
+
+        let all = AllAnalytics {
+            temporal: self.temporal_analytics(),
+            relationship: self.relationship_analytics(),
+            tag: self.tag_analytics(),
+            activity: self.activity_analytics(),
+            generated_at: Utc::now(),
+        };
+
+        serde_json::to_string_pretty(&all)
+    }
+
+    /// Exports aggregation result to CSV format (feature-gated).
+    #[cfg(feature = "csv-export")]
+    pub fn export_aggregation_csv(
+        &self,
+        result: &AggregationResult,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+
+        // Write header
+        wtr.write_record(["Key", "Count", "Percentage"])?;
+
+        // Write data sorted by count (descending)
+        for (key, count) in result.sorted_by_count() {
+            let percentage = result.percentage(&key);
+            wtr.write_record(&[key, count.to_string(), format!("{:.2}", percentage)])?;
+        }
+
+        let data = wtr.into_inner()?;
+        Ok(String::from_utf8(data)?)
+    }
+
+    /// Invalidates the analytics cache.
+    ///
+    /// Call this after operations that might affect analytics results.
+    pub fn invalidate_analytics_cache(&mut self) {
+        self.analytics_cache.clear();
+    }
+
+    /// Sets the analytics cache duration in seconds.
+    pub fn set_analytics_cache_duration(&mut self, duration_secs: i64) {
+        self.analytics_cache.cache_duration_secs = duration_secs;
+        self.analytics_cache.clear();
+    }
+}
+
+/// Cached analytics with timestamp for TTL.
+#[derive(Debug, Clone)]
+struct CachedAnalytics {
+    temporal: Option<(TemporalAnalytics, DateTime<Utc>)>,
+    relationship: Option<(RelationshipAnalytics, DateTime<Utc>)>,
+    tag: Option<(TagAnalytics, DateTime<Utc>)>,
+    activity: Option<(ActivityAnalytics, DateTime<Utc>)>,
+    cache_duration_secs: i64,
+}
+
+impl CachedAnalytics {
+    fn new(cache_duration_secs: i64) -> Self {
+        Self {
+            temporal: None,
+            relationship: None,
+            tag: None,
+            activity: None,
+            cache_duration_secs,
+        }
+    }
+
+    fn is_valid(timestamp: DateTime<Utc>, duration_secs: i64) -> bool {
+        let now = Utc::now();
+        (now - timestamp).num_seconds() < duration_secs
+    }
+
+    fn get_temporal(&self) -> Option<&TemporalAnalytics> {
+        self.temporal.as_ref().and_then(|(analytics, timestamp)| {
+            if Self::is_valid(*timestamp, self.cache_duration_secs) {
+                Some(analytics)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn set_temporal(&mut self, analytics: TemporalAnalytics) {
+        self.temporal = Some((analytics, Utc::now()));
+    }
+
+    fn get_relationship(&self) -> Option<&RelationshipAnalytics> {
+        self.relationship
+            .as_ref()
+            .and_then(|(analytics, timestamp)| {
+                if Self::is_valid(*timestamp, self.cache_duration_secs) {
+                    Some(analytics)
+                } else {
+                    None
+                }
+            })
+    }
+
+    fn set_relationship(&mut self, analytics: RelationshipAnalytics) {
+        self.relationship = Some((analytics, Utc::now()));
+    }
+
+    fn get_tag(&self) -> Option<&TagAnalytics> {
+        self.tag.as_ref().and_then(|(analytics, timestamp)| {
+            if Self::is_valid(*timestamp, self.cache_duration_secs) {
+                Some(analytics)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn set_tag(&mut self, analytics: TagAnalytics) {
+        self.tag = Some((analytics, Utc::now()));
+    }
+
+    fn get_activity(&self) -> Option<&ActivityAnalytics> {
+        self.activity.as_ref().and_then(|(analytics, timestamp)| {
+            if Self::is_valid(*timestamp, self.cache_duration_secs) {
+                Some(analytics)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn set_activity(&mut self, analytics: ActivityAnalytics) {
+        self.activity = Some((analytics, Utc::now()));
+    }
+
+    fn clear(&mut self) {
+        self.temporal = None;
+        self.relationship = None;
+        self.tag = None;
+        self.activity = None;
+    }
 }
 
 /// Multi-tenant registry manager.
@@ -3049,6 +3629,347 @@ impl DependencyGraph {
 }
 
 // =============================================================================
+// Advanced Analytics
+// =============================================================================
+
+/// Temporal analytics for tracking registry growth and changes over time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporalAnalytics {
+    /// Number of statutes registered per day (date -> count)
+    pub registrations_per_day: HashMap<String, usize>,
+    /// Number of updates per day (date -> count)
+    pub updates_per_day: HashMap<String, usize>,
+    /// Average version count per statute
+    pub avg_versions_per_statute: f64,
+    /// Statutes with highest version velocity (id, version_count)
+    pub most_versioned_statutes: Vec<(String, usize)>,
+    /// Growth rate (statutes per day) over the period
+    pub growth_rate: f64,
+    /// Peak activity date and count
+    pub peak_activity_date: Option<(String, usize)>,
+}
+
+impl TemporalAnalytics {
+    /// Creates a new temporal analytics instance with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the total number of registrations across all days.
+    pub fn total_registrations(&self) -> usize {
+        self.registrations_per_day.values().sum()
+    }
+
+    /// Returns the total number of updates across all days.
+    pub fn total_updates(&self) -> usize {
+        self.updates_per_day.values().sum()
+    }
+
+    /// Returns the total activity (registrations + updates).
+    pub fn total_activity(&self) -> usize {
+        self.total_registrations() + self.total_updates()
+    }
+}
+
+impl Default for TemporalAnalytics {
+    fn default() -> Self {
+        Self {
+            registrations_per_day: HashMap::new(),
+            updates_per_day: HashMap::new(),
+            avg_versions_per_statute: 0.0,
+            most_versioned_statutes: Vec::new(),
+            growth_rate: 0.0,
+            peak_activity_date: None,
+        }
+    }
+}
+
+/// Relationship analytics for analyzing statute dependencies and supersession chains.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelationshipAnalytics {
+    /// Most referenced statutes (id, reference_count)
+    pub most_referenced: Vec<(String, usize)>,
+    /// Statutes with most dependencies (id, dependency_count)
+    pub most_dependencies: Vec<(String, usize)>,
+    /// Supersession chains (root_id -> chain of superseded IDs)
+    pub supersession_chains: HashMap<String, Vec<String>>,
+    /// Orphaned statutes (no references to or from other statutes)
+    pub orphaned_statutes: Vec<String>,
+    /// Average references per statute
+    pub avg_references_per_statute: f64,
+}
+
+impl RelationshipAnalytics {
+    /// Creates a new relationship analytics instance with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the longest supersession chain length.
+    pub fn max_chain_length(&self) -> usize {
+        self.supersession_chains
+            .values()
+            .map(|chain| chain.len())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Returns the total number of relationships.
+    pub fn total_relationships(&self) -> usize {
+        self.most_referenced.iter().map(|(_, count)| count).sum()
+    }
+}
+
+impl Default for RelationshipAnalytics {
+    fn default() -> Self {
+        Self {
+            most_referenced: Vec::new(),
+            most_dependencies: Vec::new(),
+            supersession_chains: HashMap::new(),
+            orphaned_statutes: Vec::new(),
+            avg_references_per_statute: 0.0,
+        }
+    }
+}
+
+/// Tag analytics for analyzing tag usage patterns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagAnalytics {
+    /// Tag frequency (tag -> count)
+    pub tag_frequency: HashMap<String, usize>,
+    /// Tag co-occurrence (tag1 -> tag2 -> count)
+    pub tag_cooccurrence: HashMap<String, HashMap<String, usize>>,
+    /// Most used tags (tag, count)
+    pub most_used_tags: Vec<(String, usize)>,
+    /// Least used tags (tag, count)
+    pub least_used_tags: Vec<(String, usize)>,
+    /// Average tags per statute
+    pub avg_tags_per_statute: f64,
+}
+
+impl TagAnalytics {
+    /// Creates a new tag analytics instance with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the total number of unique tags.
+    pub fn unique_tag_count(&self) -> usize {
+        self.tag_frequency.len()
+    }
+
+    /// Returns the total tag usage across all statutes.
+    pub fn total_tag_usage(&self) -> usize {
+        self.tag_frequency.values().sum()
+    }
+
+    /// Gets tags that commonly appear together with the given tag.
+    pub fn related_tags(&self, tag: &str, min_occurrences: usize) -> Vec<(String, usize)> {
+        self.tag_cooccurrence
+            .get(tag)
+            .map(|cooccur| {
+                let mut pairs: Vec<_> = cooccur
+                    .iter()
+                    .filter(|&(_, count)| *count >= min_occurrences)
+                    .map(|(t, c)| (t.clone(), *c))
+                    .collect();
+                pairs.sort_by(|a, b| b.1.cmp(&a.1));
+                pairs
+            })
+            .unwrap_or_default()
+    }
+}
+
+impl Default for TagAnalytics {
+    fn default() -> Self {
+        Self {
+            tag_frequency: HashMap::new(),
+            tag_cooccurrence: HashMap::new(),
+            most_used_tags: Vec::new(),
+            least_used_tags: Vec::new(),
+            avg_tags_per_statute: 0.0,
+        }
+    }
+}
+
+/// Activity analytics for tracking modification patterns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActivityAnalytics {
+    /// Most modified statutes (id, modification_count)
+    pub most_modified: Vec<(String, usize)>,
+    /// Recently modified statutes (id, last_modified_date)
+    pub recently_modified: Vec<(String, DateTime<Utc>)>,
+    /// Least modified statutes (id, last_modified_date)
+    pub least_modified: Vec<(String, DateTime<Utc>)>,
+    /// Statutes by status change frequency (id, status_change_count)
+    pub frequent_status_changes: Vec<(String, usize)>,
+    /// Average modification frequency (days between modifications)
+    pub avg_modification_frequency_days: f64,
+}
+
+impl ActivityAnalytics {
+    /// Creates a new activity analytics instance with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns statutes modified within the last N days.
+    pub fn modified_within_days(&self, days: i64) -> Vec<String> {
+        let threshold = Utc::now() - chrono::Duration::days(days);
+        self.recently_modified
+            .iter()
+            .filter(|(_, date)| *date > threshold)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+}
+
+impl Default for ActivityAnalytics {
+    fn default() -> Self {
+        Self {
+            most_modified: Vec::new(),
+            recently_modified: Vec::new(),
+            least_modified: Vec::new(),
+            frequent_status_changes: Vec::new(),
+            avg_modification_frequency_days: 0.0,
+        }
+    }
+}
+
+/// Field projection options for efficient queries.
+#[derive(Debug, Clone, Default)]
+pub struct FieldProjection {
+    /// Include statute ID
+    pub include_id: bool,
+    /// Include title
+    pub include_title: bool,
+    /// Include version
+    pub include_version: bool,
+    /// Include status
+    pub include_status: bool,
+    /// Include jurisdiction
+    pub include_jurisdiction: bool,
+    /// Include tags
+    pub include_tags: bool,
+    /// Include dates
+    pub include_dates: bool,
+    /// Include metadata
+    pub include_metadata: bool,
+}
+
+impl FieldProjection {
+    /// Creates a projection that includes all fields.
+    pub fn all() -> Self {
+        Self {
+            include_id: true,
+            include_title: true,
+            include_version: true,
+            include_status: true,
+            include_jurisdiction: true,
+            include_tags: true,
+            include_dates: true,
+            include_metadata: true,
+        }
+    }
+
+    /// Creates a projection with only essential fields.
+    pub fn essential() -> Self {
+        Self {
+            include_id: true,
+            include_title: true,
+            include_version: true,
+            include_status: true,
+            ..Default::default()
+        }
+    }
+
+    /// Adds ID to the projection.
+    pub fn with_id(mut self) -> Self {
+        self.include_id = true;
+        self
+    }
+
+    /// Adds title to the projection.
+    pub fn with_title(mut self) -> Self {
+        self.include_title = true;
+        self
+    }
+
+    /// Adds version to the projection.
+    pub fn with_version(mut self) -> Self {
+        self.include_version = true;
+        self
+    }
+
+    /// Adds status to the projection.
+    pub fn with_status(mut self) -> Self {
+        self.include_status = true;
+        self
+    }
+
+    /// Adds jurisdiction to the projection.
+    pub fn with_jurisdiction(mut self) -> Self {
+        self.include_jurisdiction = true;
+        self
+    }
+
+    /// Adds tags to the projection.
+    pub fn with_tags(mut self) -> Self {
+        self.include_tags = true;
+        self
+    }
+
+    /// Adds dates to the projection.
+    pub fn with_dates(mut self) -> Self {
+        self.include_dates = true;
+        self
+    }
+
+    /// Adds metadata to the projection.
+    pub fn with_metadata(mut self) -> Self {
+        self.include_metadata = true;
+        self
+    }
+}
+
+/// Aggregation functions for grouping and counting.
+#[derive(Debug, Clone)]
+pub struct AggregationResult {
+    /// Group key -> count
+    pub counts: HashMap<String, usize>,
+    /// Total items aggregated
+    pub total: usize,
+}
+
+impl AggregationResult {
+    /// Creates a new aggregation result.
+    pub fn new(counts: HashMap<String, usize>) -> Self {
+        let total = counts.values().sum();
+        Self { counts, total }
+    }
+
+    /// Returns the count for a specific group.
+    pub fn get_count(&self, key: &str) -> usize {
+        self.counts.get(key).copied().unwrap_or(0)
+    }
+
+    /// Returns all groups sorted by count (descending).
+    pub fn sorted_by_count(&self) -> Vec<(String, usize)> {
+        let mut pairs: Vec<_> = self.counts.iter().map(|(k, &v)| (k.clone(), v)).collect();
+        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs
+    }
+
+    /// Returns the percentage for a specific group.
+    pub fn percentage(&self, key: &str) -> f64 {
+        if self.total == 0 {
+            return 0.0;
+        }
+        (self.get_count(key) as f64 / self.total as f64) * 100.0
+    }
+}
+
+// =============================================================================
 // Async API Support
 // =============================================================================
 
@@ -3220,6 +4141,53 @@ pub mod async_api {
         pub async fn unsubscribe_webhook(&self, id: Uuid) -> bool {
             let registry = self.inner.read().await;
             registry.unsubscribe_webhook(id)
+        }
+
+        /// Computes temporal analytics asynchronously.
+        ///
+        /// Analyzes registration patterns, update frequency, and version velocity.
+        pub async fn temporal_analytics(&self) -> TemporalAnalytics {
+            let mut registry = self.inner.write().await;
+            registry.temporal_analytics()
+        }
+
+        /// Computes relationship analytics asynchronously.
+        ///
+        /// Analyzes statute dependencies, references, and supersession chains.
+        pub async fn relationship_analytics(&self) -> RelationshipAnalytics {
+            let mut registry = self.inner.write().await;
+            registry.relationship_analytics()
+        }
+
+        /// Computes tag analytics asynchronously.
+        ///
+        /// Analyzes tag usage patterns and co-occurrence.
+        pub async fn tag_analytics(&self) -> TagAnalytics {
+            let mut registry = self.inner.write().await;
+            registry.tag_analytics()
+        }
+
+        /// Computes activity analytics asynchronously.
+        ///
+        /// Analyzes modification patterns and status changes.
+        pub async fn activity_analytics(&self) -> ActivityAnalytics {
+            let mut registry = self.inner.write().await;
+            registry.activity_analytics()
+        }
+
+        /// Groups statutes by a specified field and returns counts asynchronously.
+        pub async fn aggregate_by<F>(&self, key_fn: F) -> AggregationResult
+        where
+            F: Fn(&StatuteEntry) -> String + Send,
+        {
+            let registry = self.inner.read().await;
+            registry.aggregate_by(key_fn)
+        }
+
+        /// Groups statutes by multiple tags and returns counts asynchronously.
+        pub async fn aggregate_by_tags(&self) -> AggregationResult {
+            let registry = self.inner.read().await;
+            registry.aggregate_by_tags()
         }
     }
 
@@ -5666,6 +6634,1371 @@ impl SearchCacheConfig {
             max_entries,
             ttl_seconds: 3600,
         }
+    }
+}
+
+// ============================================================================
+// Audit Trail System
+// ============================================================================
+
+/// Audit log entry capturing detailed operation information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditEntry {
+    /// Unique audit ID
+    pub audit_id: Uuid,
+    /// Timestamp of the operation
+    pub timestamp: DateTime<Utc>,
+    /// User or system that performed the operation
+    pub actor: String,
+    /// Type of operation performed
+    pub operation: AuditOperation,
+    /// Statute ID affected (if applicable)
+    pub statute_id: Option<String>,
+    /// Result of the operation
+    pub result: AuditResult,
+    /// IP address or source identifier
+    pub source: Option<String>,
+    /// Additional context data
+    pub metadata: HashMap<String, String>,
+}
+
+/// Types of auditable operations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum AuditOperation {
+    /// Register new statute
+    Register,
+    /// Update existing statute
+    Update,
+    /// Delete statute
+    Delete,
+    /// Archive statute
+    Archive,
+    /// Unarchive statute
+    Unarchive,
+    /// Change status
+    StatusChange {
+        from: StatuteStatus,
+        to: StatuteStatus,
+    },
+    /// Add tag
+    AddTag { tag: String },
+    /// Remove tag
+    RemoveTag { tag: String },
+    /// Add metadata
+    AddMetadata { key: String },
+    /// Remove metadata
+    RemoveMetadata { key: String },
+    /// Export data
+    Export { format: String },
+    /// Import data
+    Import { format: String },
+    /// Search operation
+    Search { query: String },
+    /// Batch operation
+    BatchOperation {
+        operation_type: String,
+        count: usize,
+    },
+    /// Apply retention policy
+    RetentionPolicy,
+    /// Create snapshot
+    CreateSnapshot,
+    /// Restore from snapshot
+    RestoreSnapshot { snapshot_id: Uuid },
+}
+
+/// Result of an audited operation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AuditResult {
+    /// Operation succeeded
+    Success,
+    /// Operation failed with error message
+    Failure { error: String },
+    /// Operation partially succeeded
+    PartialSuccess { succeeded: usize, failed: usize },
+}
+
+impl AuditEntry {
+    /// Creates a new audit entry.
+    pub fn new(actor: String, operation: AuditOperation, result: AuditResult) -> Self {
+        Self {
+            audit_id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            actor,
+            operation,
+            statute_id: None,
+            result,
+            source: None,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Builder: Sets the statute ID.
+    pub fn with_statute_id(mut self, statute_id: String) -> Self {
+        self.statute_id = Some(statute_id);
+        self
+    }
+
+    /// Builder: Sets the source.
+    pub fn with_source(mut self, source: String) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Builder: Adds metadata.
+    pub fn with_metadata(mut self, key: String, value: String) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+
+    /// Checks if the operation was successful.
+    pub fn is_success(&self) -> bool {
+        matches!(self.result, AuditResult::Success)
+    }
+
+    /// Checks if the operation failed.
+    pub fn is_failure(&self) -> bool {
+        matches!(self.result, AuditResult::Failure { .. })
+    }
+}
+
+/// Audit trail manager for tracking all operations.
+#[derive(Debug, Clone)]
+pub struct AuditTrail {
+    entries: VecDeque<AuditEntry>,
+    max_entries: usize,
+    enabled: bool,
+}
+
+impl Default for AuditTrail {
+    fn default() -> Self {
+        Self::new(10000)
+    }
+}
+
+impl AuditTrail {
+    /// Creates a new audit trail with maximum entries.
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            entries: VecDeque::new(),
+            max_entries,
+            enabled: true,
+        }
+    }
+
+    /// Records an audit entry.
+    pub fn record(&mut self, entry: AuditEntry) {
+        if !self.enabled {
+            return;
+        }
+
+        self.entries.push_back(entry);
+        if self.entries.len() > self.max_entries {
+            self.entries.pop_front();
+        }
+    }
+
+    /// Enables audit logging.
+    pub fn enable(&mut self) {
+        self.enabled = true;
+    }
+
+    /// Disables audit logging.
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+
+    /// Checks if audit logging is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Returns all audit entries.
+    pub fn entries(&self) -> &VecDeque<AuditEntry> {
+        &self.entries
+    }
+
+    /// Returns entries for a specific actor.
+    pub fn entries_by_actor(&self, actor: &str) -> Vec<&AuditEntry> {
+        self.entries.iter().filter(|e| e.actor == actor).collect()
+    }
+
+    /// Returns entries for a specific statute.
+    pub fn entries_by_statute(&self, statute_id: &str) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.statute_id.as_deref() == Some(statute_id))
+            .collect()
+    }
+
+    /// Returns entries within a time range.
+    pub fn entries_in_range(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.timestamp >= start && e.timestamp <= end)
+            .collect()
+    }
+
+    /// Returns entries by operation type.
+    pub fn entries_by_operation(&self, operation_type: &str) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| format!("{:?}", e.operation).contains(operation_type))
+            .collect()
+    }
+
+    /// Returns only successful operations.
+    pub fn successful_operations(&self) -> Vec<&AuditEntry> {
+        self.entries.iter().filter(|e| e.is_success()).collect()
+    }
+
+    /// Returns only failed operations.
+    pub fn failed_operations(&self) -> Vec<&AuditEntry> {
+        self.entries.iter().filter(|e| e.is_failure()).collect()
+    }
+
+    /// Returns the total number of entries.
+    pub fn count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Clears all audit entries.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Exports audit trail to JSON.
+    pub fn export_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self.entries)
+    }
+}
+
+// ============================================================================
+// Health Check System
+// ============================================================================
+
+/// Health status of the registry.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum HealthStatus {
+    /// All systems operational
+    Healthy,
+    /// Some degradation but functional
+    Degraded { issues: Vec<String> },
+    /// Critical issues affecting functionality
+    Unhealthy { errors: Vec<String> },
+}
+
+impl HealthStatus {
+    /// Checks if the status is healthy.
+    pub fn is_healthy(&self) -> bool {
+        matches!(self, HealthStatus::Healthy)
+    }
+
+    /// Checks if the status is degraded.
+    pub fn is_degraded(&self) -> bool {
+        matches!(self, HealthStatus::Degraded { .. })
+    }
+
+    /// Checks if the status is unhealthy.
+    pub fn is_unhealthy(&self) -> bool {
+        matches!(self, HealthStatus::Unhealthy { .. })
+    }
+}
+
+/// Comprehensive health check result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthCheckResult {
+    /// Overall health status
+    pub status: HealthStatus,
+    /// Timestamp of the check
+    pub timestamp: DateTime<Utc>,
+    /// Total statutes in registry
+    pub statute_count: usize,
+    /// Total versions tracked
+    pub version_count: usize,
+    /// Total events in event store
+    pub event_count: usize,
+    /// Cache hit rate (0.0-1.0)
+    pub cache_hit_rate: f64,
+    /// Number of archived statutes
+    pub archived_count: usize,
+    /// Memory usage estimate (bytes)
+    pub memory_estimate_bytes: usize,
+    /// Check duration (milliseconds)
+    pub check_duration_ms: u64,
+    /// Component-specific checks
+    pub component_checks: HashMap<String, ComponentHealth>,
+}
+
+/// Health status of individual components.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentHealth {
+    /// Component name
+    pub name: String,
+    /// Is component healthy
+    pub healthy: bool,
+    /// Component-specific message
+    pub message: Option<String>,
+    /// Component metrics
+    pub metrics: HashMap<String, f64>,
+}
+
+impl ComponentHealth {
+    /// Creates a healthy component check.
+    pub fn healthy(name: String) -> Self {
+        Self {
+            name,
+            healthy: true,
+            message: None,
+            metrics: HashMap::new(),
+        }
+    }
+
+    /// Creates an unhealthy component check.
+    pub fn unhealthy(name: String, message: String) -> Self {
+        Self {
+            name,
+            healthy: false,
+            message: Some(message),
+            metrics: HashMap::new(),
+        }
+    }
+
+    /// Adds a metric to the component health.
+    pub fn with_metric(mut self, key: String, value: f64) -> Self {
+        self.metrics.insert(key, value);
+        self
+    }
+}
+
+// ============================================================================
+// Registry Comparison Tools
+// ============================================================================
+
+/// Difference between two registries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryDifference {
+    /// Timestamp of comparison
+    pub compared_at: DateTime<Utc>,
+    /// Statutes only in left registry
+    pub only_in_left: Vec<String>,
+    /// Statutes only in right registry
+    pub only_in_right: Vec<String>,
+    /// Statutes in both but with differences
+    pub different_statutes: Vec<StatuteDifferenceDetail>,
+    /// Statutes that are identical
+    pub identical_statutes: Vec<String>,
+}
+
+impl RegistryDifference {
+    /// Creates a new empty registry difference.
+    pub fn new() -> Self {
+        Self {
+            compared_at: Utc::now(),
+            only_in_left: Vec::new(),
+            only_in_right: Vec::new(),
+            different_statutes: Vec::new(),
+            identical_statutes: Vec::new(),
+        }
+    }
+
+    /// Returns the total number of differences found.
+    pub fn difference_count(&self) -> usize {
+        self.only_in_left.len() + self.only_in_right.len() + self.different_statutes.len()
+    }
+
+    /// Checks if the registries are identical.
+    pub fn is_identical(&self) -> bool {
+        self.difference_count() == 0
+    }
+
+    /// Returns a summary of the comparison.
+    pub fn summary(&self) -> String {
+        format!(
+            "Only in left: {}, Only in right: {}, Different: {}, Identical: {}",
+            self.only_in_left.len(),
+            self.only_in_right.len(),
+            self.different_statutes.len(),
+            self.identical_statutes.len()
+        )
+    }
+}
+
+impl Default for RegistryDifference {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Details of differences in a specific statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteDifferenceDetail {
+    /// Statute ID
+    pub statute_id: String,
+    /// Fields that differ
+    pub differing_fields: Vec<String>,
+    /// Version in left registry
+    pub left_version: u32,
+    /// Version in right registry
+    pub right_version: u32,
+}
+
+// ============================================================================
+// Bulk Streaming Operations
+// ============================================================================
+
+/// Configuration for bulk operations.
+#[derive(Debug, Clone)]
+pub struct BulkConfig {
+    /// Batch size for processing
+    pub batch_size: usize,
+    /// Whether to continue on error
+    pub continue_on_error: bool,
+    /// Maximum parallel operations
+    pub max_parallelism: usize,
+}
+
+impl Default for BulkConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: 100,
+            continue_on_error: true,
+            max_parallelism: 4,
+        }
+    }
+}
+
+impl BulkConfig {
+    /// Creates a new bulk config.
+    pub fn new(batch_size: usize) -> Self {
+        Self {
+            batch_size,
+            ..Default::default()
+        }
+    }
+
+    /// Builder: Sets continue on error.
+    pub fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
+        self.continue_on_error = continue_on_error;
+        self
+    }
+
+    /// Builder: Sets max parallelism.
+    pub fn with_max_parallelism(mut self, max_parallelism: usize) -> Self {
+        self.max_parallelism = max_parallelism;
+        self
+    }
+}
+
+/// Result of a bulk operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkOperationResult {
+    /// Total items processed
+    pub total_processed: usize,
+    /// Successful operations
+    pub successful: usize,
+    /// Failed operations
+    pub failed: usize,
+    /// Error details by statute ID
+    pub errors: HashMap<String, String>,
+    /// Duration of the operation
+    pub duration_ms: u64,
+}
+
+impl BulkOperationResult {
+    /// Creates a new empty result.
+    pub fn new() -> Self {
+        Self {
+            total_processed: 0,
+            successful: 0,
+            failed: 0,
+            errors: HashMap::new(),
+            duration_ms: 0,
+        }
+    }
+
+    /// Checks if all operations succeeded.
+    pub fn is_all_successful(&self) -> bool {
+        self.failed == 0 && self.total_processed > 0
+    }
+
+    /// Returns the success rate (0.0-1.0).
+    pub fn success_rate(&self) -> f64 {
+        if self.total_processed == 0 {
+            0.0
+        } else {
+            self.successful as f64 / self.total_processed as f64
+        }
+    }
+}
+
+impl Default for BulkOperationResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// StatuteRegistry Extensions
+// ============================================================================
+
+impl StatuteRegistry {
+    /// Performs a comprehensive health check on the registry.
+    pub fn health_check(&self) -> HealthCheckResult {
+        let start = std::time::Instant::now();
+        let mut component_checks = HashMap::new();
+
+        // Check cache health
+        let cache_health = ComponentHealth::healthy("cache".to_string())
+            .with_metric("capacity".to_string(), self.cache.cap().get() as f64)
+            .with_metric("current_size".to_string(), self.cache.len() as f64);
+        component_checks.insert("cache".to_string(), cache_health);
+
+        // Check storage health
+        let statute_count = self.statutes.len();
+        let version_count: usize = self.versions.values().map(|v| v.len()).sum();
+        let storage_health = ComponentHealth::healthy("storage".to_string())
+            .with_metric("statutes".to_string(), statute_count as f64)
+            .with_metric("versions".to_string(), version_count as f64);
+        component_checks.insert("storage".to_string(), storage_health);
+
+        // Check index health
+        let tag_count = self.tag_index.len();
+        let jurisdiction_count = self.jurisdiction_index.len();
+        let index_health = ComponentHealth::healthy("indexes".to_string())
+            .with_metric("tags".to_string(), tag_count as f64)
+            .with_metric("jurisdictions".to_string(), jurisdiction_count as f64);
+        component_checks.insert("indexes".to_string(), index_health);
+
+        // Check event store health
+        let event_count = self.event_store.events.len();
+        let event_health = ComponentHealth::healthy("event_store".to_string())
+            .with_metric("events".to_string(), event_count as f64);
+        component_checks.insert("event_store".to_string(), event_health);
+
+        // Determine overall status
+        let mut issues = Vec::new();
+        let errors = Vec::new();
+
+        if statute_count == 0 {
+            issues.push("Registry is empty".to_string());
+        }
+
+        if statute_count > 100000 {
+            issues.push("Registry has very large number of statutes (>100k)".to_string());
+        }
+
+        if event_count > 1000000 {
+            issues.push("Event store has very large number of events (>1M)".to_string());
+        }
+
+        let status = if !errors.is_empty() {
+            HealthStatus::Unhealthy { errors }
+        } else if !issues.is_empty() {
+            HealthStatus::Degraded { issues }
+        } else {
+            HealthStatus::Healthy
+        };
+
+        // Estimate memory usage (rough approximation)
+        let memory_estimate = statute_count * 1024  // ~1KB per statute
+            + version_count * 1024                   // ~1KB per version
+            + event_count * 512; // ~512B per event
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        HealthCheckResult {
+            status,
+            timestamp: Utc::now(),
+            statute_count,
+            version_count,
+            event_count,
+            cache_hit_rate: 0.0, // Would need metrics tracking
+            archived_count: self.archive.count(),
+            memory_estimate_bytes: memory_estimate,
+            check_duration_ms: duration_ms,
+            component_checks,
+        }
+    }
+
+    /// Compares this registry with another registry.
+    pub fn compare_with(&self, other: &StatuteRegistry) -> RegistryDifference {
+        let mut diff = RegistryDifference::new();
+
+        let left_ids: HashSet<_> = self.statutes.keys().cloned().collect();
+        let right_ids: HashSet<_> = other.statutes.keys().cloned().collect();
+
+        // Find statutes only in left
+        diff.only_in_left = left_ids.difference(&right_ids).cloned().collect();
+        diff.only_in_left.sort();
+
+        // Find statutes only in right
+        diff.only_in_right = right_ids.difference(&left_ids).cloned().collect();
+        diff.only_in_right.sort();
+
+        // Find statutes in both and compare
+        for statute_id in left_ids.intersection(&right_ids) {
+            let left_entry = &self.statutes[statute_id];
+            let right_entry = &other.statutes[statute_id];
+
+            if self.are_entries_identical(left_entry, right_entry) {
+                diff.identical_statutes.push(statute_id.clone());
+            } else {
+                let differing_fields = self.find_differing_fields(left_entry, right_entry);
+                diff.different_statutes.push(StatuteDifferenceDetail {
+                    statute_id: statute_id.clone(),
+                    differing_fields,
+                    left_version: left_entry.version,
+                    right_version: right_entry.version,
+                });
+            }
+        }
+
+        diff.identical_statutes.sort();
+        diff
+    }
+
+    /// Checks if two statute entries are identical.
+    fn are_entries_identical(&self, left: &StatuteEntry, right: &StatuteEntry) -> bool {
+        left.statute.id == right.statute.id
+            && left.statute.title == right.statute.title
+            && left.version == right.version
+            && left.status == right.status
+            && left.jurisdiction == right.jurisdiction
+            && left.tags == right.tags
+    }
+
+    /// Finds fields that differ between two entries.
+    fn find_differing_fields(&self, left: &StatuteEntry, right: &StatuteEntry) -> Vec<String> {
+        let mut fields = Vec::new();
+
+        if left.statute.title != right.statute.title {
+            fields.push("title".to_string());
+        }
+        if left.version != right.version {
+            fields.push("version".to_string());
+        }
+        if left.status != right.status {
+            fields.push("status".to_string());
+        }
+        if left.jurisdiction != right.jurisdiction {
+            fields.push("jurisdiction".to_string());
+        }
+        if left.tags != right.tags {
+            fields.push("tags".to_string());
+        }
+        if left.effective_date != right.effective_date {
+            fields.push("effective_date".to_string());
+        }
+        if left.expiry_date != right.expiry_date {
+            fields.push("expiry_date".to_string());
+        }
+
+        fields
+    }
+
+    /// Performs bulk registration with configuration.
+    pub fn bulk_register(
+        &mut self,
+        entries: Vec<StatuteEntry>,
+        config: BulkConfig,
+    ) -> BulkOperationResult {
+        let start = std::time::Instant::now();
+        let mut result = BulkOperationResult::new();
+
+        for chunk in entries.chunks(config.batch_size) {
+            for entry in chunk {
+                result.total_processed += 1;
+                match self.register(entry.clone()) {
+                    Ok(_) => result.successful += 1,
+                    Err(e) => {
+                        result.failed += 1;
+                        result
+                            .errors
+                            .insert(entry.statute.id.clone(), e.to_string());
+                        if !config.continue_on_error {
+                            result.duration_ms = start.elapsed().as_millis() as u64;
+                            return result;
+                        }
+                    }
+                }
+            }
+        }
+
+        result.duration_ms = start.elapsed().as_millis() as u64;
+        result
+    }
+
+    /// Performs bulk deletion with configuration.
+    pub fn bulk_delete_with_config(
+        &mut self,
+        statute_ids: Vec<String>,
+        config: BulkConfig,
+    ) -> BulkOperationResult {
+        let start = std::time::Instant::now();
+        let mut result = BulkOperationResult::new();
+
+        for chunk in statute_ids.chunks(config.batch_size) {
+            for statute_id in chunk {
+                result.total_processed += 1;
+                match self.delete(statute_id) {
+                    Ok(_) => result.successful += 1,
+                    Err(e) => {
+                        result.failed += 1;
+                        result.errors.insert(statute_id.clone(), e.to_string());
+                        if !config.continue_on_error {
+                            result.duration_ms = start.elapsed().as_millis() as u64;
+                            return result;
+                        }
+                    }
+                }
+            }
+        }
+
+        result.duration_ms = start.elapsed().as_millis() as u64;
+        result
+    }
+
+    /// Streams statute IDs matching a predicate.
+    pub fn stream_ids<F>(&self, predicate: F) -> Vec<String>
+    where
+        F: Fn(&StatuteEntry) -> bool,
+    {
+        self.statutes
+            .iter()
+            .filter(|(_, entry)| predicate(entry))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Streams entries matching a predicate with batching.
+    pub fn stream_entries<F>(&self, predicate: F, batch_size: usize) -> Vec<Vec<StatuteEntry>>
+    where
+        F: Fn(&StatuteEntry) -> bool,
+    {
+        let entries: Vec<StatuteEntry> = self
+            .statutes
+            .values()
+            .filter(|entry| predicate(entry))
+            .cloned()
+            .collect();
+
+        entries
+            .chunks(batch_size)
+            .map(|chunk| chunk.to_vec())
+            .collect()
+    }
+}
+
+// ============================================================================
+// Performance Benchmarking
+// ============================================================================
+
+/// Performance benchmark result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkResult {
+    /// Benchmark name
+    pub name: String,
+    /// Number of iterations
+    pub iterations: usize,
+    /// Total duration in milliseconds
+    pub total_duration_ms: u64,
+    /// Average duration per operation in microseconds
+    pub avg_duration_us: f64,
+    /// Operations per second
+    pub ops_per_sec: f64,
+    /// Minimum duration in microseconds
+    pub min_duration_us: u64,
+    /// Maximum duration in microseconds
+    pub max_duration_us: u64,
+}
+
+impl BenchmarkResult {
+    /// Creates a new benchmark result.
+    pub fn new(name: String, iterations: usize, durations_us: Vec<u64>) -> Self {
+        let total_duration_us: u64 = durations_us.iter().sum();
+        let total_duration_ms = total_duration_us / 1000;
+        let avg_duration_us = total_duration_us as f64 / iterations as f64;
+        let ops_per_sec = 1_000_000.0 / avg_duration_us;
+        let min_duration_us = *durations_us.iter().min().unwrap_or(&0);
+        let max_duration_us = *durations_us.iter().max().unwrap_or(&0);
+
+        Self {
+            name,
+            iterations,
+            total_duration_ms,
+            avg_duration_us,
+            ops_per_sec,
+            min_duration_us,
+            max_duration_us,
+        }
+    }
+
+    /// Returns a formatted summary.
+    pub fn summary(&self) -> String {
+        format!(
+            "{}: {:.2} ops/sec, avg: {:.2}µs, min: {}µs, max: {}µs ({} iterations)",
+            self.name,
+            self.ops_per_sec,
+            self.avg_duration_us,
+            self.min_duration_us,
+            self.max_duration_us,
+            self.iterations
+        )
+    }
+}
+
+/// Benchmark suite for registry operations.
+#[derive(Debug, Clone, Default)]
+pub struct BenchmarkSuite {
+    results: Vec<BenchmarkResult>,
+}
+
+impl BenchmarkSuite {
+    /// Creates a new benchmark suite.
+    pub fn new() -> Self {
+        Self {
+            results: Vec::new(),
+        }
+    }
+
+    /// Adds a benchmark result.
+    pub fn add_result(&mut self, result: BenchmarkResult) {
+        self.results.push(result);
+    }
+
+    /// Returns all benchmark results.
+    pub fn results(&self) -> &[BenchmarkResult] {
+        &self.results
+    }
+
+    /// Exports results to JSON.
+    pub fn export_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self.results)
+    }
+
+    /// Returns a summary of all benchmarks.
+    pub fn summary(&self) -> String {
+        let mut summary = String::from("Benchmark Results:\n");
+        for result in &self.results {
+            summary.push_str(&format!("  {}\n", result.summary()));
+        }
+        summary
+    }
+}
+
+// ============================================================================
+// Rate Limiting
+// ============================================================================
+
+/// Rate limit configuration.
+#[derive(Debug, Clone)]
+pub struct RateLimitConfig {
+    /// Maximum requests per window
+    pub max_requests: usize,
+    /// Time window in seconds
+    pub window_secs: i64,
+    /// Whether to enable rate limiting
+    pub enabled: bool,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            max_requests: 1000,
+            window_secs: 60,
+            enabled: true,
+        }
+    }
+}
+
+impl RateLimitConfig {
+    /// Creates a new rate limit config.
+    pub fn new(max_requests: usize, window_secs: i64) -> Self {
+        Self {
+            max_requests,
+            window_secs,
+            enabled: true,
+        }
+    }
+
+    /// Disables rate limiting.
+    pub fn disabled() -> Self {
+        Self {
+            max_requests: 0,
+            window_secs: 0,
+            enabled: false,
+        }
+    }
+
+    /// Builder: Sets enabled flag.
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+/// Rate limiter for protecting against abuse.
+#[derive(Debug, Clone)]
+pub struct RateLimiter {
+    config: RateLimitConfig,
+    /// Request timestamps by key (e.g., user ID, IP)
+    requests: HashMap<String, VecDeque<DateTime<Utc>>>,
+}
+
+impl RateLimiter {
+    /// Creates a new rate limiter.
+    pub fn new(config: RateLimitConfig) -> Self {
+        Self {
+            config,
+            requests: HashMap::new(),
+        }
+    }
+
+    /// Checks if a request is allowed for the given key.
+    pub fn check_rate_limit(&mut self, key: &str) -> bool {
+        if !self.config.enabled {
+            return true;
+        }
+
+        let now = Utc::now();
+        let window_start = now - chrono::Duration::seconds(self.config.window_secs);
+
+        // Get or create request history for this key
+        let history = self.requests.entry(key.to_string()).or_default();
+
+        // Remove old requests outside the window
+        while let Some(&front) = history.front() {
+            if front < window_start {
+                history.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        // Check if under limit
+        if history.len() >= self.config.max_requests {
+            return false;
+        }
+
+        // Record this request
+        history.push_back(now);
+        true
+    }
+
+    /// Returns current request count for a key.
+    pub fn current_count(&self, key: &str) -> usize {
+        self.requests.get(key).map(|h| h.len()).unwrap_or(0)
+    }
+
+    /// Returns remaining requests for a key.
+    pub fn remaining(&self, key: &str) -> usize {
+        if !self.config.enabled {
+            return usize::MAX;
+        }
+        let current = self.current_count(key);
+        self.config.max_requests.saturating_sub(current)
+    }
+
+    /// Resets rate limit for a specific key.
+    pub fn reset(&mut self, key: &str) {
+        self.requests.remove(key);
+    }
+
+    /// Clears all rate limit data.
+    pub fn clear_all(&mut self) {
+        self.requests.clear();
+    }
+
+    /// Returns the configuration.
+    pub fn config(&self) -> &RateLimitConfig {
+        &self.config
+    }
+}
+
+impl Default for RateLimiter {
+    fn default() -> Self {
+        Self::new(RateLimitConfig::default())
+    }
+}
+
+// ============================================================================
+// Circuit Breaker
+// ============================================================================
+
+/// Circuit breaker state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CircuitState {
+    /// Circuit is closed, requests flow normally
+    Closed,
+    /// Circuit is open, requests are rejected
+    Open,
+    /// Circuit is half-open, testing if service recovered
+    HalfOpen,
+}
+
+/// Circuit breaker configuration.
+#[derive(Debug, Clone)]
+pub struct CircuitBreakerConfig {
+    /// Number of failures before opening circuit
+    pub failure_threshold: usize,
+    /// Time to wait before attempting recovery (seconds)
+    pub timeout_secs: i64,
+    /// Number of successful requests needed to close circuit
+    pub success_threshold: usize,
+}
+
+impl Default for CircuitBreakerConfig {
+    fn default() -> Self {
+        Self {
+            failure_threshold: 5,
+            timeout_secs: 60,
+            success_threshold: 2,
+        }
+    }
+}
+
+impl CircuitBreakerConfig {
+    /// Creates a new circuit breaker config.
+    pub fn new(failure_threshold: usize, timeout_secs: i64, success_threshold: usize) -> Self {
+        Self {
+            failure_threshold,
+            timeout_secs,
+            success_threshold,
+        }
+    }
+}
+
+/// Circuit breaker for fault tolerance.
+#[derive(Debug, Clone)]
+pub struct CircuitBreaker {
+    config: CircuitBreakerConfig,
+    state: CircuitState,
+    failure_count: usize,
+    success_count: usize,
+    last_failure_time: Option<DateTime<Utc>>,
+}
+
+impl CircuitBreaker {
+    /// Creates a new circuit breaker.
+    pub fn new(config: CircuitBreakerConfig) -> Self {
+        Self {
+            config,
+            state: CircuitState::Closed,
+            failure_count: 0,
+            success_count: 0,
+            last_failure_time: None,
+        }
+    }
+
+    /// Records a successful operation.
+    pub fn record_success(&mut self) {
+        match self.state {
+            CircuitState::Closed => {
+                self.failure_count = 0;
+            }
+            CircuitState::HalfOpen => {
+                self.success_count += 1;
+                if self.success_count >= self.config.success_threshold {
+                    self.state = CircuitState::Closed;
+                    self.failure_count = 0;
+                    self.success_count = 0;
+                    self.last_failure_time = None;
+                }
+            }
+            CircuitState::Open => {
+                // Should not happen, but reset if it does
+                self.state = CircuitState::Closed;
+                self.failure_count = 0;
+                self.success_count = 0;
+            }
+        }
+    }
+
+    /// Records a failed operation.
+    pub fn record_failure(&mut self) {
+        self.last_failure_time = Some(Utc::now());
+
+        match self.state {
+            CircuitState::Closed => {
+                self.failure_count += 1;
+                if self.failure_count >= self.config.failure_threshold {
+                    self.state = CircuitState::Open;
+                }
+            }
+            CircuitState::HalfOpen => {
+                self.state = CircuitState::Open;
+                self.success_count = 0;
+            }
+            CircuitState::Open => {
+                // Already open, nothing to do
+            }
+        }
+    }
+
+    /// Checks if a request is allowed.
+    pub fn is_request_allowed(&mut self) -> bool {
+        match self.state {
+            CircuitState::Closed => true,
+            CircuitState::Open => {
+                // Check if timeout has passed
+                if let Some(last_failure) = self.last_failure_time {
+                    let now = Utc::now();
+                    let timeout = chrono::Duration::seconds(self.config.timeout_secs);
+                    if now - last_failure >= timeout {
+                        self.state = CircuitState::HalfOpen;
+                        self.success_count = 0;
+                        return true;
+                    }
+                }
+                false
+            }
+            CircuitState::HalfOpen => true,
+        }
+    }
+
+    /// Returns the current state.
+    pub fn state(&self) -> &CircuitState {
+        &self.state
+    }
+
+    /// Returns the failure count.
+    pub fn failure_count(&self) -> usize {
+        self.failure_count
+    }
+
+    /// Resets the circuit breaker.
+    pub fn reset(&mut self) {
+        self.state = CircuitState::Closed;
+        self.failure_count = 0;
+        self.success_count = 0;
+        self.last_failure_time = None;
+    }
+
+    /// Forces the circuit to open.
+    pub fn force_open(&mut self) {
+        self.state = CircuitState::Open;
+        self.last_failure_time = Some(Utc::now());
+    }
+}
+
+impl Default for CircuitBreaker {
+    fn default() -> Self {
+        Self::new(CircuitBreakerConfig::default())
+    }
+}
+
+// ============================================================================
+// Observability
+// ============================================================================
+
+/// Log level for observability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LogLevel {
+    /// Trace level (most verbose)
+    Trace,
+    /// Debug level
+    Debug,
+    /// Info level
+    Info,
+    /// Warning level
+    Warn,
+    /// Error level
+    Error,
+}
+
+/// Structured log entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    /// Timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Log level
+    pub level: LogLevel,
+    /// Log message
+    pub message: String,
+    /// Operation that generated the log
+    pub operation: String,
+    /// Additional context fields
+    pub fields: HashMap<String, String>,
+}
+
+impl LogEntry {
+    /// Creates a new log entry.
+    pub fn new(level: LogLevel, operation: String, message: String) -> Self {
+        Self {
+            timestamp: Utc::now(),
+            level,
+            message,
+            operation,
+            fields: HashMap::new(),
+        }
+    }
+
+    /// Adds a field to the log entry.
+    pub fn with_field(mut self, key: String, value: String) -> Self {
+        self.fields.insert(key, value);
+        self
+    }
+}
+
+/// Metric type for observability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MetricType {
+    /// Counter that only increases
+    Counter { value: u64 },
+    /// Gauge that can increase or decrease
+    Gauge { value: f64 },
+    /// Histogram of values
+    Histogram { values: Vec<f64> },
+    /// Timing measurement in microseconds
+    Timing { duration_us: u64 },
+}
+
+/// Metric entry for observability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricEntry {
+    /// Metric name
+    pub name: String,
+    /// Timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Metric type and value
+    pub metric_type: MetricType,
+    /// Labels for grouping
+    pub labels: HashMap<String, String>,
+}
+
+impl MetricEntry {
+    /// Creates a new counter metric.
+    pub fn counter(name: String, value: u64) -> Self {
+        Self {
+            name,
+            timestamp: Utc::now(),
+            metric_type: MetricType::Counter { value },
+            labels: HashMap::new(),
+        }
+    }
+
+    /// Creates a new gauge metric.
+    pub fn gauge(name: String, value: f64) -> Self {
+        Self {
+            name,
+            timestamp: Utc::now(),
+            metric_type: MetricType::Gauge { value },
+            labels: HashMap::new(),
+        }
+    }
+
+    /// Creates a new timing metric.
+    pub fn timing(name: String, duration_us: u64) -> Self {
+        Self {
+            name,
+            timestamp: Utc::now(),
+            metric_type: MetricType::Timing { duration_us },
+            labels: HashMap::new(),
+        }
+    }
+
+    /// Adds a label to the metric.
+    pub fn with_label(mut self, key: String, value: String) -> Self {
+        self.labels.insert(key, value);
+        self
+    }
+}
+
+/// Observability collector for logs and metrics.
+#[derive(Debug, Clone)]
+pub struct ObservabilityCollector {
+    logs: VecDeque<LogEntry>,
+    metrics: VecDeque<MetricEntry>,
+    max_logs: usize,
+    max_metrics: usize,
+    min_log_level: LogLevel,
+}
+
+impl Default for ObservabilityCollector {
+    fn default() -> Self {
+        Self::new(10000, 10000, LogLevel::Info)
+    }
+}
+
+impl ObservabilityCollector {
+    /// Creates a new observability collector.
+    pub fn new(max_logs: usize, max_metrics: usize, min_log_level: LogLevel) -> Self {
+        Self {
+            logs: VecDeque::new(),
+            metrics: VecDeque::new(),
+            max_logs,
+            max_metrics,
+            min_log_level,
+        }
+    }
+
+    /// Records a log entry.
+    pub fn log(&mut self, entry: LogEntry) {
+        if entry.level < self.min_log_level {
+            return;
+        }
+
+        self.logs.push_back(entry);
+        if self.logs.len() > self.max_logs {
+            self.logs.pop_front();
+        }
+    }
+
+    /// Records a metric entry.
+    pub fn metric(&mut self, entry: MetricEntry) {
+        self.metrics.push_back(entry);
+        if self.metrics.len() > self.max_metrics {
+            self.metrics.pop_front();
+        }
+    }
+
+    /// Returns all logs.
+    pub fn logs(&self) -> &VecDeque<LogEntry> {
+        &self.logs
+    }
+
+    /// Returns all metrics.
+    pub fn metrics(&self) -> &VecDeque<MetricEntry> {
+        &self.metrics
+    }
+
+    /// Returns logs filtered by level.
+    pub fn logs_by_level(&self, level: LogLevel) -> Vec<&LogEntry> {
+        self.logs.iter().filter(|e| e.level == level).collect()
+    }
+
+    /// Returns logs filtered by operation.
+    pub fn logs_by_operation(&self, operation: &str) -> Vec<&LogEntry> {
+        self.logs
+            .iter()
+            .filter(|e| e.operation == operation)
+            .collect()
+    }
+
+    /// Returns metrics by name.
+    pub fn metrics_by_name(&self, name: &str) -> Vec<&MetricEntry> {
+        self.metrics.iter().filter(|m| m.name == name).collect()
+    }
+
+    /// Clears all logs.
+    pub fn clear_logs(&mut self) {
+        self.logs.clear();
+    }
+
+    /// Clears all metrics.
+    pub fn clear_metrics(&mut self) {
+        self.metrics.clear();
+    }
+
+    /// Exports logs to JSON.
+    pub fn export_logs_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self.logs)
+    }
+
+    /// Exports metrics to JSON.
+    pub fn export_metrics_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self.metrics)
     }
 }
 
@@ -8980,5 +11313,1537 @@ mod tests {
             Some(&"Expired".to_string())
         );
         assert_eq!(result.reasons.get("statute-2"), Some(&"Old".to_string()));
+    }
+
+    #[test]
+    fn test_iterator_apis() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add test statutes
+        registry
+            .register(StatuteEntry::new(test_statute("iter-1"), "US"))
+            .unwrap();
+        let mut entry2 = StatuteEntry::new(test_statute("iter-2"), "US");
+        entry2.status = StatuteStatus::Active;
+        registry.register(entry2).unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("iter-3"), "JP"))
+            .unwrap();
+
+        // Test iter()
+        assert_eq!(registry.iter().count(), 3);
+
+        // Test iter_active()
+        let active_count = registry.iter_active().count();
+        assert_eq!(active_count, 1);
+
+        // Test iter_with_ids()
+        let ids: Vec<_> = registry
+            .iter_with_ids()
+            .map(|(id, _)| id.as_str())
+            .collect();
+        assert!(ids.contains(&"iter-1"));
+        assert!(ids.contains(&"iter-2"));
+        assert!(ids.contains(&"iter-3"));
+    }
+
+    #[test]
+    fn test_temporal_analytics() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add test statutes with different timestamps
+        registry
+            .register(StatuteEntry::new(test_statute("temp-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("temp-2"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("temp-3"), "US"))
+            .unwrap();
+
+        // Update one to create version history
+        registry.update("temp-1", test_statute("temp-1")).unwrap();
+        registry.update("temp-1", test_statute("temp-1")).unwrap();
+
+        let analytics = registry.temporal_analytics();
+
+        // Should have some registrations
+        assert_eq!(analytics.total_registrations(), 3);
+        // Total updates can be any non-negative value
+        let _ = analytics.total_updates();
+        assert!(analytics.avg_versions_per_statute >= 0.0);
+
+        // Most versioned should include temp-1
+        assert!(
+            analytics
+                .most_versioned_statutes
+                .iter()
+                .any(|(id, _)| id == "temp-1")
+        );
+    }
+
+    #[test]
+    fn test_relationship_analytics() {
+        let mut registry = StatuteRegistry::new();
+
+        // Create statutes with relationships
+        let mut entry1 = StatuteEntry::new(test_statute("rel-1"), "US");
+        entry1.references.push("rel-2".to_string());
+        registry.register(entry1).unwrap();
+
+        let mut entry2 = StatuteEntry::new(test_statute("rel-2"), "US");
+        entry2.references.push("rel-3".to_string());
+        registry.register(entry2).unwrap();
+
+        let mut entry3 = StatuteEntry::new(test_statute("rel-3"), "US");
+        entry3.supersedes.push("rel-2".to_string());
+        registry.register(entry3).unwrap();
+
+        // Orphan statute with no relationships
+        registry
+            .register(StatuteEntry::new(test_statute("rel-orphan"), "US"))
+            .unwrap();
+
+        let analytics = registry.relationship_analytics();
+
+        // Check most referenced includes rel-2 and rel-3
+        assert!(
+            analytics
+                .most_referenced
+                .iter()
+                .any(|(id, count)| id == "rel-2" && *count >= 1)
+        );
+        assert!(
+            analytics
+                .most_referenced
+                .iter()
+                .any(|(id, count)| id == "rel-3" && *count >= 1)
+        );
+
+        // Check supersession chains
+        assert!(!analytics.supersession_chains.is_empty());
+
+        // Check orphaned statutes
+        assert!(
+            analytics
+                .orphaned_statutes
+                .contains(&"rel-orphan".to_string())
+        );
+
+        // Average references should be > 0
+        assert!(analytics.avg_references_per_statute >= 0.0);
+    }
+
+    #[test]
+    fn test_tag_analytics() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with various tags
+        registry
+            .register(
+                StatuteEntry::new(test_statute("tag-1"), "US")
+                    .with_tag("civil")
+                    .with_tag("contract"),
+            )
+            .unwrap();
+        registry
+            .register(
+                StatuteEntry::new(test_statute("tag-2"), "US")
+                    .with_tag("civil")
+                    .with_tag("tort"),
+            )
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("tag-3"), "US").with_tag("criminal"))
+            .unwrap();
+
+        let analytics = registry.tag_analytics();
+
+        // Check tag frequency
+        assert_eq!(analytics.tag_frequency.get("civil"), Some(&2));
+        assert_eq!(analytics.tag_frequency.get("criminal"), Some(&1));
+        assert_eq!(analytics.tag_frequency.get("contract"), Some(&1));
+        assert_eq!(analytics.tag_frequency.get("tort"), Some(&1));
+
+        // Check total tag usage
+        assert_eq!(analytics.total_tag_usage(), 5);
+
+        // Check unique tag count
+        assert_eq!(analytics.unique_tag_count(), 4);
+
+        // Check most used tags includes "civil"
+        assert!(
+            analytics
+                .most_used_tags
+                .iter()
+                .any(|(tag, count)| tag == "civil" && *count == 2)
+        );
+
+        // Check tag co-occurrence (civil appears with both contract and tort)
+        assert!(analytics.tag_cooccurrence.contains_key("civil"));
+
+        // Check related tags
+        let related = analytics.related_tags("civil", 1);
+        assert!(related.iter().any(|(tag, _)| tag == "contract"));
+        assert!(related.iter().any(|(tag, _)| tag == "tort"));
+
+        // Check average tags per statute
+        assert!((analytics.avg_tags_per_statute - 1.666).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_activity_analytics() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes
+        registry
+            .register(StatuteEntry::new(test_statute("act-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("act-2"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("act-3"), "US"))
+            .unwrap();
+
+        // Update some statutes to create modification history
+        registry.update("act-1", test_statute("act-1")).unwrap();
+        registry.update("act-1", test_statute("act-1")).unwrap();
+        registry.update("act-2", test_statute("act-2")).unwrap();
+
+        // Change status to create status change events
+        registry.set_status("act-1", StatuteStatus::Active).unwrap();
+        registry
+            .set_status("act-1", StatuteStatus::Repealed)
+            .unwrap();
+
+        let analytics = registry.activity_analytics();
+
+        // Check most modified statutes
+        assert!(!analytics.most_modified.is_empty());
+        assert!(analytics.most_modified.iter().any(|(id, _)| id == "act-1"));
+
+        // Check recently modified
+        assert_eq!(analytics.recently_modified.len(), 3);
+
+        // Check least modified
+        assert_eq!(analytics.least_modified.len(), 3);
+
+        // Check frequent status changes
+        assert!(
+            analytics
+                .frequent_status_changes
+                .iter()
+                .any(|(id, count)| id == "act-1" && *count == 2)
+        );
+
+        // Check average modification frequency
+        assert!(analytics.avg_modification_frequency_days >= 0.0);
+
+        // Test modified_within_days
+        let recent = analytics.modified_within_days(1);
+        assert_eq!(recent.len(), 3);
+    }
+
+    #[test]
+    fn test_field_projection() {
+        // Test all() projection
+        let proj = FieldProjection::all();
+        assert!(proj.include_id);
+        assert!(proj.include_title);
+        assert!(proj.include_version);
+        assert!(proj.include_status);
+        assert!(proj.include_jurisdiction);
+        assert!(proj.include_tags);
+        assert!(proj.include_dates);
+        assert!(proj.include_metadata);
+
+        // Test essential() projection
+        let proj = FieldProjection::essential();
+        assert!(proj.include_id);
+        assert!(proj.include_title);
+        assert!(proj.include_version);
+        assert!(proj.include_status);
+        assert!(!proj.include_jurisdiction);
+        assert!(!proj.include_tags);
+        assert!(!proj.include_dates);
+        assert!(!proj.include_metadata);
+
+        // Test builder methods
+        let proj = FieldProjection::default()
+            .with_id()
+            .with_title()
+            .with_tags()
+            .with_metadata();
+        assert!(proj.include_id);
+        assert!(proj.include_title);
+        assert!(proj.include_tags);
+        assert!(proj.include_metadata);
+        assert!(!proj.include_status);
+    }
+
+    #[test]
+    fn test_aggregation_result() {
+        let mut counts = HashMap::new();
+        counts.insert("A".to_string(), 5);
+        counts.insert("B".to_string(), 3);
+        counts.insert("C".to_string(), 2);
+
+        let result = AggregationResult::new(counts);
+
+        // Test total
+        assert_eq!(result.total, 10);
+
+        // Test get_count
+        assert_eq!(result.get_count("A"), 5);
+        assert_eq!(result.get_count("B"), 3);
+        assert_eq!(result.get_count("nonexistent"), 0);
+
+        // Test sorted_by_count
+        let sorted = result.sorted_by_count();
+        assert_eq!(sorted[0], ("A".to_string(), 5));
+        assert_eq!(sorted[1], ("B".to_string(), 3));
+        assert_eq!(sorted[2], ("C".to_string(), 2));
+
+        // Test percentage
+        assert!((result.percentage("A") - 50.0).abs() < 0.01);
+        assert!((result.percentage("B") - 30.0).abs() < 0.01);
+        assert!((result.percentage("C") - 20.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_aggregate_by() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with different jurisdictions
+        registry
+            .register(StatuteEntry::new(test_statute("agg-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("agg-2"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("agg-3"), "JP"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("agg-4"), "UK"))
+            .unwrap();
+
+        // Aggregate by jurisdiction
+        let by_jurisdiction = registry.aggregate_by(|entry| entry.jurisdiction.clone());
+
+        assert_eq!(by_jurisdiction.get_count("US"), 2);
+        assert_eq!(by_jurisdiction.get_count("JP"), 1);
+        assert_eq!(by_jurisdiction.get_count("UK"), 1);
+        assert_eq!(by_jurisdiction.total, 4);
+
+        // Aggregate by status (using Debug format)
+        let by_status = registry.aggregate_by(|entry| format!("{:?}", entry.status));
+        assert!(by_status.total > 0);
+    }
+
+    #[test]
+    fn test_aggregate_by_tags() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add statutes with tags
+        registry
+            .register(
+                StatuteEntry::new(test_statute("tag-agg-1"), "US")
+                    .with_tag("civil")
+                    .with_tag("contract"),
+            )
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("tag-agg-2"), "US").with_tag("civil"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("tag-agg-3"), "US").with_tag("criminal"))
+            .unwrap();
+
+        let by_tags = registry.aggregate_by_tags();
+
+        assert_eq!(by_tags.get_count("civil"), 2);
+        assert_eq!(by_tags.get_count("contract"), 1);
+        assert_eq!(by_tags.get_count("criminal"), 1);
+        assert_eq!(by_tags.total, 4);
+    }
+
+    #[test]
+    fn test_analytics_empty_registry() {
+        let mut registry = StatuteRegistry::new();
+
+        // Test temporal analytics on empty registry
+        let temporal = registry.temporal_analytics();
+        assert_eq!(temporal.total_registrations(), 0);
+        assert_eq!(temporal.total_updates(), 0);
+        assert_eq!(temporal.total_activity(), 0);
+        assert_eq!(temporal.avg_versions_per_statute, 0.0);
+
+        // Test relationship analytics on empty registry
+        let relationship = registry.relationship_analytics();
+        assert_eq!(relationship.total_relationships(), 0);
+        assert_eq!(relationship.max_chain_length(), 0);
+
+        // Test tag analytics on empty registry
+        let tag = registry.tag_analytics();
+        assert_eq!(tag.unique_tag_count(), 0);
+        assert_eq!(tag.total_tag_usage(), 0);
+
+        // Test activity analytics on empty registry
+        let activity = registry.activity_analytics();
+        assert!(activity.most_modified.is_empty());
+        assert!(activity.recently_modified.is_empty());
+
+        // Test aggregation on empty registry
+        let agg = registry.aggregate_by(|entry| entry.jurisdiction.clone());
+        assert_eq!(agg.total, 0);
+    }
+
+    // ========================================================================
+    // Tests for Session 8: Audit Trail, Health Check, Comparison, Bulk Ops
+    // ========================================================================
+
+    #[test]
+    fn test_audit_entry_creation() {
+        let entry = AuditEntry::new(
+            "user123".to_string(),
+            AuditOperation::Register,
+            AuditResult::Success,
+        );
+
+        assert_eq!(entry.actor, "user123");
+        assert!(entry.is_success());
+        assert!(!entry.is_failure());
+        assert!(entry.statute_id.is_none());
+        assert!(entry.source.is_none());
+        assert!(entry.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_audit_entry_builders() {
+        let entry = AuditEntry::new(
+            "admin".to_string(),
+            AuditOperation::Update,
+            AuditResult::Success,
+        )
+        .with_statute_id("test-123".to_string())
+        .with_source("192.168.1.1".to_string())
+        .with_metadata("reason".to_string(), "compliance".to_string());
+
+        assert_eq!(entry.statute_id, Some("test-123".to_string()));
+        assert_eq!(entry.source, Some("192.168.1.1".to_string()));
+        assert_eq!(
+            entry.metadata.get("reason"),
+            Some(&"compliance".to_string())
+        );
+    }
+
+    #[test]
+    fn test_audit_result_variants() {
+        let success = AuditResult::Success;
+        let failure = AuditResult::Failure {
+            error: "Not found".to_string(),
+        };
+        let partial = AuditResult::PartialSuccess {
+            succeeded: 5,
+            failed: 2,
+        };
+
+        let entry1 = AuditEntry::new("user1".to_string(), AuditOperation::Register, success);
+        assert!(entry1.is_success());
+
+        let entry2 = AuditEntry::new("user2".to_string(), AuditOperation::Delete, failure);
+        assert!(entry2.is_failure());
+
+        let entry3 = AuditEntry::new(
+            "user3".to_string(),
+            AuditOperation::BatchOperation {
+                operation_type: "import".to_string(),
+                count: 7,
+            },
+            partial,
+        );
+        assert!(!entry3.is_success());
+        assert!(!entry3.is_failure());
+    }
+
+    #[test]
+    fn test_audit_trail_basic() {
+        let mut trail = AuditTrail::new(100);
+        assert_eq!(trail.count(), 0);
+        assert!(trail.is_enabled());
+
+        let entry = AuditEntry::new(
+            "user1".to_string(),
+            AuditOperation::Register,
+            AuditResult::Success,
+        );
+        trail.record(entry.clone());
+
+        assert_eq!(trail.count(), 1);
+        assert_eq!(trail.entries().len(), 1);
+    }
+
+    #[test]
+    fn test_audit_trail_max_entries() {
+        let mut trail = AuditTrail::new(3);
+
+        for i in 0..5 {
+            let entry = AuditEntry::new(
+                format!("user{}", i),
+                AuditOperation::Register,
+                AuditResult::Success,
+            );
+            trail.record(entry);
+        }
+
+        // Should only keep last 3 entries
+        assert_eq!(trail.count(), 3);
+    }
+
+    #[test]
+    fn test_audit_trail_filtering() {
+        let mut trail = AuditTrail::new(100);
+
+        // Add entries with different actors
+        trail.record(
+            AuditEntry::new(
+                "alice".to_string(),
+                AuditOperation::Register,
+                AuditResult::Success,
+            )
+            .with_statute_id("s1".to_string()),
+        );
+
+        trail.record(
+            AuditEntry::new(
+                "bob".to_string(),
+                AuditOperation::Update,
+                AuditResult::Success,
+            )
+            .with_statute_id("s2".to_string()),
+        );
+
+        trail.record(
+            AuditEntry::new(
+                "alice".to_string(),
+                AuditOperation::Delete,
+                AuditResult::Failure {
+                    error: "Not found".to_string(),
+                },
+            )
+            .with_statute_id("s3".to_string()),
+        );
+
+        // Test filtering by actor
+        let alice_entries = trail.entries_by_actor("alice");
+        assert_eq!(alice_entries.len(), 2);
+
+        let bob_entries = trail.entries_by_actor("bob");
+        assert_eq!(bob_entries.len(), 1);
+
+        // Test filtering by statute
+        let s1_entries = trail.entries_by_statute("s1");
+        assert_eq!(s1_entries.len(), 1);
+
+        // Test successful/failed operations
+        let successful = trail.successful_operations();
+        assert_eq!(successful.len(), 2);
+
+        let failed = trail.failed_operations();
+        assert_eq!(failed.len(), 1);
+    }
+
+    #[test]
+    fn test_audit_trail_enable_disable() {
+        let mut trail = AuditTrail::new(100);
+        assert!(trail.is_enabled());
+
+        trail.disable();
+        assert!(!trail.is_enabled());
+
+        // Recording when disabled should be a no-op
+        trail.record(AuditEntry::new(
+            "user".to_string(),
+            AuditOperation::Register,
+            AuditResult::Success,
+        ));
+        assert_eq!(trail.count(), 0);
+
+        trail.enable();
+        trail.record(AuditEntry::new(
+            "user".to_string(),
+            AuditOperation::Register,
+            AuditResult::Success,
+        ));
+        assert_eq!(trail.count(), 1);
+    }
+
+    #[test]
+    fn test_audit_trail_export_json() {
+        let mut trail = AuditTrail::new(100);
+        trail.record(AuditEntry::new(
+            "user1".to_string(),
+            AuditOperation::Register,
+            AuditResult::Success,
+        ));
+
+        let json = trail.export_json().unwrap();
+        assert!(json.contains("user1"));
+        assert!(json.contains("Register"));
+    }
+
+    #[test]
+    fn test_health_status_methods() {
+        let healthy = HealthStatus::Healthy;
+        assert!(healthy.is_healthy());
+        assert!(!healthy.is_degraded());
+        assert!(!healthy.is_unhealthy());
+
+        let degraded = HealthStatus::Degraded {
+            issues: vec!["High load".to_string()],
+        };
+        assert!(!degraded.is_healthy());
+        assert!(degraded.is_degraded());
+        assert!(!degraded.is_unhealthy());
+
+        let unhealthy = HealthStatus::Unhealthy {
+            errors: vec!["Database down".to_string()],
+        };
+        assert!(!unhealthy.is_healthy());
+        assert!(!unhealthy.is_degraded());
+        assert!(unhealthy.is_unhealthy());
+    }
+
+    #[test]
+    fn test_component_health() {
+        let healthy = ComponentHealth::healthy("cache".to_string());
+        assert_eq!(healthy.name, "cache");
+        assert!(healthy.healthy);
+        assert!(healthy.message.is_none());
+
+        let unhealthy = ComponentHealth::unhealthy("storage".to_string(), "Disk full".to_string());
+        assert_eq!(unhealthy.name, "storage");
+        assert!(!unhealthy.healthy);
+        assert_eq!(unhealthy.message, Some("Disk full".to_string()));
+
+        let with_metrics = ComponentHealth::healthy("system".to_string())
+            .with_metric("cpu".to_string(), 75.0)
+            .with_metric("memory".to_string(), 80.5);
+        assert_eq!(with_metrics.metrics.get("cpu"), Some(&75.0));
+        assert_eq!(with_metrics.metrics.get("memory"), Some(&80.5));
+    }
+
+    #[test]
+    fn test_health_check() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes
+        registry
+            .register(StatuteEntry::new(test_statute("h1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("h2"), "US"))
+            .unwrap();
+
+        let health = registry.health_check();
+
+        assert_eq!(health.statute_count, 2);
+        assert!(health.version_count > 0);
+        assert!(health.event_count > 0);
+        assert_eq!(health.archived_count, 0);
+        assert!(health.memory_estimate_bytes > 0);
+        // check_duration_ms is u64, so it's always >= 0
+
+        // Check component health
+        assert!(health.component_checks.contains_key("cache"));
+        assert!(health.component_checks.contains_key("storage"));
+        assert!(health.component_checks.contains_key("indexes"));
+        assert!(health.component_checks.contains_key("event_store"));
+
+        // All components should be healthy
+        for component in health.component_checks.values() {
+            assert!(component.healthy);
+        }
+    }
+
+    #[test]
+    fn test_health_check_empty_registry() {
+        let registry = StatuteRegistry::new();
+        let health = registry.health_check();
+
+        assert_eq!(health.statute_count, 0);
+        assert!(health.status.is_degraded()); // Empty registry is degraded
+    }
+
+    #[test]
+    fn test_registry_difference_new() {
+        let diff = RegistryDifference::new();
+        assert_eq!(diff.difference_count(), 0);
+        assert!(diff.is_identical());
+        assert!(diff.only_in_left.is_empty());
+        assert!(diff.only_in_right.is_empty());
+        assert!(diff.different_statutes.is_empty());
+        assert!(diff.identical_statutes.is_empty());
+    }
+
+    #[test]
+    fn test_registry_comparison_identical() {
+        let mut registry1 = StatuteRegistry::new();
+        let mut registry2 = StatuteRegistry::new();
+
+        registry1
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+        registry2
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+
+        let diff = registry1.compare_with(&registry2);
+        assert!(diff.is_identical());
+        assert_eq!(diff.identical_statutes.len(), 1);
+        assert_eq!(diff.difference_count(), 0);
+    }
+
+    #[test]
+    fn test_registry_comparison_only_in_left() {
+        let mut registry1 = StatuteRegistry::new();
+        let registry2 = StatuteRegistry::new();
+
+        registry1
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+        registry1
+            .register(StatuteEntry::new(test_statute("c2"), "US"))
+            .unwrap();
+
+        let diff = registry1.compare_with(&registry2);
+        assert!(!diff.is_identical());
+        assert_eq!(diff.only_in_left.len(), 2);
+        assert_eq!(diff.only_in_right.len(), 0);
+        assert!(diff.only_in_left.contains(&"c1".to_string()));
+        assert!(diff.only_in_left.contains(&"c2".to_string()));
+    }
+
+    #[test]
+    fn test_registry_comparison_only_in_right() {
+        let registry1 = StatuteRegistry::new();
+        let mut registry2 = StatuteRegistry::new();
+
+        registry2
+            .register(StatuteEntry::new(test_statute("c3"), "JP"))
+            .unwrap();
+
+        let diff = registry1.compare_with(&registry2);
+        assert!(!diff.is_identical());
+        assert_eq!(diff.only_in_left.len(), 0);
+        assert_eq!(diff.only_in_right.len(), 1);
+        assert!(diff.only_in_right.contains(&"c3".to_string()));
+    }
+
+    #[test]
+    fn test_registry_comparison_different_versions() {
+        let mut registry1 = StatuteRegistry::new();
+        let mut registry2 = StatuteRegistry::new();
+
+        registry1
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+        registry2
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+
+        // Update one registry
+        let existing = registry2.get("c1").unwrap().clone();
+        let mut updated_statute = existing.statute.clone();
+        updated_statute.title = "Updated Title".to_string();
+        registry2.update("c1", updated_statute).unwrap();
+
+        let diff = registry1.compare_with(&registry2);
+        assert!(!diff.is_identical());
+        assert_eq!(diff.different_statutes.len(), 1);
+        assert!(
+            diff.different_statutes[0]
+                .differing_fields
+                .contains(&"title".to_string())
+        );
+        assert!(
+            diff.different_statutes[0]
+                .differing_fields
+                .contains(&"version".to_string())
+        );
+    }
+
+    #[test]
+    fn test_registry_comparison_summary() {
+        let mut registry1 = StatuteRegistry::new();
+        let mut registry2 = StatuteRegistry::new();
+
+        registry1
+            .register(StatuteEntry::new(test_statute("c1"), "US"))
+            .unwrap();
+        registry1
+            .register(StatuteEntry::new(test_statute("c2"), "US"))
+            .unwrap();
+
+        registry2
+            .register(StatuteEntry::new(test_statute("c2"), "US"))
+            .unwrap();
+        registry2
+            .register(StatuteEntry::new(test_statute("c3"), "JP"))
+            .unwrap();
+
+        let diff = registry1.compare_with(&registry2);
+        let summary = diff.summary();
+
+        assert!(summary.contains("Only in left: 1"));
+        assert!(summary.contains("Only in right: 1"));
+        assert!(summary.contains("Identical: 1"));
+    }
+
+    #[test]
+    fn test_bulk_config_default() {
+        let config = BulkConfig::default();
+        assert_eq!(config.batch_size, 100);
+        assert!(config.continue_on_error);
+        assert_eq!(config.max_parallelism, 4);
+    }
+
+    #[test]
+    fn test_bulk_config_builders() {
+        let config = BulkConfig::new(50)
+            .with_continue_on_error(false)
+            .with_max_parallelism(8);
+
+        assert_eq!(config.batch_size, 50);
+        assert!(!config.continue_on_error);
+        assert_eq!(config.max_parallelism, 8);
+    }
+
+    #[test]
+    fn test_bulk_operation_result() {
+        let result = BulkOperationResult::new();
+        assert_eq!(result.total_processed, 0);
+        assert_eq!(result.successful, 0);
+        assert_eq!(result.failed, 0);
+        assert!(!result.is_all_successful());
+        assert_eq!(result.success_rate(), 0.0);
+
+        let mut result2 = BulkOperationResult::new();
+        result2.total_processed = 10;
+        result2.successful = 7;
+        result2.failed = 3;
+
+        assert!(!result2.is_all_successful());
+        assert!((result2.success_rate() - 0.7).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_bulk_register_success() {
+        let mut registry = StatuteRegistry::new();
+        let entries = vec![
+            StatuteEntry::new(test_statute("bulk-1"), "US"),
+            StatuteEntry::new(test_statute("bulk-2"), "US"),
+            StatuteEntry::new(test_statute("bulk-3"), "US"),
+        ];
+
+        let config = BulkConfig::new(2);
+        let result = registry.bulk_register(entries, config);
+
+        assert_eq!(result.total_processed, 3);
+        assert_eq!(result.successful, 3);
+        assert_eq!(result.failed, 0);
+        assert!(result.is_all_successful());
+        assert_eq!(result.success_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_bulk_register_partial_failure() {
+        let mut registry = StatuteRegistry::new();
+
+        // Pre-register one to cause duplicate error
+        registry
+            .register(StatuteEntry::new(test_statute("bulk-2"), "US"))
+            .unwrap();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("bulk-1"), "US"),
+            StatuteEntry::new(test_statute("bulk-2"), "US"), // Duplicate
+            StatuteEntry::new(test_statute("bulk-3"), "US"),
+        ];
+
+        let config = BulkConfig::default().with_continue_on_error(true);
+        let result = registry.bulk_register(entries, config);
+
+        assert_eq!(result.total_processed, 3);
+        assert_eq!(result.successful, 2);
+        assert_eq!(result.failed, 1);
+        assert!(!result.is_all_successful());
+        assert!(result.errors.contains_key("bulk-2"));
+    }
+
+    #[test]
+    fn test_bulk_register_stop_on_error() {
+        let mut registry = StatuteRegistry::new();
+        registry
+            .register(StatuteEntry::new(test_statute("bulk-2"), "US"))
+            .unwrap();
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("bulk-1"), "US"),
+            StatuteEntry::new(test_statute("bulk-2"), "US"), // Duplicate
+            StatuteEntry::new(test_statute("bulk-3"), "US"), // Won't be processed
+        ];
+
+        let config = BulkConfig::default().with_continue_on_error(false);
+        let result = registry.bulk_register(entries, config);
+
+        assert_eq!(result.total_processed, 2);
+        assert_eq!(result.successful, 1);
+        assert_eq!(result.failed, 1);
+    }
+
+    #[test]
+    fn test_bulk_delete_success() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register statutes
+        registry
+            .register(StatuteEntry::new(test_statute("del-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("del-2"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("del-3"), "US"))
+            .unwrap();
+
+        let statute_ids = vec![
+            "del-1".to_string(),
+            "del-2".to_string(),
+            "del-3".to_string(),
+        ];
+
+        let config = BulkConfig::default();
+        let result = registry.bulk_delete_with_config(statute_ids, config);
+
+        assert_eq!(result.total_processed, 3);
+        assert_eq!(result.successful, 3);
+        assert_eq!(result.failed, 0);
+        assert!(result.is_all_successful());
+    }
+
+    #[test]
+    fn test_bulk_delete_partial_failure() {
+        let mut registry = StatuteRegistry::new();
+
+        // Register only 2 statutes
+        registry
+            .register(StatuteEntry::new(test_statute("del-1"), "US"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("del-3"), "US"))
+            .unwrap();
+
+        let statute_ids = vec![
+            "del-1".to_string(),
+            "del-2".to_string(), // Doesn't exist
+            "del-3".to_string(),
+        ];
+
+        let config = BulkConfig::default();
+        let result = registry.bulk_delete_with_config(statute_ids, config);
+
+        assert_eq!(result.total_processed, 3);
+        assert_eq!(result.successful, 2);
+        assert_eq!(result.failed, 1);
+        assert!(result.errors.contains_key("del-2"));
+    }
+
+    #[test]
+    fn test_stream_ids() {
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("stream-1"), "US").with_tag("civil"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("stream-2"), "JP").with_tag("criminal"))
+            .unwrap();
+        registry
+            .register(StatuteEntry::new(test_statute("stream-3"), "US").with_tag("civil"))
+            .unwrap();
+
+        // Stream US statutes
+        let us_ids = registry.stream_ids(|entry| entry.jurisdiction == "US");
+        assert_eq!(us_ids.len(), 2);
+        assert!(us_ids.contains(&"stream-1".to_string()));
+        assert!(us_ids.contains(&"stream-3".to_string()));
+
+        // Stream civil statutes
+        let civil_ids = registry.stream_ids(|entry| entry.tags.contains(&"civil".to_string()));
+        assert_eq!(civil_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_stream_entries() {
+        let mut registry = StatuteRegistry::new();
+
+        for i in 1..=10 {
+            registry
+                .register(StatuteEntry::new(
+                    test_statute(&format!("stream-{}", i)),
+                    "US",
+                ))
+                .unwrap();
+        }
+
+        // Stream all entries with batch size 3
+        let batches = registry.stream_entries(|_| true, 3);
+        assert_eq!(batches.len(), 4); // 3 + 3 + 3 + 1
+        assert_eq!(batches[0].len(), 3);
+        assert_eq!(batches[1].len(), 3);
+        assert_eq!(batches[2].len(), 3);
+        assert_eq!(batches[3].len(), 1);
+    }
+
+    #[test]
+    fn test_audit_operation_variants() {
+        let _register = AuditOperation::Register;
+        let _update = AuditOperation::Update;
+        let _delete = AuditOperation::Delete;
+        let _archive = AuditOperation::Archive;
+        let _status_change = AuditOperation::StatusChange {
+            from: StatuteStatus::Draft,
+            to: StatuteStatus::Active,
+        };
+        let _add_tag = AuditOperation::AddTag {
+            tag: "test".to_string(),
+        };
+        let _export = AuditOperation::Export {
+            format: "json".to_string(),
+        };
+        let _batch = AuditOperation::BatchOperation {
+            operation_type: "import".to_string(),
+            count: 100,
+        };
+    }
+
+    // ========================================================================
+    // Tests for Session 9: Benchmarking, Rate Limiting, Circuit Breaker, Observability
+    // ========================================================================
+
+    #[test]
+    fn test_benchmark_result_creation() {
+        let durations = vec![100, 150, 120, 180, 110];
+        let result = BenchmarkResult::new("test_op".to_string(), 5, durations);
+
+        assert_eq!(result.name, "test_op");
+        assert_eq!(result.iterations, 5);
+        assert_eq!(result.min_duration_us, 100);
+        assert_eq!(result.max_duration_us, 180);
+        assert!(result.avg_duration_us > 0.0);
+        assert!(result.ops_per_sec > 0.0);
+
+        let summary = result.summary();
+        assert!(summary.contains("test_op"));
+        assert!(summary.contains("ops/sec"));
+    }
+
+    #[test]
+    fn test_benchmark_suite() {
+        let mut suite = BenchmarkSuite::new();
+        assert_eq!(suite.results().len(), 0);
+
+        let result1 = BenchmarkResult::new("op1".to_string(), 10, vec![100; 10]);
+        let result2 = BenchmarkResult::new("op2".to_string(), 5, vec![200; 5]);
+
+        suite.add_result(result1);
+        suite.add_result(result2);
+
+        assert_eq!(suite.results().len(), 2);
+
+        let summary = suite.summary();
+        assert!(summary.contains("Benchmark Results"));
+        assert!(summary.contains("op1"));
+        assert!(summary.contains("op2"));
+
+        let json = suite.export_json().unwrap();
+        assert!(json.contains("op1"));
+        assert!(json.contains("op2"));
+    }
+
+    #[test]
+    fn test_rate_limit_config() {
+        let config = RateLimitConfig::default();
+        assert_eq!(config.max_requests, 1000);
+        assert_eq!(config.window_secs, 60);
+        assert!(config.enabled);
+
+        let custom = RateLimitConfig::new(100, 30);
+        assert_eq!(custom.max_requests, 100);
+        assert_eq!(custom.window_secs, 30);
+
+        let disabled = RateLimitConfig::disabled();
+        assert!(!disabled.enabled);
+    }
+
+    #[test]
+    fn test_rate_limiter_basic() {
+        let config = RateLimitConfig::new(3, 60);
+        let mut limiter = RateLimiter::new(config);
+
+        // First 3 requests should be allowed
+        assert!(limiter.check_rate_limit("user1"));
+        assert!(limiter.check_rate_limit("user1"));
+        assert!(limiter.check_rate_limit("user1"));
+
+        // 4th request should be denied
+        assert!(!limiter.check_rate_limit("user1"));
+
+        // Different user should be allowed
+        assert!(limiter.check_rate_limit("user2"));
+    }
+
+    #[test]
+    fn test_rate_limiter_counts() {
+        let config = RateLimitConfig::new(5, 60);
+        let mut limiter = RateLimiter::new(config);
+
+        limiter.check_rate_limit("user1");
+        limiter.check_rate_limit("user1");
+        limiter.check_rate_limit("user1");
+
+        assert_eq!(limiter.current_count("user1"), 3);
+        assert_eq!(limiter.remaining("user1"), 2);
+        assert_eq!(limiter.current_count("user2"), 0);
+    }
+
+    #[test]
+    fn test_rate_limiter_reset() {
+        let config = RateLimitConfig::new(2, 60);
+        let mut limiter = RateLimiter::new(config);
+
+        limiter.check_rate_limit("user1");
+        limiter.check_rate_limit("user1");
+        assert!(!limiter.check_rate_limit("user1"));
+
+        // Reset should allow new requests
+        limiter.reset("user1");
+        assert!(limiter.check_rate_limit("user1"));
+    }
+
+    #[test]
+    fn test_rate_limiter_disabled() {
+        let config = RateLimitConfig::disabled();
+        let mut limiter = RateLimiter::new(config);
+
+        // All requests should be allowed when disabled
+        for _ in 0..100 {
+            assert!(limiter.check_rate_limit("user1"));
+        }
+    }
+
+    #[test]
+    fn test_rate_limiter_clear_all() {
+        let config = RateLimitConfig::new(5, 60);
+        let mut limiter = RateLimiter::new(config);
+
+        limiter.check_rate_limit("user1");
+        limiter.check_rate_limit("user2");
+        limiter.check_rate_limit("user3");
+
+        limiter.clear_all();
+
+        assert_eq!(limiter.current_count("user1"), 0);
+        assert_eq!(limiter.current_count("user2"), 0);
+        assert_eq!(limiter.current_count("user3"), 0);
+    }
+
+    #[test]
+    fn test_circuit_breaker_config() {
+        let config = CircuitBreakerConfig::default();
+        assert_eq!(config.failure_threshold, 5);
+        assert_eq!(config.timeout_secs, 60);
+        assert_eq!(config.success_threshold, 2);
+
+        let custom = CircuitBreakerConfig::new(3, 30, 1);
+        assert_eq!(custom.failure_threshold, 3);
+        assert_eq!(custom.timeout_secs, 30);
+        assert_eq!(custom.success_threshold, 1);
+    }
+
+    #[test]
+    fn test_circuit_breaker_closed_to_open() {
+        let config = CircuitBreakerConfig::new(3, 60, 2);
+        let mut breaker = CircuitBreaker::new(config);
+
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+        assert!(breaker.is_request_allowed());
+
+        // Record failures
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+        assert_eq!(breaker.failure_count(), 1);
+
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+        assert_eq!(breaker.failure_count(), 2);
+
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Open);
+
+        // Requests should be denied when open
+        assert!(!breaker.is_request_allowed());
+    }
+
+    #[test]
+    fn test_circuit_breaker_success_resets_failures() {
+        let config = CircuitBreakerConfig::new(5, 60, 2);
+        let mut breaker = CircuitBreaker::new(config);
+
+        breaker.record_failure();
+        breaker.record_failure();
+        assert_eq!(breaker.failure_count(), 2);
+
+        breaker.record_success();
+        assert_eq!(breaker.failure_count(), 0);
+    }
+
+    #[test]
+    fn test_circuit_breaker_half_open_to_closed() {
+        let config = CircuitBreakerConfig::new(2, 0, 2); // 0 timeout for immediate testing
+        let mut breaker = CircuitBreaker::new(config);
+
+        // Open the circuit
+        breaker.record_failure();
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Open);
+
+        // Should transition to half-open after timeout
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        assert!(breaker.is_request_allowed());
+        assert_eq!(*breaker.state(), CircuitState::HalfOpen);
+
+        // Record successful requests
+        breaker.record_success();
+        assert_eq!(*breaker.state(), CircuitState::HalfOpen);
+
+        breaker.record_success();
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+    }
+
+    #[test]
+    fn test_circuit_breaker_half_open_to_open() {
+        let config = CircuitBreakerConfig::new(2, 0, 2);
+        let mut breaker = CircuitBreaker::new(config);
+
+        // Open the circuit
+        breaker.record_failure();
+        breaker.record_failure();
+
+        // Transition to half-open
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        breaker.is_request_allowed();
+        assert_eq!(*breaker.state(), CircuitState::HalfOpen);
+
+        // Failure in half-open should reopen circuit
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Open);
+    }
+
+    #[test]
+    fn test_circuit_breaker_reset() {
+        let config = CircuitBreakerConfig::new(2, 60, 2);
+        let mut breaker = CircuitBreaker::new(config);
+
+        breaker.record_failure();
+        breaker.record_failure();
+        assert_eq!(*breaker.state(), CircuitState::Open);
+
+        breaker.reset();
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+        assert_eq!(breaker.failure_count(), 0);
+    }
+
+    #[test]
+    fn test_circuit_breaker_force_open() {
+        let mut breaker = CircuitBreaker::default();
+        assert_eq!(*breaker.state(), CircuitState::Closed);
+
+        breaker.force_open();
+        assert_eq!(*breaker.state(), CircuitState::Open);
+        assert!(!breaker.is_request_allowed());
+    }
+
+    #[test]
+    fn test_log_level_ordering() {
+        assert!(LogLevel::Trace < LogLevel::Debug);
+        assert!(LogLevel::Debug < LogLevel::Info);
+        assert!(LogLevel::Info < LogLevel::Warn);
+        assert!(LogLevel::Warn < LogLevel::Error);
+    }
+
+    #[test]
+    fn test_log_entry_creation() {
+        let entry = LogEntry::new(
+            LogLevel::Info,
+            "register".to_string(),
+            "Statute registered".to_string(),
+        );
+
+        assert_eq!(entry.level, LogLevel::Info);
+        assert_eq!(entry.operation, "register");
+        assert_eq!(entry.message, "Statute registered");
+        assert!(entry.fields.is_empty());
+    }
+
+    #[test]
+    fn test_log_entry_with_fields() {
+        let entry = LogEntry::new(
+            LogLevel::Warn,
+            "update".to_string(),
+            "Update warning".to_string(),
+        )
+        .with_field("statute_id".to_string(), "test-123".to_string())
+        .with_field("version".to_string(), "2".to_string());
+
+        assert_eq!(
+            entry.fields.get("statute_id"),
+            Some(&"test-123".to_string())
+        );
+        assert_eq!(entry.fields.get("version"), Some(&"2".to_string()));
+    }
+
+    #[test]
+    fn test_metric_entry_counter() {
+        let metric = MetricEntry::counter("requests".to_string(), 100);
+        assert_eq!(metric.name, "requests");
+        assert!(matches!(
+            metric.metric_type,
+            MetricType::Counter { value: 100 }
+        ));
+    }
+
+    #[test]
+    fn test_metric_entry_gauge() {
+        let metric = MetricEntry::gauge("cpu_usage".to_string(), 75.5);
+        assert_eq!(metric.name, "cpu_usage");
+        assert!(
+            matches!(metric.metric_type, MetricType::Gauge { value } if (value - 75.5).abs() < 0.01)
+        );
+    }
+
+    #[test]
+    fn test_metric_entry_timing() {
+        let metric = MetricEntry::timing("operation_duration".to_string(), 12345);
+        assert_eq!(metric.name, "operation_duration");
+        assert!(matches!(
+            metric.metric_type,
+            MetricType::Timing { duration_us: 12345 }
+        ));
+    }
+
+    #[test]
+    fn test_metric_entry_with_labels() {
+        let metric = MetricEntry::counter("http_requests".to_string(), 50)
+            .with_label("method".to_string(), "GET".to_string())
+            .with_label("status".to_string(), "200".to_string());
+
+        assert_eq!(metric.labels.get("method"), Some(&"GET".to_string()));
+        assert_eq!(metric.labels.get("status"), Some(&"200".to_string()));
+    }
+
+    #[test]
+    fn test_observability_collector_basic() {
+        let mut collector = ObservabilityCollector::default();
+
+        let log = LogEntry::new(
+            LogLevel::Info,
+            "test".to_string(),
+            "Test message".to_string(),
+        );
+        collector.log(log);
+
+        assert_eq!(collector.logs().len(), 1);
+
+        let metric = MetricEntry::counter("test_metric".to_string(), 1);
+        collector.metric(metric);
+
+        assert_eq!(collector.metrics().len(), 1);
+    }
+
+    #[test]
+    fn test_observability_collector_log_level_filtering() {
+        let mut collector = ObservabilityCollector::new(100, 100, LogLevel::Warn);
+
+        // Debug and Info should be filtered out
+        collector.log(LogEntry::new(
+            LogLevel::Debug,
+            "op".to_string(),
+            "debug".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "op".to_string(),
+            "info".to_string(),
+        ));
+        assert_eq!(collector.logs().len(), 0);
+
+        // Warn and Error should be collected
+        collector.log(LogEntry::new(
+            LogLevel::Warn,
+            "op".to_string(),
+            "warn".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Error,
+            "op".to_string(),
+            "error".to_string(),
+        ));
+        assert_eq!(collector.logs().len(), 2);
+    }
+
+    #[test]
+    fn test_observability_collector_log_rotation() {
+        let mut collector = ObservabilityCollector::new(3, 10, LogLevel::Info);
+
+        // Add 5 logs, should only keep last 3
+        for i in 0..5 {
+            collector.log(LogEntry::new(
+                LogLevel::Info,
+                "op".to_string(),
+                format!("Log {}", i),
+            ));
+        }
+
+        assert_eq!(collector.logs().len(), 3);
+    }
+
+    #[test]
+    fn test_observability_collector_metric_rotation() {
+        let mut collector = ObservabilityCollector::new(10, 3, LogLevel::Info);
+
+        // Add 5 metrics, should only keep last 3
+        for i in 0..5 {
+            collector.metric(MetricEntry::counter(format!("metric_{}", i), i as u64));
+        }
+
+        assert_eq!(collector.metrics().len(), 3);
+    }
+
+    #[test]
+    fn test_observability_collector_logs_by_level() {
+        let mut collector = ObservabilityCollector::default();
+
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "op".to_string(),
+            "info1".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Warn,
+            "op".to_string(),
+            "warn1".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "op".to_string(),
+            "info2".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Error,
+            "op".to_string(),
+            "error1".to_string(),
+        ));
+
+        let info_logs = collector.logs_by_level(LogLevel::Info);
+        assert_eq!(info_logs.len(), 2);
+
+        let warn_logs = collector.logs_by_level(LogLevel::Warn);
+        assert_eq!(warn_logs.len(), 1);
+    }
+
+    #[test]
+    fn test_observability_collector_logs_by_operation() {
+        let mut collector = ObservabilityCollector::default();
+
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "register".to_string(),
+            "msg1".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "update".to_string(),
+            "msg2".to_string(),
+        ));
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "register".to_string(),
+            "msg3".to_string(),
+        ));
+
+        let register_logs = collector.logs_by_operation("register");
+        assert_eq!(register_logs.len(), 2);
+
+        let update_logs = collector.logs_by_operation("update");
+        assert_eq!(update_logs.len(), 1);
+    }
+
+    #[test]
+    fn test_observability_collector_metrics_by_name() {
+        let mut collector = ObservabilityCollector::default();
+
+        collector.metric(MetricEntry::counter("requests".to_string(), 10));
+        collector.metric(MetricEntry::gauge("cpu".to_string(), 50.0));
+        collector.metric(MetricEntry::counter("requests".to_string(), 20));
+
+        let request_metrics = collector.metrics_by_name("requests");
+        assert_eq!(request_metrics.len(), 2);
+
+        let cpu_metrics = collector.metrics_by_name("cpu");
+        assert_eq!(cpu_metrics.len(), 1);
+    }
+
+    #[test]
+    fn test_observability_collector_clear() {
+        let mut collector = ObservabilityCollector::default();
+
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "op".to_string(),
+            "msg".to_string(),
+        ));
+        collector.metric(MetricEntry::counter("test".to_string(), 1));
+
+        collector.clear_logs();
+        assert_eq!(collector.logs().len(), 0);
+        assert_eq!(collector.metrics().len(), 1);
+
+        collector.clear_metrics();
+        assert_eq!(collector.metrics().len(), 0);
+    }
+
+    #[test]
+    fn test_observability_collector_export_json() {
+        let mut collector = ObservabilityCollector::default();
+
+        collector.log(LogEntry::new(
+            LogLevel::Info,
+            "test".to_string(),
+            "message".to_string(),
+        ));
+        collector.metric(MetricEntry::counter("test_metric".to_string(), 42));
+
+        let logs_json = collector.export_logs_json().unwrap();
+        assert!(logs_json.contains("test"));
+        assert!(logs_json.contains("message"));
+
+        let metrics_json = collector.export_metrics_json().unwrap();
+        assert!(metrics_json.contains("test_metric"));
+        assert!(metrics_json.contains("42"));
     }
 }

@@ -10,7 +10,7 @@ mod smt;
 #[cfg(feature = "z3-solver")]
 pub use smt::{SmtVerifier, create_z3_context};
 
-use legalis_core::Statute;
+use legalis_core::{EffectType, Statute};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
@@ -256,7 +256,7 @@ impl Default for VerificationBudget {
 }
 
 /// Incremental verification state for tracking statute changes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IncrementalState {
     /// Hashes of previously verified statutes
     statute_hashes: HashMap<String, u64>,
@@ -1105,7 +1105,7 @@ impl Default for StatuteVerifier {
 }
 
 /// A constitutional principle to check against.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConstitutionalPrinciple {
     /// Unique identifier
     pub id: String,
@@ -1144,7 +1144,7 @@ pub enum PrincipleCheck {
 }
 
 /// Result of a constitutional principle check.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PrincipleCheckResult {
     /// Whether the check passed
     pub passed: bool,
@@ -2547,6 +2547,7 @@ fn analyze_condition(condition: &legalis_core::Condition) -> (usize, usize, Hash
             (1, 0, ["SetMembership".to_string()].into_iter().collect())
         }
         Condition::Pattern { .. } => (1, 0, ["Pattern".to_string()].into_iter().collect()),
+        Condition::Calculation { .. } => (1, 0, ["Calculation".to_string()].into_iter().collect()),
         Condition::Custom { .. } => (1, 0, ["Custom".to_string()].into_iter().collect()),
         Condition::And(left, right) => {
             let (l_depth, l_ops, l_types) = analyze_condition(left);
@@ -3796,6 +3797,11 @@ fn conditions_are_similar(c1: &legalis_core::Condition, c2: &legalis_core::Condi
         (Condition::Geographic { .. }, Condition::Geographic { .. }) => true,
         (Condition::EntityRelationship { .. }, Condition::EntityRelationship { .. }) => true,
         (Condition::ResidencyDuration { .. }, Condition::ResidencyDuration { .. }) => true,
+        (Condition::Duration { .. }, Condition::Duration { .. }) => true,
+        (Condition::Percentage { .. }, Condition::Percentage { .. }) => true,
+        (Condition::SetMembership { .. }, Condition::SetMembership { .. }) => true,
+        (Condition::Pattern { .. }, Condition::Pattern { .. }) => true,
+        (Condition::Calculation { .. }, Condition::Calculation { .. }) => true,
         (Condition::Custom { description: d1 }, Condition::Custom { description: d2 }) => {
             string_similarity(d1, d2) > 0.7
         }
@@ -5923,7 +5929,7 @@ pub mod watch {
     use std::time::Duration;
 
     /// Configuration for watch mode.
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     pub struct WatchConfig {
         /// Paths to watch
         pub paths: Vec<PathBuf>,
@@ -6255,6 +6261,3295 @@ impl PrecedentRegistry {
     }
 }
 
+/// Optimization suggestion for statute conditions.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OptimizationSuggestion {
+    /// Statute ID that can be optimized
+    pub statute_id: String,
+    /// Current complexity score
+    pub current_complexity: usize,
+    /// Suggested simplified condition
+    pub suggested_condition: Option<String>,
+    /// List of specific suggestions
+    pub suggestions: Vec<String>,
+    /// Potential complexity after optimization
+    pub optimized_complexity: usize,
+}
+
+/// Analyzes statutes and suggests optimizations for complex conditions.
+///
+/// This function uses SMT-based analysis to identify simplification opportunities.
+#[cfg(feature = "z3-solver")]
+pub fn suggest_optimizations(statutes: &[Statute]) -> Vec<OptimizationSuggestion> {
+    use crate::smt::{SmtVerifier, create_z3_context};
+
+    let ctx = create_z3_context();
+    let mut verifier = SmtVerifier::new(&ctx);
+    let mut suggestions = Vec::new();
+
+    for statute in statutes {
+        for condition in &statute.preconditions {
+            let (complexity, smt_suggestions) = verifier.analyze_complexity(condition);
+
+            if !smt_suggestions.is_empty() || complexity > 10 {
+                // Try to simplify
+                if let Ok((simplified, changed)) = verifier.simplify(condition) {
+                    let optimized_complexity = if changed {
+                        let (opt_comp, _) = verifier.analyze_complexity(&simplified);
+                        opt_comp
+                    } else {
+                        complexity
+                    };
+
+                    suggestions.push(OptimizationSuggestion {
+                        statute_id: statute.id.clone(),
+                        current_complexity: complexity,
+                        suggested_condition: if changed {
+                            Some(format!("{}", simplified))
+                        } else {
+                            None
+                        },
+                        suggestions: smt_suggestions,
+                        optimized_complexity,
+                    });
+                }
+            }
+        }
+    }
+
+    suggestions
+}
+
+/// Gap in statute coverage - a scenario not handled by any statute.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CoverageGap {
+    /// Description of the gap
+    pub description: String,
+    /// Example scenario that falls into this gap
+    pub example_scenario: String,
+    /// Severity of the gap (Info, Warning, Error, Critical)
+    pub severity: Severity,
+    /// Suggested statutes that might be related
+    pub related_statutes: Vec<String>,
+}
+
+/// Analyzes statute coverage and identifies potential gaps.
+///
+/// This performs a heuristic analysis to find common scenarios that
+/// might not be covered by the provided statutes.
+pub fn analyze_coverage_gaps(statutes: &[Statute]) -> Vec<CoverageGap> {
+    let mut gaps = Vec::new();
+
+    // Check for age-based gaps
+    let age_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| {
+            s.preconditions
+                .iter()
+                .any(|c| matches!(c, legalis_core::Condition::Age { .. }))
+        })
+        .collect();
+
+    if !age_statutes.is_empty() {
+        // Check for gaps in age ranges
+        let mut age_thresholds: Vec<u32> = age_statutes
+            .iter()
+            .flat_map(|s| {
+                s.preconditions.iter().filter_map(|c| {
+                    if let legalis_core::Condition::Age { value, .. } = c {
+                        Some(*value)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        age_thresholds.sort_unstable();
+        age_thresholds.dedup();
+
+        if age_thresholds.len() >= 2 {
+            for window in age_thresholds.windows(2) {
+                if window[1] - window[0] > 5 {
+                    gaps.push(CoverageGap {
+                        description: format!(
+                            "Potential gap in age coverage between {} and {}",
+                            window[0], window[1]
+                        ),
+                        example_scenario: format!(
+                            "Person aged {} may not be covered by any statute",
+                            (window[0] + window[1]) / 2
+                        ),
+                        severity: Severity::Warning,
+                        related_statutes: age_statutes.iter().map(|s| s.id.clone()).collect(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Check for income-based gaps
+    let income_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| {
+            s.preconditions
+                .iter()
+                .any(|c| matches!(c, legalis_core::Condition::Income { .. }))
+        })
+        .collect();
+
+    if !income_statutes.is_empty() {
+        gaps.push(CoverageGap {
+            description: "Income-based statutes detected - verify edge cases".to_string(),
+            example_scenario: "Persons at exact income thresholds may need special handling"
+                .to_string(),
+            severity: Severity::Info,
+            related_statutes: income_statutes.iter().map(|s| s.id.clone()).collect(),
+        });
+    }
+
+    // Check for jurisdiction gaps
+    let jurisdictions: std::collections::HashSet<_> = statutes
+        .iter()
+        .filter_map(|s| s.jurisdiction.as_ref())
+        .collect();
+
+    if jurisdictions.len() > 1 {
+        for statute in statutes {
+            if statute.jurisdiction.is_none() {
+                gaps.push(CoverageGap {
+                    description: format!(
+                        "Statute '{}' has no jurisdiction specified",
+                        statute.id
+                    ),
+                    example_scenario: "May apply too broadly or conflict with jurisdictional statutes".to_string(),
+                    severity: Severity::Warning,
+                    related_statutes: vec![statute.id.clone()],
+                });
+            }
+        }
+    }
+
+    gaps
+}
+
+/// Generates a report of coverage gaps and optimization suggestions.
+pub fn optimization_and_gaps_report(statutes: &[Statute]) -> String {
+    let mut report = String::new();
+    report.push_str("# Statute Optimization and Gap Analysis Report\n\n");
+
+    // Gap analysis
+    let gaps = analyze_coverage_gaps(statutes);
+    report.push_str("## Coverage Gaps\n\n");
+
+    if gaps.is_empty() {
+        report.push_str("No significant coverage gaps detected.\n\n");
+    } else {
+        for (i, gap) in gaps.iter().enumerate() {
+            report.push_str(&format!("### Gap #{}: {}\n", i + 1, gap.description));
+            report.push_str(&format!("- **Severity**: {:?}\n", gap.severity));
+            report.push_str(&format!("- **Example**: {}\n", gap.example_scenario));
+            report.push_str(&format!(
+                "- **Related statutes**: {}\n\n",
+                gap.related_statutes.join(", ")
+            ));
+        }
+    }
+
+    // Optimization suggestions (only available with z3-solver feature)
+    #[cfg(feature = "z3-solver")]
+    {
+        let optimizations = suggest_optimizations(statutes);
+        report.push_str("## Optimization Suggestions\n\n");
+
+        if optimizations.is_empty() {
+            report.push_str("No optimization opportunities detected.\n\n");
+        } else {
+            for opt in &optimizations {
+                report.push_str(&format!("### Statute: {}\n", opt.statute_id));
+                report.push_str(&format!(
+                    "- **Current complexity**: {}\n",
+                    opt.current_complexity
+                ));
+                report.push_str(&format!(
+                    "- **Optimized complexity**: {}\n",
+                    opt.optimized_complexity
+                ));
+
+                if let Some(ref suggested) = opt.suggested_condition {
+                    report.push_str(&format!(
+                        "- **Suggested simplification**: `{}`\n",
+                        suggested
+                    ));
+                }
+
+                if !opt.suggestions.is_empty() {
+                    report.push_str("- **Recommendations**:\n");
+                    for suggestion in &opt.suggestions {
+                        report.push_str(&format!("  - {}\n", suggestion));
+                    }
+                }
+                report.push('\n');
+            }
+        }
+    }
+
+    #[cfg(not(feature = "z3-solver"))]
+    {
+        report.push_str("## Optimization Suggestions\n\n");
+        report.push_str(
+            "*Optimization suggestions require the `z3-solver` feature to be enabled.*\n\n",
+        );
+    }
+
+    report.push_str("## Summary\n\n");
+    report.push_str(&format!("- Total statutes analyzed: {}\n", statutes.len()));
+    report.push_str(&format!("- Coverage gaps found: {}\n", gaps.len()));
+
+    #[cfg(feature = "z3-solver")]
+    {
+        let optimizations = suggest_optimizations(statutes);
+        report.push_str(&format!(
+            "- Optimization opportunities: {}\n",
+            optimizations.len()
+        ));
+    }
+
+    report
+}
+
+// ============================================================================
+// Dependency Graph Export
+// ============================================================================
+
+/// Exports statute dependencies as a GraphViz DOT format graph.
+///
+/// This can be visualized using tools like Graphviz, which supports
+/// rendering DOT files to SVG, PNG, PDF, and other formats.
+///
+/// # Example
+/// ```ignore
+/// let statutes = vec![...];
+/// let dot = export_dependency_graph(&statutes);
+/// std::fs::write("dependencies.dot", dot)?;
+/// // Then run: dot -Tpng dependencies.dot -o dependencies.png
+/// ```
+pub fn export_dependency_graph(statutes: &[Statute]) -> String {
+    let mut dot = String::from("digraph StatuteDependencies {\n");
+    dot.push_str("  rankdir=LR;\n");
+    dot.push_str("  node [shape=box, style=filled, fillcolor=lightblue];\n\n");
+
+    // Add nodes for each statute
+    for statute in statutes {
+        let label = format!("{}\\n{}", statute.id, statute.title);
+        dot.push_str(&format!("  \"{}\" [label=\"{}\"];\n", statute.id, label));
+    }
+
+    dot.push('\n');
+
+    // Add edges for references
+    let statute_ids: HashSet<String> = statutes.iter().map(|s| s.id.clone()).collect();
+
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+
+        for ref_id in refs {
+            if statute_ids.contains(&ref_id) {
+                dot.push_str(&format!(
+                    "  \"{}\" -> \"{}\" [label=\"references\"];\n",
+                    statute.id, ref_id
+                ));
+            }
+        }
+    }
+
+    dot.push_str("}\n");
+    dot
+}
+
+/// Exports statute dependencies with conflict highlighting.
+///
+/// Conflicting statutes are colored in red, and conflict edges are dashed.
+pub fn export_dependency_graph_with_conflicts(statutes: &[Statute]) -> String {
+    let conflicts = detect_statute_conflicts(statutes);
+    let mut conflict_pairs: HashSet<(String, String)> = HashSet::new();
+    let mut conflicting_statute_ids: HashSet<String> = HashSet::new();
+
+    for conflict in &conflicts {
+        for statute_id in &conflict.statute_ids {
+            conflicting_statute_ids.insert(statute_id.clone());
+        }
+
+        if conflict.statute_ids.len() >= 2 {
+            let id1 = &conflict.statute_ids[0];
+            let id2 = &conflict.statute_ids[1];
+            conflict_pairs.insert((id1.clone(), id2.clone()));
+            conflict_pairs.insert((id2.clone(), id1.clone()));
+        }
+    }
+
+    let mut dot = String::from("digraph StatuteDependenciesWithConflicts {\n");
+    dot.push_str("  rankdir=LR;\n");
+    dot.push_str("  node [shape=box, style=filled];\n\n");
+
+    // Add nodes with conflict highlighting
+    for statute in statutes {
+        let color = if conflicting_statute_ids.contains(&statute.id) {
+            "lightcoral"
+        } else {
+            "lightblue"
+        };
+
+        let label = format!("{}\\n{}", statute.id, statute.title);
+        dot.push_str(&format!(
+            "  \"{}\" [label=\"{}\", fillcolor={}];\n",
+            statute.id, label, color
+        ));
+    }
+
+    dot.push('\n');
+
+    // Add reference edges
+    let statute_ids: HashSet<String> = statutes.iter().map(|s| s.id.clone()).collect();
+
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+
+        for ref_id in refs {
+            if statute_ids.contains(&ref_id) {
+                dot.push_str(&format!(
+                    "  \"{}\" -> \"{}\" [label=\"references\"];\n",
+                    statute.id, ref_id
+                ));
+            }
+        }
+    }
+
+    // Add conflict edges
+    for (id1, id2) in &conflict_pairs {
+        if statute_ids.contains(id1) && statute_ids.contains(id2) {
+            dot.push_str(&format!(
+                "  \"{}\" -> \"{}\" [style=dashed, color=red, label=\"conflicts\"];\n",
+                id1, id2
+            ));
+        }
+    }
+
+    dot.push_str("}\n");
+    dot
+}
+
+// ============================================================================
+// Quality Metrics
+// ============================================================================
+
+/// Overall quality score for a statute.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct QualityMetrics {
+    /// Statute ID
+    pub statute_id: String,
+    /// Overall quality score (0.0 to 100.0)
+    pub overall_score: f64,
+    /// Complexity score (lower is better, 0-100)
+    pub complexity_score: f64,
+    /// Readability score (higher is better, 0-100)
+    pub readability_score: f64,
+    /// Consistency score (higher is better, 0-100)
+    pub consistency_score: f64,
+    /// Completeness score (higher is better, 0-100)
+    pub completeness_score: f64,
+    /// List of quality issues
+    pub issues: Vec<String>,
+    /// List of quality strengths
+    pub strengths: Vec<String>,
+}
+
+impl QualityMetrics {
+    /// Creates a new quality metrics instance.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        statute_id: String,
+        complexity_score: f64,
+        readability_score: f64,
+        consistency_score: f64,
+        completeness_score: f64,
+    ) -> Self {
+        let overall_score =
+            (complexity_score + readability_score + consistency_score + completeness_score) / 4.0;
+
+        Self {
+            statute_id,
+            overall_score,
+            complexity_score,
+            readability_score,
+            consistency_score,
+            completeness_score,
+            issues: Vec::new(),
+            strengths: Vec::new(),
+        }
+    }
+
+    /// Adds a quality issue.
+    pub fn with_issue(mut self, issue: impl Into<String>) -> Self {
+        self.issues.push(issue.into());
+        self
+    }
+
+    /// Adds a quality strength.
+    pub fn with_strength(mut self, strength: impl Into<String>) -> Self {
+        self.strengths.push(strength.into());
+        self
+    }
+
+    /// Returns a quality grade (A, B, C, D, F).
+    pub fn grade(&self) -> char {
+        if self.overall_score >= 90.0 {
+            'A'
+        } else if self.overall_score >= 80.0 {
+            'B'
+        } else if self.overall_score >= 70.0 {
+            'C'
+        } else if self.overall_score >= 60.0 {
+            'D'
+        } else {
+            'F'
+        }
+    }
+}
+
+/// Analyzes statute quality and returns comprehensive metrics.
+pub fn analyze_quality(statute: &Statute) -> QualityMetrics {
+    // Complexity analysis
+    let complexity_metrics = analyze_complexity(statute);
+    let max_complexity = 100.0; // Maximum complexity score
+    let complexity_score = ((max_complexity
+        - complexity_metrics
+            .complexity_score
+            .min(max_complexity as u32) as f64)
+        / max_complexity
+        * 100.0)
+        .max(0.0);
+
+    // Readability: based on title clarity, discretion logic presence, etc.
+    let mut readability_score = 50.0;
+    if !statute.title.is_empty() && statute.title.len() > 10 {
+        readability_score += 20.0;
+    }
+    if statute.discretion_logic.is_some() {
+        readability_score += 30.0;
+    }
+
+    // Consistency: check if jurisdiction and metadata are set
+    let mut consistency_score = 50.0;
+    if statute.jurisdiction.is_some() {
+        consistency_score += 25.0;
+    }
+    if statute.temporal_validity.enacted_at.is_some() {
+        consistency_score += 25.0;
+    }
+
+    // Completeness: check if essential fields are populated
+    let mut completeness_score = 0.0;
+    if !statute.id.is_empty() {
+        completeness_score += 20.0;
+    }
+    if !statute.title.is_empty() {
+        completeness_score += 20.0;
+    }
+    if statute.jurisdiction.is_some() {
+        completeness_score += 20.0;
+    }
+    if statute.temporal_validity.enacted_at.is_some() {
+        completeness_score += 20.0;
+    }
+    if !statute.preconditions.is_empty() || !statute.effect.description.is_empty() {
+        completeness_score += 20.0;
+    }
+
+    let mut metrics = QualityMetrics::new(
+        statute.id.clone(),
+        complexity_score,
+        readability_score,
+        consistency_score,
+        completeness_score,
+    );
+
+    // Add issues
+    if complexity_metrics.complexity_score > 70 {
+        metrics = metrics.with_issue(format!(
+            "High complexity ({}), consider simplification",
+            complexity_metrics.complexity_score
+        ));
+    }
+    if statute.discretion_logic.is_none() {
+        metrics = metrics.with_issue("Missing discretion logic");
+    }
+    if statute.jurisdiction.is_none() {
+        metrics = metrics.with_issue("Missing jurisdiction");
+    }
+    if statute.temporal_validity.enacted_at.is_none() {
+        metrics = metrics.with_issue("Missing enactment date");
+    }
+
+    // Add strengths
+    if complexity_metrics.complexity_score <= 30 {
+        metrics = metrics.with_strength("Low complexity");
+    }
+    if statute.discretion_logic.is_some() {
+        metrics = metrics.with_strength("Has discretion logic");
+    }
+    if statute.jurisdiction.is_some() && statute.temporal_validity.enacted_at.is_some() {
+        metrics = metrics.with_strength("Complete metadata");
+    }
+
+    metrics
+}
+
+/// Generates a quality report for multiple statutes.
+pub fn quality_report(statutes: &[Statute]) -> String {
+    let mut report = String::from("# Statute Quality Report\n\n");
+
+    let mut total_score = 0.0;
+    let mut grade_counts: HashMap<char, usize> = HashMap::new();
+
+    for statute in statutes {
+        let metrics = analyze_quality(statute);
+        total_score += metrics.overall_score;
+        *grade_counts.entry(metrics.grade()).or_insert(0) += 1;
+
+        report.push_str(&format!(
+            "## Statute: {} - {}\n\n",
+            statute.id, statute.title
+        ));
+        report.push_str(&format!(
+            "**Overall Score**: {:.1}/100 (Grade: {})\n\n",
+            metrics.overall_score,
+            metrics.grade()
+        ));
+
+        report.push_str("### Detailed Scores\n\n");
+        report.push_str(&format!(
+            "- Complexity: {:.1}/100\n",
+            metrics.complexity_score
+        ));
+        report.push_str(&format!(
+            "- Readability: {:.1}/100\n",
+            metrics.readability_score
+        ));
+        report.push_str(&format!(
+            "- Consistency: {:.1}/100\n",
+            metrics.consistency_score
+        ));
+        report.push_str(&format!(
+            "- Completeness: {:.1}/100\n\n",
+            metrics.completeness_score
+        ));
+
+        if !metrics.strengths.is_empty() {
+            report.push_str("### Strengths\n\n");
+            for strength in &metrics.strengths {
+                report.push_str(&format!("- {}\n", strength));
+            }
+            report.push('\n');
+        }
+
+        if !metrics.issues.is_empty() {
+            report.push_str("### Issues\n\n");
+            for issue in &metrics.issues {
+                report.push_str(&format!("- {}\n", issue));
+            }
+            report.push('\n');
+        }
+    }
+
+    report.push_str("## Summary\n\n");
+    report.push_str(&format!("- Total statutes analyzed: {}\n", statutes.len()));
+
+    if !statutes.is_empty() {
+        let average_score = total_score / statutes.len() as f64;
+        report.push_str(&format!(
+            "- Average quality score: {:.1}/100\n",
+            average_score
+        ));
+    }
+
+    report.push_str("\n### Grade Distribution\n\n");
+    for grade in ['A', 'B', 'C', 'D', 'F'] {
+        let count = grade_counts.get(&grade).unwrap_or(&0);
+        report.push_str(&format!("- Grade {}: {}\n", grade, count));
+    }
+
+    report
+}
+
+// ============================================================================
+// Change Impact Analysis
+// ============================================================================
+
+/// Represents a change between two statute versions.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum StatuteChange {
+    /// Title changed
+    TitleChanged { old: String, new: String },
+    /// Description changed
+    DescriptionChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+    /// Jurisdiction changed
+    JurisdictionChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+    /// Effect changed
+    EffectChanged { old: String, new: String },
+    /// Preconditions changed
+    PreconditionsChanged { old_count: usize, new_count: usize },
+    /// Enactment date changed
+    EnactmentDateChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+    /// Effective date changed
+    EffectiveDateChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+}
+
+impl std::fmt::Display for StatuteChange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TitleChanged { old, new } => {
+                write!(f, "Title changed from '{}' to '{}'", old, new)
+            }
+            Self::DescriptionChanged { old, new } => {
+                write!(f, "Description changed from {:?} to {:?}", old, new)
+            }
+            Self::JurisdictionChanged { old, new } => {
+                write!(f, "Jurisdiction changed from {:?} to {:?}", old, new)
+            }
+            Self::EffectChanged { old, new } => {
+                write!(f, "Effect changed from '{}' to '{}'", old, new)
+            }
+            Self::PreconditionsChanged {
+                old_count,
+                new_count,
+            } => {
+                write!(
+                    f,
+                    "Preconditions changed from {} to {} conditions",
+                    old_count, new_count
+                )
+            }
+            Self::EnactmentDateChanged { old, new } => {
+                write!(f, "Enactment date changed from {:?} to {:?}", old, new)
+            }
+            Self::EffectiveDateChanged { old, new } => {
+                write!(f, "Effective date changed from {:?} to {:?}", old, new)
+            }
+        }
+    }
+}
+
+/// Impact of a statute change on the system.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ChangeImpact {
+    /// ID of the changed statute
+    pub statute_id: String,
+    /// List of changes detected
+    pub changes: Vec<StatuteChange>,
+    /// Statutes that reference this statute (potentially affected)
+    pub affected_statutes: Vec<String>,
+    /// Estimated impact severity
+    pub impact_severity: Severity,
+    /// Recommendations for handling the change
+    pub recommendations: Vec<String>,
+}
+
+/// Compares two versions of a statute and identifies changes.
+pub fn compare_statutes(old: &Statute, new: &Statute) -> Vec<StatuteChange> {
+    let mut changes = Vec::new();
+
+    if old.title != new.title {
+        changes.push(StatuteChange::TitleChanged {
+            old: old.title.clone(),
+            new: new.title.clone(),
+        });
+    }
+
+    // Discretion logic acts as a pseudo-description
+    if old.discretion_logic != new.discretion_logic {
+        changes.push(StatuteChange::DescriptionChanged {
+            old: old.discretion_logic.clone(),
+            new: new.discretion_logic.clone(),
+        });
+    }
+
+    if old.jurisdiction != new.jurisdiction {
+        changes.push(StatuteChange::JurisdictionChanged {
+            old: old.jurisdiction.clone(),
+            new: new.jurisdiction.clone(),
+        });
+    }
+
+    let old_effect_str = format!("{:?}", old.effect);
+    let new_effect_str = format!("{:?}", new.effect);
+    if old_effect_str != new_effect_str {
+        changes.push(StatuteChange::EffectChanged {
+            old: old_effect_str,
+            new: new_effect_str,
+        });
+    }
+
+    if old.preconditions.len() != new.preconditions.len() || old.preconditions != new.preconditions
+    {
+        changes.push(StatuteChange::PreconditionsChanged {
+            old_count: old.preconditions.len(),
+            new_count: new.preconditions.len(),
+        });
+    }
+
+    let old_enacted = old
+        .temporal_validity
+        .enacted_at
+        .as_ref()
+        .map(|d| d.to_string());
+    let new_enacted = new
+        .temporal_validity
+        .enacted_at
+        .as_ref()
+        .map(|d| d.to_string());
+    if old_enacted != new_enacted {
+        changes.push(StatuteChange::EnactmentDateChanged {
+            old: old_enacted,
+            new: new_enacted,
+        });
+    }
+
+    let old_effective = old
+        .temporal_validity
+        .effective_date
+        .as_ref()
+        .map(|d| d.to_string());
+    let new_effective = new
+        .temporal_validity
+        .effective_date
+        .as_ref()
+        .map(|d| d.to_string());
+    if old_effective != new_effective {
+        changes.push(StatuteChange::EffectiveDateChanged {
+            old: old_effective,
+            new: new_effective,
+        });
+    }
+
+    changes
+}
+
+/// Analyzes the impact of changing a statute in a collection.
+pub fn analyze_change_impact(
+    changed_statute: &Statute,
+    old_version: &Statute,
+    all_statutes: &[Statute],
+) -> ChangeImpact {
+    let changes = compare_statutes(old_version, changed_statute);
+
+    // Find statutes that reference this one
+    let mut affected_statutes = Vec::new();
+    for statute in all_statutes {
+        if statute.id != changed_statute.id {
+            let refs = extract_statute_references_from_conditions(&statute.preconditions);
+            if refs.contains(&changed_statute.id) {
+                affected_statutes.push(statute.id.clone());
+            }
+        }
+    }
+
+    // Determine impact severity
+    let impact_severity = if changes.iter().any(|c| {
+        matches!(
+            c,
+            StatuteChange::EffectChanged { .. } | StatuteChange::PreconditionsChanged { .. }
+        )
+    }) && !affected_statutes.is_empty()
+    {
+        Severity::Critical
+    } else if !affected_statutes.is_empty() || changes.len() > 3 {
+        Severity::Warning
+    } else {
+        Severity::Info
+    };
+
+    // Generate recommendations
+    let mut recommendations = Vec::new();
+
+    if !affected_statutes.is_empty() {
+        recommendations.push(format!(
+            "Review and re-verify {} affected statute(s)",
+            affected_statutes.len()
+        ));
+    }
+
+    if changes
+        .iter()
+        .any(|c| matches!(c, StatuteChange::EffectChanged { .. }))
+    {
+        recommendations
+            .push("Effect changed - verify compatibility with dependent statutes".to_string());
+    }
+
+    if changes
+        .iter()
+        .any(|c| matches!(c, StatuteChange::PreconditionsChanged { .. }))
+    {
+        recommendations.push("Preconditions changed - update test cases".to_string());
+    }
+
+    if changes
+        .iter()
+        .any(|c| matches!(c, StatuteChange::JurisdictionChanged { .. }))
+    {
+        recommendations.push("Jurisdiction changed - verify compliance requirements".to_string());
+    }
+
+    ChangeImpact {
+        statute_id: changed_statute.id.clone(),
+        changes,
+        affected_statutes,
+        impact_severity,
+        recommendations,
+    }
+}
+
+/// Generates a change impact report.
+pub fn change_impact_report(impact: &ChangeImpact) -> String {
+    let mut report = String::from("# Change Impact Analysis\n\n");
+    report.push_str(&format!("## Statute: {}\n\n", impact.statute_id));
+    report.push_str(&format!(
+        "**Impact Severity**: {:?}\n\n",
+        impact.impact_severity
+    ));
+
+    report.push_str("### Changes Detected\n\n");
+    if impact.changes.is_empty() {
+        report.push_str("No changes detected.\n\n");
+    } else {
+        for (i, change) in impact.changes.iter().enumerate() {
+            report.push_str(&format!("{}. {}\n", i + 1, change));
+        }
+        report.push('\n');
+    }
+
+    report.push_str("### Affected Statutes\n\n");
+    if impact.affected_statutes.is_empty() {
+        report.push_str("No statutes are directly affected by this change.\n\n");
+    } else {
+        report.push_str(&format!(
+            "{} statute(s) reference this statute and may be affected:\n\n",
+            impact.affected_statutes.len()
+        ));
+        for statute_id in &impact.affected_statutes {
+            report.push_str(&format!("- {}\n", statute_id));
+        }
+        report.push('\n');
+    }
+
+    report.push_str("### Recommendations\n\n");
+    if impact.recommendations.is_empty() {
+        report.push_str("No specific recommendations.\n\n");
+    } else {
+        for rec in &impact.recommendations {
+            report.push_str(&format!("- {}\n", rec));
+        }
+        report.push('\n');
+    }
+
+    report
+}
+
+// ============================================================================
+// Batch Verification
+// ============================================================================
+
+/// Result of batch verification across multiple statutes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BatchVerificationResult {
+    /// Total number of statutes processed
+    pub total_statutes: usize,
+    /// Number of statutes that passed verification
+    pub passed: usize,
+    /// Number of statutes that failed verification
+    pub failed: usize,
+    /// Individual results for each statute
+    pub individual_results: HashMap<String, VerificationResult>,
+    /// Overall statistics
+    pub error_counts: HashMap<Severity, usize>,
+    /// Total verification time in milliseconds
+    pub total_time_ms: u64,
+}
+
+impl BatchVerificationResult {
+    /// Creates a new batch verification result.
+    pub fn new() -> Self {
+        Self {
+            total_statutes: 0,
+            passed: 0,
+            failed: 0,
+            individual_results: HashMap::new(),
+            error_counts: HashMap::new(),
+            total_time_ms: 0,
+        }
+    }
+
+    /// Adds a result for a statute.
+    pub fn add_result(&mut self, statute_id: String, result: VerificationResult) {
+        self.total_statutes += 1;
+
+        if result.passed {
+            self.passed += 1;
+        } else {
+            self.failed += 1;
+        }
+
+        // Count errors by severity
+        for error in &result.errors {
+            *self.error_counts.entry(error.severity()).or_insert(0) += 1;
+        }
+
+        self.individual_results.insert(statute_id, result);
+    }
+
+    /// Returns the pass rate as a percentage.
+    pub fn pass_rate(&self) -> f64 {
+        if self.total_statutes == 0 {
+            0.0
+        } else {
+            (self.passed as f64 / self.total_statutes as f64) * 100.0
+        }
+    }
+}
+
+impl Default for BatchVerificationResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Performs batch verification on multiple statutes and returns aggregate results.
+pub fn batch_verify(statutes: &[Statute], verifier: &StatuteVerifier) -> BatchVerificationResult {
+    let start = std::time::Instant::now();
+    let mut batch_result = BatchVerificationResult::new();
+
+    for statute in statutes {
+        let result = verifier.verify(std::slice::from_ref(statute));
+        batch_result.add_result(statute.id.clone(), result);
+    }
+
+    batch_result.total_time_ms = start.elapsed().as_millis() as u64;
+    batch_result
+}
+
+/// Generates a batch verification report.
+pub fn batch_verification_report(result: &BatchVerificationResult) -> String {
+    let mut report = String::from("# Batch Verification Report\n\n");
+
+    report.push_str("## Summary\n\n");
+    report.push_str(&format!("- Total statutes: {}\n", result.total_statutes));
+    report.push_str(&format!("- Passed: {}\n", result.passed));
+    report.push_str(&format!("- Failed: {}\n", result.failed));
+    report.push_str(&format!("- Pass rate: {:.1}%\n", result.pass_rate()));
+    report.push_str(&format!(
+        "- Total verification time: {}ms\n\n",
+        result.total_time_ms
+    ));
+
+    report.push_str("## Error Distribution\n\n");
+    if result.error_counts.is_empty() {
+        report.push_str("No errors detected.\n\n");
+    } else {
+        for severity in [
+            Severity::Critical,
+            Severity::Error,
+            Severity::Warning,
+            Severity::Info,
+        ] {
+            if let Some(count) = result.error_counts.get(&severity) {
+                report.push_str(&format!("- {}: {}\n", severity, count));
+            }
+        }
+        report.push('\n');
+    }
+
+    report.push_str("## Failed Statutes\n\n");
+    let mut failed_statutes: Vec<_> = result
+        .individual_results
+        .iter()
+        .filter(|(_, r)| !r.passed)
+        .collect();
+
+    if failed_statutes.is_empty() {
+        report.push_str("All statutes passed verification.\n\n");
+    } else {
+        failed_statutes.sort_by_key(|(id, _)| id.as_str());
+
+        for (statute_id, verification_result) in failed_statutes {
+            report.push_str(&format!("### {}\n\n", statute_id));
+            report.push_str(&format!("- Errors: {}\n", verification_result.errors.len()));
+            report.push_str(&format!(
+                "- Warnings: {}\n",
+                verification_result.warnings.len()
+            ));
+
+            if !verification_result.errors.is_empty() {
+                report.push_str("\n**Errors:**\n\n");
+                for error in &verification_result.errors {
+                    report.push_str(&format!("- [{:?}] {}\n", error.severity(), error));
+                }
+            }
+            report.push('\n');
+        }
+    }
+
+    report
+}
+
+// ============================================================================
+// Statistical Analysis
+// ============================================================================
+
+/// Statistical summary of a statute collection.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteStatistics {
+    /// Total number of statutes
+    pub total_count: usize,
+    /// Average number of preconditions per statute
+    pub avg_preconditions: f64,
+    /// Median number of preconditions
+    pub median_preconditions: f64,
+    /// Most common condition types
+    pub common_condition_types: Vec<(String, usize)>,
+    /// Jurisdiction distribution
+    pub jurisdiction_distribution: HashMap<String, usize>,
+    /// Average complexity score
+    pub avg_complexity: f64,
+    /// Effect type distribution
+    pub effect_type_distribution: HashMap<String, usize>,
+    /// Statutes with discretion logic count
+    pub discretion_count: usize,
+    /// Temporal validity coverage (statutes with dates)
+    pub temporal_coverage: f64,
+}
+
+/// Analyzes a collection of statutes and returns comprehensive statistics.
+pub fn analyze_statute_statistics(statutes: &[Statute]) -> StatuteStatistics {
+    if statutes.is_empty() {
+        return StatuteStatistics {
+            total_count: 0,
+            avg_preconditions: 0.0,
+            median_preconditions: 0.0,
+            common_condition_types: Vec::new(),
+            jurisdiction_distribution: HashMap::new(),
+            avg_complexity: 0.0,
+            effect_type_distribution: HashMap::new(),
+            discretion_count: 0,
+            temporal_coverage: 0.0,
+        };
+    }
+
+    let total_count = statutes.len();
+
+    // Precondition statistics
+    let mut precondition_counts: Vec<usize> =
+        statutes.iter().map(|s| s.preconditions.len()).collect();
+    precondition_counts.sort_unstable();
+
+    let total_preconditions: usize = precondition_counts.iter().sum();
+    let avg_preconditions = total_preconditions as f64 / total_count as f64;
+
+    let median_preconditions = if precondition_counts.len() % 2 == 0 {
+        let mid = precondition_counts.len() / 2;
+        (precondition_counts[mid - 1] + precondition_counts[mid]) as f64 / 2.0
+    } else {
+        precondition_counts[precondition_counts.len() / 2] as f64
+    };
+
+    // Condition type analysis
+    let mut condition_type_counts: HashMap<String, usize> = HashMap::new();
+    for statute in statutes {
+        for condition in &statute.preconditions {
+            let type_name = format!("{:?}", condition)
+                .split('{')
+                .next()
+                .unwrap_or("Unknown")
+                .to_string();
+            *condition_type_counts.entry(type_name).or_insert(0) += 1;
+        }
+    }
+
+    let mut common_condition_types: Vec<(String, usize)> =
+        condition_type_counts.into_iter().collect();
+    common_condition_types.sort_by(|a, b| b.1.cmp(&a.1));
+    common_condition_types.truncate(10); // Top 10
+
+    // Jurisdiction distribution
+    let mut jurisdiction_distribution: HashMap<String, usize> = HashMap::new();
+    for statute in statutes {
+        let jurisdiction = statute
+            .jurisdiction
+            .as_deref()
+            .unwrap_or("None")
+            .to_string();
+        *jurisdiction_distribution.entry(jurisdiction).or_insert(0) += 1;
+    }
+
+    // Complexity statistics
+    let total_complexity: u32 = statutes
+        .iter()
+        .map(|s| analyze_complexity(s).complexity_score)
+        .sum();
+    let avg_complexity = total_complexity as f64 / total_count as f64;
+
+    // Effect type distribution
+    let mut effect_type_distribution: HashMap<String, usize> = HashMap::new();
+    for statute in statutes {
+        let effect_type = format!("{:?}", statute.effect.effect_type);
+        *effect_type_distribution.entry(effect_type).or_insert(0) += 1;
+    }
+
+    // Discretion logic count
+    let discretion_count = statutes
+        .iter()
+        .filter(|s| s.discretion_logic.is_some())
+        .count();
+
+    // Temporal coverage
+    let temporal_count = statutes
+        .iter()
+        .filter(|s| {
+            s.temporal_validity.effective_date.is_some() || s.temporal_validity.enacted_at.is_some()
+        })
+        .count();
+    let temporal_coverage = (temporal_count as f64 / total_count as f64) * 100.0;
+
+    StatuteStatistics {
+        total_count,
+        avg_preconditions,
+        median_preconditions,
+        common_condition_types,
+        jurisdiction_distribution,
+        avg_complexity,
+        effect_type_distribution,
+        discretion_count,
+        temporal_coverage,
+    }
+}
+
+/// Generates a statistical report for a statute collection.
+pub fn statistics_report(statutes: &[Statute]) -> String {
+    let stats = analyze_statute_statistics(statutes);
+
+    let mut report = String::from("# Statute Collection Statistics\n\n");
+
+    report.push_str("## Overview\n\n");
+    report.push_str(&format!("- **Total Statutes**: {}\n", stats.total_count));
+    report.push_str(&format!(
+        "- **Average Preconditions**: {:.2}\n",
+        stats.avg_preconditions
+    ));
+    report.push_str(&format!(
+        "- **Median Preconditions**: {:.1}\n",
+        stats.median_preconditions
+    ));
+    report.push_str(&format!(
+        "- **Average Complexity**: {:.2}\n",
+        stats.avg_complexity
+    ));
+    report.push_str(&format!(
+        "- **Statutes with Discretion Logic**: {} ({:.1}%)\n",
+        stats.discretion_count,
+        (stats.discretion_count as f64 / stats.total_count as f64) * 100.0
+    ));
+    report.push_str(&format!(
+        "- **Temporal Coverage**: {:.1}%\n\n",
+        stats.temporal_coverage
+    ));
+
+    report.push_str("## Common Condition Types\n\n");
+    for (i, (condition_type, count)) in stats.common_condition_types.iter().enumerate() {
+        report.push_str(&format!(
+            "{}. **{}**: {} occurrences\n",
+            i + 1,
+            condition_type,
+            count
+        ));
+    }
+    report.push('\n');
+
+    report.push_str("## Jurisdiction Distribution\n\n");
+    let mut jurisdictions: Vec<_> = stats.jurisdiction_distribution.iter().collect();
+    jurisdictions.sort_by(|a, b| b.1.cmp(a.1));
+    for (jurisdiction, count) in jurisdictions {
+        let percentage = (*count as f64 / stats.total_count as f64) * 100.0;
+        report.push_str(&format!(
+            "- **{}**: {} ({:.1}%)\n",
+            jurisdiction, count, percentage
+        ));
+    }
+    report.push('\n');
+
+    report.push_str("## Effect Type Distribution\n\n");
+    let mut effects: Vec<_> = stats.effect_type_distribution.iter().collect();
+    effects.sort_by(|a, b| b.1.cmp(a.1));
+    for (effect_type, count) in effects {
+        let percentage = (*count as f64 / stats.total_count as f64) * 100.0;
+        report.push_str(&format!(
+            "- **{}**: {} ({:.1}%)\n",
+            effect_type, count, percentage
+        ));
+    }
+
+    report
+}
+
+// ============================================================================
+// Duplicate Detection
+// ============================================================================
+
+/// Represents a potential duplicate statute.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DuplicateCandidate {
+    /// IDs of potentially duplicate statutes
+    pub statute_ids: Vec<String>,
+    /// Similarity score (0.0 to 1.0)
+    pub similarity_score: f64,
+    /// Type of similarity
+    pub similarity_type: String,
+    /// Recommendation
+    pub recommendation: String,
+}
+
+/// Detects potential duplicate or near-duplicate statutes.
+pub fn detect_duplicates(statutes: &[Statute], min_similarity: f64) -> Vec<DuplicateCandidate> {
+    let mut duplicates = Vec::new();
+
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let stat1 = &statutes[i];
+            let stat2 = &statutes[j];
+
+            // Check semantic similarity
+            let similarity = semantic_similarity(stat1, stat2);
+
+            if similarity.0 >= min_similarity {
+                let similarity_type = if similarity.0 >= 0.95 {
+                    "Near-identical"
+                } else if similarity.0 >= 0.80 {
+                    "Very similar"
+                } else {
+                    "Similar"
+                };
+
+                let recommendation = if similarity.0 >= 0.95 {
+                    "Consider merging or removing duplicate".to_string()
+                } else if similarity.0 >= 0.80 {
+                    "Review for potential consolidation".to_string()
+                } else {
+                    "Review for consistency".to_string()
+                };
+
+                duplicates.push(DuplicateCandidate {
+                    statute_ids: vec![stat1.id.clone(), stat2.id.clone()],
+                    similarity_score: similarity.0,
+                    similarity_type: similarity_type.to_string(),
+                    recommendation,
+                });
+            }
+        }
+    }
+
+    // Sort by similarity score (descending)
+    duplicates.sort_by(|a, b| b.similarity_score.partial_cmp(&a.similarity_score).unwrap());
+
+    duplicates
+}
+
+/// Generates a duplicate detection report.
+pub fn duplicate_detection_report(statutes: &[Statute], min_similarity: f64) -> String {
+    let duplicates = detect_duplicates(statutes, min_similarity);
+
+    let mut report = String::from("# Duplicate Detection Report\n\n");
+    report.push_str(&format!(
+        "**Minimum Similarity Threshold**: {:.0}%\n\n",
+        min_similarity * 100.0
+    ));
+
+    if duplicates.is_empty() {
+        report.push_str("No duplicates or similar statutes found.\n");
+        return report;
+    }
+
+    report.push_str(&format!(
+        "Found **{}** potential duplicate(s) or similar statute(s):\n\n",
+        duplicates.len()
+    ));
+
+    for (i, dup) in duplicates.iter().enumerate() {
+        report.push_str(&format!("## Duplicate Group #{}\n\n", i + 1));
+        report.push_str(&format!(
+            "- **Similarity**: {:.1}% ({})\n",
+            dup.similarity_score * 100.0,
+            dup.similarity_type
+        ));
+        report.push_str("- **Statutes**:\n");
+        for statute_id in &dup.statute_ids {
+            report.push_str(&format!("  - {}\n", statute_id));
+        }
+        report.push_str(&format!("- **Recommendation**: {}\n\n", dup.recommendation));
+    }
+
+    report
+}
+
+// ============================================================================
+// Regulatory Impact Scoring
+// ============================================================================
+
+/// Regulatory impact assessment for a statute.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RegulatoryImpact {
+    /// Statute ID
+    pub statute_id: String,
+    /// Overall impact score (0-100, higher = more regulatory burden)
+    pub impact_score: u32,
+    /// Compliance complexity score (0-100)
+    pub compliance_complexity: u32,
+    /// Affected entities estimate
+    pub affected_entities: String,
+    /// Implementation cost estimate
+    pub implementation_cost: String,
+    /// Ongoing compliance cost estimate
+    pub ongoing_cost: String,
+    /// Impact level
+    pub impact_level: String,
+}
+
+/// Analyzes the regulatory impact of a statute.
+pub fn analyze_regulatory_impact(statute: &Statute) -> RegulatoryImpact {
+    // Calculate compliance complexity based on preconditions and effects
+    let complexity_metrics = analyze_complexity(statute);
+    let compliance_complexity = complexity_metrics.complexity_score;
+
+    // Calculate impact score
+    let mut impact_score = compliance_complexity;
+
+    // Adjust for effect type
+    let effect_weight = match statute.effect.effect_type {
+        legalis_core::EffectType::Prohibition => 30,
+        legalis_core::EffectType::Obligation => 25,
+        legalis_core::EffectType::Revoke => 20,
+        legalis_core::EffectType::Grant => 10,
+        legalis_core::EffectType::MonetaryTransfer => 20,
+        legalis_core::EffectType::StatusChange => 15,
+        legalis_core::EffectType::Custom => 15,
+    };
+    impact_score = (impact_score + effect_weight).min(100);
+
+    // Adjust for number of preconditions (more conditions = higher burden)
+    let precondition_weight = (statute.preconditions.len() as u32 * 5).min(30);
+    impact_score = (impact_score + precondition_weight).min(100);
+
+    // Determine impact level
+    let impact_level = if impact_score >= 75 {
+        "High Impact"
+    } else if impact_score >= 50 {
+        "Medium Impact"
+    } else if impact_score >= 25 {
+        "Low Impact"
+    } else {
+        "Minimal Impact"
+    };
+
+    // Estimate affected entities (simplified heuristic)
+    let affected_entities = if statute.preconditions.is_empty() {
+        "Potentially all entities"
+    } else if statute.preconditions.len() <= 2 {
+        "Broad population"
+    } else if statute.preconditions.len() <= 5 {
+        "Specific demographic"
+    } else {
+        "Narrow subset"
+    };
+
+    // Estimate implementation cost
+    let implementation_cost = if impact_score >= 75 {
+        "High - Significant resources required"
+    } else if impact_score >= 50 {
+        "Medium - Moderate resources required"
+    } else {
+        "Low - Minimal resources required"
+    };
+
+    // Estimate ongoing cost
+    let ongoing_cost = if complexity_metrics.complexity_score >= 70 {
+        "High - Ongoing monitoring and compliance needed"
+    } else if complexity_metrics.complexity_score >= 40 {
+        "Medium - Periodic compliance checks needed"
+    } else {
+        "Low - Minimal ongoing requirements"
+    };
+
+    RegulatoryImpact {
+        statute_id: statute.id.clone(),
+        impact_score,
+        compliance_complexity,
+        affected_entities: affected_entities.to_string(),
+        implementation_cost: implementation_cost.to_string(),
+        ongoing_cost: ongoing_cost.to_string(),
+        impact_level: impact_level.to_string(),
+    }
+}
+
+/// Generates a regulatory impact report for multiple statutes.
+pub fn regulatory_impact_report(statutes: &[Statute]) -> String {
+    let mut report = String::from("# Regulatory Impact Assessment\n\n");
+
+    let impacts: Vec<RegulatoryImpact> = statutes.iter().map(analyze_regulatory_impact).collect();
+
+    // Calculate aggregate statistics
+    let total_score: u32 = impacts.iter().map(|i| i.impact_score).sum();
+    let avg_score = if !impacts.is_empty() {
+        total_score as f64 / impacts.len() as f64
+    } else {
+        0.0
+    };
+
+    let high_impact_count = impacts
+        .iter()
+        .filter(|i| i.impact_level == "High Impact")
+        .count();
+    let medium_impact_count = impacts
+        .iter()
+        .filter(|i| i.impact_level == "Medium Impact")
+        .count();
+    let low_impact_count = impacts
+        .iter()
+        .filter(|i| i.impact_level == "Low Impact")
+        .count();
+
+    report.push_str("## Summary\n\n");
+    report.push_str(&format!(
+        "- **Total Statutes Analyzed**: {}\n",
+        statutes.len()
+    ));
+    report.push_str(&format!(
+        "- **Average Impact Score**: {:.1}/100\n",
+        avg_score
+    ));
+    report.push_str(&format!("- **High Impact**: {}\n", high_impact_count));
+    report.push_str(&format!("- **Medium Impact**: {}\n", medium_impact_count));
+    report.push_str(&format!(
+        "- **Low/Minimal Impact**: {}\n\n",
+        low_impact_count
+    ));
+
+    report.push_str("## Individual Statute Analysis\n\n");
+
+    for impact in &impacts {
+        report.push_str(&format!(
+            "### {} - {}\n\n",
+            impact.statute_id, impact.impact_level
+        ));
+        report.push_str(&format!(
+            "- **Impact Score**: {}/100\n",
+            impact.impact_score
+        ));
+        report.push_str(&format!(
+            "- **Compliance Complexity**: {}/100\n",
+            impact.compliance_complexity
+        ));
+        report.push_str(&format!(
+            "- **Affected Entities**: {}\n",
+            impact.affected_entities
+        ));
+        report.push_str(&format!(
+            "- **Implementation Cost**: {}\n",
+            impact.implementation_cost
+        ));
+        report.push_str(&format!("- **Ongoing Cost**: {}\n\n", impact.ongoing_cost));
+    }
+
+    report
+}
+
+// ============================================================================
+// Compliance Checklist Generation
+// ============================================================================
+
+/// A compliance checklist item.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ComplianceItem {
+    /// Item number
+    pub number: usize,
+    /// Description of the requirement
+    pub requirement: String,
+    /// Precondition that must be met
+    pub precondition: Option<String>,
+    /// Priority level
+    pub priority: String,
+}
+
+/// Generates a compliance checklist from a statute.
+pub fn generate_compliance_checklist(statute: &Statute) -> Vec<ComplianceItem> {
+    let mut items = Vec::new();
+    let mut item_number = 1;
+
+    // Add precondition checks
+    for precondition in &statute.preconditions {
+        let requirement = format!("Verify: {:?}", precondition);
+        let priority = "Required";
+
+        items.push(ComplianceItem {
+            number: item_number,
+            requirement,
+            precondition: Some(format!("{:?}", precondition)),
+            priority: priority.to_string(),
+        });
+        item_number += 1;
+    }
+
+    // Add effect implementation
+    let effect_requirement = format!(
+        "Implement effect: {:?} - {}",
+        statute.effect.effect_type, statute.effect.description
+    );
+
+    items.push(ComplianceItem {
+        number: item_number,
+        requirement: effect_requirement,
+        precondition: None,
+        priority: "Required".to_string(),
+    });
+    item_number += 1;
+
+    // Add discretion logic if present
+    if let Some(ref discretion) = statute.discretion_logic {
+        items.push(ComplianceItem {
+            number: item_number,
+            requirement: format!("Consider discretion: {}", discretion),
+            precondition: None,
+            priority: "Optional".to_string(),
+        });
+        item_number += 1;
+    }
+
+    // Add temporal validity checks
+    if statute.temporal_validity.effective_date.is_some()
+        || statute.temporal_validity.enacted_at.is_some()
+    {
+        items.push(ComplianceItem {
+            number: item_number,
+            requirement: "Verify statute is currently in effect".to_string(),
+            precondition: None,
+            priority: "Required".to_string(),
+        });
+    }
+
+    items
+}
+
+/// Generates a compliance checklist report for a statute.
+pub fn compliance_checklist_report(statute: &Statute) -> String {
+    let items = generate_compliance_checklist(statute);
+
+    let mut report = String::from("# Compliance Checklist\n\n");
+    report.push_str(&format!(
+        "**Statute**: {} - {}\n\n",
+        statute.id, statute.title
+    ));
+
+    if let Some(ref jurisdiction) = statute.jurisdiction {
+        report.push_str(&format!("**Jurisdiction**: {}\n", jurisdiction));
+    }
+
+    report.push_str(&format!("\n**Total Items**: {}\n\n", items.len()));
+
+    report.push_str("## Checklist Items\n\n");
+
+    for item in &items {
+        report.push_str(&format!(
+            "- [ ] **Item {}** [{}]: {}\n",
+            item.number, item.priority, item.requirement
+        ));
+    }
+
+    report
+}
+
+/// Generates a consolidated compliance checklist for multiple statutes.
+pub fn consolidated_compliance_checklist(statutes: &[Statute]) -> String {
+    let mut report = String::from("# Consolidated Compliance Checklist\n\n");
+    report.push_str(&format!("**Total Statutes**: {}\n\n", statutes.len()));
+
+    for statute in statutes {
+        let items = generate_compliance_checklist(statute);
+        report.push_str(&format!("## {} - {}\n\n", statute.id, statute.title));
+
+        for item in &items {
+            report.push_str(&format!(
+                "- [ ] **{}**: {}\n",
+                item.priority, item.requirement
+            ));
+        }
+        report.push('\n');
+    }
+
+    report
+}
+
+// ============================================================================
+// Advanced Graph Analysis
+// ============================================================================
+
+/// Graph metrics for statute dependency network
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GraphMetrics {
+    /// Total number of nodes (statutes)
+    pub node_count: usize,
+    /// Total number of edges (dependencies)
+    pub edge_count: usize,
+    /// Average degree (connections per statute)
+    pub average_degree: f64,
+    /// Density of the graph (0.0 to 1.0)
+    pub density: f64,
+    /// Number of strongly connected components
+    pub strongly_connected_components: usize,
+    /// Whether the graph is acyclic (DAG)
+    pub is_acyclic: bool,
+    /// Maximum path length in the graph
+    pub diameter: usize,
+}
+
+/// Centrality metrics for a single statute
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CentralityMetrics {
+    /// Statute ID
+    pub statute_id: String,
+    /// Degree centrality (number of direct connections)
+    pub degree_centrality: f64,
+    /// In-degree (number of statutes referencing this one)
+    pub in_degree: usize,
+    /// Out-degree (number of statutes this one references)
+    pub out_degree: usize,
+    /// PageRank score (importance based on link structure)
+    pub pagerank: f64,
+    /// Betweenness centrality (how often statute is on shortest path)
+    pub betweenness: f64,
+}
+
+/// Cluster/community in the statute graph
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteCluster {
+    /// Cluster ID
+    pub id: usize,
+    /// Statute IDs in this cluster
+    pub statute_ids: Vec<String>,
+    /// Internal density of the cluster
+    pub density: f64,
+    /// Representative keywords/topics
+    pub keywords: Vec<String>,
+}
+
+/// Computes overall graph metrics for statute dependencies
+pub fn analyze_graph_metrics(statutes: &[Statute]) -> GraphMetrics {
+    let node_count = statutes.len();
+
+    // Count edges
+    let mut edges = 0;
+
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+        edges += refs.len();
+    }
+
+    let edge_count = edges;
+    let average_degree = if node_count > 0 {
+        (edge_count as f64) / (node_count as f64)
+    } else {
+        0.0
+    };
+
+    let max_edges = node_count * (node_count - 1);
+    let density = if max_edges > 0 {
+        (edge_count as f64) / (max_edges as f64)
+    } else {
+        0.0
+    };
+
+    // Detect cycles using DFS
+    let has_cycle = detect_cycles_in_graph(statutes);
+    let is_acyclic = !has_cycle;
+
+    // Count strongly connected components using Tarjan's algorithm
+    let scc_count = count_strongly_connected_components(statutes);
+
+    // Compute diameter (longest shortest path)
+    let diameter = compute_graph_diameter(statutes);
+
+    GraphMetrics {
+        node_count,
+        edge_count,
+        average_degree,
+        density,
+        strongly_connected_components: scc_count,
+        is_acyclic,
+        diameter,
+    }
+}
+
+/// Detects cycles in the statute dependency graph
+fn detect_cycles_in_graph(statutes: &[Statute]) -> bool {
+    let mut visited = HashSet::new();
+    let mut rec_stack = HashSet::new();
+
+    fn dfs_cycle(
+        statute_id: &str,
+        statutes: &[Statute],
+        visited: &mut HashSet<String>,
+        rec_stack: &mut HashSet<String>,
+    ) -> bool {
+        visited.insert(statute_id.to_string());
+        rec_stack.insert(statute_id.to_string());
+
+        if let Some(statute) = statutes.iter().find(|s| s.id == statute_id) {
+            let refs = extract_statute_references_from_conditions(&statute.preconditions);
+            for ref_id in refs {
+                if !visited.contains(&ref_id) {
+                    if dfs_cycle(&ref_id, statutes, visited, rec_stack) {
+                        return true;
+                    }
+                } else if rec_stack.contains(&ref_id) {
+                    return true; // Cycle detected
+                }
+            }
+        }
+
+        rec_stack.remove(statute_id);
+        false
+    }
+
+    for statute in statutes {
+        if !visited.contains(&statute.id)
+            && dfs_cycle(&statute.id, statutes, &mut visited, &mut rec_stack)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Counts strongly connected components using Tarjan's algorithm
+fn count_strongly_connected_components(statutes: &[Statute]) -> usize {
+    if statutes.is_empty() {
+        return 0;
+    }
+
+    struct TarjanState {
+        index: usize,
+        stack: Vec<String>,
+        indices: HashMap<String, usize>,
+        lowlinks: HashMap<String, usize>,
+        on_stack: HashSet<String>,
+        scc_count: usize,
+    }
+
+    fn strongconnect(v: String, statutes: &[Statute], state: &mut TarjanState) {
+        state.indices.insert(v.clone(), state.index);
+        state.lowlinks.insert(v.clone(), state.index);
+        state.index += 1;
+        state.stack.push(v.clone());
+        state.on_stack.insert(v.clone());
+
+        if let Some(statute) = statutes.iter().find(|s| s.id == v) {
+            let refs = extract_statute_references_from_conditions(&statute.preconditions);
+            for w in refs {
+                if !state.indices.contains_key(&w) {
+                    strongconnect(w.clone(), statutes, state);
+                    let w_lowlink = *state.lowlinks.get(&w).unwrap_or(&0);
+                    let v_lowlink = *state.lowlinks.get(&v).unwrap_or(&0);
+                    state.lowlinks.insert(v.clone(), v_lowlink.min(w_lowlink));
+                } else if state.on_stack.contains(&w) {
+                    let w_index = *state.indices.get(&w).unwrap_or(&0);
+                    let v_lowlink = *state.lowlinks.get(&v).unwrap_or(&0);
+                    state.lowlinks.insert(v.clone(), v_lowlink.min(w_index));
+                }
+            }
+        }
+
+        if state.lowlinks.get(&v) == state.indices.get(&v) {
+            // Found an SCC
+            while let Some(w) = state.stack.pop() {
+                state.on_stack.remove(&w);
+                if w == v {
+                    break;
+                }
+            }
+            state.scc_count += 1;
+        }
+    }
+
+    let mut state = TarjanState {
+        index: 0,
+        stack: Vec::new(),
+        indices: HashMap::new(),
+        lowlinks: HashMap::new(),
+        on_stack: HashSet::new(),
+        scc_count: 0,
+    };
+
+    for statute in statutes {
+        if !state.indices.contains_key(&statute.id) {
+            strongconnect(statute.id.clone(), statutes, &mut state);
+        }
+    }
+
+    state.scc_count
+}
+
+/// Computes graph diameter (longest shortest path)
+fn compute_graph_diameter(statutes: &[Statute]) -> usize {
+    if statutes.is_empty() {
+        return 0;
+    }
+
+    let mut max_dist = 0;
+
+    // BFS from each node to find longest shortest path
+    for source in statutes {
+        let distances = bfs_distances(&source.id, statutes);
+        if let Some(&max) = distances.values().max() {
+            max_dist = max_dist.max(max);
+        }
+    }
+
+    max_dist
+}
+
+/// BFS to compute distances from a source statute
+fn bfs_distances(source: &str, statutes: &[Statute]) -> HashMap<String, usize> {
+    let mut distances = HashMap::new();
+    let mut queue = std::collections::VecDeque::new();
+
+    distances.insert(source.to_string(), 0);
+    queue.push_back(source.to_string());
+
+    while let Some(current) = queue.pop_front() {
+        let current_dist = *distances.get(&current).unwrap_or(&0);
+
+        if let Some(statute) = statutes.iter().find(|s| s.id == current) {
+            let refs = extract_statute_references_from_conditions(&statute.preconditions);
+            for ref_id in refs {
+                if !distances.contains_key(&ref_id) {
+                    distances.insert(ref_id.clone(), current_dist + 1);
+                    queue.push_back(ref_id);
+                }
+            }
+        }
+    }
+
+    distances
+}
+
+/// Computes centrality metrics for each statute
+pub fn analyze_centrality(statutes: &[Statute]) -> Vec<CentralityMetrics> {
+    let mut metrics = Vec::new();
+
+    // Build in-degree and out-degree maps
+    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut out_degree: HashMap<String, usize> = HashMap::new();
+
+    // Initialize out_degree for all statutes
+    for statute in statutes {
+        out_degree.insert(statute.id.clone(), 0);
+    }
+
+    // Build degree maps
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+        *out_degree.get_mut(&statute.id).unwrap() = refs.len();
+
+        for ref_id in refs {
+            *in_degree.entry(ref_id).or_insert(0) += 1;
+        }
+    }
+
+    // Compute PageRank
+    let pagerank_scores = compute_pagerank(statutes, 0.85, 20);
+
+    // Compute betweenness centrality
+    let betweenness_scores = compute_betweenness(statutes);
+
+    for statute in statutes {
+        let in_deg = *in_degree.get(&statute.id).unwrap_or(&0);
+        let out_deg = *out_degree.get(&statute.id).unwrap_or(&0);
+        let total_deg = in_deg + out_deg;
+
+        let degree_centrality = if statutes.len() > 1 {
+            (total_deg as f64) / ((statutes.len() - 1) as f64)
+        } else {
+            0.0
+        };
+
+        metrics.push(CentralityMetrics {
+            statute_id: statute.id.clone(),
+            degree_centrality,
+            in_degree: in_deg,
+            out_degree: out_deg,
+            pagerank: *pagerank_scores.get(&statute.id).unwrap_or(&0.0),
+            betweenness: *betweenness_scores.get(&statute.id).unwrap_or(&0.0),
+        });
+    }
+
+    metrics
+}
+
+/// Computes PageRank scores for statutes
+fn compute_pagerank(statutes: &[Statute], damping: f64, iterations: usize) -> HashMap<String, f64> {
+    let n = statutes.len();
+    if n == 0 {
+        return HashMap::new();
+    }
+
+    let mut ranks: HashMap<String, f64> = statutes
+        .iter()
+        .map(|s| (s.id.clone(), 1.0 / (n as f64)))
+        .collect();
+
+    let mut out_degree: HashMap<String, usize> = HashMap::new();
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+        out_degree.insert(statute.id.clone(), refs.len());
+    }
+
+    for _ in 0..iterations {
+        let mut new_ranks = HashMap::new();
+
+        for statute in statutes {
+            let mut rank_sum = 0.0;
+
+            // Sum contributions from statutes pointing to this one
+            for other in statutes {
+                let refs = extract_statute_references_from_conditions(&other.preconditions);
+                if refs.contains(&statute.id) {
+                    let other_out = *out_degree.get(&other.id).unwrap_or(&1);
+                    if other_out > 0 {
+                        rank_sum += ranks.get(&other.id).unwrap_or(&0.0) / (other_out as f64);
+                    }
+                }
+            }
+
+            let new_rank = (1.0 - damping) / (n as f64) + damping * rank_sum;
+            new_ranks.insert(statute.id.clone(), new_rank);
+        }
+
+        ranks = new_ranks;
+    }
+
+    ranks
+}
+
+/// Computes betweenness centrality (simplified version)
+fn compute_betweenness(statutes: &[Statute]) -> HashMap<String, f64> {
+    let n = statutes.len();
+    let mut betweenness: HashMap<String, f64> =
+        statutes.iter().map(|s| (s.id.clone(), 0.0)).collect();
+
+    if n <= 2 {
+        return betweenness;
+    }
+
+    // For each pair of statutes, find shortest paths
+    for source in statutes {
+        for target in statutes {
+            if source.id == target.id {
+                continue;
+            }
+
+            // BFS to find all shortest paths from source to target
+            let paths = find_shortest_paths(&source.id, &target.id, statutes);
+
+            if !paths.is_empty() {
+                // Count how many paths pass through each statute
+                for path in &paths {
+                    for statute_id in path {
+                        if statute_id != &source.id && statute_id != &target.id {
+                            *betweenness.get_mut(statute_id).unwrap() += 1.0 / (paths.len() as f64);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Normalize
+    let normalization = if n > 2 {
+        ((n - 1) * (n - 2)) as f64
+    } else {
+        1.0
+    };
+
+    for value in betweenness.values_mut() {
+        *value /= normalization;
+    }
+
+    betweenness
+}
+
+/// Finds all shortest paths between two statutes
+fn find_shortest_paths(source: &str, target: &str, statutes: &[Statute]) -> Vec<Vec<String>> {
+    let mut queue = std::collections::VecDeque::new();
+    let mut distances: HashMap<String, usize> = HashMap::new();
+    let mut paths: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+
+    distances.insert(source.to_string(), 0);
+    paths.insert(source.to_string(), vec![vec![source.to_string()]]);
+    queue.push_back(source.to_string());
+
+    while let Some(current) = queue.pop_front() {
+        if current == target {
+            continue;
+        }
+
+        let current_dist = *distances.get(&current).unwrap_or(&0);
+
+        if let Some(statute) = statutes.iter().find(|s| s.id == current) {
+            let refs = extract_statute_references_from_conditions(&statute.preconditions);
+
+            for ref_id in refs {
+                let new_dist = current_dist + 1;
+
+                if !distances.contains_key(&ref_id) {
+                    distances.insert(ref_id.clone(), new_dist);
+                    queue.push_back(ref_id.clone());
+
+                    // Extend all paths to current with ref_id
+                    if let Some(current_paths) = paths.get(&current) {
+                        let new_paths: Vec<Vec<String>> = current_paths
+                            .iter()
+                            .map(|path| {
+                                let mut new_path = path.clone();
+                                new_path.push(ref_id.clone());
+                                new_path
+                            })
+                            .collect();
+                        paths.insert(ref_id.clone(), new_paths);
+                    }
+                } else if distances.get(&ref_id) == Some(&new_dist) {
+                    // Found another shortest path
+                    if let Some(current_paths) = paths.get(&current).cloned() {
+                        for path in current_paths {
+                            let mut new_path = path.clone();
+                            new_path.push(ref_id.clone());
+                            paths.entry(ref_id.clone()).or_default().push(new_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    paths.get(target).cloned().unwrap_or_default()
+}
+
+/// Detects clusters/communities in the statute graph using simple heuristic
+#[allow(dead_code)]
+pub fn detect_clusters(statutes: &[Statute]) -> Vec<StatuteCluster> {
+    if statutes.is_empty() {
+        return Vec::new();
+    }
+
+    let mut clusters = Vec::new();
+    let mut assigned: HashSet<String> = HashSet::new();
+
+    // Simple clustering based on connected components
+    for statute in statutes {
+        if assigned.contains(&statute.id) {
+            continue;
+        }
+
+        // Find all statutes reachable from this one
+        let mut component = HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(statute.id.clone());
+        component.insert(statute.id.clone());
+
+        while let Some(current) = queue.pop_front() {
+            if let Some(current_statute) = statutes.iter().find(|s| s.id == current) {
+                let refs =
+                    extract_statute_references_from_conditions(&current_statute.preconditions);
+                for ref_id in refs {
+                    if !component.contains(&ref_id) {
+                        component.insert(ref_id.clone());
+                        queue.push_back(ref_id);
+                    }
+                }
+
+                // Also check reverse references
+                for other in statutes {
+                    let other_refs =
+                        extract_statute_references_from_conditions(&other.preconditions);
+                    if other_refs.contains(&current) && !component.contains(&other.id) {
+                        component.insert(other.id.clone());
+                        queue.push_back(other.id.clone());
+                    }
+                }
+            }
+        }
+
+        // Calculate cluster density
+        let cluster_statutes: Vec<_> = component.iter().collect();
+        let cluster_size = cluster_statutes.len();
+        let mut internal_edges = 0;
+
+        for id in &cluster_statutes {
+            if let Some(stat) = statutes.iter().find(|s| s.id == **id) {
+                let refs = extract_statute_references_from_conditions(&stat.preconditions);
+                internal_edges += refs.iter().filter(|r| cluster_statutes.contains(r)).count();
+            }
+        }
+
+        let max_edges = cluster_size * (cluster_size - 1);
+        let density = if max_edges > 0 {
+            (internal_edges as f64) / (max_edges as f64)
+        } else {
+            0.0
+        };
+
+        // Extract keywords from titles
+        let mut keywords = Vec::new();
+        for id in &cluster_statutes {
+            if let Some(stat) = statutes.iter().find(|s| s.id == **id) {
+                // Simple keyword extraction: take common words from titles
+                let words: Vec<&str> = stat.title.split_whitespace().collect();
+                for word in words {
+                    if word.len() > 4 && !keywords.contains(&word.to_string()) {
+                        keywords.push(word.to_string());
+                    }
+                }
+            }
+        }
+        keywords.truncate(5); // Keep top 5 keywords
+
+        let statute_ids: Vec<String> = component.into_iter().collect();
+        assigned.extend(statute_ids.clone());
+
+        clusters.push(StatuteCluster {
+            id: clusters.len(),
+            statute_ids,
+            density,
+            keywords,
+        });
+    }
+
+    clusters
+}
+
+/// Generates a comprehensive graph analysis report
+pub fn graph_analysis_report(statutes: &[Statute]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Statute Dependency Graph Analysis\n\n");
+
+    // Overall metrics
+    report.push_str("## Graph Metrics\n\n");
+    let metrics = analyze_graph_metrics(statutes);
+    report.push_str(&format!("- **Nodes (Statutes)**: {}\n", metrics.node_count));
+    report.push_str(&format!(
+        "- **Edges (Dependencies)**: {}\n",
+        metrics.edge_count
+    ));
+    report.push_str(&format!(
+        "- **Average Degree**: {:.2}\n",
+        metrics.average_degree
+    ));
+    report.push_str(&format!("- **Graph Density**: {:.4}\n", metrics.density));
+    report.push_str(&format!("- **Is Acyclic (DAG)**: {}\n", metrics.is_acyclic));
+    report.push_str(&format!(
+        "- **Strongly Connected Components**: {}\n",
+        metrics.strongly_connected_components
+    ));
+    report.push_str(&format!(
+        "- **Diameter (Longest Path)**: {}\n",
+        metrics.diameter
+    ));
+    report.push('\n');
+
+    // Centrality metrics
+    report.push_str("## Centrality Metrics\n\n");
+    let mut centrality = analyze_centrality(statutes);
+    centrality.sort_by(|a, b| {
+        b.pagerank
+            .partial_cmp(&a.pagerank)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    report.push_str("### Top 10 Statutes by PageRank\n\n");
+    for (i, metric) in centrality.iter().take(10).enumerate() {
+        report.push_str(&format!(
+            "{}. **{}** (PageRank: {:.4}, Degree: {:.2}, In: {}, Out: {})\n",
+            i + 1,
+            metric.statute_id,
+            metric.pagerank,
+            metric.degree_centrality,
+            metric.in_degree,
+            metric.out_degree
+        ));
+    }
+    report.push('\n');
+
+    // Sort by betweenness
+    centrality.sort_by(|a, b| {
+        b.betweenness
+            .partial_cmp(&a.betweenness)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    report.push_str("### Top 10 Statutes by Betweenness Centrality\n\n");
+    for (i, metric) in centrality.iter().take(10).enumerate() {
+        if metric.betweenness > 0.0 {
+            report.push_str(&format!(
+                "{}. **{}** (Betweenness: {:.4})\n",
+                i + 1,
+                metric.statute_id,
+                metric.betweenness
+            ));
+        }
+    }
+    report.push('\n');
+
+    report
+}
+
+// ============================================================================
+// Statute Evolution Tracking
+// ============================================================================
+
+/// Version entry in statute evolution history
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteVersion {
+    /// Version number
+    pub version: u32,
+    /// Statute snapshot at this version
+    pub statute: Statute,
+    /// Timestamp of this version (optional)
+    pub timestamp: Option<chrono::NaiveDateTime>,
+    /// Description of changes in this version
+    pub change_description: Option<String>,
+}
+
+/// Evolution history for a statute
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteEvolution {
+    /// Statute ID
+    pub statute_id: String,
+    /// Chronological list of versions
+    pub versions: Vec<StatuteVersion>,
+}
+
+/// Evolution metrics for a statute
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EvolutionMetrics {
+    /// Statute ID
+    pub statute_id: String,
+    /// Total number of versions
+    pub total_versions: usize,
+    /// Number of major changes (effect or precondition modifications)
+    pub major_changes: usize,
+    /// Number of minor changes (title, description, metadata)
+    pub minor_changes: usize,
+    /// Average time between versions (in days)
+    pub avg_days_between_versions: Option<f64>,
+    /// Stability score (0.0 = very unstable, 1.0 = very stable)
+    pub stability_score: f64,
+    /// Complexity trend (Increasing, Decreasing, Stable)
+    pub complexity_trend: ComplexityTrend,
+}
+
+/// Trend in statute complexity over time
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ComplexityTrend {
+    /// Complexity is increasing
+    Increasing,
+    /// Complexity is decreasing
+    Decreasing,
+    /// Complexity is stable
+    Stable,
+}
+
+impl std::fmt::Display for ComplexityTrend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Increasing => write!(f, "Increasing"),
+            Self::Decreasing => write!(f, "Decreasing"),
+            Self::Stable => write!(f, "Stable"),
+        }
+    }
+}
+
+impl StatuteEvolution {
+    /// Creates a new evolution history starting with an initial statute
+    pub fn new(statute: Statute) -> Self {
+        Self {
+            statute_id: statute.id.clone(),
+            versions: vec![StatuteVersion {
+                version: statute.version,
+                statute,
+                timestamp: None,
+                change_description: None,
+            }],
+        }
+    }
+
+    /// Adds a new version to the evolution history
+    pub fn add_version(&mut self, statute: Statute, description: Option<String>) {
+        self.versions.push(StatuteVersion {
+            version: statute.version,
+            statute,
+            timestamp: Some(chrono::Utc::now().naive_utc()),
+            change_description: description,
+        });
+    }
+
+    /// Gets the latest version
+    pub fn latest_version(&self) -> Option<&StatuteVersion> {
+        self.versions.last()
+    }
+
+    /// Gets a specific version by number
+    pub fn get_version(&self, version: u32) -> Option<&StatuteVersion> {
+        self.versions.iter().find(|v| v.version == version)
+    }
+
+    /// Analyzes the evolution metrics
+    pub fn analyze_metrics(&self) -> EvolutionMetrics {
+        let total_versions = self.versions.len();
+
+        // Count major and minor changes
+        let mut major_changes = 0;
+        let mut minor_changes = 0;
+
+        for i in 1..self.versions.len() {
+            let old = &self.versions[i - 1].statute;
+            let new = &self.versions[i].statute;
+
+            let changes = compare_statutes(old, new);
+
+            for change in changes {
+                match change {
+                    StatuteChange::EffectChanged { .. }
+                    | StatuteChange::PreconditionsChanged { .. } => {
+                        major_changes += 1;
+                    }
+                    _ => {
+                        minor_changes += 1;
+                    }
+                }
+            }
+        }
+
+        // Calculate average days between versions
+        let avg_days = if self.versions.len() > 1 {
+            let mut total_days = 0.0;
+            let mut count = 0;
+
+            for i in 1..self.versions.len() {
+                if let (Some(prev_ts), Some(curr_ts)) =
+                    (&self.versions[i - 1].timestamp, &self.versions[i].timestamp)
+                {
+                    let duration = curr_ts.signed_duration_since(*prev_ts);
+                    total_days += duration.num_days() as f64;
+                    count += 1;
+                }
+            }
+
+            if count > 0 {
+                Some(total_days / count as f64)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Calculate stability score (fewer changes = more stable)
+        let total_changes = major_changes + minor_changes;
+        let stability_score = if total_versions > 1 {
+            1.0 - (total_changes as f64 / (total_versions - 1) as f64).min(1.0)
+        } else {
+            1.0
+        };
+
+        // Analyze complexity trend
+        let complexity_trend = if self.versions.len() >= 3 {
+            let first_complexity = analyze_complexity(&self.versions[0].statute);
+            let last_complexity =
+                analyze_complexity(&self.versions[self.versions.len() - 1].statute);
+
+            let diff = (last_complexity.logical_operator_count as i32)
+                - (first_complexity.logical_operator_count as i32);
+
+            if diff > 2 {
+                ComplexityTrend::Increasing
+            } else if diff < -2 {
+                ComplexityTrend::Decreasing
+            } else {
+                ComplexityTrend::Stable
+            }
+        } else {
+            ComplexityTrend::Stable
+        };
+
+        EvolutionMetrics {
+            statute_id: self.statute_id.clone(),
+            total_versions,
+            major_changes,
+            minor_changes,
+            avg_days_between_versions: avg_days,
+            stability_score,
+            complexity_trend,
+        }
+    }
+}
+
+/// Tracks evolution for multiple statutes
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EvolutionTracker {
+    /// Map from statute ID to evolution history
+    pub evolutions: HashMap<String, StatuteEvolution>,
+}
+
+impl EvolutionTracker {
+    /// Creates a new evolution tracker
+    pub fn new() -> Self {
+        Self {
+            evolutions: HashMap::new(),
+        }
+    }
+
+    /// Adds a statute (creates new evolution or adds version to existing)
+    pub fn track_statute(&mut self, statute: Statute, description: Option<String>) {
+        if let Some(evolution) = self.evolutions.get_mut(&statute.id) {
+            evolution.add_version(statute, description);
+        } else {
+            self.evolutions
+                .insert(statute.id.clone(), StatuteEvolution::new(statute));
+        }
+    }
+
+    /// Gets evolution history for a statute
+    pub fn get_evolution(&self, statute_id: &str) -> Option<&StatuteEvolution> {
+        self.evolutions.get(statute_id)
+    }
+
+    /// Analyzes metrics for all tracked statutes
+    pub fn analyze_all_metrics(&self) -> Vec<EvolutionMetrics> {
+        self.evolutions
+            .values()
+            .map(|e| e.analyze_metrics())
+            .collect()
+    }
+
+    /// Finds statutes with most changes
+    pub fn most_changed_statutes(&self, limit: usize) -> Vec<EvolutionMetrics> {
+        let mut metrics = self.analyze_all_metrics();
+        metrics.sort_by(|a, b| {
+            (b.major_changes + b.minor_changes).cmp(&(a.major_changes + a.minor_changes))
+        });
+        metrics.truncate(limit);
+        metrics
+    }
+
+    /// Finds most stable statutes
+    pub fn most_stable_statutes(&self, limit: usize) -> Vec<EvolutionMetrics> {
+        let mut metrics = self.analyze_all_metrics();
+        metrics.sort_by(|a, b| {
+            b.stability_score
+                .partial_cmp(&a.stability_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        metrics.truncate(limit);
+        metrics
+    }
+}
+
+impl Default for EvolutionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Generates an evolution report for tracked statutes
+pub fn evolution_report(tracker: &EvolutionTracker) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Statute Evolution Report\n\n");
+
+    let all_metrics = tracker.analyze_all_metrics();
+
+    report.push_str(&format!(
+        "**Total Tracked Statutes**: {}\n\n",
+        all_metrics.len()
+    ));
+
+    // Summary statistics
+    let total_versions: usize = all_metrics.iter().map(|m| m.total_versions).sum();
+    let avg_versions = if !all_metrics.is_empty() {
+        total_versions as f64 / all_metrics.len() as f64
+    } else {
+        0.0
+    };
+
+    report.push_str("## Summary Statistics\n\n");
+    report.push_str(&format!(
+        "- **Total Versions Across All Statutes**: {}\n",
+        total_versions
+    ));
+    report.push_str(&format!(
+        "- **Average Versions Per Statute**: {:.2}\n",
+        avg_versions
+    ));
+    report.push('\n');
+
+    // Most changed statutes
+    report.push_str("## Most Changed Statutes\n\n");
+    let most_changed = tracker.most_changed_statutes(10);
+    for (i, metric) in most_changed.iter().enumerate() {
+        report.push_str(&format!(
+            "{}. **{}** - {} versions ({} major, {} minor changes)\n",
+            i + 1,
+            metric.statute_id,
+            metric.total_versions,
+            metric.major_changes,
+            metric.minor_changes
+        ));
+    }
+    report.push('\n');
+
+    // Most stable statutes
+    report.push_str("## Most Stable Statutes\n\n");
+    let most_stable = tracker.most_stable_statutes(10);
+    for (i, metric) in most_stable.iter().enumerate() {
+        report.push_str(&format!(
+            "{}. **{}** - Stability: {:.2}, {} versions\n",
+            i + 1,
+            metric.statute_id,
+            metric.stability_score,
+            metric.total_versions
+        ));
+    }
+    report.push('\n');
+
+    // Complexity trends
+    report.push_str("## Complexity Trends\n\n");
+    let increasing: Vec<_> = all_metrics
+        .iter()
+        .filter(|m| m.complexity_trend == ComplexityTrend::Increasing)
+        .collect();
+    let decreasing: Vec<_> = all_metrics
+        .iter()
+        .filter(|m| m.complexity_trend == ComplexityTrend::Decreasing)
+        .collect();
+    let stable: Vec<_> = all_metrics
+        .iter()
+        .filter(|m| m.complexity_trend == ComplexityTrend::Stable)
+        .collect();
+
+    report.push_str(&format!(
+        "- **Increasing Complexity**: {} statutes\n",
+        increasing.len()
+    ));
+    report.push_str(&format!(
+        "- **Decreasing Complexity**: {} statutes\n",
+        decreasing.len()
+    ));
+    report.push_str(&format!(
+        "- **Stable Complexity**: {} statutes\n",
+        stable.len()
+    ));
+    report.push('\n');
+
+    report
+}
+
+// ============================================================================
+// Pattern Mining
+// ============================================================================
+
+/// Common pattern found in statutes
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatutePattern {
+    /// Pattern ID
+    pub id: String,
+    /// Pattern description
+    pub description: String,
+    /// Frequency (number of statutes matching this pattern)
+    pub frequency: usize,
+    /// Example statute IDs
+    pub examples: Vec<String>,
+    /// Pattern type
+    pub pattern_type: PatternType,
+}
+
+/// Type of statute pattern
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PatternType {
+    /// Age-based eligibility
+    AgeEligibility,
+    /// Income-based qualification
+    IncomeQualification,
+    /// Combined age and income
+    AgeAndIncome,
+    /// Prohibition with exceptions
+    ProhibitionWithExceptions,
+    /// Temporal restriction
+    TemporalRestriction,
+    /// Jurisdiction-specific
+    JurisdictionalPattern,
+    /// Custom pattern
+    Custom,
+}
+
+impl std::fmt::Display for PatternType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AgeEligibility => write!(f, "Age Eligibility"),
+            Self::IncomeQualification => write!(f, "Income Qualification"),
+            Self::AgeAndIncome => write!(f, "Age and Income"),
+            Self::ProhibitionWithExceptions => write!(f, "Prohibition with Exceptions"),
+            Self::TemporalRestriction => write!(f, "Temporal Restriction"),
+            Self::JurisdictionalPattern => write!(f, "Jurisdictional Pattern"),
+            Self::Custom => write!(f, "Custom"),
+        }
+    }
+}
+
+/// Mines common patterns from a collection of statutes
+pub fn mine_patterns(statutes: &[Statute]) -> Vec<StatutePattern> {
+    let mut patterns = Vec::new();
+
+    // Pattern 1: Age eligibility
+    let age_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| has_age_condition(&s.preconditions))
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !age_statutes.is_empty() {
+        patterns.push(StatutePattern {
+            id: "age-eligibility".to_string(),
+            description: "Statutes with age-based eligibility requirements".to_string(),
+            frequency: age_statutes.len(),
+            examples: age_statutes.iter().take(5).cloned().collect(),
+            pattern_type: PatternType::AgeEligibility,
+        });
+    }
+
+    // Pattern 2: Income qualification
+    let income_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| has_income_condition(&s.preconditions))
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !income_statutes.is_empty() {
+        patterns.push(StatutePattern {
+            id: "income-qualification".to_string(),
+            description: "Statutes with income-based qualification criteria".to_string(),
+            frequency: income_statutes.len(),
+            examples: income_statutes.iter().take(5).cloned().collect(),
+            pattern_type: PatternType::IncomeQualification,
+        });
+    }
+
+    // Pattern 3: Combined age and income
+    let combined_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| has_age_condition(&s.preconditions) && has_income_condition(&s.preconditions))
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !combined_statutes.is_empty() {
+        patterns.push(StatutePattern {
+            id: "age-and-income".to_string(),
+            description: "Statutes combining age and income requirements".to_string(),
+            frequency: combined_statutes.len(),
+            examples: combined_statutes.iter().take(5).cloned().collect(),
+            pattern_type: PatternType::AgeAndIncome,
+        });
+    }
+
+    // Pattern 4: Prohibition with exceptions
+    let prohibition_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| {
+            matches!(s.effect.effect_type, EffectType::Prohibition)
+                && has_negation(&s.preconditions)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !prohibition_statutes.is_empty() {
+        patterns.push(StatutePattern {
+            id: "prohibition-with-exceptions".to_string(),
+            description: "Prohibitions with exception conditions (NOT clauses)".to_string(),
+            frequency: prohibition_statutes.len(),
+            examples: prohibition_statutes.iter().take(5).cloned().collect(),
+            pattern_type: PatternType::ProhibitionWithExceptions,
+        });
+    }
+
+    // Pattern 5: Temporal restrictions
+    let temporal_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| {
+            s.temporal_validity.has_effective_date() || s.temporal_validity.has_expiry_date()
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !temporal_statutes.is_empty() {
+        patterns.push(StatutePattern {
+            id: "temporal-restriction".to_string(),
+            description: "Statutes with temporal validity constraints".to_string(),
+            frequency: temporal_statutes.len(),
+            examples: temporal_statutes.iter().take(5).cloned().collect(),
+            pattern_type: PatternType::TemporalRestriction,
+        });
+    }
+
+    // Pattern 6: Jurisdictional patterns
+    let mut jurisdiction_map: HashMap<String, Vec<String>> = HashMap::new();
+    for statute in statutes {
+        if let Some(jurisdiction) = &statute.jurisdiction {
+            jurisdiction_map
+                .entry(jurisdiction.clone())
+                .or_default()
+                .push(statute.id.clone());
+        }
+    }
+
+    for (jurisdiction, statute_ids) in jurisdiction_map {
+        if statute_ids.len() >= 3 {
+            // Only report if at least 3 statutes
+            patterns.push(StatutePattern {
+                id: format!("jurisdiction-{}", jurisdiction.to_lowercase()),
+                description: format!("Statutes specific to {} jurisdiction", jurisdiction),
+                frequency: statute_ids.len(),
+                examples: statute_ids.iter().take(5).cloned().collect(),
+                pattern_type: PatternType::JurisdictionalPattern,
+            });
+        }
+    }
+
+    patterns.sort_by(|a, b| b.frequency.cmp(&a.frequency));
+    patterns
+}
+
+/// Helper: checks if conditions contain age requirement
+fn has_age_condition(conditions: &[legalis_core::Condition]) -> bool {
+    conditions
+        .iter()
+        .any(|c| matches!(c, legalis_core::Condition::Age { .. }))
+        || conditions.iter().any(|c| {
+            check_condition_recursive(c, |cond| {
+                matches!(cond, legalis_core::Condition::Age { .. })
+            })
+        })
+}
+
+/// Helper: checks if conditions contain income requirement
+fn has_income_condition(conditions: &[legalis_core::Condition]) -> bool {
+    conditions
+        .iter()
+        .any(|c| matches!(c, legalis_core::Condition::Income { .. }))
+        || conditions.iter().any(|c| {
+            check_condition_recursive(c, |cond| {
+                matches!(cond, legalis_core::Condition::Income { .. })
+            })
+        })
+}
+
+/// Helper: checks if conditions contain negation
+fn has_negation(conditions: &[legalis_core::Condition]) -> bool {
+    conditions
+        .iter()
+        .any(|c| matches!(c, legalis_core::Condition::Not(_)))
+        || conditions.iter().any(|c| {
+            check_condition_recursive(c, |cond| matches!(cond, legalis_core::Condition::Not(_)))
+        })
+}
+
+/// Helper: recursively checks a condition with a predicate
+fn check_condition_recursive<F>(condition: &legalis_core::Condition, predicate: F) -> bool
+where
+    F: Fn(&legalis_core::Condition) -> bool + Copy,
+{
+    use legalis_core::Condition;
+
+    if predicate(condition) {
+        return true;
+    }
+
+    match condition {
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            check_condition_recursive(left, predicate)
+                || check_condition_recursive(right, predicate)
+        }
+        Condition::Not(inner) => check_condition_recursive(inner, predicate),
+        _ => false,
+    }
+}
+
+/// Generates a pattern mining report
+pub fn pattern_mining_report(statutes: &[Statute]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Statute Pattern Mining Report\n\n");
+
+    let patterns = mine_patterns(statutes);
+
+    report.push_str(&format!(
+        "**Total Statutes Analyzed**: {}\n",
+        statutes.len()
+    ));
+    report.push_str(&format!("**Patterns Found**: {}\n\n", patterns.len()));
+
+    report.push_str("## Discovered Patterns\n\n");
+
+    for (i, pattern) in patterns.iter().enumerate() {
+        report.push_str(&format!(
+            "### {}. {} ({})\n\n",
+            i + 1,
+            pattern.description,
+            pattern.pattern_type
+        ));
+        report.push_str(&format!(
+            "- **Frequency**: {} statutes ({:.1}%)\n",
+            pattern.frequency,
+            (pattern.frequency as f64 / statutes.len() as f64) * 100.0
+        ));
+        report.push_str("- **Examples**: ");
+        report.push_str(&pattern.examples.join(", "));
+        report.push_str("\n\n");
+    }
+
+    report
+}
+
+// ============================================================================
+// Comprehensive Metrics Dashboard
+// ============================================================================
+
+/// Comprehensive dashboard containing all metrics
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MetricsDashboard {
+    /// Timestamp when dashboard was generated
+    pub generated_at: chrono::NaiveDateTime,
+    /// Basic statistics
+    pub statistics: StatuteStatistics,
+    /// Graph analysis metrics
+    pub graph_metrics: GraphMetrics,
+    /// Centrality metrics for top statutes
+    pub top_centrality: Vec<CentralityMetrics>,
+    /// Quality metrics summary
+    pub quality_summary: QualitySummary,
+    /// Conflict summary
+    pub conflict_summary: ConflictSummary,
+    /// Coverage analysis
+    pub coverage_info: CoverageInfo,
+    /// Evolution summary (if tracker provided)
+    pub evolution_summary: Option<EvolutionSummary>,
+    /// Discovered patterns
+    pub patterns: Vec<StatutePattern>,
+}
+
+/// Quality metrics summary
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QualitySummary {
+    /// Average quality score
+    pub average_score: f64,
+    /// Grade distribution
+    pub grade_distribution: HashMap<String, usize>,
+    /// Number of statutes with issues
+    pub statutes_with_issues: usize,
+    /// Total issues found
+    pub total_issues: usize,
+}
+
+/// Conflict summary
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConflictSummary {
+    /// Total conflicts detected
+    pub total_conflicts: usize,
+    /// Conflicts by type
+    pub conflicts_by_type: HashMap<String, usize>,
+    /// Critical conflicts (severity critical)
+    pub critical_conflicts: usize,
+}
+
+/// Evolution summary
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EvolutionSummary {
+    /// Total tracked statutes
+    pub total_tracked: usize,
+    /// Average versions per statute
+    pub avg_versions: f64,
+    /// Total versions across all statutes
+    pub total_versions: usize,
+    /// Most changed statute
+    pub most_changed: Option<String>,
+    /// Most stable statute
+    pub most_stable: Option<String>,
+}
+
+/// Generates a comprehensive metrics dashboard
+pub fn generate_metrics_dashboard(
+    statutes: &[Statute],
+    evolution_tracker: Option<&EvolutionTracker>,
+) -> MetricsDashboard {
+    // Basic statistics
+    let statistics = analyze_statute_statistics(statutes);
+
+    // Graph analysis
+    let graph_metrics = analyze_graph_metrics(statutes);
+    let mut centrality = analyze_centrality(statutes);
+    centrality.sort_by(|a, b| {
+        b.pagerank
+            .partial_cmp(&a.pagerank)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let top_centrality: Vec<_> = centrality.into_iter().take(10).collect();
+
+    // Quality analysis
+    let quality_metrics: Vec<_> = statutes.iter().map(analyze_quality).collect();
+    let average_score = if !quality_metrics.is_empty() {
+        quality_metrics.iter().map(|q| q.overall_score).sum::<f64>() / quality_metrics.len() as f64
+    } else {
+        0.0
+    };
+
+    let mut grade_distribution = HashMap::new();
+    for qm in &quality_metrics {
+        *grade_distribution
+            .entry(qm.grade().to_string())
+            .or_insert(0) += 1;
+    }
+
+    let statutes_with_issues = quality_metrics
+        .iter()
+        .filter(|q| !q.issues.is_empty())
+        .count();
+    let total_issues: usize = quality_metrics.iter().map(|q| q.issues.len()).sum();
+
+    let quality_summary = QualitySummary {
+        average_score,
+        grade_distribution,
+        statutes_with_issues,
+        total_issues,
+    };
+
+    // Conflict detection
+    let conflicts = detect_statute_conflicts(statutes);
+    let mut conflicts_by_type = HashMap::new();
+    for conflict in &conflicts {
+        let type_name = format!("{:?}", conflict.conflict_type);
+        *conflicts_by_type.entry(type_name).or_insert(0) += 1;
+    }
+
+    let critical_conflicts = conflicts
+        .iter()
+        .filter(|c| matches!(c.severity, Severity::Critical))
+        .count();
+
+    let conflict_summary = ConflictSummary {
+        total_conflicts: conflicts.len(),
+        conflicts_by_type,
+        critical_conflicts,
+    };
+
+    // Coverage analysis
+    let coverage_info = analyze_coverage(statutes);
+
+    // Evolution summary
+    let evolution_summary = evolution_tracker.map(|tracker| {
+        let all_metrics = tracker.analyze_all_metrics();
+        let total_tracked = all_metrics.len();
+        let total_versions: usize = all_metrics.iter().map(|m| m.total_versions).sum();
+        let avg_versions = if total_tracked > 0 {
+            total_versions as f64 / total_tracked as f64
+        } else {
+            0.0
+        };
+
+        let most_changed = tracker
+            .most_changed_statutes(1)
+            .first()
+            .map(|m| m.statute_id.clone());
+
+        let most_stable = tracker
+            .most_stable_statutes(1)
+            .first()
+            .map(|m| m.statute_id.clone());
+
+        EvolutionSummary {
+            total_tracked,
+            avg_versions,
+            total_versions,
+            most_changed,
+            most_stable,
+        }
+    });
+
+    // Pattern mining
+    let patterns = mine_patterns(statutes);
+
+    MetricsDashboard {
+        generated_at: chrono::Utc::now().naive_utc(),
+        statistics,
+        graph_metrics,
+        top_centrality,
+        quality_summary,
+        conflict_summary,
+        coverage_info,
+        evolution_summary,
+        patterns,
+    }
+}
+
+/// Exports dashboard to JSON
+pub fn export_dashboard_json(dashboard: &MetricsDashboard) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(dashboard)
+}
+
+/// Exports dashboard to HTML
+pub fn export_dashboard_html(dashboard: &MetricsDashboard, title: &str) -> String {
+    let mut html = String::new();
+
+    html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+    html.push_str(&format!("<title>{}</title>\n", title));
+    html.push_str("<style>\n");
+    html.push_str("body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }\n");
+    html.push_str("h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }\n");
+    html.push_str("h2 { color: #555; margin-top: 30px; }\n");
+    html.push_str(".card { background: white; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+    html.push_str(".metric { display: inline-block; margin: 10px 20px 10px 0; }\n");
+    html.push_str(".metric-label { font-weight: bold; color: #666; }\n");
+    html.push_str(".metric-value { font-size: 1.2em; color: #007bff; }\n");
+    html.push_str("table { width: 100%; border-collapse: collapse; margin-top: 10px; }\n");
+    html.push_str("th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }\n");
+    html.push_str("th { background: #007bff; color: white; }\n");
+    html.push_str("tr:hover { background: #f9f9f9; }\n");
+    html.push_str(".critical { color: #dc3545; font-weight: bold; }\n");
+    html.push_str(".warning { color: #ffc107; }\n");
+    html.push_str(".success { color: #28a745; }\n");
+    html.push_str("</style>\n</head>\n<body>\n");
+
+    html.push_str(&format!("<h1>{}</h1>\n", title));
+    html.push_str(&format!(
+        "<p><em>Generated: {}</em></p>\n",
+        dashboard.generated_at
+    ));
+
+    // Overview Card
+    html.push_str("<div class=\"card\">\n<h2>Overview</h2>\n");
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Total Statutes:</span> <span class=\"metric-value\">{}</span></div>\n", dashboard.statistics.total_count));
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Average Quality:</span> <span class=\"metric-value\">{:.1}</span></div>\n", dashboard.quality_summary.average_score));
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Total Conflicts:</span> <span class=\"metric-value {}\">{}</span></div>\n",
+        if dashboard.conflict_summary.total_conflicts > 0 { "critical" } else { "success" },
+        dashboard.conflict_summary.total_conflicts));
+    html.push_str("</div>\n");
+
+    // Graph Metrics Card
+    html.push_str("<div class=\"card\">\n<h2>Dependency Graph</h2>\n");
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Nodes:</span> <span class=\"metric-value\">{}</span></div>\n", dashboard.graph_metrics.node_count));
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Edges:</span> <span class=\"metric-value\">{}</span></div>\n", dashboard.graph_metrics.edge_count));
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Density:</span> <span class=\"metric-value\">{:.4}</span></div>\n", dashboard.graph_metrics.density));
+    html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Is DAG:</span> <span class=\"metric-value {}\">{}</span></div>\n",
+        if dashboard.graph_metrics.is_acyclic { "success" } else { "critical" },
+        dashboard.graph_metrics.is_acyclic));
+    html.push_str("</div>\n");
+
+    // Top Statutes by PageRank
+    html.push_str("<div class=\"card\">\n<h2>Top 10 Statutes by Importance (PageRank)</h2>\n");
+    html.push_str("<table>\n<tr><th>Rank</th><th>Statute ID</th><th>PageRank</th><th>In-Degree</th><th>Out-Degree</th></tr>\n");
+    for (i, metric) in dashboard.top_centrality.iter().enumerate() {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{:.4}</td><td>{}</td><td>{}</td></tr>\n",
+            i + 1,
+            metric.statute_id,
+            metric.pagerank,
+            metric.in_degree,
+            metric.out_degree
+        ));
+    }
+    html.push_str("</table>\n</div>\n");
+
+    // Quality Summary
+    html.push_str("<div class=\"card\">\n<h2>Quality Summary</h2>\n");
+    html.push_str("<table>\n<tr><th>Grade</th><th>Count</th></tr>\n");
+    let mut grades: Vec<_> = dashboard
+        .quality_summary
+        .grade_distribution
+        .iter()
+        .collect();
+    grades.sort_by(|a, b| a.0.cmp(b.0));
+    for (grade, count) in grades {
+        html.push_str(&format!("<tr><td>{}</td><td>{}</td></tr>\n", grade, count));
+    }
+    html.push_str("</table>\n");
+    html.push_str(&format!(
+        "<p>Statutes with Issues: <span class=\"warning\">{}</span></p>\n",
+        dashboard.quality_summary.statutes_with_issues
+    ));
+    html.push_str("</div>\n");
+
+    // Patterns
+    html.push_str("<div class=\"card\">\n<h2>Common Patterns</h2>\n");
+    html.push_str(
+        "<table>\n<tr><th>Pattern</th><th>Type</th><th>Frequency</th><th>Percentage</th></tr>\n",
+    );
+    for pattern in &dashboard.patterns {
+        let percentage =
+            (pattern.frequency as f64 / dashboard.statistics.total_count as f64) * 100.0;
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.1}%</td></tr>\n",
+            pattern.description, pattern.pattern_type, pattern.frequency, percentage
+        ));
+    }
+    html.push_str("</table>\n</div>\n");
+
+    // Evolution Summary (if available)
+    if let Some(evolution) = &dashboard.evolution_summary {
+        html.push_str("<div class=\"card\">\n<h2>Evolution Summary</h2>\n");
+        html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Tracked Statutes:</span> <span class=\"metric-value\">{}</span></div>\n", evolution.total_tracked));
+        html.push_str(&format!("<div class=\"metric\"><span class=\"metric-label\">Avg Versions:</span> <span class=\"metric-value\">{:.2}</span></div>\n", evolution.avg_versions));
+        if let Some(most_changed) = &evolution.most_changed {
+            html.push_str(&format!(
+                "<p>Most Changed: <strong>{}</strong></p>\n",
+                most_changed
+            ));
+        }
+        if let Some(most_stable) = &evolution.most_stable {
+            html.push_str(&format!(
+                "<p>Most Stable: <strong>{}</strong></p>\n",
+                most_stable
+            ));
+        }
+        html.push_str("</div>\n");
+    }
+
+    html.push_str("</body>\n</html>");
+    html
+}
+
+/// Generates a markdown summary of the dashboard
+pub fn dashboard_markdown_summary(dashboard: &MetricsDashboard) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Comprehensive Metrics Dashboard\n\n");
+    report.push_str(&format!("**Generated**: {}\n\n", dashboard.generated_at));
+
+    report.push_str("## Overview\n\n");
+    report.push_str(&format!(
+        "- **Total Statutes**: {}\n",
+        dashboard.statistics.total_count
+    ));
+    report.push_str(&format!(
+        "- **Average Quality Score**: {:.1}/100\n",
+        dashboard.quality_summary.average_score
+    ));
+    report.push_str(&format!(
+        "- **Total Conflicts**: {}\n",
+        dashboard.conflict_summary.total_conflicts
+    ));
+    report.push_str(&format!(
+        "- **Critical Conflicts**: {}\n",
+        dashboard.conflict_summary.critical_conflicts
+    ));
+    report.push('\n');
+
+    report.push_str("## Graph Structure\n\n");
+    report.push_str(&format!(
+        "- **Nodes**: {}\n",
+        dashboard.graph_metrics.node_count
+    ));
+    report.push_str(&format!(
+        "- **Edges**: {}\n",
+        dashboard.graph_metrics.edge_count
+    ));
+    report.push_str(&format!(
+        "- **Density**: {:.4}\n",
+        dashboard.graph_metrics.density
+    ));
+    report.push_str(&format!(
+        "- **Is Acyclic**: {}\n",
+        dashboard.graph_metrics.is_acyclic
+    ));
+    report.push_str(&format!(
+        "- **Diameter**: {}\n",
+        dashboard.graph_metrics.diameter
+    ));
+    report.push('\n');
+
+    report.push_str("## Quality Distribution\n\n");
+    let mut grades: Vec<_> = dashboard
+        .quality_summary
+        .grade_distribution
+        .iter()
+        .collect();
+    grades.sort_by(|a, b| a.0.cmp(b.0));
+    for (grade, count) in grades {
+        report.push_str(&format!("- Grade {}: {} statutes\n", grade, count));
+    }
+    report.push('\n');
+
+    report.push_str("## Top Patterns\n\n");
+    for (i, pattern) in dashboard.patterns.iter().take(5).enumerate() {
+        let percentage =
+            (pattern.frequency as f64 / dashboard.statistics.total_count as f64) * 100.0;
+        report.push_str(&format!(
+            "{}. {} - {} statutes ({:.1}%)\n",
+            i + 1,
+            pattern.description,
+            pattern.frequency,
+            percentage
+        ));
+    }
+    report.push('\n');
+
+    if let Some(evolution) = &dashboard.evolution_summary {
+        report.push_str("## Evolution Tracking\n\n");
+        report.push_str(&format!(
+            "- **Tracked Statutes**: {}\n",
+            evolution.total_tracked
+        ));
+        report.push_str(&format!(
+            "- **Average Versions**: {:.2}\n",
+            evolution.avg_versions
+        ));
+        if let Some(most_changed) = &evolution.most_changed {
+            report.push_str(&format!("- **Most Changed**: {}\n", most_changed));
+        }
+        if let Some(most_stable) = &evolution.most_stable {
+            report.push_str(&format!("- **Most Stable**: {}\n", most_stable));
+        }
+        report.push('\n');
+    }
+
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6402,6 +9697,52 @@ mod tests {
         assert!(report.contains("s1"));
         assert!(report.contains("s2"));
         assert!(report.contains("## Summary"));
+    }
+
+    #[test]
+    fn test_complexity_with_calculation() {
+        let statute = Statute::new(
+            "calc-test",
+            "Calculation Test",
+            Effect::new(EffectType::Grant, "Tax benefit"),
+        )
+        .with_precondition(Condition::Calculation {
+            formula: "income * 0.2".to_string(),
+            operator: ComparisonOp::GreaterThan,
+            value: 1000.0,
+        });
+
+        let metrics = analyze_complexity(&statute);
+        assert_eq!(metrics.condition_count, 1);
+        assert_eq!(metrics.condition_depth, 1);
+        assert_eq!(metrics.condition_type_count, 1);
+        assert_eq!(metrics.logical_operator_count, 0); // No logical operators
+    }
+
+    #[test]
+    fn test_complexity_with_mixed_calculation() {
+        let statute = Statute::new(
+            "mixed-test",
+            "Mixed Calculation Test",
+            Effect::new(EffectType::Grant, "Complex benefit"),
+        )
+        .with_precondition(Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::Calculation {
+                formula: "net_worth / annual_income".to_string(),
+                operator: ComparisonOp::LessThan,
+                value: 5.0,
+            }),
+        ));
+
+        let metrics = analyze_complexity(&statute);
+        assert_eq!(metrics.condition_count, 1);
+        assert_eq!(metrics.condition_depth, 2);
+        assert_eq!(metrics.condition_type_count, 2); // Age and Calculation
+        assert_eq!(metrics.logical_operator_count, 1); // One AND operator
     }
 
     #[test]
@@ -7922,5 +11263,742 @@ mod tests {
 
         assert_eq!(conflict.resolution_suggestions.len(), 2);
         assert_eq!(conflict.severity, Severity::Critical);
+    }
+
+    #[test]
+    fn test_coverage_gap_detection() {
+        let statutes = vec![
+            Statute::new("young", "Young Adult Rights", Effect::grant("vote"))
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                })
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::LessThan,
+                    value: 25,
+                }),
+            Statute::new("senior", "Senior Rights", Effect::grant("benefits")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 65,
+                },
+            ),
+        ];
+
+        let gaps = analyze_coverage_gaps(&statutes);
+
+        // Should detect age gap between 25 and 65
+        assert!(!gaps.is_empty());
+        assert!(gaps.iter().any(|g| g.description.contains("age coverage")));
+    }
+
+    #[test]
+    fn test_no_coverage_gaps_simple() {
+        let statutes = vec![Statute::new(
+            "general",
+            "General Law",
+            Effect::grant("rights"),
+        )];
+
+        let gaps = analyze_coverage_gaps(&statutes);
+
+        // No age conditions, so no age-based gaps
+        assert!(gaps.is_empty());
+    }
+
+    #[test]
+    fn test_jurisdiction_gap_detection() {
+        let statutes = vec![
+            Statute::new("us-law", "US Law", Effect::grant("benefit")).with_jurisdiction("US"),
+            Statute::new("eu-law", "EU Law", Effect::grant("benefit")).with_jurisdiction("EU"),
+            Statute::new("no-jurisdiction", "Unknown", Effect::grant("other")),
+        ];
+
+        let gaps = analyze_coverage_gaps(&statutes);
+
+        // Should detect jurisdiction gap (need multiple jurisdictions first)
+        assert!(
+            gaps.iter()
+                .any(|g| g.description.contains("no jurisdiction"))
+        );
+    }
+
+    #[test]
+    fn test_optimization_report_generation() {
+        let statutes = vec![
+            Statute::new("complex", "Complex Law", Effect::grant("rights")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+        ];
+
+        let report = optimization_and_gaps_report(&statutes);
+
+        assert!(report.contains("Statute Optimization"));
+        assert!(report.contains("Coverage Gaps"));
+        assert!(report.contains("Summary"));
+        assert!(report.contains("Total statutes analyzed: 1"));
+    }
+
+    #[test]
+    fn test_coverage_gap_severity_levels() {
+        let statutes = vec![
+            Statute::new("income-law", "Income-Based Law", Effect::grant("credit"))
+                .with_precondition(Condition::Income {
+                    operator: ComparisonOp::LessThan,
+                    value: 50000,
+                }),
+        ];
+
+        let gaps = analyze_coverage_gaps(&statutes);
+
+        // Income-based statutes should generate info-level gap
+        if let Some(gap) = gaps.iter().find(|g| g.description.contains("Income")) {
+            assert_eq!(gap.severity, Severity::Info);
+        }
+    }
+
+    // ========================================================================
+    // Tests for Dependency Graph Export
+    // ========================================================================
+
+    #[test]
+    fn test_export_dependency_graph() {
+        let statutes = vec![
+            Statute::new("law1", "First Law", Effect::grant("right1")),
+            Statute::new("law2", "Second Law", Effect::grant("right2")).with_precondition(
+                Condition::Custom {
+                    description: "statute:law1".to_string(),
+                },
+            ),
+        ];
+
+        let dot = export_dependency_graph(&statutes);
+
+        assert!(dot.contains("digraph StatuteDependencies"));
+        assert!(dot.contains("law1"));
+        assert!(dot.contains("law2"));
+        assert!(dot.contains("law2\" -> \"law1"));
+        assert!(dot.contains("[label=\"references\"]"));
+    }
+
+    #[test]
+    fn test_export_dependency_graph_with_conflicts() {
+        let statutes = vec![
+            Statute::new("law1", "First Law", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Second Law", Effect::revoke("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+        ];
+
+        let dot = export_dependency_graph_with_conflicts(&statutes);
+
+        assert!(dot.contains("digraph StatuteDependenciesWithConflicts"));
+        assert!(dot.contains("law1"));
+        assert!(dot.contains("law2"));
+        // Should contain conflict highlighting
+        assert!(dot.contains("lightcoral") || dot.contains("lightblue"));
+    }
+
+    #[test]
+    fn test_export_dependency_graph_no_references() {
+        let statutes = vec![
+            Statute::new("law1", "Independent Law 1", Effect::grant("right1")),
+            Statute::new("law2", "Independent Law 2", Effect::grant("right2")),
+        ];
+
+        let dot = export_dependency_graph(&statutes);
+
+        assert!(dot.contains("law1"));
+        assert!(dot.contains("law2"));
+        // No reference edges expected
+        assert!(!dot.contains("->"));
+    }
+
+    // ========================================================================
+    // Tests for Quality Metrics
+    // ========================================================================
+
+    #[test]
+    fn test_quality_metrics_basic() {
+        let statute = Statute::new("test-law", "Test Statute", Effect::grant("benefit"))
+            .with_jurisdiction("US")
+            .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()));
+
+        let metrics = analyze_quality(&statute);
+
+        assert_eq!(metrics.statute_id, "test-law");
+        assert!(metrics.overall_score >= 0.0 && metrics.overall_score <= 100.0);
+        assert!(metrics.complexity_score >= 0.0 && metrics.complexity_score <= 100.0);
+        assert!(metrics.readability_score >= 0.0 && metrics.readability_score <= 100.0);
+    }
+
+    #[test]
+    fn test_quality_metrics_grade() {
+        let metrics = QualityMetrics::new("test".to_string(), 95.0, 95.0, 95.0, 95.0);
+
+        assert_eq!(metrics.grade(), 'A');
+        assert_eq!(metrics.overall_score, 95.0);
+    }
+
+    #[test]
+    fn test_quality_metrics_with_issues() {
+        let statute = Statute::new("incomplete-law", "Incomplete Law", Effect::grant("benefit"));
+
+        let metrics = analyze_quality(&statute);
+
+        // Should have issues for missing jurisdiction and enacted date
+        assert!(!metrics.issues.is_empty());
+        assert!(metrics.issues.iter().any(|i| i.contains("jurisdiction")));
+    }
+
+    #[test]
+    fn test_quality_report_generation() {
+        let statutes = vec![
+            Statute::new("law1", "Good Law", Effect::grant("benefit"))
+                .with_jurisdiction("US")
+                .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()))
+                .with_discretion("A well-documented law"),
+            Statute::new("law2", "Poor Law", Effect::grant("other")),
+        ];
+
+        let report = quality_report(&statutes);
+
+        assert!(report.contains("# Statute Quality Report"));
+        assert!(report.contains("law1"));
+        assert!(report.contains("law2"));
+        assert!(report.contains("Summary"));
+        assert!(report.contains("Total statutes analyzed: 2"));
+        assert!(report.contains("Grade Distribution"));
+    }
+
+    #[test]
+    fn test_quality_metrics_low_complexity_strength() {
+        let statute = Statute::new("simple-law", "Simple Law", Effect::grant("benefit"))
+            .with_jurisdiction("US")
+            .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()))
+            .with_discretion("A simple law");
+
+        let metrics = analyze_quality(&statute);
+
+        assert!(metrics.strengths.iter().any(|s| s.contains("complexity")));
+    }
+
+    // ========================================================================
+    // Tests for Change Impact Analysis
+    // ========================================================================
+
+    #[test]
+    fn test_compare_statutes_no_changes() {
+        let statute1 = Statute::new("law1", "Test Law", Effect::grant("benefit"));
+        let statute2 = Statute::new("law1", "Test Law", Effect::grant("benefit"));
+
+        let changes = compare_statutes(&statute1, &statute2);
+
+        assert!(changes.is_empty());
+    }
+
+    #[test]
+    fn test_compare_statutes_title_changed() {
+        let old = Statute::new("law1", "Old Title", Effect::grant("benefit"));
+        let new = Statute::new("law1", "New Title", Effect::grant("benefit"));
+
+        let changes = compare_statutes(&old, &new);
+
+        assert_eq!(changes.len(), 1);
+        assert!(matches!(changes[0], StatuteChange::TitleChanged { .. }));
+    }
+
+    #[test]
+    fn test_compare_statutes_effect_changed() {
+        let old = Statute::new("law1", "Test Law", Effect::grant("benefit"));
+        let new = Statute::new("law1", "Test Law", Effect::revoke("benefit"));
+
+        let changes = compare_statutes(&old, &new);
+
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, StatuteChange::EffectChanged { .. }))
+        );
+    }
+
+    #[test]
+    fn test_compare_statutes_preconditions_changed() {
+        let old = Statute::new("law1", "Test Law", Effect::grant("benefit")).with_precondition(
+            Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            },
+        );
+        let new = Statute::new("law1", "Test Law", Effect::grant("benefit")).with_precondition(
+            Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 21,
+            },
+        );
+
+        let changes = compare_statutes(&old, &new);
+
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, StatuteChange::PreconditionsChanged { .. }))
+        );
+    }
+
+    #[test]
+    fn test_analyze_change_impact_no_dependents() {
+        let old = Statute::new("law1", "Old Version", Effect::grant("benefit"));
+        let new = Statute::new("law1", "New Version", Effect::grant("benefit"));
+        let all_statutes = vec![new.clone()];
+
+        let impact = analyze_change_impact(&new, &old, &all_statutes);
+
+        assert_eq!(impact.statute_id, "law1");
+        assert_eq!(impact.affected_statutes.len(), 0);
+        assert_eq!(impact.impact_severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_analyze_change_impact_with_dependents() {
+        let old = Statute::new("base-law", "Base Law Old", Effect::grant("benefit"));
+        let new = Statute::new("base-law", "Base Law New", Effect::revoke("benefit"));
+
+        let dependent = Statute::new("dependent-law", "Dependent Law", Effect::grant("other"))
+            .with_precondition(Condition::Custom {
+                description: "statute:base-law".to_string(),
+            });
+
+        let all_statutes = vec![new.clone(), dependent];
+
+        let impact = analyze_change_impact(&new, &old, &all_statutes);
+
+        assert_eq!(impact.affected_statutes.len(), 1);
+        assert!(
+            impact
+                .affected_statutes
+                .contains(&"dependent-law".to_string())
+        );
+        assert_eq!(impact.impact_severity, Severity::Critical);
+        assert!(!impact.recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_change_impact_report_generation() {
+        let old = Statute::new("law1", "Old Title", Effect::grant("benefit"));
+        let new = Statute::new("law1", "New Title", Effect::grant("benefit"));
+        let all_statutes = vec![new.clone()];
+
+        let impact = analyze_change_impact(&new, &old, &all_statutes);
+        let report = change_impact_report(&impact);
+
+        assert!(report.contains("# Change Impact Analysis"));
+        assert!(report.contains("law1"));
+        assert!(report.contains("Changes Detected"));
+        assert!(report.contains("Affected Statutes"));
+        assert!(report.contains("Recommendations"));
+    }
+
+    #[test]
+    fn test_statute_change_display() {
+        let change = StatuteChange::TitleChanged {
+            old: "Old".to_string(),
+            new: "New".to_string(),
+        };
+
+        let display = format!("{}", change);
+        assert!(display.contains("Title changed"));
+        assert!(display.contains("Old"));
+        assert!(display.contains("New"));
+    }
+
+    // ========================================================================
+    // Tests for Batch Verification
+    // ========================================================================
+
+    #[test]
+    fn test_batch_verification_basic() {
+        let verifier = StatuteVerifier::new();
+
+        let statutes = vec![
+            Statute::new("law1", "Valid Law", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Another Law", Effect::grant("other")).with_precondition(
+                Condition::Income {
+                    operator: ComparisonOp::GreaterThan,
+                    value: 30000,
+                },
+            ),
+        ];
+
+        let result = batch_verify(&statutes, &verifier);
+
+        assert_eq!(result.total_statutes, 2);
+        // total_time_ms is always >= 0 as it's u64, so no need to assert
+        assert_eq!(result.pass_rate(), 100.0);
+    }
+
+    #[test]
+    fn test_batch_verification_result_new() {
+        let result = BatchVerificationResult::new();
+
+        assert_eq!(result.total_statutes, 0);
+        assert_eq!(result.passed, 0);
+        assert_eq!(result.failed, 0);
+        assert_eq!(result.pass_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_batch_verification_add_result() {
+        let mut batch_result = BatchVerificationResult::new();
+
+        let result1 = VerificationResult::pass();
+        let result2 = VerificationResult::fail(vec![VerificationError::DeadStatute {
+            statute_id: "dead-law".to_string(),
+        }]);
+
+        batch_result.add_result("law1".to_string(), result1);
+        batch_result.add_result("law2".to_string(), result2);
+
+        assert_eq!(batch_result.total_statutes, 2);
+        assert_eq!(batch_result.passed, 1);
+        assert_eq!(batch_result.failed, 1);
+        assert_eq!(batch_result.pass_rate(), 50.0);
+        assert!(batch_result.error_counts.get(&Severity::Error).is_some());
+    }
+
+    #[test]
+    fn test_batch_verification_report() {
+        let mut batch_result = BatchVerificationResult::new();
+
+        let pass = VerificationResult::pass();
+        let fail = VerificationResult::fail(vec![VerificationError::DeadStatute {
+            statute_id: "dead-law".to_string(),
+        }]);
+
+        batch_result.add_result("pass-law".to_string(), pass);
+        batch_result.add_result("fail-law".to_string(), fail);
+        batch_result.total_time_ms = 100;
+
+        let report = batch_verification_report(&batch_result);
+
+        assert!(report.contains("# Batch Verification Report"));
+        assert!(report.contains("Summary"));
+        assert!(report.contains("Total statutes: 2"));
+        assert!(report.contains("Passed: 1"));
+        assert!(report.contains("Failed: 1"));
+        assert!(report.contains("Pass rate: 50.0%"));
+        assert!(report.contains("Error Distribution"));
+        assert!(report.contains("Failed Statutes"));
+        assert!(report.contains("fail-law"));
+    }
+
+    #[test]
+    fn test_batch_verification_default() {
+        let result = BatchVerificationResult::default();
+        assert_eq!(result.total_statutes, 0);
+        assert_eq!(result.pass_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_batch_verification_all_pass() {
+        let mut batch_result = BatchVerificationResult::new();
+
+        for i in 1..=5 {
+            batch_result.add_result(format!("law{}", i), VerificationResult::pass());
+        }
+
+        assert_eq!(batch_result.total_statutes, 5);
+        assert_eq!(batch_result.passed, 5);
+        assert_eq!(batch_result.failed, 0);
+        assert_eq!(batch_result.pass_rate(), 100.0);
+
+        let report = batch_verification_report(&batch_result);
+        assert!(report.contains("All statutes passed verification"));
+    }
+
+    // ========================================================================
+    // Tests for Statistical Analysis
+    // ========================================================================
+
+    #[test]
+    fn test_statute_statistics_basic() {
+        let statutes = vec![
+            Statute::new("law1", "First Law", Effect::grant("benefit"))
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                })
+                .with_jurisdiction("US"),
+            Statute::new("law2", "Second Law", Effect::revoke("license"))
+                .with_precondition(Condition::Income {
+                    operator: ComparisonOp::LessThan,
+                    value: 50000,
+                })
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::LessThan,
+                    value: 65,
+                })
+                .with_jurisdiction("US"),
+        ];
+
+        let stats = analyze_statute_statistics(&statutes);
+
+        assert_eq!(stats.total_count, 2);
+        assert_eq!(stats.avg_preconditions, 1.5);
+        assert!(stats.jurisdiction_distribution.contains_key("US"));
+        assert_eq!(stats.jurisdiction_distribution["US"], 2);
+    }
+
+    #[test]
+    fn test_statute_statistics_empty() {
+        let statutes: Vec<Statute> = Vec::new();
+        let stats = analyze_statute_statistics(&statutes);
+
+        assert_eq!(stats.total_count, 0);
+        assert_eq!(stats.avg_preconditions, 0.0);
+        assert_eq!(stats.median_preconditions, 0.0);
+    }
+
+    #[test]
+    fn test_statistics_report() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law", Effect::grant("benefit"))
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                })
+                .with_jurisdiction("US"),
+        ];
+
+        let report = statistics_report(&statutes);
+
+        assert!(report.contains("# Statute Collection Statistics"));
+        assert!(report.contains("**Total Statutes**: 1"));
+        assert!(report.contains("Jurisdiction Distribution"));
+    }
+
+    // ========================================================================
+    // Tests for Duplicate Detection
+    // ========================================================================
+
+    #[test]
+    fn test_detect_duplicates_similar() {
+        let statutes = vec![
+            Statute::new("law1", "Voting Rights Act", Effect::grant("vote")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Voting Rights Act", Effect::grant("vote")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+        ];
+
+        let duplicates = detect_duplicates(&statutes, 0.70);
+
+        assert!(!duplicates.is_empty());
+        assert!(duplicates[0].similarity_score >= 0.70);
+    }
+
+    #[test]
+    fn test_detect_duplicates_no_similarity() {
+        let statutes = vec![
+            Statute::new("law1", "Voting Rights", Effect::grant("vote")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Tax Code", Effect::obligation("pay_tax")).with_precondition(
+                Condition::Income {
+                    operator: ComparisonOp::GreaterThan,
+                    value: 50000,
+                },
+            ),
+        ];
+
+        let duplicates = detect_duplicates(&statutes, 0.90);
+
+        assert!(duplicates.is_empty());
+    }
+
+    #[test]
+    fn test_duplicate_detection_report() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+        ];
+
+        let report = duplicate_detection_report(&statutes, 0.70);
+
+        assert!(report.contains("# Duplicate Detection Report"));
+        assert!(report.contains("Minimum Similarity Threshold"));
+    }
+
+    // ========================================================================
+    // Tests for Regulatory Impact Scoring
+    // ========================================================================
+
+    #[test]
+    fn test_regulatory_impact_basic() {
+        let statute = Statute::new(
+            "test-law",
+            "Test Statute",
+            Effect::new(EffectType::Prohibition, "Prohibited action"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        })
+        .with_precondition(Condition::Income {
+            operator: ComparisonOp::LessThan,
+            value: 50000,
+        });
+
+        let impact = analyze_regulatory_impact(&statute);
+
+        assert_eq!(impact.statute_id, "test-law");
+        assert!(impact.impact_score > 0);
+        assert!(impact.impact_score <= 100);
+        assert!(!impact.impact_level.is_empty());
+    }
+
+    #[test]
+    fn test_regulatory_impact_high() {
+        let mut statute = Statute::new(
+            "complex-law",
+            "Complex Statute",
+            Effect::new(EffectType::Prohibition, "Complex prohibition"),
+        );
+
+        // Add many preconditions to increase complexity
+        for i in 0..10 {
+            statute = statute.with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18 + i,
+            });
+        }
+
+        let impact = analyze_regulatory_impact(&statute);
+
+        assert!(impact.impact_score >= 50);
+        assert!(impact.impact_level.contains("Impact"));
+    }
+
+    #[test]
+    fn test_regulatory_impact_report() {
+        let statutes = vec![
+            Statute::new("law1", "Law 1", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new(
+                "law2",
+                "Law 2",
+                Effect::new(EffectType::Prohibition, "Action"),
+            ),
+        ];
+
+        let report = regulatory_impact_report(&statutes);
+
+        assert!(report.contains("# Regulatory Impact Assessment"));
+        assert!(report.contains("Summary"));
+        assert!(report.contains("law1"));
+        assert!(report.contains("law2"));
+        assert!(report.contains("Impact Score"));
+    }
+
+    // ========================================================================
+    // Tests for Compliance Checklist
+    // ========================================================================
+
+    #[test]
+    fn test_generate_compliance_checklist() {
+        let statute = Statute::new("test-law", "Test Law", Effect::grant("benefit"))
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            })
+            .with_precondition(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            })
+            .with_discretion("Optional discretion");
+
+        let checklist = generate_compliance_checklist(&statute);
+
+        // Should have: 2 preconditions + 1 effect + 1 discretion = 4 items minimum
+        assert!(checklist.len() >= 4);
+        assert!(checklist.iter().any(|item| item.priority == "Required"));
+        assert!(checklist.iter().any(|item| item.priority == "Optional"));
+    }
+
+    #[test]
+    fn test_compliance_checklist_report() {
+        let statute = Statute::new("test-law", "Test Law", Effect::grant("benefit"))
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            })
+            .with_jurisdiction("US");
+
+        let report = compliance_checklist_report(&statute);
+
+        assert!(report.contains("# Compliance Checklist"));
+        assert!(report.contains("test-law"));
+        assert!(report.contains("Test Law"));
+        assert!(report.contains("US"));
+        assert!(report.contains("[ ]"));
+    }
+
+    #[test]
+    fn test_consolidated_compliance_checklist() {
+        let statutes = vec![
+            Statute::new("law1", "First Law", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Second Law", Effect::grant("license")).with_precondition(
+                Condition::Income {
+                    operator: ComparisonOp::GreaterThan,
+                    value: 30000,
+                },
+            ),
+        ];
+
+        let report = consolidated_compliance_checklist(&statutes);
+
+        assert!(report.contains("# Consolidated Compliance Checklist"));
+        assert!(report.contains("**Total Statutes**: 2"));
+        assert!(report.contains("law1"));
+        assert!(report.contains("law2"));
     }
 }

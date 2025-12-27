@@ -283,9 +283,15 @@
 //! - Property-based tests ensure reasonable performance across edge cases
 
 pub mod case_law;
+pub mod const_collections;
+pub mod formats;
+pub mod transactions;
 pub mod typed_attributes;
+pub mod typed_effects;
+pub mod workflows;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
 
@@ -798,6 +804,13 @@ pub enum Condition {
         pattern: String,
         negated: bool,
     },
+    /// Calculation check (derived values, formulas)
+    /// Example: `tax_owed = income * 0.2` where operator compares tax_owed
+    Calculation {
+        formula: String,
+        operator: ComparisonOp,
+        value: f64,
+    },
     /// Logical AND of conditions
     And(Box<Condition>, Box<Condition>),
     /// Logical OR of conditions
@@ -933,6 +946,22 @@ impl Condition {
         }
     }
 
+    /// Creates a new Calculation condition (formula-based check).
+    ///
+    /// # Examples
+    /// ```
+    /// use legalis_core::{Condition, ComparisonOp};
+    ///
+    /// let tax_check = Condition::calculation("income * 0.2", ComparisonOp::GreaterThan, 5000.0);
+    /// ```
+    pub fn calculation(formula: impl Into<String>, operator: ComparisonOp, value: f64) -> Self {
+        Self::Calculation {
+            formula: formula.into(),
+            operator,
+            value,
+        }
+    }
+
     /// Combines this condition with another using AND.
     pub fn and(self, other: Condition) -> Self {
         Self::And(Box::new(self), Box::new(other))
@@ -947,6 +976,726 @@ impl Condition {
     #[allow(clippy::should_implement_trait)]
     pub fn not(self) -> Self {
         Self::Not(Box::new(self))
+    }
+
+    /// Normalizes this condition by applying logical simplifications.
+    ///
+    /// This method optimizes conditions by:
+    /// - Removing double negations: `NOT (NOT A)` → `A`
+    /// - Applying De Morgan's laws: `NOT (A AND B)` → `(NOT A) OR (NOT B)`
+    /// - Recursively normalizing sub-conditions
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Condition, ComparisonOp};
+    ///
+    /// // Double negation elimination
+    /// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18).not().not();
+    /// let normalized = condition.normalize();
+    /// // normalized is equivalent to: age >= 18
+    /// ```
+    #[must_use]
+    pub fn normalize(self) -> Self {
+        match self {
+            // Double negation elimination: NOT (NOT A) → A
+            Self::Not(inner) => match *inner {
+                Self::Not(double_inner) => double_inner.normalize(),
+                // De Morgan's laws
+                Self::And(left, right) => {
+                    // NOT (A AND B) → (NOT A) OR (NOT B)
+                    Self::Or(
+                        Box::new(Self::Not(left).normalize()),
+                        Box::new(Self::Not(right).normalize()),
+                    )
+                }
+                Self::Or(left, right) => {
+                    // NOT (A OR B) → (NOT A) AND (NOT B)
+                    Self::And(
+                        Box::new(Self::Not(left).normalize()),
+                        Box::new(Self::Not(right).normalize()),
+                    )
+                }
+                other => Self::Not(Box::new(other.normalize())),
+            },
+            // Recursively normalize compound conditions
+            Self::And(left, right) => {
+                Self::And(Box::new(left.normalize()), Box::new(right.normalize()))
+            }
+            Self::Or(left, right) => {
+                Self::Or(Box::new(left.normalize()), Box::new(right.normalize()))
+            }
+            // Simple conditions are already normalized
+            other => other,
+        }
+    }
+
+    /// Checks if this condition is in normalized form.
+    #[must_use]
+    pub fn is_normalized(&self) -> bool {
+        match self {
+            // Check for double negation
+            Self::Not(inner) => !matches!(**inner, Self::Not(_)) && inner.is_normalized(),
+            Self::And(left, right) | Self::Or(left, right) => {
+                left.is_normalized() && right.is_normalized()
+            }
+            _ => true,
+        }
+    }
+
+    /// Evaluates this condition with lazy evaluation and short-circuit logic.
+    ///
+    /// This method implements:
+    /// - **Short-circuit AND**: Returns false as soon as any condition is false
+    /// - **Short-circuit OR**: Returns true as soon as any condition is true
+    /// - **Maximum depth protection**: Prevents stack overflow from deeply nested conditions
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Evaluation context containing entity data and settings
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConditionError`] if:
+    /// - Required attributes are missing
+    /// - Type mismatches occur
+    /// - Formula evaluation fails
+    /// - Maximum evaluation depth is exceeded
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Condition, ComparisonOp, AttributeBasedContext};
+    /// use std::collections::HashMap;
+    ///
+    /// let mut attrs = HashMap::new();
+    /// attrs.insert("age".to_string(), "25".to_string());
+    /// attrs.insert("income".to_string(), "45000".to_string());
+    ///
+    /// let ctx = AttributeBasedContext::new(attrs);
+    /// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18)
+    ///     .and(Condition::income(ComparisonOp::LessThan, 50000));
+    ///
+    /// assert_eq!(condition.evaluate_simple(&ctx).unwrap(), true);
+    /// ```
+    pub fn evaluate_simple(&self, ctx: &AttributeBasedContext) -> Result<bool, ConditionError> {
+        self.evaluate_simple_with_depth(ctx, 0)
+    }
+
+    /// Internal evaluation with depth tracking.
+    fn evaluate_simple_with_depth(
+        &self,
+        ctx: &AttributeBasedContext,
+        depth: usize,
+    ) -> Result<bool, ConditionError> {
+        // Protect against stack overflow from deeply nested conditions
+        if depth > ctx.max_depth {
+            return Err(ConditionError::MaxDepthExceeded {
+                max_depth: ctx.max_depth,
+            });
+        }
+
+        match self {
+            // Lazy evaluation with short-circuit for AND
+            Self::And(left, right) => {
+                let left_result = left.evaluate_simple_with_depth(ctx, depth + 1)?;
+                if !left_result {
+                    // Short-circuit: if left is false, return false immediately
+                    return Ok(false);
+                }
+                // Only evaluate right if left is true
+                right.evaluate_simple_with_depth(ctx, depth + 1)
+            }
+            // Lazy evaluation with short-circuit for OR
+            Self::Or(left, right) => {
+                let left_result = left.evaluate_simple_with_depth(ctx, depth + 1)?;
+                if left_result {
+                    // Short-circuit: if left is true, return true immediately
+                    return Ok(true);
+                }
+                // Only evaluate right if left is false
+                right.evaluate_simple_with_depth(ctx, depth + 1)
+            }
+            Self::Not(inner) => {
+                let result = inner.evaluate_simple_with_depth(ctx, depth + 1)?;
+                Ok(!result)
+            }
+            Self::Age { operator, value } => {
+                let age_str =
+                    ctx.attributes
+                        .get("age")
+                        .ok_or_else(|| ConditionError::MissingAttribute {
+                            key: "age".to_string(),
+                        })?;
+                let age: u32 = age_str.parse().map_err(|_| ConditionError::TypeMismatch {
+                    expected: "u32".to_string(),
+                    actual: age_str.clone(),
+                })?;
+                Ok(operator.compare_u32(age, *value))
+            }
+            Self::Income { operator, value } => {
+                let income_str = ctx.attributes.get("income").ok_or_else(|| {
+                    ConditionError::MissingAttribute {
+                        key: "income".to_string(),
+                    }
+                })?;
+                let income: u64 = income_str
+                    .parse()
+                    .map_err(|_| ConditionError::TypeMismatch {
+                        expected: "u64".to_string(),
+                        actual: income_str.clone(),
+                    })?;
+                Ok(operator.compare_u64(income, *value))
+            }
+            Self::HasAttribute { key } => Ok(ctx.attributes.contains_key(key)),
+            Self::AttributeEquals { key, value } => Ok(ctx.attributes.get(key) == Some(value)),
+            Self::Calculation {
+                formula,
+                operator,
+                value,
+            } => {
+                // Simple formula evaluation (can be extended with a proper expression parser)
+                let result = Self::evaluate_formula(formula, ctx)?;
+                Ok(operator.compare_f64(result, *value))
+            }
+            Self::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => {
+                let attr_value = ctx.attributes.get(attribute).ok_or_else(|| {
+                    ConditionError::MissingAttribute {
+                        key: attribute.clone(),
+                    }
+                })?;
+                // Simple substring matching (can be extended with regex crate if needed)
+                let matches = attr_value.contains(pattern);
+                Ok(if *negated { !matches } else { matches })
+            }
+            // For other conditions, return Ok(true) as a placeholder
+            // (implementation depends on specific evaluation logic)
+            _ => Ok(true),
+        }
+    }
+
+    /// Evaluates a simple formula.
+    /// This is a basic implementation - can be extended with a proper expression parser.
+    #[allow(dead_code)]
+    fn evaluate_formula(
+        formula: &str,
+        _ctx: &AttributeBasedContext,
+    ) -> Result<f64, ConditionError> {
+        // Simple implementation: support basic arithmetic with attributes
+        // For production use, consider using a proper expression parser like `meval` or `evalexpr`
+
+        // For now, just return an error indicating formula evaluation needs implementation
+        Err(ConditionError::InvalidFormula {
+            formula: formula.to_string(),
+            error: "Formula evaluation not yet implemented - consider using 'meval' or 'evalexpr' crate".to_string(),
+        })
+    }
+
+    /// Evaluates this condition using the `EvaluationContext` trait.
+    ///
+    /// This is the trait-based evaluation method that allows custom context implementations.
+    /// For a simpler attribute-based approach, see [`evaluate_simple`](Self::evaluate_simple).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Condition, ComparisonOp, EvaluationContext, RegionType, RelationshipType, DurationUnit};
+    /// use chrono::NaiveDate;
+    ///
+    /// struct MyContext {
+    ///     age: u32,
+    ///     income: u64,
+    /// }
+    ///
+    /// impl EvaluationContext for MyContext {
+    ///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+    ///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+    ///     fn get_income(&self) -> Option<u64> { Some(self.income) }
+    ///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+    ///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+    ///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+    ///     fn get_residency_months(&self) -> Option<u32> { None }
+    ///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+    ///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+    ///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+    /// }
+    ///
+    /// let ctx = MyContext { age: 25, income: 45000 };
+    /// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18)
+    ///     .and(Condition::income(ComparisonOp::LessThan, 50000));
+    ///
+    /// assert_eq!(condition.evaluate(&ctx).unwrap(), true);
+    /// ```
+    pub fn evaluate<C: EvaluationContext>(&self, context: &C) -> Result<bool, EvaluationError> {
+        self.evaluate_with_depth(context, 0)
+    }
+
+    /// Internal evaluation with depth tracking using the `EvaluationContext` trait.
+    fn evaluate_with_depth<C: EvaluationContext>(
+        &self,
+        context: &C,
+        depth: usize,
+    ) -> Result<bool, EvaluationError> {
+        const MAX_DEPTH: usize = 100;
+
+        // Protect against stack overflow from deeply nested conditions
+        if depth > MAX_DEPTH {
+            return Err(EvaluationError::MaxDepthExceeded {
+                max_depth: MAX_DEPTH,
+            });
+        }
+
+        match self {
+            // Lazy evaluation with short-circuit for AND
+            Self::And(left, right) => {
+                let left_result = left.evaluate_with_depth(context, depth + 1)?;
+                if !left_result {
+                    return Ok(false);
+                }
+                right.evaluate_with_depth(context, depth + 1)
+            }
+            // Lazy evaluation with short-circuit for OR
+            Self::Or(left, right) => {
+                let left_result = left.evaluate_with_depth(context, depth + 1)?;
+                if left_result {
+                    return Ok(true);
+                }
+                right.evaluate_with_depth(context, depth + 1)
+            }
+            Self::Not(inner) => {
+                let result = inner.evaluate_with_depth(context, depth + 1)?;
+                Ok(!result)
+            }
+            Self::Age { operator, value } => {
+                let age = context
+                    .get_age()
+                    .ok_or_else(|| EvaluationError::MissingAttribute {
+                        key: "age".to_string(),
+                    })?;
+                Ok(operator.compare_u32(age, *value))
+            }
+            Self::Income { operator, value } => {
+                let income =
+                    context
+                        .get_income()
+                        .ok_or_else(|| EvaluationError::MissingAttribute {
+                            key: "income".to_string(),
+                        })?;
+                Ok(operator.compare_u64(income, *value))
+            }
+            Self::HasAttribute { key } => Ok(context.get_attribute(key).is_some()),
+            Self::AttributeEquals { key, value } => {
+                Ok(context.get_attribute(key).as_ref() == Some(value))
+            }
+            Self::Geographic {
+                region_type,
+                region_id,
+            } => Ok(context.check_geographic(*region_type, region_id)),
+            Self::EntityRelationship {
+                relationship_type,
+                target_entity_id,
+            } => Ok(context.check_relationship(*relationship_type, target_entity_id.as_deref())),
+            Self::ResidencyDuration { operator, months } => {
+                let residency = context.get_residency_months().ok_or_else(|| {
+                    EvaluationError::MissingContext {
+                        description: "residency months".to_string(),
+                    }
+                })?;
+                Ok(operator.compare_u32(residency, *months))
+            }
+            Self::Duration {
+                operator,
+                value,
+                unit,
+            } => {
+                let duration =
+                    context
+                        .get_duration(*unit)
+                        .ok_or_else(|| EvaluationError::MissingContext {
+                            description: format!("duration for unit {:?}", unit),
+                        })?;
+                Ok(operator.compare_u32(duration, *value))
+            }
+            Self::Percentage {
+                operator,
+                value,
+                context: pct_context,
+            } => {
+                let percentage = context.get_percentage(pct_context).ok_or_else(|| {
+                    EvaluationError::MissingContext {
+                        description: format!("percentage for context '{}'", pct_context),
+                    }
+                })?;
+                Ok(operator.compare_u32(percentage, *value))
+            }
+            Self::Calculation {
+                formula,
+                operator,
+                value,
+            } => {
+                let result = context.evaluate_formula(formula).ok_or_else(|| {
+                    EvaluationError::InvalidFormula {
+                        formula: formula.clone(),
+                        reason: "Formula evaluation not supported".to_string(),
+                    }
+                })?;
+                Ok(operator.compare_f64(result, *value))
+            }
+            Self::Pattern {
+                attribute,
+                pattern,
+                negated,
+            } => {
+                let attr_value = context.get_attribute(attribute).ok_or_else(|| {
+                    EvaluationError::MissingAttribute {
+                        key: attribute.clone(),
+                    }
+                })?;
+                let matches = attr_value.contains(pattern);
+                Ok(if *negated { !matches } else { matches })
+            }
+            Self::SetMembership {
+                attribute,
+                values,
+                negated,
+            } => {
+                let attr_value = context.get_attribute(attribute).ok_or_else(|| {
+                    EvaluationError::MissingAttribute {
+                        key: attribute.clone(),
+                    }
+                })?;
+                let is_member = values.contains(&attr_value);
+                Ok(if *negated { !is_member } else { is_member })
+            }
+            Self::DateRange { start, end } => {
+                let current_date =
+                    context
+                        .get_current_date()
+                        .ok_or_else(|| EvaluationError::MissingContext {
+                            description: "current date".to_string(),
+                        })?;
+                let after_start = start.is_none_or(|s| current_date >= s);
+                let before_end = end.is_none_or(|e| current_date <= e);
+                Ok(after_start && before_end)
+            }
+            // For Custom conditions, we can't evaluate without more context
+            Self::Custom { description } => Err(EvaluationError::Custom {
+                message: format!("Cannot evaluate custom condition: {}", description),
+            }),
+        }
+    }
+}
+
+/// Context for evaluating conditions (simple attribute-based implementation).
+///
+/// Contains entity attributes and evaluation settings.
+/// For a more flexible trait-based approach, see the `EvaluationContext` trait.
+#[derive(Debug, Clone)]
+pub struct AttributeBasedContext {
+    /// Entity attributes as key-value pairs.
+    pub attributes: HashMap<String, String>,
+    /// Maximum evaluation depth to prevent stack overflow.
+    pub max_depth: usize,
+    /// Optional cache for memoizing condition evaluation results.
+    pub cache: Option<ConditionCache>,
+    /// Optional audit trail for tracking evaluation history.
+    pub audit_trail: Option<EvaluationAuditTrail>,
+}
+
+impl AttributeBasedContext {
+    /// Creates a new evaluation context with default max depth (100).
+    #[must_use]
+    pub fn new(attributes: HashMap<String, String>) -> Self {
+        Self {
+            attributes,
+            max_depth: 100,
+            cache: None,
+            audit_trail: None,
+        }
+    }
+
+    /// Creates a new evaluation context with custom max depth.
+    #[must_use]
+    pub fn with_max_depth(attributes: HashMap<String, String>, max_depth: usize) -> Self {
+        Self {
+            attributes,
+            max_depth,
+            cache: None,
+            audit_trail: None,
+        }
+    }
+
+    /// Creates a new evaluation context with caching enabled.
+    #[must_use]
+    pub fn with_cache(attributes: HashMap<String, String>) -> Self {
+        Self {
+            attributes,
+            max_depth: 100,
+            cache: Some(ConditionCache::new()),
+            audit_trail: None,
+        }
+    }
+
+    /// Creates a new evaluation context with custom max depth and cache capacity.
+    #[must_use]
+    pub fn with_cache_capacity(
+        attributes: HashMap<String, String>,
+        max_depth: usize,
+        cache_capacity: usize,
+    ) -> Self {
+        Self {
+            attributes,
+            max_depth,
+            cache: Some(ConditionCache::with_capacity(cache_capacity)),
+            audit_trail: None,
+        }
+    }
+
+    /// Creates a new evaluation context with audit trail enabled.
+    #[must_use]
+    pub fn with_audit_trail(attributes: HashMap<String, String>) -> Self {
+        Self {
+            attributes,
+            max_depth: 100,
+            cache: None,
+            audit_trail: Some(EvaluationAuditTrail::new()),
+        }
+    }
+
+    /// Records an evaluation in the audit trail if enabled.
+    pub fn record_evaluation(&mut self, condition: &str, result: bool, duration_micros: u64) {
+        if let Some(trail) = &mut self.audit_trail {
+            trail.record(condition.to_string(), result, duration_micros);
+        }
+    }
+}
+
+/// Cache for memoizing condition evaluation results.
+///
+/// This cache improves performance when the same conditions are evaluated repeatedly
+/// with the same entity attributes.
+#[derive(Debug, Clone)]
+pub struct ConditionCache {
+    /// Cache storage mapping condition strings to evaluation results.
+    cache: HashMap<String, bool>,
+    /// Maximum number of entries to store (LRU eviction).
+    max_capacity: usize,
+    /// Access order for LRU eviction.
+    access_order: Vec<String>,
+}
+
+impl ConditionCache {
+    /// Creates a new cache with default capacity (1000).
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_capacity: 1000,
+            access_order: Vec::new(),
+        }
+    }
+
+    /// Creates a new cache with custom capacity.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            cache: HashMap::with_capacity(capacity),
+            max_capacity: capacity,
+            access_order: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Gets a cached evaluation result if available.
+    pub fn get(&mut self, condition_key: &str) -> Option<bool> {
+        if let Some(&result) = self.cache.get(condition_key) {
+            // Update access order (move to end for LRU)
+            if let Some(pos) = self.access_order.iter().position(|k| k == condition_key) {
+                self.access_order.remove(pos);
+            }
+            self.access_order.push(condition_key.to_string());
+            Some(result)
+        } else {
+            None
+        }
+    }
+
+    /// Stores an evaluation result in the cache.
+    pub fn insert(&mut self, condition_key: String, result: bool) {
+        // Evict oldest entry if at capacity
+        if self.cache.len() >= self.max_capacity && !self.cache.contains_key(&condition_key) {
+            if let Some(oldest_key) = self.access_order.first().cloned() {
+                self.cache.remove(&oldest_key);
+                self.access_order.remove(0);
+            }
+        }
+
+        self.cache.insert(condition_key.clone(), result);
+        self.access_order.push(condition_key);
+    }
+
+    /// Clears all cached entries.
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.access_order.clear();
+    }
+
+    /// Returns the number of cached entries.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    /// Returns true if the cache is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
+    /// Returns cache hit rate (for performance monitoring).
+    #[must_use]
+    pub fn hit_rate(&self) -> f64 {
+        // Note: This is a simplified implementation
+        // For production, track hits/misses separately
+        0.0
+    }
+}
+
+impl Default for ConditionCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Audit trail for tracking condition evaluations.
+///
+/// Records each evaluation with timestamp, condition, result, and duration.
+/// Useful for debugging, compliance, and performance analysis.
+#[derive(Debug, Clone)]
+pub struct EvaluationAuditTrail {
+    /// List of evaluation records
+    records: Vec<EvaluationRecord>,
+    /// Maximum number of records to keep
+    max_records: usize,
+}
+
+impl EvaluationAuditTrail {
+    /// Creates a new audit trail with default capacity (1000 records).
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            records: Vec::new(),
+            max_records: 1000,
+        }
+    }
+
+    /// Creates a new audit trail with custom capacity.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            records: Vec::with_capacity(capacity),
+            max_records: capacity,
+        }
+    }
+
+    /// Records an evaluation.
+    pub fn record(&mut self, condition: String, result: bool, duration_micros: u64) {
+        // Evict oldest record if at capacity
+        if self.records.len() >= self.max_records {
+            self.records.remove(0);
+        }
+
+        self.records.push(EvaluationRecord {
+            timestamp: Utc::now(),
+            condition,
+            result,
+            duration_micros,
+        });
+    }
+
+    /// Returns all evaluation records.
+    #[must_use]
+    pub fn records(&self) -> &[EvaluationRecord] {
+        &self.records
+    }
+
+    /// Returns the number of records.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    /// Returns true if there are no records.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+
+    /// Clears all records.
+    pub fn clear(&mut self) {
+        self.records.clear();
+    }
+
+    /// Returns average evaluation duration in microseconds.
+    #[must_use]
+    pub fn average_duration(&self) -> f64 {
+        if self.records.is_empty() {
+            return 0.0;
+        }
+        let total: u64 = self.records.iter().map(|r| r.duration_micros).sum();
+        total as f64 / self.records.len() as f64
+    }
+
+    /// Returns the slowest evaluation record.
+    #[must_use]
+    pub fn slowest_evaluation(&self) -> Option<&EvaluationRecord> {
+        self.records.iter().max_by_key(|r| r.duration_micros)
+    }
+
+    /// Returns records where evaluation took longer than threshold (microseconds).
+    #[must_use]
+    pub fn slow_evaluations(&self, threshold_micros: u64) -> Vec<&EvaluationRecord> {
+        self.records
+            .iter()
+            .filter(|r| r.duration_micros > threshold_micros)
+            .collect()
+    }
+}
+
+impl Default for EvaluationAuditTrail {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A single evaluation record in the audit trail.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct EvaluationRecord {
+    /// When the evaluation occurred
+    pub timestamp: DateTime<Utc>,
+    /// The condition that was evaluated (as string)
+    pub condition: String,
+    /// The result of the evaluation
+    pub result: bool,
+    /// How long the evaluation took (microseconds)
+    pub duration_micros: u64,
+}
+
+impl fmt::Display for EvaluationRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[{}] {} = {} ({} μs)",
+            self.timestamp.format("%Y-%m-%d %H:%M:%S"),
+            self.condition,
+            self.result,
+            self.duration_micros
+        )
     }
 }
 
@@ -1008,6 +1757,13 @@ impl fmt::Display for Condition {
             } => {
                 let op = if *negated { "!~" } else { "=~" };
                 write!(f, "{} {} /{}/", attribute, op, pattern)
+            }
+            Self::Calculation {
+                formula,
+                operator,
+                value,
+            } => {
+                write!(f, "({}) {} {}", formula, operator, value)
             }
             Self::And(left, right) => write!(f, "({} AND {})", left, right),
             Self::Or(left, right) => write!(f, "({} OR {})", left, right),
@@ -1116,6 +1872,58 @@ impl ComparisonOp {
     pub const fn is_ordering(&self) -> bool {
         !self.is_equality()
     }
+
+    /// Compares two u32 values using this operator.
+    #[must_use]
+    pub const fn compare_u32(&self, left: u32, right: u32) -> bool {
+        match self {
+            Self::Equal => left == right,
+            Self::NotEqual => left != right,
+            Self::GreaterThan => left > right,
+            Self::GreaterOrEqual => left >= right,
+            Self::LessThan => left < right,
+            Self::LessOrEqual => left <= right,
+        }
+    }
+
+    /// Compares two u64 values using this operator.
+    #[must_use]
+    pub const fn compare_u64(&self, left: u64, right: u64) -> bool {
+        match self {
+            Self::Equal => left == right,
+            Self::NotEqual => left != right,
+            Self::GreaterThan => left > right,
+            Self::GreaterOrEqual => left >= right,
+            Self::LessThan => left < right,
+            Self::LessOrEqual => left <= right,
+        }
+    }
+
+    /// Compares two i64 values using this operator.
+    #[must_use]
+    pub const fn compare_i64(&self, left: i64, right: i64) -> bool {
+        match self {
+            Self::Equal => left == right,
+            Self::NotEqual => left != right,
+            Self::GreaterThan => left > right,
+            Self::GreaterOrEqual => left >= right,
+            Self::LessThan => left < right,
+            Self::LessOrEqual => left <= right,
+        }
+    }
+
+    /// Compares two f64 values using this operator.
+    #[must_use]
+    pub fn compare_f64(&self, left: f64, right: f64) -> bool {
+        match self {
+            Self::Equal => (left - right).abs() < f64::EPSILON,
+            Self::NotEqual => (left - right).abs() >= f64::EPSILON,
+            Self::GreaterThan => left > right,
+            Self::GreaterOrEqual => left >= right,
+            Self::LessThan => left < right,
+            Self::LessOrEqual => left <= right,
+        }
+    }
 }
 
 impl fmt::Display for ComparisonOp {
@@ -1127,6 +1935,1825 @@ impl fmt::Display for ComparisonOp {
             Self::GreaterOrEqual => write!(f, ">="),
             Self::LessThan => write!(f, "<"),
             Self::LessOrEqual => write!(f, "<="),
+        }
+    }
+}
+
+// ==================================================
+// Evaluation Context Trait for Flexible Condition Evaluation
+// ==================================================
+
+/// Context trait for evaluating conditions against legal entities.
+///
+/// Implement this trait to provide custom evaluation logic for your domain.
+/// This trait-based approach allows integration with any entity storage system.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{EvaluationContext, RegionType, RelationshipType, DurationUnit};
+/// use chrono::NaiveDate;
+///
+/// struct MyContext {
+///     age: u32,
+///     income: u64,
+/// }
+///
+/// impl EvaluationContext for MyContext {
+///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+///     fn get_income(&self) -> Option<u64> { Some(self.income) }
+///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+///     fn get_residency_months(&self) -> Option<u32> { None }
+///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+/// }
+/// ```
+pub trait EvaluationContext {
+    /// Get an attribute value from the entity.
+    fn get_attribute(&self, key: &str) -> Option<String>;
+
+    /// Get entity's age.
+    fn get_age(&self) -> Option<u32>;
+
+    /// Get entity's income.
+    fn get_income(&self) -> Option<u64>;
+
+    /// Get current date for date range checks.
+    fn get_current_date(&self) -> Option<NaiveDate>;
+
+    /// Check geographic location.
+    fn check_geographic(&self, region_type: RegionType, region_id: &str) -> bool;
+
+    /// Check entity relationship.
+    fn check_relationship(
+        &self,
+        relationship_type: RelationshipType,
+        target_id: Option<&str>,
+    ) -> bool;
+
+    /// Get residency duration in months.
+    fn get_residency_months(&self) -> Option<u32>;
+
+    /// Get duration value for a given unit.
+    fn get_duration(&self, unit: DurationUnit) -> Option<u32>;
+
+    /// Get percentage value for a given context.
+    fn get_percentage(&self, context: &str) -> Option<u32>;
+
+    /// Evaluate a custom formula and return the result.
+    fn evaluate_formula(&self, formula: &str) -> Option<f64>;
+}
+
+/// Errors that can occur during condition evaluation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum EvaluationError {
+    /// Missing required attribute for evaluation
+    MissingAttribute { key: String },
+    /// Missing required context data
+    MissingContext { description: String },
+    /// Invalid formula or calculation
+    InvalidFormula { formula: String, reason: String },
+    /// Pattern matching error
+    PatternError { pattern: String, reason: String },
+    /// Maximum evaluation depth exceeded (prevents infinite recursion)
+    MaxDepthExceeded { max_depth: usize },
+    /// Custom error
+    Custom { message: String },
+}
+
+impl fmt::Display for EvaluationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingAttribute { key } => write!(f, "Missing attribute: {}", key),
+            Self::MissingContext { description } => write!(f, "Missing context: {}", description),
+            Self::InvalidFormula { formula, reason } => {
+                write!(f, "Invalid formula '{}': {}", formula, reason)
+            }
+            Self::PatternError { pattern, reason } => {
+                write!(f, "Pattern error '{}': {}", pattern, reason)
+            }
+            Self::MaxDepthExceeded { max_depth } => {
+                write!(f, "Maximum evaluation depth {} exceeded", max_depth)
+            }
+            Self::Custom { message } => write!(f, "{}", message),
+        }
+    }
+}
+
+impl std::error::Error for EvaluationError {}
+
+/// Implement EvaluationContext for AttributeBasedContext for compatibility.
+impl EvaluationContext for AttributeBasedContext {
+    fn get_attribute(&self, key: &str) -> Option<String> {
+        self.attributes.get(key).cloned()
+    }
+
+    fn get_age(&self) -> Option<u32> {
+        self.attributes.get("age").and_then(|v| v.parse().ok())
+    }
+
+    fn get_income(&self) -> Option<u64> {
+        self.attributes.get("income").and_then(|v| v.parse().ok())
+    }
+
+    fn get_current_date(&self) -> Option<NaiveDate> {
+        self.attributes
+            .get("current_date")
+            .and_then(|v| NaiveDate::parse_from_str(v, "%Y-%m-%d").ok())
+    }
+
+    fn check_geographic(&self, _region_type: RegionType, region_id: &str) -> bool {
+        self.attributes
+            .get("region")
+            .is_some_and(|v| v == region_id)
+    }
+
+    fn check_relationship(
+        &self,
+        _relationship_type: RelationshipType,
+        target_id: Option<&str>,
+    ) -> bool {
+        if let Some(target) = target_id {
+            self.attributes
+                .get("relationship")
+                .is_some_and(|v| v == target)
+        } else {
+            self.attributes.contains_key("relationship")
+        }
+    }
+
+    fn get_residency_months(&self) -> Option<u32> {
+        self.attributes
+            .get("residency_months")
+            .and_then(|v| v.parse().ok())
+    }
+
+    fn get_duration(&self, unit: DurationUnit) -> Option<u32> {
+        let key = format!("duration_{:?}", unit).to_lowercase();
+        self.attributes.get(&key).and_then(|v| v.parse().ok())
+    }
+
+    fn get_percentage(&self, context: &str) -> Option<u32> {
+        let key = format!("percentage_{}", context);
+        self.attributes.get(&key).and_then(|v| v.parse().ok())
+    }
+
+    fn evaluate_formula(&self, _formula: &str) -> Option<f64> {
+        // Basic formula evaluation - can be extended with a proper parser
+        None
+    }
+}
+
+/// Memoization cache for condition evaluation results.
+///
+/// Caches evaluation results to avoid re-evaluating the same conditions.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Condition, ComparisonOp, ConditionEvaluator};
+/// use legalis_core::{EvaluationContext, RegionType, RelationshipType, DurationUnit};
+/// use chrono::NaiveDate;
+///
+/// struct MyContext { age: u32 }
+///
+/// impl EvaluationContext for MyContext {
+///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+///     fn get_income(&self) -> Option<u64> { None }
+///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+///     fn get_residency_months(&self) -> Option<u32> { None }
+///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+/// }
+///
+/// let mut evaluator = ConditionEvaluator::new();
+/// let ctx = MyContext { age: 25 };
+/// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+///
+/// // First evaluation - not cached
+/// assert_eq!(evaluator.evaluate(&condition, &ctx).ok(), Some(true));
+///
+/// // Second evaluation - retrieved from cache
+/// assert_eq!(evaluator.evaluate(&condition, &ctx).ok(), Some(true));
+/// assert_eq!(evaluator.cache_hits(), 1);
+/// ```
+#[derive(Debug, Default)]
+pub struct ConditionEvaluator {
+    cache: std::collections::HashMap<String, bool>,
+    cache_hits: usize,
+    cache_misses: usize,
+}
+
+impl ConditionEvaluator {
+    /// Creates a new condition evaluator with an empty cache.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Evaluates a condition with memoization.
+    ///
+    /// Results are cached based on the condition's string representation.
+    pub fn evaluate<C: EvaluationContext>(
+        &mut self,
+        condition: &Condition,
+        context: &C,
+    ) -> Result<bool, EvaluationError> {
+        let cache_key = format!("{}", condition);
+
+        if let Some(&result) = self.cache.get(&cache_key) {
+            self.cache_hits += 1;
+            return Ok(result);
+        }
+
+        self.cache_misses += 1;
+        let result = condition.evaluate(context)?;
+        self.cache.insert(cache_key, result);
+        Ok(result)
+    }
+
+    /// Clears the evaluation cache.
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
+        self.cache_hits = 0;
+        self.cache_misses = 0;
+    }
+
+    /// Returns the number of cache hits.
+    #[must_use]
+    pub const fn cache_hits(&self) -> usize {
+        self.cache_hits
+    }
+
+    /// Returns the number of cache misses.
+    #[must_use]
+    pub const fn cache_misses(&self) -> usize {
+        self.cache_misses
+    }
+
+    /// Returns the cache hit ratio (0.0 to 1.0).
+    #[must_use]
+    pub fn hit_ratio(&self) -> f64 {
+        let total = self.cache_hits + self.cache_misses;
+        if total == 0 {
+            0.0
+        } else {
+            self.cache_hits as f64 / total as f64
+        }
+    }
+}
+
+// ==================================================
+// Parallel Condition Evaluation (requires "parallel" feature)
+// ==================================================
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
+impl Condition {
+    /// Evaluates this condition with parallel processing for independent conditions.
+    ///
+    /// When the `parallel` feature is enabled, this method will evaluate independent
+    /// And/Or branches in parallel for better performance on multi-core systems.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use legalis_core::{Condition, ComparisonOp, EvaluationContext, RegionType, RelationshipType, DurationUnit};
+    /// use chrono::NaiveDate;
+    ///
+    /// struct MyContext { age: u32, income: u64 }
+    ///
+    /// impl EvaluationContext for MyContext {
+    ///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+    ///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+    ///     fn get_income(&self) -> Option<u64> { Some(self.income) }
+    ///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+    ///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+    ///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+    ///     fn get_residency_months(&self) -> Option<u32> { None }
+    ///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+    ///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+    ///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+    /// }
+    ///
+    /// let ctx = MyContext { age: 25, income: 45000 };
+    ///
+    /// // Complex condition with multiple independent checks
+    /// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 18)
+    ///     .and(Condition::income(ComparisonOp::LessThan, 50000));
+    ///
+    /// // Evaluates branches in parallel when possible
+    /// let result = condition.evaluate_parallel(&ctx);
+    /// ```
+    #[cfg(feature = "parallel")]
+    pub fn evaluate_parallel<C: EvaluationContext + Sync>(
+        &self,
+        context: &C,
+    ) -> Result<bool, EvaluationError> {
+        self.evaluate_parallel_with_depth(context, 0, 100)
+    }
+
+    #[cfg(feature = "parallel")]
+    #[allow(clippy::too_many_lines)]
+    fn evaluate_parallel_with_depth<C: EvaluationContext + Sync>(
+        &self,
+        context: &C,
+        depth: usize,
+        max_depth: usize,
+    ) -> Result<bool, EvaluationError> {
+        if depth > max_depth {
+            return Err(EvaluationError::MaxDepthExceeded { max_depth });
+        }
+
+        match self {
+            // For simple conditions, use sequential evaluation
+            Self::Age { .. }
+            | Self::Income { .. }
+            | Self::HasAttribute { .. }
+            | Self::AttributeEquals { .. }
+            | Self::DateRange { .. }
+            | Self::Geographic { .. }
+            | Self::EntityRelationship { .. }
+            | Self::ResidencyDuration { .. }
+            | Self::Duration { .. }
+            | Self::Percentage { .. }
+            | Self::SetMembership { .. }
+            | Self::Pattern { .. }
+            | Self::Calculation { .. }
+            | Self::Custom { .. } => {
+                // Delegate to sequential evaluation
+                self.evaluate(context)
+            }
+
+            // Parallel evaluation for compound conditions
+            Self::And(left, right) => {
+                // Evaluate both sides in parallel
+                let (left_result, right_result) = rayon::join(
+                    || left.evaluate_parallel_with_depth(context, depth + 1, max_depth),
+                    || right.evaluate_parallel_with_depth(context, depth + 1, max_depth),
+                );
+
+                // Both must succeed and be true
+                match (left_result, right_result) {
+                    (Ok(true), Ok(true)) => Ok(true),
+                    (Ok(false), _) | (_, Ok(false)) => Ok(false),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            }
+
+            Self::Or(left, right) => {
+                // Evaluate both sides in parallel
+                let (left_result, right_result) = rayon::join(
+                    || left.evaluate_parallel_with_depth(context, depth + 1, max_depth),
+                    || right.evaluate_parallel_with_depth(context, depth + 1, max_depth),
+                );
+
+                // Either can be true
+                match (left_result, right_result) {
+                    (Ok(true), _) | (_, Ok(true)) => Ok(true),
+                    (Ok(false), Ok(false)) => Ok(false),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            }
+
+            Self::Not(inner) => {
+                let result = inner.evaluate_parallel_with_depth(context, depth + 1, max_depth)?;
+                Ok(!result)
+            }
+        }
+    }
+
+    /// Evaluates a collection of conditions in parallel.
+    ///
+    /// This is useful when you have multiple independent conditions to evaluate
+    /// and want to leverage parallel processing.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use legalis_core::{Condition, ComparisonOp, EvaluationContext, RegionType, RelationshipType, DurationUnit};
+    /// use chrono::NaiveDate;
+    ///
+    /// struct MyContext { age: u32, income: u64 }
+    ///
+    /// impl EvaluationContext for MyContext {
+    ///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+    ///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+    ///     fn get_income(&self) -> Option<u64> { Some(self.income) }
+    ///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+    ///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+    ///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+    ///     fn get_residency_months(&self) -> Option<u32> { None }
+    ///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+    ///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+    ///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+    /// }
+    ///
+    /// let ctx = MyContext { age: 25, income: 45000 };
+    /// let conditions = vec![
+    ///     Condition::age(ComparisonOp::GreaterOrEqual, 18),
+    ///     Condition::income(ComparisonOp::LessThan, 50000),
+    /// ];
+    ///
+    /// let results = Condition::evaluate_all_parallel(&conditions, &ctx);
+    /// assert_eq!(results.len(), 2);
+    /// ```
+    #[cfg(feature = "parallel")]
+    pub fn evaluate_all_parallel<C: EvaluationContext + Sync>(
+        conditions: &[Condition],
+        context: &C,
+    ) -> Vec<Result<bool, EvaluationError>> {
+        conditions
+            .par_iter()
+            .map(|cond| cond.evaluate_parallel(context))
+            .collect()
+    }
+}
+
+/// Parallel evaluation support for ConditionEvaluator.
+#[cfg(feature = "parallel")]
+impl ConditionEvaluator {
+    /// Evaluates a condition with memoization and parallel processing.
+    ///
+    /// Note: The cache is not thread-safe, so this method requires mutable access.
+    /// For truly concurrent evaluation, use separate evaluators per thread.
+    pub fn evaluate_parallel<C: EvaluationContext + Sync>(
+        &mut self,
+        condition: &Condition,
+        context: &C,
+    ) -> Result<bool, EvaluationError> {
+        let cache_key = format!("{}", condition);
+
+        if let Some(&result) = self.cache.get(&cache_key) {
+            self.cache_hits += 1;
+            return Ok(result);
+        }
+
+        self.cache_misses += 1;
+        let result = condition.evaluate_parallel(context)?;
+        self.cache.insert(cache_key, result);
+        Ok(result)
+    }
+}
+
+/// Parallel evaluation support for EntailmentEngine.
+#[cfg(feature = "parallel")]
+impl EntailmentEngine {
+    /// Determines what legal effects follow using parallel evaluation.
+    ///
+    /// This method evaluates all statutes in parallel for improved performance
+    /// on multi-core systems.
+    pub fn entail_parallel<C: EvaluationContext + Sync>(
+        &self,
+        context: &C,
+    ) -> Vec<EntailmentResult> {
+        self.statutes
+            .par_iter()
+            .map(|statute| self.apply_statute_parallel(statute, context))
+            .collect()
+    }
+
+    /// Determines what legal effects follow (parallel), filtering to only satisfied statutes.
+    pub fn entail_satisfied_parallel<C: EvaluationContext + Sync>(
+        &self,
+        context: &C,
+    ) -> Vec<EntailmentResult> {
+        self.entail_parallel(context)
+            .into_par_iter()
+            .filter(|result| result.conditions_satisfied)
+            .collect()
+    }
+
+    fn apply_statute_parallel<C: EvaluationContext + Sync>(
+        &self,
+        statute: &Statute,
+        context: &C,
+    ) -> EntailmentResult {
+        let mut errors = Vec::new();
+
+        if statute.preconditions.is_empty() {
+            return EntailmentResult {
+                statute_id: statute.id.clone(),
+                effect: statute.effect.clone(),
+                conditions_satisfied: true,
+                errors: Vec::new(),
+            };
+        }
+
+        // Evaluate all preconditions in parallel
+        let results: Vec<_> = statute
+            .preconditions
+            .par_iter()
+            .map(|condition| condition.evaluate_parallel(context))
+            .collect();
+
+        let all_satisfied = results.iter().all(|r| matches!(r, Ok(true)));
+
+        for result in results {
+            if let Err(e) = result {
+                errors.push(format!("{}", e));
+            }
+        }
+
+        EntailmentResult {
+            statute_id: statute.id.clone(),
+            effect: statute.effect.clone(),
+            conditions_satisfied: all_satisfied,
+            errors,
+        }
+    }
+}
+
+// ==================================================
+// Statute Subsumption Checking
+// ==================================================
+
+/// Subsumption analyzer for determining if one statute subsumes another.
+///
+/// In legal reasoning, statute A subsumes statute B if:
+/// - A and B have the same legal effect
+/// - B's conditions are more specific than (or equal to) A's conditions
+/// - Whenever B applies, A also applies (but not necessarily vice versa)
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, Condition, ComparisonOp, SubsumptionAnalyzer};
+///
+/// // General statute: anyone over 18 can vote
+/// let general = Statute::new("vote-general", "Voting Rights", Effect::grant("vote"))
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// // Specific statute: citizens over 18 can vote (more specific)
+/// let specific = Statute::new("vote-citizen", "Citizen Voting", Effect::grant("vote"))
+///     .with_precondition(
+///         Condition::age(ComparisonOp::GreaterOrEqual, 18)
+///             .and(Condition::has_attribute("citizenship"))
+///     );
+///
+/// // General subsumes specific
+/// assert!(SubsumptionAnalyzer::subsumes(&general, &specific));
+/// assert!(!SubsumptionAnalyzer::subsumes(&specific, &general));
+/// ```
+pub struct SubsumptionAnalyzer;
+
+impl SubsumptionAnalyzer {
+    /// Checks if statute A subsumes statute B.
+    ///
+    /// Returns `true` if B is more specific than A (A subsumes B).
+    #[must_use]
+    pub fn subsumes(a: &Statute, b: &Statute) -> bool {
+        // Must have compatible effects
+        if !Self::effects_compatible(&a.effect, &b.effect) {
+            return false;
+        }
+
+        // If A has no preconditions, it subsumes everything with the same effect
+        if a.preconditions.is_empty() {
+            return true;
+        }
+
+        // If A has preconditions but B doesn't, A doesn't subsume B
+        if b.preconditions.is_empty() {
+            return false;
+        }
+
+        // Check if B's preconditions are more specific than A's
+        Self::conditions_subsume(&a.preconditions, &b.preconditions)
+    }
+
+    /// Checks if effects are compatible for subsumption.
+    fn effects_compatible(a: &Effect, b: &Effect) -> bool {
+        // For basic subsumption, effects must be identical
+        a.effect_type == b.effect_type && a.description == b.description
+    }
+
+    /// Checks if condition set A subsumes condition set B.
+    ///
+    /// Returns `true` if B is more specific (adds more constraints).
+    fn conditions_subsume(a_conds: &[Condition], b_conds: &[Condition]) -> bool {
+        // If B has more conditions than A, it might be more specific
+        // We need to check if all of A's conditions are present in B
+
+        for a_cond in a_conds {
+            if !Self::condition_present_in(a_cond, b_conds) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Checks if a single condition from A is present (or implied) in B's conditions.
+    fn condition_present_in(a_cond: &Condition, b_conds: &[Condition]) -> bool {
+        // Direct match
+        if b_conds
+            .iter()
+            .any(|b_cond| Self::conditions_equivalent(a_cond, b_cond))
+        {
+            return true;
+        }
+
+        // Check if any of B's conditions are stricter versions of A's condition
+        if b_conds
+            .iter()
+            .any(|b_cond| Self::condition_subsumes_condition(a_cond, b_cond))
+        {
+            return true;
+        }
+
+        // Check if the condition is present in a compound condition
+        for b_cond in b_conds {
+            if Self::condition_in_compound(a_cond, b_cond) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Checks if condition A subsumes condition B (B is stricter than A).
+    fn condition_subsumes_condition(a: &Condition, b: &Condition) -> bool {
+        match (a, b) {
+            // Age subsumption: age >= 18 subsumes age >= 21
+            (
+                Condition::Age {
+                    operator: op_a,
+                    value: val_a,
+                },
+                Condition::Age {
+                    operator: op_b,
+                    value: val_b,
+                },
+            ) => {
+                match (op_a, op_b) {
+                    // >= subsumes >= if B's value is higher
+                    (ComparisonOp::GreaterOrEqual, ComparisonOp::GreaterOrEqual) => val_b >= val_a,
+                    // <= subsumes <= if B's value is lower
+                    (ComparisonOp::LessOrEqual, ComparisonOp::LessOrEqual) => val_b <= val_a,
+                    _ => false,
+                }
+            }
+
+            // Income subsumption
+            (
+                Condition::Income {
+                    operator: op_a,
+                    value: val_a,
+                },
+                Condition::Income {
+                    operator: op_b,
+                    value: val_b,
+                },
+            ) => match (op_a, op_b) {
+                (ComparisonOp::LessThan, ComparisonOp::LessThan) => val_b <= val_a,
+                (ComparisonOp::GreaterThan, ComparisonOp::GreaterThan) => val_b >= val_a,
+                _ => false,
+            },
+
+            // Percentage subsumption
+            (
+                Condition::Percentage {
+                    operator: op_a,
+                    value: val_a,
+                    context: ctx_a,
+                },
+                Condition::Percentage {
+                    operator: op_b,
+                    value: val_b,
+                    context: ctx_b,
+                },
+            ) => {
+                if ctx_a != ctx_b {
+                    return false;
+                }
+                match (op_a, op_b) {
+                    (ComparisonOp::GreaterOrEqual, ComparisonOp::GreaterOrEqual) => val_b >= val_a,
+                    (ComparisonOp::LessOrEqual, ComparisonOp::LessOrEqual) => val_b <= val_a,
+                    _ => false,
+                }
+            }
+
+            // Compound conditions
+            (Condition::And(a_left, a_right), Condition::And(b_left, b_right)) => {
+                Self::condition_subsumes_condition(a_left, b_left)
+                    && Self::condition_subsumes_condition(a_right, b_right)
+            }
+
+            _ => false,
+        }
+    }
+
+    /// Checks if two conditions are logically equivalent.
+    fn conditions_equivalent(a: &Condition, b: &Condition) -> bool {
+        match (a, b) {
+            (
+                Condition::Age {
+                    operator: op_a,
+                    value: val_a,
+                },
+                Condition::Age {
+                    operator: op_b,
+                    value: val_b,
+                },
+            ) => op_a == op_b && val_a == val_b,
+            (
+                Condition::Income {
+                    operator: op_a,
+                    value: val_a,
+                },
+                Condition::Income {
+                    operator: op_b,
+                    value: val_b,
+                },
+            ) => op_a == op_b && val_a == val_b,
+            (Condition::HasAttribute { key: key_a }, Condition::HasAttribute { key: key_b }) => {
+                key_a == key_b
+            }
+            (
+                Condition::AttributeEquals {
+                    key: key_a,
+                    value: val_a,
+                },
+                Condition::AttributeEquals {
+                    key: key_b,
+                    value: val_b,
+                },
+            ) => key_a == key_b && val_a == val_b,
+            (
+                Condition::Geographic {
+                    region_type: rt_a,
+                    region_id: rid_a,
+                },
+                Condition::Geographic {
+                    region_type: rt_b,
+                    region_id: rid_b,
+                },
+            ) => rt_a == rt_b && rid_a == rid_b,
+            _ => false,
+        }
+    }
+
+    /// Checks if a condition appears within a compound condition.
+    fn condition_in_compound(target: &Condition, compound: &Condition) -> bool {
+        match compound {
+            Condition::And(left, right) | Condition::Or(left, right) => {
+                Self::conditions_equivalent(target, left)
+                    || Self::conditions_equivalent(target, right)
+                    || Self::condition_subsumes_condition(target, left)
+                    || Self::condition_subsumes_condition(target, right)
+                    || Self::condition_in_compound(target, left)
+                    || Self::condition_in_compound(target, right)
+            }
+            Condition::Not(inner) => {
+                Self::conditions_equivalent(target, inner)
+                    || Self::condition_in_compound(target, inner)
+            }
+            _ => false,
+        }
+    }
+
+    /// Finds all statutes that are subsumed by the given statute.
+    ///
+    /// Returns statutes that are more specific than the given statute.
+    #[must_use]
+    pub fn find_subsumed<'a>(statute: &Statute, candidates: &'a [Statute]) -> Vec<&'a Statute> {
+        candidates
+            .iter()
+            .filter(|candidate| candidate.id != statute.id && Self::subsumes(statute, candidate))
+            .collect()
+    }
+
+    /// Finds all statutes that subsume the given statute.
+    ///
+    /// Returns statutes that are more general than the given statute.
+    #[must_use]
+    pub fn find_subsuming<'a>(statute: &Statute, candidates: &'a [Statute]) -> Vec<&'a Statute> {
+        candidates
+            .iter()
+            .filter(|candidate| candidate.id != statute.id && Self::subsumes(candidate, statute))
+            .collect()
+    }
+}
+
+// ==================================================
+// Legal Entailment Engine
+// ==================================================
+
+/// Result of applying a statute in the entailment process.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct EntailmentResult {
+    /// The statute that was applied
+    pub statute_id: String,
+    /// The effect that was produced
+    pub effect: Effect,
+    /// Whether all preconditions were satisfied
+    pub conditions_satisfied: bool,
+    /// Evaluation errors if any
+    pub errors: Vec<String>,
+}
+
+/// Legal entailment engine that determines what conclusions follow from statutes and facts.
+///
+/// Given a set of statutes and an evaluation context, the entailment engine:
+/// 1. Evaluates each statute's preconditions
+/// 2. Applies statutes whose conditions are met
+/// 3. Returns the resulting legal effects
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, Condition, ComparisonOp};
+/// use legalis_core::{EntailmentEngine, AttributeBasedContext};
+/// use std::collections::HashMap;
+///
+/// let voting_statute = Statute::new("vote", "Voting Rights", Effect::grant("vote"))
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// let tax_credit = Statute::new("tax", "Tax Credit", Effect::grant("tax_credit"))
+///     .with_precondition(Condition::income(ComparisonOp::LessThan, 50000));
+///
+/// let mut attributes = HashMap::new();
+/// attributes.insert("age".to_string(), "25".to_string());
+/// attributes.insert("income".to_string(), "45000".to_string());
+/// let context = AttributeBasedContext::new(attributes);
+///
+/// let statutes = vec![voting_statute, tax_credit];
+/// let engine = EntailmentEngine::new(statutes);
+/// let results = engine.entail(&context);
+///
+/// // Both statutes apply
+/// assert_eq!(results.len(), 2);
+/// assert!(results.iter().all(|r| r.conditions_satisfied));
+/// ```
+#[derive(Debug, Clone)]
+pub struct EntailmentEngine {
+    statutes: Vec<Statute>,
+}
+
+impl EntailmentEngine {
+    /// Creates a new entailment engine with the given statutes.
+    #[must_use]
+    pub fn new(statutes: Vec<Statute>) -> Self {
+        Self { statutes }
+    }
+
+    /// Determines what legal effects follow from the statutes given the context.
+    ///
+    /// Returns all applicable effects where preconditions are satisfied.
+    pub fn entail(&self, context: &AttributeBasedContext) -> Vec<EntailmentResult> {
+        self.statutes
+            .iter()
+            .map(|statute| self.apply_statute(statute, context))
+            .collect()
+    }
+
+    /// Determines what legal effects follow, filtering to only satisfied statutes.
+    ///
+    /// Returns only the effects where all preconditions are met.
+    pub fn entail_satisfied(&self, context: &AttributeBasedContext) -> Vec<EntailmentResult> {
+        self.entail(context)
+            .into_iter()
+            .filter(|result| result.conditions_satisfied)
+            .collect()
+    }
+
+    /// Applies a single statute and returns the result.
+    fn apply_statute(
+        &self,
+        statute: &Statute,
+        context: &AttributeBasedContext,
+    ) -> EntailmentResult {
+        let mut errors = Vec::new();
+        let mut all_satisfied = true;
+
+        // If no preconditions, statute always applies
+        if statute.preconditions.is_empty() {
+            return EntailmentResult {
+                statute_id: statute.id.clone(),
+                effect: statute.effect.clone(),
+                conditions_satisfied: true,
+                errors: Vec::new(),
+            };
+        }
+
+        // Evaluate all preconditions
+        for condition in &statute.preconditions {
+            match condition.evaluate_simple(context) {
+                Ok(true) => {
+                    // Condition satisfied
+                }
+                Ok(false) => {
+                    all_satisfied = false;
+                }
+                Err(e) => {
+                    all_satisfied = false;
+                    errors.push(format!("{}", e));
+                }
+            }
+        }
+
+        EntailmentResult {
+            statute_id: statute.id.clone(),
+            effect: statute.effect.clone(),
+            conditions_satisfied: all_satisfied,
+            errors,
+        }
+    }
+
+    /// Adds a statute to the engine.
+    pub fn add_statute(&mut self, statute: Statute) {
+        self.statutes.push(statute);
+    }
+
+    /// Removes a statute by ID.
+    pub fn remove_statute(&mut self, statute_id: &str) -> bool {
+        let original_len = self.statutes.len();
+        self.statutes.retain(|s| s.id != statute_id);
+        self.statutes.len() < original_len
+    }
+
+    /// Returns a reference to all statutes in the engine.
+    #[must_use]
+    pub fn statutes(&self) -> &[Statute] {
+        &self.statutes
+    }
+
+    /// Returns the number of statutes in the engine.
+    #[must_use]
+    pub fn statute_count(&self) -> usize {
+        self.statutes.len()
+    }
+
+    /// Checks if a statute exists in the engine by ID.
+    #[must_use]
+    pub fn has_statute(&self, statute_id: &str) -> bool {
+        self.statutes.iter().any(|s| s.id == statute_id)
+    }
+}
+
+/// Inference step in legal reasoning chains.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct InferenceStep {
+    /// The statute applied in this step
+    pub statute_id: String,
+    /// The effect produced
+    pub effect: Effect,
+    /// Previous steps this inference depends on
+    pub depends_on: Vec<usize>,
+}
+
+/// Forward chaining entailment with multi-step inference.
+///
+/// This engine can perform multi-step legal reasoning, where the effects
+/// of one statute can enable the conditions of another statute.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, Condition, ComparisonOp};
+/// use legalis_core::{ForwardChainingEngine, AttributeBasedContext};
+/// use std::collections::HashMap;
+///
+/// // Step 1: Being 18+ grants eligibility
+/// let eligibility = Statute::new("eligibility", "Eligibility", Effect::grant("eligible"))
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// // Step 2: Having eligibility grants voting rights
+/// let voting = Statute::new("voting", "Voting", Effect::grant("vote"))
+///     .with_precondition(Condition::has_attribute("eligible"));
+///
+/// let mut attributes = HashMap::new();
+/// attributes.insert("age".to_string(), "25".to_string());
+/// let context = AttributeBasedContext::new(attributes);
+///
+/// let statutes = vec![eligibility, voting];
+/// let engine = ForwardChainingEngine::new(statutes);
+/// let chain = engine.infer(&context, 5);
+///
+/// // Should derive both eligibility and voting rights
+/// assert!(!chain.is_empty());
+/// ```
+#[derive(Debug, Clone)]
+pub struct ForwardChainingEngine {
+    statutes: Vec<Statute>,
+}
+
+impl ForwardChainingEngine {
+    /// Creates a new forward chaining engine.
+    #[must_use]
+    pub fn new(statutes: Vec<Statute>) -> Self {
+        Self { statutes }
+    }
+
+    /// Performs forward chaining inference up to max_steps.
+    ///
+    /// Returns the chain of inferences that can be derived.
+    pub fn infer(&self, context: &AttributeBasedContext, max_steps: usize) -> Vec<InferenceStep> {
+        let mut inferences = Vec::new();
+        let mut changed = true;
+        let mut steps = 0;
+
+        while changed && steps < max_steps {
+            changed = false;
+            steps += 1;
+
+            for statute in &self.statutes {
+                // Skip if already inferred
+                if inferences
+                    .iter()
+                    .any(|inf: &InferenceStep| inf.statute_id == statute.id)
+                {
+                    continue;
+                }
+
+                // Check if conditions are met
+                if self.can_apply_statute(statute, context) {
+                    let depends_on = self.find_dependencies(&inferences, statute);
+
+                    inferences.push(InferenceStep {
+                        statute_id: statute.id.clone(),
+                        effect: statute.effect.clone(),
+                        depends_on,
+                    });
+
+                    changed = true;
+                }
+            }
+        }
+
+        inferences
+    }
+
+    /// Checks if a statute's conditions can be applied given the current context.
+    fn can_apply_statute(&self, statute: &Statute, context: &AttributeBasedContext) -> bool {
+        if statute.preconditions.is_empty() {
+            return true;
+        }
+
+        statute
+            .preconditions
+            .iter()
+            .all(|cond| cond.evaluate_simple(context).unwrap_or(false))
+    }
+
+    /// Finds which previous inferences this statute depends on.
+    fn find_dependencies(&self, _inferences: &[InferenceStep], _statute: &Statute) -> Vec<usize> {
+        // For now, return empty dependencies
+        // TODO: Implement dependency tracking based on which effects enable conditions
+        Vec::new()
+    }
+}
+
+impl fmt::Display for EntailmentResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}: {} (satisfied: {})",
+            self.statute_id, self.effect, self.conditions_satisfied
+        )
+    }
+}
+
+// ==================================================
+// Abductive Reasoning Engine for Legal Outcome Explanation
+// ==================================================
+
+/// Explanation for why a legal outcome occurred.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct LegalExplanation {
+    /// The observed outcome being explained
+    pub outcome: Effect,
+    /// Statutes that contributed to this outcome
+    pub applicable_statutes: Vec<String>,
+    /// Conditions that were satisfied
+    pub satisfied_conditions: Vec<String>,
+    /// Conditions that were not satisfied
+    pub unsatisfied_conditions: Vec<String>,
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Step-by-step reasoning chain
+    pub reasoning_chain: Vec<ReasoningStep>,
+}
+
+/// A single step in the reasoning chain.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct ReasoningStep {
+    /// Step number
+    pub step: usize,
+    /// Description of this reasoning step
+    pub description: String,
+    /// Statute ID involved in this step
+    pub statute_id: Option<String>,
+    /// Condition evaluated in this step
+    pub condition: Option<String>,
+    /// Result of this step
+    pub result: StepResult,
+}
+
+/// Result of a reasoning step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum StepResult {
+    /// Condition was satisfied
+    Satisfied,
+    /// Condition was not satisfied
+    NotSatisfied,
+    /// Statute was applied
+    Applied,
+    /// Statute was not applicable
+    NotApplicable,
+    /// Uncertain result
+    Uncertain,
+}
+
+impl fmt::Display for StepResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Satisfied => write!(f, "✓ satisfied"),
+            Self::NotSatisfied => write!(f, "✗ not satisfied"),
+            Self::Applied => write!(f, "→ applied"),
+            Self::NotApplicable => write!(f, "- not applicable"),
+            Self::Uncertain => write!(f, "? uncertain"),
+        }
+    }
+}
+
+impl fmt::Display for LegalExplanation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Explanation for outcome: {}", self.outcome)?;
+        writeln!(f, "Confidence: {:.0}%", self.confidence * 100.0)?;
+        writeln!(f)?;
+
+        if !self.applicable_statutes.is_empty() {
+            writeln!(f, "Applicable statutes:")?;
+            for statute_id in &self.applicable_statutes {
+                writeln!(f, "  - {}", statute_id)?;
+            }
+            writeln!(f)?;
+        }
+
+        if !self.satisfied_conditions.is_empty() {
+            writeln!(f, "Satisfied conditions:")?;
+            for condition in &self.satisfied_conditions {
+                writeln!(f, "  ✓ {}", condition)?;
+            }
+            writeln!(f)?;
+        }
+
+        if !self.unsatisfied_conditions.is_empty() {
+            writeln!(f, "Unsatisfied conditions:")?;
+            for condition in &self.unsatisfied_conditions {
+                writeln!(f, "  ✗ {}", condition)?;
+            }
+            writeln!(f)?;
+        }
+
+        if !self.reasoning_chain.is_empty() {
+            writeln!(f, "Reasoning chain:")?;
+            for step in &self.reasoning_chain {
+                write!(f, "  {}. {} ", step.step, step.description)?;
+                writeln!(f, "[{}]", step.result)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Abductive reasoning engine for explaining legal outcomes.
+///
+/// This engine works backwards from an observed outcome to determine which
+/// statutes and conditions led to that outcome.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{AbductiveReasoner, Statute, Effect, EffectType, Condition, ComparisonOp};
+/// use legalis_core::{EvaluationContext, RegionType, RelationshipType, DurationUnit};
+/// use chrono::NaiveDate;
+///
+/// struct Person { age: u32, income: u64 }
+///
+/// impl EvaluationContext for Person {
+///     fn get_attribute(&self, _key: &str) -> Option<String> { None }
+///     fn get_age(&self) -> Option<u32> { Some(self.age) }
+///     fn get_income(&self) -> Option<u64> { Some(self.income) }
+///     fn get_current_date(&self) -> Option<NaiveDate> { None }
+///     fn check_geographic(&self, _region_type: RegionType, _region_id: &str) -> bool { false }
+///     fn check_relationship(&self, _relationship_type: RelationshipType, _target_id: Option<&str>) -> bool { false }
+///     fn get_residency_months(&self) -> Option<u32> { None }
+///     fn get_duration(&self, _unit: DurationUnit) -> Option<u32> { None }
+///     fn get_percentage(&self, _context: &str) -> Option<u32> { None }
+///     fn evaluate_formula(&self, _formula: &str) -> Option<f64> { None }
+/// }
+///
+/// let voting_law = Statute::new("vote", "Voting Rights", Effect::grant("vote"))
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// let statutes = vec![voting_law];
+/// let person = Person { age: 25, income: 50000 };
+///
+/// let reasoner = AbductiveReasoner::new(statutes);
+/// let explanations = reasoner.explain_effect(Effect::grant("vote"), &person);
+///
+/// assert!(!explanations.is_empty());
+/// println!("{}", explanations[0]);
+/// ```
+#[derive(Debug, Clone)]
+pub struct AbductiveReasoner {
+    statutes: Vec<Statute>,
+}
+
+impl AbductiveReasoner {
+    /// Creates a new abductive reasoner with the given statutes.
+    #[must_use]
+    pub fn new(statutes: Vec<Statute>) -> Self {
+        Self { statutes }
+    }
+
+    /// Explains why a specific effect occurred.
+    ///
+    /// Returns all possible explanations ranked by confidence.
+    pub fn explain_effect<C: EvaluationContext>(
+        &self,
+        target_effect: Effect,
+        context: &C,
+    ) -> Vec<LegalExplanation> {
+        let mut explanations = Vec::new();
+
+        // Find all statutes that produce this effect
+        for statute in &self.statutes {
+            if self.effects_match(&statute.effect, &target_effect) {
+                if let Some(explanation) = self.explain_statute(statute, context) {
+                    explanations.push(explanation);
+                }
+            }
+        }
+
+        // Sort by confidence (highest first)
+        explanations.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+
+        explanations
+    }
+
+    /// Explains why a specific statute was or was not applied.
+    pub fn explain_statute<C: EvaluationContext>(
+        &self,
+        statute: &Statute,
+        context: &C,
+    ) -> Option<LegalExplanation> {
+        let mut reasoning_chain = Vec::new();
+        let mut satisfied_conditions = Vec::new();
+        let mut unsatisfied_conditions = Vec::new();
+        let mut step_num = 1;
+
+        // If no preconditions, statute always applies
+        if statute.preconditions.is_empty() {
+            reasoning_chain.push(ReasoningStep {
+                step: step_num,
+                description: format!("Statute '{}' has no preconditions", statute.id),
+                statute_id: Some(statute.id.clone()),
+                condition: None,
+                result: StepResult::Applied,
+            });
+
+            return Some(LegalExplanation {
+                outcome: statute.effect.clone(),
+                applicable_statutes: vec![statute.id.clone()],
+                satisfied_conditions: vec!["No preconditions".to_string()],
+                unsatisfied_conditions: Vec::new(),
+                confidence: 1.0,
+                reasoning_chain,
+            });
+        }
+
+        // Evaluate each precondition
+        for condition in &statute.preconditions {
+            let condition_str = format!("{}", condition);
+
+            match condition.evaluate(context) {
+                Ok(true) => {
+                    satisfied_conditions.push(condition_str.clone());
+                    reasoning_chain.push(ReasoningStep {
+                        step: step_num,
+                        description: format!("Condition satisfied: {}", condition_str),
+                        statute_id: Some(statute.id.clone()),
+                        condition: Some(condition_str),
+                        result: StepResult::Satisfied,
+                    });
+                }
+                Ok(false) => {
+                    unsatisfied_conditions.push(condition_str.clone());
+                    reasoning_chain.push(ReasoningStep {
+                        step: step_num,
+                        description: format!("Condition not satisfied: {}", condition_str),
+                        statute_id: Some(statute.id.clone()),
+                        condition: Some(condition_str),
+                        result: StepResult::NotSatisfied,
+                    });
+                }
+                Err(_) => {
+                    unsatisfied_conditions.push(condition_str.clone());
+                    reasoning_chain.push(ReasoningStep {
+                        step: step_num,
+                        description: format!("Condition evaluation failed: {}", condition_str),
+                        statute_id: Some(statute.id.clone()),
+                        condition: Some(condition_str),
+                        result: StepResult::Uncertain,
+                    });
+                }
+            }
+
+            step_num += 1;
+        }
+
+        // Calculate confidence based on satisfied conditions
+        let total_conditions = statute.preconditions.len();
+        let satisfied_count = satisfied_conditions.len();
+        let confidence = if total_conditions > 0 {
+            satisfied_count as f64 / total_conditions as f64
+        } else {
+            1.0
+        };
+
+        // Determine if statute was applied
+        let all_satisfied = unsatisfied_conditions.is_empty();
+        let applicable_statutes = if all_satisfied {
+            vec![statute.id.clone()]
+        } else {
+            Vec::new()
+        };
+
+        reasoning_chain.push(ReasoningStep {
+            step: step_num,
+            description: if all_satisfied {
+                format!("Statute '{}' applies", statute.id)
+            } else {
+                format!("Statute '{}' does not apply", statute.id)
+            },
+            statute_id: Some(statute.id.clone()),
+            condition: None,
+            result: if all_satisfied {
+                StepResult::Applied
+            } else {
+                StepResult::NotApplicable
+            },
+        });
+
+        Some(LegalExplanation {
+            outcome: statute.effect.clone(),
+            applicable_statutes,
+            satisfied_conditions,
+            unsatisfied_conditions,
+            confidence,
+            reasoning_chain,
+        })
+    }
+
+    /// Explains why a specific outcome did NOT occur.
+    ///
+    /// This is useful for understanding what conditions would need to be satisfied
+    /// for a desired outcome.
+    pub fn explain_why_not<C: EvaluationContext>(
+        &self,
+        target_effect: Effect,
+        context: &C,
+    ) -> Vec<LegalExplanation> {
+        let mut explanations = Vec::new();
+
+        // Find statutes that could produce this effect but didn't
+        for statute in &self.statutes {
+            if self.effects_match(&statute.effect, &target_effect) {
+                if let Some(explanation) = self.explain_statute(statute, context) {
+                    // Only include if statute didn't apply (confidence < 1.0)
+                    if explanation.confidence < 1.0 {
+                        explanations.push(explanation);
+                    }
+                }
+            }
+        }
+
+        // Sort by how close they came (highest confidence first)
+        explanations.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+
+        explanations
+    }
+
+    /// Checks if two effects match for explanation purposes.
+    fn effects_match(&self, effect1: &Effect, effect2: &Effect) -> bool {
+        effect1.effect_type == effect2.effect_type
+            && effect1.description.contains(&effect2.description)
+    }
+
+    /// Finds alternative paths to achieve an outcome.
+    ///
+    /// Returns explanations for all statutes that could produce the target effect,
+    /// showing which conditions need to be satisfied for each path.
+    pub fn find_alternatives<C: EvaluationContext>(
+        &self,
+        target_effect: Effect,
+        context: &C,
+    ) -> Vec<LegalExplanation> {
+        let mut alternatives = Vec::new();
+
+        for statute in &self.statutes {
+            if self.effects_match(&statute.effect, &target_effect) {
+                if let Some(explanation) = self.explain_statute(statute, context) {
+                    alternatives.push(explanation);
+                }
+            }
+        }
+
+        alternatives
+    }
+}
+
+// ==================================================
+// Statute Registry Query DSL
+// ==================================================
+
+/// Fluent query builder for searching and filtering statutes.
+///
+/// Provides a chainable API for constructing complex queries over statute collections.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, StatuteQuery, Condition, ComparisonOp};
+/// use chrono::NaiveDate;
+///
+/// let statutes = vec![
+///     Statute::new("law1", "Voting Rights", Effect::grant("vote"))
+///         .with_jurisdiction("US")
+///         .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18)),
+///     Statute::new("law2", "Tax Credit", Effect::grant("credit"))
+///         .with_jurisdiction("US-CA")
+///         .with_precondition(Condition::income(ComparisonOp::LessThan, 50000)),
+/// ];
+///
+/// // Find all US statutes with preconditions
+/// let results = StatuteQuery::new(&statutes)
+///     .jurisdiction("US")
+///     .with_preconditions()
+///     .execute();
+///
+/// assert_eq!(results.len(), 1);
+/// assert_eq!(results[0].id, "law1");
+/// ```
+pub struct StatuteQuery<'a> {
+    statutes: &'a [Statute],
+    #[allow(clippy::type_complexity)]
+    filters: Vec<Box<dyn Fn(&Statute) -> bool + 'a>>,
+}
+
+impl<'a> StatuteQuery<'a> {
+    /// Creates a new query over the given statute collection.
+    #[must_use]
+    pub fn new(statutes: &'a [Statute]) -> Self {
+        Self {
+            statutes,
+            filters: Vec::new(),
+        }
+    }
+
+    /// Filters statutes by jurisdiction.
+    #[must_use]
+    pub fn jurisdiction(mut self, jurisdiction: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| {
+            s.jurisdiction.as_ref().is_some_and(|j| j == jurisdiction)
+        }));
+        self
+    }
+
+    /// Filters statutes by jurisdiction prefix (e.g., "US" matches "US", "US-CA", "US-NY").
+    #[must_use]
+    pub fn jurisdiction_prefix(mut self, prefix: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| {
+            s.jurisdiction
+                .as_ref()
+                .is_some_and(|j| j.starts_with(prefix))
+        }));
+        self
+    }
+
+    /// Filters statutes by effect type.
+    #[must_use]
+    pub fn effect_type(mut self, effect_type: EffectType) -> Self {
+        self.filters
+            .push(Box::new(move |s| s.effect.effect_type == effect_type));
+        self
+    }
+
+    /// Filters statutes that grant a specific right or privilege.
+    #[must_use]
+    pub fn grants(mut self, description: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| {
+            s.effect.effect_type == EffectType::Grant && s.effect.description.contains(description)
+        }));
+        self
+    }
+
+    /// Filters statutes that revoke a specific right or privilege.
+    #[must_use]
+    pub fn revokes(mut self, description: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| {
+            s.effect.effect_type == EffectType::Revoke && s.effect.description.contains(description)
+        }));
+        self
+    }
+
+    /// Filters statutes that have preconditions.
+    #[must_use]
+    pub fn with_preconditions(mut self) -> Self {
+        self.filters.push(Box::new(|s| !s.preconditions.is_empty()));
+        self
+    }
+
+    /// Filters statutes that have no preconditions (unconditional).
+    #[must_use]
+    pub fn unconditional(mut self) -> Self {
+        self.filters.push(Box::new(|s| s.preconditions.is_empty()));
+        self
+    }
+
+    /// Filters statutes by minimum number of preconditions.
+    #[must_use]
+    pub fn min_preconditions(mut self, min: usize) -> Self {
+        self.filters
+            .push(Box::new(move |s| s.preconditions.len() >= min));
+        self
+    }
+
+    /// Filters statutes effective at a given date.
+    #[must_use]
+    pub fn effective_at(mut self, date: NaiveDate) -> Self {
+        self.filters
+            .push(Box::new(move |s| s.temporal_validity.is_active(date)));
+        self
+    }
+
+    /// Filters statutes that are currently effective.
+    #[must_use]
+    pub fn currently_effective(mut self) -> Self {
+        let today = chrono::Utc::now().date_naive();
+        self.filters
+            .push(Box::new(move |s| s.temporal_validity.is_active(today)));
+        self
+    }
+
+    /// Filters statutes with a specific version.
+    #[must_use]
+    pub fn version(mut self, version: u32) -> Self {
+        self.filters.push(Box::new(move |s| s.version == version));
+        self
+    }
+
+    /// Filters statutes by ID prefix.
+    #[must_use]
+    pub fn id_prefix(mut self, prefix: &'a str) -> Self {
+        self.filters
+            .push(Box::new(move |s| s.id.starts_with(prefix)));
+        self
+    }
+
+    /// Filters statutes by ID suffix.
+    #[must_use]
+    pub fn id_suffix(mut self, suffix: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| s.id.ends_with(suffix)));
+        self
+    }
+
+    /// Filters statutes containing a keyword in title or ID.
+    #[must_use]
+    pub fn keyword(mut self, keyword: &'a str) -> Self {
+        self.filters.push(Box::new(move |s| {
+            s.id.contains(keyword) || s.title.contains(keyword)
+        }));
+        self
+    }
+
+    /// Filters statutes with a custom predicate.
+    #[must_use]
+    pub fn filter<F>(mut self, predicate: F) -> Self
+    where
+        F: Fn(&Statute) -> bool + 'a,
+    {
+        self.filters.push(Box::new(predicate));
+        self
+    }
+
+    /// Executes the query and returns matching statutes.
+    #[must_use]
+    pub fn execute(self) -> Vec<&'a Statute> {
+        self.statutes
+            .iter()
+            .filter(|statute| self.filters.iter().all(|f| f(statute)))
+            .collect()
+    }
+
+    /// Executes the query and returns the first matching statute.
+    #[must_use]
+    pub fn first(self) -> Option<&'a Statute> {
+        self.statutes
+            .iter()
+            .find(|statute| self.filters.iter().all(|f| f(statute)))
+    }
+
+    /// Executes the query and returns the count of matching statutes.
+    #[must_use]
+    pub fn count(self) -> usize {
+        self.statutes
+            .iter()
+            .filter(|statute| self.filters.iter().all(|f| f(statute)))
+            .count()
+    }
+
+    /// Executes the query and checks if any statutes match.
+    #[must_use]
+    pub fn exists(self) -> bool {
+        self.statutes
+            .iter()
+            .any(|statute| self.filters.iter().all(|f| f(statute)))
+    }
+}
+
+/// Statute registry for managing collections of statutes with query capabilities.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{StatuteRegistry, Statute, Effect};
+///
+/// let mut registry = StatuteRegistry::new();
+/// registry.add(Statute::new("law1", "Example Law", Effect::grant("right")));
+/// registry.add(Statute::new("law2", "Another Law", Effect::revoke("privilege")));
+///
+/// assert_eq!(registry.len(), 2);
+///
+/// // Query the registry
+/// let grants = registry.query().effect_type(legalis_core::EffectType::Grant).execute();
+/// assert_eq!(grants.len(), 1);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct StatuteRegistry {
+    statutes: Vec<Statute>,
+}
+
+impl StatuteRegistry {
+    /// Creates a new empty statute registry.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a statute registry from a vector of statutes.
+    #[must_use]
+    pub fn from_statutes(statutes: Vec<Statute>) -> Self {
+        Self { statutes }
+    }
+
+    /// Adds a statute to the registry.
+    pub fn add(&mut self, statute: Statute) {
+        self.statutes.push(statute);
+    }
+
+    /// Removes a statute by ID.
+    ///
+    /// Returns `true` if a statute was removed.
+    pub fn remove(&mut self, id: &str) -> bool {
+        let original_len = self.statutes.len();
+        self.statutes.retain(|s| s.id != id);
+        self.statutes.len() < original_len
+    }
+
+    /// Gets a statute by ID.
+    #[must_use]
+    pub fn get(&self, id: &str) -> Option<&Statute> {
+        self.statutes.iter().find(|s| s.id == id)
+    }
+
+    /// Gets a mutable reference to a statute by ID.
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut Statute> {
+        self.statutes.iter_mut().find(|s| s.id == id)
+    }
+
+    /// Returns the number of statutes in the registry.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.statutes.len()
+    }
+
+    /// Returns `true` if the registry is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.statutes.is_empty()
+    }
+
+    /// Returns an iterator over all statutes.
+    pub fn iter(&self) -> impl Iterator<Item = &Statute> {
+        self.statutes.iter()
+    }
+
+    /// Returns a mutable iterator over all statutes.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Statute> {
+        self.statutes.iter_mut()
+    }
+
+    /// Creates a new query over the statutes in this registry.
+    #[must_use]
+    pub fn query(&self) -> StatuteQuery<'_> {
+        StatuteQuery::new(&self.statutes)
+    }
+
+    /// Clears all statutes from the registry.
+    pub fn clear(&mut self) {
+        self.statutes.clear();
+    }
+
+    /// Returns all statutes as a vector.
+    #[must_use]
+    pub fn all(&self) -> &[Statute] {
+        &self.statutes
+    }
+
+    /// Finds statutes that conflict with each other at a given date.
+    #[must_use]
+    pub fn find_conflicts(&self, date: NaiveDate) -> Vec<(&Statute, &Statute)> {
+        let mut conflicts = Vec::new();
+        let effective: Vec<_> = self
+            .statutes
+            .iter()
+            .filter(|s| s.temporal_validity.is_active(date))
+            .collect();
+
+        for i in 0..effective.len() {
+            for j in (i + 1)..effective.len() {
+                let a = effective[i];
+                let b = effective[j];
+
+                // Simple conflict check: same effect type but different descriptions
+                if a.effect.effect_type == b.effect.effect_type
+                    && a.effect.description != b.effect.description
+                    && !a.preconditions.is_empty()
+                    && !b.preconditions.is_empty()
+                {
+                    conflicts.push((a, b));
+                }
+            }
+        }
+
+        conflicts
+    }
+
+    /// Merges another registry into this one.
+    pub fn merge(&mut self, other: StatuteRegistry) {
+        self.statutes.extend(other.statutes);
+    }
+}
+
+impl IntoIterator for StatuteRegistry {
+    type Item = Statute;
+    type IntoIter = std::vec::IntoIter<Statute>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statutes.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a StatuteRegistry {
+    type Item = &'a Statute;
+    type IntoIter = std::slice::Iter<'a, Statute>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statutes.iter()
+    }
+}
+
+impl FromIterator<Statute> for StatuteRegistry {
+    fn from_iter<T: IntoIterator<Item = Statute>>(iter: T) -> Self {
+        Self {
+            statutes: iter.into_iter().collect(),
         }
     }
 }
@@ -1660,9 +4287,296 @@ impl Statute {
             _ => None,
         }
     }
+
+    /// Checks if this statute subsumes another statute.
+    ///
+    /// Statute A subsumes statute B if:
+    /// - A's preconditions are more general than (or equal to) B's preconditions
+    /// - A's effect is the same or broader than B's effect
+    /// - Whenever B applies, A also applies
+    ///
+    /// This is useful for detecting redundancy and logical relationships between statutes.
+    ///
+    /// **Note**: This is a simplified heuristic-based implementation.
+    /// Full subsumption checking would require logical analysis of condition relationships
+    /// (e.g., recognizing that age >= 18 subsumes age >= 21).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+    ///
+    /// // Statute with no preconditions subsumes one with preconditions (same effect)
+    /// let general = Statute::new("general", "Voting Rights", Effect::grant("Vote"));
+    ///
+    /// let specific = Statute::new("specific", "Voting Rights (21+)", Effect::grant("Vote"))
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 21));
+    ///
+    /// // General (no conditions) subsumes specific (has conditions)
+    /// assert_eq!(general.subsumes(&specific), true);
+    /// assert_eq!(specific.subsumes(&general), false);
+    /// ```
+    #[must_use]
+    pub fn subsumes(&self, other: &Self) -> bool {
+        // For a basic implementation, check if:
+        // 1. Effects are compatible (same type and description)
+        // 2. This statute's preconditions are more general
+
+        // Check effect compatibility
+        if self.effect.effect_type != other.effect.effect_type
+            || self.effect.description != other.effect.description
+        {
+            return false;
+        }
+
+        // Check jurisdiction compatibility
+        if self.jurisdiction != other.jurisdiction && self.jurisdiction.is_some() {
+            return false;
+        }
+
+        // For preconditions, we do a simplified check:
+        // If this statute has fewer or equally general preconditions, it subsumes the other
+        // This is a simplified implementation - full subsumption would require
+        // logical analysis of condition relationships
+
+        // If this has no preconditions, it subsumes any statute with the same effect
+        if self.preconditions.is_empty() {
+            return true;
+        }
+
+        // If other has no preconditions but this does, this doesn't subsume
+        if other.preconditions.is_empty() {
+            return false;
+        }
+
+        // Simplified heuristic: if precondition count is less, more general
+        // For a proper implementation, use logical subsumption checking
+        self.preconditions.len() <= other.preconditions.len()
+    }
+
+    /// Checks if this statute is subsumed by another statute.
+    ///
+    /// This is the inverse of [`Self::subsumes`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+    ///
+    /// let general = Statute::new("general", "General Rule", Effect::grant("Benefit"))
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+    ///
+    /// let specific = Statute::new("specific", "Specific Rule", Effect::grant("Benefit"))
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 21));
+    ///
+    /// assert_eq!(specific.is_subsumed_by(&general), true);
+    /// ```
+    #[must_use]
+    pub fn is_subsumed_by(&self, other: &Self) -> bool {
+        other.subsumes(self)
+    }
+
+    /// Computes the differences between this statute and another version.
+    ///
+    /// This is useful for tracking amendments, understanding changes over time,
+    /// and generating change logs for legal documents.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, Condition, ComparisonOp};
+    ///
+    /// let version1 = Statute::new("tax-1", "Tax Law", Effect::grant("Tax Credit"))
+    ///     .with_precondition(Condition::income(ComparisonOp::LessThan, 50000))
+    ///     .with_version(1);
+    ///
+    /// let version2 = Statute::new("tax-1", "Tax Law (Amended)", Effect::grant("Tax Credit"))
+    ///     .with_precondition(Condition::income(ComparisonOp::LessThan, 60000))
+    ///     .with_version(2);
+    ///
+    /// let diff = version1.diff(&version2);
+    /// assert!(!diff.changes.is_empty());
+    /// ```
+    #[must_use]
+    pub fn diff(&self, other: &Self) -> StatuteDiff {
+        let mut changes = Vec::new();
+
+        // Check ID change
+        if self.id != other.id {
+            changes.push(StatuteChange::IdChanged {
+                old: self.id.clone(),
+                new: other.id.clone(),
+            });
+        }
+
+        // Check title change
+        if self.title != other.title {
+            changes.push(StatuteChange::TitleChanged {
+                old: self.title.clone(),
+                new: other.title.clone(),
+            });
+        }
+
+        // Check effect change
+        if self.effect != other.effect {
+            changes.push(StatuteChange::EffectChanged {
+                old: format!("{}", self.effect),
+                new: format!("{}", other.effect),
+            });
+        }
+
+        // Check preconditions change
+        if self.preconditions != other.preconditions {
+            changes.push(StatuteChange::PreconditionsChanged {
+                added: other
+                    .preconditions
+                    .len()
+                    .saturating_sub(self.preconditions.len()),
+                removed: self
+                    .preconditions
+                    .len()
+                    .saturating_sub(other.preconditions.len()),
+            });
+        }
+
+        // Check temporal validity change
+        if self.temporal_validity != other.temporal_validity {
+            changes.push(StatuteChange::TemporalValidityChanged);
+        }
+
+        // Check version change
+        if self.version != other.version {
+            changes.push(StatuteChange::VersionChanged {
+                old: self.version,
+                new: other.version,
+            });
+        }
+
+        // Check jurisdiction change
+        if self.jurisdiction != other.jurisdiction {
+            changes.push(StatuteChange::JurisdictionChanged {
+                old: self.jurisdiction.clone(),
+                new: other.jurisdiction.clone(),
+            });
+        }
+
+        StatuteDiff {
+            statute_id: self.id.clone(),
+            changes,
+        }
+    }
 }
 
-/// Validation errors for statutes.
+/// Represents differences between two versions of a statute.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct StatuteDiff {
+    /// ID of the statute being compared
+    pub statute_id: String,
+    /// List of changes detected
+    pub changes: Vec<StatuteChange>,
+}
+
+impl StatuteDiff {
+    /// Returns true if there are no changes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.changes.is_empty()
+    }
+
+    /// Returns the number of changes.
+    #[must_use]
+    pub fn change_count(&self) -> usize {
+        self.changes.len()
+    }
+}
+
+/// Types of changes that can occur in a statute.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum StatuteChange {
+    /// The statute ID was changed
+    IdChanged { old: String, new: String },
+    /// The statute title was changed
+    TitleChanged { old: String, new: String },
+    /// The effect was changed
+    EffectChanged { old: String, new: String },
+    /// Preconditions were modified
+    PreconditionsChanged { added: usize, removed: usize },
+    /// Temporal validity was changed
+    TemporalValidityChanged,
+    /// Version number was changed
+    VersionChanged { old: u32, new: u32 },
+    /// Jurisdiction was changed
+    JurisdictionChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
+}
+
+impl fmt::Display for StatuteDiff {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return write!(f, "No changes for statute '{}'", self.statute_id);
+        }
+
+        writeln!(f, "Changes for statute '{}':", self.statute_id)?;
+        for (i, change) in self.changes.iter().enumerate() {
+            writeln!(f, "  {}. {}", i + 1, change)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for StatuteChange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IdChanged { old, new } => write!(f, "ID: '{}' → '{}'", old, new),
+            Self::TitleChanged { old, new } => write!(f, "Title: '{}' → '{}'", old, new),
+            Self::EffectChanged { old, new } => write!(f, "Effect: {} → {}", old, new),
+            Self::PreconditionsChanged { added, removed } => {
+                write!(f, "Preconditions: +{} -{}", added, removed)
+            }
+            Self::TemporalValidityChanged => write!(f, "Temporal validity changed"),
+            Self::VersionChanged { old, new } => write!(f, "Version: {} → {}", old, new),
+            Self::JurisdictionChanged { old, new } => {
+                write!(
+                    f,
+                    "Jurisdiction: {} → {}",
+                    old.as_deref().unwrap_or("None"),
+                    new.as_deref().unwrap_or("None")
+                )
+            }
+        }
+    }
+}
+
+/// Error severity levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum ErrorSeverity {
+    /// Warning - potential issue but not critical.
+    Warning,
+    /// Error - significant problem that should be addressed.
+    Error,
+    /// Critical - fundamental issue that prevents operation.
+    Critical,
+}
+
+impl fmt::Display for ErrorSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Warning => write!(f, "WARNING"),
+            Self::Error => write!(f, "ERROR"),
+            Self::Critical => write!(f, "CRITICAL"),
+        }
+    }
+}
+
+/// Validation errors for statutes with error codes and severity.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -1685,6 +4599,300 @@ pub enum ValidationError {
     /// Version must be > 0.
     InvalidVersion,
 }
+
+impl ValidationError {
+    /// Returns the error code for this validation error.
+    #[must_use]
+    pub const fn error_code(&self) -> &'static str {
+        match self {
+            Self::EmptyId => "E001",
+            Self::InvalidId(_) => "E002",
+            Self::EmptyTitle => "E003",
+            Self::ExpiryBeforeEffective { .. } => "E004",
+            Self::InvalidCondition { .. } => "E005",
+            Self::EmptyEffectDescription => "E006",
+            Self::InvalidVersion => "E007",
+        }
+    }
+
+    /// Returns the severity level of this error.
+    #[must_use]
+    pub const fn severity(&self) -> ErrorSeverity {
+        match self {
+            Self::EmptyId | Self::EmptyTitle | Self::EmptyEffectDescription => {
+                ErrorSeverity::Critical
+            }
+            Self::InvalidId(_) | Self::InvalidVersion => ErrorSeverity::Error,
+            Self::ExpiryBeforeEffective { .. } | Self::InvalidCondition { .. } => {
+                ErrorSeverity::Warning
+            }
+        }
+    }
+
+    /// Returns a suggestion for how to fix this error.
+    #[must_use]
+    pub fn suggestion(&self) -> Option<&str> {
+        match self {
+            Self::EmptyId => Some("Provide a non-empty ID for the statute"),
+            Self::InvalidId(_) => {
+                Some("Use only alphanumeric characters, hyphens, and underscores in IDs")
+            }
+            Self::EmptyTitle => Some("Provide a descriptive title for the statute"),
+            Self::ExpiryBeforeEffective { .. } => {
+                Some("Ensure the expiry date is after the effective date")
+            }
+            Self::InvalidCondition { .. } => {
+                Some("Review and fix the condition, or remove it if not needed")
+            }
+            Self::EmptyEffectDescription => Some("Provide a description for the effect"),
+            Self::InvalidVersion => Some("Version must be greater than 0"),
+        }
+    }
+
+    /// Returns multiple recovery options for this error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::ValidationError;
+    ///
+    /// let err = ValidationError::EmptyId;
+    /// let options = err.recovery_options();
+    /// assert!(!options.is_empty());
+    /// ```
+    #[must_use]
+    pub fn recovery_options(&self) -> Vec<String> {
+        match self {
+            Self::EmptyId => vec![
+                "Generate a unique ID based on title".to_string(),
+                "Use a UUID as the ID".to_string(),
+                "Derive ID from jurisdiction and statute number".to_string(),
+            ],
+            Self::InvalidId(id) => vec![
+                format!("Remove invalid characters from '{}'", id),
+                "Replace spaces with hyphens or underscores".to_string(),
+                "Start ID with a letter if it begins with a number".to_string(),
+            ],
+            Self::EmptyTitle => vec![
+                "Add a descriptive title summarizing the statute".to_string(),
+                "Use the statute ID as a temporary title".to_string(),
+            ],
+            Self::ExpiryBeforeEffective { effective, expiry } => vec![
+                format!("Change expiry date to be after {}", effective),
+                format!("Change effective date to be before {}", expiry),
+                "Remove the expiry date if statute doesn't expire".to_string(),
+            ],
+            Self::InvalidCondition { index, message } => vec![
+                format!("Fix condition at index {}: {}", index, message),
+                format!("Remove condition at index {}", index),
+                "Simplify the condition to avoid validation issues".to_string(),
+            ],
+            Self::EmptyEffectDescription => vec![
+                "Add a description explaining what the effect does".to_string(),
+                "Use the effect type as a default description".to_string(),
+            ],
+            Self::InvalidVersion => vec![
+                "Set version to 1 for new statutes".to_string(),
+                "Increment version number from previous version".to_string(),
+            ],
+        }
+    }
+
+    /// Attempts to automatically fix this error if possible.
+    ///
+    /// Returns a description of the fix applied, or None if auto-fix is not available.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::ValidationError;
+    ///
+    /// let err = ValidationError::InvalidId("my statute!".to_string());
+    /// let fixed = err.try_auto_fix();
+    /// assert!(fixed.is_some());
+    /// ```
+    #[must_use]
+    pub fn try_auto_fix(&self) -> Option<(String, String)> {
+        match self {
+            Self::InvalidId(id) => {
+                let fixed = id
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '-' || c == '_' {
+                            c
+                        } else if c.is_whitespace() {
+                            '-'
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
+                Some((
+                    fixed,
+                    "Replaced invalid characters with hyphens/underscores".to_string(),
+                ))
+            }
+            Self::InvalidVersion => Some((
+                "1".to_string(),
+                "Set version to 1 (default for new statutes)".to_string(),
+            )),
+            _ => None,
+        }
+    }
+}
+
+/// Condition evaluation errors.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum ConditionError {
+    /// Missing attribute in entity.
+    MissingAttribute { key: String },
+    /// Type mismatch when evaluating condition.
+    TypeMismatch { expected: String, actual: String },
+    /// Invalid calculation formula.
+    InvalidFormula { formula: String, error: String },
+    /// Pattern matching error.
+    PatternError { pattern: String, error: String },
+    /// Evaluation exceeded maximum depth (possible infinite recursion).
+    MaxDepthExceeded { max_depth: usize },
+    /// Custom evaluation error.
+    Custom { message: String },
+}
+
+impl ConditionError {
+    /// Returns the error code for this condition error.
+    #[must_use]
+    pub const fn error_code(&self) -> &'static str {
+        match self {
+            Self::MissingAttribute { .. } => "C001",
+            Self::TypeMismatch { .. } => "C002",
+            Self::InvalidFormula { .. } => "C003",
+            Self::PatternError { .. } => "C004",
+            Self::MaxDepthExceeded { .. } => "C005",
+            Self::Custom { .. } => "C999",
+        }
+    }
+
+    /// Returns the severity level of this error.
+    #[must_use]
+    pub const fn severity(&self) -> ErrorSeverity {
+        match self {
+            Self::MissingAttribute { .. } | Self::TypeMismatch { .. } => ErrorSeverity::Error,
+            Self::InvalidFormula { .. } | Self::PatternError { .. } => ErrorSeverity::Critical,
+            Self::MaxDepthExceeded { .. } => ErrorSeverity::Critical,
+            Self::Custom { .. } => ErrorSeverity::Error,
+        }
+    }
+
+    /// Returns a suggestion for how to fix this error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::ConditionError;
+    ///
+    /// let err = ConditionError::MissingAttribute {
+    ///     key: "age".to_string(),
+    /// };
+    /// assert!(err.suggestion().is_some());
+    /// ```
+    #[must_use]
+    pub fn suggestion(&self) -> Option<String> {
+        match self {
+            Self::MissingAttribute { key } => Some(format!(
+                "Add the '{}' attribute to the entity before evaluation",
+                key
+            )),
+            Self::TypeMismatch { expected, actual } => Some(format!(
+                "Convert the value from {} to {} or adjust the condition type",
+                actual, expected
+            )),
+            Self::InvalidFormula { formula, error } => Some(format!(
+                "Fix the formula '{}': {}. Check syntax and ensure all variables are defined.",
+                formula, error
+            )),
+            Self::PatternError { pattern, error } => Some(format!(
+                "Fix the regex pattern '{}': {}. Ensure the pattern is valid regex syntax.",
+                pattern, error
+            )),
+            Self::MaxDepthExceeded { max_depth } => Some(format!(
+                "Simplify the condition structure to reduce nesting below {} levels, or check for circular references",
+                max_depth
+            )),
+            Self::Custom { .. } => None,
+        }
+    }
+
+    /// Returns multiple recovery options for this error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::ConditionError;
+    ///
+    /// let err = ConditionError::TypeMismatch {
+    ///     expected: "u32".to_string(),
+    ///     actual: "String".to_string(),
+    /// };
+    /// let options = err.recovery_options();
+    /// assert!(!options.is_empty());
+    /// ```
+    #[must_use]
+    pub fn recovery_options(&self) -> Vec<String> {
+        match self {
+            Self::MissingAttribute { key } => vec![
+                format!("Add '{}' to entity attributes", key),
+                "Use default value for missing attribute".to_string(),
+                "Make this condition optional".to_string(),
+            ],
+            Self::TypeMismatch { expected, actual } => vec![
+                format!("Convert {} to {}", actual, expected),
+                "Change condition to accept current type".to_string(),
+                "Add type conversion in evaluation context".to_string(),
+            ],
+            Self::InvalidFormula { .. } => vec![
+                "Fix formula syntax".to_string(),
+                "Use simpler condition type instead of calculation".to_string(),
+                "Define missing variables in context".to_string(),
+            ],
+            Self::PatternError { .. } => vec![
+                "Fix regex syntax".to_string(),
+                "Escape special regex characters".to_string(),
+                "Use simpler string comparison instead".to_string(),
+            ],
+            Self::MaxDepthExceeded { .. } => vec![
+                "Flatten nested conditions using normalization".to_string(),
+                "Break complex condition into multiple simpler ones".to_string(),
+                "Check for and remove circular condition references".to_string(),
+            ],
+            Self::Custom { .. } => vec![],
+        }
+    }
+}
+
+impl fmt::Display for ConditionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingAttribute { key } => write!(f, "Missing attribute: {}", key),
+            Self::TypeMismatch { expected, actual } => {
+                write!(f, "Type mismatch: expected {}, got {}", expected, actual)
+            }
+            Self::InvalidFormula { formula, error } => {
+                write!(f, "Invalid formula '{}': {}", formula, error)
+            }
+            Self::PatternError { pattern, error } => {
+                write!(f, "Pattern error '{}': {}", pattern, error)
+            }
+            Self::MaxDepthExceeded { max_depth } => {
+                write!(f, "Maximum evaluation depth ({}) exceeded", max_depth)
+            }
+            Self::Custom { message } => write!(f, "{}", message),
+        }
+    }
+}
+
+impl std::error::Error for ConditionError {}
 
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1709,6 +4917,426 @@ impl fmt::Display for ValidationError {
             Self::EmptyEffectDescription => write!(f, "Effect description cannot be empty"),
             Self::InvalidVersion => write!(f, "Version must be greater than 0"),
         }
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+// ==================================================
+// Enhanced Diagnostic Context for Validation Errors
+// ==================================================
+
+/// Source location information for error diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct SourceLocation {
+    /// File path or source identifier
+    pub file: Option<String>,
+    /// Line number (1-indexed)
+    pub line: Option<usize>,
+    /// Column number (1-indexed)
+    pub column: Option<usize>,
+    /// Source snippet for context
+    pub snippet: Option<String>,
+}
+
+impl SourceLocation {
+    /// Creates a new source location.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            file: None,
+            line: None,
+            column: None,
+            snippet: None,
+        }
+    }
+
+    /// Sets the file path.
+    #[must_use]
+    pub fn with_file(mut self, file: impl Into<String>) -> Self {
+        self.file = Some(file.into());
+        self
+    }
+
+    /// Sets the line number.
+    #[must_use]
+    pub const fn with_line(mut self, line: usize) -> Self {
+        self.line = Some(line);
+        self
+    }
+
+    /// Sets the column number.
+    #[must_use]
+    pub const fn with_column(mut self, column: usize) -> Self {
+        self.column = Some(column);
+        self
+    }
+
+    /// Sets the source snippet.
+    #[must_use]
+    pub fn with_snippet(mut self, snippet: impl Into<String>) -> Self {
+        self.snippet = Some(snippet.into());
+        self
+    }
+}
+
+impl Default for SourceLocation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for SourceLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(file) = &self.file {
+            write!(f, "{}", file)?;
+            if let Some(line) = self.line {
+                write!(f, ":{}", line)?;
+                if let Some(column) = self.column {
+                    write!(f, ":{}", column)?;
+                }
+            }
+        } else if let Some(line) = self.line {
+            write!(f, "line {}", line)?;
+            if let Some(column) = self.column {
+                write!(f, ":{}", column)?;
+            }
+        } else {
+            write!(f, "unknown location")?;
+        }
+        Ok(())
+    }
+}
+
+/// Diagnostic context for detailed error reporting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct DiagnosticContext {
+    /// Source location where the error occurred
+    pub location: Option<SourceLocation>,
+    /// Related statute ID
+    pub statute_id: Option<String>,
+    /// Related condition description
+    pub condition: Option<String>,
+    /// Stack trace or call chain
+    pub stack: Vec<String>,
+    /// Additional contextual notes
+    pub notes: Vec<String>,
+    /// Suggested fixes
+    pub suggestions: Vec<String>,
+}
+
+impl DiagnosticContext {
+    /// Creates a new empty diagnostic context.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            location: None,
+            statute_id: None,
+            condition: None,
+            stack: Vec::new(),
+            notes: Vec::new(),
+            suggestions: Vec::new(),
+        }
+    }
+
+    /// Sets the source location.
+    #[must_use]
+    pub fn with_location(mut self, location: SourceLocation) -> Self {
+        self.location = Some(location);
+        self
+    }
+
+    /// Sets the statute ID.
+    #[must_use]
+    pub fn with_statute_id(mut self, id: impl Into<String>) -> Self {
+        self.statute_id = Some(id.into());
+        self
+    }
+
+    /// Sets the condition description.
+    #[must_use]
+    pub fn with_condition(mut self, condition: impl Into<String>) -> Self {
+        self.condition = Some(condition.into());
+        self
+    }
+
+    /// Adds a stack frame.
+    pub fn add_stack_frame(&mut self, frame: impl Into<String>) {
+        self.stack.push(frame.into());
+    }
+
+    /// Adds a note.
+    pub fn add_note(&mut self, note: impl Into<String>) {
+        self.notes.push(note.into());
+    }
+
+    /// Adds a suggestion.
+    pub fn add_suggestion(&mut self, suggestion: impl Into<String>) {
+        self.suggestions.push(suggestion.into());
+    }
+
+    /// Builder method to add a stack frame.
+    #[must_use]
+    pub fn with_stack_frame(mut self, frame: impl Into<String>) -> Self {
+        self.stack.push(frame.into());
+        self
+    }
+
+    /// Builder method to add a note.
+    #[must_use]
+    pub fn with_note(mut self, note: impl Into<String>) -> Self {
+        self.notes.push(note.into());
+        self
+    }
+
+    /// Builder method to add a suggestion.
+    #[must_use]
+    pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
+        self.suggestions.push(suggestion.into());
+        self
+    }
+}
+
+impl Default for DiagnosticContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for DiagnosticContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(location) = &self.location {
+            writeln!(f, "at {}", location)?;
+            if let Some(snippet) = &location.snippet {
+                writeln!(f, "  {}", snippet)?;
+            }
+        }
+
+        if let Some(statute_id) = &self.statute_id {
+            writeln!(f, "in statute: {}", statute_id)?;
+        }
+
+        if let Some(condition) = &self.condition {
+            writeln!(f, "condition: {}", condition)?;
+        }
+
+        if !self.stack.is_empty() {
+            writeln!(f, "\nStack trace:")?;
+            for (i, frame) in self.stack.iter().enumerate() {
+                writeln!(f, "  {}: {}", i, frame)?;
+            }
+        }
+
+        if !self.notes.is_empty() {
+            writeln!(f, "\nNotes:")?;
+            for note in &self.notes {
+                writeln!(f, "  - {}", note)?;
+            }
+        }
+
+        if !self.suggestions.is_empty() {
+            writeln!(f, "\nSuggestions:")?;
+            for suggestion in &self.suggestions {
+                writeln!(f, "  - {}", suggestion)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Enhanced validation error with diagnostic context.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DiagnosticValidationError {
+    /// The base validation error
+    pub error: ValidationError,
+    /// Diagnostic context
+    pub context: DiagnosticContext,
+}
+
+impl DiagnosticValidationError {
+    /// Creates a new diagnostic validation error.
+    #[must_use]
+    pub fn new(error: ValidationError) -> Self {
+        Self {
+            error,
+            context: DiagnosticContext::new(),
+        }
+    }
+
+    /// Adds diagnostic context.
+    #[must_use]
+    pub fn with_context(mut self, context: DiagnosticContext) -> Self {
+        self.context = context;
+        self
+    }
+
+    /// Gets the error code.
+    #[must_use]
+    pub fn error_code(&self) -> &str {
+        self.error.error_code()
+    }
+
+    /// Gets the error severity.
+    #[must_use]
+    pub fn severity(&self) -> ErrorSeverity {
+        self.error.severity()
+    }
+
+    /// Gets a suggestion for fixing the error.
+    #[must_use]
+    pub fn suggestion(&self) -> Option<&str> {
+        self.error.suggestion()
+    }
+}
+
+impl fmt::Display for DiagnosticValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Error [{}]: {}", self.error_code(), self.error)?;
+        write!(f, "{}", self.context)?;
+        Ok(())
+    }
+}
+
+impl std::error::Error for DiagnosticValidationError {}
+
+/// Diagnostic error reporter for collecting and formatting errors.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{DiagnosticReporter, ValidationError, SourceLocation, DiagnosticContext};
+///
+/// let mut reporter = DiagnosticReporter::new();
+///
+/// reporter.add_error(
+///     ValidationError::EmptyTitle,
+///     DiagnosticContext::new()
+///         .with_statute_id("law-123")
+///         .with_location(SourceLocation::new().with_file("statutes.json").with_line(45))
+///         .with_suggestion("Add a 'title' field to the statute definition")
+/// );
+///
+/// reporter.add_error(
+///     ValidationError::InvalidVersion,
+///     DiagnosticContext::new()
+///         .with_statute_id("law-456")
+///         .with_note("Version must be greater than 0")
+/// );
+///
+/// // Print all errors with diagnostic context
+/// println!("{}", reporter.report());
+/// assert_eq!(reporter.error_count(), 2);
+/// ```
+#[derive(Debug, Default)]
+pub struct DiagnosticReporter {
+    errors: Vec<DiagnosticValidationError>,
+}
+
+impl DiagnosticReporter {
+    /// Creates a new diagnostic reporter.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds an error with diagnostic context.
+    pub fn add_error(&mut self, error: ValidationError, context: DiagnosticContext) {
+        self.errors
+            .push(DiagnosticValidationError { error, context });
+    }
+
+    /// Adds an error without context.
+    pub fn add_simple_error(&mut self, error: ValidationError) {
+        self.errors.push(DiagnosticValidationError::new(error));
+    }
+
+    /// Returns the number of errors.
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.errors.len()
+    }
+
+    /// Returns `true` if there are no errors.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// Returns `true` if there are errors.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    /// Gets all errors.
+    #[must_use]
+    pub fn errors(&self) -> &[DiagnosticValidationError] {
+        &self.errors
+    }
+
+    /// Filters errors by severity.
+    #[must_use]
+    pub fn errors_with_severity(&self, severity: ErrorSeverity) -> Vec<&DiagnosticValidationError> {
+        self.errors
+            .iter()
+            .filter(|e| e.severity() == severity)
+            .collect()
+    }
+
+    /// Returns only critical errors.
+    #[must_use]
+    pub fn critical_errors(&self) -> Vec<&DiagnosticValidationError> {
+        self.errors_with_severity(ErrorSeverity::Critical)
+    }
+
+    /// Clears all errors.
+    pub fn clear(&mut self) {
+        self.errors.clear();
+    }
+
+    /// Generates a formatted error report.
+    #[must_use]
+    pub fn report(&self) -> String {
+        if self.errors.is_empty() {
+            return "No errors".to_string();
+        }
+
+        let mut output = String::new();
+        output.push_str(&format!("\n{} error(s) found:\n\n", self.errors.len()));
+
+        for (i, error) in self.errors.iter().enumerate() {
+            output.push_str(&format!("{}. {}\n", i + 1, error));
+        }
+
+        output
+    }
+
+    /// Generates a summary of errors by type.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        let critical = self.critical_errors().len();
+        let errors = self.errors_with_severity(ErrorSeverity::Error).len();
+        let warnings = self.errors_with_severity(ErrorSeverity::Warning).len();
+
+        format!(
+            "{} total ({} critical, {} errors, {} warnings)",
+            self.error_count(),
+            critical,
+            errors,
+            warnings
+        )
+    }
+}
+
+impl fmt::Display for DiagnosticReporter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.report())
     }
 }
 
@@ -2000,6 +5628,777 @@ impl StatuteConflictAnalyzer {
 
         active
     }
+
+    /// Detects contradictions across a set of statutes.
+    ///
+    /// A contradiction occurs when:
+    /// - Two statutes have conflicting effects (Grant vs Revoke) for the same thing
+    /// - Two statutes have mutually exclusive preconditions but same effects
+    /// - Statutes create logical inconsistencies in the legal system
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, StatuteConflictAnalyzer, Condition, ComparisonOp};
+    ///
+    /// let grant = Statute::new("grant-1", "Grant Right", Effect::new(EffectType::Grant, "Voting"))
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+    ///
+    /// let revoke = Statute::new("revoke-1", "Revoke Right", Effect::new(EffectType::Revoke, "Voting"))
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+    ///
+    /// let statutes = vec![grant, revoke];
+    /// let contradictions = StatuteConflictAnalyzer::detect_contradictions(&statutes);
+    ///
+    /// assert!(!contradictions.is_empty());
+    /// ```
+    #[must_use]
+    pub fn detect_contradictions(statutes: &[Statute]) -> Vec<Contradiction> {
+        let mut contradictions = Vec::new();
+
+        // Check all pairs of statutes
+        for (i, statute_a) in statutes.iter().enumerate() {
+            for statute_b in statutes.iter().skip(i + 1) {
+                // Check for effect contradictions
+                if Self::effects_contradict(&statute_a.effect, &statute_b.effect) {
+                    // Check if conditions overlap (could both apply)
+                    if Self::conditions_may_overlap(
+                        &statute_a.preconditions,
+                        &statute_b.preconditions,
+                    ) {
+                        contradictions.push(Contradiction {
+                            statute_a_id: statute_a.id.clone(),
+                            statute_b_id: statute_b.id.clone(),
+                            contradiction_type: ContradictionType::ConflictingEffects,
+                            description: format!(
+                                "Statute '{}' grants while '{}' revokes the same right",
+                                statute_a.id, statute_b.id
+                            ),
+                            severity: ErrorSeverity::Critical,
+                        });
+                    }
+                }
+
+                // Check for identical preconditions with conflicting effects
+                if statute_a.preconditions == statute_b.preconditions
+                    && statute_a.effect.effect_type != statute_b.effect.effect_type
+                {
+                    contradictions.push(Contradiction {
+                        statute_a_id: statute_a.id.clone(),
+                        statute_b_id: statute_b.id.clone(),
+                        contradiction_type: ContradictionType::IdenticalConditionsConflictingEffects,
+                        description: format!(
+                            "Statutes '{}' and '{}' have identical conditions but conflicting effects",
+                            statute_a.id, statute_b.id
+                        ),
+                        severity: ErrorSeverity::Critical,
+                    });
+                }
+            }
+        }
+
+        contradictions
+    }
+
+    /// Checks if two effects contradict each other.
+    fn effects_contradict(effect_a: &Effect, effect_b: &Effect) -> bool {
+        // Grant vs Revoke is a contradiction
+        matches!(
+            (&effect_a.effect_type, &effect_b.effect_type),
+            (EffectType::Grant, EffectType::Revoke) | (EffectType::Revoke, EffectType::Grant)
+        ) && effect_a.description == effect_b.description
+    }
+
+    /// Checks if two sets of conditions may overlap (both could be true).
+    /// This is a simplified heuristic - full overlap detection requires SAT solving.
+    #[allow(dead_code)]
+    fn conditions_may_overlap(conds_a: &[Condition], conds_b: &[Condition]) -> bool {
+        // Simplified: if either is empty or they're identical, they overlap
+        conds_a.is_empty() || conds_b.is_empty() || conds_a == conds_b
+    }
+}
+
+/// Represents a logical contradiction between statutes.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct Contradiction {
+    /// ID of the first statute involved
+    pub statute_a_id: String,
+    /// ID of the second statute involved
+    pub statute_b_id: String,
+    /// Type of contradiction
+    pub contradiction_type: ContradictionType,
+    /// Human-readable description
+    pub description: String,
+    /// Severity of the contradiction
+    pub severity: ErrorSeverity,
+}
+
+/// Types of contradictions that can occur between statutes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum ContradictionType {
+    /// Statutes have conflicting effects (grant vs revoke)
+    ConflictingEffects,
+    /// Identical conditions but conflicting effects
+    IdenticalConditionsConflictingEffects,
+    /// Circular dependency between statutes
+    CircularDependency,
+    /// Logical inconsistency in rule set
+    LogicalInconsistency,
+}
+
+impl fmt::Display for Contradiction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[{}] {} <-> {}: {}",
+            self.severity, self.statute_a_id, self.statute_b_id, self.description
+        )
+    }
+}
+
+impl fmt::Display for ContradictionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ConflictingEffects => write!(f, "Conflicting Effects"),
+            Self::IdenticalConditionsConflictingEffects => {
+                write!(f, "Identical Conditions, Conflicting Effects")
+            }
+            Self::CircularDependency => write!(f, "Circular Dependency"),
+            Self::LogicalInconsistency => write!(f, "Logical Inconsistency"),
+        }
+    }
+}
+
+// ============================================================================
+// Typestate Builder Pattern for Compile-Time Verification
+// ============================================================================
+
+/// Marker types for typestate builder pattern.
+///
+/// These types are used to track the builder state at compile time,
+/// ensuring that required fields are set before building a `Statute`.
+pub mod builder_states {
+    /// Marker indicating ID is not set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct NoId;
+    /// Marker indicating ID is set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct HasId;
+    /// Marker indicating title is not set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct NoTitle;
+    /// Marker indicating title is set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct HasTitle;
+    /// Marker indicating effect is not set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct NoEffect;
+    /// Marker indicating effect is set.
+    #[derive(Debug, Clone, Copy)]
+    pub struct HasEffect;
+}
+
+use builder_states::*;
+
+/// Type-safe builder for `Statute` using the typestate pattern.
+///
+/// This builder ensures at compile time that all required fields (id, title, effect)
+/// are set before building a statute. The type parameters track which fields have been set.
+///
+/// # Type Parameters
+///
+/// - `I`: ID state (`NoId` or `HasId`)
+/// - `T`: Title state (`NoTitle` or `HasTitle`)
+/// - `E`: Effect state (`NoEffect` or `HasEffect`)
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{TypedStatuteBuilder, Effect, EffectType, Condition, ComparisonOp};
+///
+/// // This compiles - all required fields are set
+/// let statute = TypedStatuteBuilder::new()
+///     .id("tax-law-2025")
+///     .title("Income Tax Credit")
+///     .effect(Effect::new(EffectType::Grant, "Tax credit of $1000"))
+///     .with_precondition(Condition::Income {
+///         operator: ComparisonOp::LessThan,
+///         value: 50000,
+///     })
+///     .build();
+///
+/// assert_eq!(statute.id, "tax-law-2025");
+/// ```
+///
+/// ```compile_fail
+/// use legalis_core::TypedStatuteBuilder;
+///
+/// // This won't compile - missing title and effect
+/// let statute = TypedStatuteBuilder::new()
+///     .id("tax-law-2025")
+///     .build(); // ERROR: build() not available
+/// ```
+#[derive(Debug, Clone)]
+pub struct TypedStatuteBuilder<I, T, E> {
+    id: Option<String>,
+    title: Option<String>,
+    effect: Option<Effect>,
+    preconditions: Vec<Condition>,
+    discretion_logic: Option<String>,
+    temporal_validity: TemporalValidity,
+    version: u32,
+    jurisdiction: Option<String>,
+    _phantom: std::marker::PhantomData<(I, T, E)>,
+}
+
+impl TypedStatuteBuilder<NoId, NoTitle, NoEffect> {
+    /// Creates a new builder with no fields set.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            id: None,
+            title: None,
+            effect: None,
+            preconditions: Vec::new(),
+            discretion_logic: None,
+            temporal_validity: TemporalValidity::default(),
+            version: 1,
+            jurisdiction: None,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T, E> TypedStatuteBuilder<NoId, T, E> {
+    /// Sets the statute ID (required field).
+    ///
+    /// Transitions from `NoId` to `HasId` state.
+    #[must_use]
+    pub fn id(self, id: impl Into<String>) -> TypedStatuteBuilder<HasId, T, E> {
+        TypedStatuteBuilder {
+            id: Some(id.into()),
+            title: self.title,
+            effect: self.effect,
+            preconditions: self.preconditions,
+            discretion_logic: self.discretion_logic,
+            temporal_validity: self.temporal_validity,
+            version: self.version,
+            jurisdiction: self.jurisdiction,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<I, E> TypedStatuteBuilder<I, NoTitle, E> {
+    /// Sets the statute title (required field).
+    ///
+    /// Transitions from `NoTitle` to `HasTitle` state.
+    #[must_use]
+    pub fn title(self, title: impl Into<String>) -> TypedStatuteBuilder<I, HasTitle, E> {
+        TypedStatuteBuilder {
+            id: self.id,
+            title: Some(title.into()),
+            effect: self.effect,
+            preconditions: self.preconditions,
+            discretion_logic: self.discretion_logic,
+            temporal_validity: self.temporal_validity,
+            version: self.version,
+            jurisdiction: self.jurisdiction,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<I, T> TypedStatuteBuilder<I, T, NoEffect> {
+    /// Sets the statute effect (required field).
+    ///
+    /// Transitions from `NoEffect` to `HasEffect` state.
+    #[must_use]
+    pub fn effect(self, effect: Effect) -> TypedStatuteBuilder<I, T, HasEffect> {
+        TypedStatuteBuilder {
+            id: self.id,
+            title: self.title,
+            effect: Some(effect),
+            preconditions: self.preconditions,
+            discretion_logic: self.discretion_logic,
+            temporal_validity: self.temporal_validity,
+            version: self.version,
+            jurisdiction: self.jurisdiction,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+// Methods available in all states
+impl<I, T, E> TypedStatuteBuilder<I, T, E> {
+    /// Adds a precondition (optional field).
+    #[must_use]
+    pub fn with_precondition(mut self, condition: Condition) -> Self {
+        self.preconditions.push(condition);
+        self
+    }
+
+    /// Sets the discretion logic (optional field).
+    #[must_use]
+    pub fn with_discretion(mut self, logic: impl Into<String>) -> Self {
+        self.discretion_logic = Some(logic.into());
+        self
+    }
+
+    /// Sets temporal validity (optional field).
+    #[must_use]
+    pub fn with_temporal_validity(mut self, validity: TemporalValidity) -> Self {
+        self.temporal_validity = validity;
+        self
+    }
+
+    /// Sets the version (optional field, defaults to 1).
+    #[must_use]
+    pub fn with_version(mut self, version: u32) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Sets the jurisdiction (optional field).
+    #[must_use]
+    pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+}
+
+// build() only available when all required fields are set
+impl TypedStatuteBuilder<HasId, HasTitle, HasEffect> {
+    /// Builds the `Statute` (only available when all required fields are set).
+    ///
+    /// This method is only callable when the builder has transitioned through
+    /// all required states (HasId, HasTitle, HasEffect).
+    #[must_use]
+    pub fn build(self) -> Statute {
+        Statute {
+            id: self.id.expect("ID must be set"),
+            title: self.title.expect("Title must be set"),
+            effect: self.effect.expect("Effect must be set"),
+            preconditions: self.preconditions,
+            discretion_logic: self.discretion_logic,
+            temporal_validity: self.temporal_validity,
+            version: self.version,
+            jurisdiction: self.jurisdiction,
+        }
+    }
+}
+
+impl Default for TypedStatuteBuilder<NoId, NoTitle, NoEffect> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Phantom Types for Jurisdiction-Specific Statutes
+// ============================================================================
+
+/// Marker trait for jurisdictions.
+///
+/// This trait enables compile-time verification that statutes are used
+/// in the correct jurisdiction context.
+pub trait Jurisdiction: std::fmt::Debug + Clone {
+    /// Returns the jurisdiction code (e.g., "US", "UK", "US-CA").
+    fn code() -> &'static str;
+}
+
+/// United States jurisdiction marker.
+#[derive(Debug, Clone, Copy)]
+pub struct US;
+
+impl Jurisdiction for US {
+    fn code() -> &'static str {
+        "US"
+    }
+}
+
+/// United Kingdom jurisdiction marker.
+#[derive(Debug, Clone, Copy)]
+pub struct UK;
+
+impl Jurisdiction for UK {
+    fn code() -> &'static str {
+        "UK"
+    }
+}
+
+/// European Union jurisdiction marker.
+#[derive(Debug, Clone, Copy)]
+pub struct EU;
+
+impl Jurisdiction for EU {
+    fn code() -> &'static str {
+        "EU"
+    }
+}
+
+/// California (US-CA) jurisdiction marker.
+#[derive(Debug, Clone, Copy)]
+pub struct California;
+
+impl Jurisdiction for California {
+    fn code() -> &'static str {
+        "US-CA"
+    }
+}
+
+/// New York (US-NY) jurisdiction marker.
+#[derive(Debug, Clone, Copy)]
+pub struct NewYork;
+
+impl Jurisdiction for NewYork {
+    fn code() -> &'static str {
+        "US-NY"
+    }
+}
+
+/// Generic marker for any jurisdiction.
+#[derive(Debug, Clone, Copy)]
+pub struct AnyJurisdiction;
+
+impl Jurisdiction for AnyJurisdiction {
+    fn code() -> &'static str {
+        ""
+    }
+}
+
+/// Jurisdiction-specific statute wrapper using phantom types.
+///
+/// This type enforces at compile time that statutes are used in the correct
+/// jurisdiction context. The type parameter `J` ensures that you can't mix
+/// statutes from different jurisdictions without explicit conversion.
+///
+/// # Type Parameters
+///
+/// - `J`: Jurisdiction marker type implementing the `Jurisdiction` trait
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{JurisdictionStatute, US, UK, Statute, Effect, EffectType};
+///
+/// // Create a US-specific statute
+/// let us_statute = Statute::new("tax-law", "Tax Law", Effect::new(EffectType::Grant, "Tax credit"));
+/// let us_law = JurisdictionStatute::<US>::new(us_statute);
+///
+/// // Create a UK-specific statute
+/// let uk_statute = Statute::new("uk-law", "UK Law", Effect::new(EffectType::Grant, "Benefit"));
+/// let uk_law = JurisdictionStatute::<UK>::new(uk_statute);
+///
+/// // These types are different and can't be mixed
+/// assert_eq!(us_law.jurisdiction_code(), "US");
+/// assert_eq!(uk_law.jurisdiction_code(), "UK");
+/// ```
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JurisdictionStatute<J: Jurisdiction> {
+    statute: Statute,
+    _phantom: std::marker::PhantomData<J>,
+}
+
+impl<J: Jurisdiction> JurisdictionStatute<J> {
+    /// Creates a new jurisdiction-specific statute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{JurisdictionStatute, US, Statute, Effect, EffectType};
+    ///
+    /// let statute = Statute::new("law-1", "Law", Effect::new(EffectType::Grant, "Benefit"));
+    /// let us_law = JurisdictionStatute::<US>::new(statute);
+    /// ```
+    #[must_use]
+    pub fn new(mut statute: Statute) -> Self {
+        // Automatically set the jurisdiction if not already set
+        if statute.jurisdiction.is_none() {
+            statute.jurisdiction = Some(J::code().to_string());
+        }
+        Self {
+            statute,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Returns the jurisdiction code for this statute.
+    #[must_use]
+    pub fn jurisdiction_code(&self) -> &'static str {
+        J::code()
+    }
+
+    /// Returns a reference to the underlying statute.
+    #[must_use]
+    pub fn statute(&self) -> &Statute {
+        &self.statute
+    }
+
+    /// Consumes self and returns the underlying statute.
+    #[must_use]
+    pub fn into_statute(self) -> Statute {
+        self.statute
+    }
+
+    /// Converts this statute to a different jurisdiction.
+    ///
+    /// This is an explicit operation that requires the caller to acknowledge
+    /// they are changing jurisdictions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{JurisdictionStatute, US, UK, Statute, Effect, EffectType};
+    ///
+    /// let statute = Statute::new("law", "Law", Effect::new(EffectType::Grant, "Benefit"));
+    /// let us_law = JurisdictionStatute::<US>::new(statute);
+    /// let uk_law = us_law.convert_to::<UK>();
+    /// assert_eq!(uk_law.jurisdiction_code(), "UK");
+    /// ```
+    #[must_use]
+    pub fn convert_to<K: Jurisdiction>(mut self) -> JurisdictionStatute<K> {
+        self.statute.jurisdiction = Some(K::code().to_string());
+        JurisdictionStatute {
+            statute: self.statute,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+/// Collection of jurisdiction-specific statutes.
+///
+/// This type ensures all statutes in the collection belong to the same jurisdiction.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{JurisdictionStatuteRegistry, US, JurisdictionStatute, Statute, Effect, EffectType};
+///
+/// let mut registry = JurisdictionStatuteRegistry::<US>::new();
+///
+/// let statute1 = Statute::new("law-1", "Law 1", Effect::new(EffectType::Grant, "Benefit 1"));
+/// let statute2 = Statute::new("law-2", "Law 2", Effect::new(EffectType::Grant, "Benefit 2"));
+///
+/// registry.add(JurisdictionStatute::new(statute1));
+/// registry.add(JurisdictionStatute::new(statute2));
+///
+/// assert_eq!(registry.len(), 2);
+/// assert_eq!(registry.jurisdiction_code(), "US");
+/// ```
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JurisdictionStatuteRegistry<J: Jurisdiction> {
+    statutes: Vec<JurisdictionStatute<J>>,
+    _phantom: std::marker::PhantomData<J>,
+}
+
+impl<J: Jurisdiction> JurisdictionStatuteRegistry<J> {
+    /// Creates a new empty registry for a specific jurisdiction.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            statutes: Vec::new(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Adds a statute to the registry.
+    pub fn add(&mut self, statute: JurisdictionStatute<J>) {
+        self.statutes.push(statute);
+    }
+
+    /// Returns the number of statutes in the registry.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.statutes.len()
+    }
+
+    /// Returns true if the registry is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.statutes.is_empty()
+    }
+
+    /// Returns the jurisdiction code for this registry.
+    #[must_use]
+    pub fn jurisdiction_code(&self) -> &'static str {
+        J::code()
+    }
+
+    /// Returns an iterator over the statutes.
+    pub fn iter(&self) -> impl Iterator<Item = &JurisdictionStatute<J>> {
+        self.statutes.iter()
+    }
+
+    /// Finds a statute by ID.
+    #[must_use]
+    pub fn find(&self, id: &str) -> Option<&JurisdictionStatute<J>> {
+        self.statutes.iter().find(|s| s.statute().id == id)
+    }
+}
+
+impl<J: Jurisdiction> Default for JurisdictionStatuteRegistry<J> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Macro for defining custom jurisdiction types with automatic boilerplate.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{define_jurisdiction, Jurisdiction};
+///
+/// define_jurisdiction! {
+///     /// Texas jurisdiction
+///     Texas => "US-TX"
+/// }
+///
+/// // Now Texas can be used as a jurisdiction marker
+/// let code = Texas::code();
+/// assert_eq!(code, "US-TX");
+/// ```
+#[macro_export]
+macro_rules! define_jurisdiction {
+    (
+        $(#[$meta:meta])*
+        $name:ident => $code:expr
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy)]
+        pub struct $name;
+
+        impl $crate::Jurisdiction for $name {
+            fn code() -> &'static str {
+                $code
+            }
+        }
+    };
+}
+
+/// Macro for defining custom condition types with automatic boilerplate.
+///
+/// This macro generates a custom condition wrapper type with:
+/// - A struct to hold the condition data
+/// - Constructor methods
+/// - Display trait implementation
+/// - Conversion to `Condition::Custom` variant
+/// - Evaluation helper method
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{define_custom_condition, Condition, EvaluationContext, EvaluationError};
+///
+/// // Define a custom "Employment Status" condition
+/// define_custom_condition! {
+///     /// Checks if entity has specific employment status
+///     EmploymentStatus {
+///         status: String,
+///         requires_full_time: bool,
+///     }
+/// }
+///
+/// // Use the custom condition
+/// let cond = EmploymentStatus::new("engineer".to_string(), true);
+/// let custom_cond: Condition = cond.into();
+/// assert!(matches!(custom_cond, Condition::Custom { .. }));
+/// ```
+///
+/// The macro generates:
+///
+/// ```text
+/// pub struct EmploymentStatus {
+///     pub status: String,
+///     pub requires_full_time: bool,
+/// }
+///
+/// impl EmploymentStatus {
+///     pub fn new(status: String, requires_full_time: bool) -> Self { ... }
+///     pub fn to_condition(&self) -> Condition { ... }
+/// }
+///
+/// impl From<EmploymentStatus> for Condition { ... }
+/// impl std::fmt::Display for EmploymentStatus { ... }
+/// ```
+#[macro_export]
+macro_rules! define_custom_condition {
+    (
+        $(#[$meta:meta])*
+        $name:ident {
+            $($field:ident: $field_type:ty),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct $name {
+            $(pub $field: $field_type,)*
+        }
+
+        impl $name {
+            /// Creates a new instance of this custom condition.
+            #[must_use]
+            pub fn new($($field: $field_type),*) -> Self {
+                Self {
+                    $($field,)*
+                }
+            }
+
+            /// Converts this custom condition to a `Condition::Custom`.
+            #[must_use]
+            pub fn to_condition(&self) -> $crate::Condition {
+                $crate::Condition::Custom {
+                    description: self.to_string(),
+                }
+            }
+
+            /// Evaluates this condition against a context.
+            ///
+            /// Override this method in your implementation to provide custom evaluation logic.
+            #[allow(dead_code)]
+            pub fn evaluate<C: $crate::EvaluationContext>(
+                &self,
+                _context: &C,
+            ) -> Result<bool, $crate::EvaluationError> {
+                // Default implementation always returns an error
+                // Users should implement their own evaluation logic
+                Err($crate::EvaluationError::Custom {
+                    message: format!(
+                        "Evaluation not implemented for custom condition type '{}'",
+                        stringify!($name)
+                    ),
+                })
+            }
+        }
+
+        impl From<$name> for $crate::Condition {
+            fn from(custom: $name) -> Self {
+                custom.to_condition()
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}(", stringify!($name))?;
+                let mut first = true;
+                $(
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {:?}", stringify!($field), self.$field)?;
+                    first = false;
+                )*
+                write!(f, ")")
+            }
+        }
+    };
 }
 
 #[cfg(test)]

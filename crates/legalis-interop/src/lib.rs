@@ -10,18 +10,24 @@
 //! - **LKIF**: Legal Knowledge Interchange Format (ESTRELLA)
 
 pub mod akoma_ntoso;
+#[cfg(feature = "async")]
+pub mod async_converter;
 pub mod cache;
 pub mod catala;
 pub mod compatibility;
 pub mod coverage;
 #[cfg(test)]
 mod edge_cases_tests;
+pub mod enhanced;
+pub mod errors;
 pub mod incremental;
 pub mod l4;
 pub mod legaldocml;
 pub mod legalruleml;
 pub mod lkif;
+pub mod optimizations;
 pub mod stipula;
+pub mod streaming;
 pub mod validation;
 
 use legalis_core::Statute;

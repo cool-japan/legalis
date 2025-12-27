@@ -165,7 +165,7 @@ fn extract_final_answer(response: &str) -> String {
     // If no marker found, use the last sentence
     response
         .split('.')
-        .last()
+        .next_back()
         .unwrap_or(response)
         .trim()
         .to_string()
@@ -329,6 +329,239 @@ pub fn compress_prompt(prompt: &str, max_length: usize) -> String {
     format!("{}... [content summarized] ...{}", start, end)
 }
 
+/// Memory store for storing and retrieving context information.
+///
+/// This enables memory-augmented generation where the LLM can access
+/// relevant facts and context from a memory store.
+#[derive(Clone)]
+pub struct FactStore {
+    memories: HashMap<String, String>,
+    max_size: Option<usize>,
+    access_order: Vec<String>,
+}
+
+impl FactStore {
+    /// Creates a new empty memory store.
+    pub fn new() -> Self {
+        Self {
+            memories: HashMap::new(),
+            max_size: None,
+            access_order: Vec::new(),
+        }
+    }
+
+    /// Sets the maximum number of memories to store.
+    /// When exceeded, oldest memories are evicted (FIFO).
+    pub fn with_max_size(mut self, max_size: usize) -> Self {
+        self.max_size = Some(max_size);
+        self
+    }
+
+    /// Adds a memory to the store.
+    pub fn add_memory(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        let key = key.into();
+        let value = value.into();
+
+        // If we're at capacity, remove the oldest memory
+        if let Some(max) = self.max_size {
+            while self.memories.len() >= max && !self.access_order.is_empty() {
+                if let Some(old_key) = self.access_order.first().cloned() {
+                    self.memories.remove(&old_key);
+                    self.access_order.remove(0);
+                }
+            }
+        }
+
+        self.memories.insert(key.clone(), value);
+        self.access_order.push(key);
+    }
+
+    /// Retrieves a memory by key.
+    pub fn get_memory(&self, key: &str) -> Option<String> {
+        self.memories.get(key).cloned()
+    }
+
+    /// Checks if a memory exists.
+    pub fn has_memory(&self, key: &str) -> bool {
+        self.memories.contains_key(key)
+    }
+
+    /// Returns all memories.
+    pub fn all_memories(&self) -> Vec<(String, String)> {
+        self.memories
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    /// Returns the number of memories stored.
+    pub fn len(&self) -> usize {
+        self.memories.len()
+    }
+
+    /// Returns true if the store is empty.
+    pub fn is_empty(&self) -> bool {
+        self.memories.is_empty()
+    }
+
+    /// Clears all memories.
+    pub fn clear(&mut self) {
+        self.memories.clear();
+        self.access_order.clear();
+    }
+}
+
+impl Default for FactStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Memory-augmented prompt builder.
+///
+/// Augments a prompt with relevant information from a memory store.
+pub struct MemoryAugmentedPrompt {
+    prompt: String,
+    memory_store: Option<FactStore>,
+    relevant_keys: Option<Vec<String>>,
+    include_all: bool,
+}
+
+impl MemoryAugmentedPrompt {
+    /// Creates a new memory-augmented prompt.
+    pub fn new(prompt: impl Into<String>) -> Self {
+        Self {
+            prompt: prompt.into(),
+            memory_store: None,
+            relevant_keys: None,
+            include_all: false,
+        }
+    }
+
+    /// Sets the memory store to use.
+    pub fn with_memory_store(mut self, store: FactStore) -> Self {
+        self.memory_store = Some(store);
+        self.include_all = true;
+        self
+    }
+
+    /// Specifies which memories are relevant (by key).
+    /// If not specified, all memories are included.
+    pub fn with_relevant_memories(mut self, keys: Vec<String>) -> Self {
+        self.relevant_keys = Some(keys);
+        self.include_all = false;
+        self
+    }
+
+    /// Builds the augmented prompt.
+    pub fn build(&self) -> String {
+        let mut prompt = String::new();
+
+        // Add memories if available
+        if let Some(store) = &self.memory_store {
+            if !store.is_empty() {
+                prompt.push_str("Relevant context from memory:\n\n");
+
+                if self.include_all {
+                    // Include all memories
+                    for (key, value) in store.all_memories() {
+                        prompt.push_str(&format!("[{}]: {}\n", key, value));
+                    }
+                } else if let Some(keys) = &self.relevant_keys {
+                    // Include only specified memories
+                    for key in keys {
+                        if let Some(value) = store.get_memory(key) {
+                            prompt.push_str(&format!("[{}]: {}\n", key, value));
+                        }
+                    }
+                }
+
+                prompt.push_str("\n---\n\n");
+            }
+        }
+
+        // Add the main prompt
+        prompt.push_str(&self.prompt);
+
+        prompt
+    }
+}
+
+/// Memory-augmented provider wrapper.
+///
+/// Wraps an LLM provider to automatically augment prompts with memory context.
+pub struct MemoryAugmentedProvider<P: LLMProvider> {
+    provider: P,
+    memory_store: FactStore,
+}
+
+impl<P: LLMProvider> MemoryAugmentedProvider<P> {
+    /// Creates a new memory-augmented provider.
+    pub fn new(provider: P, memory_store: FactStore) -> Self {
+        Self {
+            provider,
+            memory_store,
+        }
+    }
+
+    /// Adds a memory to the store.
+    pub fn add_memory(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.memory_store.add_memory(key, value);
+    }
+
+    /// Gets the memory store.
+    pub fn memory_store(&self) -> &FactStore {
+        &self.memory_store
+    }
+
+    /// Gets a mutable reference to the memory store.
+    pub fn memory_store_mut(&mut self) -> &mut FactStore {
+        &mut self.memory_store
+    }
+}
+
+#[async_trait::async_trait]
+impl<P: LLMProvider> LLMProvider for MemoryAugmentedProvider<P> {
+    async fn generate_text(&self, prompt: &str) -> Result<String> {
+        let augmented = MemoryAugmentedPrompt::new(prompt)
+            .with_memory_store(self.memory_store.clone())
+            .build();
+
+        self.provider.generate_text(&augmented).await
+    }
+
+    async fn generate_structured<T: serde::de::DeserializeOwned + Send>(
+        &self,
+        prompt: &str,
+    ) -> Result<T> {
+        let augmented = MemoryAugmentedPrompt::new(prompt)
+            .with_memory_store(self.memory_store.clone())
+            .build();
+
+        self.provider.generate_structured(&augmented).await
+    }
+
+    async fn generate_text_stream(&self, prompt: &str) -> Result<crate::TextStream> {
+        let augmented = MemoryAugmentedPrompt::new(prompt)
+            .with_memory_store(self.memory_store.clone())
+            .build();
+
+        self.provider.generate_text_stream(&augmented).await
+    }
+
+    fn provider_name(&self) -> &str {
+        self.provider.provider_name()
+    }
+
+    fn model_name(&self) -> &str {
+        self.provider.model_name()
+    }
+
+    fn supports_streaming(&self) -> bool {
+        self.provider.supports_streaming()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +676,72 @@ mod tests {
         assert_eq!(result.answer, "42");
         assert_eq!(result.confidence, 0.75); // 3 out of 4
         assert_eq!(result.all_answers.len(), 4);
+    }
+
+    #[test]
+    fn test_memory_store() {
+        let mut memory = FactStore::new().with_max_size(10);
+
+        memory.add_memory("fact1", "The sky is blue");
+        memory.add_memory("fact2", "Water is wet");
+
+        assert_eq!(memory.len(), 2);
+        assert!(memory.has_memory("fact1"));
+        assert!(!memory.has_memory("fact3"));
+    }
+
+    #[test]
+    fn test_memory_store_retrieval() {
+        let mut memory = FactStore::new();
+
+        memory.add_memory("key1", "Value 1");
+        memory.add_memory("key2", "Value 2");
+
+        let result = memory.get_memory("key1");
+        assert_eq!(result, Some("Value 1".to_string()));
+    }
+
+    #[test]
+    fn test_memory_store_max_size() {
+        let mut memory = FactStore::new().with_max_size(2);
+
+        memory.add_memory("m1", "Memory 1");
+        memory.add_memory("m2", "Memory 2");
+        memory.add_memory("m3", "Memory 3"); // Should evict m1
+
+        assert_eq!(memory.len(), 2);
+        assert!(!memory.has_memory("m1"));
+        assert!(memory.has_memory("m2"));
+        assert!(memory.has_memory("m3"));
+    }
+
+    #[test]
+    fn test_memory_augmented_prompt() {
+        let mut memory = FactStore::new();
+        memory.add_memory("fact1", "Paris is the capital of France");
+        memory.add_memory("fact2", "Tokyo is the capital of Japan");
+
+        let augmented = MemoryAugmentedPrompt::new("What is the capital of France?")
+            .with_memory_store(memory)
+            .build();
+
+        assert!(augmented.contains("Paris is the capital of France"));
+        assert!(augmented.contains("Tokyo is the capital of Japan"));
+        assert!(augmented.contains("What is the capital of France?"));
+    }
+
+    #[test]
+    fn test_memory_augmented_prompt_with_relevance() {
+        let mut memory = FactStore::new();
+        memory.add_memory("france", "Paris is the capital of France");
+        memory.add_memory("japan", "Tokyo is the capital of Japan");
+
+        let augmented = MemoryAugmentedPrompt::new("Tell me about France")
+            .with_memory_store(memory)
+            .with_relevant_memories(vec!["france".to_string()])
+            .build();
+
+        assert!(augmented.contains("Paris is the capital of France"));
+        assert!(!augmented.contains("Tokyo is the capital of Japan"));
     }
 }

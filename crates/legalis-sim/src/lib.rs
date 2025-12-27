@@ -56,6 +56,10 @@
 //! - Calibration and validation tools
 //! - Impact assessment and equity analysis
 //! - Event-driven simulation and hybrid approaches
+//! - Risk analysis (VaR, CVaR, risk metrics, tail risk)
+//! - Portfolio analysis (efficient frontier, diversification, correlation)
+//! - Scenario planning (scenario trees, probability weighting, sensitivity)
+//! - Forecasting (linear trends, moving average, exponential smoothing)
 
 mod analysis;
 mod behavior;
@@ -66,6 +70,7 @@ mod economic;
 mod engine;
 mod error;
 mod event_driven;
+mod forecasting;
 mod impact;
 mod incremental;
 mod metrics;
@@ -74,7 +79,10 @@ mod network_effects;
 mod optimization;
 mod performance;
 mod population;
+mod portfolio;
 mod relationships;
+mod risk;
+mod scenarios;
 mod stress_tests;
 mod temporal;
 mod utils;
@@ -89,6 +97,7 @@ pub use economic::*;
 pub use engine::*;
 pub use error::*;
 pub use event_driven::*;
+pub use forecasting::*;
 pub use impact::*;
 pub use incremental::*;
 pub use metrics::*;
@@ -97,7 +106,10 @@ pub use network_effects::*;
 pub use optimization::*;
 pub use performance::*;
 pub use population::*;
+pub use portfolio::*;
 pub use relationships::*;
+pub use risk::*;
+pub use scenarios::*;
 pub use temporal::*;
 pub use utils::*;
 pub use visualization::*;

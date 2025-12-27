@@ -1827,6 +1827,54 @@ fn format_condition(condition: &Condition) -> String {
         Condition::ResidencyDuration { operator, months } => {
             format!("Residency {} {} months", format_operator(operator), months)
         }
+        Condition::Duration {
+            operator,
+            value,
+            unit,
+        } => {
+            let unit_str = match unit {
+                legalis_core::DurationUnit::Days => "days",
+                legalis_core::DurationUnit::Weeks => "weeks",
+                legalis_core::DurationUnit::Months => "months",
+                legalis_core::DurationUnit::Years => "years",
+            };
+            format!(
+                "Duration {} {} {}",
+                format_operator(operator),
+                value,
+                unit_str
+            )
+        }
+        Condition::Percentage {
+            operator,
+            value,
+            context,
+        } => {
+            format!("{} {} {}%", context, format_operator(operator), value)
+        }
+        Condition::SetMembership {
+            attribute,
+            values,
+            negated,
+        } => {
+            let op = if *negated { "not in" } else { "in" };
+            format!("{} {} {{{}}}", attribute, op, values.join(", "))
+        }
+        Condition::Pattern {
+            attribute,
+            pattern,
+            negated,
+        } => {
+            let op = if *negated { "!~" } else { "~" };
+            format!("{} {} '{}'", attribute, op, pattern)
+        }
+        Condition::Calculation {
+            formula,
+            operator,
+            value,
+        } => {
+            format!("{} {} {}", formula, format_operator(operator), value)
+        }
         Condition::And(_, _) => "AND condition".to_string(),
         Condition::Or(_, _) => "OR condition".to_string(),
         Condition::Not(_) => "NOT condition".to_string(),
@@ -2718,6 +2766,472 @@ fn base64_encode(data: &str) -> String {
     }
 
     result
+}
+
+/// Visualizer for statute differences (comparing versions).
+pub struct StatuteDiffVisualizer {
+    theme: Theme,
+}
+
+impl StatuteDiffVisualizer {
+    /// Creates a new statute diff visualizer with default theme.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme for visualization.
+    #[must_use]
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders a statute diff as a side-by-side comparison in HTML.
+    #[must_use]
+    pub fn to_html(&self, diff: &legalis_core::StatuteDiff) -> String {
+        let mut html = String::from("<div class='statute-diff'>");
+        html.push_str(&format!(
+            "<h2>Changes for Statute: {}</h2>",
+            diff.statute_id
+        ));
+
+        if diff.is_empty() {
+            html.push_str("<p>No changes detected.</p>");
+        } else {
+            html.push_str("<table class='diff-table'>");
+            html.push_str("<thead><tr><th>Change Type</th><th>Details</th></tr></thead>");
+            html.push_str("<tbody>");
+
+            for change in &diff.changes {
+                html.push_str("<tr>");
+                html.push_str(&format!("<td>{}</td>", format_change_type(change)));
+                html.push_str(&format!("<td>{}</td>", change));
+                html.push_str("</tr>");
+            }
+
+            html.push_str("</tbody></table>");
+        }
+
+        html.push_str("</div>");
+        self.add_styles(html)
+    }
+
+    /// Renders a statute diff as a Mermaid flowchart showing the transformation.
+    #[must_use]
+    pub fn to_mermaid(&self, diff: &legalis_core::StatuteDiff) -> String {
+        let mut mermaid = String::from("flowchart LR\n");
+        mermaid.push_str(&format!(
+            "    Start[\"Statute: {}\"] --> Changes{{Changes}}\n",
+            diff.statute_id
+        ));
+
+        for (i, change) in diff.changes.iter().enumerate() {
+            mermaid.push_str(&format!("    Changes --> C{}[\"{}\"]\n", i, change));
+        }
+
+        mermaid.push_str("    Changes --> End[\"Updated Statute\"]\n");
+        mermaid
+    }
+
+    /// Renders a statute diff as ASCII art for terminal display.
+    #[must_use]
+    pub fn to_ascii(&self, diff: &legalis_core::StatuteDiff) -> String {
+        let mut ascii = String::new();
+        ascii.push_str(&format!("=== Statute Diff: {} ===\n\n", diff.statute_id));
+
+        if diff.is_empty() {
+            ascii.push_str("No changes detected.\n");
+        } else {
+            for (i, change) in diff.changes.iter().enumerate() {
+                ascii.push_str(&format!("{}. {}\n", i + 1, change));
+            }
+        }
+
+        ascii
+    }
+
+    fn add_styles(&self, content: String) -> String {
+        format!(
+            "<style>
+.statute-diff {{ font-family: Arial, sans-serif; padding: 20px; background: {}; color: {}; }}
+.diff-table {{ width: 100%; border-collapse: collapse; }}
+.diff-table th, .diff-table td {{ border: 1px solid {}; padding: 8px; text-align: left; }}
+.diff-table th {{ background: {}; }}
+</style>{}",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.root_color,
+            content
+        )
+    }
+}
+
+impl Default for StatuteDiffVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Visualizer for legal reasoning chains and explanations.
+pub struct ReasoningChainVisualizer {
+    theme: Theme,
+}
+
+impl ReasoningChainVisualizer {
+    /// Creates a new reasoning chain visualizer with default theme.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme for visualization.
+    #[must_use]
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders a legal explanation as an interactive HTML timeline.
+    #[must_use]
+    pub fn to_html(&self, explanation: &legalis_core::LegalExplanation) -> String {
+        let mut html = String::from("<div class='reasoning-chain'>");
+        html.push_str(&format!(
+            "<h2>Legal Reasoning: {}</h2>",
+            explanation.outcome.description
+        ));
+        html.push_str(&format!(
+            "<p><strong>Confidence:</strong> {:.1}%</p>",
+            explanation.confidence * 100.0
+        ));
+
+        // Applicable statutes
+        if !explanation.applicable_statutes.is_empty() {
+            html.push_str("<h3>Applicable Statutes</h3><ul>");
+            for statute in &explanation.applicable_statutes {
+                html.push_str(&format!("<li>{}</li>", statute));
+            }
+            html.push_str("</ul>");
+        }
+
+        // Satisfied conditions
+        if !explanation.satisfied_conditions.is_empty() {
+            html.push_str("<h3>Satisfied Conditions</h3><ul>");
+            for condition in &explanation.satisfied_conditions {
+                html.push_str(&format!("<li style='color: green;'>✓ {}</li>", condition));
+            }
+            html.push_str("</ul>");
+        }
+
+        // Unsatisfied conditions
+        if !explanation.unsatisfied_conditions.is_empty() {
+            html.push_str("<h3>Unsatisfied Conditions</h3><ul>");
+            for condition in &explanation.unsatisfied_conditions {
+                html.push_str(&format!("<li style='color: red;'>✗ {}</li>", condition));
+            }
+            html.push_str("</ul>");
+        }
+
+        // Reasoning chain
+        if !explanation.reasoning_chain.is_empty() {
+            html.push_str("<h3>Reasoning Chain</h3>");
+            html.push_str("<div class='reasoning-steps'>");
+            for step in &explanation.reasoning_chain {
+                html.push_str(&format!(
+                    "<div class='step'><span class='step-num'>Step {}</span>: {}</div>",
+                    step.step, step.description
+                ));
+            }
+            html.push_str("</div>");
+        }
+
+        html.push_str("</div>");
+        self.add_styles(html)
+    }
+
+    /// Renders a reasoning chain as a Mermaid flowchart.
+    #[must_use]
+    pub fn to_mermaid(&self, explanation: &legalis_core::LegalExplanation) -> String {
+        let mut mermaid = String::from("flowchart TD\n");
+        mermaid.push_str("    Start([Start Reasoning]) --> Statutes{Applicable Statutes}\n");
+
+        // Add statutes
+        for (i, statute) in explanation.applicable_statutes.iter().enumerate() {
+            mermaid.push_str(&format!("    Statutes --> S{}[\"{}\"]\n", i, statute));
+        }
+
+        // Add reasoning steps
+        if !explanation.reasoning_chain.is_empty() {
+            mermaid.push_str("    Statutes --> Reasoning{Reasoning Chain}\n");
+            for step in &explanation.reasoning_chain {
+                mermaid.push_str(&format!(
+                    "    Reasoning --> R{}[\"Step {}: {}\"]\n",
+                    step.step, step.step, step.description
+                ));
+            }
+            mermaid.push_str(&format!(
+                "    Reasoning --> Outcome([\"Outcome: {}\\nConfidence: {:.1}%\"])\n",
+                explanation.outcome.description,
+                explanation.confidence * 100.0
+            ));
+        } else {
+            mermaid.push_str(&format!(
+                "    Statutes --> Outcome([\"Outcome: {}\\nConfidence: {:.1}%\"])\n",
+                explanation.outcome.description,
+                explanation.confidence * 100.0
+            ));
+        }
+
+        mermaid
+    }
+
+    /// Renders a reasoning chain as ASCII art for terminal display.
+    #[must_use]
+    pub fn to_ascii(&self, explanation: &legalis_core::LegalExplanation) -> String {
+        let mut ascii = String::new();
+        ascii.push_str("=== Legal Reasoning Chain ===\n\n");
+        ascii.push_str(&format!("Outcome: {}\n", explanation.outcome.description));
+        ascii.push_str(&format!(
+            "Confidence: {:.1}%\n\n",
+            explanation.confidence * 100.0
+        ));
+
+        if !explanation.applicable_statutes.is_empty() {
+            ascii.push_str("Applicable Statutes:\n");
+            for statute in &explanation.applicable_statutes {
+                ascii.push_str(&format!("  • {}\n", statute));
+            }
+            ascii.push('\n');
+        }
+
+        if !explanation.satisfied_conditions.is_empty() {
+            ascii.push_str("Satisfied Conditions:\n");
+            for condition in &explanation.satisfied_conditions {
+                ascii.push_str(&format!("  ✓ {}\n", condition));
+            }
+            ascii.push('\n');
+        }
+
+        if !explanation.unsatisfied_conditions.is_empty() {
+            ascii.push_str("Unsatisfied Conditions:\n");
+            for condition in &explanation.unsatisfied_conditions {
+                ascii.push_str(&format!("  ✗ {}\n", condition));
+            }
+            ascii.push('\n');
+        }
+
+        if !explanation.reasoning_chain.is_empty() {
+            ascii.push_str("Reasoning Steps:\n");
+            for step in &explanation.reasoning_chain {
+                ascii.push_str(&format!("  {}. {}\n", step.step, step.description));
+            }
+        }
+
+        ascii
+    }
+
+    fn add_styles(&self, content: String) -> String {
+        format!(
+            "<style>
+.reasoning-chain {{ font-family: Arial, sans-serif; padding: 20px; background: {}; color: {}; }}
+.reasoning-chain h2, .reasoning-chain h3 {{ color: {}; }}
+.reasoning-chain ul {{ list-style: none; padding-left: 20px; }}
+.reasoning-steps {{ margin-top: 10px; }}
+.step {{ padding: 10px; margin: 5px 0; background: {}; border-left: 3px solid {}; }}
+.step-num {{ font-weight: bold; color: {}; }}
+</style>{}",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.root_color,
+            self.theme.condition_color,
+            self.theme.link_color,
+            self.theme.outcome_color,
+            content
+        )
+    }
+}
+
+impl Default for ReasoningChainVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Visualizer for evaluation audit trails.
+pub struct AuditTrailVisualizer {
+    theme: Theme,
+}
+
+impl AuditTrailVisualizer {
+    /// Creates a new audit trail visualizer with default theme.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme for visualization.
+    #[must_use]
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders an audit trail as an HTML table with performance metrics.
+    #[must_use]
+    pub fn to_html(&self, trail: &legalis_core::EvaluationAuditTrail) -> String {
+        let records = trail.records();
+        let mut html = String::from("<div class='audit-trail'>");
+        html.push_str("<h2>Evaluation Audit Trail</h2>");
+
+        if records.is_empty() {
+            html.push_str("<p>No evaluation records.</p>");
+        } else {
+            html.push_str(&format!(
+                "<p><strong>Total Evaluations:</strong> {}</p>",
+                records.len()
+            ));
+
+            html.push_str("<table class='audit-table'>");
+            html.push_str("<thead><tr><th>#</th><th>Condition</th><th>Result</th><th>Duration (μs)</th></tr></thead>");
+            html.push_str("<tbody>");
+
+            for (i, record) in records.iter().enumerate() {
+                let result_color = if record.result { "green" } else { "red" };
+                let result_text = if record.result {
+                    "✓ Pass"
+                } else {
+                    "✗ Fail"
+                };
+                html.push_str("<tr>");
+                html.push_str(&format!("<td>{}</td>", i + 1));
+                html.push_str(&format!("<td>{}</td>", record.condition));
+                html.push_str(&format!(
+                    "<td style='color: {};'>{}</td>",
+                    result_color, result_text
+                ));
+                html.push_str(&format!("<td>{}</td>", record.duration_micros));
+                html.push_str("</tr>");
+            }
+
+            html.push_str("</tbody></table>");
+
+            // Summary statistics
+            let total_duration: u64 = records.iter().map(|r| r.duration_micros).sum();
+            let avg_duration = if !records.is_empty() {
+                total_duration / records.len() as u64
+            } else {
+                0
+            };
+            let passed = records.iter().filter(|r| r.result).count();
+
+            html.push_str("<div class='summary'>");
+            html.push_str(&format!(
+                "<p><strong>Pass Rate:</strong> {}/{} ({:.1}%)</p>",
+                passed,
+                records.len(),
+                (passed as f64 / records.len() as f64) * 100.0
+            ));
+            html.push_str(&format!(
+                "<p><strong>Average Duration:</strong> {} μs</p>",
+                avg_duration
+            ));
+            html.push_str(&format!(
+                "<p><strong>Total Duration:</strong> {} μs</p>",
+                total_duration
+            ));
+            html.push_str("</div>");
+        }
+
+        html.push_str("</div>");
+        self.add_styles(html)
+    }
+
+    /// Renders an audit trail as ASCII art for terminal display.
+    #[must_use]
+    pub fn to_ascii(&self, trail: &legalis_core::EvaluationAuditTrail) -> String {
+        let records = trail.records();
+        let mut ascii = String::new();
+        ascii.push_str("=== Evaluation Audit Trail ===\n\n");
+
+        if records.is_empty() {
+            ascii.push_str("No evaluation records.\n");
+        } else {
+            ascii.push_str(&format!("Total Evaluations: {}\n\n", records.len()));
+
+            for (i, record) in records.iter().enumerate() {
+                let result_symbol = if record.result { "✓" } else { "✗" };
+                ascii.push_str(&format!(
+                    "{:3}. {} | {} | {} μs\n",
+                    i + 1,
+                    result_symbol,
+                    record.condition,
+                    record.duration_micros
+                ));
+            }
+
+            // Summary
+            let total_duration: u64 = records.iter().map(|r| r.duration_micros).sum();
+            let avg_duration = total_duration / records.len() as u64;
+            let passed = records.iter().filter(|r| r.result).count();
+
+            ascii.push('\n');
+            ascii.push_str("=== Summary ===\n");
+            ascii.push_str(&format!(
+                "Pass Rate: {}/{} ({:.1}%)\n",
+                passed,
+                records.len(),
+                (passed as f64 / records.len() as f64) * 100.0
+            ));
+            ascii.push_str(&format!("Average Duration: {} μs\n", avg_duration));
+            ascii.push_str(&format!("Total Duration: {} μs\n", total_duration));
+        }
+
+        ascii
+    }
+
+    fn add_styles(&self, content: String) -> String {
+        format!(
+            "<style>
+.audit-trail {{ font-family: Arial, sans-serif; padding: 20px; background: {}; color: {}; }}
+.audit-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+.audit-table th, .audit-table td {{ border: 1px solid {}; padding: 8px; text-align: left; }}
+.audit-table th {{ background: {}; }}
+.summary {{ margin-top: 20px; padding: 15px; background: {}; border-left: 3px solid {}; }}
+</style>{}",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.root_color,
+            self.theme.condition_color,
+            self.theme.outcome_color,
+            content
+        )
+    }
+}
+
+impl Default for AuditTrailVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn format_change_type(change: &legalis_core::StatuteChange) -> &'static str {
+    match change {
+        legalis_core::StatuteChange::IdChanged { .. } => "ID Changed",
+        legalis_core::StatuteChange::TitleChanged { .. } => "Title Changed",
+        legalis_core::StatuteChange::EffectChanged { .. } => "Effect Changed",
+        legalis_core::StatuteChange::PreconditionsChanged { .. } => "Preconditions Changed",
+        legalis_core::StatuteChange::TemporalValidityChanged => "Temporal Validity Changed",
+        legalis_core::StatuteChange::VersionChanged { .. } => "Version Changed",
+        legalis_core::StatuteChange::JurisdictionChanged { .. } => "Jurisdiction Changed",
+    }
 }
 
 #[cfg(test)]
@@ -3689,5 +4203,311 @@ mod tests {
 
         assert_eq!(slide.title, "Test Slide");
         assert!(slide.notes.is_some());
+    }
+
+    #[test]
+    fn test_statute_diff_visualizer_creation() {
+        let visualizer = StatuteDiffVisualizer::new();
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_statute_diff_visualizer_with_theme() {
+        let visualizer = StatuteDiffVisualizer::new().with_theme(Theme::dark());
+        assert_eq!(visualizer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_statute_diff_to_html_empty() {
+        use legalis_core::StatuteDiff;
+
+        let diff = StatuteDiff {
+            statute_id: "test-statute".to_string(),
+            changes: vec![],
+        };
+
+        let visualizer = StatuteDiffVisualizer::new();
+        let html = visualizer.to_html(&diff);
+
+        assert!(html.contains("test-statute"));
+        assert!(html.contains("No changes detected"));
+        assert!(html.contains("<style>"));
+    }
+
+    #[test]
+    fn test_statute_diff_to_html_with_changes() {
+        use legalis_core::{StatuteChange, StatuteDiff};
+
+        let diff = StatuteDiff {
+            statute_id: "test-statute".to_string(),
+            changes: vec![
+                StatuteChange::TitleChanged {
+                    old: "Old Title".to_string(),
+                    new: "New Title".to_string(),
+                },
+                StatuteChange::VersionChanged { old: 1, new: 2 },
+            ],
+        };
+
+        let visualizer = StatuteDiffVisualizer::new();
+        let html = visualizer.to_html(&diff);
+
+        assert!(html.contains("test-statute"));
+        assert!(html.contains("Title Changed"));
+        assert!(html.contains("Version Changed"));
+        assert!(html.contains("<table"));
+    }
+
+    #[test]
+    fn test_statute_diff_to_mermaid() {
+        use legalis_core::{StatuteChange, StatuteDiff};
+
+        let diff = StatuteDiff {
+            statute_id: "test-statute".to_string(),
+            changes: vec![StatuteChange::VersionChanged { old: 1, new: 2 }],
+        };
+
+        let visualizer = StatuteDiffVisualizer::new();
+        let mermaid = visualizer.to_mermaid(&diff);
+
+        assert!(mermaid.contains("flowchart LR"));
+        assert!(mermaid.contains("test-statute"));
+        assert!(mermaid.contains("Changes"));
+    }
+
+    #[test]
+    fn test_statute_diff_to_ascii() {
+        use legalis_core::{StatuteChange, StatuteDiff};
+
+        let diff = StatuteDiff {
+            statute_id: "test-statute".to_string(),
+            changes: vec![StatuteChange::TitleChanged {
+                old: "Old".to_string(),
+                new: "New".to_string(),
+            }],
+        };
+
+        let visualizer = StatuteDiffVisualizer::new();
+        let ascii = visualizer.to_ascii(&diff);
+
+        assert!(ascii.contains("test-statute"));
+        assert!(ascii.contains("1."));
+    }
+
+    #[test]
+    fn test_reasoning_chain_visualizer_creation() {
+        let visualizer = ReasoningChainVisualizer::new();
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_reasoning_chain_visualizer_with_theme() {
+        let visualizer = ReasoningChainVisualizer::new().with_theme(Theme::colorblind_friendly());
+        assert_eq!(visualizer.theme.root_color, "#999999");
+    }
+
+    #[test]
+    fn test_reasoning_chain_to_html() {
+        use legalis_core::{LegalExplanation, ReasoningStep};
+
+        let explanation = LegalExplanation {
+            outcome: Effect::new(EffectType::Grant, "Tax credit"),
+            applicable_statutes: vec!["statute-1".to_string()],
+            satisfied_conditions: vec!["Age >= 18".to_string()],
+            unsatisfied_conditions: vec![],
+            confidence: 0.95,
+            reasoning_chain: vec![ReasoningStep {
+                step: 1,
+                description: "Check age requirement".to_string(),
+                statute_id: Some("statute-1".to_string()),
+                condition: Some("Age >= 18".to_string()),
+                result: legalis_core::StepResult::Satisfied,
+            }],
+        };
+
+        let visualizer = ReasoningChainVisualizer::new();
+        let html = visualizer.to_html(&explanation);
+
+        assert!(html.contains("Tax credit"));
+        assert!(html.contains("95"));
+        assert!(html.contains("statute-1"));
+        assert!(html.contains("Age >= 18"));
+        assert!(html.contains("Check age requirement"));
+    }
+
+    #[test]
+    fn test_reasoning_chain_to_mermaid() {
+        use legalis_core::{LegalExplanation, ReasoningStep};
+
+        let explanation = LegalExplanation {
+            outcome: Effect::new(EffectType::Grant, "Benefit"),
+            applicable_statutes: vec!["statute-1".to_string()],
+            satisfied_conditions: vec![],
+            unsatisfied_conditions: vec![],
+            confidence: 0.8,
+            reasoning_chain: vec![ReasoningStep {
+                step: 1,
+                description: "Verify conditions".to_string(),
+                statute_id: Some("statute-1".to_string()),
+                condition: None,
+                result: legalis_core::StepResult::Applied,
+            }],
+        };
+
+        let visualizer = ReasoningChainVisualizer::new();
+        let mermaid = visualizer.to_mermaid(&explanation);
+
+        assert!(mermaid.contains("flowchart TD"));
+        assert!(mermaid.contains("statute-1"));
+        assert!(mermaid.contains("80"));
+    }
+
+    #[test]
+    fn test_reasoning_chain_to_ascii() {
+        use legalis_core::{LegalExplanation, ReasoningStep};
+
+        let explanation = LegalExplanation {
+            outcome: Effect::new(EffectType::Grant, "Grant"),
+            applicable_statutes: vec!["statute-a".to_string()],
+            satisfied_conditions: vec!["Condition A".to_string()],
+            unsatisfied_conditions: vec!["Condition B".to_string()],
+            confidence: 0.75,
+            reasoning_chain: vec![ReasoningStep {
+                step: 1,
+                description: "Step one".to_string(),
+                statute_id: None,
+                condition: Some("Test condition".to_string()),
+                result: legalis_core::StepResult::Satisfied,
+            }],
+        };
+
+        let visualizer = ReasoningChainVisualizer::new();
+        let ascii = visualizer.to_ascii(&explanation);
+
+        assert!(ascii.contains("Grant"));
+        assert!(ascii.contains("75"));
+        assert!(ascii.contains("statute-a"));
+        assert!(ascii.contains("Condition A"));
+        assert!(ascii.contains("Condition B"));
+        assert!(ascii.contains("Step one"));
+    }
+
+    #[test]
+    fn test_audit_trail_visualizer_creation() {
+        let visualizer = AuditTrailVisualizer::new();
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_audit_trail_visualizer_with_theme() {
+        let visualizer = AuditTrailVisualizer::new().with_theme(Theme::high_contrast());
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_audit_trail_to_html_empty() {
+        use legalis_core::EvaluationAuditTrail;
+
+        let trail = EvaluationAuditTrail::new();
+        let visualizer = AuditTrailVisualizer::new();
+        let html = visualizer.to_html(&trail);
+
+        assert!(html.contains("Evaluation Audit Trail"));
+        assert!(html.contains("No evaluation records"));
+    }
+
+    #[test]
+    fn test_audit_trail_to_html_with_records() {
+        use legalis_core::EvaluationAuditTrail;
+
+        let mut trail = EvaluationAuditTrail::new();
+        trail.record("Age >= 18".to_string(), true, 100);
+        trail.record("Income < 50000".to_string(), false, 150);
+
+        let visualizer = AuditTrailVisualizer::new();
+        let html = visualizer.to_html(&trail);
+
+        assert!(html.contains("Total Evaluations"));
+        assert!(html.contains("Age >= 18"));
+        assert!(html.contains("Income < 50000"));
+        assert!(html.contains("Pass Rate"));
+        assert!(html.contains("Average Duration"));
+    }
+
+    #[test]
+    fn test_audit_trail_to_ascii() {
+        use legalis_core::EvaluationAuditTrail;
+
+        let mut trail = EvaluationAuditTrail::new();
+        trail.record("Condition A".to_string(), true, 50);
+        trail.record("Condition B".to_string(), true, 75);
+        trail.record("Condition C".to_string(), false, 60);
+
+        let visualizer = AuditTrailVisualizer::new();
+        let ascii = visualizer.to_ascii(&trail);
+
+        assert!(ascii.contains("Evaluation Audit Trail"));
+        assert!(ascii.contains("Total Evaluations: 3"));
+        assert!(ascii.contains("Condition A"));
+        assert!(ascii.contains("Condition B"));
+        assert!(ascii.contains("Condition C"));
+        assert!(ascii.contains("Pass Rate"));
+        assert!(ascii.contains("66.7%")); // 2 out of 3 passed
+    }
+
+    #[test]
+    fn test_statute_diff_default() {
+        let visualizer1 = StatuteDiffVisualizer::new();
+        let visualizer2 = StatuteDiffVisualizer::default();
+        assert_eq!(
+            visualizer1.theme.background_color,
+            visualizer2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_reasoning_chain_default() {
+        let visualizer1 = ReasoningChainVisualizer::new();
+        let visualizer2 = ReasoningChainVisualizer::default();
+        assert_eq!(
+            visualizer1.theme.background_color,
+            visualizer2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_audit_trail_default() {
+        let visualizer1 = AuditTrailVisualizer::new();
+        let visualizer2 = AuditTrailVisualizer::default();
+        assert_eq!(
+            visualizer1.theme.background_color,
+            visualizer2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_format_change_type() {
+        use legalis_core::StatuteChange;
+
+        assert_eq!(
+            format_change_type(&StatuteChange::IdChanged {
+                old: "a".to_string(),
+                new: "b".to_string()
+            }),
+            "ID Changed"
+        );
+
+        assert_eq!(
+            format_change_type(&StatuteChange::TitleChanged {
+                old: "a".to_string(),
+                new: "b".to_string()
+            }),
+            "Title Changed"
+        );
+
+        assert_eq!(
+            format_change_type(&StatuteChange::TemporalValidityChanged),
+            "Temporal Validity Changed"
+        );
     }
 }

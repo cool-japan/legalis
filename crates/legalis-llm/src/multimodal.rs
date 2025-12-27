@@ -527,6 +527,258 @@ mod base64_impl {
 
 use base64_impl as base64;
 
+/// Represents a parsed multi-modal response from an LLM.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiModalResponse {
+    /// Text content in the response.
+    pub text: Option<String>,
+    /// Generated or returned images.
+    pub images: Vec<GeneratedImage>,
+    /// Generated or returned audio.
+    pub audio: Vec<GeneratedAudio>,
+    /// Additional metadata from the response.
+    pub metadata: serde_json::Value,
+}
+
+/// Represents a generated or returned image in a response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedImage {
+    /// Image data as base64.
+    pub data: Option<String>,
+    /// URL to the image (if hosted).
+    pub url: Option<String>,
+    /// MIME type of the image.
+    pub mime_type: String,
+    /// Optional caption or description.
+    pub caption: Option<String>,
+}
+
+/// Represents generated or returned audio in a response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedAudio {
+    /// Audio data as base64.
+    pub data: Option<String>,
+    /// URL to the audio (if hosted).
+    pub url: Option<String>,
+    /// MIME type of the audio.
+    pub mime_type: String,
+    /// Optional transcript or description.
+    pub transcript: Option<String>,
+}
+
+impl MultiModalResponse {
+    /// Creates a new empty multi-modal response.
+    pub fn new() -> Self {
+        Self {
+            text: None,
+            images: Vec::new(),
+            audio: Vec::new(),
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    /// Creates a response with only text content.
+    pub fn text_only(text: impl Into<String>) -> Self {
+        Self {
+            text: Some(text.into()),
+            images: Vec::new(),
+            audio: Vec::new(),
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    /// Adds text content to the response.
+    pub fn with_text(mut self, text: impl Into<String>) -> Self {
+        self.text = Some(text.into());
+        self
+    }
+
+    /// Adds an image to the response.
+    pub fn add_image(mut self, image: GeneratedImage) -> Self {
+        self.images.push(image);
+        self
+    }
+
+    /// Adds audio to the response.
+    pub fn add_audio(mut self, audio: GeneratedAudio) -> Self {
+        self.audio.push(audio);
+        self
+    }
+
+    /// Adds metadata to the response.
+    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Returns true if the response contains any images.
+    pub fn has_images(&self) -> bool {
+        !self.images.is_empty()
+    }
+
+    /// Returns true if the response contains any audio.
+    pub fn has_audio(&self) -> bool {
+        !self.audio.is_empty()
+    }
+
+    /// Returns true if the response contains text.
+    pub fn has_text(&self) -> bool {
+        self.text.is_some()
+    }
+
+    /// Returns the text content, or an empty string if none.
+    pub fn text_or_empty(&self) -> &str {
+        self.text.as_deref().unwrap_or("")
+    }
+
+    /// Parses a JSON response into a MultiModalResponse.
+    ///
+    /// This handles various provider-specific formats.
+    pub fn from_json(json: &serde_json::Value) -> Result<Self> {
+        let mut response = Self::new();
+
+        // Extract text content
+        if let Some(text) = json.get("text").and_then(|v| v.as_str()) {
+            response.text = Some(text.to_string());
+        } else if let Some(content) = json.get("content").and_then(|v| v.as_str()) {
+            response.text = Some(content.to_string());
+        } else if let Some(message) = json.get("message").and_then(|v| v.as_str()) {
+            response.text = Some(message.to_string());
+        }
+
+        // Extract images
+        if let Some(images) = json.get("images").and_then(|v| v.as_array()) {
+            for img in images {
+                if let Ok(generated_img) = Self::parse_image(img) {
+                    response.images.push(generated_img);
+                }
+            }
+        }
+
+        // Extract audio
+        if let Some(audio_arr) = json.get("audio").and_then(|v| v.as_array()) {
+            for audio in audio_arr {
+                if let Ok(generated_audio) = Self::parse_audio(audio) {
+                    response.audio.push(generated_audio);
+                }
+            }
+        }
+
+        // Store full JSON as metadata
+        response.metadata = json.clone();
+
+        Ok(response)
+    }
+
+    /// Parses an image from JSON.
+    fn parse_image(json: &serde_json::Value) -> Result<GeneratedImage> {
+        let data = json.get("data").and_then(|v| v.as_str()).map(String::from);
+        let url = json.get("url").and_then(|v| v.as_str()).map(String::from);
+        let mime_type = json
+            .get("mime_type")
+            .or_else(|| json.get("mimeType"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("image/png")
+            .to_string();
+        let caption = json
+            .get("caption")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Ok(GeneratedImage {
+            data,
+            url,
+            mime_type,
+            caption,
+        })
+    }
+
+    /// Parses audio from JSON.
+    fn parse_audio(json: &serde_json::Value) -> Result<GeneratedAudio> {
+        let data = json.get("data").and_then(|v| v.as_str()).map(String::from);
+        let url = json.get("url").and_then(|v| v.as_str()).map(String::from);
+        let mime_type = json
+            .get("mime_type")
+            .or_else(|| json.get("mimeType"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("audio/mpeg")
+            .to_string();
+        let transcript = json
+            .get("transcript")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Ok(GeneratedAudio {
+            data,
+            url,
+            mime_type,
+            transcript,
+        })
+    }
+}
+
+impl Default for MultiModalResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GeneratedImage {
+    /// Creates a new generated image from base64 data.
+    pub fn from_data(mime_type: impl Into<String>, data: impl Into<String>) -> Self {
+        Self {
+            data: Some(data.into()),
+            url: None,
+            mime_type: mime_type.into(),
+            caption: None,
+        }
+    }
+
+    /// Creates a new generated image from a URL.
+    pub fn from_url(mime_type: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            data: None,
+            url: Some(url.into()),
+            mime_type: mime_type.into(),
+            caption: None,
+        }
+    }
+
+    /// Adds a caption to the image.
+    pub fn with_caption(mut self, caption: impl Into<String>) -> Self {
+        self.caption = Some(caption.into());
+        self
+    }
+}
+
+impl GeneratedAudio {
+    /// Creates a new generated audio from base64 data.
+    pub fn from_data(mime_type: impl Into<String>, data: impl Into<String>) -> Self {
+        Self {
+            data: Some(data.into()),
+            url: None,
+            mime_type: mime_type.into(),
+            transcript: None,
+        }
+    }
+
+    /// Creates a new generated audio from a URL.
+    pub fn from_url(mime_type: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            data: None,
+            url: Some(url.into()),
+            mime_type: mime_type.into(),
+            transcript: None,
+        }
+    }
+
+    /// Adds a transcript to the audio.
+    pub fn with_transcript(mut self, transcript: impl Into<String>) -> Self {
+        self.transcript = Some(transcript.into());
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -689,5 +941,76 @@ mod tests {
         assert!(message.has_audio());
         assert_eq!(message.image_count(), 1);
         assert_eq!(message.audio_count(), 1);
+    }
+
+    #[test]
+    fn test_multimodal_response_text_only() {
+        let response = MultiModalResponse::text_only("Hello, world!");
+        assert_eq!(response.text_or_empty(), "Hello, world!");
+        assert!(!response.has_images());
+        assert!(!response.has_audio());
+    }
+
+    #[test]
+    fn test_multimodal_response_with_image() {
+        let image = GeneratedImage::from_url("image/png", "https://example.com/generated.png");
+        let response = MultiModalResponse::new()
+            .with_text("Generated image:")
+            .add_image(image);
+
+        assert!(response.has_text());
+        assert!(response.has_images());
+        assert_eq!(response.images.len(), 1);
+    }
+
+    #[test]
+    fn test_multimodal_response_from_json() {
+        let json = serde_json::json!({
+            "text": "This is a response",
+            "images": [
+                {
+                    "url": "https://example.com/image1.png",
+                    "mime_type": "image/png",
+                    "caption": "A generated image"
+                }
+            ],
+            "audio": [
+                {
+                    "url": "https://example.com/audio1.mp3",
+                    "mime_type": "audio/mpeg",
+                    "transcript": "Hello world"
+                }
+            ]
+        });
+
+        let response = MultiModalResponse::from_json(&json).unwrap();
+        assert_eq!(response.text_or_empty(), "This is a response");
+        assert_eq!(response.images.len(), 1);
+        assert_eq!(response.audio.len(), 1);
+        assert_eq!(
+            response.images[0].caption.as_deref(),
+            Some("A generated image")
+        );
+        assert_eq!(response.audio[0].transcript.as_deref(), Some("Hello world"));
+    }
+
+    #[test]
+    fn test_generated_image_from_data() {
+        let image =
+            GeneratedImage::from_data("image/jpeg", "base64data").with_caption("Test image");
+
+        assert_eq!(image.data.as_deref(), Some("base64data"));
+        assert_eq!(image.mime_type, "image/jpeg");
+        assert_eq!(image.caption.as_deref(), Some("Test image"));
+    }
+
+    #[test]
+    fn test_generated_audio_from_url() {
+        let audio = GeneratedAudio::from_url("audio/wav", "https://example.com/audio.wav")
+            .with_transcript("Spoken text");
+
+        assert_eq!(audio.url.as_deref(), Some("https://example.com/audio.wav"));
+        assert_eq!(audio.mime_type, "audio/wav");
+        assert_eq!(audio.transcript.as_deref(), Some("Spoken text"));
     }
 }

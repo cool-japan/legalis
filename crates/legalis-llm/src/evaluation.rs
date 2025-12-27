@@ -324,6 +324,377 @@ pub fn compare_variants(text_a: &str, text_b: &str, reference: &str) -> Vec<ABTe
     results
 }
 
+/// Human feedback integration for RLHF (Reinforcement Learning from Human Feedback).
+pub mod human_feedback {
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    /// Rating scale for human feedback.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    pub enum Rating {
+        /// Very poor quality (1 star)
+        VeryPoor = 1,
+        /// Poor quality (2 stars)
+        Poor = 2,
+        /// Acceptable quality (3 stars)
+        Acceptable = 3,
+        /// Good quality (4 stars)
+        Good = 4,
+        /// Excellent quality (5 stars)
+        Excellent = 5,
+    }
+
+    impl Rating {
+        /// Converts a numeric value to a rating.
+        pub fn from_value(value: u8) -> Option<Self> {
+            match value {
+                1 => Some(Rating::VeryPoor),
+                2 => Some(Rating::Poor),
+                3 => Some(Rating::Acceptable),
+                4 => Some(Rating::Good),
+                5 => Some(Rating::Excellent),
+                _ => None,
+            }
+        }
+
+        /// Gets the numeric value of the rating.
+        pub fn value(&self) -> u8 {
+            *self as u8
+        }
+    }
+
+    /// Feedback dimensions for detailed evaluation.
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct FeedbackDimensions {
+        /// Accuracy of the response
+        pub accuracy: Option<Rating>,
+        /// Helpfulness of the response
+        pub helpfulness: Option<Rating>,
+        /// Clarity of the response
+        pub clarity: Option<Rating>,
+        /// Relevance to the prompt
+        pub relevance: Option<Rating>,
+        /// Safety and appropriateness
+        pub safety: Option<Rating>,
+    }
+
+    impl FeedbackDimensions {
+        /// Creates new empty feedback dimensions.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Calculates average rating across all dimensions.
+        pub fn average_rating(&self) -> Option<f64> {
+            let ratings: Vec<u8> = [
+                self.accuracy,
+                self.helpfulness,
+                self.clarity,
+                self.relevance,
+                self.safety,
+            ]
+            .iter()
+            .filter_map(|r| r.map(|rating| rating.value()))
+            .collect();
+
+            if ratings.is_empty() {
+                None
+            } else {
+                Some(ratings.iter().map(|&r| r as f64).sum::<f64>() / ratings.len() as f64)
+            }
+        }
+    }
+
+    /// Human feedback entry for a single response.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Feedback {
+        /// Unique identifier
+        pub id: String,
+        /// The prompt that was used
+        pub prompt: String,
+        /// The response that was evaluated
+        pub response: String,
+        /// Overall rating
+        pub overall_rating: Rating,
+        /// Detailed dimension ratings
+        pub dimensions: FeedbackDimensions,
+        /// Free-form text feedback
+        pub comments: Option<String>,
+        /// Annotator/rater identifier
+        pub annotator_id: Option<String>,
+        /// Timestamp
+        pub timestamp: DateTime<Utc>,
+        /// Metadata (model, version, etc.)
+        pub metadata: HashMap<String, String>,
+    }
+
+    impl Feedback {
+        /// Creates a new feedback entry.
+        pub fn new(
+            prompt: impl Into<String>,
+            response: impl Into<String>,
+            overall_rating: Rating,
+        ) -> Self {
+            Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                prompt: prompt.into(),
+                response: response.into(),
+                overall_rating,
+                dimensions: FeedbackDimensions::default(),
+                comments: None,
+                annotator_id: None,
+                timestamp: Utc::now(),
+                metadata: HashMap::new(),
+            }
+        }
+
+        /// Adds dimension ratings.
+        pub fn with_dimensions(mut self, dimensions: FeedbackDimensions) -> Self {
+            self.dimensions = dimensions;
+            self
+        }
+
+        /// Adds comments.
+        pub fn with_comments(mut self, comments: impl Into<String>) -> Self {
+            self.comments = Some(comments.into());
+            self
+        }
+
+        /// Adds annotator ID.
+        pub fn with_annotator(mut self, annotator_id: impl Into<String>) -> Self {
+            self.annotator_id = Some(annotator_id.into());
+            self
+        }
+
+        /// Adds metadata.
+        pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+            self.metadata.insert(key.into(), value.into());
+            self
+        }
+    }
+
+    /// Preference comparison between two responses.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PreferenceComparison {
+        /// Unique identifier
+        pub id: String,
+        /// The prompt used
+        pub prompt: String,
+        /// First response option
+        pub response_a: String,
+        /// Second response option
+        pub response_b: String,
+        /// Which response was preferred (true = A, false = B)
+        pub prefers_a: bool,
+        /// Strength of preference (0.0 = weak, 1.0 = strong)
+        pub preference_strength: f64,
+        /// Annotator identifier
+        pub annotator_id: Option<String>,
+        /// Timestamp
+        pub timestamp: DateTime<Utc>,
+        /// Metadata
+        pub metadata: HashMap<String, String>,
+    }
+
+    impl PreferenceComparison {
+        /// Creates a new preference comparison.
+        pub fn new(
+            prompt: impl Into<String>,
+            response_a: impl Into<String>,
+            response_b: impl Into<String>,
+            prefers_a: bool,
+        ) -> Self {
+            Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                prompt: prompt.into(),
+                response_a: response_a.into(),
+                response_b: response_b.into(),
+                prefers_a,
+                preference_strength: 1.0,
+                annotator_id: None,
+                timestamp: Utc::now(),
+                metadata: HashMap::new(),
+            }
+        }
+
+        /// Sets preference strength.
+        pub fn with_strength(mut self, strength: f64) -> Self {
+            self.preference_strength = strength.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Adds annotator ID.
+        pub fn with_annotator(mut self, annotator_id: impl Into<String>) -> Self {
+            self.annotator_id = Some(annotator_id.into());
+            self
+        }
+    }
+
+    /// Statistics from collected feedback.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FeedbackStats {
+        /// Total number of feedback entries
+        pub total_count: usize,
+        /// Average overall rating
+        pub avg_overall_rating: f64,
+        /// Rating distribution
+        pub rating_distribution: HashMap<u8, usize>,
+        /// Average ratings by dimension
+        pub avg_accuracy: Option<f64>,
+        pub avg_helpfulness: Option<f64>,
+        pub avg_clarity: Option<f64>,
+        pub avg_relevance: Option<f64>,
+        pub avg_safety: Option<f64>,
+    }
+
+    /// Feedback collector and storage.
+    pub struct FeedbackCollector {
+        feedback: Arc<RwLock<Vec<Feedback>>>,
+        preferences: Arc<RwLock<Vec<PreferenceComparison>>>,
+    }
+
+    impl FeedbackCollector {
+        /// Creates a new feedback collector.
+        pub fn new() -> Self {
+            Self {
+                feedback: Arc::new(RwLock::new(Vec::new())),
+                preferences: Arc::new(RwLock::new(Vec::new())),
+            }
+        }
+
+        /// Adds a feedback entry.
+        pub async fn add_feedback(&self, feedback: Feedback) {
+            self.feedback.write().await.push(feedback);
+        }
+
+        /// Adds a preference comparison.
+        pub async fn add_preference(&self, preference: PreferenceComparison) {
+            self.preferences.write().await.push(preference);
+        }
+
+        /// Gets all feedback entries.
+        pub async fn get_all_feedback(&self) -> Vec<Feedback> {
+            self.feedback.read().await.clone()
+        }
+
+        /// Gets all preference comparisons.
+        pub async fn get_all_preferences(&self) -> Vec<PreferenceComparison> {
+            self.preferences.read().await.clone()
+        }
+
+        /// Calculates feedback statistics.
+        pub async fn calculate_stats(&self) -> FeedbackStats {
+            let feedback = self.feedback.read().await;
+
+            if feedback.is_empty() {
+                return FeedbackStats {
+                    total_count: 0,
+                    avg_overall_rating: 0.0,
+                    rating_distribution: HashMap::new(),
+                    avg_accuracy: None,
+                    avg_helpfulness: None,
+                    avg_clarity: None,
+                    avg_relevance: None,
+                    avg_safety: None,
+                };
+            }
+
+            let total_count = feedback.len();
+
+            // Overall rating
+            let avg_overall_rating = feedback
+                .iter()
+                .map(|f| f.overall_rating.value() as f64)
+                .sum::<f64>()
+                / total_count as f64;
+
+            // Rating distribution
+            let mut rating_distribution = HashMap::new();
+            for f in feedback.iter() {
+                *rating_distribution
+                    .entry(f.overall_rating.value())
+                    .or_insert(0) += 1;
+            }
+
+            // Dimension averages
+            let calc_avg = |extract: fn(&FeedbackDimensions) -> Option<Rating>| {
+                let values: Vec<f64> = feedback
+                    .iter()
+                    .filter_map(|f| extract(&f.dimensions).map(|r| r.value() as f64))
+                    .collect();
+                if values.is_empty() {
+                    None
+                } else {
+                    Some(values.iter().sum::<f64>() / values.len() as f64)
+                }
+            };
+
+            let avg_accuracy = calc_avg(|d| d.accuracy);
+            let avg_helpfulness = calc_avg(|d| d.helpfulness);
+            let avg_clarity = calc_avg(|d| d.clarity);
+            let avg_relevance = calc_avg(|d| d.relevance);
+            let avg_safety = calc_avg(|d| d.safety);
+
+            FeedbackStats {
+                total_count,
+                avg_overall_rating,
+                rating_distribution,
+                avg_accuracy,
+                avg_helpfulness,
+                avg_clarity,
+                avg_relevance,
+                avg_safety,
+            }
+        }
+
+        /// Filters feedback by rating threshold.
+        pub async fn filter_by_rating(&self, min_rating: Rating) -> Vec<Feedback> {
+            let feedback = self.feedback.read().await;
+            feedback
+                .iter()
+                .filter(|f| f.overall_rating >= min_rating)
+                .cloned()
+                .collect()
+        }
+
+        /// Gets feedback for a specific prompt.
+        pub async fn get_feedback_for_prompt(&self, prompt: &str) -> Vec<Feedback> {
+            let feedback = self.feedback.read().await;
+            feedback
+                .iter()
+                .filter(|f| f.prompt == prompt)
+                .cloned()
+                .collect()
+        }
+
+        /// Calculates preference win rate for response A vs B across all comparisons.
+        pub async fn preference_win_rate(&self) -> f64 {
+            let preferences = self.preferences.read().await;
+            if preferences.is_empty() {
+                return 0.5;
+            }
+
+            let a_wins = preferences.iter().filter(|p| p.prefers_a).count();
+            a_wins as f64 / preferences.len() as f64
+        }
+
+        /// Clears all collected feedback.
+        pub async fn clear(&self) {
+            self.feedback.write().await.clear();
+            self.preferences.write().await.clear();
+        }
+    }
+
+    impl Default for FeedbackCollector {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
