@@ -363,10 +363,11 @@ impl EmbeddingProvider for LocalEmbedding {
 }
 
 /// Utilities for working with embeddings.
-pub mod utils {
+pub mod embedding_utils {
     use super::*;
 
     /// Finds the top-k most similar embeddings to a query.
+    #[allow(dead_code)]
     pub fn find_top_k(
         query: &Embedding,
         candidates: &[(Embedding, usize)], // (embedding, original_index)
@@ -390,6 +391,7 @@ pub mod utils {
     }
 
     /// Clusters embeddings using simple k-means.
+    #[allow(dead_code)]
     pub fn cluster_kmeans(
         embeddings: &[Embedding],
         k: usize,
@@ -538,7 +540,7 @@ mod tests {
             (Embedding::new(vec![-1.0, 0.0]), 3), // Opposite
         ];
 
-        let top = utils::find_top_k(&query, &candidates, 2).unwrap();
+        let top = embedding_utils::find_top_k(&query, &candidates, 2).unwrap();
         assert_eq!(top.len(), 2);
         assert_eq!(top[0].0, 0); // Index of most similar
     }
@@ -552,7 +554,7 @@ mod tests {
             Embedding::new(vec![0.1, 1.1]),
         ];
 
-        let assignments = utils::cluster_kmeans(&embeddings, 2, 10).unwrap();
+        let assignments = embedding_utils::cluster_kmeans(&embeddings, 2, 10).unwrap();
         assert_eq!(assignments.len(), 4);
 
         // Check that we have exactly 2 clusters

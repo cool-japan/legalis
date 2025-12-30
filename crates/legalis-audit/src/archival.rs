@@ -180,7 +180,8 @@ impl ArchiveManager {
         };
 
         // Save metadata
-        self.metadata_index.insert(archive_id.clone(), metadata.clone());
+        self.metadata_index
+            .insert(archive_id.clone(), metadata.clone());
         self.save_metadata_index()?;
 
         tracing::info!(
@@ -194,10 +195,9 @@ impl ArchiveManager {
 
     /// Retrieves records from a specific archive.
     pub fn retrieve_archive(&self, archive_id: &str) -> AuditResult<Vec<AuditRecord>> {
-        let metadata = self
-            .metadata_index
-            .get(archive_id)
-            .ok_or_else(|| AuditError::InvalidRecord(format!("Archive not found: {}", archive_id)))?;
+        let metadata = self.metadata_index.get(archive_id).ok_or_else(|| {
+            AuditError::InvalidRecord(format!("Archive not found: {}", archive_id))
+        })?;
 
         // Verify integrity
         let archive_data = std::fs::read(&metadata.file_path)?;
@@ -314,19 +314,14 @@ mod tests {
 
     #[test]
     fn test_archive_with_statute_filter() {
-        let policy = ArchivePolicy::new(30)
-            .with_statute_filter("statute-1".to_string());
+        let policy = ArchivePolicy::new(30).with_statute_filter("statute-1".to_string());
 
-        let old_record = create_test_record_with_statute(
-            Utc::now() - Duration::days(60),
-            "statute-1",
-        );
+        let old_record =
+            create_test_record_with_statute(Utc::now() - Duration::days(60), "statute-1");
         assert!(policy.should_archive(&old_record));
 
-        let other_old_record = create_test_record_with_statute(
-            Utc::now() - Duration::days(60),
-            "statute-2",
-        );
+        let other_old_record =
+            create_test_record_with_statute(Utc::now() - Duration::days(60), "statute-2");
         assert!(!policy.should_archive(&other_old_record));
     }
 
@@ -392,10 +387,7 @@ mod tests {
         create_test_record_with_statute(timestamp, "test-statute")
     }
 
-    fn create_test_record_with_statute(
-        timestamp: DateTime<Utc>,
-        statute_id: &str,
-    ) -> AuditRecord {
+    fn create_test_record_with_statute(timestamp: DateTime<Utc>, statute_id: &str) -> AuditRecord {
         let mut record = AuditRecord::new(
             EventType::AutomaticDecision,
             Actor::System {

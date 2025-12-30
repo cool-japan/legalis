@@ -2,12 +2,21 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// Global lazy-loaded configuration instance.
+static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
 /// Configuration for legalis-cli.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    /// Path to parent configuration file for inheritance
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+
     /// Default jurisdiction for operations
     #[serde(default)]
     pub jurisdiction: Option<String>,
@@ -23,6 +32,10 @@ pub struct Config {
     /// Linting settings
     #[serde(default)]
     pub lint: LintConfig,
+
+    /// Command aliases (alias -> full command)
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
 }
 
 /// Verification configuration.
@@ -106,10 +119,73 @@ impl Config {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
-        let config: Config = toml::from_str(&content)
+        let mut config: Config = toml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
 
+        // Handle inheritance
+        if let Some(parent_path) = &config.parent.clone() {
+            let parent_path = if Path::new(parent_path).is_relative() {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(parent_path)
+            } else {
+                PathBuf::from(parent_path)
+            };
+
+            let parent_config = Self::from_file(&parent_path).with_context(|| {
+                format!("Failed to load parent config: {}", parent_path.display())
+            })?;
+
+            // Merge parent config with current config (current takes precedence)
+            config = config.merge_with_parent(parent_config);
+        }
+
         Ok(config)
+    }
+
+    /// Merge this configuration with a parent configuration.
+    /// Current configuration takes precedence over parent.
+    fn merge_with_parent(self, parent: Config) -> Self {
+        Config {
+            parent: self.parent, // Keep current parent reference
+            jurisdiction: self.jurisdiction.or(parent.jurisdiction),
+            verification: VerificationConfig {
+                strict: self.verification.strict || parent.verification.strict,
+                constitutional_checks: self.verification.constitutional_checks
+                    && parent.verification.constitutional_checks,
+            },
+            output: OutputConfig {
+                format: if self.output.format == default_format() {
+                    parent.output.format
+                } else {
+                    self.output.format
+                },
+                directory: if self.output.directory == default_output_dir() {
+                    parent.output.directory
+                } else {
+                    self.output.directory
+                },
+                colored: self.output.colored && parent.output.colored,
+            },
+            lint: LintConfig {
+                rules: {
+                    let mut rules = parent.lint.rules;
+                    rules.extend(self.lint.rules);
+                    rules
+                },
+                disabled_rules: {
+                    let mut disabled = parent.lint.disabled_rules;
+                    disabled.extend(self.lint.disabled_rules);
+                    disabled
+                },
+                strict: self.lint.strict || parent.lint.strict,
+            },
+            aliases: {
+                let mut aliases = parent.aliases;
+                aliases.extend(self.aliases);
+                aliases
+            },
+        }
     }
 
     /// Load configuration from the default locations with environment variable overrides.
@@ -199,5 +275,50 @@ impl Config {
         }
 
         Ok(config_file)
+    }
+
+    /// Expand command aliases in arguments.
+    /// Returns a new vector with aliases expanded.
+    pub fn expand_aliases(&self, args: Vec<String>) -> Vec<String> {
+        if args.len() < 2 {
+            return args;
+        }
+
+        // Check if the first argument (command name) is an alias
+        if let Some(expansion) = self.aliases.get(&args[1]) {
+            let mut expanded = vec![args[0].clone()];
+            // Parse the expansion and add it
+            expanded.extend(expansion.split_whitespace().map(String::from));
+            // Add the rest of the arguments
+            expanded.extend(args[2..].iter().cloned());
+            expanded
+        } else {
+            args
+        }
+    }
+
+    /// Get the global configuration instance (lazy-loaded).
+    /// This function loads the configuration only once and caches it.
+    pub fn global() -> &'static Config {
+        GLOBAL_CONFIG.get_or_init(|| Self::load())
+    }
+
+    /// Try to get the global configuration if it's already loaded.
+    /// Returns None if the configuration hasn't been loaded yet.
+    pub fn try_global() -> Option<&'static Config> {
+        GLOBAL_CONFIG.get()
+    }
+
+    /// Force reload the global configuration.
+    /// Note: This will only work if the configuration hasn't been loaded yet.
+    /// Returns true if reload was successful, false if already loaded.
+    #[allow(dead_code)]
+    pub fn reload_global() -> bool {
+        if GLOBAL_CONFIG.get().is_none() {
+            let _ = GLOBAL_CONFIG.set(Self::load());
+            true
+        } else {
+            false
+        }
     }
 }

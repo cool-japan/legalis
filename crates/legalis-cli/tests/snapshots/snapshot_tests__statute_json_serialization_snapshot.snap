@@ -1,0 +1,33 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: json
+---
+{
+  "id": "snapshot-test",
+  "title": "Snapshot Test Act",
+  "preconditions": [
+    {
+      "Age": {
+        "operator": "GreaterOrEqual",
+        "value": 18
+      }
+    }
+  ],
+  "effect": {
+    "effect_type": "Grant",
+    "description": "Test right",
+    "parameters": {}
+  },
+  "discretion_logic": null,
+  "temporal_validity": {
+    "effective_date": null,
+    "expiry_date": null,
+    "enacted_at": null,
+    "amended_at": null
+  },
+  "version": 1,
+  "jurisdiction": "US",
+  "derives_from": [],
+  "applies_to": [],
+  "exceptions": []
+}

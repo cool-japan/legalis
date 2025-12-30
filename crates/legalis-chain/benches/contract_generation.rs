@@ -1,10 +1,9 @@
 //! Benchmarks for smart contract generation performance.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use legalis_chain::{
-    BatchOperationConfig, ContractGenerator, FormalVerificationConfig,
-    MultiNetworkConfig, NetworkConfig, ProxyPattern, TargetPlatform,
-    TestSuiteConfig,
+    BatchOperationConfig, ContractGenerator, FormalVerificationConfig, MultiNetworkConfig,
+    NetworkConfig, ProxyPattern, TargetPlatform, TestSuiteConfig,
 };
 use legalis_core::{Effect, EffectType, Statute};
 
@@ -12,7 +11,7 @@ fn create_sample_statute(name: &str, _num_conditions: usize) -> Statute {
     Statute::new(
         name.to_string(),
         format!("{} Title", name),
-        Effect::new(EffectType::Grant, "Grant permission")
+        Effect::new(EffectType::Grant, "Grant permission"),
     )
 }
 
@@ -20,19 +19,15 @@ fn bench_solidity_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("solidity_generation");
 
     for num_conditions in [1, 5, 10, 20].iter() {
-        let statute = create_sample_statute(
-            &format!("TestStatute{}", num_conditions),
-            *num_conditions
-        );
+        let statute =
+            create_sample_statute(&format!("TestStatute{}", num_conditions), *num_conditions);
 
         group.bench_with_input(
             BenchmarkId::new("basic", num_conditions),
             num_conditions,
             |b, _| {
                 let generator = ContractGenerator::new(TargetPlatform::Solidity);
-                b.iter(|| {
-                    black_box(generator.generate(&statute).unwrap())
-                });
+                b.iter(|| black_box(generator.generate(&statute).unwrap()));
             },
         );
     }
@@ -44,19 +39,15 @@ fn bench_vyper_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("vyper_generation");
 
     for num_conditions in [1, 5, 10].iter() {
-        let statute = create_sample_statute(
-            &format!("TestStatute{}", num_conditions),
-            *num_conditions
-        );
+        let statute =
+            create_sample_statute(&format!("TestStatute{}", num_conditions), *num_conditions);
 
         group.bench_with_input(
             BenchmarkId::new("basic", num_conditions),
             num_conditions,
             |b, _| {
                 let generator = ContractGenerator::new(TargetPlatform::Vyper);
-                b.iter(|| {
-                    black_box(generator.generate(&statute).unwrap())
-                });
+                b.iter(|| black_box(generator.generate(&statute).unwrap()));
             },
         );
     }
@@ -69,9 +60,7 @@ fn bench_wasm_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::RustWasm);
 
     c.bench_function("rust_wasm_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -80,9 +69,7 @@ fn bench_move_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::Move);
 
     c.bench_function("move_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -91,9 +78,7 @@ fn bench_cairo_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::Cairo);
 
     c.bench_function("cairo_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -102,9 +87,7 @@ fn bench_cosmwasm_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::CosmWasm);
 
     c.bench_function("cosmwasm_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -113,9 +96,7 @@ fn bench_ton_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::Ton);
 
     c.bench_function("ton_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -124,9 +105,7 @@ fn bench_teal_generation(c: &mut Criterion) {
     let generator = ContractGenerator::new(TargetPlatform::Teal);
 
     c.bench_function("teal_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate(&statute).unwrap()));
     });
 }
 
@@ -137,9 +116,7 @@ fn bench_batch_generation(c: &mut Criterion) {
 
     c.bench_function("batch_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
-        b.iter(|| {
-            black_box(generator.generate_batch(&statutes))
-        });
+        b.iter(|| black_box(generator.generate_batch(&statutes)));
     });
 }
 
@@ -148,9 +125,7 @@ fn bench_factory_generation(c: &mut Criterion) {
 
     c.bench_function("factory_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
-        b.iter(|| {
-            black_box(generator.generate_factory(&statute_ids).unwrap())
-        });
+        b.iter(|| black_box(generator.generate_factory(&statute_ids).unwrap()));
     });
 }
 
@@ -171,7 +146,9 @@ fn bench_proxy_generation(c: &mut Criterion) {
                 let generator = ContractGenerator::new(TargetPlatform::Solidity);
                 b.iter(|| {
                     black_box(
-                        generator.generate_proxy_with_pattern("TestContract", pattern).unwrap()
+                        generator
+                            .generate_proxy_with_pattern("TestContract", pattern)
+                            .unwrap(),
                     )
                 });
             },
@@ -188,9 +165,7 @@ fn bench_test_suite_generation(c: &mut Criterion) {
     let config = TestSuiteConfig::default();
 
     c.bench_function("test_suite_generation", |b| {
-        b.iter(|| {
-            black_box(generator.generate_test_suite(&contract, &config).unwrap())
-        });
+        b.iter(|| black_box(generator.generate_test_suite(&contract, &config).unwrap()));
     });
 }
 
@@ -202,9 +177,7 @@ fn bench_security_analysis(c: &mut Criterion) {
     let contract = generator.generate(&statute).unwrap();
 
     c.bench_function("security_analysis", |b| {
-        b.iter(|| {
-            black_box(SecurityAnalyzer::analyze(&contract))
-        });
+        b.iter(|| black_box(SecurityAnalyzer::analyze(&contract)));
     });
 }
 
@@ -216,7 +189,11 @@ fn bench_formal_verification_generation(c: &mut Criterion) {
 
     c.bench_function("formal_verification_generation", |b| {
         b.iter(|| {
-            black_box(generator.generate_formal_verification(&contract, &config).unwrap())
+            black_box(
+                generator
+                    .generate_formal_verification(&contract, &config)
+                    .unwrap(),
+            )
         });
     });
 }
@@ -228,7 +205,11 @@ fn bench_batch_operations(c: &mut Criterion) {
     c.bench_function("batch_operations_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
         b.iter(|| {
-            black_box(generator.generate_with_batch_operations(&statute, &config).unwrap())
+            black_box(
+                generator
+                    .generate_with_batch_operations(&statute, &config)
+                    .unwrap(),
+            )
         });
     });
 }
@@ -262,7 +243,11 @@ fn bench_multi_network_config(c: &mut Criterion) {
 
     c.bench_function("multi_network_config_generation", |b| {
         b.iter(|| {
-            black_box(generator.generate_multi_network_config(&contract, &config).unwrap())
+            black_box(
+                generator
+                    .generate_multi_network_config(&contract, &config)
+                    .unwrap(),
+            )
         });
     });
 }
@@ -272,9 +257,7 @@ fn bench_modular_generation(c: &mut Criterion) {
 
     c.bench_function("modular_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
-        b.iter(|| {
-            black_box(generator.generate_modular(&statute).unwrap())
-        });
+        b.iter(|| black_box(generator.generate_modular(&statute).unwrap()));
     });
 }
 
@@ -285,7 +268,11 @@ fn bench_inheritance_generation(c: &mut Criterion) {
     c.bench_function("inheritance_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
         b.iter(|| {
-            black_box(generator.generate_with_inheritance(&statute, &base_contracts).unwrap())
+            black_box(
+                generator
+                    .generate_with_inheritance(&statute, &base_contracts)
+                    .unwrap(),
+            )
         });
     });
 }
@@ -299,9 +286,7 @@ fn bench_diamond_pattern(c: &mut Criterion) {
 
     c.bench_function("diamond_pattern_generation", |b| {
         let generator = ContractGenerator::new(TargetPlatform::Solidity);
-        b.iter(|| {
-            black_box(generator.generate_diamond(&statutes).unwrap())
-        });
+        b.iter(|| black_box(generator.generate_diamond(&statutes).unwrap()));
     });
 }
 

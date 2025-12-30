@@ -8,17 +8,30 @@
 //! - OpenAPI 3.0 documentation
 //! - Authentication and authorization (RBAC + ReBAC)
 
+pub mod anomaly;
 pub mod async_jobs;
+pub mod audit;
 pub mod auth;
 pub mod cache;
+pub mod collaborative;
 pub mod config;
+pub mod edge_cache;
 pub mod field_selection;
 pub mod graphql;
 pub mod logging;
 mod metrics;
+pub mod multitenancy;
+pub mod oauth2_provider;
+pub mod observability;
 mod openapi;
+pub mod presence;
 pub mod rate_limit;
 pub mod rebac;
+pub mod sampling;
+pub mod security;
+pub mod slo;
+pub mod telemetry;
+pub mod versioning;
 pub mod websocket;
 
 use axum::{
@@ -154,6 +167,14 @@ pub struct AppState {
     pub cache: Arc<cache::CacheStore>,
     /// WebSocket broadcaster for real-time notifications
     pub ws_broadcaster: websocket::WsBroadcaster,
+    /// Audit log for tracking all mutations
+    pub audit_log: Arc<audit::AuditLog>,
+    /// API keys storage
+    pub api_keys: RwLock<Vec<auth::ApiKey>>,
+    /// Collaborative editor for real-time editing
+    pub collaborative_editor: Arc<collaborative::CollaborativeEditor>,
+    /// Presence manager for tracking active users
+    pub presence_manager: Arc<presence::PresenceManager>,
 }
 
 impl AppState {
@@ -165,6 +186,10 @@ impl AppState {
             saved_simulations: RwLock::new(Vec::new()),
             cache: Arc::new(cache::CacheStore::new()),
             ws_broadcaster: websocket::WsBroadcaster::new(),
+            audit_log: Arc::new(audit::AuditLog::new()),
+            api_keys: RwLock::new(Vec::new()),
+            collaborative_editor: Arc::new(collaborative::CollaborativeEditor::new()),
+            presence_manager: Arc::new(presence::PresenceManager::new(30)),
         }
     }
 }
@@ -188,6 +213,29 @@ pub struct StatuteSummary {
     pub title: String,
     pub has_discretion: bool,
     pub precondition_count: usize,
+}
+
+/// Statute permission update request.
+#[derive(Deserialize)]
+pub struct StatutePermissionRequest {
+    /// User ID to grant/revoke permission
+    pub user_id: String,
+    /// Permission type (viewer, editor, owner)
+    pub permission: String,
+}
+
+/// Statute permission list response.
+#[derive(Serialize)]
+pub struct StatutePermissionsResponse {
+    pub statute_id: String,
+    pub permissions: Vec<StatutePermissionEntry>,
+}
+
+/// Statute permission entry.
+#[derive(Serialize)]
+pub struct StatutePermissionEntry {
+    pub user_id: String,
+    pub permission: String,
 }
 
 impl From<&Statute> for StatuteSummary {
@@ -337,6 +385,74 @@ pub struct StatuteComparisonRequest {
     pub statute_id_b: String,
 }
 
+/// Statute comparison matrix request.
+#[derive(Deserialize)]
+pub struct StatuteComparisonMatrixRequest {
+    /// List of statute IDs to compare
+    pub statute_ids: Vec<String>,
+}
+
+/// Statute comparison matrix response.
+#[derive(Serialize)]
+pub struct StatuteComparisonMatrixResponse {
+    /// Statutes being compared
+    pub statutes: Vec<StatuteSummary>,
+    /// Matrix of similarity scores (indexed by statute order)
+    pub similarity_matrix: Vec<Vec<f64>>,
+    /// Detailed comparison pairs
+    pub comparisons: Vec<ComparisonMatrixEntry>,
+}
+
+/// Entry in the comparison matrix.
+#[derive(Serialize)]
+pub struct ComparisonMatrixEntry {
+    pub statute_a_id: String,
+    pub statute_b_id: String,
+    pub similarity_score: f64,
+    pub precondition_diff: i32,
+    pub discretion_differs: bool,
+}
+
+/// API key creation request.
+#[derive(Deserialize)]
+pub struct CreateApiKeyRequest {
+    /// Name/description for the key
+    pub name: String,
+    /// Role for the key
+    pub role: auth::Role,
+    /// Optional scoped permissions (if not provided, uses all role permissions)
+    pub scopes: Option<Vec<String>>,
+    /// Optional expiration in days (if not provided, never expires)
+    pub expires_in_days: Option<i64>,
+}
+
+/// API key response (with the actual key value shown only once).
+#[derive(Serialize)]
+pub struct ApiKeyResponse {
+    pub id: String,
+    pub key: Option<String>, // Only shown on creation
+    pub name: String,
+    pub role: String,
+    pub scopes: Vec<String>,
+    pub created_at: String,
+    pub expires_at: Option<String>,
+    pub active: bool,
+    pub last_used_at: Option<String>,
+}
+
+/// API key list response.
+#[derive(Serialize)]
+pub struct ApiKeyListResponse {
+    pub keys: Vec<ApiKeyResponse>,
+}
+
+/// API key rotation response.
+#[derive(Serialize)]
+pub struct ApiKeyRotationResponse {
+    pub old_key_id: String,
+    pub new_key: ApiKeyResponse,
+}
+
 /// Statute comparison response.
 #[derive(Serialize)]
 pub struct StatuteComparisonResponse {
@@ -477,6 +593,42 @@ pub struct SaveSimulationRequest {
     pub simulation_result: SimulationResponse,
 }
 
+/// Compliance check request.
+#[derive(Deserialize)]
+pub struct ComplianceCheckRequest {
+    pub statute_ids: Vec<String>,
+    pub entity_attributes: std::collections::HashMap<String, String>,
+}
+
+/// Compliance check response.
+#[derive(Serialize)]
+pub struct ComplianceCheckResponse {
+    pub compliant: bool,
+    pub requires_discretion: bool,
+    pub not_applicable: bool,
+    pub applicable_statutes: Vec<String>,
+    pub checked_statute_count: usize,
+}
+
+/// What-if analysis request.
+#[derive(Deserialize)]
+pub struct WhatIfRequest {
+    pub statute_ids: Vec<String>,
+    pub baseline_attributes: std::collections::HashMap<String, String>,
+    pub modified_attributes: std::collections::HashMap<String, String>,
+}
+
+/// What-if analysis response.
+#[derive(Serialize)]
+pub struct WhatIfResponse {
+    pub baseline_compliant: bool,
+    pub modified_compliant: bool,
+    pub impact: String,
+    pub baseline_requires_discretion: bool,
+    pub modified_requires_discretion: bool,
+    pub changed_attribute_count: usize,
+}
+
 /// List saved simulations query.
 #[derive(Deserialize)]
 pub struct ListSavedSimulationsQuery {
@@ -540,6 +692,586 @@ pub struct SimulationDifferences {
     pub significant_change: bool,
 }
 
+/// Get permissions for a specific statute.
+async fn get_statute_permissions(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(statute_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    // Check if statute exists
+    let statutes = state.statutes.read().await;
+    if !statutes.iter().any(|s| s.id == statute_id) {
+        return Err(ApiError::NotFound(format!(
+            "Statute not found: {}",
+            statute_id
+        )));
+    }
+    drop(statutes);
+
+    // Get all users who have access to this statute
+    // This is a simplified version - in production, you'd have a way to iterate
+    // through users or store reverse mappings via the ReBAC engine
+    // For now, we'll return a placeholder response
+    let permissions_list = vec![StatutePermissionEntry {
+        user_id: "system".to_string(),
+        permission: "owner".to_string(),
+    }];
+
+    Ok(Json(ApiResponse::new(StatutePermissionsResponse {
+        statute_id,
+        permissions: permissions_list,
+    })))
+}
+
+/// Grant permission on a statute to a user.
+async fn grant_statute_permission(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(statute_id): Path<String>,
+    Json(req): Json<StatutePermissionRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageUsers)?;
+
+    // Check if statute exists
+    let statutes = state.statutes.read().await;
+    if !statutes.iter().any(|s| s.id == statute_id) {
+        return Err(ApiError::NotFound(format!(
+            "Statute not found: {}",
+            statute_id
+        )));
+    }
+    drop(statutes);
+
+    // Parse user ID
+    let target_user_id = uuid::Uuid::parse_str(&req.user_id)
+        .map_err(|_| ApiError::BadRequest("Invalid user ID format".to_string()))?;
+
+    // Create a deterministic UUID from statute_id using hash
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    statute_id.hash(&mut hasher);
+    let hash_value = hasher.finish();
+
+    // Convert hash to UUID (deterministic based on statute_id)
+    let resource_uuid = uuid::Uuid::from_u128(hash_value as u128);
+
+    // Parse relation type
+    let relation = match req.permission.as_str() {
+        "owner" => rebac::Relation::Owner,
+        "editor" => rebac::Relation::Editor,
+        "viewer" => rebac::Relation::Viewer,
+        _ => {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid permission type: {}. Must be one of: owner, editor, viewer",
+                req.permission
+            )));
+        }
+    };
+
+    let mut rebac = state.rebac.write().await;
+
+    // Grant the permission via ReBAC
+    let tuple = rebac::RelationTuple::new(
+        target_user_id,
+        relation,
+        rebac::ResourceType::Statute,
+        resource_uuid,
+    );
+    rebac.add_tuple(tuple);
+
+    // Update metrics
+    metrics::PERMISSION_OPERATIONS
+        .with_label_values(&["grant"])
+        .inc();
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::PermissionGranted,
+            user.id.to_string(),
+            user.username.clone(),
+            "grant_statute_permission".to_string(),
+            Some(statute_id.clone()),
+            Some("statute".to_string()),
+            serde_json::json!({
+                "statute_id": statute_id,
+                "granted_to": req.user_id,
+                "permission": req.permission
+            }),
+        )
+        .await;
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse::new(serde_json::json!({
+            "message": "Permission granted successfully",
+            "statute_id": statute_id,
+            "user_id": req.user_id,
+            "permission": req.permission
+        }))),
+    ))
+}
+
+/// Revoke permission on a statute from a user.
+async fn revoke_statute_permission(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(statute_id): Path<String>,
+    Json(req): Json<StatutePermissionRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageUsers)?;
+
+    // Check if statute exists
+    let statutes = state.statutes.read().await;
+    if !statutes.iter().any(|s| s.id == statute_id) {
+        return Err(ApiError::NotFound(format!(
+            "Statute not found: {}",
+            statute_id
+        )));
+    }
+    drop(statutes);
+
+    // Parse user ID
+    let target_user_id = uuid::Uuid::parse_str(&req.user_id)
+        .map_err(|_| ApiError::BadRequest("Invalid user ID format".to_string()))?;
+
+    // Create a deterministic UUID from statute_id using hash
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    statute_id.hash(&mut hasher);
+    let hash_value = hasher.finish();
+
+    // Convert hash to UUID (deterministic based on statute_id)
+    let resource_uuid = uuid::Uuid::from_u128(hash_value as u128);
+
+    // Parse relation type
+    let relation = match req.permission.as_str() {
+        "owner" => rebac::Relation::Owner,
+        "editor" => rebac::Relation::Editor,
+        "viewer" => rebac::Relation::Viewer,
+        _ => {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid permission type: {}. Must be one of: owner, editor, viewer",
+                req.permission
+            )));
+        }
+    };
+
+    let mut rebac = state.rebac.write().await;
+
+    // Revoke the permission via ReBAC
+    let tuple = rebac::RelationTuple::new(
+        target_user_id,
+        relation,
+        rebac::ResourceType::Statute,
+        resource_uuid,
+    );
+    rebac.remove_tuple(&tuple);
+
+    // Update metrics
+    metrics::PERMISSION_OPERATIONS
+        .with_label_values(&["revoke"])
+        .inc();
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::PermissionRevoked,
+            user.id.to_string(),
+            user.username.clone(),
+            "revoke_statute_permission".to_string(),
+            Some(statute_id.clone()),
+            Some("statute".to_string()),
+            serde_json::json!({
+                "statute_id": statute_id,
+                "revoked_from": req.user_id,
+                "permission": req.permission
+            }),
+        )
+        .await;
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse::new(serde_json::json!({
+            "message": "Permission revoked successfully",
+            "statute_id": statute_id,
+            "user_id": req.user_id,
+            "permission": req.permission
+        }))),
+    ))
+}
+
+/// Create a new API key.
+async fn create_api_key(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateApiKeyRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageApiKeys)?;
+
+    // Parse scopes if provided
+    let scopes = if let Some(scope_strs) = req.scopes {
+        let mut parsed_scopes = std::collections::HashSet::new();
+        for scope_str in scope_strs {
+            let permission = match scope_str.as_str() {
+                "read_statutes" => auth::Permission::ReadStatutes,
+                "create_statutes" => auth::Permission::CreateStatutes,
+                "update_statutes" => auth::Permission::UpdateStatutes,
+                "delete_statutes" => auth::Permission::DeleteStatutes,
+                "verify_statutes" => auth::Permission::VerifyStatutes,
+                "run_simulations" => auth::Permission::RunSimulations,
+                "view_analytics" => auth::Permission::ViewAnalytics,
+                "manage_users" => auth::Permission::ManageUsers,
+                "manage_api_keys" => auth::Permission::ManageApiKeys,
+                "admin" => auth::Permission::Admin,
+                _ => {
+                    return Err(ApiError::BadRequest(format!(
+                        "Invalid permission: {}",
+                        scope_str
+                    )));
+                }
+            };
+            parsed_scopes.insert(permission);
+        }
+        parsed_scopes
+    } else {
+        req.role.permissions()
+    };
+
+    // Create API key
+    let api_key = if let Some(expires_in_days) = req.expires_in_days {
+        auth::ApiKey::with_expiration(req.name, user.id, req.role, expires_in_days)
+    } else {
+        auth::ApiKey::with_scopes(req.name, user.id, req.role, scopes)
+    };
+
+    let key_id = api_key.id.to_string();
+    let key_value = api_key.key.clone();
+
+    // Store API key
+    let mut api_keys = state.api_keys.write().await;
+    api_keys.push(api_key.clone());
+    drop(api_keys);
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::ApiKeyCreated,
+            user.id.to_string(),
+            user.username.clone(),
+            "create_api_key".to_string(),
+            Some(key_id.clone()),
+            Some("api_key".to_string()),
+            serde_json::json!({
+                "key_id": key_id,
+                "name": api_key.name,
+                "role": format!("{:?}", api_key.role)
+            }),
+        )
+        .await;
+
+    let response = ApiKeyResponse {
+        id: key_id,
+        key: Some(key_value), // Only shown on creation
+        name: api_key.name,
+        role: format!("{:?}", api_key.role),
+        scopes: api_key.scopes.iter().map(|s| format!("{:?}", s)).collect(),
+        created_at: chrono::DateTime::from_timestamp(api_key.created_at, 0)
+            .unwrap_or_default()
+            .to_rfc3339(),
+        expires_at: api_key.expires_at.map(|ts| {
+            chrono::DateTime::from_timestamp(ts, 0)
+                .unwrap_or_default()
+                .to_rfc3339()
+        }),
+        active: api_key.active,
+        last_used_at: None,
+    };
+
+    Ok((StatusCode::CREATED, Json(ApiResponse::new(response))))
+}
+
+/// List all API keys for the current user.
+async fn list_api_keys(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageApiKeys)?;
+
+    let api_keys = state.api_keys.read().await;
+
+    let keys: Vec<ApiKeyResponse> = api_keys
+        .iter()
+        .filter(|key| key.owner_id == user.id || user.has_permission(auth::Permission::Admin))
+        .map(|key| ApiKeyResponse {
+            id: key.id.to_string(),
+            key: None, // Never show the key value in list
+            name: key.name.clone(),
+            role: format!("{:?}", key.role),
+            scopes: key.scopes.iter().map(|s| format!("{:?}", s)).collect(),
+            created_at: chrono::DateTime::from_timestamp(key.created_at, 0)
+                .unwrap_or_default()
+                .to_rfc3339(),
+            expires_at: key.expires_at.map(|ts| {
+                chrono::DateTime::from_timestamp(ts, 0)
+                    .unwrap_or_default()
+                    .to_rfc3339()
+            }),
+            active: key.active,
+            last_used_at: key.last_used_at.map(|ts| {
+                chrono::DateTime::from_timestamp(ts, 0)
+                    .unwrap_or_default()
+                    .to_rfc3339()
+            }),
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::new(ApiKeyListResponse { keys })))
+}
+
+/// Get a specific API key.
+#[allow(dead_code)]
+async fn get_api_key(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageApiKeys)?;
+
+    let key_id = uuid::Uuid::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid key ID format".to_string()))?;
+
+    let api_keys = state.api_keys.read().await;
+
+    let key = api_keys
+        .iter()
+        .find(|k| {
+            k.id == key_id
+                && (k.owner_id == user.id || user.has_permission(auth::Permission::Admin))
+        })
+        .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
+
+    let response = ApiKeyResponse {
+        id: key.id.to_string(),
+        key: None, // Never show the key value
+        name: key.name.clone(),
+        role: format!("{:?}", key.role),
+        scopes: key.scopes.iter().map(|s| format!("{:?}", s)).collect(),
+        created_at: chrono::DateTime::from_timestamp(key.created_at, 0)
+            .unwrap_or_default()
+            .to_rfc3339(),
+        expires_at: key.expires_at.map(|ts| {
+            chrono::DateTime::from_timestamp(ts, 0)
+                .unwrap_or_default()
+                .to_rfc3339()
+        }),
+        active: key.active,
+        last_used_at: key.last_used_at.map(|ts| {
+            chrono::DateTime::from_timestamp(ts, 0)
+                .unwrap_or_default()
+                .to_rfc3339()
+        }),
+    };
+
+    Ok(Json(ApiResponse::new(response)))
+}
+
+/// Revoke an API key.
+async fn revoke_api_key(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageApiKeys)?;
+
+    let key_id = uuid::Uuid::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid key ID format".to_string()))?;
+
+    let mut api_keys = state.api_keys.write().await;
+
+    let key_index = api_keys
+        .iter()
+        .position(|k| {
+            k.id == key_id
+                && (k.owner_id == user.id || user.has_permission(auth::Permission::Admin))
+        })
+        .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
+
+    let key = api_keys.remove(key_index);
+
+    drop(api_keys);
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::ApiKeyRevoked,
+            user.id.to_string(),
+            user.username.clone(),
+            "revoke_api_key".to_string(),
+            Some(key.id.to_string()),
+            Some("api_key".to_string()),
+            serde_json::json!({
+                "key_id": key.id.to_string(),
+                "name": key.name
+            }),
+        )
+        .await;
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse::new(serde_json::json!({
+            "message": "API key revoked successfully",
+            "key_id": key.id.to_string()
+        }))),
+    ))
+}
+
+/// Rotate an API key (creates a new key, deactivates the old one).
+async fn rotate_api_key(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ManageApiKeys)?;
+
+    let key_id = uuid::Uuid::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid key ID format".to_string()))?;
+
+    let mut api_keys = state.api_keys.write().await;
+
+    let old_key = api_keys
+        .iter_mut()
+        .find(|k| {
+            k.id == key_id
+                && (k.owner_id == user.id || user.has_permission(auth::Permission::Admin))
+        })
+        .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
+
+    // Create new key
+    let new_key = old_key.rotate();
+    let new_key_value = new_key.key.clone();
+
+    // Deactivate old key
+    old_key.active = false;
+
+    // Add new key
+    api_keys.push(new_key.clone());
+    drop(api_keys);
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::ApiKeyRotated,
+            user.id.to_string(),
+            user.username.clone(),
+            "rotate_api_key".to_string(),
+            Some(new_key.id.to_string()),
+            Some("api_key".to_string()),
+            serde_json::json!({
+                "old_key_id": key_id.to_string(),
+                "new_key_id": new_key.id.to_string()
+            }),
+        )
+        .await;
+
+    let response = ApiKeyRotationResponse {
+        old_key_id: key_id.to_string(),
+        new_key: ApiKeyResponse {
+            id: new_key.id.to_string(),
+            key: Some(new_key_value), // Only shown on rotation
+            name: new_key.name,
+            role: format!("{:?}", new_key.role),
+            scopes: new_key.scopes.iter().map(|s| format!("{:?}", s)).collect(),
+            created_at: chrono::DateTime::from_timestamp(new_key.created_at, 0)
+                .unwrap_or_default()
+                .to_rfc3339(),
+            expires_at: new_key.expires_at.map(|ts| {
+                chrono::DateTime::from_timestamp(ts, 0)
+                    .unwrap_or_default()
+                    .to_rfc3339()
+            }),
+            active: new_key.active,
+            last_used_at: None,
+        },
+    };
+
+    Ok((StatusCode::OK, Json(ApiResponse::new(response))))
+}
+
+/// Query audit logs with filtering.
+async fn query_audit_logs(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Query(filter): Query<audit::AuditQueryFilter>,
+) -> Result<impl IntoResponse, ApiError> {
+    // Only admins can view audit logs
+    user.require_permission(auth::Permission::Admin)?;
+
+    let entries = state.audit_log.query(filter.clone()).await;
+    let total = state.audit_log.count_filtered(filter).await;
+
+    let meta = ResponseMeta {
+        total: Some(total),
+        ..Default::default()
+    };
+
+    Ok(Json(ApiResponse::new(entries).with_meta(meta)))
+}
+
+/// Get audit log statistics.
+async fn audit_stats(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, ApiError> {
+    // Only admins can view audit stats
+    user.require_permission(auth::Permission::Admin)?;
+
+    let total_count = state.audit_log.count().await;
+
+    // Count by event type
+    let statute_created = state
+        .audit_log
+        .count_filtered(audit::AuditQueryFilter {
+            event_type: Some(audit::AuditEventType::StatuteCreated),
+            ..Default::default()
+        })
+        .await;
+
+    let statute_deleted = state
+        .audit_log
+        .count_filtered(audit::AuditQueryFilter {
+            event_type: Some(audit::AuditEventType::StatuteDeleted),
+            ..Default::default()
+        })
+        .await;
+
+    let simulations_saved = state
+        .audit_log
+        .count_filtered(audit::AuditQueryFilter {
+            event_type: Some(audit::AuditEventType::SimulationSaved),
+            ..Default::default()
+        })
+        .await;
+
+    let stats = serde_json::json!({
+        "total_audit_entries": total_count,
+        "by_event_type": {
+            "statute_created": statute_created,
+            "statute_deleted": statute_deleted,
+            "simulations_saved": simulations_saved
+        }
+    });
+
+    Ok(Json(ApiResponse::new(stats)))
+}
+
 /// GraphQL handler.
 async fn graphql_handler(
     schema: axum::extract::Extension<graphql::LegalisSchema>,
@@ -574,6 +1306,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/statutes/batch/delete", post(batch_delete_statutes))
         .route("/api/v1/statutes/compare", post(compare_statutes))
         .route(
+            "/api/v1/statutes/compare/matrix",
+            post(compare_statutes_matrix),
+        )
+        .route(
             "/api/v1/statutes/{id}",
             get(get_statute).delete(delete_statute),
         )
@@ -587,6 +1323,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/verify/detailed", post(verify_statutes_detailed))
         .route("/api/v1/verify/conflicts", post(detect_conflicts))
         .route("/api/v1/verify/batch", post(verify_batch))
+        .route("/api/v1/verify/bulk/stream", post(verify_bulk_stream))
         .route("/api/v1/verify/async", post(verify_statutes_async))
         .route(
             "/api/v1/verify/async/{job_id}",
@@ -595,6 +1332,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/simulate", post(run_simulation))
         .route("/api/v1/simulate/stream", post(stream_simulation))
         .route("/api/v1/simulate/compare", post(compare_simulations))
+        .route("/api/v1/simulate/compliance", post(check_compliance))
+        .route("/api/v1/simulate/whatif", post(whatif_analysis))
         .route(
             "/api/v1/simulate/saved",
             get(list_saved_simulations).post(save_simulation),
@@ -605,9 +1344,24 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v1/visualize/{id}", get(visualize_statute))
         .route("/api-docs/openapi.json", get(openapi_spec))
+        .route("/api-docs", get(swagger_ui))
         .route("/graphql", post(graphql_handler))
         .route("/graphql/playground", get(graphql_playground))
         .route("/ws", get(websocket::ws_handler))
+        .route("/api/v1/audit", get(query_audit_logs))
+        .route("/api/v1/audit/stats", get(audit_stats))
+        .route(
+            "/api/v1/statutes/{id}/permissions",
+            get(get_statute_permissions)
+                .post(grant_statute_permission)
+                .delete(revoke_statute_permission),
+        )
+        .route("/api/v1/api-keys", get(list_api_keys).post(create_api_key))
+        .route(
+            "/api/v1/api-keys/{id}",
+            get(get_api_key).delete(revoke_api_key),
+        )
+        .route("/api/v1/api-keys/{id}/rotate", post(rotate_api_key))
         .layer(Extension(graphql_schema))
         .layer(middleware::from_fn(logging::log_request))
         .layer(CompressionLayer::new())
@@ -618,6 +1372,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 /// Returns the OpenAPI 3.0 specification.
 async fn openapi_spec() -> impl IntoResponse {
     Json(openapi::generate_spec())
+}
+
+/// Returns the Swagger UI HTML page.
+async fn swagger_ui() -> impl IntoResponse {
+    axum::response::Html(openapi::generate_swagger_ui_html())
 }
 
 /// Health check endpoint - liveness probe.
@@ -860,14 +1619,132 @@ async fn create_statute(
     let statute_title = req.statute.title.clone();
     statutes.push(req.statute.clone());
 
+    // Update metrics
+    metrics::STATUTE_OPERATIONS
+        .with_label_values(&["create"])
+        .inc();
+    metrics::STATUTES_TOTAL.inc();
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::StatuteCreated,
+            user.id.to_string(),
+            user.username.clone(),
+            "create_statute".to_string(),
+            Some(statute_id.clone()),
+            Some("statute".to_string()),
+            serde_json::json!({
+                "statute_id": statute_id,
+                "title": statute_title
+            }),
+        )
+        .await;
+
     // Broadcast WebSocket notification
-    state.ws_broadcaster.broadcast(websocket::WsNotification::StatuteCreated {
-        statute_id: statute_id.clone(),
-        title: statute_title,
-        created_by: user.username.clone(),
-    });
+    state
+        .ws_broadcaster
+        .broadcast(websocket::WsNotification::StatuteCreated {
+            statute_id: statute_id.clone(),
+            title: statute_title,
+            created_by: user.username.clone(),
+        });
 
     Ok((StatusCode::CREATED, Json(ApiResponse::new(req.statute))))
+}
+
+/// Compare multiple statutes in a matrix format.
+async fn compare_statutes_matrix(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<StatuteComparisonMatrixRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    if req.statute_ids.len() < 2 {
+        return Err(ApiError::BadRequest(
+            "At least 2 statutes required for comparison matrix".to_string(),
+        ));
+    }
+
+    if req.statute_ids.len() > 20 {
+        return Err(ApiError::BadRequest(
+            "Maximum 20 statutes allowed for comparison matrix".to_string(),
+        ));
+    }
+
+    let statutes = state.statutes.read().await;
+
+    // Fetch all requested statutes
+    let mut statute_list = Vec::new();
+    for id in &req.statute_ids {
+        if let Some(statute) = statutes.iter().find(|s| &s.id == id) {
+            statute_list.push(statute.clone());
+        } else {
+            return Err(ApiError::NotFound(format!("Statute not found: {}", id)));
+        }
+    }
+
+    let count = statute_list.len();
+
+    // Build similarity matrix (symmetric matrix)
+    let mut similarity_matrix = vec![vec![0.0; count]; count];
+    let mut comparisons = Vec::new();
+
+    for i in 0..count {
+        for j in i..count {
+            if i == j {
+                // Same statute: 100% similarity
+                similarity_matrix[i][j] = 100.0;
+            } else {
+                // Calculate similarity between statute i and j
+                let stat_a = &statute_list[i];
+                let stat_b = &statute_list[j];
+
+                let precond_count_a = stat_a.preconditions.len() as i32;
+                let precond_count_b = stat_b.preconditions.len() as i32;
+                let precondition_diff = precond_count_b - precond_count_a;
+
+                let depth_a = calculate_nesting_depth(&stat_a.preconditions) as i32;
+                let depth_b = calculate_nesting_depth(&stat_b.preconditions) as i32;
+                let depth_diff = depth_b - depth_a;
+
+                let discretion_a = stat_a.discretion_logic.is_some();
+                let discretion_b = stat_b.discretion_logic.is_some();
+                let discretion_differs = discretion_a != discretion_b;
+
+                // Calculate similarity score
+                let mut similarity = 100.0;
+                similarity -= (precondition_diff.abs() as f64) * 5.0;
+                similarity -= (depth_diff.abs() as f64) * 10.0;
+                if discretion_differs {
+                    similarity -= 20.0;
+                }
+                similarity = similarity.clamp(0.0, 100.0);
+
+                // Store in matrix (symmetric)
+                similarity_matrix[i][j] = similarity;
+                similarity_matrix[j][i] = similarity;
+
+                comparisons.push(ComparisonMatrixEntry {
+                    statute_a_id: stat_a.id.clone(),
+                    statute_b_id: stat_b.id.clone(),
+                    similarity_score: similarity,
+                    precondition_diff,
+                    discretion_differs,
+                });
+            }
+        }
+    }
+
+    let summaries: Vec<StatuteSummary> = statute_list.iter().map(StatuteSummary::from).collect();
+
+    Ok(Json(ApiResponse::new(StatuteComparisonMatrixResponse {
+        statutes: summaries,
+        similarity_matrix,
+        comparisons,
+    })))
 }
 
 /// Compare two statutes.
@@ -951,6 +1828,7 @@ async fn batch_create_statutes(
     let mut created = 0;
     let mut failed = 0;
     let mut errors = Vec::new();
+    let total_requested = req.statutes.len();
 
     for statute in req.statutes {
         // Check for duplicate ID
@@ -967,6 +1845,24 @@ async fn batch_create_statutes(
         statutes.push(statute);
         created += 1;
     }
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::BatchStatutesCreated,
+            user.id.to_string(),
+            user.username.clone(),
+            "batch_create_statutes".to_string(),
+            None,
+            Some("statute".to_string()),
+            serde_json::json!({
+                "created": created,
+                "failed": failed,
+                "total": total_requested
+            }),
+        )
+        .await;
 
     Ok((
         if created > 0 {
@@ -997,6 +1893,7 @@ async fn batch_delete_statutes(
     let mut statutes = state.statutes.write().await;
     let mut deleted = 0;
     let mut not_found = Vec::new();
+    let total_requested = req.statute_ids.len();
 
     for id in req.statute_ids {
         let initial_len = statutes.len();
@@ -1009,6 +1906,24 @@ async fn batch_delete_statutes(
             not_found.push(id);
         }
     }
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::BatchStatutesDeleted,
+            user.id.to_string(),
+            user.username.clone(),
+            "batch_delete_statutes".to_string(),
+            None,
+            Some("statute".to_string()),
+            serde_json::json!({
+                "deleted": deleted,
+                "not_found": not_found.len(),
+                "total": total_requested
+            }),
+        )
+        .await;
 
     Ok(Json(ApiResponse::new(BatchDeleteStatutesResponse {
         deleted,
@@ -1034,11 +1949,35 @@ async fn delete_statute(
 
     info!("Deleted statute: {} by user {}", id, user.username);
 
+    // Update metrics
+    metrics::STATUTE_OPERATIONS
+        .with_label_values(&["delete"])
+        .inc();
+    metrics::STATUTES_TOTAL.dec();
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::StatuteDeleted,
+            user.id.to_string(),
+            user.username.clone(),
+            "delete_statute".to_string(),
+            Some(id.clone()),
+            Some("statute".to_string()),
+            serde_json::json!({
+                "statute_id": id
+            }),
+        )
+        .await;
+
     // Broadcast WebSocket notification
-    state.ws_broadcaster.broadcast(websocket::WsNotification::StatuteDeleted {
-        statute_id: id.clone(),
-        deleted_by: user.username.clone(),
-    });
+    state
+        .ws_broadcaster
+        .broadcast(websocket::WsNotification::StatuteDeleted {
+            statute_id: id.clone(),
+            deleted_by: user.username.clone(),
+        });
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1069,6 +2008,12 @@ async fn verify_statutes(
     let verifier = legalis_verifier::StatuteVerifier::new();
     let to_verify_owned: Vec<Statute> = to_verify.into_iter().cloned().collect();
     let result = verifier.verify(&to_verify_owned);
+
+    // Update metrics
+    metrics::VERIFICATIONS_TOTAL.inc();
+    metrics::VERIFICATION_RESULTS
+        .with_label_values(&[if result.passed { "passed" } else { "failed" }])
+        .inc();
 
     Ok(Json(ApiResponse::new(VerifyResponse {
         passed: result.passed,
@@ -1272,12 +2217,14 @@ async fn verify_statutes_async(
             .await;
 
         // Broadcast WebSocket notification
-        state_clone.ws_broadcaster.broadcast(websocket::WsNotification::VerificationCompleted {
-            job_id: job_id.clone(),
-            passed,
-            errors_count,
-            warnings_count,
-        });
+        state_clone
+            .ws_broadcaster
+            .broadcast(websocket::WsNotification::VerificationCompleted {
+                job_id: job_id.clone(),
+                passed,
+                errors_count,
+                warnings_count,
+            });
     });
 
     let poll_url = format!("/api/v1/verify/async/{}", job_id);
@@ -1323,6 +2270,108 @@ async fn get_verification_job_status(
         created_at: job.created_at.to_rfc3339(),
         updated_at: job.updated_at.to_rfc3339(),
     })))
+}
+
+/// Bulk verification with streaming results via Server-Sent Events.
+/// Verifies statutes in bulk and streams progress updates in real-time.
+async fn verify_bulk_stream(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<BatchVerifyRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    if req.jobs.is_empty() {
+        return Err(ApiError::BadRequest(
+            "No verification jobs provided".to_string(),
+        ));
+    }
+
+    // Clone data for async stream
+    let statutes = state.statutes.read().await.clone();
+
+    // Create stream
+    let stream = stream::unfold(
+        (req.jobs, statutes, 0usize),
+        |(mut jobs, statutes, processed)| async move {
+            if processed == 0 {
+                // Send start event
+                let event = Event::default()
+                    .event("start")
+                    .json_data(serde_json::json!({
+                        "total_jobs": jobs.len(),
+                        "status": "started"
+                    }))
+                    .ok()?;
+                return Some((Ok::<_, Infallible>(event), (jobs, statutes, processed)));
+            }
+
+            if jobs.is_empty() {
+                // Send completion event
+                let event = Event::default()
+                    .event("complete")
+                    .json_data(serde_json::json!({
+                        "status": "completed",
+                        "total_processed": processed
+                    }))
+                    .ok()?;
+                return Some((Ok::<_, Infallible>(event), (jobs, statutes, processed)));
+            }
+
+            // Process next job
+            let job = jobs.remove(0);
+            let verifier = legalis_verifier::StatuteVerifier::new();
+
+            let to_verify: Vec<&Statute> = if job.statute_ids.is_empty() {
+                statutes.iter().collect()
+            } else {
+                statutes
+                    .iter()
+                    .filter(|s| job.statute_ids.contains(&s.id))
+                    .collect()
+            };
+
+            let to_verify_owned: Vec<Statute> = to_verify.into_iter().cloned().collect();
+            let statute_count = to_verify_owned.len();
+
+            let result = if statute_count == 0 {
+                BatchVerifyResult {
+                    job_id: job.job_id.clone(),
+                    passed: false,
+                    errors: vec!["No statutes found for verification".to_string()],
+                    warnings: vec![],
+                    statute_count: 0,
+                }
+            } else {
+                let verify_result = verifier.verify(&to_verify_owned);
+                BatchVerifyResult {
+                    job_id: job.job_id,
+                    passed: verify_result.passed,
+                    errors: verify_result.errors.iter().map(|e| e.to_string()).collect(),
+                    warnings: verify_result.warnings.clone(),
+                    statute_count,
+                }
+            };
+
+            let processed_count = processed + 1;
+            let event = Event::default()
+                .event("result")
+                .json_data(serde_json::json!({
+                    "job_index": processed_count,
+                    "total_jobs": processed_count + jobs.len(),
+                    "result": result,
+                    "progress": (processed_count as f64 / (processed_count + jobs.len()) as f64) * 100.0
+                }))
+                .ok()?;
+
+            Some((
+                Ok::<_, Infallible>(event),
+                (jobs, statutes, processed_count),
+            ))
+        },
+    );
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 /// Batch verification of multiple statute groups.
@@ -1536,6 +2585,24 @@ async fn create_statute_version(
     );
     statutes.push(new_statute.clone());
 
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::StatuteVersionCreated,
+            user.id.to_string(),
+            user.username.clone(),
+            "create_statute_version".to_string(),
+            Some(new_id.clone()),
+            Some("statute".to_string()),
+            serde_json::json!({
+                "statute_id": new_id,
+                "version": new_version,
+                "base_id": base_id
+            }),
+        )
+        .await;
+
     Ok((StatusCode::CREATED, Json(ApiResponse::new(new_statute))))
 }
 
@@ -1615,21 +2682,33 @@ async fn run_simulation(
     // Run simulation
     use legalis_sim::SimEngine;
     let engine = SimEngine::new(to_simulate.clone(), population);
-    let metrics = engine.run_simulation().await;
+    let sim_metrics = engine.run_simulation().await;
 
-    let total = metrics.total_applications as f64;
+    // Update business metrics
+    metrics::SIMULATIONS_TOTAL.inc();
+    metrics::SIMULATION_OUTCOMES
+        .with_label_values(&["deterministic"])
+        .inc_by(sim_metrics.deterministic_count as u64);
+    metrics::SIMULATION_OUTCOMES
+        .with_label_values(&["discretionary"])
+        .inc_by(sim_metrics.discretion_count as u64);
+    metrics::SIMULATION_OUTCOMES
+        .with_label_values(&["void"])
+        .inc_by(sim_metrics.void_count as u64);
+
+    let total = sim_metrics.total_applications as f64;
     let deterministic_rate = if total > 0.0 {
-        (metrics.deterministic_count as f64 / total) * 100.0
+        (sim_metrics.deterministic_count as f64 / total) * 100.0
     } else {
         0.0
     };
     let discretionary_rate = if total > 0.0 {
-        (metrics.discretion_count as f64 / total) * 100.0
+        (sim_metrics.discretion_count as f64 / total) * 100.0
     } else {
         0.0
     };
     let void_rate = if total > 0.0 {
-        (metrics.void_count as f64 / total) * 100.0
+        (sim_metrics.void_count as f64 / total) * 100.0
     } else {
         0.0
     };
@@ -1637,9 +2716,9 @@ async fn run_simulation(
     Ok(Json(ApiResponse::new(SimulationResponse {
         simulation_id: uuid::Uuid::new_v4().to_string(),
         total_entities: req.population_size,
-        deterministic_outcomes: metrics.deterministic_count,
-        discretionary_outcomes: metrics.discretion_count,
-        void_outcomes: metrics.void_count,
+        deterministic_outcomes: sim_metrics.deterministic_count,
+        discretionary_outcomes: sim_metrics.discretion_count,
+        void_outcomes: sim_metrics.void_count,
         deterministic_rate,
         discretionary_rate,
         void_rate,
@@ -1896,6 +2975,150 @@ async fn compare_simulations(
     })))
 }
 
+/// Check compliance of a specific entity against statutes.
+async fn check_compliance(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ComplianceCheckRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    let statutes = state.statutes.read().await;
+
+    let to_check: Vec<Statute> = if req.statute_ids.is_empty() {
+        statutes.clone()
+    } else {
+        statutes
+            .iter()
+            .filter(|s| req.statute_ids.contains(&s.id))
+            .cloned()
+            .collect()
+    };
+
+    if to_check.is_empty() {
+        return Err(ApiError::BadRequest("No statutes to check".to_string()));
+    }
+
+    drop(statutes);
+
+    // Create entity from provided attributes
+    use legalis_core::TypedEntity;
+    let mut entity = TypedEntity::new();
+    for (key, value) in &req.entity_attributes {
+        // Try to parse as different types
+        if let Ok(num) = value.parse::<u32>() {
+            entity.set_u32(key, num);
+        } else if let Ok(num) = value.parse::<u64>() {
+            entity.set_u64(key, num);
+        } else {
+            entity.set_string(key, value);
+        }
+    }
+
+    // Check compliance by simulating with single entity
+    use legalis_sim::SimEngine;
+    let population: Vec<Box<dyn legalis_core::LegalEntity>> = vec![Box::new(entity)];
+    let engine = SimEngine::new(to_check.clone(), population);
+    let metrics = engine.run_simulation().await;
+
+    let compliant = metrics.deterministic_count > 0;
+    let requires_discretion = metrics.discretion_count > 0;
+    let not_applicable = metrics.void_count > 0;
+
+    // Determine which statutes apply
+    let applicable_statutes: Vec<String> = to_check.iter().map(|s| s.id.clone()).collect();
+
+    Ok(Json(ApiResponse::new(ComplianceCheckResponse {
+        compliant,
+        requires_discretion,
+        not_applicable,
+        applicable_statutes,
+        checked_statute_count: to_check.len(),
+    })))
+}
+
+/// Perform what-if analysis by comparing entity with modified attributes.
+async fn whatif_analysis(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<WhatIfRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::VerifyStatutes)?;
+
+    let statutes = state.statutes.read().await;
+
+    let to_analyze: Vec<Statute> = if req.statute_ids.is_empty() {
+        statutes.clone()
+    } else {
+        statutes
+            .iter()
+            .filter(|s| req.statute_ids.contains(&s.id))
+            .cloned()
+            .collect()
+    };
+
+    if to_analyze.is_empty() {
+        return Err(ApiError::BadRequest(
+            "No statutes for what-if analysis".to_string(),
+        ));
+    }
+
+    drop(statutes);
+
+    // Helper to create entity from attributes
+    fn create_entity(
+        attributes: &std::collections::HashMap<String, String>,
+    ) -> legalis_core::TypedEntity {
+        use legalis_core::TypedEntity;
+        let mut entity = TypedEntity::new();
+        for (key, value) in attributes {
+            if let Ok(num) = value.parse::<u32>() {
+                entity.set_u32(key, num);
+            } else if let Ok(num) = value.parse::<u64>() {
+                entity.set_u64(key, num);
+            } else {
+                entity.set_string(key, value);
+            }
+        }
+        entity
+    }
+
+    // Baseline scenario
+    let baseline_entity = create_entity(&req.baseline_attributes);
+    let baseline_pop: Vec<Box<dyn legalis_core::LegalEntity>> = vec![Box::new(baseline_entity)];
+
+    use legalis_sim::SimEngine;
+    let baseline_engine = SimEngine::new(to_analyze.clone(), baseline_pop);
+    let baseline_metrics = baseline_engine.run_simulation().await;
+
+    // Modified scenario
+    let modified_entity = create_entity(&req.modified_attributes);
+    let modified_pop: Vec<Box<dyn legalis_core::LegalEntity>> = vec![Box::new(modified_entity)];
+
+    let modified_engine = SimEngine::new(to_analyze.clone(), modified_pop);
+    let modified_metrics = modified_engine.run_simulation().await;
+
+    let baseline_compliant = baseline_metrics.deterministic_count > 0;
+    let modified_compliant = modified_metrics.deterministic_count > 0;
+
+    let impact = if baseline_compliant && !modified_compliant {
+        "negative".to_string()
+    } else if !baseline_compliant && modified_compliant {
+        "positive".to_string()
+    } else {
+        "none".to_string()
+    };
+
+    Ok(Json(ApiResponse::new(WhatIfResponse {
+        baseline_compliant,
+        modified_compliant,
+        impact,
+        baseline_requires_discretion: baseline_metrics.discretion_count > 0,
+        modified_requires_discretion: modified_metrics.discretion_count > 0,
+        changed_attribute_count: req.modified_attributes.len(),
+    })))
+}
+
 /// Save a simulation result for later retrieval.
 async fn save_simulation(
     user: auth::AuthUser,
@@ -1924,6 +3147,24 @@ async fn save_simulation(
     simulations.push(saved.clone());
 
     info!("Saved simulation: {} by user {}", saved.id, user.username);
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::SimulationSaved,
+            user.id.to_string(),
+            user.username.clone(),
+            "save_simulation".to_string(),
+            Some(saved.id.clone()),
+            Some("simulation".to_string()),
+            serde_json::json!({
+                "simulation_id": saved.id,
+                "name": saved.name
+            }),
+        )
+        .await;
+
     Ok((StatusCode::CREATED, Json(ApiResponse::new(saved))))
 }
 
@@ -1997,6 +3238,23 @@ async fn delete_saved_simulation(
     }
 
     info!("Deleted saved simulation: {} by user {}", id, user.username);
+
+    // Audit log
+    state
+        .audit_log
+        .log_success(
+            audit::AuditEventType::SimulationDeleted,
+            user.id.to_string(),
+            user.username.clone(),
+            "delete_saved_simulation".to_string(),
+            Some(id.clone()),
+            Some("simulation".to_string()),
+            serde_json::json!({
+                "simulation_id": id
+            }),
+        )
+        .await;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -2170,7 +3428,7 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["data"]["statutes"].as_array().unwrap().len() > 0);
+        assert!(!json["data"]["statutes"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -2178,6 +3436,15 @@ mod tests {
         // GraphQL create and query test - uses GraphQL schema
         let state = graphql::GraphQLState::new();
         let schema = graphql::create_schema(state);
+
+        // Create an admin user for testing
+        use auth::{AuthMethod, AuthUser, Role};
+        let admin_user = AuthUser::new(
+            uuid::Uuid::new_v4(),
+            "admin".to_string(),
+            Role::Admin,
+            AuthMethod::Jwt,
+        );
 
         let mutation = r#"
             mutation {
@@ -2194,7 +3461,8 @@ mod tests {
             }
         "#;
 
-        let result = schema.execute(mutation).await;
+        let request = async_graphql::Request::new(mutation).data(admin_user);
+        let result = schema.execute(request).await;
         assert!(result.errors.is_empty());
 
         let query = r#"

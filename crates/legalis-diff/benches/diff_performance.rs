@@ -314,6 +314,189 @@ fn bench_validate_rollbacks_parallel(c: &mut Criterion) {
     });
 }
 
+// Benchmarks for audit trail
+fn bench_audit_trail_creation(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 10);
+    let new = create_statute_with_preconditions("test", "New", 10);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("audit_trail_creation", |b| {
+        b.iter(|| {
+            use legalis_diff::audit::{AuditTrail, ChangeAttribution};
+            let attr = ChangeAttribution::new("Test User");
+            let _ = AuditTrail::new(black_box(diff_result.clone()), black_box(attr));
+        });
+    });
+}
+
+fn bench_audit_lifecycle_transitions(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 10);
+    let new = create_statute_with_preconditions("test", "New", 10);
+    let diff_result = diff(&old, &new).unwrap();
+
+    use legalis_diff::audit::{AuditTrail, ChangeAttribution, ChangeLifecycle};
+    let attr = ChangeAttribution::new("Test User");
+    let mut audit = AuditTrail::new(diff_result, attr);
+
+    c.bench_function("audit_lifecycle_transition", |b| {
+        b.iter(|| {
+            audit.transition_to(
+                black_box(ChangeLifecycle::UnderReview),
+                black_box("Reviewer"),
+                None,
+            );
+        });
+    });
+}
+
+// Benchmarks for streaming diff
+fn bench_streaming_diff(c: &mut Criterion) {
+    use legalis_diff::streaming::StreamingDiffer;
+
+    let mut group = c.benchmark_group("streaming_diff");
+    for size in [10, 50, 100, 500].iter() {
+        let old = create_statute_with_preconditions("test", "Old", *size);
+        let new = create_statute_with_preconditions("test", "New", *size);
+        let differ = StreamingDiffer::new();
+
+        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
+            b.iter(|| {
+                let _ = differ.stream_diff(black_box(&old), black_box(&new));
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_memory_efficient_diff(c: &mut Criterion) {
+    use legalis_diff::streaming::MemoryEfficientDiffer;
+
+    let old = create_statute_with_preconditions("test", "Old", 200);
+    let new = create_statute_with_preconditions("test", "New", 200);
+    let differ = MemoryEfficientDiffer::new();
+
+    c.bench_function("memory_efficient_diff_200", |b| {
+        b.iter(|| {
+            let _ = differ.diff(black_box(&old), black_box(&new));
+        });
+    });
+}
+
+fn bench_incremental_updater(c: &mut Criterion) {
+    use legalis_diff::streaming::IncrementalUpdater;
+
+    let v1 = create_statute_with_preconditions("test", "V1", 50);
+    let v2 = create_statute_with_preconditions("test", "V2", 50);
+    let mut updater = IncrementalUpdater::new();
+
+    c.bench_function("incremental_updater", |b| {
+        b.iter(|| {
+            let _ = updater.update(black_box(&v1), black_box(&v2));
+        });
+    });
+}
+
+// Benchmarks for export formats
+fn bench_export_unified_diff(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("export_unified_diff", |b| {
+        b.iter(|| {
+            use legalis_diff::export::generate_unified_diff;
+            let _ = generate_unified_diff(black_box(&diff_result));
+        });
+    });
+}
+
+fn bench_export_latex(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("export_latex_redline", |b| {
+        b.iter(|| {
+            use legalis_diff::export::generate_latex_redline;
+            let _ = generate_latex_redline(black_box(&diff_result));
+        });
+    });
+}
+
+fn bench_export_changelog(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("export_changelog", |b| {
+        b.iter(|| {
+            use legalis_diff::export::generate_changelog;
+            let _ = generate_changelog(black_box(&diff_result), "1.0.0");
+        });
+    });
+}
+
+fn bench_export_pdf_content(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("export_pdf_content", |b| {
+        b.iter(|| {
+            use legalis_diff::export::{PdfConfig, generate_pdf_content};
+            let config = PdfConfig::default();
+            let _ = generate_pdf_content(black_box(&diff_result), black_box(&config));
+        });
+    });
+}
+
+// Benchmarks for integration
+fn bench_webhook_payload_creation(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("webhook_payload_creation", |b| {
+        b.iter(|| {
+            use legalis_diff::integration::{WebhookEvent, WebhookPayload};
+            let _ = WebhookPayload::new(
+                black_box(WebhookEvent::DiffCreated),
+                black_box(diff_result.clone()),
+            );
+        });
+    });
+}
+
+fn bench_cicd_trigger_evaluation(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let mut new = old.clone();
+    new.effect = Effect::new(EffectType::Revoke, "Revoke");
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("cicd_trigger_evaluation", |b| {
+        b.iter(|| {
+            use legalis_diff::integration::{CiCdTrigger, TriggerCondition};
+            let trigger = CiCdTrigger::new("test", TriggerCondition::BreakingChange);
+            let _ = trigger.should_trigger(black_box(&diff_result));
+        });
+    });
+}
+
+fn bench_pr_comment_generation(c: &mut Criterion) {
+    let old = create_statute_with_preconditions("test", "Old", 20);
+    let new = create_statute_with_preconditions("test", "New", 20);
+    let diff_result = diff(&old, &new).unwrap();
+
+    c.bench_function("pr_comment_generation", |b| {
+        b.iter(|| {
+            use legalis_diff::integration::{Platform, PullRequestIntegration};
+            let pr =
+                PullRequestIntegration::new(42, "owner/repo", Platform::GitHub, "main", "feature");
+            let _ = pr.generate_comment(black_box(&diff_result));
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_diff_small,
@@ -331,6 +514,18 @@ criterion_group!(
     bench_parallel_generate_rollbacks,
     bench_parallel_analyze_rollbacks,
     bench_compute_rollback_statistics,
-    bench_validate_rollbacks_parallel
+    bench_validate_rollbacks_parallel,
+    bench_audit_trail_creation,
+    bench_audit_lifecycle_transitions,
+    bench_streaming_diff,
+    bench_memory_efficient_diff,
+    bench_incremental_updater,
+    bench_export_unified_diff,
+    bench_export_latex,
+    bench_export_changelog,
+    bench_export_pdf_content,
+    bench_webhook_payload_creation,
+    bench_cicd_trigger_evaluation,
+    bench_pr_comment_generation
 );
 criterion_main!(benches);

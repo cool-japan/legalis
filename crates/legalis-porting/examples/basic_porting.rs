@@ -148,10 +148,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Risk Score: {:.1}%", risk.risk_score * 100.0);
     println!("  Risks Identified:");
     for r in &risk.risks {
-        println!("    [{:?}] {} - {}", r.severity, r.category, r.description);
+        println!(
+            "    [{:?}] {:?} - {}",
+            r.severity, r.category, r.description
+        );
+        let likelihood_pct = match r.likelihood {
+            legalis_porting::RiskLevel::Low => 25.0,
+            legalis_porting::RiskLevel::Medium => 50.0,
+            legalis_porting::RiskLevel::High => 75.0,
+            legalis_porting::RiskLevel::Critical => 100.0,
+        };
         println!(
             "      Likelihood: {:.1}%, Impact: {:.1}%",
-            r.likelihood * 100.0,
+            likelihood_pct,
             r.impact * 100.0
         );
     }

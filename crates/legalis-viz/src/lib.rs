@@ -1879,6 +1879,62 @@ fn format_condition(condition: &Condition) -> String {
         Condition::Or(_, _) => "OR condition".to_string(),
         Condition::Not(_) => "NOT condition".to_string(),
         Condition::Custom { description } => description.clone(),
+        Condition::Composite {
+            conditions,
+            threshold,
+        } => {
+            format!(
+                "Composite ({} conditions, threshold: {})",
+                conditions.len(),
+                threshold
+            )
+        }
+        Condition::Threshold {
+            attributes,
+            operator,
+            value,
+        } => {
+            let attrs = attributes
+                .iter()
+                .map(|(attr, mult)| format!("{}*{}", mult, attr))
+                .collect::<Vec<_>>()
+                .join(" + ");
+            format!("{} {} {}", attrs, format_operator(operator), value)
+        }
+        Condition::Fuzzy {
+            attribute,
+            membership_points,
+            min_membership,
+        } => {
+            format!(
+                "{} ∈ fuzzy set ({} points, min: {})",
+                attribute,
+                membership_points.len(),
+                min_membership
+            )
+        }
+        Condition::Probabilistic {
+            condition: _,
+            probability,
+            threshold,
+        } => {
+            format!("Probabilistic (p={}, threshold={})", probability, threshold)
+        }
+        Condition::Temporal {
+            base_value,
+            reference_time: _,
+            rate,
+            operator,
+            target_value,
+        } => {
+            format!(
+                "Temporal (base={}, rate={}) {} {}",
+                base_value,
+                rate,
+                format_operator(operator),
+                target_value
+            )
+        }
     }
 }
 
@@ -3234,6 +3290,5513 @@ fn format_change_type(change: &legalis_core::StatuteChange) -> &'static str {
     }
 }
 
+/// Interactive visualization configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InteractiveConfig {
+    /// Enable zoom and pan controls
+    pub enable_zoom_pan: bool,
+    /// Enable node/edge hover tooltips
+    pub enable_tooltips: bool,
+    /// Enable click-to-expand for collapsed nodes
+    pub enable_click_expand: bool,
+    /// Enable search and highlight functionality
+    pub enable_search: bool,
+    /// Enable mini-map for navigation
+    pub enable_minimap: bool,
+    /// Initial zoom level (1.0 = 100%)
+    pub initial_zoom: f64,
+    /// Minimum zoom level
+    pub min_zoom: f64,
+    /// Maximum zoom level
+    pub max_zoom: f64,
+    /// Mini-map size (width, height in pixels)
+    pub minimap_size: (u32, u32),
+}
+
+impl Default for InteractiveConfig {
+    fn default() -> Self {
+        Self {
+            enable_zoom_pan: true,
+            enable_tooltips: true,
+            enable_click_expand: true,
+            enable_search: true,
+            enable_minimap: true,
+            initial_zoom: 1.0,
+            min_zoom: 0.1,
+            max_zoom: 5.0,
+            minimap_size: (200, 150),
+        }
+    }
+}
+
+/// Interactive visualizer for decision trees and dependency graphs
+pub struct InteractiveVisualizer {
+    theme: Theme,
+    config: InteractiveConfig,
+}
+
+impl InteractiveVisualizer {
+    /// Creates a new interactive visualizer with default settings.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+            config: InteractiveConfig::default(),
+        }
+    }
+
+    /// Sets the color theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the interactive configuration.
+    pub fn with_config(mut self, config: InteractiveConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates interactive HTML for a decision tree with zoom, pan, tooltips, etc.
+    pub fn to_interactive_html(&self, tree: &DecisionTree) -> String {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        self.wrap_with_interactive_controls(svg, "decision-tree")
+    }
+
+    /// Generates interactive HTML for a dependency graph.
+    pub fn to_interactive_html_graph(&self, graph: &DependencyGraph) -> String {
+        let svg = graph.to_svg_with_theme(&self.theme);
+        self.wrap_with_interactive_controls(svg, "dependency-graph")
+    }
+
+    fn wrap_with_interactive_controls(&self, svg: String, viz_type: &str) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("<meta charset=\"UTF-8\">\n");
+        html.push_str(&format!(
+            "<title>Interactive {} Visualization</title>\n",
+            viz_type
+        ));
+        html.push_str("<style>\n");
+        html.push_str(&self.generate_styles());
+        html.push_str("</style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        // Container
+        html.push_str("<div class=\"viz-container\">\n");
+
+        // Toolbar
+        if self.config.enable_zoom_pan || self.config.enable_search {
+            html.push_str("<div class=\"toolbar\">\n");
+
+            if self.config.enable_zoom_pan {
+                html.push_str("<div class=\"zoom-controls\">\n");
+                html.push_str("<button id=\"zoom-in\" title=\"Zoom In\">+</button>\n");
+                html.push_str("<button id=\"zoom-out\" title=\"Zoom Out\">-</button>\n");
+                html.push_str("<button id=\"zoom-reset\" title=\"Reset Zoom\">⚪</button>\n");
+                html.push_str("<button id=\"fit-to-screen\" title=\"Fit to Screen\">⬜</button>\n");
+                html.push_str("</div>\n");
+            }
+
+            if self.config.enable_search {
+                html.push_str("<div class=\"search-controls\">\n");
+                html.push_str(
+                    "<input type=\"text\" id=\"search-box\" placeholder=\"Search nodes...\" />\n",
+                );
+                html.push_str("<button id=\"search-btn\">🔍</button>\n");
+                html.push_str("<button id=\"clear-search\">✕</button>\n");
+                html.push_str("</div>\n");
+            }
+
+            html.push_str("</div>\n");
+        }
+
+        // Main visualization area
+        html.push_str("<div class=\"viz-main\">\n");
+        html.push_str("<div id=\"svg-container\" class=\"svg-container\">\n");
+        html.push_str(&svg);
+        html.push_str("</div>\n");
+
+        // Mini-map
+        if self.config.enable_minimap {
+            html.push_str(&format!(
+                "<div id=\"minimap\" class=\"minimap\" style=\"width: {}px; height: {}px;\"></div>\n",
+                self.config.minimap_size.0, self.config.minimap_size.1
+            ));
+        }
+
+        html.push_str("</div>\n");
+        html.push_str("</div>\n");
+
+        // JavaScript
+        html.push_str("<script>\n");
+        html.push_str(&self.generate_javascript());
+        html.push_str("</script>\n");
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    fn generate_styles(&self) -> String {
+        format!(
+            "body {{
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: {};
+    color: {};
+}}
+
+.viz-container {{
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}}
+
+.toolbar {{
+    background: {};
+    padding: 10px;
+    border-bottom: 2px solid {};
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}}
+
+.zoom-controls, .search-controls {{
+    display: flex;
+    gap: 5px;
+}}
+
+button {{
+    padding: 8px 12px;
+    background: {};
+    border: 1px solid {};
+    color: {};
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+}}
+
+button:hover {{
+    opacity: 0.8;
+}}
+
+#search-box {{
+    padding: 8px;
+    border: 1px solid {};
+    background: {};
+    color: {};
+    border-radius: 4px;
+    min-width: 200px;
+}}
+
+.viz-main {{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}}
+
+.svg-container {{
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+}}
+
+.svg-container:active {{
+    cursor: grabbing;
+}}
+
+.svg-container svg {{
+    width: 100%;
+    height: 100%;
+}}
+
+.minimap {{
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    border: 2px solid {};
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}}
+
+.minimap svg {{
+    width: 100%;
+    height: 100%;
+}}
+
+.node-tooltip {{
+    position: absolute;
+    background: {};
+    color: {};
+    padding: 10px;
+    border: 1px solid {};
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 300px;
+}}
+
+.highlighted {{
+    filter: drop-shadow(0 0 8px yellow);
+}}
+
+.collapsed {{
+    opacity: 0.6;
+}}",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.root_color,
+            self.theme.link_color,
+            self.theme.condition_color,
+            self.theme.link_color,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.link_color
+        )
+    }
+
+    fn generate_javascript(&self) -> String {
+        let mut js = String::new();
+
+        js.push_str(&format!(
+            "const config = {{
+    enableZoomPan: {},
+    enableTooltips: {},
+    enableClickExpand: {},
+    enableSearch: {},
+    enableMinimap: {},
+    initialZoom: {},
+    minZoom: {},
+    maxZoom: {}
+}};\n\n",
+            self.config.enable_zoom_pan,
+            self.config.enable_tooltips,
+            self.config.enable_click_expand,
+            self.config.enable_search,
+            self.config.enable_minimap,
+            self.config.initial_zoom,
+            self.config.min_zoom,
+            self.config.max_zoom
+        ));
+
+        js.push_str(
+            "let currentZoom = config.initialZoom;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let startX = 0;
+let startY = 0;
+
+const svgContainer = document.getElementById('svg-container');
+const svg = svgContainer.querySelector('svg');
+
+// Zoom and Pan functionality
+if (config.enableZoomPan) {
+    document.getElementById('zoom-in')?.addEventListener('click', () => {
+        currentZoom = Math.min(currentZoom * 1.2, config.maxZoom);
+        updateTransform();
+    });
+
+    document.getElementById('zoom-out')?.addEventListener('click', () => {
+        currentZoom = Math.max(currentZoom / 1.2, config.minZoom);
+        updateTransform();
+    });
+
+    document.getElementById('zoom-reset')?.addEventListener('click', () => {
+        currentZoom = config.initialZoom;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+    });
+
+    document.getElementById('fit-to-screen')?.addEventListener('click', () => {
+        const containerRect = svgContainer.getBoundingClientRect();
+        const svgRect = svg.getBoundingClientRect();
+        const scaleX = containerRect.width / svgRect.width;
+        const scaleY = containerRect.height / svgRect.height;
+        currentZoom = Math.min(scaleX, scaleY) * 0.9;
+        panX = (containerRect.width - svgRect.width * currentZoom) / 2;
+        panY = (containerRect.height - svgRect.height * currentZoom) / 2;
+        updateTransform();
+    });
+
+    // Mouse wheel zoom
+    svgContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        currentZoom = Math.max(config.minZoom, Math.min(config.maxZoom, currentZoom * delta));
+        updateTransform();
+    });
+
+    // Pan with mouse drag
+    svgContainer.addEventListener('mousedown', (e) => {
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (isPanning) {
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateTransform();
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        isPanning = false;
+    });
+}
+
+function updateTransform() {
+    svg.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
+    svg.style.transformOrigin = '0 0';
+    updateMinimap();
+}
+
+// Tooltips
+if (config.enableTooltips) {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'node-tooltip';
+    tooltip.style.display = 'none';
+    document.body.appendChild(tooltip);
+
+    svg.querySelectorAll('g[id], rect[id], circle[id], text[id]').forEach(element => {
+        element.addEventListener('mouseenter', (e) => {
+            const id = element.id || element.textContent;
+            const content = element.getAttribute('data-tooltip') || id || 'Node';
+            tooltip.textContent = content;
+            tooltip.style.display = 'block';
+        });
+
+        element.addEventListener('mousemove', (e) => {
+            tooltip.style.left = e.pageX + 10 + 'px';
+            tooltip.style.top = e.pageY + 10 + 'px';
+        });
+
+        element.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+    });
+}
+
+// Click to expand/collapse
+if (config.enableClickExpand) {
+    const collapsedNodes = new Set();
+
+    svg.querySelectorAll('g[id]').forEach(node => {
+        node.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nodeId = node.id;
+
+            if (collapsedNodes.has(nodeId)) {
+                collapsedNodes.delete(nodeId);
+                node.classList.remove('collapsed');
+                showChildNodes(node);
+            } else {
+                collapsedNodes.add(nodeId);
+                node.classList.add('collapsed');
+                hideChildNodes(node);
+            }
+        });
+    });
+
+    function hideChildNodes(node) {
+        // Find and hide child nodes (simple implementation)
+        const children = findChildElements(node);
+        children.forEach(child => {
+            child.style.display = 'none';
+        });
+    }
+
+    function showChildNodes(node) {
+        const children = findChildElements(node);
+        children.forEach(child => {
+            child.style.display = '';
+        });
+    }
+
+    function findChildElements(node) {
+        // Simple heuristic: find elements connected via edges
+        return [];
+    }
+}
+
+// Search and highlight
+if (config.enableSearch) {
+    const searchBox = document.getElementById('search-box');
+    const searchBtn = document.getElementById('search-btn');
+    const clearBtn = document.getElementById('clear-search');
+
+    function performSearch() {
+        const query = searchBox.value.toLowerCase();
+        clearHighlights();
+
+        if (!query) return;
+
+        svg.querySelectorAll('g[id], text').forEach(element => {
+            const text = element.textContent.toLowerCase();
+            if (text.includes(query)) {
+                element.classList.add('highlighted');
+            }
+        });
+    }
+
+    function clearHighlights() {
+        svg.querySelectorAll('.highlighted').forEach(el => {
+            el.classList.remove('highlighted');
+        });
+    }
+
+    searchBtn?.addEventListener('click', performSearch);
+    searchBox?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+    clearBtn?.addEventListener('click', () => {
+        searchBox.value = '';
+        clearHighlights();
+    });
+}
+
+// Mini-map
+if (config.enableMinimap) {
+    const minimap = document.getElementById('minimap');
+    if (minimap && svg) {
+        const minimapSvg = svg.cloneNode(true);
+        minimapSvg.style.transform = 'scale(0.1)';
+        minimap.appendChild(minimapSvg);
+    }
+}
+
+function updateMinimap() {
+    if (!config.enableMinimap) return;
+    const minimap = document.getElementById('minimap');
+    if (minimap) {
+        const minimapSvg = minimap.querySelector('svg');
+        if (minimapSvg) {
+            minimapSvg.style.transform = `scale(${currentZoom * 0.1})`;
+        }
+    }
+}
+
+// Initialize
+updateTransform();
+",
+        );
+
+        js
+    }
+}
+
+impl Default for InteractiveVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 3D visualization configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreeDConfig {
+    /// Enable VR mode
+    pub enable_vr: bool,
+    /// Enable AR mode
+    pub enable_ar: bool,
+    /// Use force-directed layout
+    pub force_directed: bool,
+    /// Enable depth-based coloring
+    pub depth_coloring: bool,
+    /// Camera field of view (degrees)
+    pub camera_fov: f64,
+    /// Graph node size
+    pub node_size: f64,
+    /// Edge thickness
+    pub edge_thickness: f64,
+    /// Force-directed simulation strength (0.0-1.0)
+    pub force_strength: f64,
+    /// Auto-rotate speed (degrees per second, 0 = disabled)
+    pub auto_rotate_speed: f64,
+}
+
+impl Default for ThreeDConfig {
+    fn default() -> Self {
+        Self {
+            enable_vr: false,
+            enable_ar: false,
+            force_directed: true,
+            depth_coloring: true,
+            camera_fov: 75.0,
+            node_size: 1.0,
+            edge_thickness: 0.1,
+            force_strength: 0.5,
+            auto_rotate_speed: 10.0,
+        }
+    }
+}
+
+/// 3D visualizer for dependency graphs and timelines using WebGL
+pub struct ThreeDVisualizer {
+    theme: Theme,
+    config: ThreeDConfig,
+}
+
+impl ThreeDVisualizer {
+    /// Creates a new 3D visualizer with default settings.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+            config: ThreeDConfig::default(),
+        }
+    }
+
+    /// Sets the color theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the 3D configuration.
+    pub fn with_config(mut self, config: ThreeDConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates 3D HTML visualization for a dependency graph.
+    pub fn to_3d_html_graph(&self, graph: &DependencyGraph) -> String {
+        let nodes = self.extract_graph_nodes(graph);
+        let edges = self.extract_graph_edges(graph);
+        self.generate_3d_html("Dependency Graph", &nodes, &edges, false)
+    }
+
+    /// Generates 3D HTML visualization for a timeline.
+    pub fn to_3d_html_timeline(&self, timeline: &Timeline) -> String {
+        let nodes = self.extract_timeline_nodes(timeline);
+        let edges = self.extract_timeline_edges(timeline);
+        self.generate_3d_html("Timeline", &nodes, &edges, true)
+    }
+
+    fn extract_graph_nodes(&self, graph: &DependencyGraph) -> Vec<(String, usize)> {
+        // Extract nodes with their depth for depth-based coloring
+        let mut nodes = Vec::new();
+        for idx in graph.graph.node_indices() {
+            if let Some(statute_id) = graph.graph.node_weight(idx) {
+                // Calculate depth (simplified - distance from root nodes)
+                let depth = self.calculate_node_depth(graph, idx);
+                nodes.push((statute_id.clone(), depth));
+            }
+        }
+        nodes
+    }
+
+    fn extract_graph_edges(&self, graph: &DependencyGraph) -> Vec<(usize, usize, String)> {
+        let mut edges = Vec::new();
+        for edge in graph.graph.edge_indices() {
+            if let Some((from, to)) = graph.graph.edge_endpoints(edge) {
+                let relation = graph
+                    .graph
+                    .edge_weight(edge)
+                    .unwrap_or(&"depends-on".to_string())
+                    .clone();
+                edges.push((from.index(), to.index(), relation));
+            }
+        }
+        edges
+    }
+
+    fn calculate_node_depth(&self, graph: &DependencyGraph, node: NodeIndex) -> usize {
+        // Simple BFS to find depth from root nodes
+        use std::collections::VecDeque;
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back((node, 0));
+        visited.insert(node);
+
+        while let Some((current, depth)) = queue.pop_front() {
+            let incoming = graph
+                .graph
+                .neighbors_directed(current, petgraph::Direction::Incoming);
+            if incoming.clone().count() == 0 {
+                return depth; // Found a root node
+            }
+            for neighbor in incoming {
+                if !visited.contains(&neighbor) {
+                    visited.insert(neighbor);
+                    queue.push_back((neighbor, depth + 1));
+                }
+            }
+        }
+        0
+    }
+
+    fn extract_timeline_nodes(&self, timeline: &Timeline) -> Vec<(String, usize)> {
+        timeline
+            .events
+            .iter()
+            .enumerate()
+            .map(|(i, (date, event))| {
+                let label = match event {
+                    TimelineEvent::Enacted { statute_id, title } => {
+                        format!("{}: Enacted {} - {}", date, statute_id, title)
+                    }
+                    TimelineEvent::Amended {
+                        statute_id,
+                        description,
+                    } => format!("{}: Amended {} - {}", date, statute_id, description),
+                    TimelineEvent::Repealed { statute_id } => {
+                        format!("{}: Repealed {}", date, statute_id)
+                    }
+                    TimelineEvent::EffectiveStart { statute_id } => {
+                        format!("{}: Effective Start {}", date, statute_id)
+                    }
+                    TimelineEvent::EffectiveEnd { statute_id } => {
+                        format!("{}: Effective End {}", date, statute_id)
+                    }
+                };
+                (label, i)
+            })
+            .collect()
+    }
+
+    fn extract_timeline_edges(&self, timeline: &Timeline) -> Vec<(usize, usize, String)> {
+        // Connect consecutive events in timeline
+        let mut edges = Vec::new();
+        for i in 0..timeline.events.len().saturating_sub(1) {
+            edges.push((i, i + 1, "follows".to_string()));
+        }
+        edges
+    }
+
+    fn generate_3d_html(
+        &self,
+        title: &str,
+        nodes: &[(String, usize)],
+        edges: &[(usize, usize, String)],
+        is_timeline: bool,
+    ) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("<meta charset=\"UTF-8\">\n");
+        html.push_str(&format!("<title>3D {} Visualization</title>\n", title));
+        html.push_str("<style>\n");
+        html.push_str(&self.generate_3d_styles());
+        html.push_str("</style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        // Container
+        html.push_str("<div class=\"viz-3d-container\">\n");
+        html.push_str("<div class=\"controls-panel\">\n");
+        html.push_str(&format!("<h2>3D {} Visualization</h2>\n", title));
+
+        // Control buttons
+        html.push_str("<div class=\"control-group\">\n");
+        html.push_str("<button id=\"reset-camera\">Reset Camera</button>\n");
+        html.push_str("<button id=\"toggle-rotation\">Toggle Auto-Rotate</button>\n");
+        if self.config.force_directed {
+            html.push_str("<button id=\"reset-forces\">Reset Forces</button>\n");
+        }
+        if self.config.enable_vr {
+            html.push_str("<button id=\"enter-vr\">Enter VR</button>\n");
+        }
+        if self.config.enable_ar {
+            html.push_str("<button id=\"enter-ar\">Enter AR</button>\n");
+        }
+        html.push_str("</div>\n");
+
+        // Info panel
+        html.push_str("<div class=\"info-panel\">\n");
+        html.push_str("<div id=\"node-info\">Hover over nodes for details</div>\n");
+        html.push_str(&format!("<div>Nodes: {}</div>\n", nodes.len()));
+        html.push_str(&format!("<div>Edges: {}</div>\n", edges.len()));
+        html.push_str("</div>\n");
+
+        html.push_str("</div>\n"); // controls-panel
+
+        // 3D canvas
+        html.push_str("<div id=\"canvas-container\"></div>\n");
+
+        html.push_str("</div>\n"); // viz-3d-container
+
+        // Include Three.js from CDN
+        html.push_str("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+
+        if self.config.enable_vr || self.config.enable_ar {
+            html.push_str("<script src=\"https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js\"></script>\n");
+        }
+
+        // Generate JavaScript
+        html.push_str("<script>\n");
+        html.push_str(&self.generate_3d_javascript(nodes, edges, is_timeline));
+        html.push_str("</script>\n");
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    fn generate_3d_styles(&self) -> String {
+        format!(
+            "body {{
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: {};
+    color: {};
+    overflow: hidden;
+}}
+
+.viz-3d-container {{
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+}}
+
+.controls-panel {{
+    width: 250px;
+    background: {};
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 2px solid {};
+}}
+
+.controls-panel h2 {{
+    margin-top: 0;
+    font-size: 18px;
+}}
+
+.control-group {{
+    margin: 20px 0;
+}}
+
+button {{
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    background: {};
+    border: 1px solid {};
+    color: {};
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+}}
+
+button:hover {{
+    opacity: 0.8;
+}}
+
+.info-panel {{
+    margin-top: 20px;
+    padding: 10px;
+    background: {};
+    border-radius: 4px;
+    font-size: 12px;
+}}
+
+.info-panel div {{
+    margin: 5px 0;
+}}
+
+#canvas-container {{
+    flex: 1;
+    position: relative;
+}}
+
+#node-info {{
+    font-weight: bold;
+    margin-bottom: 10px !important;
+}}",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.root_color,
+            self.theme.link_color,
+            self.theme.condition_color,
+            self.theme.link_color,
+            self.theme.text_color,
+            self.theme.discretion_color
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generate_3d_javascript(
+        &self,
+        nodes: &[(String, usize)],
+        edges: &[(usize, usize, String)],
+        is_timeline: bool,
+    ) -> String {
+        let mut js = String::new();
+
+        // Configuration
+        js.push_str(&format!(
+            "const config = {{
+    enableVR: {},
+    enableAR: {},
+    forceDirected: {},
+    depthColoring: {},
+    cameraFov: {},
+    nodeSize: {},
+    edgeThickness: {},
+    forceStrength: {},
+    autoRotateSpeed: {},
+    isTimeline: {}
+}};\n\n",
+            self.config.enable_vr,
+            self.config.enable_ar,
+            self.config.force_directed,
+            self.config.depth_coloring,
+            self.config.camera_fov,
+            self.config.node_size,
+            self.config.edge_thickness,
+            self.config.force_strength,
+            self.config.auto_rotate_speed,
+            is_timeline
+        ));
+
+        // Node data
+        js.push_str("const nodes = [\n");
+        for (label, depth) in nodes {
+            js.push_str(&format!(
+                "    {{ label: '{}', depth: {} }},\n",
+                label.replace('\'', "\\'"),
+                depth
+            ));
+        }
+        js.push_str("];\n\n");
+
+        // Edge data
+        js.push_str("const edges = [\n");
+        for (from, to, relation) in edges {
+            js.push_str(&format!(
+                "    {{ from: {}, to: {}, relation: '{}' }},\n",
+                from,
+                to,
+                relation.replace('\'', "\\'")
+            ));
+        }
+        js.push_str("];\n\n");
+
+        // Main Three.js code
+        js.push_str(&format!(
+            "// Three.js setup
+let scene, camera, renderer, controls;
+let nodeObjects = [];
+let edgeObjects = [];
+let autoRotate = true;
+
+function init() {{
+    const container = document.getElementById('canvas-container');
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color('{}');
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(
+        config.cameraFov,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        1000
+    );
+    camera.position.z = 50;
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({{ antialias: true }});
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 10, 10);
+    scene.add(directionalLight);
+
+    // Create graph
+    createGraph();
+
+    // Event listeners
+    window.addEventListener('resize', onWindowResize);
+    document.getElementById('reset-camera').addEventListener('click', resetCamera);
+    document.getElementById('toggle-rotation').addEventListener('click', toggleRotation);
+
+    if (config.forceDirected) {{
+        document.getElementById('reset-forces')?.addEventListener('click', resetForces);
+    }}
+
+    // Mouse interaction
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    renderer.domElement.addEventListener('mousemove', (event) => {{
+        const rect = container.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(nodeObjects);
+
+        if (intersects.length > 0) {{
+            const nodeIndex = nodeObjects.indexOf(intersects[0].object);
+            if (nodeIndex !== -1) {{
+                document.getElementById('node-info').textContent = nodes[nodeIndex].label;
+            }}
+        }} else {{
+            document.getElementById('node-info').textContent = 'Hover over nodes for details';
+        }}
+    }});
+
+    // Animation loop
+    animate();
+}}
+
+function createGraph() {{
+    // Node positions
+    const positions = calculateNodePositions();
+
+    // Create nodes
+    nodes.forEach((node, i) => {{
+        const geometry = new THREE.SphereGeometry(config.nodeSize, 32, 32);
+
+        // Depth-based coloring
+        let color;
+        if (config.depthColoring) {{
+            const hue = (node.depth * 60) % 360; // Cycle through colors by depth
+            color = new THREE.Color(`hsl(${{hue}}, 70%, 50%)`);
+        }} else {{
+            color = new THREE.Color('{}');
+        }}
+
+        const material = new THREE.MeshPhongMaterial({{ color }});
+        const sphere = new THREE.Mesh(geometry, material);
+
+        sphere.position.copy(positions[i]);
+        sphere.userData = {{ index: i, label: node.label, depth: node.depth }};
+
+        scene.add(sphere);
+        nodeObjects.push(sphere);
+    }});
+
+    // Create edges
+    edges.forEach(edge => {{
+        const start = positions[edge.from];
+        const end = positions[edge.to];
+
+        const points = [start, end];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({{
+            color: '{}',
+            linewidth: config.edgeThickness
+        }});
+        const line = new THREE.Line(geometry, material);
+
+        scene.add(line);
+        edgeObjects.push(line);
+    }});
+}}
+
+function calculateNodePositions() {{
+    const positions = [];
+
+    if (config.isTimeline) {{
+        // Timeline layout - linear arrangement
+        nodes.forEach((node, i) => {{
+            const x = (i - nodes.length / 2) * 5;
+            const y = Math.sin(i * 0.5) * 3;
+            const z = i * 2;
+            positions.push(new THREE.Vector3(x, y, z));
+        }});
+    }} else if (config.forceDirected) {{
+        // Force-directed layout (simplified)
+        nodes.forEach((node, i) => {{
+            const angle = (i / nodes.length) * Math.PI * 2;
+            const radius = 20 + node.depth * 5;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            const z = node.depth * 3;
+            positions.push(new THREE.Vector3(x, y, z));
+        }});
+    }} else {{
+        // Simple circular layout
+        nodes.forEach((node, i) => {{
+            const angle = (i / nodes.length) * Math.PI * 2;
+            const radius = 20;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            const z = 0;
+            positions.push(new THREE.Vector3(x, y, z));
+        }});
+    }}
+
+    return positions;
+}}
+
+function animate() {{
+    requestAnimationFrame(animate);
+
+    if (autoRotate) {{
+        const delta = config.autoRotateSpeed * 0.001;
+        scene.rotation.y += delta;
+    }}
+
+    renderer.render(scene, camera);
+}}
+
+function onWindowResize() {{
+    const container = document.getElementById('canvas-container');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}}
+
+function resetCamera() {{
+    camera.position.set(0, 0, 50);
+    camera.lookAt(0, 0, 0);
+    scene.rotation.set(0, 0, 0);
+}}
+
+function toggleRotation() {{
+    autoRotate = !autoRotate;
+}}
+
+function resetForces() {{
+    // Recreate graph with new force-directed positions
+    nodeObjects.forEach(obj => scene.remove(obj));
+    edgeObjects.forEach(obj => scene.remove(obj));
+    nodeObjects = [];
+    edgeObjects = [];
+    createGraph();
+}}
+
+// Initialize
+init();
+",
+            self.theme.background_color, self.theme.condition_color, self.theme.link_color
+        ));
+
+        js
+    }
+}
+
+impl Default for ThreeDVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Advanced Export Formats
+// ============================================================================
+
+/// Export format types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExportFormat {
+    /// Animated GIF
+    AnimatedGif,
+    /// MP4 video
+    Mp4,
+    /// WebM video
+    WebM,
+    /// Print-optimized PDF
+    PrintPdf,
+    /// Vector PDF
+    VectorPdf,
+    /// Poster-size image
+    Poster,
+}
+
+/// Configuration for poster-size exports.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PosterConfig {
+    /// Width in pixels (or mm for print)
+    pub width: usize,
+    /// Height in pixels (or mm for print)
+    pub height: usize,
+    /// DPI (dots per inch) for print quality
+    pub dpi: usize,
+    /// Paper size (e.g., "A0", "A1", "24x36")
+    pub paper_size: String,
+    /// Orientation ("portrait" or "landscape")
+    pub orientation: String,
+}
+
+impl Default for PosterConfig {
+    fn default() -> Self {
+        Self {
+            width: 841,   // A0 width in mm
+            height: 1189, // A0 height in mm
+            dpi: 300,
+            paper_size: "A0".to_string(),
+            orientation: "portrait".to_string(),
+        }
+    }
+}
+
+impl PosterConfig {
+    /// Creates a new poster configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A0 poster (841mm x 1189mm)
+    pub fn a0() -> Self {
+        Self {
+            width: 841,
+            height: 1189,
+            dpi: 300,
+            paper_size: "A0".to_string(),
+            orientation: "portrait".to_string(),
+        }
+    }
+
+    /// A1 poster (594mm x 841mm)
+    pub fn a1() -> Self {
+        Self {
+            width: 594,
+            height: 841,
+            dpi: 300,
+            paper_size: "A1".to_string(),
+            orientation: "portrait".to_string(),
+        }
+    }
+
+    /// A2 poster (420mm x 594mm)
+    pub fn a2() -> Self {
+        Self {
+            width: 420,
+            height: 594,
+            dpi: 300,
+            paper_size: "A2".to_string(),
+            orientation: "portrait".to_string(),
+        }
+    }
+
+    /// 24x36 inch poster (common US size)
+    pub fn poster_24x36() -> Self {
+        Self {
+            width: 610,  // 24 inches in mm
+            height: 914, // 36 inches in mm
+            dpi: 300,
+            paper_size: "24x36".to_string(),
+            orientation: "portrait".to_string(),
+        }
+    }
+
+    /// Sets landscape orientation.
+    pub fn landscape(mut self) -> Self {
+        std::mem::swap(&mut self.width, &mut self.height);
+        self.orientation = "landscape".to_string();
+        self
+    }
+
+    /// Sets the DPI.
+    pub fn with_dpi(mut self, dpi: usize) -> Self {
+        self.dpi = dpi;
+        self
+    }
+}
+
+/// Configuration for animated GIF export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimatedGifConfig {
+    /// Frame rate (frames per second)
+    pub fps: u32,
+    /// Duration in seconds
+    pub duration: u32,
+    /// Loop count (0 = infinite)
+    pub loop_count: u16,
+    /// Frame width
+    pub width: usize,
+    /// Frame height
+    pub height: usize,
+    /// Quality (1-100)
+    pub quality: u8,
+}
+
+impl Default for AnimatedGifConfig {
+    fn default() -> Self {
+        Self {
+            fps: 30,
+            duration: 10,
+            loop_count: 0,
+            width: 1920,
+            height: 1080,
+            quality: 80,
+        }
+    }
+}
+
+impl AnimatedGifConfig {
+    /// Creates a new animated GIF configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the frame rate.
+    pub fn with_fps(mut self, fps: u32) -> Self {
+        self.fps = fps;
+        self
+    }
+
+    /// Sets the duration.
+    pub fn with_duration(mut self, duration: u32) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// Sets the loop count.
+    pub fn with_loop_count(mut self, loop_count: u16) -> Self {
+        self.loop_count = loop_count;
+        self
+    }
+
+    /// Sets the dimensions.
+    pub fn with_size(mut self, width: usize, height: usize) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    /// Sets the quality.
+    pub fn with_quality(mut self, quality: u8) -> Self {
+        self.quality = quality.min(100);
+        self
+    }
+}
+
+/// Configuration for video export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoConfig {
+    /// Frame rate (frames per second)
+    pub fps: u32,
+    /// Duration in seconds
+    pub duration: u32,
+    /// Video width
+    pub width: usize,
+    /// Video height
+    pub height: usize,
+    /// Bitrate (in kbps)
+    pub bitrate: u32,
+    /// Codec (e.g., "h264", "vp9")
+    pub codec: String,
+}
+
+impl Default for VideoConfig {
+    fn default() -> Self {
+        Self {
+            fps: 30,
+            duration: 10,
+            width: 1920,
+            height: 1080,
+            bitrate: 5000,
+            codec: "h264".to_string(),
+        }
+    }
+}
+
+impl VideoConfig {
+    /// Creates a new video configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 1080p HD configuration.
+    pub fn hd_1080p() -> Self {
+        Self {
+            width: 1920,
+            height: 1080,
+            fps: 30,
+            bitrate: 8000,
+            ..Self::default()
+        }
+    }
+
+    /// 720p HD configuration.
+    pub fn hd_720p() -> Self {
+        Self {
+            width: 1280,
+            height: 720,
+            fps: 30,
+            bitrate: 5000,
+            ..Self::default()
+        }
+    }
+
+    /// 4K UHD configuration.
+    pub fn uhd_4k() -> Self {
+        Self {
+            width: 3840,
+            height: 2160,
+            fps: 30,
+            bitrate: 20000,
+            ..Self::default()
+        }
+    }
+
+    /// Sets the frame rate.
+    pub fn with_fps(mut self, fps: u32) -> Self {
+        self.fps = fps;
+        self
+    }
+
+    /// Sets the codec.
+    pub fn with_codec(mut self, codec: &str) -> Self {
+        self.codec = codec.to_string();
+        self
+    }
+
+    /// Sets the bitrate.
+    pub fn with_bitrate(mut self, bitrate: u32) -> Self {
+        self.bitrate = bitrate;
+        self
+    }
+
+    /// Sets the duration.
+    pub fn with_duration(mut self, duration: u32) -> Self {
+        self.duration = duration;
+        self
+    }
+}
+
+/// Configuration for PDF export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PdfConfig {
+    /// Page width in mm
+    pub width: f32,
+    /// Page height in mm
+    pub height: f32,
+    /// Margin in mm
+    pub margin: f32,
+    /// Vector-based (true) or rasterized (false)
+    pub vector: bool,
+    /// DPI for rasterized output
+    pub dpi: usize,
+    /// Optimize for print (true) or screen (false)
+    pub print_optimized: bool,
+}
+
+impl Default for PdfConfig {
+    fn default() -> Self {
+        Self {
+            width: 210.0,  // A4 width
+            height: 297.0, // A4 height
+            margin: 10.0,
+            vector: true,
+            dpi: 300,
+            print_optimized: true,
+        }
+    }
+}
+
+impl PdfConfig {
+    /// Creates a new PDF configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A4 page size (210mm x 297mm)
+    pub fn a4() -> Self {
+        Self {
+            width: 210.0,
+            height: 297.0,
+            ..Self::default()
+        }
+    }
+
+    /// A3 page size (297mm x 420mm)
+    pub fn a3() -> Self {
+        Self {
+            width: 297.0,
+            height: 420.0,
+            ..Self::default()
+        }
+    }
+
+    /// Letter page size (215.9mm x 279.4mm)
+    pub fn letter() -> Self {
+        Self {
+            width: 215.9,
+            height: 279.4,
+            ..Self::default()
+        }
+    }
+
+    /// Tabloid page size (279.4mm x 431.8mm)
+    pub fn tabloid() -> Self {
+        Self {
+            width: 279.4,
+            height: 431.8,
+            ..Self::default()
+        }
+    }
+
+    /// Sets landscape orientation.
+    pub fn landscape(mut self) -> Self {
+        std::mem::swap(&mut self.width, &mut self.height);
+        self
+    }
+
+    /// Sets vector mode.
+    pub fn vector(mut self) -> Self {
+        self.vector = true;
+        self
+    }
+
+    /// Sets raster mode.
+    pub fn raster(mut self) -> Self {
+        self.vector = false;
+        self
+    }
+
+    /// Sets print optimization.
+    pub fn print_optimized(mut self) -> Self {
+        self.print_optimized = true;
+        self
+    }
+
+    /// Sets screen optimization.
+    pub fn screen_optimized(mut self) -> Self {
+        self.print_optimized = false;
+        self.dpi = 96; // Screen DPI
+        self
+    }
+
+    /// Sets the DPI.
+    pub fn with_dpi(mut self, dpi: usize) -> Self {
+        self.dpi = dpi;
+        self
+    }
+
+    /// Sets the margin.
+    pub fn with_margin(mut self, margin: f32) -> Self {
+        self.margin = margin;
+        self
+    }
+}
+
+/// Advanced export handler for various formats.
+#[derive(Debug, Clone)]
+pub struct AdvancedExporter {
+    theme: Theme,
+}
+
+impl AdvancedExporter {
+    /// Creates a new advanced exporter.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Exports a decision tree to animated GIF.
+    /// Returns SVG frames that can be encoded to GIF with external tools.
+    pub fn to_animated_gif(&self, tree: &DecisionTree, config: AnimatedGifConfig) -> Vec<String> {
+        let mut frames = Vec::new();
+        let total_frames = config.fps * config.duration;
+
+        for i in 0..total_frames {
+            // Generate a frame with progressive revelation
+            let progress = i as f32 / total_frames as f32;
+            let frame = self.generate_frame(tree, progress, config.width, config.height);
+            frames.push(frame);
+        }
+
+        frames
+    }
+
+    #[allow(dead_code)]
+    fn generate_frame(
+        &self,
+        tree: &DecisionTree,
+        progress: f32,
+        width: usize,
+        height: usize,
+    ) -> String {
+        // Generate SVG frame with animation progress
+        let mut svg = tree.to_svg_with_theme(&self.theme);
+
+        // Add animation overlay based on progress
+        let overlay = format!(
+            r#"<rect x="0" y="0" width="{}" height="{}" fill="rgba(0,0,0,{})" />"#,
+            width,
+            height,
+            (1.0 - progress) * 0.3
+        );
+
+        svg = svg.replace("</svg>", &format!("{}</svg>", overlay));
+        svg
+    }
+
+    /// Exports a dependency graph to animated GIF frames.
+    pub fn graph_to_animated_gif(
+        &self,
+        graph: &DependencyGraph,
+        config: AnimatedGifConfig,
+    ) -> Vec<String> {
+        let mut frames = Vec::new();
+        let total_frames = config.fps * config.duration;
+
+        for i in 0..total_frames {
+            let progress = i as f32 / total_frames as f32;
+            let frame = self.generate_graph_frame(graph, progress, config.width, config.height);
+            frames.push(frame);
+        }
+
+        frames
+    }
+
+    #[allow(dead_code)]
+    fn generate_graph_frame(
+        &self,
+        graph: &DependencyGraph,
+        _progress: f32,
+        _width: usize,
+        _height: usize,
+    ) -> String {
+        // Generate SVG frame for graph
+        graph.to_svg_with_theme(&self.theme)
+    }
+
+    /// Exports to video format (returns SVG frames for encoding).
+    pub fn to_video_frames(&self, tree: &DecisionTree, config: VideoConfig) -> Vec<String> {
+        let total_frames = config.fps * config.duration;
+        let mut frames = Vec::new();
+
+        for i in 0..total_frames {
+            let progress = i as f32 / total_frames as f32;
+            let frame = self.generate_frame(tree, progress, config.width, config.height);
+            frames.push(frame);
+        }
+
+        frames
+    }
+
+    /// Exports dependency graph to video frames.
+    pub fn graph_to_video_frames(
+        &self,
+        graph: &DependencyGraph,
+        config: VideoConfig,
+    ) -> Vec<String> {
+        let total_frames = config.fps * config.duration;
+        let mut frames = Vec::new();
+
+        for i in 0..total_frames {
+            let progress = i as f32 / total_frames as f32;
+            let frame = self.generate_graph_frame(graph, progress, config.width, config.height);
+            frames.push(frame);
+        }
+
+        frames
+    }
+
+    /// Exports to print-optimized PDF (returns optimized SVG).
+    pub fn to_print_pdf(&self, tree: &DecisionTree, config: PdfConfig) -> String {
+        let mut svg = tree.to_svg_with_theme(&self.theme);
+
+        if config.print_optimized {
+            // Add print-specific optimizations
+            svg = self.optimize_for_print(svg, &config);
+        }
+
+        svg
+    }
+
+    /// Exports dependency graph to print-optimized PDF.
+    pub fn graph_to_print_pdf(&self, graph: &DependencyGraph, config: PdfConfig) -> String {
+        let mut svg = graph.to_svg_with_theme(&self.theme);
+
+        if config.print_optimized {
+            svg = self.optimize_for_print(svg, &config);
+        }
+
+        svg
+    }
+
+    #[allow(dead_code)]
+    fn optimize_for_print(&self, svg: String, config: &PdfConfig) -> String {
+        // Add print-specific CSS
+        let print_css = format!(
+            r#"<style>
+            @media print {{
+                svg {{
+                    width: {}mm;
+                    height: {}mm;
+                    page-break-inside: avoid;
+                }}
+                text {{
+                    font-family: serif;
+                    -webkit-font-smoothing: antialiased;
+                }}
+            }}
+            </style>"#,
+            config.width, config.height
+        );
+
+        svg.replace("<svg", &format!("{}<svg", print_css))
+    }
+
+    /// Exports to vector PDF (returns vector SVG).
+    pub fn to_vector_pdf(&self, tree: &DecisionTree, config: PdfConfig) -> String {
+        let svg = tree.to_svg_with_theme(&self.theme);
+        self.vectorize_for_pdf(svg, &config)
+    }
+
+    /// Exports dependency graph to vector PDF.
+    pub fn graph_to_vector_pdf(&self, graph: &DependencyGraph, config: PdfConfig) -> String {
+        let svg = graph.to_svg_with_theme(&self.theme);
+        self.vectorize_for_pdf(svg, &config)
+    }
+
+    #[allow(dead_code)]
+    fn vectorize_for_pdf(&self, svg: String, config: &PdfConfig) -> String {
+        // Ensure all elements are vector-based
+        let mut vectorized = svg;
+
+        // Add PDF-specific metadata
+        let metadata = format!(
+            r#"<!-- PDF Export: {}x{}mm @ {}dpi -->"#,
+            config.width, config.height, config.dpi
+        );
+
+        vectorized = vectorized.replace("<svg", &format!("{}\n<svg", metadata));
+        vectorized
+    }
+
+    /// Exports to poster size.
+    pub fn to_poster(&self, tree: &DecisionTree, config: PosterConfig) -> String {
+        // Generate high-resolution SVG
+        let svg = tree.to_svg_with_theme(&self.theme);
+        self.scale_to_poster(svg, &config)
+    }
+
+    /// Exports dependency graph to poster size.
+    pub fn graph_to_poster(&self, graph: &DependencyGraph, config: PosterConfig) -> String {
+        let svg = graph.to_svg_with_theme(&self.theme);
+        self.scale_to_poster(svg, &config)
+    }
+
+    #[allow(dead_code)]
+    fn scale_to_poster(&self, svg: String, config: &PosterConfig) -> String {
+        // Scale SVG to poster dimensions
+        let scale_factor = config.dpi as f32 / 96.0; // 96 DPI is screen standard
+        let pixel_width = (config.width as f32 * scale_factor * 3.7795) as usize; // mm to pixels at given DPI
+        let pixel_height = (config.height as f32 * scale_factor * 3.7795) as usize;
+
+        let metadata = format!(
+            r#"<!-- Poster: {} {}x{}mm ({}x{}px @ {}dpi) -->"#,
+            config.paper_size, config.width, config.height, pixel_width, pixel_height, config.dpi
+        );
+
+        svg.replace(
+            "<svg",
+            &format!(
+                "{}\n<svg width=\"{}\" height=\"{}\"",
+                metadata, pixel_width, pixel_height
+            ),
+        )
+    }
+
+    /// Gets metadata for an export format.
+    pub fn format_metadata(&self, format: ExportFormat) -> String {
+        match format {
+            ExportFormat::AnimatedGif => {
+                "Animated GIF - Suitable for presentations and web".to_string()
+            }
+            ExportFormat::Mp4 => "MP4 Video - H.264 codec, widely compatible".to_string(),
+            ExportFormat::WebM => "WebM Video - VP9 codec, web-optimized".to_string(),
+            ExportFormat::PrintPdf => "Print PDF - Optimized for high-quality printing".to_string(),
+            ExportFormat::VectorPdf => "Vector PDF - Scalable vector graphics".to_string(),
+            ExportFormat::Poster => "Poster - Large format print output".to_string(),
+        }
+    }
+}
+
+impl Default for AdvancedExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Accessibility Features (WCAG 2.1 AA Compliance)
+// ============================================================================
+
+/// Configuration for accessibility features.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessibilityConfig {
+    /// Enable WCAG 2.1 AA compliance features
+    pub wcag_aa_compliant: bool,
+    /// Enable screen reader descriptions (ARIA labels)
+    pub enable_screen_reader: bool,
+    /// Enable keyboard navigation
+    pub enable_keyboard_nav: bool,
+    /// Use high contrast colors (minimum 4.5:1 ratio)
+    pub high_contrast_mode: bool,
+    /// Reduce or disable animations
+    pub reduced_motion: bool,
+    /// Minimum font size in pixels
+    pub min_font_size: f32,
+    /// Focus indicator color
+    pub focus_color: String,
+    /// Tab index for interactive elements
+    pub tab_index_start: i32,
+}
+
+impl Default for AccessibilityConfig {
+    fn default() -> Self {
+        Self {
+            wcag_aa_compliant: true,
+            enable_screen_reader: true,
+            enable_keyboard_nav: true,
+            high_contrast_mode: false,
+            reduced_motion: false,
+            min_font_size: 16.0,
+            focus_color: "#005fcc".to_string(),
+            tab_index_start: 0,
+        }
+    }
+}
+
+impl AccessibilityConfig {
+    /// Creates a new accessibility configuration with WCAG 2.1 AA compliance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a configuration optimized for screen readers.
+    pub fn screen_reader_optimized() -> Self {
+        Self {
+            wcag_aa_compliant: true,
+            enable_screen_reader: true,
+            enable_keyboard_nav: true,
+            high_contrast_mode: true,
+            reduced_motion: true,
+            min_font_size: 18.0,
+            focus_color: "#0066cc".to_string(),
+            tab_index_start: 0,
+        }
+    }
+
+    /// Creates a configuration with reduced motion for users sensitive to animation.
+    pub fn reduced_motion() -> Self {
+        Self {
+            reduced_motion: true,
+            ..Self::default()
+        }
+    }
+
+    /// Creates a configuration with high contrast for users with low vision.
+    pub fn high_contrast() -> Self {
+        Self {
+            high_contrast_mode: true,
+            min_font_size: 18.0,
+            ..Self::default()
+        }
+    }
+}
+
+/// Enhances visualizations with accessibility features.
+#[derive(Debug, Clone)]
+pub struct AccessibilityEnhancer {
+    config: AccessibilityConfig,
+    theme: Theme,
+}
+
+impl AccessibilityEnhancer {
+    /// Creates a new accessibility enhancer with default configuration.
+    pub fn new() -> Self {
+        Self {
+            config: AccessibilityConfig::default(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the accessibility configuration.
+    pub fn with_config(mut self, config: AccessibilityConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Sets the theme, adjusting it for accessibility if needed.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = if self.config.high_contrast_mode {
+            Theme::high_contrast()
+        } else {
+            theme
+        };
+        self
+    }
+
+    /// Generates ARIA label for a decision node.
+    pub fn aria_label_for_node(&self, node: &DecisionNode) -> String {
+        match node {
+            DecisionNode::Root { statute_id, title } => {
+                format!("Root node: {} (ID: {})", title, statute_id)
+            }
+            DecisionNode::Condition {
+                description,
+                is_discretionary,
+            } => {
+                if *is_discretionary {
+                    format!("Discretionary condition: {}", description)
+                } else {
+                    format!("Condition: {}", description)
+                }
+            }
+            DecisionNode::Outcome { description } => {
+                format!("Outcome: {}", description)
+            }
+            DecisionNode::Discretion { issue, hint } => {
+                if let Some(h) = hint {
+                    format!("Discretionary decision: {}. Hint: {}", issue, h)
+                } else {
+                    format!("Discretionary decision: {}", issue)
+                }
+            }
+        }
+    }
+
+    /// Generates ARIA role for a decision node.
+    pub fn aria_role_for_node(&self, node: &DecisionNode) -> &'static str {
+        match node {
+            DecisionNode::Root { .. } => "landmark",
+            DecisionNode::Condition { .. } => "listitem",
+            DecisionNode::Outcome { .. } => "status",
+            DecisionNode::Discretion { .. } => "alert",
+        }
+    }
+
+    /// Adds keyboard navigation JavaScript to HTML output.
+    pub fn keyboard_nav_script(&self) -> String {
+        if !self.config.enable_keyboard_nav {
+            return String::new();
+        }
+
+        format!(
+            r#"
+<script>
+// Keyboard navigation support
+document.addEventListener('DOMContentLoaded', function() {{
+    let focusIndex = 0;
+    const focusableElements = document.querySelectorAll('[tabindex]');
+
+    document.addEventListener('keydown', function(e) {{
+        // Tab navigation
+        if (e.key === 'Tab') {{
+            e.preventDefault();
+            if (e.shiftKey) {{
+                focusIndex = (focusIndex - 1 + focusableElements.length) % focusableElements.length;
+            }} else {{
+                focusIndex = (focusIndex + 1) % focusableElements.length;
+            }}
+            focusableElements[focusIndex].focus();
+        }}
+
+        // Enter/Space to activate
+        if (e.key === 'Enter' || e.key === ' ') {{
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.onclick) {{
+                e.preventDefault();
+                activeElement.click();
+            }}
+        }}
+
+        // Arrow key navigation
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {{
+            e.preventDefault();
+            focusIndex = (focusIndex - 1 + focusableElements.length) % focusableElements.length;
+            focusableElements[focusIndex].focus();
+        }}
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {{
+            e.preventDefault();
+            focusIndex = (focusIndex + 1) % focusableElements.length;
+            focusableElements[focusIndex].focus();
+        }}
+
+        // Home/End keys
+        if (e.key === 'Home') {{
+            e.preventDefault();
+            focusIndex = 0;
+            focusableElements[focusIndex].focus();
+        }}
+        if (e.key === 'End') {{
+            e.preventDefault();
+            focusIndex = focusableElements.length - 1;
+            focusableElements[focusIndex].focus();
+        }}
+    }});
+
+    // Add focus indicators
+    const style = document.createElement('style');
+    style.textContent = `
+        *:focus {{
+            outline: 3px solid {};
+            outline-offset: 2px;
+        }}
+    `;
+    document.head.appendChild(style);
+}});
+</script>
+"#,
+            self.config.focus_color
+        )
+    }
+
+    /// Adds screen reader descriptions to HTML output.
+    pub fn screen_reader_enhancements(&self) -> String {
+        if !self.config.enable_screen_reader {
+            return String::new();
+        }
+
+        r#"
+<div role="complementary" aria-label="Accessibility information" class="sr-only">
+    <h2>Navigation Instructions</h2>
+    <p>Use Tab to navigate between elements. Press Enter or Space to activate buttons.</p>
+    <p>Use arrow keys to navigate through the visualization.</p>
+    <p>Press Home to go to the first element, End to go to the last element.</p>
+</div>
+<style>
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+</style>
+"#
+        .to_string()
+    }
+
+    /// Generates CSS for reduced motion.
+    pub fn reduced_motion_css(&self) -> String {
+        if !self.config.reduced_motion {
+            return String::new();
+        }
+
+        r#"
+<style>
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Force reduced motion when config is enabled */
+*, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+}
+</style>
+"#
+        .to_string()
+    }
+
+    /// Generates CSS for high contrast mode.
+    pub fn high_contrast_css(&self) -> String {
+        if !self.config.high_contrast_mode {
+            return String::new();
+        }
+
+        format!(
+            r#"
+<style>
+/* High contrast mode styles */
+body {{
+    background: {};
+    color: {};
+    font-size: {}px;
+}}
+
+.node {{
+    border: 2px solid {} !important;
+}}
+
+.edge, .link {{
+    stroke: {} !important;
+    stroke-width: 2px !important;
+}}
+
+text {{
+    fill: {} !important;
+    font-weight: bold;
+    font-size: {}px;
+}}
+
+/* Ensure minimum contrast ratio of 4.5:1 */
+.condition {{
+    background: {};
+    color: {};
+}}
+
+.outcome {{
+    background: {};
+    color: {};
+}}
+
+.discretion {{
+    background: {};
+    color: {};
+}}
+</style>
+"#,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.config.min_font_size,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.text_color,
+            self.config.min_font_size,
+            self.theme.condition_color,
+            self.theme.text_color,
+            self.theme.outcome_color,
+            self.theme.text_color,
+            self.theme.discretion_color,
+            self.theme.text_color,
+        )
+    }
+
+    /// Enhances HTML with full accessibility features.
+    pub fn enhance_html(&self, html: &str) -> String {
+        let mut enhanced = html.to_string();
+
+        // Add lang attribute if not present
+        if !enhanced.contains("lang=") {
+            enhanced = enhanced.replace("<html>", r#"<html lang="en">"#);
+        }
+
+        // Add accessibility meta tags
+        let meta_tags = r#"
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Accessible legal statute visualization">
+"#;
+
+        if !enhanced.contains("viewport") {
+            enhanced = enhanced.replace("</head>", &format!("{}</head>", meta_tags));
+        }
+
+        // Add screen reader enhancements
+        let sr_enhancements = self.screen_reader_enhancements();
+        enhanced = enhanced.replace("<body>", &format!("<body>{}", sr_enhancements));
+
+        // Add CSS enhancements
+        let mut css = String::new();
+        css.push_str(&self.high_contrast_css());
+        css.push_str(&self.reduced_motion_css());
+
+        if !css.is_empty() {
+            enhanced = enhanced.replace("</head>", &format!("{}</head>", css));
+        }
+
+        // Add keyboard navigation
+        let kb_script = self.keyboard_nav_script();
+        if !kb_script.is_empty() {
+            enhanced = enhanced.replace("</body>", &format!("{}</body>", kb_script));
+        }
+
+        enhanced
+    }
+
+    /// Validates WCAG 2.1 AA compliance for color contrast.
+    /// Returns true if the contrast ratio is at least 4.5:1.
+    pub fn validate_contrast(&self, foreground: &str, background: &str) -> bool {
+        // Parse hex colors
+        let fg = Self::parse_hex_color(foreground);
+        let bg = Self::parse_hex_color(background);
+
+        if fg.is_none() || bg.is_none() {
+            return false;
+        }
+
+        let (r1, g1, b1) = fg.unwrap();
+        let (r2, g2, b2) = bg.unwrap();
+
+        // Calculate relative luminance
+        let l1 = Self::relative_luminance(r1, g1, b1);
+        let l2 = Self::relative_luminance(r2, g2, b2);
+
+        // Calculate contrast ratio
+        let ratio = if l1 > l2 {
+            (l1 + 0.05) / (l2 + 0.05)
+        } else {
+            (l2 + 0.05) / (l1 + 0.05)
+        };
+
+        // WCAG AA requires 4.5:1 for normal text
+        ratio >= 4.5
+    }
+
+    #[allow(dead_code)]
+    fn parse_hex_color(hex: &str) -> Option<(f32, f32, f32)> {
+        let hex = hex.trim_start_matches('#');
+        if hex.len() != 6 {
+            return None;
+        }
+
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+
+        Some((r, g, b))
+    }
+
+    #[allow(dead_code)]
+    fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
+        let r = if r <= 0.03928 {
+            r / 12.92
+        } else {
+            ((r + 0.055) / 1.055).powf(2.4)
+        };
+        let g = if g <= 0.03928 {
+            g / 12.92
+        } else {
+            ((g + 0.055) / 1.055).powf(2.4)
+        };
+        let b = if b <= 0.03928 {
+            b / 12.92
+        } else {
+            ((b + 0.055) / 1.055).powf(2.4)
+        };
+
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /// Generates an accessible HTML decision tree.
+    pub fn to_accessible_html(&self, tree: &DecisionTree) -> String {
+        let mut html = tree.to_html_with_theme(&self.theme);
+        html = self.enhance_html(&html);
+        html
+    }
+
+    /// Generates an accessible HTML dependency graph.
+    pub fn to_accessible_html_graph(&self, graph: &DependencyGraph) -> String {
+        let mut html = graph.to_html();
+        html = self.enhance_html(&html);
+        html
+    }
+}
+
+impl Default for AccessibilityEnhancer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Real-Time Collaboration Features (v0.1.5)
+// ============================================================================
+
+/// Streaming data source for continuous updates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingDataSource {
+    /// Source identifier
+    pub source_id: String,
+    /// Data stream URL or connection string
+    pub stream_url: String,
+    /// Update frequency in milliseconds
+    pub update_frequency_ms: u64,
+    /// Buffer size for data points
+    pub buffer_size: usize,
+    /// Current data buffer
+    data_buffer: Vec<String>,
+}
+
+impl StreamingDataSource {
+    /// Creates a new streaming data source.
+    pub fn new(source_id: &str, stream_url: &str, update_frequency_ms: u64) -> Self {
+        Self {
+            source_id: source_id.to_string(),
+            stream_url: stream_url.to_string(),
+            update_frequency_ms,
+            buffer_size: 1000,
+            data_buffer: Vec::new(),
+        }
+    }
+
+    /// Sets the buffer size.
+    pub fn with_buffer_size(mut self, size: usize) -> Self {
+        self.buffer_size = size;
+        self
+    }
+
+    /// Adds data to the buffer.
+    pub fn push_data(&mut self, data: String) {
+        self.data_buffer.push(data);
+        if self.data_buffer.len() > self.buffer_size {
+            self.data_buffer.remove(0);
+        }
+    }
+
+    /// Gets the current buffer.
+    pub fn buffer(&self) -> &[String] {
+        &self.data_buffer
+    }
+
+    /// Clears the buffer.
+    pub fn clear_buffer(&mut self) {
+        self.data_buffer.clear();
+    }
+
+    /// Generates JavaScript code for streaming data connection.
+    pub fn to_javascript(&self) -> String {
+        format!(
+            r#"
+class StreamingDataSource {{
+    constructor() {{
+        this.sourceId = '{}';
+        this.streamUrl = '{}';
+        this.updateFrequency = {};
+        this.buffer = [];
+        this.maxBufferSize = {};
+        this.connection = null;
+        this.callbacks = [];
+    }}
+
+    connect() {{
+        this.connection = new WebSocket(this.streamUrl);
+        this.connection.onmessage = (event) => {{
+            const data = JSON.parse(event.data);
+            this.pushData(data);
+            this.notifyCallbacks(data);
+        }};
+        this.connection.onerror = (error) => {{
+            console.error('Streaming error:', error);
+        }};
+        this.connection.onclose = () => {{
+            console.log('Stream closed, reconnecting...');
+            setTimeout(() => this.connect(), this.updateFrequency);
+        }};
+    }}
+
+    pushData(data) {{
+        this.buffer.push(data);
+        if (this.buffer.length > this.maxBufferSize) {{
+            this.buffer.shift();
+        }}
+    }}
+
+    onData(callback) {{
+        this.callbacks.push(callback);
+    }}
+
+    notifyCallbacks(data) {{
+        this.callbacks.forEach(cb => cb(data));
+    }}
+
+    disconnect() {{
+        if (this.connection) {{
+            this.connection.close();
+        }}
+    }}
+}}
+
+const streamingSource = new StreamingDataSource();
+streamingSource.connect();
+"#,
+            self.source_id, self.stream_url, self.update_frequency_ms, self.buffer_size
+        )
+    }
+}
+
+/// User information for collaborative sessions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CollaborativeUser {
+    /// User ID
+    pub user_id: String,
+    /// User display name
+    pub display_name: String,
+    /// User color (for cursor and annotations)
+    pub color: String,
+    /// Whether the user is currently active
+    pub active: bool,
+}
+
+impl CollaborativeUser {
+    /// Creates a new collaborative user.
+    pub fn new(user_id: &str, display_name: &str, color: &str) -> Self {
+        Self {
+            user_id: user_id.to_string(),
+            display_name: display_name.to_string(),
+            color: color.to_string(),
+            active: true,
+        }
+    }
+}
+
+/// Cursor position for collaborative viewing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CursorPosition {
+    /// User who owns this cursor
+    pub user: CollaborativeUser,
+    /// X coordinate (percentage)
+    pub x: f64,
+    /// Y coordinate (percentage)
+    pub y: f64,
+    /// Timestamp of last update
+    pub timestamp: u64,
+}
+
+impl CursorPosition {
+    /// Creates a new cursor position.
+    pub fn new(user: CollaborativeUser, x: f64, y: f64, timestamp: u64) -> Self {
+        Self {
+            user,
+            x,
+            y,
+            timestamp,
+        }
+    }
+}
+
+/// Shared annotation for collaborative viewing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SharedAnnotation {
+    /// Annotation ID
+    pub annotation_id: String,
+    /// User who created the annotation
+    pub user: CollaborativeUser,
+    /// Target node or element ID
+    pub target_id: String,
+    /// Annotation content
+    pub content: String,
+    /// Timestamp
+    pub timestamp: u64,
+    /// Whether the annotation is resolved
+    pub resolved: bool,
+}
+
+impl SharedAnnotation {
+    /// Creates a new shared annotation.
+    pub fn new(
+        annotation_id: &str,
+        user: CollaborativeUser,
+        target_id: &str,
+        content: &str,
+        timestamp: u64,
+    ) -> Self {
+        Self {
+            annotation_id: annotation_id.to_string(),
+            user,
+            target_id: target_id.to_string(),
+            content: content.to_string(),
+            timestamp,
+            resolved: false,
+        }
+    }
+
+    /// Marks the annotation as resolved.
+    pub fn resolve(&mut self) {
+        self.resolved = true;
+    }
+}
+
+/// Collaborative session manager for multi-user viewing and annotation.
+#[derive(Debug, Clone)]
+pub struct CollaborativeSession {
+    /// Session ID
+    pub session_id: String,
+    /// Active users in the session
+    users: Vec<CollaborativeUser>,
+    /// Cursor positions for each user
+    cursors: Vec<CursorPosition>,
+    /// Shared annotations
+    annotations: Vec<SharedAnnotation>,
+    /// WebSocket URL for the session
+    pub websocket_url: String,
+}
+
+impl CollaborativeSession {
+    /// Creates a new collaborative session.
+    pub fn new(session_id: &str, websocket_url: &str) -> Self {
+        Self {
+            session_id: session_id.to_string(),
+            users: Vec::new(),
+            cursors: Vec::new(),
+            annotations: Vec::new(),
+            websocket_url: websocket_url.to_string(),
+        }
+    }
+
+    /// Adds a user to the session.
+    pub fn add_user(&mut self, user: CollaborativeUser) {
+        if !self.users.iter().any(|u| u.user_id == user.user_id) {
+            self.users.push(user);
+        }
+    }
+
+    /// Removes a user from the session.
+    pub fn remove_user(&mut self, user_id: &str) {
+        self.users.retain(|u| u.user_id != user_id);
+        self.cursors.retain(|c| c.user.user_id != user_id);
+    }
+
+    /// Updates a user's cursor position.
+    pub fn update_cursor(&mut self, cursor: CursorPosition) {
+        if let Some(existing) = self
+            .cursors
+            .iter_mut()
+            .find(|c| c.user.user_id == cursor.user.user_id)
+        {
+            *existing = cursor;
+        } else {
+            self.cursors.push(cursor);
+        }
+    }
+
+    /// Adds a shared annotation.
+    pub fn add_annotation(&mut self, annotation: SharedAnnotation) {
+        self.annotations.push(annotation);
+    }
+
+    /// Removes an annotation by ID.
+    pub fn remove_annotation(&mut self, annotation_id: &str) {
+        self.annotations
+            .retain(|a| a.annotation_id != annotation_id);
+    }
+
+    /// Gets all active users.
+    pub fn active_users(&self) -> Vec<&CollaborativeUser> {
+        self.users.iter().filter(|u| u.active).collect()
+    }
+
+    /// Gets all cursor positions.
+    pub fn cursors(&self) -> &[CursorPosition] {
+        &self.cursors
+    }
+
+    /// Gets all annotations.
+    pub fn annotations(&self) -> &[SharedAnnotation] {
+        &self.annotations
+    }
+
+    /// Generates HTML for collaborative visualization.
+    pub fn to_collaborative_html(&self, tree: &DecisionTree) -> String {
+        let base_html = tree.to_html();
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <title>Collaborative Visualization</title>\n");
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; padding: 0; overflow: hidden; }\n");
+        html.push_str(
+            "        #visualization { position: relative; width: 100vw; height: 100vh; }\n",
+        );
+        html.push_str("        .cursor { position: absolute; width: 20px; height: 20px; border-radius: 50%; pointer-events: none; transition: all 0.1s ease; }\n");
+        html.push_str("        .cursor-label { position: absolute; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 25px; white-space: nowrap; }\n");
+        html.push_str("        .annotation { position: absolute; background: #fff; border: 2px solid #333; border-radius: 4px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-width: 300px; z-index: 100; }\n");
+        html.push_str("        .annotation-header { font-weight: bold; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }\n");
+        html.push_str(
+            "        .annotation-author { font-size: 11px; color: #666; margin-bottom: 5px; }\n",
+        );
+        html.push_str("        .annotation-content { font-size: 13px; }\n");
+        html.push_str(
+            "        .annotation-resolved { opacity: 0.6; text-decoration: line-through; }\n",
+        );
+        html.push_str("        .users-panel { position: fixed; top: 10px; right: 10px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-width: 200px; }\n");
+        html.push_str("        .user-item { display: flex; align-items: center; margin: 5px 0; font-size: 13px; }\n");
+        html.push_str("        .user-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div id=\"visualization\">\n");
+        html.push_str(&format!("        {}\n", base_html));
+        html.push_str("    </div>\n");
+        html.push_str("    <div class=\"users-panel\">\n");
+        html.push_str(
+            "        <div style=\"font-weight: bold; margin-bottom: 10px;\">Active Users</div>\n",
+        );
+        html.push_str("        <div id=\"user-list\"></div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const sessionId = '{}';\n", self.session_id));
+        html.push_str(&format!("const wsUrl = '{}';\n", self.websocket_url));
+        html.push_str("let ws = null;\n");
+        html.push_str("const cursors = new Map();\n");
+        html.push_str("const annotations = new Map();\n\n");
+
+        // Add WebSocket connection code
+        html.push_str(&self.generate_websocket_code());
+
+        // Add cursor rendering code
+        html.push_str(&self.generate_cursor_code());
+
+        // Add annotation rendering code
+        html.push_str(&self.generate_annotation_code());
+
+        html.push_str("    </script>\n</body>\n</html>");
+
+        html
+    }
+
+    #[allow(dead_code)]
+    fn generate_websocket_code(&self) -> String {
+        r#"
+function connectWebSocket() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('Connected to collaborative session');
+        ws.send(JSON.stringify({ type: 'join', sessionId: sessionId }));
+    };
+
+    ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        handleMessage(message);
+    };
+
+    ws.onclose = () => {
+        console.log('Disconnected, reconnecting...');
+        setTimeout(connectWebSocket, 3000);
+    };
+}
+
+function handleMessage(message) {
+    switch (message.type) {
+        case 'cursor_update':
+            updateCursor(message.user, message.x, message.y);
+            break;
+        case 'annotation_added':
+            addAnnotation(message.annotation);
+            break;
+        case 'annotation_removed':
+            removeAnnotation(message.annotationId);
+            break;
+        case 'user_joined':
+            addUser(message.user);
+            break;
+        case 'user_left':
+            removeUser(message.userId);
+            break;
+    }
+}
+
+document.addEventListener('mousemove', (e) => {
+    const x = (e.clientX / window.innerWidth) * 100;
+    const y = (e.clientY / window.innerHeight) * 100;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'cursor_update',
+            sessionId: sessionId,
+            x: x,
+            y: y
+        }));
+    }
+});
+
+connectWebSocket();
+"#
+        .to_string()
+    }
+
+    #[allow(dead_code)]
+    fn generate_cursor_code(&self) -> String {
+        r#"
+function updateCursor(user, x, y) {
+    let cursor = cursors.get(user.user_id);
+    if (!cursor) {
+        cursor = document.createElement('div');
+        cursor.className = 'cursor';
+        cursor.style.backgroundColor = user.color;
+
+        const label = document.createElement('div');
+        label.className = 'cursor-label';
+        label.textContent = user.display_name;
+        label.style.backgroundColor = user.color;
+        cursor.appendChild(label);
+
+        document.getElementById('visualization').appendChild(cursor);
+        cursors.set(user.user_id, cursor);
+    }
+
+    cursor.style.left = x + '%';
+    cursor.style.top = y + '%';
+}
+
+function removeCursor(userId) {
+    const cursor = cursors.get(userId);
+    if (cursor) {
+        cursor.remove();
+        cursors.delete(userId);
+    }
+}
+"#
+        .to_string()
+    }
+
+    #[allow(dead_code)]
+    fn generate_annotation_code(&self) -> String {
+        r#"
+function addAnnotation(annotation) {
+    const annotationDiv = document.createElement('div');
+    annotationDiv.className = 'annotation' + (annotation.resolved ? ' annotation-resolved' : '');
+    annotationDiv.id = 'annotation-' + annotation.annotation_id;
+
+    annotationDiv.innerHTML = `
+        <div class="annotation-header">
+            <span style="color: ${annotation.user.color}">${annotation.user.display_name}</span>
+            <button onclick="resolveAnnotation('${annotation.annotation_id}')">✓</button>
+        </div>
+        <div class="annotation-author">${new Date(annotation.timestamp).toLocaleString()}</div>
+        <div class="annotation-content">${annotation.content}</div>
+    `;
+
+    // Position near target element
+    const target = document.getElementById(annotation.target_id);
+    if (target) {
+        const rect = target.getBoundingClientRect();
+        annotationDiv.style.left = (rect.right + 10) + 'px';
+        annotationDiv.style.top = rect.top + 'px';
+    }
+
+    document.getElementById('visualization').appendChild(annotationDiv);
+    annotations.set(annotation.annotation_id, annotationDiv);
+}
+
+function removeAnnotation(annotationId) {
+    const annotation = annotations.get(annotationId);
+    if (annotation) {
+        annotation.remove();
+        annotations.delete(annotationId);
+    }
+}
+
+function resolveAnnotation(annotationId) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'resolve_annotation',
+            sessionId: sessionId,
+            annotationId: annotationId
+        }));
+    }
+}
+
+function addUser(user) {
+    const userList = document.getElementById('user-list');
+    const userItem = document.createElement('div');
+    userItem.className = 'user-item';
+    userItem.id = 'user-' + user.user_id;
+    userItem.innerHTML = `
+        <div class="user-dot" style="background-color: ${user.color}"></div>
+        <span>${user.display_name}</span>
+    `;
+    userList.appendChild(userItem);
+}
+
+function removeUser(userId) {
+    const userItem = document.getElementById('user-' + userId);
+    if (userItem) {
+        userItem.remove();
+    }
+    removeCursor(userId);
+}
+"#
+        .to_string()
+    }
+}
+
+// ============================================================================
+// Custom Theme Builder (v0.1.7)
+// ============================================================================
+
+/// Custom theme builder for creating branded themes.
+#[derive(Debug, Clone)]
+pub struct CustomThemeBuilder {
+    theme: Theme,
+}
+
+impl CustomThemeBuilder {
+    /// Creates a new custom theme builder.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::default(),
+        }
+    }
+
+    /// Starts from an existing theme.
+    pub fn from_theme(theme: Theme) -> Self {
+        Self { theme }
+    }
+
+    /// Sets the background color.
+    pub fn with_background_color(mut self, color: &str) -> Self {
+        self.theme.background_color = color.to_string();
+        self
+    }
+
+    /// Sets the text color.
+    pub fn with_text_color(mut self, color: &str) -> Self {
+        self.theme.text_color = color.to_string();
+        self
+    }
+
+    /// Sets the condition node color.
+    pub fn with_condition_color(mut self, color: &str) -> Self {
+        self.theme.condition_color = color.to_string();
+        self
+    }
+
+    /// Sets the outcome node color.
+    pub fn with_outcome_color(mut self, color: &str) -> Self {
+        self.theme.outcome_color = color.to_string();
+        self
+    }
+
+    /// Sets the discretion zone color.
+    pub fn with_discretion_color(mut self, color: &str) -> Self {
+        self.theme.discretion_color = color.to_string();
+        self
+    }
+
+    /// Sets the link/edge color.
+    pub fn with_link_color(mut self, color: &str) -> Self {
+        self.theme.link_color = color.to_string();
+        self
+    }
+
+    /// Sets the root node color.
+    pub fn with_root_color(mut self, color: &str) -> Self {
+        self.theme.root_color = color.to_string();
+        self
+    }
+
+    /// Sets organization branding colors.
+    pub fn with_branding(mut self, primary_color: &str, secondary_color: &str) -> Self {
+        self.theme.condition_color = primary_color.to_string();
+        self.theme.outcome_color = secondary_color.to_string();
+        self.theme.link_color = primary_color.to_string();
+        self
+    }
+
+    /// Sets a custom color palette.
+    pub fn with_palette(
+        mut self,
+        background: &str,
+        foreground: &str,
+        accent1: &str,
+        accent2: &str,
+        accent3: &str,
+    ) -> Self {
+        self.theme.background_color = background.to_string();
+        self.theme.text_color = foreground.to_string();
+        self.theme.condition_color = accent1.to_string();
+        self.theme.outcome_color = accent2.to_string();
+        self.theme.discretion_color = accent3.to_string();
+        self.theme.link_color = accent1.to_string();
+        self
+    }
+
+    /// Builds the custom theme.
+    pub fn build(self) -> Theme {
+        self.theme
+    }
+
+    /// Exports the theme to JSON.
+    pub fn to_json(&self) -> Result<String, VizError> {
+        serde_json::to_string_pretty(&self.theme)
+            .map_err(|e| VizError::ExportError(format!("Failed to serialize theme: {}", e)))
+    }
+
+    /// Imports a theme from JSON.
+    pub fn from_json(json: &str) -> Result<Self, VizError> {
+        let theme: Theme = serde_json::from_str(json)
+            .map_err(|e| VizError::ExportError(format!("Failed to deserialize theme: {}", e)))?;
+        Ok(Self { theme })
+    }
+}
+
+impl Default for CustomThemeBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Seasonal and Event Themes (v0.1.7 continued)
+// ============================================================================
+
+/// Seasonal and event-specific theme presets.
+#[derive(Debug, Clone)]
+pub struct SeasonalThemes;
+
+impl SeasonalThemes {
+    /// Winter/Holiday theme with cool blues and whites.
+    pub fn winter() -> Theme {
+        Theme {
+            root_color: "#e8f4f8".to_string(),
+            condition_color: "#b3d9ff".to_string(),
+            discretion_color: "#cce5ff".to_string(),
+            outcome_color: "#d4ebf7".to_string(),
+            link_color: "#668db8".to_string(),
+            background_color: "#f0f8ff".to_string(),
+            text_color: "#2c3e50".to_string(),
+        }
+    }
+
+    /// Spring theme with fresh greens and pastels.
+    pub fn spring() -> Theme {
+        Theme {
+            root_color: "#e8f5e9".to_string(),
+            condition_color: "#c8e6c9".to_string(),
+            discretion_color: "#fff9c4".to_string(),
+            outcome_color: "#a5d6a7".to_string(),
+            link_color: "#81c784".to_string(),
+            background_color: "#f1f8e9".to_string(),
+            text_color: "#33691e".to_string(),
+        }
+    }
+
+    /// Summer theme with warm, vibrant colors.
+    pub fn summer() -> Theme {
+        Theme {
+            root_color: "#fff3e0".to_string(),
+            condition_color: "#ffe0b2".to_string(),
+            discretion_color: "#ffccbc".to_string(),
+            outcome_color: "#ffab91".to_string(),
+            link_color: "#ff9800".to_string(),
+            background_color: "#fffaf0".to_string(),
+            text_color: "#e65100".to_string(),
+        }
+    }
+
+    /// Autumn/Fall theme with warm earth tones.
+    pub fn autumn() -> Theme {
+        Theme {
+            root_color: "#fbe9e7".to_string(),
+            condition_color: "#ffccbc".to_string(),
+            discretion_color: "#ffab91".to_string(),
+            outcome_color: "#bcaaa4".to_string(),
+            link_color: "#8d6e63".to_string(),
+            background_color: "#fff8f5".to_string(),
+            text_color: "#5d4037".to_string(),
+        }
+    }
+
+    /// Holiday theme with festive reds and greens.
+    pub fn holiday() -> Theme {
+        Theme {
+            root_color: "#ffebee".to_string(),
+            condition_color: "#c8e6c9".to_string(),
+            discretion_color: "#ffcdd2".to_string(),
+            outcome_color: "#a5d6a7".to_string(),
+            link_color: "#c62828".to_string(),
+            background_color: "#fafafa".to_string(),
+            text_color: "#1b5e20".to_string(),
+        }
+    }
+
+    /// Professional/Corporate theme with navy and gray.
+    pub fn corporate() -> Theme {
+        Theme {
+            root_color: "#eceff1".to_string(),
+            condition_color: "#b0bec5".to_string(),
+            discretion_color: "#90a4ae".to_string(),
+            outcome_color: "#78909c".to_string(),
+            link_color: "#455a64".to_string(),
+            background_color: "#fafafa".to_string(),
+            text_color: "#263238".to_string(),
+        }
+    }
+
+    /// Academic theme with scholarly blues.
+    pub fn academic() -> Theme {
+        Theme {
+            root_color: "#e3f2fd".to_string(),
+            condition_color: "#bbdefb".to_string(),
+            discretion_color: "#90caf9".to_string(),
+            outcome_color: "#64b5f6".to_string(),
+            link_color: "#1976d2".to_string(),
+            background_color: "#fafafa".to_string(),
+            text_color: "#0d47a1".to_string(),
+        }
+    }
+
+    /// Legal/Government theme with traditional colors.
+    pub fn legal() -> Theme {
+        Theme {
+            root_color: "#f5f5f5".to_string(),
+            condition_color: "#e0e0e0".to_string(),
+            discretion_color: "#d4af37".to_string(),
+            outcome_color: "#bdbdbd".to_string(),
+            link_color: "#1a237e".to_string(),
+            background_color: "#ffffff".to_string(),
+            text_color: "#000000".to_string(),
+        }
+    }
+}
+
+/// CSS variable customization for dynamic theming.
+#[derive(Debug, Clone)]
+pub struct CssVariableTheme {
+    /// CSS variable definitions
+    variables: Vec<(String, String)>,
+}
+
+impl CssVariableTheme {
+    /// Creates a new CSS variable theme.
+    pub fn new() -> Self {
+        Self {
+            variables: Vec::new(),
+        }
+    }
+
+    /// Adds a CSS variable.
+    pub fn add_variable(mut self, name: &str, value: &str) -> Self {
+        self.variables.push((name.to_string(), value.to_string()));
+        self
+    }
+
+    /// Creates CSS variable theme from a Theme.
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self::new()
+            .add_variable("--viz-root-color", &theme.root_color)
+            .add_variable("--viz-condition-color", &theme.condition_color)
+            .add_variable("--viz-discretion-color", &theme.discretion_color)
+            .add_variable("--viz-outcome-color", &theme.outcome_color)
+            .add_variable("--viz-link-color", &theme.link_color)
+            .add_variable("--viz-background-color", &theme.background_color)
+            .add_variable("--viz-text-color", &theme.text_color)
+    }
+
+    /// Generates CSS :root block with variables.
+    pub fn to_css(&self) -> String {
+        let mut css = String::from(":root {\n");
+        for (name, value) in &self.variables {
+            css.push_str(&format!("  {}: {};\n", name, value));
+        }
+        css.push_str("}\n");
+        css
+    }
+
+    /// Generates CSS with custom selector.
+    pub fn to_css_with_selector(&self, selector: &str) -> String {
+        let mut css = String::from(selector);
+        css.push_str(" {\n");
+        for (name, value) in &self.variables {
+            css.push_str(&format!("  {}: {};\n", name, value));
+        }
+        css.push_str("}\n");
+        css
+    }
+
+    /// Gets all variables.
+    pub fn variables(&self) -> &[(String, String)] {
+        &self.variables
+    }
+}
+
+impl Default for CssVariableTheme {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Performance Optimizations (v0.1.8)
+// ============================================================================
+
+/// Virtualization configuration for large datasets.
+#[derive(Debug, Clone)]
+pub struct VirtualizationConfig {
+    /// Enable virtualization
+    pub enabled: bool,
+    /// Number of items to render at once
+    pub render_batch_size: usize,
+    /// Buffer size around visible area
+    pub buffer_size: usize,
+    /// Minimum item height in pixels
+    pub min_item_height: u32,
+    /// Enable dynamic height calculation
+    pub dynamic_height: bool,
+}
+
+impl VirtualizationConfig {
+    /// Creates a new virtualization configuration.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            render_batch_size: 100,
+            buffer_size: 20,
+            min_item_height: 50,
+            dynamic_height: false,
+        }
+    }
+
+    /// Disables virtualization.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::new()
+        }
+    }
+
+    /// Sets the render batch size.
+    pub fn with_batch_size(mut self, size: usize) -> Self {
+        self.render_batch_size = size;
+        self
+    }
+
+    /// Sets the buffer size.
+    pub fn with_buffer_size(mut self, size: usize) -> Self {
+        self.buffer_size = size;
+        self
+    }
+
+    /// Enables dynamic height calculation.
+    pub fn with_dynamic_height(mut self) -> Self {
+        self.dynamic_height = true;
+        self
+    }
+
+    /// Generates JavaScript virtualization code.
+    pub fn to_javascript(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"
+// Virtualization for large datasets
+class VirtualScroller {{
+    constructor(container, items, config) {{
+        this.container = container;
+        this.items = items;
+        this.renderBatchSize = {};
+        this.bufferSize = {};
+        this.minItemHeight = {};
+        this.dynamicHeight = {};
+        this.visibleStart = 0;
+        this.visibleEnd = this.renderBatchSize;
+        this.init();
+    }}
+
+    init() {{
+        this.container.style.overflowY = 'auto';
+        this.container.style.position = 'relative';
+
+        // Create viewport
+        this.viewport = document.createElement('div');
+        this.viewport.style.position = 'relative';
+        this.container.appendChild(this.viewport);
+
+        // Initial render
+        this.render();
+
+        // Add scroll listener
+        this.container.addEventListener('scroll', () => this.onScroll());
+    }}
+
+    onScroll() {{
+        const scrollTop = this.container.scrollTop;
+        const newStart = Math.floor(scrollTop / this.minItemHeight);
+        const newEnd = newStart + this.renderBatchSize;
+
+        if (newStart !== this.visibleStart || newEnd !== this.visibleEnd) {{
+            this.visibleStart = Math.max(0, newStart - this.bufferSize);
+            this.visibleEnd = Math.min(this.items.length, newEnd + this.bufferSize);
+            this.render();
+        }}
+    }}
+
+    render() {{
+        // Clear viewport
+        this.viewport.innerHTML = '';
+
+        // Set total height
+        this.viewport.style.height = (this.items.length * this.minItemHeight) + 'px';
+
+        // Create fragment for batch rendering
+        const fragment = document.createDocumentFragment();
+
+        // Render visible items
+        for (let i = this.visibleStart; i < this.visibleEnd; i++) {{
+            const item = this.createItem(this.items[i], i);
+            fragment.appendChild(item);
+        }}
+
+        this.viewport.appendChild(fragment);
+    }}
+
+    createItem(data, index) {{
+        const item = document.createElement('div');
+        item.className = 'virtual-item';
+        item.style.position = 'absolute';
+        item.style.top = (index * this.minItemHeight) + 'px';
+        item.style.width = '100%';
+        item.style.minHeight = this.minItemHeight + 'px';
+        item.innerHTML = data;
+        return item;
+    }}
+}}
+"#,
+            self.render_batch_size, self.buffer_size, self.min_item_height, self.dynamic_height
+        )
+    }
+}
+
+impl Default for VirtualizationConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Progressive loading configuration.
+#[derive(Debug, Clone)]
+pub struct ProgressiveLoadingConfig {
+    /// Enable progressive loading
+    pub enabled: bool,
+    /// Initial load count
+    pub initial_load: usize,
+    /// Load increment on scroll
+    pub load_increment: usize,
+    /// Show loading indicator
+    pub show_loading_indicator: bool,
+    /// Delay before loading more (ms)
+    pub load_delay_ms: u32,
+}
+
+impl ProgressiveLoadingConfig {
+    /// Creates a new progressive loading configuration.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            initial_load: 50,
+            load_increment: 25,
+            show_loading_indicator: true,
+            load_delay_ms: 200,
+        }
+    }
+
+    /// Sets the initial load count.
+    pub fn with_initial_load(mut self, count: usize) -> Self {
+        self.initial_load = count;
+        self
+    }
+
+    /// Sets the load increment.
+    pub fn with_load_increment(mut self, increment: usize) -> Self {
+        self.load_increment = increment;
+        self
+    }
+
+    /// Disables loading indicator.
+    pub fn without_loading_indicator(mut self) -> Self {
+        self.show_loading_indicator = false;
+        self
+    }
+
+    /// Generates JavaScript progressive loading code.
+    pub fn to_javascript(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"
+// Progressive loading for large datasets
+class ProgressiveLoader {{
+    constructor(container, dataProvider, config) {{
+        this.container = container;
+        this.dataProvider = dataProvider;
+        this.initialLoad = {};
+        this.loadIncrement = {};
+        this.showLoadingIndicator = {};
+        this.loadDelay = {};
+        this.currentIndex = 0;
+        this.loading = false;
+        this.hasMore = true;
+        this.init();
+    }}
+
+    init() {{
+        this.loadMore();
+        this.container.addEventListener('scroll', () => this.checkScroll());
+    }}
+
+    checkScroll() {{
+        if (this.loading || !this.hasMore) return;
+
+        const scrollTop = this.container.scrollTop;
+        const scrollHeight = this.container.scrollHeight;
+        const clientHeight = this.container.clientHeight;
+
+        // Load more when 80% scrolled
+        if (scrollTop + clientHeight >= scrollHeight * 0.8) {{
+            this.loadMore();
+        }}
+    }}
+
+    async loadMore() {{
+        if (this.loading || !this.hasMore) return;
+
+        this.loading = true;
+        if (this.showLoadingIndicator) {{
+            this.showLoader();
+        }}
+
+        setTimeout(async () => {{
+            const count = this.currentIndex === 0 ? this.initialLoad : this.loadIncrement;
+            const items = await this.dataProvider(this.currentIndex, count);
+
+            if (items.length === 0) {{
+                this.hasMore = false;
+            }} else {{
+                this.renderItems(items);
+                this.currentIndex += items.length;
+            }}
+
+            this.loading = false;
+            if (this.showLoadingIndicator) {{
+                this.hideLoader();
+            }}
+        }}, this.loadDelay);
+    }}
+
+    renderItems(items) {{
+        const fragment = document.createDocumentFragment();
+        items.forEach(item => {{
+            const element = this.createItemElement(item);
+            fragment.appendChild(element);
+        }});
+        this.container.appendChild(fragment);
+    }}
+
+    createItemElement(item) {{
+        const div = document.createElement('div');
+        div.className = 'progressive-item';
+        div.innerHTML = item;
+        return div;
+    }}
+
+    showLoader() {{
+        if (!this.loader) {{
+            this.loader = document.createElement('div');
+            this.loader.className = 'progressive-loader';
+            this.loader.innerHTML = '<div class="spinner">Loading...</div>';
+        }}
+        this.container.appendChild(this.loader);
+    }}
+
+    hideLoader() {{
+        if (this.loader && this.loader.parentNode) {{
+            this.loader.parentNode.removeChild(this.loader);
+        }}
+    }}
+}}
+"#,
+            self.initial_load, self.load_increment, self.show_loading_indicator, self.load_delay_ms
+        )
+    }
+}
+
+impl Default for ProgressiveLoadingConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Level-of-detail configuration for complex visualizations.
+#[derive(Debug, Clone)]
+pub struct LevelOfDetailConfig {
+    /// Enable LOD rendering
+    pub enabled: bool,
+    /// Zoom level thresholds for detail levels
+    pub zoom_thresholds: Vec<f64>,
+    /// Simplify graph at low zoom
+    pub simplify_at_low_zoom: bool,
+    /// Hide labels at low zoom
+    pub hide_labels_at_low_zoom: bool,
+    /// Aggregate nodes at low zoom
+    pub aggregate_nodes: bool,
+}
+
+impl LevelOfDetailConfig {
+    /// Creates a new LOD configuration.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            zoom_thresholds: vec![0.25, 0.5, 0.75, 1.0],
+            simplify_at_low_zoom: true,
+            hide_labels_at_low_zoom: true,
+            aggregate_nodes: true,
+        }
+    }
+
+    /// Disables LOD rendering.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::new()
+        }
+    }
+
+    /// Sets custom zoom thresholds.
+    pub fn with_zoom_thresholds(mut self, thresholds: Vec<f64>) -> Self {
+        self.zoom_thresholds = thresholds;
+        self
+    }
+
+    /// Generates JavaScript LOD code.
+    pub fn to_javascript(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"
+// Level-of-detail rendering for performance
+class LevelOfDetailRenderer {{
+    constructor(svg, config) {{
+        this.svg = svg;
+        this.zoomThresholds = {:?};
+        this.simplifyAtLowZoom = {};
+        this.hideLabelsAtLowZoom = {};
+        this.aggregateNodes = {};
+        this.currentZoom = 1.0;
+        this.init();
+    }}
+
+    init() {{
+        // Add zoom listener
+        this.svg.addEventListener('zoom', (e) => {{
+            this.currentZoom = e.detail.scale;
+            this.updateDetailLevel();
+        }});
+    }}
+
+    updateDetailLevel() {{
+        const level = this.getDetailLevel(this.currentZoom);
+
+        // Apply detail level
+        this.applyDetailLevel(level);
+    }}
+
+    getDetailLevel(zoom) {{
+        for (let i = 0; i < this.zoomThresholds.length; i++) {{
+            if (zoom <= this.zoomThresholds[i]) {{
+                return i;
+            }}
+        }}
+        return this.zoomThresholds.length;
+    }}
+
+    applyDetailLevel(level) {{
+        // Hide/show labels based on zoom
+        if (this.hideLabelsAtLowZoom) {{
+            const labels = this.svg.querySelectorAll('.node-label');
+            labels.forEach(label => {{
+                label.style.display = level >= 2 ? 'block' : 'none';
+            }});
+        }}
+
+        // Simplify edges at low zoom
+        if (this.simplifyAtLowZoom) {{
+            const edges = this.svg.querySelectorAll('.edge');
+            edges.forEach(edge => {{
+                edge.style.strokeWidth = level >= 2 ? '2px' : '1px';
+            }});
+        }}
+
+        // Aggregate nodes at low zoom
+        if (this.aggregateNodes && level < 2) {{
+            this.performNodeAggregation();
+        }}
+    }}
+
+    performNodeAggregation() {{
+        // Group nearby nodes into clusters
+        const nodes = this.svg.querySelectorAll('.node');
+        // Implementation depends on graph structure
+    }}
+}}
+"#,
+            self.zoom_thresholds,
+            self.simplify_at_low_zoom,
+            self.hide_labels_at_low_zoom,
+            self.aggregate_nodes
+        )
+    }
+}
+
+impl Default for LevelOfDetailConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Domain-Specific Visualizations (v0.1.9)
+// ============================================================================
+
+/// Court hierarchy visualization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CourtNode {
+    /// Court identifier
+    pub id: String,
+    /// Court name
+    pub name: String,
+    /// Court level (e.g., "Supreme", "Appellate", "Trial")
+    pub level: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Number of judges
+    pub judge_count: usize,
+}
+
+/// Court hierarchy visualizer
+#[derive(Debug, Clone)]
+pub struct CourtHierarchyVisualizer {
+    theme: Theme,
+}
+
+impl CourtHierarchyVisualizer {
+    /// Creates a new court hierarchy visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders court hierarchy to HTML.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_html(&self, courts: &[CourtNode]) -> String {
+        let mut levels: HashMap<String, Vec<&CourtNode>> = HashMap::new();
+
+        for court in courts {
+            levels.entry(court.level.clone()).or_default().push(court);
+        }
+
+        let mut html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            background-color: {};
+            color: {};
+            padding: 20px;
+        }}
+        .court-hierarchy {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        .court-level {{
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: {};
+            border-radius: 8px;
+        }}
+        .level-title {{
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: {};
+        }}
+        .court-container {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }}
+        .court-box {{
+            flex: 1 1 300px;
+            padding: 15px;
+            background-color: {};
+            border: 2px solid {};
+            border-radius: 6px;
+        }}
+        .court-name {{
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }}
+        .court-info {{
+            font-size: 14px;
+            color: {};
+            margin: 4px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="court-hierarchy">
+        <h1>Court Hierarchy</h1>
+"#,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.root_color,
+            self.theme.condition_color,
+            self.theme.outcome_color,
+            self.theme.link_color,
+            self.theme.text_color,
+        );
+
+        // Sort levels (Supreme > Appellate > Trial)
+        let level_order = ["Supreme", "Appellate", "Trial", "District", "Municipal"];
+        for level in &level_order {
+            if let Some(court_list) = levels.get(*level) {
+                html.push_str(&format!(
+                    r#"        <div class="court-level">
+            <div class="level-title">{} Courts</div>
+            <div class="court-container">
+"#,
+                    level
+                ));
+
+                for court in court_list {
+                    html.push_str(&format!(
+                        r#"                <div class="court-box">
+                    <div class="court-name">{}</div>
+                    <div class="court-info">Jurisdiction: {}</div>
+                    <div class="court-info">Judges: {}</div>
+                </div>
+"#,
+                        court.name, court.jurisdiction, court.judge_count
+                    ));
+                }
+
+                html.push_str("            </div>\n        </div>\n");
+            }
+        }
+
+        html.push_str(
+            r#"    </div>
+</body>
+</html>"#,
+        );
+
+        html
+    }
+
+    /// Renders court hierarchy to Mermaid diagram.
+    pub fn to_mermaid(&self, courts: &[CourtNode]) -> String {
+        let mut diagram = String::from("graph TD\n");
+
+        let mut levels: HashMap<String, Vec<&CourtNode>> = HashMap::new();
+        for court in courts {
+            levels.entry(court.level.clone()).or_default().push(court);
+        }
+
+        let level_order = ["Supreme", "Appellate", "Trial", "District", "Municipal"];
+        for (i, level) in level_order.iter().enumerate() {
+            if let Some(court_list) = levels.get(*level) {
+                for court in court_list {
+                    let node_id = court.id.replace('-', "_");
+                    diagram.push_str(&format!(
+                        "    {}[\"{}<br/>{}\"]",
+                        node_id, court.name, court.jurisdiction
+                    ));
+
+                    if i > 0 {
+                        if let Some(prev_level) = level_order.get(i - 1) {
+                            if let Some(prev_courts) = levels.get(*prev_level) {
+                                for prev_court in prev_courts {
+                                    let prev_id = prev_court.id.replace('-', "_");
+                                    diagram.push_str(&format!("\n    {} --> {}", prev_id, node_id));
+                                }
+                            }
+                        }
+                    }
+                    diagram.push('\n');
+                }
+            }
+        }
+
+        diagram
+    }
+}
+
+impl Default for CourtHierarchyVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legislative process step
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegislativeStep {
+    /// Step identifier
+    pub id: String,
+    /// Step name
+    pub name: String,
+    /// Step description
+    pub description: String,
+    /// Required actors
+    pub actors: Vec<String>,
+    /// Estimated duration in days
+    pub duration_days: Option<u32>,
+}
+
+/// Legislative process flowchart visualizer
+#[derive(Debug, Clone)]
+pub struct LegislativeProcessVisualizer {
+    theme: Theme,
+}
+
+impl LegislativeProcessVisualizer {
+    /// Creates a new legislative process visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders legislative process to HTML.
+    pub fn to_html(&self, steps: &[LegislativeStep]) -> String {
+        let mut html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            background-color: {};
+            color: {};
+            padding: 20px;
+        }}
+        .process-container {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        .step {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        .step-box {{
+            flex: 1;
+            padding: 20px;
+            background-color: {};
+            border: 2px solid {};
+            border-radius: 8px;
+        }}
+        .step-number {{
+            width: 40px;
+            height: 40px;
+            background-color: {};
+            color: {};
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 20px;
+        }}
+        .step-title {{
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }}
+        .step-description {{
+            margin-bottom: 10px;
+        }}
+        .step-actors {{
+            font-style: italic;
+            color: {};
+        }}
+        .step-duration {{
+            color: {};
+            font-size: 12px;
+        }}
+        .arrow {{
+            text-align: center;
+            font-size: 24px;
+            color: {};
+            margin: 10px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="process-container">
+        <h1>Legislative Process</h1>
+"#,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.outcome_color,
+            self.theme.link_color,
+            self.theme.condition_color,
+            self.theme.background_color,
+            self.theme.discretion_color,
+            self.theme.discretion_color,
+            self.theme.link_color,
+        );
+
+        for (i, step) in steps.iter().enumerate() {
+            html.push_str(&format!(
+                r#"        <div class="step">
+            <div class="step-number">{}</div>
+            <div class="step-box">
+                <div class="step-title">{}</div>
+                <div class="step-description">{}</div>
+                <div class="step-actors">Actors: {}</div>
+"#,
+                i + 1,
+                step.name,
+                step.description,
+                step.actors.join(", ")
+            ));
+
+            if let Some(duration) = step.duration_days {
+                html.push_str(&format!(
+                    r#"                <div class="step-duration">Estimated duration: {} days</div>
+"#,
+                    duration
+                ));
+            }
+
+            html.push_str("            </div>\n        </div>\n");
+
+            if i < steps.len() - 1 {
+                html.push_str(
+                    r#"        <div class="arrow">↓</div>
+"#,
+                );
+            }
+        }
+
+        html.push_str(
+            r#"    </div>
+</body>
+</html>"#,
+        );
+
+        html
+    }
+
+    /// Renders legislative process to Mermaid flowchart.
+    pub fn to_mermaid(&self, steps: &[LegislativeStep]) -> String {
+        let mut diagram = String::from("graph TD\n");
+
+        for (i, step) in steps.iter().enumerate() {
+            let node_id = step.id.replace('-', "_");
+            diagram.push_str(&format!("    {}[\"{}\"]\n", node_id, step.name));
+
+            if i > 0 {
+                let prev_id = steps[i - 1].id.replace('-', "_");
+                diagram.push_str(&format!("    {} --> {}\n", prev_id, node_id));
+            }
+        }
+
+        diagram
+    }
+}
+
+impl Default for LegislativeProcessVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Case citation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseCitation {
+    /// Case identifier
+    pub id: String,
+    /// Case name
+    pub name: String,
+    /// Year
+    pub year: u32,
+    /// Court
+    pub court: String,
+    /// Citations (references to other cases)
+    pub citations: Vec<String>,
+}
+
+/// Case citation network visualizer
+#[derive(Debug, Clone)]
+pub struct CaseCitationNetworkVisualizer {
+    theme: Theme,
+}
+
+impl CaseCitationNetworkVisualizer {
+    /// Creates a new case citation network visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders citation network to HTML with D3.js.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_html(&self, cases: &[CaseCitation]) -> String {
+        let nodes_json = serde_json::to_string(cases).unwrap_or_else(|_| "[]".to_string());
+
+        let html = format!(
+            "<!DOCTYPE html>\n\
+<html>\n\
+<head>\n\
+    <meta charset=\"UTF-8\">\n\
+    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n\
+    <style>\n\
+        body {{\n\
+            margin: 0;\n\
+            background-color: {};\n\
+            color: {};\n\
+            font-family: Arial, sans-serif;\n\
+        }}\n\
+        #graph {{\n\
+            width: 100vw;\n\
+            height: 100vh;\n\
+        }}\n\
+        .node {{\n\
+            stroke: {};\n\
+            stroke-width: 2px;\n\
+            cursor: pointer;\n\
+        }}\n\
+        .link {{\n\
+            stroke: {};\n\
+            stroke-opacity: 0.6;\n\
+            fill: none;\n\
+        }}\n\
+        .label {{\n\
+            font-size: 12px;\n\
+            fill: {};\n\
+            pointer-events: none;\n\
+        }}\n\
+    </style>\n\
+</head>\n\
+<body>\n\
+    <svg id=\"graph\"></svg>\n\
+    <script>\n\
+        const data = {};\n\
+\n\
+        const width = window.innerWidth;\n\
+        const height = window.innerHeight;\n\
+\n\
+        const svg = d3.select(\"#graph\")\n\
+            .attr(\"width\", width)\n\
+            .attr(\"height\", height);\n\
+\n\
+        const nodes = data.map(d => ({{{{ id: d.id, name: d.name, year: d.year, court: d.court }}}}));\n\
+        const links = [];\n\
+        data.forEach(d => {{\n\
+            d.citations.forEach(target => {{\n\
+                links.push({{{{ source: d.id, target: target }}}});\n\
+            }});\n\
+        }});\n\
+\n\
+        const simulation = d3.forceSimulation(nodes)\n\
+            .force(\"link\", d3.forceLink(links).id(d => d.id))\n\
+            .force(\"charge\", d3.forceManyBody().strength(-300))\n\
+            .force(\"center\", d3.forceCenter(width / 2, height / 2));\n\
+\n\
+        const link = svg.append(\"g\")\n\
+            .selectAll(\"line\")\n\
+            .data(links)\n\
+            .enter().append(\"line\")\n\
+            .attr(\"class\", \"link\");\n\
+\n\
+        const node = svg.append(\"g\")\n\
+            .selectAll(\"circle\")\n\
+            .data(nodes)\n\
+            .enter().append(\"circle\")\n\
+            .attr(\"class\", \"node\")\n\
+            .attr(\"r\", 8)\n\
+            .attr(\"fill\", \"{}\")\n\
+            .call(d3.drag()\n\
+                .on(\"start\", dragstarted)\n\
+                .on(\"drag\", dragged)\n\
+                .on(\"end\", dragended));\n\
+\n\
+        const label = svg.append(\"g\")\n\
+            .selectAll(\"text\")\n\
+            .data(nodes)\n\
+            .enter().append(\"text\")\n\
+            .attr(\"class\", \"label\")\n\
+            .text(d => d.name)\n\
+            .attr(\"text-anchor\", \"middle\");\n\
+\n\
+        simulation.on(\"tick\", () => {{\n\
+            link.attr(\"x1\", d => d.source.x)\n\
+                .attr(\"y1\", d => d.source.y)\n\
+                .attr(\"x2\", d => d.target.x)\n\
+                .attr(\"y2\", d => d.target.y);\n\
+\n\
+            node.attr(\"cx\", d => d.x)\n\
+                .attr(\"cy\", d => d.y);\n\
+\n\
+            label.attr(\"x\", d => d.x)\n\
+                .attr(\"y\", d => d.y - 12);\n\
+        }});\n\
+\n\
+        function dragstarted(event) {{\n\
+            if (!event.active) simulation.alphaTarget(0.3).restart();\n\
+            event.subject.fx = event.subject.x;\n\
+            event.subject.fy = event.subject.y;\n\
+        }}\n\
+\n\
+        function dragged(event) {{\n\
+            event.subject.fx = event.x;\n\
+            event.subject.fy = event.y;\n\
+        }}\n\
+\n\
+        function dragended(event) {{\n\
+            if (!event.active) simulation.alphaTarget(0);\n\
+            event.subject.fx = null;\n\
+            event.subject.fy = null;\n\
+        }}\n\
+    </script>\n\
+</body>\n\
+</html>",
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.link_color,
+            self.theme.link_color,
+            self.theme.text_color,
+            nodes_json,
+            self.theme.condition_color,
+        );
+
+        html
+    }
+
+    /// Renders citation network to Mermaid.
+    pub fn to_mermaid(&self, cases: &[CaseCitation]) -> String {
+        let mut diagram = String::from("graph LR\n");
+
+        for case in cases {
+            let node_id = case.id.replace('-', "_");
+            diagram.push_str(&format!("    {}[\"{}\"]\n", node_id, case.name));
+
+            for citation in &case.citations {
+                let citation_id = citation.replace('-', "_");
+                diagram.push_str(&format!("    {} --> {}\n", node_id, citation_id));
+            }
+        }
+
+        diagram
+    }
+}
+
+impl Default for CaseCitationNetworkVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Regulatory entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulatoryEntity {
+    /// Entity identifier
+    pub id: String,
+    /// Entity name
+    pub name: String,
+    /// Entity type (e.g., "Agency", "Authority", "Commission")
+    pub entity_type: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Regulated sectors
+    pub sectors: Vec<String>,
+}
+
+/// Regulatory landscape map visualizer
+#[derive(Debug, Clone)]
+pub struct RegulatoryLandscapeVisualizer {
+    theme: Theme,
+}
+
+impl RegulatoryLandscapeVisualizer {
+    /// Creates a new regulatory landscape visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders regulatory landscape to HTML.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_html(&self, entities: &[RegulatoryEntity]) -> String {
+        let mut entity_types: HashMap<String, Vec<&RegulatoryEntity>> = HashMap::new();
+
+        for entity in entities {
+            entity_types
+                .entry(entity.entity_type.clone())
+                .or_default()
+                .push(entity);
+        }
+
+        let mut html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            background-color: {};
+            color: {};
+            padding: 20px;
+        }}
+        .landscape {{
+            max-width: 1400px;
+            margin: 0 auto;
+        }}
+        .entity-type-section {{
+            margin-bottom: 30px;
+        }}
+        .type-title {{
+            font-size: 22px;
+            font-weight: bold;
+            color: {};
+            margin-bottom: 15px;
+        }}
+        .entity-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }}
+        .entity-card {{
+            padding: 15px;
+            background-color: {};
+            border: 2px solid {};
+            border-radius: 8px;
+        }}
+        .entity-name {{
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }}
+        .entity-info {{
+            font-size: 14px;
+            margin: 4px 0;
+        }}
+        .sectors {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }}
+        .sector-tag {{
+            padding: 3px 8px;
+            background-color: {};
+            color: {};
+            border-radius: 4px;
+            font-size: 12px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="landscape">
+        <h1>Regulatory Landscape</h1>
+"#,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.condition_color,
+            self.theme.outcome_color,
+            self.theme.link_color,
+            self.theme.discretion_color,
+            self.theme.background_color,
+        );
+
+        for (entity_type, entity_list) in &entity_types {
+            html.push_str(&format!(
+                r#"        <div class="entity-type-section">
+            <div class="type-title">{}</div>
+            <div class="entity-grid">
+"#,
+                entity_type
+            ));
+
+            for entity in entity_list {
+                html.push_str(&format!(
+                    r#"                <div class="entity-card">
+                    <div class="entity-name">{}</div>
+                    <div class="entity-info">Jurisdiction: {}</div>
+                    <div class="sectors">
+"#,
+                    entity.name, entity.jurisdiction
+                ));
+
+                for sector in &entity.sectors {
+                    html.push_str(&format!(
+                        r#"                        <span class="sector-tag">{}</span>
+"#,
+                        sector
+                    ));
+                }
+
+                html.push_str("                    </div>\n                </div>\n");
+            }
+
+            html.push_str("            </div>\n        </div>\n");
+        }
+
+        html.push_str(
+            r#"    </div>
+</body>
+</html>"#,
+        );
+
+        html
+    }
+}
+
+impl Default for RegulatoryLandscapeVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Compliance status
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ComplianceStatus {
+    /// Fully compliant
+    Compliant,
+    /// Partially compliant
+    PartiallyCompliant,
+    /// Non-compliant
+    NonCompliant,
+    /// Not applicable
+    NotApplicable,
+}
+
+/// Compliance item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceItem {
+    /// Item identifier
+    pub id: String,
+    /// Requirement name
+    pub requirement: String,
+    /// Status
+    pub status: ComplianceStatus,
+    /// Category
+    pub category: String,
+    /// Notes
+    pub notes: String,
+}
+
+/// Compliance status dashboard visualizer
+#[derive(Debug, Clone)]
+pub struct ComplianceDashboardVisualizer {
+    theme: Theme,
+}
+
+impl ComplianceDashboardVisualizer {
+    /// Creates a new compliance dashboard visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Renders compliance dashboard to HTML.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_html(&self, items: &[ComplianceItem]) -> String {
+        let total = items.len();
+        let compliant = items
+            .iter()
+            .filter(|i| matches!(i.status, ComplianceStatus::Compliant))
+            .count();
+        let partial = items
+            .iter()
+            .filter(|i| matches!(i.status, ComplianceStatus::PartiallyCompliant))
+            .count();
+        let non_compliant = items
+            .iter()
+            .filter(|i| matches!(i.status, ComplianceStatus::NonCompliant))
+            .count();
+
+        let compliance_rate = if total > 0 {
+            (compliant as f64 / total as f64 * 100.0).round() as u32
+        } else {
+            0
+        };
+
+        let mut categories: HashMap<String, Vec<&ComplianceItem>> = HashMap::new();
+        for item in items {
+            categories
+                .entry(item.category.clone())
+                .or_default()
+                .push(item);
+        }
+
+        let mut html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            background-color: {};
+            color: {};
+            padding: 20px;
+        }}
+        .dashboard {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        .summary {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        .summary-card {{
+            padding: 20px;
+            background-color: {};
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .summary-number {{
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }}
+        .summary-label {{
+            font-size: 14px;
+            color: {};
+        }}
+        .category-section {{
+            margin-bottom: 30px;
+        }}
+        .category-title {{
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: {};
+        }}
+        .item-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }}
+        .item {{
+            padding: 15px;
+            background-color: {};
+            border-left: 4px solid;
+            border-radius: 4px;
+        }}
+        .item.compliant {{ border-left-color: #4caf50; }}
+        .item.partial {{ border-left-color: #ff9800; }}
+        .item.non-compliant {{ border-left-color: #f44336; }}
+        .item.not-applicable {{ border-left-color: #9e9e9e; }}
+        .item-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }}
+        .item-name {{
+            font-weight: bold;
+        }}
+        .status-badge {{
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }}
+        .status-badge.compliant {{
+            background-color: #4caf50;
+            color: white;
+        }}
+        .status-badge.partial {{
+            background-color: #ff9800;
+            color: white;
+        }}
+        .status-badge.non-compliant {{
+            background-color: #f44336;
+            color: white;
+        }}
+        .status-badge.not-applicable {{
+            background-color: #9e9e9e;
+            color: white;
+        }}
+        .item-notes {{
+            font-size: 14px;
+            color: {};
+        }}
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Compliance Dashboard</h1>
+        <div class="summary">
+            <div class="summary-card">
+                <div class="summary-number">{}%</div>
+                <div class="summary-label">Compliance Rate</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-number">{}</div>
+                <div class="summary-label">Compliant</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-number">{}</div>
+                <div class="summary-label">Partial</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-number">{}</div>
+                <div class="summary-label">Non-Compliant</div>
+            </div>
+        </div>
+"#,
+            self.theme.background_color,
+            self.theme.text_color,
+            self.theme.root_color,
+            self.theme.discretion_color,
+            self.theme.condition_color,
+            self.theme.outcome_color,
+            self.theme.discretion_color,
+            compliance_rate,
+            compliant,
+            partial,
+            non_compliant,
+        );
+
+        for (category, item_list) in &categories {
+            html.push_str(&format!(
+                r#"        <div class="category-section">
+            <div class="category-title">{}</div>
+            <div class="item-list">
+"#,
+                category
+            ));
+
+            for item in item_list {
+                let (status_class, status_label) = match item.status {
+                    ComplianceStatus::Compliant => ("compliant", "Compliant"),
+                    ComplianceStatus::PartiallyCompliant => ("partial", "Partially Compliant"),
+                    ComplianceStatus::NonCompliant => ("non-compliant", "Non-Compliant"),
+                    ComplianceStatus::NotApplicable => ("not-applicable", "N/A"),
+                };
+
+                html.push_str(&format!(
+                    r#"                <div class="item {}">
+                    <div class="item-header">
+                        <div class="item-name">{}</div>
+                        <div class="status-badge {}">{}</div>
+                    </div>
+                    <div class="item-notes">{}</div>
+                </div>
+"#,
+                    status_class, item.requirement, status_class, status_label, item.notes
+                ));
+            }
+
+            html.push_str("            </div>\n        </div>\n");
+        }
+
+        html.push_str(
+            r#"    </div>
+</body>
+</html>"#,
+        );
+
+        html
+    }
+}
+
+impl Default for ComplianceDashboardVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Performance Features (v0.1.8)
+// ============================================================================
+
+/// WebWorker rendering configuration
+#[derive(Debug, Clone)]
+pub struct WebWorkerConfig {
+    /// Enable web worker rendering
+    pub enabled: bool,
+    /// Number of worker threads
+    pub worker_count: usize,
+    /// Chunk size for parallel processing
+    pub chunk_size: usize,
+}
+
+impl WebWorkerConfig {
+    /// Creates a new web worker configuration.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            worker_count: 4,
+            chunk_size: 100,
+        }
+    }
+
+    /// Disables web worker rendering.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::new()
+        }
+    }
+
+    /// Sets the worker count.
+    pub fn with_worker_count(mut self, count: usize) -> Self {
+        self.worker_count = count;
+        self
+    }
+
+    /// Sets the chunk size.
+    pub fn with_chunk_size(mut self, size: usize) -> Self {
+        self.chunk_size = size;
+        self
+    }
+
+    /// Generates JavaScript web worker code.
+    pub fn to_javascript(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"
+// Web Worker rendering for performance
+const workerCode = `
+self.onmessage = function(e) {{
+    const {{ nodes, edges, chunkIndex }} = e.data;
+
+    // Process this chunk of data
+    const processed = {{
+        nodes: nodes.map(node => ({{
+            ...node,
+            rendered: true,
+            position: calculatePosition(node)
+        }})),
+        edges: edges.map(edge => ({{
+            ...edge,
+            path: calculatePath(edge)
+        }}))
+    }};
+
+    self.postMessage({{ chunkIndex, data: processed }});
+}};
+
+function calculatePosition(node) {{
+    // Placeholder for position calculation
+    return {{ x: 0, y: 0 }};
+}}
+
+function calculatePath(edge) {{
+    // Placeholder for path calculation
+    return '';
+}}
+`;
+
+class WebWorkerRenderer {{
+    constructor(data) {{
+        this.data = data;
+        this.workerCount = {};
+        this.chunkSize = {};
+        this.workers = [];
+        this.results = [];
+        this.init();
+    }}
+
+    init() {{
+        const blob = new Blob([workerCode], {{ type: 'application/javascript' }});
+        const workerUrl = URL.createObjectURL(blob);
+
+        for (let i = 0; i < this.workerCount; i++) {{
+            this.workers.push(new Worker(workerUrl));
+        }}
+    }}
+
+    async render() {{
+        const chunks = this.chunkData(this.data, this.chunkSize);
+        const promises = chunks.map((chunk, index) => {{
+            return new Promise((resolve) => {{
+                const worker = this.workers[index % this.workerCount];
+                worker.onmessage = (e) => {{
+                    this.results[e.data.chunkIndex] = e.data.data;
+                    resolve();
+                }};
+                worker.postMessage({{
+                    nodes: chunk.nodes,
+                    edges: chunk.edges,
+                    chunkIndex: index
+                }});
+            }});
+        }});
+
+        await Promise.all(promises);
+        return this.mergeResults();
+    }}
+
+    chunkData(data, size) {{
+        const chunks = [];
+        for (let i = 0; i < data.nodes.length; i += size) {{
+            chunks.push({{
+                nodes: data.nodes.slice(i, i + size),
+                edges: data.edges.filter(e =>
+                    e.source >= i && e.source < i + size
+                )
+            }});
+        }}
+        return chunks;
+    }}
+
+    mergeResults() {{
+        return this.results.reduce((acc, result) => ({{
+            nodes: [...acc.nodes, ...result.nodes],
+            edges: [...acc.edges, ...result.edges]
+        }}), {{ nodes: [], edges: [] }});
+    }}
+
+    terminate() {{
+        this.workers.forEach(worker => worker.terminate());
+    }}
+}}
+"#,
+            self.worker_count, self.chunk_size
+        )
+    }
+}
+
+impl Default for WebWorkerConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Canvas fallback configuration
+#[derive(Debug, Clone)]
+pub struct CanvasFallbackConfig {
+    /// Enable canvas rendering fallback
+    pub enabled: bool,
+    /// Use canvas for graphs larger than this size
+    pub threshold_node_count: usize,
+    /// Enable offscreen canvas
+    pub offscreen: bool,
+}
+
+impl CanvasFallbackConfig {
+    /// Creates a new canvas fallback configuration.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            threshold_node_count: 1000,
+            offscreen: true,
+        }
+    }
+
+    /// Disables canvas fallback.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::new()
+        }
+    }
+
+    /// Sets the threshold for switching to canvas.
+    pub fn with_threshold(mut self, threshold: usize) -> Self {
+        self.threshold_node_count = threshold;
+        self
+    }
+
+    /// Generates JavaScript canvas fallback code.
+    pub fn to_javascript(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"
+// Canvas fallback for large graphs
+class CanvasRenderer {{
+    constructor(container, data) {{
+        this.container = container;
+        this.data = data;
+        this.threshold = {};
+        this.offscreen = {};
+        this.init();
+    }}
+
+    init() {{
+        if (this.data.nodes.length < this.threshold) {{
+            // Use SVG for small graphs
+            this.useSvg = true;
+            return;
+        }}
+
+        this.useSvg = false;
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = this.container.clientWidth;
+        this.canvas.height = this.container.clientHeight;
+        this.container.appendChild(this.canvas);
+
+        if (this.offscreen && 'OffscreenCanvas' in window) {{
+            this.offscreenCanvas = this.canvas.transferControlToOffscreen();
+            this.ctx = this.offscreenCanvas.getContext('2d');
+        }} else {{
+            this.ctx = this.canvas.getContext('2d');
+        }}
+    }}
+
+    render() {{
+        if (this.useSvg) {{
+            // Delegate to SVG renderer
+            return;
+        }}
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Render edges
+        this.ctx.strokeStyle = '#ccc';
+        this.ctx.lineWidth = 1;
+        this.data.edges.forEach(edge => {{
+            this.ctx.beginPath();
+            this.ctx.moveTo(edge.source.x, edge.source.y);
+            this.ctx.lineTo(edge.target.x, edge.target.y);
+            this.ctx.stroke();
+        }});
+
+        // Render nodes
+        this.data.nodes.forEach(node => {{
+            this.ctx.fillStyle = node.color || '#3498db';
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI);
+            this.ctx.fill();
+
+            // Draw label
+            this.ctx.fillStyle = '#333';
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(node.name, node.x + 8, node.y + 4);
+        }});
+    }}
+
+    update(data) {{
+        this.data = data;
+        this.render();
+    }}
+}}
+"#,
+            self.threshold_node_count, self.offscreen
+        )
+    }
+}
+
+impl Default for CanvasFallbackConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Framework Integration (v0.1.6)
+// ============================================================================
+
+/// React component wrapper configuration
+#[derive(Debug, Clone)]
+pub struct ReactComponentConfig {
+    /// Component name
+    pub component_name: String,
+    /// Use TypeScript
+    pub typescript: bool,
+    /// Include prop types
+    pub include_prop_types: bool,
+}
+
+impl ReactComponentConfig {
+    /// Creates a new React component configuration.
+    pub fn new(component_name: impl Into<String>) -> Self {
+        Self {
+            component_name: component_name.into(),
+            typescript: true,
+            include_prop_types: false,
+        }
+    }
+
+    /// Disables TypeScript.
+    pub fn without_typescript(mut self) -> Self {
+        self.typescript = false;
+        self
+    }
+
+    /// Enables PropTypes validation.
+    pub fn with_prop_types(mut self) -> Self {
+        self.include_prop_types = true;
+        self
+    }
+
+    /// Generates React component code.
+    pub fn to_react_component(&self) -> String {
+        if self.typescript {
+            format!(
+                "import React, {{ useEffect, useRef, useState }} from 'react';\n\
+\n\
+interface {}Props {{\n\
+    data: any;\n\
+    theme?: 'light' | 'dark' | 'high-contrast' | 'colorblind-friendly';\n\
+    width?: number;\n\
+    height?: number;\n\
+    onNodeClick?: (node: any) => void;\n\
+}}\n\
+\n\
+export const {}: React.FC<{}Props> = ({{\n\
+    data,\n\
+    theme = 'light',\n\
+    width = 800,\n\
+    height = 600,\n\
+    onNodeClick\n\
+}}) => {{\n\
+    const containerRef = useRef<HTMLDivElement>(null);\n\
+    const [error, setError] = useState<string | null>(null);\n\
+\n\
+    useEffect(() => {{\n\
+        if (!containerRef.current || !data) return;\n\
+\n\
+        try {{\n\
+            const container = containerRef.current;\n\
+            container.innerHTML = '';\n\
+\n\
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+            svg.setAttribute('width', width.toString());\n\
+            svg.setAttribute('height', height.toString());\n\
+            container.appendChild(svg);\n\
+\n\
+            if (onNodeClick) {{\n\
+                svg.addEventListener('click', (e) => {{\n\
+                    const target = e.target as SVGElement;\n\
+                    if (target.classList.contains('node')) {{\n\
+                        onNodeClick({{ id: target.getAttribute('data-id') }});\n\
+                    }}\n\
+                }});\n\
+            }}\n\
+        }} catch (err) {{\n\
+            setError(err instanceof Error ? err.message : 'Unknown error');\n\
+        }}\n\
+    }}, [data, theme, width, height, onNodeClick]);\n\
+\n\
+    if (error) {{\n\
+        return <div style={{{{{{ color: 'red' }}}}}}>Error: {{error}}</div>;\n\
+    }}\n\
+\n\
+    return (\n\
+        <div\n\
+            ref={{{{containerRef}}}}\n\
+            className=\"legalis-viz-container\"\n\
+            style={{{{{{ width, height, overflow: 'hidden' }}}}}}\n\
+        />\n\
+    );\n\
+}};\n\
+\n\
+export default {};\n",
+                self.component_name, self.component_name, self.component_name, self.component_name
+            )
+        } else {
+            let prop_types = if self.include_prop_types {
+                format!(
+                    "\nimport PropTypes from 'prop-types';\n\n\
+{}.propTypes = {{\n\
+    data: PropTypes.any.isRequired,\n\
+    theme: PropTypes.oneOf(['light', 'dark', 'high-contrast', 'colorblind-friendly']),\n\
+    width: PropTypes.number,\n\
+    height: PropTypes.number,\n\
+    onNodeClick: PropTypes.func\n\
+}};\n",
+                    self.component_name
+                )
+            } else {
+                String::new()
+            };
+
+            format!(
+                "import React, {{ useEffect, useRef, useState }} from 'react';\n\
+\n\
+export const {} = ({{\n\
+    data,\n\
+    theme = 'light',\n\
+    width = 800,\n\
+    height = 600,\n\
+    onNodeClick\n\
+}}) => {{\n\
+    const containerRef = useRef(null);\n\
+    const [error, setError] = useState(null);\n\
+\n\
+    useEffect(() => {{\n\
+        if (!containerRef.current || !data) return;\n\
+\n\
+        try {{\n\
+            const container = containerRef.current;\n\
+            container.innerHTML = '';\n\
+\n\
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+            svg.setAttribute('width', width.toString());\n\
+            svg.setAttribute('height', height.toString());\n\
+            container.appendChild(svg);\n\
+\n\
+            if (onNodeClick) {{\n\
+                svg.addEventListener('click', (e) => {{\n\
+                    if (e.target.classList.contains('node')) {{\n\
+                        onNodeClick({{ id: e.target.getAttribute('data-id') }});\n\
+                    }}\n\
+                }});\n\
+            }}\n\
+        }} catch (err) {{\n\
+            setError(err.message || 'Unknown error');\n\
+        }}\n\
+    }}, [data, theme, width, height, onNodeClick]);\n\
+\n\
+    if (error) {{\n\
+        return <div style={{{{{{ color: 'red' }}}}}}>Error: {{error}}</div>;\n\
+    }}\n\
+\n\
+    return (\n\
+        <div\n\
+            ref={{{{containerRef}}}}\n\
+            className=\"legalis-viz-container\"\n\
+            style={{{{{{ width, height, overflow: 'hidden' }}}}}}\n\
+        />\n\
+    );\n\
+}};\n\
+{}\n\
+export default {};\n",
+                self.component_name, prop_types, self.component_name
+            )
+        }
+    }
+}
+
+impl Default for ReactComponentConfig {
+    fn default() -> Self {
+        Self::new("LegalisViz")
+    }
+}
+
+/// Vue.js component wrapper configuration
+#[derive(Debug, Clone)]
+pub struct VueComponentConfig {
+    /// Component name
+    pub component_name: String,
+    /// Use TypeScript
+    pub typescript: bool,
+    /// Use Composition API
+    pub composition_api: bool,
+}
+
+impl VueComponentConfig {
+    /// Creates a new Vue component configuration.
+    pub fn new(component_name: impl Into<String>) -> Self {
+        Self {
+            component_name: component_name.into(),
+            typescript: true,
+            composition_api: true,
+        }
+    }
+
+    /// Disables TypeScript.
+    pub fn without_typescript(mut self) -> Self {
+        self.typescript = false;
+        self
+    }
+
+    /// Uses Options API instead of Composition API.
+    pub fn with_options_api(mut self) -> Self {
+        self.composition_api = false;
+        self
+    }
+
+    /// Generates Vue component code.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_vue_component(&self) -> String {
+        if self.composition_api {
+            if self.typescript {
+                "<template>\n\
+  <div ref=\"containerRef\" class=\"legalis-viz-container\" :style=\"{ width: width + 'px', height: height + 'px' }\">\n\
+    <div v-if=\"error\" class=\"error\">Error: {{ error }}</div>\n\
+  </div>\n\
+</template>\n\
+\n\
+<script setup lang=\"ts\">\n\
+import { ref, onMounted, watch } from 'vue';\n\
+\n\
+interface Props {\n\
+  data: any;\n\
+  theme?: 'light' | 'dark' | 'high-contrast' | 'colorblind-friendly';\n\
+  width?: number;\n\
+  height?: number;\n\
+}\n\
+\n\
+const props = withDefaults(defineProps<Props>(), {\n\
+  theme: 'light',\n\
+  width: 800,\n\
+  height: 600\n\
+});\n\
+\n\
+const emit = defineEmits<{\n\
+  nodeClick: [node: any];\n\
+}>();\n\
+\n\
+const containerRef = ref<HTMLDivElement | null>(null);\n\
+const error = ref<string | null>(null);\n\
+\n\
+const renderVisualization = () => {\n\
+  if (!containerRef.value || !props.data) return;\n\
+\n\
+  try {\n\
+    const container = containerRef.value;\n\
+    container.innerHTML = '';\n\
+\n\
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+    svg.setAttribute('width', props.width.toString());\n\
+    svg.setAttribute('height', props.height.toString());\n\
+    container.appendChild(svg);\n\
+\n\
+    svg.addEventListener('click', (e) => {\n\
+      const target = e.target as SVGElement;\n\
+      if (target.classList.contains('node')) {\n\
+        emit('nodeClick', { id: target.getAttribute('data-id') });\n\
+      }\n\
+    });\n\
+  } catch (err) {\n\
+    error.value = err instanceof Error ? err.message : 'Unknown error';\n\
+  }\n\
+};\n\
+\n\
+onMounted(() => {\n\
+  renderVisualization();\n\
+});\n\
+\n\
+watch(() => [props.data, props.theme, props.width, props.height], () => {\n\
+  renderVisualization();\n\
+});\n\
+</script>\n\
+\n\
+<style scoped>\n\
+.legalis-viz-container {\n\
+  overflow: hidden;\n\
+}\n\
+\n\
+.error {\n\
+  color: red;\n\
+}\n\
+</style>\n".to_string()
+            } else {
+                "<template>\n\
+  <div ref=\"containerRef\" class=\"legalis-viz-container\" :style=\"{ width: width + 'px', height: height + 'px' }\">\n\
+    <div v-if=\"error\" class=\"error\">Error: {{ error }}</div>\n\
+  </div>\n\
+</template>\n\
+\n\
+<script setup>\n\
+import { ref, onMounted, watch } from 'vue';\n\
+\n\
+const props = defineProps({\n\
+  data: { type: Object, required: true },\n\
+  theme: { type: String, default: 'light' },\n\
+  width: { type: Number, default: 800 },\n\
+  height: { type: Number, default: 600 }\n\
+});\n\
+\n\
+const emit = defineEmits(['nodeClick']);\n\
+\n\
+const containerRef = ref(null);\n\
+const error = ref(null);\n\
+\n\
+const renderVisualization = () => {\n\
+  if (!containerRef.value || !props.data) return;\n\
+\n\
+  try {\n\
+    const container = containerRef.value;\n\
+    container.innerHTML = '';\n\
+\n\
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+    svg.setAttribute('width', props.width.toString());\n\
+    svg.setAttribute('height', props.height.toString());\n\
+    container.appendChild(svg);\n\
+\n\
+    svg.addEventListener('click', (e) => {\n\
+      if (e.target.classList.contains('node')) {\n\
+        emit('nodeClick', { id: e.target.getAttribute('data-id') });\n\
+      }\n\
+    });\n\
+  } catch (err) {\n\
+    error.value = err.message || 'Unknown error';\n\
+  }\n\
+};\n\
+\n\
+onMounted(() => {\n\
+  renderVisualization();\n\
+});\n\
+\n\
+watch(() => [props.data, props.theme, props.width, props.height], () => {\n\
+  renderVisualization();\n\
+});\n\
+</script>\n\
+\n\
+<style scoped>\n\
+.legalis-viz-container {\n\
+  overflow: hidden;\n\
+}\n\
+\n\
+.error {\n\
+  color: red;\n\
+}\n\
+</style>\n".to_string()
+            }
+        } else {
+            format!(
+                "<template>\n\
+  <div ref=\"container\" class=\"legalis-viz-container\" :style=\"{{ width: width + 'px', height: height + 'px' }}\">\n\
+    <div v-if=\"error\" class=\"error\">Error: {{{{ error }}}}</div>\n\
+  </div>\n\
+</template>\n\
+\n\
+<script>\n\
+export default {{\n\
+  name: '{}',\n\
+  props: {{\n\
+    data: {{ type: Object, required: true }},\n\
+    theme: {{ type: String, default: 'light' }},\n\
+    width: {{ type: Number, default: 800 }},\n\
+    height: {{ type: Number, default: 600 }}\n\
+  }},\n\
+  data() {{\n\
+    return {{\n\
+      error: null\n\
+    }};\n\
+  }},\n\
+  mounted() {{\n\
+    this.renderVisualization();\n\
+  }},\n\
+  watch: {{\n\
+    data() {{ this.renderVisualization(); }},\n\
+    theme() {{ this.renderVisualization(); }},\n\
+    width() {{ this.renderVisualization(); }},\n\
+    height() {{ this.renderVisualization(); }}\n\
+  }},\n\
+  methods: {{\n\
+    renderVisualization() {{\n\
+      if (!this.$refs.container || !this.data) return;\n\
+\n\
+      try {{\n\
+        const container = this.$refs.container;\n\
+        container.innerHTML = '';\n\
+\n\
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+        svg.setAttribute('width', this.width.toString());\n\
+        svg.setAttribute('height', this.height.toString());\n\
+        container.appendChild(svg);\n\
+\n\
+        svg.addEventListener('click', (e) => {{\n\
+          if (e.target.classList.contains('node')) {{\n\
+            this.$emit('nodeClick', {{ id: e.target.getAttribute('data-id') }});\n\
+          }}\n\
+        }});\n\
+      }} catch (err) {{\n\
+        this.error = err.message || 'Unknown error';\n\
+      }}\n\
+    }}\n\
+  }}\n\
+}};\n\
+</script>\n\
+\n\
+<style scoped>\n\
+.legalis-viz-container {{\n\
+  overflow: hidden;\n\
+}}\n\
+\n\
+.error {{\n\
+  color: red;\n\
+}}\n\
+</style>\n",
+                self.component_name
+            )
+        }
+    }
+}
+
+impl Default for VueComponentConfig {
+    fn default() -> Self {
+        Self::new("LegalisViz")
+    }
+}
+
+/// Angular component wrapper configuration
+#[derive(Debug, Clone)]
+pub struct AngularComponentConfig {
+    /// Component name
+    pub component_name: String,
+    /// Component selector
+    pub selector: String,
+}
+
+impl AngularComponentConfig {
+    /// Creates a new Angular component configuration.
+    pub fn new(component_name: impl Into<String>, selector: impl Into<String>) -> Self {
+        Self {
+            component_name: component_name.into(),
+            selector: selector.into(),
+        }
+    }
+
+    /// Generates Angular component code (TypeScript, HTML, CSS).
+    pub fn to_angular_component(&self) -> (String, String, String) {
+        let component_ts = format!(
+            "import {{ Component, Input, Output, EventEmitter, OnInit, OnChanges, ElementRef, ViewChild }} from '@angular/core';\n\
+\n\
+@Component({{\n\
+  selector: '{}',\n\
+  templateUrl: './{}.component.html',\n\
+  styleUrls: ['./{}.component.css']\n\
+}})\n\
+export class {} implements OnInit, OnChanges {{\n\
+  @Input() data: any;\n\
+  @Input() theme: 'light' | 'dark' | 'high-contrast' | 'colorblind-friendly' = 'light';\n\
+  @Input() width: number = 800;\n\
+  @Input() height: number = 600;\n\
+  @Output() nodeClick = new EventEmitter<any>();\n\
+\n\
+  @ViewChild('container', {{ static: true }}) containerRef!: ElementRef<HTMLDivElement>;\n\
+\n\
+  error: string | null = null;\n\
+\n\
+  ngOnInit(): void {{\n\
+    this.renderVisualization();\n\
+  }}\n\
+\n\
+  ngOnChanges(): void {{\n\
+    this.renderVisualization();\n\
+  }}\n\
+\n\
+  private renderVisualization(): void {{\n\
+    if (!this.containerRef?.nativeElement || !this.data) return;\n\
+\n\
+    try {{\n\
+      const container = this.containerRef.nativeElement;\n\
+      container.innerHTML = '';\n\
+\n\
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n\
+      svg.setAttribute('width', this.width.toString());\n\
+      svg.setAttribute('height', this.height.toString());\n\
+      container.appendChild(svg);\n\
+\n\
+      svg.addEventListener('click', (e) => {{\n\
+        const target = e.target as SVGElement;\n\
+        if (target.classList.contains('node')) {{\n\
+          this.nodeClick.emit({{ id: target.getAttribute('data-id') }});\n\
+        }}\n\
+      }});\n\
+\n\
+      this.error = null;\n\
+    }} catch (err) {{\n\
+      this.error = err instanceof Error ? err.message : 'Unknown error';\n\
+    }}\n\
+  }}\n\
+}}\n",
+            self.selector,
+            self.component_name.to_lowercase(),
+            self.component_name.to_lowercase(),
+            self.component_name
+        );
+
+        let component_html = "<div #container class=\"legalis-viz-container\" [style.width.px]=\"width\" [style.height.px]=\"height\">\n\
+  <div *ngIf=\"error\" class=\"error\">Error: {{ error }}</div>\n\
+</div>\n".to_string();
+
+        let component_css = ".legalis-viz-container {\n\
+  overflow: hidden;\n\
+}\n\
+\n\
+.error {\n\
+  color: red;\n\
+}\n"
+        .to_string();
+
+        (component_ts, component_html, component_css)
+    }
+}
+
+impl Default for AngularComponentConfig {
+    fn default() -> Self {
+        Self::new("LegalisVizComponent", "app-legalis-viz")
+    }
+}
+
+/// WordPress plugin integration configuration
+#[derive(Debug, Clone)]
+pub struct WordPressPluginConfig {
+    /// Plugin name
+    pub plugin_name: String,
+    /// Plugin slug
+    pub plugin_slug: String,
+    /// Shortcode name
+    pub shortcode: String,
+}
+
+impl WordPressPluginConfig {
+    /// Creates a new WordPress plugin configuration.
+    pub fn new(plugin_name: impl Into<String>) -> Self {
+        let name = plugin_name.into();
+        let slug = name.to_lowercase().replace(' ', "-");
+        Self {
+            plugin_name: name,
+            plugin_slug: slug.clone(),
+            shortcode: format!("{}_viz", slug.replace('-', "_")),
+        }
+    }
+
+    /// Sets the shortcode name.
+    pub fn with_shortcode(mut self, shortcode: impl Into<String>) -> Self {
+        self.shortcode = shortcode.into();
+        self
+    }
+
+    /// Generates WordPress plugin PHP code.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_wordpress_plugin(&self) -> String {
+        let class_name = self
+            .plugin_slug
+            .replace('-', "_")
+            .split('_')
+            .map(|s| {
+                let mut chars = s.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().chain(chars).collect(),
+                }
+            })
+            .collect::<String>();
+
+        format!(
+            "<?php\n\
+/**\n\
+ * Plugin Name: {}\n\
+ * Description: Legal statute visualization plugin for WordPress\n\
+ * Version: 1.0.0\n\
+ * Author: Legalis\n\
+ */\n\
+\n\
+if (!defined('ABSPATH')) {{\n\
+    exit;\n\
+}}\n\
+\n\
+class {} {{\n\
+\n\
+    public function __construct() {{\n\
+        add_shortcode('{}', array($this, 'render_visualization'));\n\
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));\n\
+    }}\n\
+\n\
+    public function enqueue_scripts() {{\n\
+        wp_enqueue_script(\n\
+            '{}-viz',\n\
+            plugin_dir_url(__FILE__) . 'js/visualization.js',\n\
+            array(),\n\
+            '1.0.0',\n\
+            true\n\
+        );\n\
+\n\
+        wp_enqueue_style(\n\
+            '{}-viz',\n\
+            plugin_dir_url(__FILE__) . 'css/visualization.css',\n\
+            array(),\n\
+            '1.0.0'\n\
+        );\n\
+    }}\n\
+\n\
+    public function render_visualization($atts) {{\n\
+        $atts = shortcode_atts(array(\n\
+            'data' => '',\n\
+            'theme' => 'light',\n\
+            'width' => '800',\n\
+            'height' => '600',\n\
+        ), $atts);\n\
+\n\
+        $data = esc_attr($atts['data']);\n\
+        $theme = esc_attr($atts['theme']);\n\
+        $width = intval($atts['width']);\n\
+        $height = intval($atts['height']);\n\
+\n\
+        ob_start();\n\
+        ?>\n\
+        <div class=\"legalis-viz-container\"\n\
+             data-viz-data=\"<?php echo $data; ?>\"\n\
+             data-viz-theme=\"<?php echo $theme; ?>\"\n\
+             style=\"width: <?php echo $width; ?>px; height: <?php echo $height; ?>px;\">\n\
+        </div>\n\
+        <?php\n\
+        return ob_get_clean();\n\
+    }}\n\
+}}\n\
+\n\
+new {}();\n",
+            self.plugin_name,
+            class_name,
+            self.shortcode,
+            self.plugin_slug,
+            self.plugin_slug,
+            class_name
+        )
+    }
+}
+
+impl Default for WordPressPluginConfig {
+    fn default() -> Self {
+        Self::new("Legalis Visualization")
+    }
+}
+
+// ============================================================================
+// Web Components (v0.1.6)
+// ============================================================================
+
+/// Web Component configuration
+#[derive(Debug, Clone)]
+pub struct WebComponentConfig {
+    /// Component tag name
+    pub tag_name: String,
+    /// Shadow DOM enabled
+    pub shadow_dom: bool,
+    /// Custom element registry
+    pub auto_register: bool,
+}
+
+impl WebComponentConfig {
+    /// Creates a new web component configuration.
+    pub fn new(tag_name: impl Into<String>) -> Self {
+        Self {
+            tag_name: tag_name.into(),
+            shadow_dom: true,
+            auto_register: true,
+        }
+    }
+
+    /// Disables shadow DOM.
+    pub fn without_shadow_dom(mut self) -> Self {
+        self.shadow_dom = false;
+        self
+    }
+
+    /// Disables auto-registration.
+    pub fn without_auto_register(mut self) -> Self {
+        self.auto_register = false;
+        self
+    }
+
+    /// Generates Web Component JavaScript code.
+    pub fn to_javascript(&self, html_content: &str) -> String {
+        let shadow_dom_code = if self.shadow_dom {
+            r#"
+        const shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = template;
+"#
+        } else {
+            r#"
+        this.innerHTML = template;
+"#
+        };
+
+        let auto_register_code = if self.auto_register {
+            format!(
+                r#"
+if (!customElements.get('{}')) {{
+    customElements.define('{}', LegalisVizComponent);
+}}
+"#,
+                self.tag_name, self.tag_name
+            )
+        } else {
+            String::new()
+        };
+
+        format!(
+            r#"
+// Web Component for Legalis Viz
+class LegalisVizComponent extends HTMLElement {{
+    constructor() {{
+        super();
+
+        const template = `{}`;
+        {}
+    }}
+
+    connectedCallback() {{
+        // Component connected to DOM
+    }}
+
+    disconnectedCallback() {{
+        // Component removed from DOM
+    }}
+
+    static get observedAttributes() {{
+        return ['data', 'theme'];
+    }}
+
+    attributeChangedCallback(name, oldValue, newValue) {{
+        if (name === 'data') {{
+            this.updateData(JSON.parse(newValue));
+        }} else if (name === 'theme') {{
+            this.updateTheme(newValue);
+        }}
+    }}
+
+    updateData(data) {{
+        // Update visualization data
+    }}
+
+    updateTheme(theme) {{
+        // Update visualization theme
+    }}
+}}
+{}
+// Usage: <{} data='{{...}}' theme='light'></{}>
+"#,
+            html_content.replace('\n', "\\n").replace('\'', "\\'"),
+            shadow_dom_code,
+            auto_register_code,
+            self.tag_name,
+            self.tag_name,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4509,5 +10072,1739 @@ mod tests {
             format_change_type(&StatuteChange::TemporalValidityChanged),
             "Temporal Validity Changed"
         );
+    }
+
+    #[test]
+    fn test_interactive_config_default() {
+        let config = InteractiveConfig::default();
+        assert!(config.enable_zoom_pan);
+        assert!(config.enable_tooltips);
+        assert!(config.enable_click_expand);
+        assert!(config.enable_search);
+        assert!(config.enable_minimap);
+        assert_eq!(config.initial_zoom, 1.0);
+        assert_eq!(config.min_zoom, 0.1);
+        assert_eq!(config.max_zoom, 5.0);
+        assert_eq!(config.minimap_size, (200, 150));
+    }
+
+    #[test]
+    fn test_interactive_visualizer_creation() {
+        let visualizer = InteractiveVisualizer::new();
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+        assert!(visualizer.config.enable_zoom_pan);
+    }
+
+    #[test]
+    fn test_interactive_visualizer_with_theme() {
+        let visualizer = InteractiveVisualizer::new().with_theme(Theme::dark());
+        assert_eq!(visualizer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_interactive_visualizer_with_config() {
+        let mut config = InteractiveConfig::default();
+        config.enable_minimap = false;
+        config.initial_zoom = 2.0;
+
+        let visualizer = InteractiveVisualizer::new().with_config(config);
+        assert!(!visualizer.config.enable_minimap);
+        assert_eq!(visualizer.config.initial_zoom, 2.0);
+    }
+
+    #[test]
+    fn test_interactive_html_generation() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "benefit"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let visualizer = InteractiveVisualizer::new();
+        let html = visualizer.to_interactive_html(&tree);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Interactive decision-tree Visualization"));
+        assert!(html.contains("zoom-in"));
+        assert!(html.contains("zoom-out"));
+        assert!(html.contains("search-box"));
+        assert!(html.contains("minimap"));
+        assert!(html.contains("enableZoomPan"));
+        assert!(html.contains("enableTooltips"));
+        assert!(html.contains("enableClickExpand"));
+        assert!(html.contains("enableSearch"));
+        assert!(html.contains("enableMinimap"));
+    }
+
+    #[test]
+    fn test_interactive_html_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_dependency("statute-2", "statute-1", "depends-on");
+
+        let visualizer = InteractiveVisualizer::new();
+        let html = visualizer.to_interactive_html_graph(&graph);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Interactive dependency-graph Visualization"));
+        assert!(html.contains("zoom-controls"));
+        assert!(html.contains("search-controls"));
+    }
+
+    #[test]
+    fn test_interactive_config_disabled_features() {
+        let config = InteractiveConfig {
+            enable_zoom_pan: false,
+            enable_tooltips: false,
+            enable_click_expand: false,
+            enable_search: false,
+            enable_minimap: false,
+            initial_zoom: 1.0,
+            min_zoom: 0.5,
+            max_zoom: 3.0,
+            minimap_size: (100, 100),
+        };
+
+        let statute = Statute::new("test-1", "Test", Effect::new(EffectType::Grant, "test"));
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let visualizer = InteractiveVisualizer::new().with_config(config);
+        let html = visualizer.to_interactive_html(&tree);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("enableZoomPan: false"));
+        assert!(html.contains("enableTooltips: false"));
+        assert!(html.contains("enableClickExpand: false"));
+        assert!(html.contains("enableSearch: false"));
+        assert!(html.contains("enableMinimap: false"));
+    }
+
+    #[test]
+    fn test_interactive_visualizer_default() {
+        let visualizer1 = InteractiveVisualizer::new();
+        let visualizer2 = InteractiveVisualizer::default();
+        assert_eq!(
+            visualizer1.theme.background_color,
+            visualizer2.theme.background_color
+        );
+        assert_eq!(
+            visualizer1.config.initial_zoom,
+            visualizer2.config.initial_zoom
+        );
+    }
+
+    #[test]
+    fn test_3d_config_default() {
+        let config = ThreeDConfig::default();
+        assert!(!config.enable_vr);
+        assert!(!config.enable_ar);
+        assert!(config.force_directed);
+        assert!(config.depth_coloring);
+        assert_eq!(config.camera_fov, 75.0);
+        assert_eq!(config.node_size, 1.0);
+        assert_eq!(config.edge_thickness, 0.1);
+        assert_eq!(config.force_strength, 0.5);
+        assert_eq!(config.auto_rotate_speed, 10.0);
+    }
+
+    #[test]
+    fn test_3d_visualizer_creation() {
+        let visualizer = ThreeDVisualizer::new();
+        assert_eq!(visualizer.theme.background_color, "#ffffff");
+        assert!(visualizer.config.force_directed);
+    }
+
+    #[test]
+    fn test_3d_visualizer_with_theme() {
+        let visualizer = ThreeDVisualizer::new().with_theme(Theme::dark());
+        assert_eq!(visualizer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_3d_visualizer_with_config() {
+        let mut config = ThreeDConfig::default();
+        config.enable_vr = true;
+        config.enable_ar = true;
+        config.force_directed = false;
+        config.depth_coloring = false;
+
+        let visualizer = ThreeDVisualizer::new().with_config(config);
+        assert!(visualizer.config.enable_vr);
+        assert!(visualizer.config.enable_ar);
+        assert!(!visualizer.config.force_directed);
+        assert!(!visualizer.config.depth_coloring);
+    }
+
+    #[test]
+    fn test_3d_html_graph_generation() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_statute("statute-3");
+        graph.add_dependency("statute-2", "statute-1", "depends-on");
+        graph.add_dependency("statute-3", "statute-2", "depends-on");
+
+        let visualizer = ThreeDVisualizer::new();
+        let html = visualizer.to_3d_html_graph(&graph);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("3D Dependency Graph Visualization"));
+        assert!(html.contains("three.min.js"));
+        assert!(html.contains("reset-camera"));
+        assert!(html.contains("toggle-rotation"));
+        assert!(html.contains("const nodes = ["));
+        assert!(html.contains("const edges = ["));
+        assert!(html.contains("enableVR"));
+        assert!(html.contains("enableAR"));
+        assert!(html.contains("forceDirected"));
+        assert!(html.contains("depthColoring"));
+    }
+
+    #[test]
+    fn test_3d_html_timeline_generation() {
+        let mut timeline = Timeline::new();
+        timeline.add_event(
+            "2020-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "law-1".to_string(),
+                title: "Event 1".to_string(),
+            },
+        );
+        timeline.add_event(
+            "2020-02-01",
+            TimelineEvent::Amended {
+                statute_id: "law-1".to_string(),
+                description: "Event 2".to_string(),
+            },
+        );
+        timeline.add_event(
+            "2020-03-01",
+            TimelineEvent::Repealed {
+                statute_id: "law-1".to_string(),
+            },
+        );
+
+        let visualizer = ThreeDVisualizer::new();
+        let html = visualizer.to_3d_html_timeline(&timeline);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("3D Timeline Visualization"));
+        assert!(html.contains("three.min.js"));
+        assert!(html.contains("isTimeline: true"));
+        assert!(html.contains("2020-01-01"));
+        assert!(html.contains("2020-02-01"));
+        assert!(html.contains("2020-03-01"));
+    }
+
+    #[test]
+    fn test_3d_vr_ar_buttons() {
+        let config = ThreeDConfig {
+            enable_vr: true,
+            enable_ar: true,
+            force_directed: true,
+            depth_coloring: true,
+            camera_fov: 75.0,
+            node_size: 1.0,
+            edge_thickness: 0.1,
+            force_strength: 0.5,
+            auto_rotate_speed: 10.0,
+        };
+
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test");
+
+        let visualizer = ThreeDVisualizer::new().with_config(config);
+        let html = visualizer.to_3d_html_graph(&graph);
+
+        assert!(html.contains("enter-vr"));
+        assert!(html.contains("enter-ar"));
+        assert!(html.contains("VRButton.js"));
+    }
+
+    #[test]
+    fn test_3d_force_directed_layout() {
+        let config = ThreeDConfig {
+            enable_vr: false,
+            enable_ar: false,
+            force_directed: true,
+            depth_coloring: false,
+            camera_fov: 75.0,
+            node_size: 2.0,
+            edge_thickness: 0.2,
+            force_strength: 0.8,
+            auto_rotate_speed: 5.0,
+        };
+
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("node1");
+        graph.add_statute("node2");
+
+        let visualizer = ThreeDVisualizer::new().with_config(config);
+        let html = visualizer.to_3d_html_graph(&graph);
+
+        assert!(html.contains("forceDirected: true"));
+        assert!(html.contains("reset-forces"));
+        assert!(html.contains("nodeSize: 2"));
+        assert!(html.contains("edgeThickness: 0.2"));
+        assert!(html.contains("forceStrength: 0.8"));
+        assert!(html.contains("autoRotateSpeed: 5"));
+    }
+
+    #[test]
+    fn test_3d_depth_based_coloring() {
+        let config = ThreeDConfig {
+            enable_vr: false,
+            enable_ar: false,
+            force_directed: false,
+            depth_coloring: true,
+            camera_fov: 75.0,
+            node_size: 1.0,
+            edge_thickness: 0.1,
+            force_strength: 0.5,
+            auto_rotate_speed: 0.0, // No auto-rotation
+        };
+
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("root");
+        graph.add_statute("child");
+        graph.add_dependency("child", "root", "depends-on");
+
+        let visualizer = ThreeDVisualizer::new().with_config(config);
+        let html = visualizer.to_3d_html_graph(&graph);
+
+        assert!(html.contains("depthColoring: true"));
+        assert!(html.contains("const hue = (node.depth * 60) % 360"));
+    }
+
+    #[test]
+    fn test_3d_visualizer_default() {
+        let visualizer1 = ThreeDVisualizer::new();
+        let visualizer2 = ThreeDVisualizer::default();
+        assert_eq!(
+            visualizer1.theme.background_color,
+            visualizer2.theme.background_color
+        );
+        assert_eq!(visualizer1.config.camera_fov, visualizer2.config.camera_fov);
+    }
+
+    // ============================================================================
+    // Accessibility Tests
+    // ============================================================================
+
+    #[test]
+    fn test_accessibility_config_default() {
+        let config = AccessibilityConfig::default();
+        assert!(config.wcag_aa_compliant);
+        assert!(config.enable_screen_reader);
+        assert!(config.enable_keyboard_nav);
+        assert!(!config.high_contrast_mode);
+        assert!(!config.reduced_motion);
+        assert_eq!(config.min_font_size, 16.0);
+        assert_eq!(config.focus_color, "#005fcc");
+        assert_eq!(config.tab_index_start, 0);
+    }
+
+    #[test]
+    fn test_accessibility_config_screen_reader_optimized() {
+        let config = AccessibilityConfig::screen_reader_optimized();
+        assert!(config.wcag_aa_compliant);
+        assert!(config.enable_screen_reader);
+        assert!(config.enable_keyboard_nav);
+        assert!(config.high_contrast_mode);
+        assert!(config.reduced_motion);
+        assert_eq!(config.min_font_size, 18.0);
+    }
+
+    #[test]
+    fn test_accessibility_config_reduced_motion() {
+        let config = AccessibilityConfig::reduced_motion();
+        assert!(config.reduced_motion);
+        assert!(config.wcag_aa_compliant);
+    }
+
+    #[test]
+    fn test_accessibility_config_high_contrast() {
+        let config = AccessibilityConfig::high_contrast();
+        assert!(config.high_contrast_mode);
+        assert_eq!(config.min_font_size, 18.0);
+    }
+
+    #[test]
+    fn test_accessibility_enhancer_creation() {
+        let enhancer = AccessibilityEnhancer::new();
+        assert!(enhancer.config.wcag_aa_compliant);
+        assert_eq!(enhancer.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_accessibility_enhancer_with_config() {
+        let config = AccessibilityConfig::high_contrast();
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+        assert!(enhancer.config.high_contrast_mode);
+    }
+
+    #[test]
+    fn test_accessibility_enhancer_with_theme() {
+        let enhancer = AccessibilityEnhancer::new().with_theme(Theme::dark());
+        assert_eq!(enhancer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_accessibility_enhancer_with_high_contrast_theme() {
+        let config = AccessibilityConfig::high_contrast();
+        let enhancer = AccessibilityEnhancer::new()
+            .with_config(config)
+            .with_theme(Theme::light());
+        // Should override with high contrast theme
+        assert_eq!(enhancer.theme.background_color, "#ffffff");
+        assert_eq!(enhancer.theme.text_color, "#000000");
+    }
+
+    #[test]
+    fn test_aria_label_for_root_node() {
+        let enhancer = AccessibilityEnhancer::new();
+        let node = DecisionNode::Root {
+            statute_id: "test-1".to_string(),
+            title: "Test Statute".to_string(),
+        };
+        let label = enhancer.aria_label_for_node(&node);
+        assert!(label.contains("Root node"));
+        assert!(label.contains("Test Statute"));
+        assert!(label.contains("test-1"));
+    }
+
+    #[test]
+    fn test_aria_label_for_condition_node() {
+        let enhancer = AccessibilityEnhancer::new();
+        let node = DecisionNode::Condition {
+            description: "Age >= 18".to_string(),
+            is_discretionary: false,
+        };
+        let label = enhancer.aria_label_for_node(&node);
+        assert!(label.contains("Condition"));
+        assert!(label.contains("Age >= 18"));
+    }
+
+    #[test]
+    fn test_aria_label_for_discretionary_condition() {
+        let enhancer = AccessibilityEnhancer::new();
+        let node = DecisionNode::Condition {
+            description: "Good moral character".to_string(),
+            is_discretionary: true,
+        };
+        let label = enhancer.aria_label_for_node(&node);
+        assert!(label.contains("Discretionary condition"));
+        assert!(label.contains("Good moral character"));
+    }
+
+    #[test]
+    fn test_aria_label_for_outcome_node() {
+        let enhancer = AccessibilityEnhancer::new();
+        let node = DecisionNode::Outcome {
+            description: "Eligible for benefits".to_string(),
+        };
+        let label = enhancer.aria_label_for_node(&node);
+        assert!(label.contains("Outcome"));
+        assert!(label.contains("Eligible for benefits"));
+    }
+
+    #[test]
+    fn test_aria_label_for_discretion_node() {
+        let enhancer = AccessibilityEnhancer::new();
+        let node = DecisionNode::Discretion {
+            issue: "Exceptional circumstances".to_string(),
+            hint: Some("Consider case history".to_string()),
+        };
+        let label = enhancer.aria_label_for_node(&node);
+        assert!(label.contains("Discretionary decision"));
+        assert!(label.contains("Exceptional circumstances"));
+        assert!(label.contains("Hint"));
+        assert!(label.contains("Consider case history"));
+    }
+
+    #[test]
+    fn test_aria_role_for_nodes() {
+        let enhancer = AccessibilityEnhancer::new();
+
+        let root = DecisionNode::Root {
+            statute_id: "test".to_string(),
+            title: "Test".to_string(),
+        };
+        assert_eq!(enhancer.aria_role_for_node(&root), "landmark");
+
+        let condition = DecisionNode::Condition {
+            description: "Test".to_string(),
+            is_discretionary: false,
+        };
+        assert_eq!(enhancer.aria_role_for_node(&condition), "listitem");
+
+        let outcome = DecisionNode::Outcome {
+            description: "Test".to_string(),
+        };
+        assert_eq!(enhancer.aria_role_for_node(&outcome), "status");
+
+        let discretion = DecisionNode::Discretion {
+            issue: "Test".to_string(),
+            hint: None,
+        };
+        assert_eq!(enhancer.aria_role_for_node(&discretion), "alert");
+    }
+
+    #[test]
+    fn test_keyboard_nav_script_enabled() {
+        let enhancer = AccessibilityEnhancer::new();
+        let script = enhancer.keyboard_nav_script();
+        assert!(script.contains("Keyboard navigation support"));
+        assert!(script.contains("Tab"));
+        assert!(script.contains("ArrowUp"));
+        assert!(script.contains("ArrowDown"));
+        assert!(script.contains("Home"));
+        assert!(script.contains("End"));
+        assert!(script.contains(&enhancer.config.focus_color));
+    }
+
+    #[test]
+    fn test_keyboard_nav_script_disabled() {
+        let config = AccessibilityConfig {
+            enable_keyboard_nav: false,
+            ..Default::default()
+        };
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+        let script = enhancer.keyboard_nav_script();
+        assert!(script.is_empty());
+    }
+
+    #[test]
+    fn test_screen_reader_enhancements_enabled() {
+        let enhancer = AccessibilityEnhancer::new();
+        let enhancements = enhancer.screen_reader_enhancements();
+        assert!(enhancements.contains("Navigation Instructions"));
+        assert!(enhancements.contains("Tab"));
+        assert!(enhancements.contains("sr-only"));
+        assert!(enhancements.contains("complementary"));
+    }
+
+    #[test]
+    fn test_screen_reader_enhancements_disabled() {
+        let config = AccessibilityConfig {
+            enable_screen_reader: false,
+            ..Default::default()
+        };
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+        let enhancements = enhancer.screen_reader_enhancements();
+        assert!(enhancements.is_empty());
+    }
+
+    #[test]
+    fn test_reduced_motion_css_enabled() {
+        let config = AccessibilityConfig::reduced_motion();
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+        let css = enhancer.reduced_motion_css();
+        assert!(css.contains("prefers-reduced-motion"));
+        assert!(css.contains("animation-duration"));
+        assert!(css.contains("0.01ms"));
+    }
+
+    #[test]
+    fn test_reduced_motion_css_disabled() {
+        let enhancer = AccessibilityEnhancer::new();
+        let css = enhancer.reduced_motion_css();
+        assert!(css.is_empty());
+    }
+
+    #[test]
+    fn test_high_contrast_css_enabled() {
+        let config = AccessibilityConfig::high_contrast();
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+        let css = enhancer.high_contrast_css();
+        assert!(css.contains("High contrast mode"));
+        assert!(css.contains("font-size"));
+        assert!(css.contains("18px"));
+        assert!(css.contains(".node"));
+        assert!(css.contains(".edge"));
+    }
+
+    #[test]
+    fn test_high_contrast_css_disabled() {
+        let enhancer = AccessibilityEnhancer::new();
+        let css = enhancer.high_contrast_css();
+        assert!(css.is_empty());
+    }
+
+    #[test]
+    fn test_enhance_html_adds_lang() {
+        let enhancer = AccessibilityEnhancer::new();
+        let html = "<html><head></head><body></body></html>";
+        let enhanced = enhancer.enhance_html(html);
+        assert!(enhanced.contains(r#"lang="en""#));
+    }
+
+    #[test]
+    fn test_enhance_html_adds_viewport() {
+        let enhancer = AccessibilityEnhancer::new();
+        let html = "<html><head></head><body></body></html>";
+        let enhanced = enhancer.enhance_html(html);
+        assert!(enhanced.contains("viewport"));
+        assert!(enhanced.contains("width=device-width"));
+    }
+
+    #[test]
+    fn test_enhance_html_preserves_existing_lang() {
+        let enhancer = AccessibilityEnhancer::new();
+        let html = r#"<html lang="fr"><head></head><body></body></html>"#;
+        let enhanced = enhancer.enhance_html(html);
+        assert!(enhanced.contains(r#"lang="fr""#));
+    }
+
+    #[test]
+    fn test_validate_contrast_good() {
+        let enhancer = AccessibilityEnhancer::new();
+        // Black on white - very high contrast
+        assert!(enhancer.validate_contrast("#000000", "#ffffff"));
+        // Dark blue on white - good contrast
+        assert!(enhancer.validate_contrast("#0000aa", "#ffffff"));
+    }
+
+    #[test]
+    fn test_validate_contrast_bad() {
+        let enhancer = AccessibilityEnhancer::new();
+        // Light gray on white - poor contrast
+        assert!(!enhancer.validate_contrast("#cccccc", "#ffffff"));
+        // Yellow on white - poor contrast
+        assert!(!enhancer.validate_contrast("#ffff00", "#ffffff"));
+    }
+
+    #[test]
+    fn test_validate_contrast_invalid_color() {
+        let enhancer = AccessibilityEnhancer::new();
+        assert!(!enhancer.validate_contrast("invalid", "#ffffff"));
+        assert!(!enhancer.validate_contrast("#fff", "#ffffff")); // Only 3 chars
+    }
+
+    #[test]
+    fn test_accessible_html_decision_tree() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let enhancer = AccessibilityEnhancer::new();
+        let html = enhancer.to_accessible_html(&tree);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains(r#"lang="en""#));
+        assert!(html.contains("viewport"));
+        assert!(html.contains("Navigation Instructions"));
+    }
+
+    #[test]
+    fn test_accessible_html_dependency_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_dependency("statute-2", "statute-1", "depends-on");
+
+        let enhancer = AccessibilityEnhancer::new();
+        let html = enhancer.to_accessible_html_graph(&graph);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains(r#"lang="en""#));
+        assert!(html.contains("viewport"));
+    }
+
+    #[test]
+    fn test_accessible_html_with_all_features() {
+        let config = AccessibilityConfig::screen_reader_optimized();
+        let enhancer = AccessibilityEnhancer::new().with_config(config);
+
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let html = enhancer.to_accessible_html(&tree);
+
+        // Check for all accessibility features
+        assert!(html.contains(r#"lang="en""#));
+        assert!(html.contains("viewport"));
+        assert!(html.contains("Navigation Instructions"));
+        assert!(html.contains("Keyboard navigation support"));
+        assert!(html.contains("High contrast mode"));
+        assert!(html.contains("prefers-reduced-motion"));
+    }
+
+    #[test]
+    fn test_accessibility_enhancer_default() {
+        let enhancer1 = AccessibilityEnhancer::new();
+        let enhancer2 = AccessibilityEnhancer::default();
+        assert_eq!(
+            enhancer1.config.wcag_aa_compliant,
+            enhancer2.config.wcag_aa_compliant
+        );
+        assert_eq!(
+            enhancer1.theme.background_color,
+            enhancer2.theme.background_color
+        );
+    }
+
+    // ============================================================================
+    // Export Formats Tests
+    // ============================================================================
+
+    #[test]
+    fn test_export_format_types() {
+        let formats = vec![
+            ExportFormat::AnimatedGif,
+            ExportFormat::Mp4,
+            ExportFormat::WebM,
+            ExportFormat::PrintPdf,
+            ExportFormat::VectorPdf,
+            ExportFormat::Poster,
+        ];
+        assert_eq!(formats.len(), 6);
+    }
+
+    #[test]
+    fn test_poster_config_default() {
+        let config = PosterConfig::default();
+        assert_eq!(config.width, 841);
+        assert_eq!(config.height, 1189);
+        assert_eq!(config.dpi, 300);
+        assert_eq!(config.paper_size, "A0");
+        assert_eq!(config.orientation, "portrait");
+    }
+
+    #[test]
+    fn test_poster_config_a0() {
+        let config = PosterConfig::a0();
+        assert_eq!(config.width, 841);
+        assert_eq!(config.height, 1189);
+        assert_eq!(config.paper_size, "A0");
+    }
+
+    #[test]
+    fn test_poster_config_a1() {
+        let config = PosterConfig::a1();
+        assert_eq!(config.width, 594);
+        assert_eq!(config.height, 841);
+        assert_eq!(config.paper_size, "A1");
+    }
+
+    #[test]
+    fn test_poster_config_a2() {
+        let config = PosterConfig::a2();
+        assert_eq!(config.width, 420);
+        assert_eq!(config.height, 594);
+        assert_eq!(config.paper_size, "A2");
+    }
+
+    #[test]
+    fn test_poster_config_24x36() {
+        let config = PosterConfig::poster_24x36();
+        assert_eq!(config.width, 610);
+        assert_eq!(config.height, 914);
+        assert_eq!(config.paper_size, "24x36");
+    }
+
+    #[test]
+    fn test_poster_config_landscape() {
+        let config = PosterConfig::a0().landscape();
+        assert_eq!(config.width, 1189);
+        assert_eq!(config.height, 841);
+        assert_eq!(config.orientation, "landscape");
+    }
+
+    #[test]
+    fn test_poster_config_with_dpi() {
+        let config = PosterConfig::a0().with_dpi(600);
+        assert_eq!(config.dpi, 600);
+    }
+
+    #[test]
+    fn test_animated_gif_config_default() {
+        let config = AnimatedGifConfig::default();
+        assert_eq!(config.fps, 30);
+        assert_eq!(config.duration, 10);
+        assert_eq!(config.loop_count, 0);
+        assert_eq!(config.width, 1920);
+        assert_eq!(config.height, 1080);
+        assert_eq!(config.quality, 80);
+    }
+
+    #[test]
+    fn test_animated_gif_config_with_fps() {
+        let config = AnimatedGifConfig::new().with_fps(60);
+        assert_eq!(config.fps, 60);
+    }
+
+    #[test]
+    fn test_animated_gif_config_with_duration() {
+        let config = AnimatedGifConfig::new().with_duration(5);
+        assert_eq!(config.duration, 5);
+    }
+
+    #[test]
+    fn test_animated_gif_config_with_loop_count() {
+        let config = AnimatedGifConfig::new().with_loop_count(5);
+        assert_eq!(config.loop_count, 5);
+    }
+
+    #[test]
+    fn test_animated_gif_config_with_size() {
+        let config = AnimatedGifConfig::new().with_size(1280, 720);
+        assert_eq!(config.width, 1280);
+        assert_eq!(config.height, 720);
+    }
+
+    #[test]
+    fn test_animated_gif_config_with_quality() {
+        let config = AnimatedGifConfig::new().with_quality(90);
+        assert_eq!(config.quality, 90);
+    }
+
+    #[test]
+    fn test_animated_gif_config_quality_clamped() {
+        let config = AnimatedGifConfig::new().with_quality(150);
+        assert_eq!(config.quality, 100);
+    }
+
+    #[test]
+    fn test_video_config_default() {
+        let config = VideoConfig::default();
+        assert_eq!(config.fps, 30);
+        assert_eq!(config.duration, 10);
+        assert_eq!(config.width, 1920);
+        assert_eq!(config.height, 1080);
+        assert_eq!(config.bitrate, 5000);
+        assert_eq!(config.codec, "h264");
+    }
+
+    #[test]
+    fn test_video_config_hd_1080p() {
+        let config = VideoConfig::hd_1080p();
+        assert_eq!(config.width, 1920);
+        assert_eq!(config.height, 1080);
+        assert_eq!(config.bitrate, 8000);
+    }
+
+    #[test]
+    fn test_video_config_hd_720p() {
+        let config = VideoConfig::hd_720p();
+        assert_eq!(config.width, 1280);
+        assert_eq!(config.height, 720);
+        assert_eq!(config.bitrate, 5000);
+    }
+
+    #[test]
+    fn test_video_config_uhd_4k() {
+        let config = VideoConfig::uhd_4k();
+        assert_eq!(config.width, 3840);
+        assert_eq!(config.height, 2160);
+        assert_eq!(config.bitrate, 20000);
+    }
+
+    #[test]
+    fn test_video_config_with_codec() {
+        let config = VideoConfig::new().with_codec("vp9");
+        assert_eq!(config.codec, "vp9");
+    }
+
+    #[test]
+    fn test_video_config_with_bitrate() {
+        let config = VideoConfig::new().with_bitrate(10000);
+        assert_eq!(config.bitrate, 10000);
+    }
+
+    #[test]
+    fn test_video_config_with_duration() {
+        let config = VideoConfig::new().with_duration(20);
+        assert_eq!(config.duration, 20);
+    }
+
+    #[test]
+    fn test_pdf_config_default() {
+        let config = PdfConfig::default();
+        assert_eq!(config.width, 210.0);
+        assert_eq!(config.height, 297.0);
+        assert_eq!(config.margin, 10.0);
+        assert!(config.vector);
+        assert_eq!(config.dpi, 300);
+        assert!(config.print_optimized);
+    }
+
+    #[test]
+    fn test_pdf_config_a4() {
+        let config = PdfConfig::a4();
+        assert_eq!(config.width, 210.0);
+        assert_eq!(config.height, 297.0);
+    }
+
+    #[test]
+    fn test_pdf_config_a3() {
+        let config = PdfConfig::a3();
+        assert_eq!(config.width, 297.0);
+        assert_eq!(config.height, 420.0);
+    }
+
+    #[test]
+    fn test_pdf_config_letter() {
+        let config = PdfConfig::letter();
+        assert_eq!(config.width, 215.9);
+        assert_eq!(config.height, 279.4);
+    }
+
+    #[test]
+    fn test_pdf_config_tabloid() {
+        let config = PdfConfig::tabloid();
+        assert_eq!(config.width, 279.4);
+        assert_eq!(config.height, 431.8);
+    }
+
+    #[test]
+    fn test_pdf_config_landscape() {
+        let config = PdfConfig::a4().landscape();
+        assert_eq!(config.width, 297.0);
+        assert_eq!(config.height, 210.0);
+    }
+
+    #[test]
+    fn test_pdf_config_vector() {
+        let config = PdfConfig::new().vector();
+        assert!(config.vector);
+    }
+
+    #[test]
+    fn test_pdf_config_raster() {
+        let config = PdfConfig::new().raster();
+        assert!(!config.vector);
+    }
+
+    #[test]
+    fn test_pdf_config_print_optimized() {
+        let config = PdfConfig::new().print_optimized();
+        assert!(config.print_optimized);
+    }
+
+    #[test]
+    fn test_pdf_config_screen_optimized() {
+        let config = PdfConfig::new().screen_optimized();
+        assert!(!config.print_optimized);
+        assert_eq!(config.dpi, 96);
+    }
+
+    #[test]
+    fn test_pdf_config_with_dpi() {
+        let config = PdfConfig::new().with_dpi(600);
+        assert_eq!(config.dpi, 600);
+    }
+
+    #[test]
+    fn test_pdf_config_with_margin() {
+        let config = PdfConfig::new().with_margin(20.0);
+        assert_eq!(config.margin, 20.0);
+    }
+
+    #[test]
+    fn test_advanced_exporter_creation() {
+        let exporter = AdvancedExporter::new();
+        assert_eq!(exporter.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_advanced_exporter_with_theme() {
+        let exporter = AdvancedExporter::new().with_theme(Theme::dark());
+        assert_eq!(exporter.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_advanced_exporter_default() {
+        let exporter1 = AdvancedExporter::new();
+        let exporter2 = AdvancedExporter::default();
+        assert_eq!(
+            exporter1.theme.background_color,
+            exporter2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_to_animated_gif() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = AdvancedExporter::new();
+        let config = AnimatedGifConfig::new().with_fps(2).with_duration(1);
+        let frames = exporter.to_animated_gif(&tree, config);
+
+        assert_eq!(frames.len(), 2); // 2 fps * 1 second
+        assert!(frames[0].contains("<svg"));
+    }
+
+    #[test]
+    fn test_graph_to_animated_gif() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_dependency("statute-2", "statute-1", "depends-on");
+
+        let exporter = AdvancedExporter::new();
+        let config = AnimatedGifConfig::new().with_fps(2).with_duration(1);
+        let frames = exporter.graph_to_animated_gif(&graph, config);
+
+        assert_eq!(frames.len(), 2);
+        assert!(frames[0].contains("<svg"));
+    }
+
+    #[test]
+    fn test_to_video_frames() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = AdvancedExporter::new();
+        let config = VideoConfig::new().with_fps(2).with_duration(1);
+        let frames = exporter.to_video_frames(&tree, config);
+
+        assert_eq!(frames.len(), 2);
+        assert!(frames[0].contains("<svg"));
+    }
+
+    #[test]
+    fn test_graph_to_video_frames() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+
+        let exporter = AdvancedExporter::new();
+        let config = VideoConfig::hd_720p().with_fps(2).with_duration(1);
+        let frames = exporter.graph_to_video_frames(&graph, config);
+
+        assert_eq!(frames.len(), 2);
+        assert!(frames[0].contains("<svg"));
+    }
+
+    #[test]
+    fn test_to_print_pdf() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = AdvancedExporter::new();
+        let config = PdfConfig::a4().print_optimized();
+        let svg = exporter.to_print_pdf(&tree, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("@media print"));
+    }
+
+    #[test]
+    fn test_graph_to_print_pdf() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+
+        let exporter = AdvancedExporter::new();
+        let config = PdfConfig::letter().print_optimized();
+        let svg = exporter.graph_to_print_pdf(&graph, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("@media print"));
+    }
+
+    #[test]
+    fn test_to_vector_pdf() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = AdvancedExporter::new();
+        let config = PdfConfig::a4().vector();
+        let svg = exporter.to_vector_pdf(&tree, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("PDF Export"));
+    }
+
+    #[test]
+    fn test_graph_to_vector_pdf() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+
+        let exporter = AdvancedExporter::new();
+        let config = PdfConfig::a3().vector();
+        let svg = exporter.graph_to_vector_pdf(&graph, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("PDF Export"));
+    }
+
+    #[test]
+    fn test_to_poster() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = AdvancedExporter::new();
+        let config = PosterConfig::a0();
+        let svg = exporter.to_poster(&tree, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("Poster"));
+        assert!(svg.contains("A0"));
+    }
+
+    #[test]
+    fn test_graph_to_poster() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+
+        let exporter = AdvancedExporter::new();
+        let config = PosterConfig::poster_24x36().landscape();
+        let svg = exporter.graph_to_poster(&graph, config);
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("Poster"));
+        assert!(svg.contains("24x36"));
+    }
+
+    #[test]
+    fn test_format_metadata() {
+        let exporter = AdvancedExporter::new();
+
+        let gif_meta = exporter.format_metadata(ExportFormat::AnimatedGif);
+        assert!(gif_meta.contains("Animated GIF"));
+
+        let mp4_meta = exporter.format_metadata(ExportFormat::Mp4);
+        assert!(mp4_meta.contains("MP4"));
+
+        let webm_meta = exporter.format_metadata(ExportFormat::WebM);
+        assert!(webm_meta.contains("WebM"));
+
+        let print_pdf_meta = exporter.format_metadata(ExportFormat::PrintPdf);
+        assert!(print_pdf_meta.contains("Print PDF"));
+
+        let vector_pdf_meta = exporter.format_metadata(ExportFormat::VectorPdf);
+        assert!(vector_pdf_meta.contains("Vector PDF"));
+
+        let poster_meta = exporter.format_metadata(ExportFormat::Poster);
+        assert!(poster_meta.contains("Poster"));
+    }
+
+    #[test]
+    fn test_animated_gif_config_builder_pattern() {
+        let config = AnimatedGifConfig::new()
+            .with_fps(60)
+            .with_duration(5)
+            .with_loop_count(3)
+            .with_size(1280, 720)
+            .with_quality(95);
+
+        assert_eq!(config.fps, 60);
+        assert_eq!(config.duration, 5);
+        assert_eq!(config.loop_count, 3);
+        assert_eq!(config.width, 1280);
+        assert_eq!(config.height, 720);
+        assert_eq!(config.quality, 95);
+    }
+
+    #[test]
+    fn test_video_config_builder_pattern() {
+        let config = VideoConfig::hd_1080p()
+            .with_codec("vp9")
+            .with_bitrate(15000)
+            .with_duration(30);
+
+        assert_eq!(config.codec, "vp9");
+        assert_eq!(config.bitrate, 15000);
+        assert_eq!(config.duration, 30);
+    }
+
+    #[test]
+    fn test_pdf_config_builder_pattern() {
+        let config = PdfConfig::a4()
+            .landscape()
+            .vector()
+            .print_optimized()
+            .with_dpi(600)
+            .with_margin(15.0);
+
+        assert_eq!(config.width, 297.0);
+        assert_eq!(config.height, 210.0);
+        assert!(config.vector);
+        assert!(config.print_optimized);
+        assert_eq!(config.dpi, 600);
+        assert_eq!(config.margin, 15.0);
+    }
+
+    #[test]
+    fn test_poster_config_builder_pattern() {
+        let config = PosterConfig::a1().landscape().with_dpi(450);
+
+        assert_eq!(config.width, 841);
+        assert_eq!(config.height, 594);
+        assert_eq!(config.orientation, "landscape");
+        assert_eq!(config.dpi, 450);
+    }
+
+    // Real-Time Collaboration Features Tests
+    #[test]
+    fn test_streaming_data_source_creation() {
+        let source = StreamingDataSource::new("test-source", "ws://localhost:8080", 1000);
+        assert_eq!(source.source_id, "test-source");
+        assert_eq!(source.stream_url, "ws://localhost:8080");
+        assert_eq!(source.update_frequency_ms, 1000);
+        assert_eq!(source.buffer_size, 1000);
+    }
+
+    #[test]
+    fn test_streaming_data_source_buffer() {
+        let mut source = StreamingDataSource::new("test", "ws://localhost:8080", 1000);
+        source.push_data("data1".to_string());
+        source.push_data("data2".to_string());
+        assert_eq!(source.buffer().len(), 2);
+        source.clear_buffer();
+        assert_eq!(source.buffer().len(), 0);
+    }
+
+    #[test]
+    fn test_streaming_data_source_buffer_limit() {
+        let mut source =
+            StreamingDataSource::new("test", "ws://localhost:8080", 1000).with_buffer_size(2);
+        source.push_data("data1".to_string());
+        source.push_data("data2".to_string());
+        source.push_data("data3".to_string());
+        assert_eq!(source.buffer().len(), 2);
+        assert_eq!(source.buffer()[0], "data2");
+        assert_eq!(source.buffer()[1], "data3");
+    }
+
+    #[test]
+    fn test_streaming_data_source_javascript() {
+        let source = StreamingDataSource::new("test-source", "ws://localhost:8080", 1000);
+        let js = source.to_javascript();
+        assert!(js.contains("class StreamingDataSource"));
+        assert!(js.contains("test-source"));
+        assert!(js.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_collaborative_user_creation() {
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        assert_eq!(user.user_id, "user1");
+        assert_eq!(user.display_name, "Alice");
+        assert_eq!(user.color, "#ff0000");
+        assert!(user.active);
+    }
+
+    #[test]
+    fn test_cursor_position_creation() {
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let cursor = CursorPosition::new(user.clone(), 50.0, 75.0, 1234567890);
+        assert_eq!(cursor.user.user_id, "user1");
+        assert_eq!(cursor.x, 50.0);
+        assert_eq!(cursor.y, 75.0);
+        assert_eq!(cursor.timestamp, 1234567890);
+    }
+
+    #[test]
+    fn test_shared_annotation_creation() {
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let annotation = SharedAnnotation::new(
+            "annot1",
+            user.clone(),
+            "node-123",
+            "This is a comment",
+            1234567890,
+        );
+        assert_eq!(annotation.annotation_id, "annot1");
+        assert_eq!(annotation.user.user_id, "user1");
+        assert_eq!(annotation.target_id, "node-123");
+        assert_eq!(annotation.content, "This is a comment");
+        assert!(!annotation.resolved);
+    }
+
+    #[test]
+    fn test_shared_annotation_resolve() {
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let mut annotation =
+            SharedAnnotation::new("annot1", user, "node-123", "This is a comment", 1234567890);
+        annotation.resolve();
+        assert!(annotation.resolved);
+    }
+
+    #[test]
+    fn test_collaborative_session_creation() {
+        let session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        assert_eq!(session.session_id, "session1");
+        assert_eq!(session.websocket_url, "ws://localhost:8080");
+        assert_eq!(session.active_users().len(), 0);
+        assert_eq!(session.cursors().len(), 0);
+        assert_eq!(session.annotations().len(), 0);
+    }
+
+    #[test]
+    fn test_collaborative_session_add_user() {
+        let mut session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        session.add_user(user.clone());
+        assert_eq!(session.active_users().len(), 1);
+
+        // Adding the same user again should not duplicate
+        session.add_user(user);
+        assert_eq!(session.active_users().len(), 1);
+    }
+
+    #[test]
+    fn test_collaborative_session_remove_user() {
+        let mut session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        session.add_user(user.clone());
+        assert_eq!(session.active_users().len(), 1);
+
+        session.remove_user("user1");
+        assert_eq!(session.active_users().len(), 0);
+    }
+
+    #[test]
+    fn test_collaborative_session_update_cursor() {
+        let mut session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let cursor = CursorPosition::new(user.clone(), 50.0, 75.0, 1234567890);
+
+        session.update_cursor(cursor.clone());
+        assert_eq!(session.cursors().len(), 1);
+
+        // Update the same cursor
+        let cursor2 = CursorPosition::new(user, 60.0, 80.0, 1234567891);
+        session.update_cursor(cursor2);
+        assert_eq!(session.cursors().len(), 1);
+        assert_eq!(session.cursors()[0].x, 60.0);
+    }
+
+    #[test]
+    fn test_collaborative_session_add_annotation() {
+        let mut session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let annotation =
+            SharedAnnotation::new("annot1", user, "node-123", "This is a comment", 1234567890);
+
+        session.add_annotation(annotation);
+        assert_eq!(session.annotations().len(), 1);
+    }
+
+    #[test]
+    fn test_collaborative_session_remove_annotation() {
+        let mut session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let user = CollaborativeUser::new("user1", "Alice", "#ff0000");
+        let annotation =
+            SharedAnnotation::new("annot1", user, "node-123", "This is a comment", 1234567890);
+
+        session.add_annotation(annotation);
+        assert_eq!(session.annotations().len(), 1);
+
+        session.remove_annotation("annot1");
+        assert_eq!(session.annotations().len(), 0);
+    }
+
+    #[test]
+    fn test_collaborative_session_html_generation() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let session = CollaborativeSession::new("session1", "ws://localhost:8080");
+        let html = session.to_collaborative_html(&tree);
+
+        assert!(html.contains("Collaborative Visualization"));
+        assert!(html.contains("session1"));
+        assert!(html.contains("ws://localhost:8080"));
+        assert!(html.contains("connectWebSocket"));
+        assert!(html.contains("updateCursor"));
+        assert!(html.contains("addAnnotation"));
+    }
+
+    // Custom Theme Builder Tests
+    #[test]
+    fn test_custom_theme_builder_creation() {
+        let builder = CustomThemeBuilder::new();
+        let theme = builder.build();
+        assert_eq!(theme.background_color, Theme::default().background_color);
+    }
+
+    #[test]
+    fn test_custom_theme_builder_with_colors() {
+        let theme = CustomThemeBuilder::new()
+            .with_background_color("#000000")
+            .with_text_color("#ffffff")
+            .with_condition_color("#0000ff")
+            .with_outcome_color("#00ff00")
+            .with_discretion_color("#ff0000")
+            .with_link_color("#ffff00")
+            .with_root_color("#cccccc")
+            .build();
+
+        assert_eq!(theme.background_color, "#000000");
+        assert_eq!(theme.text_color, "#ffffff");
+        assert_eq!(theme.condition_color, "#0000ff");
+        assert_eq!(theme.outcome_color, "#00ff00");
+        assert_eq!(theme.discretion_color, "#ff0000");
+        assert_eq!(theme.link_color, "#ffff00");
+        assert_eq!(theme.root_color, "#cccccc");
+    }
+
+    #[test]
+    fn test_custom_theme_builder_with_branding() {
+        let theme = CustomThemeBuilder::new()
+            .with_branding("#ff0000", "#0000ff")
+            .build();
+
+        assert_eq!(theme.condition_color, "#ff0000");
+        assert_eq!(theme.outcome_color, "#0000ff");
+        assert_eq!(theme.link_color, "#ff0000");
+    }
+
+    #[test]
+    fn test_custom_theme_builder_with_palette() {
+        let theme = CustomThemeBuilder::new()
+            .with_palette("#ffffff", "#000000", "#ff0000", "#00ff00", "#0000ff")
+            .build();
+
+        assert_eq!(theme.background_color, "#ffffff");
+        assert_eq!(theme.text_color, "#000000");
+        assert_eq!(theme.condition_color, "#ff0000");
+        assert_eq!(theme.outcome_color, "#00ff00");
+        assert_eq!(theme.discretion_color, "#0000ff");
+        assert_eq!(theme.link_color, "#ff0000");
+    }
+
+    #[test]
+    fn test_custom_theme_builder_from_theme() {
+        let dark_theme = Theme::dark();
+        let custom = CustomThemeBuilder::from_theme(dark_theme.clone())
+            .with_condition_color("#123456")
+            .build();
+
+        assert_eq!(custom.background_color, dark_theme.background_color);
+        assert_eq!(custom.condition_color, "#123456");
+    }
+
+    #[test]
+    fn test_custom_theme_builder_to_json() {
+        let builder = CustomThemeBuilder::new()
+            .with_background_color("#ffffff")
+            .with_text_color("#000000");
+
+        let json = builder.to_json().unwrap();
+        assert!(json.contains("background_color"));
+        assert!(json.contains("#ffffff"));
+        assert!(json.contains("text_color"));
+        assert!(json.contains("#000000"));
+    }
+
+    #[test]
+    fn test_custom_theme_builder_from_json() {
+        let json = r##"{
+            "root_color": "#f0f0f0",
+            "condition_color": "#e1f5fe",
+            "discretion_color": "#ffcdd2",
+            "outcome_color": "#c8e6c9",
+            "link_color": "#ccc",
+            "background_color": "#ffffff",
+            "text_color": "#333333"
+        }"##;
+
+        let builder = CustomThemeBuilder::from_json(json).unwrap();
+        let theme = builder.build();
+        assert_eq!(theme.background_color, "#ffffff");
+        assert_eq!(theme.text_color, "#333333");
+    }
+
+    #[test]
+    fn test_custom_theme_builder_from_json_invalid() {
+        let json = r##"{ "invalid": "json" }"##;
+        let result = CustomThemeBuilder::from_json(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_builder_default() {
+        let builder = CustomThemeBuilder::default();
+        let theme = builder.build();
+        assert_eq!(theme.background_color, Theme::default().background_color);
+    }
+
+    // Seasonal Themes Tests
+    #[test]
+    fn test_seasonal_theme_winter() {
+        let theme = SeasonalThemes::winter();
+        assert!(theme.background_color.contains("f0f8ff"));
+        assert!(theme.link_color.contains("668db8"));
+    }
+
+    #[test]
+    fn test_seasonal_theme_spring() {
+        let theme = SeasonalThemes::spring();
+        assert!(theme.background_color.contains("f1f8e9"));
+        assert!(theme.link_color.contains("81c784"));
+    }
+
+    #[test]
+    fn test_seasonal_theme_summer() {
+        let theme = SeasonalThemes::summer();
+        assert!(theme.background_color.contains("fffaf0"));
+        assert!(theme.link_color.contains("ff9800"));
+    }
+
+    #[test]
+    fn test_seasonal_theme_autumn() {
+        let theme = SeasonalThemes::autumn();
+        assert!(theme.background_color.contains("fff8f5"));
+        assert!(theme.link_color.contains("8d6e63"));
+    }
+
+    #[test]
+    fn test_seasonal_theme_holiday() {
+        let theme = SeasonalThemes::holiday();
+        assert_eq!(theme.background_color, "#fafafa");
+        assert_eq!(theme.link_color, "#c62828");
+    }
+
+    #[test]
+    fn test_seasonal_theme_corporate() {
+        let theme = SeasonalThemes::corporate();
+        assert_eq!(theme.background_color, "#fafafa");
+        assert_eq!(theme.link_color, "#455a64");
+    }
+
+    #[test]
+    fn test_seasonal_theme_academic() {
+        let theme = SeasonalThemes::academic();
+        assert_eq!(theme.background_color, "#fafafa");
+        assert_eq!(theme.link_color, "#1976d2");
+    }
+
+    #[test]
+    fn test_seasonal_theme_legal() {
+        let theme = SeasonalThemes::legal();
+        assert_eq!(theme.background_color, "#ffffff");
+        assert_eq!(theme.link_color, "#1a237e");
+        assert_eq!(theme.text_color, "#000000");
+    }
+
+    // CSS Variable Theme Tests
+    #[test]
+    fn test_css_variable_theme_creation() {
+        let css_theme = CssVariableTheme::new()
+            .add_variable("--primary-color", "#ff0000")
+            .add_variable("--secondary-color", "#00ff00");
+
+        assert_eq!(css_theme.variables().len(), 2);
+        assert_eq!(css_theme.variables()[0].0, "--primary-color");
+        assert_eq!(css_theme.variables()[0].1, "#ff0000");
+    }
+
+    #[test]
+    fn test_css_variable_theme_from_theme() {
+        let theme = Theme::dark();
+        let css_theme = CssVariableTheme::from_theme(&theme);
+
+        assert_eq!(css_theme.variables().len(), 7);
+        let vars: Vec<&String> = css_theme.variables().iter().map(|(name, _)| name).collect();
+        assert!(vars.contains(&&"--viz-root-color".to_string()));
+        assert!(vars.contains(&&"--viz-condition-color".to_string()));
+    }
+
+    #[test]
+    fn test_css_variable_theme_to_css() {
+        let css_theme = CssVariableTheme::new()
+            .add_variable("--primary-color", "#ff0000")
+            .add_variable("--secondary-color", "#00ff00");
+
+        let css = css_theme.to_css();
+        assert!(css.contains(":root {"));
+        assert!(css.contains("--primary-color: #ff0000;"));
+        assert!(css.contains("--secondary-color: #00ff00;"));
+    }
+
+    #[test]
+    fn test_css_variable_theme_to_css_with_selector() {
+        let css_theme = CssVariableTheme::new().add_variable("--primary-color", "#ff0000");
+
+        let css = css_theme.to_css_with_selector(".dark-theme");
+        assert!(css.contains(".dark-theme {"));
+        assert!(css.contains("--primary-color: #ff0000;"));
+    }
+
+    #[test]
+    fn test_css_variable_theme_default() {
+        let css_theme = CssVariableTheme::default();
+        assert_eq!(css_theme.variables().len(), 0);
+    }
+
+    // Virtualization Tests
+    #[test]
+    fn test_virtualization_config_creation() {
+        let config = VirtualizationConfig::new();
+        assert!(config.enabled);
+        assert_eq!(config.render_batch_size, 100);
+        assert_eq!(config.buffer_size, 20);
+        assert_eq!(config.min_item_height, 50);
+        assert!(!config.dynamic_height);
+    }
+
+    #[test]
+    fn test_virtualization_config_disabled() {
+        let config = VirtualizationConfig::disabled();
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_virtualization_config_builder() {
+        let config = VirtualizationConfig::new()
+            .with_batch_size(200)
+            .with_buffer_size(30)
+            .with_dynamic_height();
+
+        assert_eq!(config.render_batch_size, 200);
+        assert_eq!(config.buffer_size, 30);
+        assert!(config.dynamic_height);
+    }
+
+    #[test]
+    fn test_virtualization_config_javascript() {
+        let config = VirtualizationConfig::new();
+        let js = config.to_javascript();
+        assert!(js.contains("class VirtualScroller"));
+        assert!(js.contains("renderBatchSize"));
+        assert!(js.contains("onScroll"));
+    }
+
+    #[test]
+    fn test_virtualization_config_javascript_disabled() {
+        let config = VirtualizationConfig::disabled();
+        let js = config.to_javascript();
+        assert_eq!(js, "");
+    }
+
+    #[test]
+    fn test_virtualization_config_default() {
+        let config = VirtualizationConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.render_batch_size, 100);
+    }
+
+    // Progressive Loading Tests
+    #[test]
+    fn test_progressive_loading_config_creation() {
+        let config = ProgressiveLoadingConfig::new();
+        assert!(config.enabled);
+        assert_eq!(config.initial_load, 50);
+        assert_eq!(config.load_increment, 25);
+        assert!(config.show_loading_indicator);
+        assert_eq!(config.load_delay_ms, 200);
+    }
+
+    #[test]
+    fn test_progressive_loading_config_builder() {
+        let config = ProgressiveLoadingConfig::new()
+            .with_initial_load(100)
+            .with_load_increment(50)
+            .without_loading_indicator();
+
+        assert_eq!(config.initial_load, 100);
+        assert_eq!(config.load_increment, 50);
+        assert!(!config.show_loading_indicator);
+    }
+
+    #[test]
+    fn test_progressive_loading_config_javascript() {
+        let config = ProgressiveLoadingConfig::new();
+        let js = config.to_javascript();
+        assert!(js.contains("class ProgressiveLoader"));
+        assert!(js.contains("loadMore"));
+        assert!(js.contains("checkScroll"));
+    }
+
+    #[test]
+    fn test_progressive_loading_config_default() {
+        let config = ProgressiveLoadingConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.initial_load, 50);
+    }
+
+    // Level of Detail Tests
+    #[test]
+    fn test_level_of_detail_config_creation() {
+        let config = LevelOfDetailConfig::new();
+        assert!(config.enabled);
+        assert_eq!(config.zoom_thresholds.len(), 4);
+        assert!(config.simplify_at_low_zoom);
+        assert!(config.hide_labels_at_low_zoom);
+        assert!(config.aggregate_nodes);
+    }
+
+    #[test]
+    fn test_level_of_detail_config_disabled() {
+        let config = LevelOfDetailConfig::disabled();
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_level_of_detail_config_custom_thresholds() {
+        let config = LevelOfDetailConfig::new().with_zoom_thresholds(vec![0.1, 0.5, 1.0]);
+
+        assert_eq!(config.zoom_thresholds.len(), 3);
+        assert_eq!(config.zoom_thresholds[0], 0.1);
+        assert_eq!(config.zoom_thresholds[1], 0.5);
+        assert_eq!(config.zoom_thresholds[2], 1.0);
+    }
+
+    #[test]
+    fn test_level_of_detail_config_javascript() {
+        let config = LevelOfDetailConfig::new();
+        let js = config.to_javascript();
+        assert!(js.contains("class LevelOfDetailRenderer"));
+        assert!(js.contains("updateDetailLevel"));
+        assert!(js.contains("applyDetailLevel"));
+    }
+
+    #[test]
+    fn test_level_of_detail_config_javascript_disabled() {
+        let config = LevelOfDetailConfig::disabled();
+        let js = config.to_javascript();
+        assert_eq!(js, "");
+    }
+
+    #[test]
+    fn test_level_of_detail_config_default() {
+        let config = LevelOfDetailConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.zoom_thresholds.len(), 4);
     }
 }

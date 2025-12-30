@@ -3,9 +3,9 @@
 //! This module generates compliance matrices that map requirements, controls,
 //! and regulations for auditing and compliance verification.
 
-use crate::ast::{LegalDocument, StatuteNode};
 #[cfg(test)]
 use crate::ast::EffectNode;
+use crate::ast::LegalDocument;
 use std::collections::{HashMap, HashSet};
 
 /// A compliance matrix showing relationships between requirements and controls.
@@ -49,8 +49,8 @@ impl ComplianceMatrix {
 
         for statute in &doc.statutes {
             // Extract jurisdiction
-            let jurisdiction = extract_jurisdiction(&statute.id)
-                .unwrap_or_else(|| "UNKNOWN".to_string());
+            let jurisdiction =
+                extract_jurisdiction(&statute.id).unwrap_or_else(|| "UNKNOWN".to_string());
             jurisdictions.insert(jurisdiction.clone());
 
             if jurisdiction != "UNKNOWN" {
@@ -119,7 +119,10 @@ impl ComplianceMatrix {
 
         // Statistics
         report.push_str("Statistics:\n");
-        report.push_str(&format!("  Total Statutes: {}\n", self.stats.total_statutes));
+        report.push_str(&format!(
+            "  Total Statutes: {}\n",
+            self.stats.total_statutes
+        ));
         report.push_str(&format!(
             "  With Jurisdiction: {}\n",
             self.stats.statutes_with_jurisdiction
@@ -156,11 +159,14 @@ impl ComplianceMatrix {
             for req_type in &self.requirement_types {
                 let key = (jurisdiction.clone(), req_type.clone());
                 let count = self.entries.get(&key).map(|v| v.len()).unwrap_or(0);
-                row.push_str(&format!(" {:^10} |", if count > 0 {
-                    count.to_string()
-                } else {
-                    "-".to_string()
-                }));
+                row.push_str(&format!(
+                    " {:^10} |",
+                    if count > 0 {
+                        count.to_string()
+                    } else {
+                        "-".to_string()
+                    }
+                ));
             }
             report.push_str(&row);
             report.push('\n');
@@ -218,9 +224,7 @@ impl ComplianceMatrix {
         for jurisdiction in &self.jurisdictions {
             for req_type in &self.requirement_types {
                 let key = (jurisdiction.clone(), req_type.clone());
-                if !self.entries.contains_key(&key)
-                    || self.entries[&key].is_empty()
-                {
+                if !self.entries.contains_key(&key) || self.entries[&key].is_empty() {
                     gaps.push((jurisdiction.clone(), req_type.clone()));
                 }
             }
@@ -248,7 +252,7 @@ fn normalize_requirement_type(effect_type: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::EffectNode;
+    use crate::ast::{EffectNode, StatuteNode};
 
     fn create_test_statute(id: &str, effect_type: &str) -> StatuteNode {
         StatuteNode {

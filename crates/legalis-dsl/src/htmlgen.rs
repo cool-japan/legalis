@@ -3,9 +3,9 @@
 //! This module generates formatted HTML documentation from parsed legal documents,
 //! suitable for web viewing and publishing.
 
-use crate::ast::{ConditionNode, LegalDocument, StatuteNode};
 #[cfg(test)]
 use crate::ast::EffectNode;
+use crate::ast::{ConditionNode, LegalDocument, StatuteNode};
 use std::fmt::Write as FmtWrite;
 
 /// HTML documentation generator.
@@ -70,7 +70,9 @@ impl HtmlGenerator {
         html.push_str("<html lang=\"en\">\n");
         html.push_str("<head>\n");
         html.push_str("    <meta charset=\"UTF-8\">\n");
-        html.push_str("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
         html.push_str("    <title>Legal Document</title>\n");
 
         if self.include_css {
@@ -283,32 +285,51 @@ impl HtmlGenerator {
     fn generate_statute_html(&self, statute: &StatuteNode) -> String {
         let mut html = String::new();
 
-        let _ = writeln!(&mut html, "            <article class=\"statute\" id=\"{}\">",
-            self.escape_html(&statute.id));
-        let _ = writeln!(&mut html, "                <div class=\"statute-id\">{}</div>",
-            self.escape_html(&statute.id));
-        let _ = writeln!(&mut html, "                <h2 class=\"statute-title\">{}</h2>",
-            self.escape_html(&statute.title));
+        let _ = writeln!(
+            &mut html,
+            "            <article class=\"statute\" id=\"{}\">",
+            self.escape_html(&statute.id)
+        );
+        let _ = writeln!(
+            &mut html,
+            "                <div class=\"statute-id\">{}</div>",
+            self.escape_html(&statute.id)
+        );
+        let _ = writeln!(
+            &mut html,
+            "                <h2 class=\"statute-title\">{}</h2>",
+            self.escape_html(&statute.title)
+        );
 
         // Metadata
         if !statute.requires.is_empty() || !statute.supersedes.is_empty() {
             html.push_str("                <div class=\"metadata\">\n");
             if !statute.requires.is_empty() {
-                html.push_str("                    <span class=\"badge badge-requires\">Requires</span>\n");
+                html.push_str(
+                    "                    <span class=\"badge badge-requires\">Requires</span>\n",
+                );
                 html.push_str("                    ");
-                html.push_str(&statute.requires.iter()
-                    .map(|r| self.escape_html(r))
-                    .collect::<Vec<_>>()
-                    .join(", "));
+                html.push_str(
+                    &statute
+                        .requires
+                        .iter()
+                        .map(|r| self.escape_html(r))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
                 html.push_str("<br>\n");
             }
             if !statute.supersedes.is_empty() {
                 html.push_str("                    <span class=\"badge badge-supersedes\">Supersedes</span>\n");
                 html.push_str("                    ");
-                html.push_str(&statute.supersedes.iter()
-                    .map(|s| self.escape_html(s))
-                    .collect::<Vec<_>>()
-                    .join(", "));
+                html.push_str(
+                    &statute
+                        .supersedes
+                        .iter()
+                        .map(|s| self.escape_html(s))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
                 html.push('\n');
             }
             html.push_str("                </div>\n");
@@ -319,8 +340,11 @@ impl HtmlGenerator {
             html.push_str("                <div class=\"section\">\n");
             html.push_str("                    <div class=\"section-title\">Conditions</div>\n");
             for condition in &statute.conditions {
-                let _ = writeln!(&mut html, "                    <div class=\"condition\">{}</div>",
-                    self.format_condition(condition));
+                let _ = writeln!(
+                    &mut html,
+                    "                    <div class=\"condition\">{}</div>",
+                    self.format_condition(condition)
+                );
             }
             html.push_str("                </div>\n");
         }
@@ -330,9 +354,12 @@ impl HtmlGenerator {
             html.push_str("                <div class=\"section\">\n");
             html.push_str("                    <div class=\"section-title\">Effects</div>\n");
             for effect in &statute.effects {
-                let _ = writeln!(&mut html, "                    <div class=\"effect\">{}: {}</div>",
+                let _ = writeln!(
+                    &mut html,
+                    "                    <div class=\"effect\">{}: {}</div>",
                     self.escape_html(&effect.effect_type),
-                    self.escape_html(&effect.description));
+                    self.escape_html(&effect.description)
+                );
             }
             html.push_str("                </div>\n");
         }
@@ -341,8 +368,11 @@ impl HtmlGenerator {
         if let Some(discretion) = &statute.discretion {
             html.push_str("                <div class=\"section\">\n");
             html.push_str("                    <div class=\"section-title\">Discretion</div>\n");
-            let _ = writeln!(&mut html, "                    <div>{}</div>",
-                self.escape_html(discretion));
+            let _ = writeln!(
+                &mut html,
+                "                    <div>{}</div>",
+                self.escape_html(discretion)
+            );
             html.push_str("                </div>\n");
         }
 
@@ -356,21 +386,31 @@ impl HtmlGenerator {
             ConditionNode::HasAttribute { key } => {
                 format!("HAS {}", self.escape_html(key))
             }
-            ConditionNode::Comparison { field, operator, value } => {
-                format!("{} {} {:?}",
+            ConditionNode::Comparison {
+                field,
+                operator,
+                value,
+            } => {
+                format!(
+                    "{} {} {:?}",
                     self.escape_html(field),
                     self.escape_html(operator),
-                    value)
+                    value
+                )
             }
             ConditionNode::And(left, right) => {
-                format!("({}) AND ({})",
+                format!(
+                    "({}) AND ({})",
                     self.format_condition(left),
-                    self.format_condition(right))
+                    self.format_condition(right)
+                )
             }
             ConditionNode::Or(left, right) => {
-                format!("({}) OR ({})",
+                format!(
+                    "({}) OR ({})",
                     self.format_condition(left),
-                    self.format_condition(right))
+                    self.format_condition(right)
+                )
             }
             ConditionNode::Not(inner) => {
                 format!("NOT ({})", self.format_condition(inner))

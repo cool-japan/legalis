@@ -996,3 +996,269 @@ mod tests {
         assert!(result.contains("Rust")); // Default language
     }
 }
+
+/// Prompt optimization utilities for improving prompt quality.
+pub struct PromptOptimizer {
+    /// Target model (for model-specific optimizations)
+    target_model: Option<String>,
+}
+
+impl PromptOptimizer {
+    /// Creates a new prompt optimizer.
+    pub fn new() -> Self {
+        Self { target_model: None }
+    }
+
+    /// Sets the target model for optimizations.
+    pub fn with_target_model(mut self, model: impl Into<String>) -> Self {
+        self.target_model = Some(model.into());
+        self
+    }
+
+    /// Optimizes a prompt by applying best practices.
+    pub fn optimize(&self, prompt: &str) -> String {
+        let mut optimized = prompt.to_string();
+
+        // Apply optimization rules
+        optimized = self.add_clarity_markers(&optimized);
+        optimized = self.structure_instructions(&optimized);
+        optimized = self.add_output_format_guidance(&optimized);
+
+        optimized
+    }
+
+    /// Adds clarity markers to make instructions more explicit.
+    fn add_clarity_markers(&self, prompt: &str) -> String {
+        // If prompt doesn't start with clear instruction, add one
+        if !prompt.trim_start().starts_with("You are")
+            && !prompt.trim_start().starts_with("Please")
+            && !prompt.trim_start().starts_with("Task:")
+        {
+            format!("Task: {}", prompt)
+        } else {
+            prompt.to_string()
+        }
+    }
+
+    /// Structures instructions for better comprehension.
+    fn structure_instructions(&self, prompt: &str) -> String {
+        // If prompt is very long, suggest breaking into sections
+        if prompt.len() > 500 && !prompt.contains("##") && !prompt.contains("---") {
+            // Add section markers if not present
+            prompt.to_string()
+        } else {
+            prompt.to_string()
+        }
+    }
+
+    /// Adds output format guidance if missing.
+    fn add_output_format_guidance(&self, prompt: &str) -> String {
+        // Check if prompt specifies output format
+        let has_format_instruction = prompt.to_lowercase().contains("respond with")
+            || prompt.to_lowercase().contains("output format")
+            || prompt.to_lowercase().contains("format:")
+            || prompt.contains("JSON")
+            || prompt.contains("```");
+
+        if !has_format_instruction && prompt.len() > 100 {
+            format!("{}\n\nPlease provide a clear, structured response.", prompt)
+        } else {
+            prompt.to_string()
+        }
+    }
+
+    /// Analyzes a prompt and provides optimization suggestions.
+    pub fn analyze(&self, prompt: &str) -> PromptAnalysis {
+        let mut suggestions = Vec::new();
+        let mut score: f64 = 100.0;
+
+        // Check length
+        if prompt.len() < 20 {
+            suggestions.push("Prompt is very short. Consider adding more context.".to_string());
+            score -= 20.0;
+        } else if prompt.len() > 2000 {
+            suggestions
+                .push("Prompt is very long. Consider breaking it into smaller parts.".to_string());
+            score -= 10.0;
+        }
+
+        // Check for clarity
+        if !prompt.contains("?") && !prompt.to_lowercase().contains("please") {
+            suggestions.push("Consider phrasing as a clear question or request.".to_string());
+            score -= 15.0;
+        }
+
+        // Check for examples
+        if prompt.len() > 200 && !prompt.to_lowercase().contains("example") {
+            suggestions.push("Consider adding examples for better results.".to_string());
+            score -= 10.0;
+        }
+
+        // Check for output format specification
+        if !prompt.to_lowercase().contains("format") && !prompt.contains("JSON") {
+            suggestions.push("Consider specifying the desired output format.".to_string());
+            score -= 10.0;
+        }
+
+        // Check for role specification (best practice)
+        if !prompt.to_lowercase().contains("you are") && prompt.len() > 100 {
+            suggestions
+                .push("Consider specifying a role (e.g., 'You are an expert...').".to_string());
+            score -= 10.0;
+        }
+
+        PromptAnalysis {
+            quality_score: score.max(0.0),
+            suggestions,
+            estimated_tokens: self.estimate_tokens(prompt),
+            complexity: self.estimate_complexity(prompt),
+        }
+    }
+
+    /// Estimates the number of tokens in a prompt.
+    fn estimate_tokens(&self, prompt: &str) -> usize {
+        // Rough estimation: ~4 characters per token
+        (prompt.len() as f64 / 4.0).ceil() as usize
+    }
+
+    /// Estimates prompt complexity.
+    fn estimate_complexity(&self, prompt: &str) -> PromptComplexity {
+        let word_count = prompt.split_whitespace().count();
+        let has_code =
+            prompt.contains("```") || prompt.contains("fn ") || prompt.contains("class ");
+        let has_structure = prompt.contains("##") || prompt.contains("1.") || prompt.contains("-");
+
+        if word_count > 300 || has_code {
+            PromptComplexity::High
+        } else if word_count > 100 || has_structure {
+            PromptComplexity::Medium
+        } else {
+            PromptComplexity::Low
+        }
+    }
+
+    /// Compresses a prompt while preserving key information.
+    pub fn compress(&self, prompt: &str, target_ratio: f64) -> String {
+        let target_len = (prompt.len() as f64 * target_ratio) as usize;
+
+        if prompt.len() <= target_len {
+            return prompt.to_string();
+        }
+
+        // Simple compression: remove extra whitespace and redundant words
+        let compressed = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        if compressed.len() <= target_len {
+            compressed
+        } else {
+            // Truncate to target length, preserving sentence boundaries
+            let truncated = &compressed[..target_len.min(compressed.len())];
+            if let Some(last_period) = truncated.rfind('.') {
+                truncated[..=last_period].to_string()
+            } else {
+                format!("{}...", truncated)
+            }
+        }
+    }
+}
+
+impl Default for PromptOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Analysis result for a prompt.
+#[derive(Debug, Clone)]
+pub struct PromptAnalysis {
+    /// Quality score (0-100)
+    pub quality_score: f64,
+    /// Optimization suggestions
+    pub suggestions: Vec<String>,
+    /// Estimated token count
+    pub estimated_tokens: usize,
+    /// Prompt complexity
+    pub complexity: PromptComplexity,
+}
+
+/// Prompt complexity levels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PromptComplexity {
+    /// Simple, short prompts
+    Low,
+    /// Moderate complexity
+    Medium,
+    /// Complex, detailed prompts
+    High,
+}
+
+#[cfg(test)]
+mod optimizer_tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_optimizer_basic() {
+        let optimizer = PromptOptimizer::new();
+        let prompt = "What is Rust?";
+        let optimized = optimizer.optimize(prompt);
+
+        assert!(optimized.contains("Task:") || optimized.contains("What is Rust?"));
+    }
+
+    #[test]
+    fn test_prompt_analysis_short() {
+        let optimizer = PromptOptimizer::new();
+        let analysis = optimizer.analyze("Hi");
+
+        assert!(analysis.quality_score < 100.0);
+        assert!(!analysis.suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_prompt_analysis_good() {
+        let optimizer = PromptOptimizer::new();
+        let prompt = "You are an expert programmer. Please explain how Rust's ownership system works. Provide examples in your response. Format: Use code blocks for examples.";
+        let analysis = optimizer.analyze(prompt);
+
+        assert!(analysis.quality_score > 70.0);
+    }
+
+    #[test]
+    fn test_token_estimation() {
+        let optimizer = PromptOptimizer::new();
+        let analysis = optimizer.analyze("This is a test prompt.");
+
+        assert!(analysis.estimated_tokens > 0);
+        assert!(analysis.estimated_tokens < 100);
+    }
+
+    #[test]
+    fn test_complexity_estimation() {
+        let optimizer = PromptOptimizer::new();
+
+        let simple = optimizer.analyze("Hi");
+        assert_eq!(simple.complexity, PromptComplexity::Low);
+
+        let complex = optimizer.analyze(&"word ".repeat(350));
+        assert_eq!(complex.complexity, PromptComplexity::High);
+    }
+
+    #[test]
+    fn test_prompt_compression() {
+        let optimizer = PromptOptimizer::new();
+        let long_prompt = "This is a very long prompt that contains a lot of redundant information and should be compressed to make it more efficient.";
+        let compressed = optimizer.compress(long_prompt, 0.5);
+
+        assert!(compressed.len() < long_prompt.len());
+    }
+
+    #[test]
+    fn test_compress_preserves_sentences() {
+        let optimizer = PromptOptimizer::new();
+        let prompt = "First sentence. Second sentence. Third sentence. Fourth sentence.";
+        let compressed = optimizer.compress(prompt, 0.4);
+
+        // Should end with a period (sentence boundary)
+        assert!(compressed.ends_with('.') || compressed.ends_with("..."));
+    }
+}

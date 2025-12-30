@@ -133,6 +133,8 @@ pub enum Permission {
     ManageUsers,
     /// Manage API keys
     ManageApiKeys,
+    /// Administrative access (view audit logs, system configuration)
+    Admin,
 }
 
 impl Permission {
@@ -148,6 +150,7 @@ impl Permission {
         perms.insert(Permission::ViewAnalytics);
         perms.insert(Permission::ManageUsers);
         perms.insert(Permission::ManageApiKeys);
+        perms.insert(Permission::Admin);
         perms
     }
 }
@@ -198,6 +201,8 @@ pub enum AuthMethod {
     Jwt,
     /// API key
     ApiKey,
+    /// OAuth2/OIDC
+    OAuth2,
 }
 
 /// JWT claims structure (simplified - in production use a proper JWT library).
@@ -228,27 +233,109 @@ pub struct ApiKey {
     pub owner_id: Uuid,
     /// Associated role
     pub role: Role,
+    /// Scoped permissions (subset of role permissions)
+    pub scopes: HashSet<Permission>,
     /// Created at timestamp
     pub created_at: i64,
     /// Last used timestamp
     pub last_used_at: Option<i64>,
+    /// Expiration timestamp (None = never expires)
+    pub expires_at: Option<i64>,
     /// Whether the key is active
     pub active: bool,
+    /// Previous key ID (for rotation tracking)
+    pub previous_key_id: Option<Uuid>,
 }
 
 impl ApiKey {
-    /// Creates a new API key.
+    /// Creates a new API key with full role permissions.
     pub fn new(name: String, owner_id: Uuid, role: Role) -> Self {
+        let scopes = role.permissions();
         Self {
             id: Uuid::new_v4(),
             key: format!("lgl_{}", Uuid::new_v4().simple()),
             name,
             owner_id,
             role,
+            scopes,
             created_at: chrono::Utc::now().timestamp(),
             last_used_at: None,
+            expires_at: None,
             active: true,
+            previous_key_id: None,
         }
+    }
+
+    /// Creates a new API key with specific scopes.
+    pub fn with_scopes(
+        name: String,
+        owner_id: Uuid,
+        role: Role,
+        scopes: HashSet<Permission>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            key: format!("lgl_{}", Uuid::new_v4().simple()),
+            name,
+            owner_id,
+            role,
+            scopes,
+            created_at: chrono::Utc::now().timestamp(),
+            last_used_at: None,
+            expires_at: None,
+            active: true,
+            previous_key_id: None,
+        }
+    }
+
+    /// Creates a new API key with expiration.
+    pub fn with_expiration(name: String, owner_id: Uuid, role: Role, expires_in_days: i64) -> Self {
+        let scopes = role.permissions();
+        let expires_at = chrono::Utc::now().timestamp() + (expires_in_days * 24 * 60 * 60);
+        Self {
+            id: Uuid::new_v4(),
+            key: format!("lgl_{}", Uuid::new_v4().simple()),
+            name,
+            owner_id,
+            role,
+            scopes,
+            created_at: chrono::Utc::now().timestamp(),
+            last_used_at: None,
+            expires_at: Some(expires_at),
+            active: true,
+            previous_key_id: None,
+        }
+    }
+
+    /// Rotates the API key, creating a new key and linking it to the old one.
+    pub fn rotate(&self) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            key: format!("lgl_{}", Uuid::new_v4().simple()),
+            name: self.name.clone(),
+            owner_id: self.owner_id,
+            role: self.role,
+            scopes: self.scopes.clone(),
+            created_at: chrono::Utc::now().timestamp(),
+            last_used_at: None,
+            expires_at: self.expires_at,
+            active: true,
+            previous_key_id: Some(self.id),
+        }
+    }
+
+    /// Checks if the API key is expired.
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            chrono::Utc::now().timestamp() > expires_at
+        } else {
+            false
+        }
+    }
+
+    /// Checks if the API key has a specific permission.
+    pub fn has_permission(&self, permission: Permission) -> bool {
+        self.scopes.contains(&permission)
     }
 }
 
@@ -405,9 +492,10 @@ mod tests {
     #[test]
     fn test_permission_all() {
         let all = Permission::all();
-        assert_eq!(all.len(), 9);
+        assert_eq!(all.len(), 10);
         assert!(all.contains(&Permission::ReadStatutes));
         assert!(all.contains(&Permission::ManageUsers));
+        assert!(all.contains(&Permission::Admin));
     }
 
     #[test]

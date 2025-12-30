@@ -4,7 +4,10 @@
 //! including chain-of-law reasoning, multi-step workflows, citation-grounded generation,
 //! and statutory interpretation.
 
-use crate::{LLMProvider, legal::{Jurisdiction, LegalCitation}};
+use crate::{
+    LLMProvider,
+    legal::{Jurisdiction, LegalCitation},
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
@@ -495,11 +498,10 @@ mod tests {
         }"#;
 
         let provider = MockProvider::new().with_response("chain-of-law", mock_response);
-        let prompter = ChainOfLawPrompter::new(provider)
-            .with_jurisdiction(Jurisdiction::UsFederal);
+        let prompter = ChainOfLawPrompter::new(provider).with_jurisdiction(Jurisdiction::UsFederal);
 
         let result = prompter
-            .reason("Test question", &vec!["Fact 1".to_string()])
+            .reason("Test question", &["Fact 1".to_string()])
             .await
             .unwrap();
 
@@ -549,7 +551,7 @@ mod tests {
         let prompter = CitationGroundedPrompter::new(provider);
 
         let result = prompter
-            .generate_with_citations("Test topic", &vec!["Requirement 1".to_string()])
+            .generate_with_citations("Test topic", &["Requirement 1".to_string()])
             .await
             .unwrap();
 
@@ -575,7 +577,7 @@ mod tests {
         let prompter = PrecedentMatchPrompter::new(provider);
 
         let precedents = prompter
-            .find_precedents("Test scenario", &vec!["Fact 1".to_string()])
+            .find_precedents("Test scenario", &["Fact 1".to_string()])
             .await
             .unwrap();
 

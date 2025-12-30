@@ -9,8 +9,12 @@ use std::collections::HashMap;
 /// Type information for a value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    /// Numeric type
+    /// Numeric type (general)
     Number,
+    /// Integer type (subset of Number) - v0.1.3
+    Integer,
+    /// Decimal type (subset of Number) - v0.1.3
+    Decimal,
     /// String type
     String,
     /// Boolean type
@@ -19,6 +23,10 @@ pub enum Type {
     Date,
     /// Set expression type
     Set(Box<Type>),
+    /// Enum type with named variants - v0.1.3
+    Enum { name: String, variants: Vec<String> },
+    /// Type alias reference - v0.1.3
+    Alias(String),
     /// Unknown/inferred type
     Unknown,
     /// Union of multiple types
@@ -37,6 +45,13 @@ impl Type {
                 types.iter().any(|t| t.is_compatible_with(other))
             }
             (Type::Set(inner1), Type::Set(inner2)) => inner1.is_compatible_with(inner2),
+            // Number is compatible with Integer and Decimal (v0.1.3)
+            (Type::Number, Type::Integer) | (Type::Integer, Type::Number) => true,
+            (Type::Number, Type::Decimal) | (Type::Decimal, Type::Number) => true,
+            // Enum compatibility - same name means compatible (v0.1.3)
+            (Type::Enum { name: n1, .. }, Type::Enum { name: n2, .. }) => n1 == n2,
+            // Alias is compatible with anything for now (should resolve first) (v0.1.3)
+            (Type::Alias(_), _) | (_, Type::Alias(_)) => true,
             (t1, t2) => t1 == t2,
         }
     }
@@ -46,10 +61,23 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Number => write!(f, "Number"),
+            Type::Integer => write!(f, "Integer"),
+            Type::Decimal => write!(f, "Decimal"),
             Type::String => write!(f, "String"),
             Type::Boolean => write!(f, "Boolean"),
             Type::Date => write!(f, "Date"),
             Type::Set(inner) => write!(f, "Set<{}>", inner),
+            Type::Enum { name, variants } => {
+                write!(f, "{}: ", name)?;
+                for (i, variant) in variants.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, "{}", variant)?;
+                }
+                Ok(())
+            }
+            Type::Alias(name) => write!(f, "{}", name),
             Type::Unknown => write!(f, "Unknown"),
             Type::Union(types) => {
                 write!(f, "(")?;
@@ -88,6 +116,76 @@ impl std::fmt::Display for TypeError {
     }
 }
 
+/// Type alias definition (v0.1.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeAlias {
+    /// Name of the alias
+    pub name: String,
+    /// The type being aliased
+    pub target: Type,
+}
+
+/// Enum definition (v0.1.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumDef {
+    /// Name of the enum
+    pub name: String,
+    /// Variants of the enum
+    pub variants: Vec<String>,
+}
+
+/// Type registry for managing type aliases and enum definitions (v0.1.3).
+#[derive(Debug, Clone, Default)]
+pub struct TypeRegistry {
+    /// Type aliases (name -> type)
+    aliases: HashMap<String, Type>,
+    /// Enum definitions (name -> variants)
+    enums: HashMap<String, Vec<String>>,
+}
+
+impl TypeRegistry {
+    /// Creates a new empty type registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a type alias.
+    pub fn register_alias(&mut self, name: String, target: Type) {
+        self.aliases.insert(name, target);
+    }
+
+    /// Registers an enum definition.
+    pub fn register_enum(&mut self, name: String, variants: Vec<String>) {
+        self.enums.insert(name, variants);
+    }
+
+    /// Resolves a type alias to its target type.
+    pub fn resolve_alias(&self, name: &str) -> Option<Type> {
+        self.aliases.get(name).cloned()
+    }
+
+    /// Gets enum variants by name.
+    pub fn get_enum_variants(&self, name: &str) -> Option<Vec<String>> {
+        self.enums.get(name).cloned()
+    }
+
+    /// Resolves a type, expanding aliases recursively.
+    pub fn resolve_type(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Alias(name) => {
+                if let Some(resolved) = self.resolve_alias(name) {
+                    self.resolve_type(&resolved)
+                } else {
+                    ty.clone()
+                }
+            }
+            Type::Set(inner) => Type::Set(Box::new(self.resolve_type(inner))),
+            Type::Union(types) => Type::Union(types.iter().map(|t| self.resolve_type(t)).collect()),
+            _ => ty.clone(),
+        }
+    }
+}
+
 /// Type inference context.
 #[derive(Debug, Clone)]
 pub struct TypeContext {
@@ -96,6 +194,8 @@ pub struct TypeContext {
     /// Attribute types (attribute_key -> type)
     #[allow(dead_code)]
     attribute_types: HashMap<String, Type>,
+    /// Type registry for aliases and enums (v0.1.3)
+    pub registry: TypeRegistry,
 }
 
 impl TypeContext {
@@ -104,6 +204,7 @@ impl TypeContext {
         Self {
             field_types: HashMap::new(),
             attribute_types: HashMap::new(),
+            registry: TypeRegistry::new(),
         }
     }
 
@@ -384,5 +485,141 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(errors[0].expected, Type::Number);
         assert_eq!(errors[0].actual, Type::String);
+    }
+
+    // Tests for enhanced type system (v0.1.3)
+
+    #[test]
+    fn test_numeric_type_compatibility() {
+        // Number should be compatible with Integer and Decimal
+        assert!(Type::Number.is_compatible_with(&Type::Integer));
+        assert!(Type::Integer.is_compatible_with(&Type::Number));
+        assert!(Type::Number.is_compatible_with(&Type::Decimal));
+        assert!(Type::Decimal.is_compatible_with(&Type::Number));
+
+        // But Integer and Decimal are not directly compatible
+        assert!(!Type::Integer.is_compatible_with(&Type::Decimal));
+        assert!(!Type::Decimal.is_compatible_with(&Type::Integer));
+    }
+
+    #[test]
+    fn test_type_aliases() {
+        let mut registry = TypeRegistry::new();
+
+        // Create a type alias: Currency = Decimal
+        registry.register_alias("Currency".to_string(), Type::Decimal);
+
+        // Resolve the alias
+        let resolved = registry.resolve_alias("Currency");
+        assert_eq!(resolved, Some(Type::Decimal));
+
+        // Resolve a type containing an alias
+        let alias_type = Type::Alias("Currency".to_string());
+        let resolved = registry.resolve_type(&alias_type);
+        assert_eq!(resolved, Type::Decimal);
+    }
+
+    #[test]
+    fn test_type_alias_chaining() {
+        let mut registry = TypeRegistry::new();
+
+        // Create chained aliases: Money = Currency, Currency = Decimal
+        registry.register_alias("Currency".to_string(), Type::Decimal);
+        registry.register_alias("Money".to_string(), Type::Alias("Currency".to_string()));
+
+        // Resolve chained alias
+        let money_type = Type::Alias("Money".to_string());
+        let resolved = registry.resolve_type(&money_type);
+        assert_eq!(resolved, Type::Decimal);
+    }
+
+    #[test]
+    fn test_enum_types() {
+        let mut registry = TypeRegistry::new();
+
+        // Create an enum: Status = Active | Inactive | Pending
+        registry.register_enum(
+            "Status".to_string(),
+            vec![
+                "Active".to_string(),
+                "Inactive".to_string(),
+                "Pending".to_string(),
+            ],
+        );
+
+        // Get enum variants
+        let variants = registry.get_enum_variants("Status");
+        assert_eq!(
+            variants,
+            Some(vec![
+                "Active".to_string(),
+                "Inactive".to_string(),
+                "Pending".to_string()
+            ])
+        );
+
+        // Test enum type compatibility
+        let enum1 = Type::Enum {
+            name: "Status".to_string(),
+            variants: vec!["Active".to_string(), "Inactive".to_string()],
+        };
+        let enum2 = Type::Enum {
+            name: "Status".to_string(),
+            variants: vec!["Active".to_string(), "Inactive".to_string()],
+        };
+        let enum3 = Type::Enum {
+            name: "Priority".to_string(),
+            variants: vec!["High".to_string(), "Low".to_string()],
+        };
+
+        assert!(enum1.is_compatible_with(&enum2));
+        assert!(!enum1.is_compatible_with(&enum3));
+    }
+
+    #[test]
+    fn test_enum_display() {
+        let enum_type = Type::Enum {
+            name: "Status".to_string(),
+            variants: vec![
+                "Active".to_string(),
+                "Inactive".to_string(),
+                "Pending".to_string(),
+            ],
+        };
+
+        let display = format!("{}", enum_type);
+        assert_eq!(display, "Status: Active | Inactive | Pending");
+    }
+
+    #[test]
+    fn test_alias_display() {
+        let alias_type = Type::Alias("Currency".to_string());
+        let display = format!("{}", alias_type);
+        assert_eq!(display, "Currency");
+    }
+
+    #[test]
+    fn test_complex_type_resolution() {
+        let mut registry = TypeRegistry::new();
+
+        // Set up type hierarchy: Money = Currency, Currency = Decimal
+        registry.register_alias("Currency".to_string(), Type::Decimal);
+        registry.register_alias("Money".to_string(), Type::Alias("Currency".to_string()));
+
+        // Create a set of aliases
+        let set_of_money = Type::Set(Box::new(Type::Alias("Money".to_string())));
+        let resolved = registry.resolve_type(&set_of_money);
+
+        assert_eq!(resolved, Type::Set(Box::new(Type::Decimal)));
+    }
+
+    #[test]
+    fn test_union_with_enhanced_types() {
+        let union_type = Type::Union(vec![Type::Integer, Type::Decimal, Type::String]);
+
+        assert!(union_type.is_compatible_with(&Type::Integer));
+        assert!(union_type.is_compatible_with(&Type::Decimal));
+        assert!(union_type.is_compatible_with(&Type::String));
+        assert!(!union_type.is_compatible_with(&Type::Boolean));
     }
 }

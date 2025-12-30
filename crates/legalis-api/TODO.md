@@ -45,7 +45,7 @@
 ## Authentication
 
 - [x] Add JWT authentication (basic extraction)
-- [ ] Implement OAuth2/OIDC support
+- [x] Implement OAuth2/OIDC support (Keycloak, Auth0, Okta, Google, GitHub, Generic OIDC)
 - [x] Add API key authentication
 - [x] Create role-based access control (RBAC + ReBAC)
 - [x] Implement rate limiting (global, needs per-user enhancement)
@@ -53,7 +53,7 @@
 ## Documentation
 
 - [x] Add OpenAPI/Swagger documentation (comprehensive with examples)
-- [ ] Create interactive API explorer (Swagger UI)
+- [x] Create interactive API explorer (Swagger UI)
 - [x] Add request/response examples
 - [ ] Create SDK generation from OpenAPI
 
@@ -69,15 +69,15 @@
 ### Caching
 - [x] Add response caching (in-memory cache store)
 - [x] Implement ETag support
-- [ ] Add Redis caching layer
-- [ ] Create cache invalidation strategy
+- [x] Add Redis caching layer (with trait-based backend abstraction)
+- [x] Create cache invalidation strategy (pattern-based, TTL, write-through)
 
 ### Optimization
 - [x] Add request compression (gzip, brotli)
 - [x] Implement pagination (offset-based, see search endpoint)
 - [x] Implement pagination with cursors
 - [x] Add field selection (GraphQL-style) for REST API endpoints
-- [ ] Create connection pooling
+- [x] Create connection pooling (Redis ConnectionManager provides pooling)
 
 ## Observability
 
@@ -85,7 +85,7 @@
 - [x] Implement request tracing (via logging middleware)
 - [x] Create metrics endpoint (Prometheus)
 - [x] Add health check endpoints
-- [ ] Implement distributed tracing (OpenTelemetry)
+- [x] Implement distributed tracing (OpenTelemetry with OTLP support)
 
 ## Deployment
 
@@ -98,54 +98,54 @@
 
 ## Testing
 
-- [x] Add integration tests (42 tests covering REST API, GraphQL, authentication, health checks, search, and batch operations)
-- [ ] Create API contract tests
+- [x] Add integration tests (108 tests covering REST API, GraphQL, authentication, health checks, search, and batch operations)
+- [ ] Create API contract tests (framework ready via security module)
 - [ ] Implement load testing
-- [ ] Add security testing (OWASP)
+- [x] Add security testing (OWASP vulnerability checks, input validation, security headers)
 
 ## Roadmap for 0.1.0 Series
 
 ### Advanced Endpoints (v0.1.1)
-- [ ] Add bulk verification endpoint with streaming results
+- [x] Add bulk verification endpoint with streaming results (POST /api/v1/verify/bulk/stream)
 - [ ] Add statute suggestion endpoint (AI-powered)
-- [ ] Add compliance check endpoint for entity
-- [ ] Add what-if analysis endpoint
-- [ ] Add statute comparison matrix endpoint
+- [x] Add compliance check endpoint for entity (POST /api/v1/simulate/compliance)
+- [x] Add what-if analysis endpoint (POST /api/v1/simulate/whatif)
+- [x] Add statute comparison matrix endpoint (POST /api/v1/statutes/compare/matrix)
 
 ### GraphQL Enhancements (v0.1.2)
-- [ ] Add subscription support for real-time updates
+- [x] Add subscription support for real-time updates
 - [ ] Add DataLoader for N+1 optimization
-- [ ] Add relay-style pagination
-- [ ] Add field-level permissions
-- [ ] Add query complexity limiting
+- [x] Add relay-style pagination
+- [x] Add field-level permissions
+- [x] Add query complexity limiting
 
 ### Authentication & Authorization (v0.1.3)
-- [ ] Add OAuth2/OIDC support (Keycloak, Auth0, Okta)
-- [ ] Add fine-grained permissions per statute
-- [ ] Add audit logging for all mutations
-- [ ] Add API key scoping and rotation
-- [ ] Add multi-tenant isolation
+- [x] Add OAuth2/OIDC support (Keycloak, Auth0, Okta, Google, GitHub, Generic OIDC)
+- [x] Add fine-grained permissions per statute (via ReBAC with grant/revoke endpoints)
+- [x] Add audit logging for all mutations (comprehensive audit trail with filtering)
+- [x] Add API key scoping and rotation (create, list, revoke, rotate with custom scopes and expiration)
+- [x] Add multi-tenant isolation (basic tenant context extraction via headers)
 
 ### Real-time Features (v0.1.4)
-- [ ] Add WebSocket support for live updates
-- [ ] Add pub/sub for statute changes
-- [ ] Add collaborative editing support
-- [ ] Add real-time conflict detection
-- [ ] Add presence awareness (who's viewing what)
+- [x] Add WebSocket support for live updates
+- [x] Add pub/sub for statute changes (GraphQL mutations now broadcast WS notifications)
+- [x] Add collaborative editing support (operational transformation, conflict resolution)
+- [x] Add real-time conflict detection (concurrent edit detection with auto-resolution)
+- [x] Add presence awareness (who's viewing what)
 
 ### Caching & Performance (v0.1.5)
-- [ ] Add Redis caching layer
-- [ ] Add cache invalidation strategy
-- [ ] Add edge caching (CDN-friendly)
-- [ ] Add query result caching with TTL
-- [ ] Add cache warming strategies
+- [x] Add Redis caching layer (with trait-based backend abstraction)
+- [x] Add cache invalidation strategy (pattern-based, TTL, write-through)
+- [x] Add edge caching (CDN-friendly with Cache-Control, Vary, and surrogate keys)
+- [x] Add query result caching with TTL
+- [x] Add cache warming strategies (warm() method with batch loading, stats tracking)
 
 ### Observability (v0.1.6)
-- [ ] Add OpenTelemetry distributed tracing
-- [ ] Add custom metrics for business logic
-- [ ] Add request sampling for high-volume endpoints
-- [ ] Add anomaly detection for API usage
-- [ ] Add SLO/SLI tracking
+- [x] Add OpenTelemetry distributed tracing (OTLP with configurable sampling)
+- [x] Add custom metrics for business logic (statute operations, verification results, simulation outcomes, permissions, etc.)
+- [x] Add request sampling for high-volume endpoints (adaptive, random, head-based strategies)
+- [x] Add anomaly detection for API usage (time-series based with z-score analysis)
+- [x] Add SLO/SLI tracking (availability, latency, error rate, throughput with error budgets)
 
 ### SDK Generation (v0.1.7)
 - [ ] Generate TypeScript SDK from OpenAPI
@@ -162,8 +162,8 @@
 - [ ] Add cross-region replication endpoints
 
 ### API Versioning (v0.1.9)
-- [ ] Add URL-based versioning (v1, v2)
-- [ ] Add header-based versioning
-- [ ] Add deprecation warnings
-- [ ] Add version migration tools
-- [ ] Add backward compatibility testing
+- [x] Add URL-based versioning (v1, v2 with path-based routing)
+- [x] Add header-based versioning (X-API-Version and Accept headers)
+- [x] Add deprecation warnings (Sunset and Warning headers)
+- [x] Add version migration tools (VersionMigration with breaking changes documentation)
+- [x] Add backward compatibility testing (CompatibilityChecker for features and endpoints)

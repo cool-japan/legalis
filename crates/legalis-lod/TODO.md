@@ -25,10 +25,10 @@
 - [x] Add SKOS for concept hierarchies
 
 ### Custom Extensions
-- [ ] Create Legalis ontology specification document
-- [ ] Add condition/effect relationship properties
-- [ ] Define discretion zone modeling
-- [ ] Create simulation result vocabulary
+- [x] Create Legalis ontology specification document
+- [x] Add condition/effect relationship properties
+- [x] Define discretion zone modeling
+- [x] Create simulation result vocabulary
 
 ## Linked Data
 
@@ -51,10 +51,10 @@
 - [x] Add named graph management
 
 ### External Services
-- [ ] Integration with EUR-Lex
-- [ ] Integration with legislation.gov.uk
-- [ ] Support for Wikidata linking
-- [ ] Add DBpedia concept mapping
+- [x] Integration with EUR-Lex
+- [x] Integration with legislation.gov.uk
+- [x] Support for Wikidata linking
+- [x] Add DBpedia concept mapping
 
 ## Validation
 
@@ -84,7 +84,7 @@
 - [x] Add LKIF-Core (Legal Knowledge Interchange Format)
 - [x] Add LegalRuleML ontology mapping
 - [x] Add Akoma Ntoso ontology
-- [ ] Add custom ontology definition DSL
+- [x] Add custom ontology definition DSL
 
 ### Linked Data Features (v0.1.2)
 - [x] Add URI dereferencing support
@@ -101,43 +101,59 @@
 - [x] Expand SPARQL query templates library
 
 ### External Integrations (v0.1.4)
-- [ ] Add EUR-Lex integration
-- [ ] Add legislation.gov.uk integration
-- [ ] Add Wikidata linking
-- [ ] Add DBpedia concept mapping
-- [ ] Add GovTrack.us integration (US legislation)
+- [x] Add EUR-Lex integration
+- [x] Add legislation.gov.uk integration
+- [x] Add Wikidata linking
+- [x] Add DBpedia concept mapping
+- [x] Add GovTrack.us integration (US legislation)
 
 ### Knowledge Graph (v0.1.5)
-- [ ] Add statute knowledge graph construction
-- [ ] Add entity relationship extraction
-- [ ] Add temporal knowledge graph support
-- [ ] Add graph reasoning (inference)
-- [ ] Add graph visualization export
+- [x] Add statute knowledge graph construction
+- [x] Add entity relationship extraction
+- [x] Add temporal knowledge graph support
+- [x] Add graph reasoning (inference)
+- [x] Add graph visualization export
 
 ### Validation & Quality (v0.1.6)
-- [ ] Add comprehensive SHACL shape library
-- [ ] Add ShEx validation rules
-- [ ] Add data quality metrics
-- [ ] Add completeness analysis
-- [ ] Add consistency checking
+- [x] Add comprehensive SHACL shape library
+- [x] Add ShEx validation rules
+- [x] Add data quality metrics
+- [x] Add completeness analysis
+- [x] Add consistency checking
 
 ### Performance (v0.1.7)
-- [ ] Add in-memory RDF store
-- [ ] Add persistent triple store integration
-- [ ] Add query result caching
-- [ ] Add incremental graph updates
-- [ ] Add graph partitioning for large datasets
+- [x] Add in-memory RDF store
+- [x] Add persistent triple store integration
+- [x] Add query result caching
+- [x] Add incremental graph updates
+- [x] Add graph partitioning for large datasets
 
 ### Reasoning (v0.1.8)
-- [ ] Add OWL 2 RL reasoning
-- [ ] Add rule-based inference
-- [ ] Add temporal reasoning
-- [ ] Add legal-specific inference rules
-- [ ] Add explanation generation for inferences
+- [x] Add OWL 2 RL reasoning
+- [x] Add rule-based inference
+- [x] Add temporal reasoning
+- [x] Add legal-specific inference rules
+- [x] Add explanation generation for inferences
 
 ### Export & Publishing (v0.1.9)
-- [ ] Add dataset publishing workflow
-- [ ] Add DCAT catalog generation
-- [ ] Add data.gov integration
-- [ ] Add dataset versioning
-- [ ] Add change notification (Linked Data Notifications)
+- [x] Add dataset publishing workflow
+- [x] Add DCAT catalog generation
+- [x] Add data.gov integration
+- [x] Add dataset versioning
+- [x] Add change notification (Linked Data Notifications)
+
+### Advanced SPARQL (v0.2.0)
+- [x] Add SPARQL 1.1 property paths support
+- [x] Add property path builder utilities (zero-or-more, one-or-more, alternative, sequence, inverse, negated)
+- [x] Add DISTINCT and GROUP BY support in query builder
+- [x] Add advanced query templates using property paths
+- [x] Add query templates for transitive conditions
+- [x] Add query templates for SKOS hierarchies
+
+### Graph Algorithms (v0.2.0)
+- [x] Add shortest path finding (BFS)
+- [x] Add all paths finding with depth limit
+- [x] Add degree centrality calculation
+- [x] Add connected components detection
+- [x] Add most connected entities ranking
+- [x] Add most referenced entities ranking

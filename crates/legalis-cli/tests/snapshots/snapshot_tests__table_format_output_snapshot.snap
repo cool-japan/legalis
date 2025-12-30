@@ -1,0 +1,11 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: table.to_string()
+---
+╭──────────────────┬───────────────────────────┬──────────────┬─────────╮
+│ ID               ┆ Title                     ┆ Jurisdiction ┆ Version │
+╞══════════════════╪═══════════════════════════╪══════════════╪═════════╡
+│ snapshot-test    ┆ Snapshot Test Act         ┆ US           ┆ 1       │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
+│ complex-snapshot ┆ Complex Snapshot Test Act ┆ US-CA        ┆ 2       │
+╰──────────────────┴───────────────────────────┴──────────────┴─────────╯

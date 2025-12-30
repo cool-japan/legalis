@@ -350,6 +350,19 @@ impl Default for LinkValidator {
     }
 }
 
+/// Helper for RdfValue to string conversion in tests.
+impl std::fmt::Display for RdfValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RdfValue::Uri(uri) => write!(f, "{}", uri),
+            RdfValue::Literal(s, None) => write!(f, "{}", s),
+            RdfValue::Literal(s, Some(lang)) => write!(f, "{}@{}", s, lang),
+            RdfValue::TypedLiteral(s, dtype) => write!(f, "{}^^{}", s, dtype),
+            RdfValue::BlankNode(id) => write!(f, "_:{}", id),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,8 +380,8 @@ mod tests {
 
     #[test]
     fn test_cool_uri_hierarchical() {
-        let scheme = CoolUriScheme::new("legislation.example.org")
-            .with_pattern(UriPattern::Hierarchical);
+        let scheme =
+            CoolUriScheme::new("legislation.example.org").with_pattern(UriPattern::Hierarchical);
         let statute = sample_statute();
         let uri = scheme.generate_uri(&statute);
 
@@ -464,9 +477,7 @@ mod tests {
 
         dereferencer.register(statute);
 
-        let (format, _) = dereferencer
-            .resolve(&uri, "application/ld+json")
-            .unwrap();
+        let (format, _) = dereferencer.resolve(&uri, "application/ld+json").unwrap();
         assert_eq!(format, RdfFormat::JsonLd);
     }
 
@@ -497,10 +508,7 @@ mod tests {
 
         let triples = resolver.generate_same_as_triples("test-act");
         assert_eq!(triples.len(), 1);
-        assert!(triples[0]
-            .object
-            .to_string()
-            .contains("data.europa.eu/eli"));
+        assert!(triples[0].object.to_string().contains("data.europa.eu/eli"));
     }
 
     #[test]
@@ -509,10 +517,12 @@ mod tests {
         resolver.link_to_wikidata("test-act", "Q12345");
 
         let triples = resolver.generate_same_as_triples("test-act");
-        assert!(triples[0]
-            .object
-            .to_string()
-            .contains("wikidata.org/entity/Q12345"));
+        assert!(
+            triples[0]
+                .object
+                .to_string()
+                .contains("wikidata.org/entity/Q12345")
+        );
     }
 
     #[test]
@@ -544,18 +554,5 @@ mod tests {
         validator.extract_uris_from_triples(&triples);
         assert_eq!(validator.uris.len(), 1);
         assert_eq!(validator.uris[0], "http://data.europa.eu/eli/test");
-    }
-}
-
-/// Helper for RdfValue to string conversion in tests.
-impl ToString for RdfValue {
-    fn to_string(&self) -> String {
-        match self {
-            RdfValue::Uri(uri) => uri.clone(),
-            RdfValue::Literal(s, None) => s.clone(),
-            RdfValue::Literal(s, Some(lang)) => format!("{}@{}", s, lang),
-            RdfValue::TypedLiteral(s, dtype) => format!("{}^^{}", s, dtype),
-            RdfValue::BlankNode(id) => format!("_:{}", id),
-        }
     }
 }

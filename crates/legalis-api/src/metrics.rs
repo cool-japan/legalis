@@ -42,6 +42,56 @@ lazy_static! {
     pub static ref SIMULATIONS_TOTAL: IntCounter =
         IntCounter::new("legalis_simulations_total", "Total simulation requests")
             .expect("metric can be created");
+
+    /// Statute operations counter (by operation type).
+    pub static ref STATUTE_OPERATIONS: IntCounterVec = IntCounterVec::new(
+        prometheus::opts!("legalis_statute_operations_total", "Total statute operations"),
+        &["operation"]  // create, update, delete, version
+    )
+    .expect("metric can be created");
+
+    /// Verification results counter (by result type).
+    pub static ref VERIFICATION_RESULTS: IntCounterVec = IntCounterVec::new(
+        prometheus::opts!("legalis_verification_results_total", "Total verification results"),
+        &["result"]  // passed, failed
+    )
+    .expect("metric can be created");
+
+    /// Simulation outcome distribution (by outcome type).
+    pub static ref SIMULATION_OUTCOMES: IntCounterVec = IntCounterVec::new(
+        prometheus::opts!("legalis_simulation_outcomes_total", "Total simulation outcomes"),
+        &["outcome"]  // deterministic, discretionary, void
+    )
+    .expect("metric can be created");
+
+    /// Audit log entries counter (by event type).
+    pub static ref AUDIT_LOG_ENTRIES: IntCounterVec = IntCounterVec::new(
+        prometheus::opts!("legalis_audit_log_entries_total", "Total audit log entries"),
+        &["event_type"]
+    )
+    .expect("metric can be created");
+
+    /// Permission operations counter (by operation type).
+    pub static ref PERMISSION_OPERATIONS: IntCounterVec = IntCounterVec::new(
+        prometheus::opts!("legalis_permission_operations_total", "Total permission operations"),
+        &["operation"]  // grant, revoke
+    )
+    .expect("metric can be created");
+
+    /// Active WebSocket connections gauge.
+    pub static ref WEBSOCKET_CONNECTIONS: IntGauge =
+        IntGauge::new("legalis_websocket_connections", "Active WebSocket connections")
+            .expect("metric can be created");
+
+    /// GraphQL query duration histogram.
+    pub static ref GRAPHQL_QUERY_DURATION: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "legalis_graphql_query_duration_seconds",
+            "GraphQL query duration in seconds"
+        ),
+        &["query_name"]
+    )
+    .expect("metric can be created");
 }
 
 static INIT: Once = Once::new();
@@ -64,6 +114,27 @@ pub fn init() {
             .expect("metric can be registered");
         REGISTRY
             .register(Box::new(SIMULATIONS_TOTAL.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(STATUTE_OPERATIONS.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(VERIFICATION_RESULTS.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(SIMULATION_OUTCOMES.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(AUDIT_LOG_ENTRIES.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(PERMISSION_OPERATIONS.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(WEBSOCKET_CONNECTIONS.clone()))
+            .expect("metric can be registered");
+        REGISTRY
+            .register(Box::new(GRAPHQL_QUERY_DURATION.clone()))
             .expect("metric can be registered");
     });
 }

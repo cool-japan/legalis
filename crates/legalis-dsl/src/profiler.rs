@@ -42,7 +42,10 @@ impl Profiler {
     pub fn stop(&mut self, label: &str) {
         if let Some(start) = self.active.remove(label) {
             let duration = start.elapsed();
-            *self.timings.entry(label.to_string()).or_insert(Duration::ZERO) += duration;
+            *self
+                .timings
+                .entry(label.to_string())
+                .or_insert(Duration::ZERO) += duration;
         }
     }
 
@@ -186,9 +189,19 @@ impl fmt::Display for ProfileReport {
             let mut timings: Vec<_> = self.timings.iter().collect();
             timings.sort_by(|a, b| b.1.cmp(a.1));
             for (label, duration) in timings {
-                writeln!(f, "  {:<30} {:>12.3} ms", label, duration.as_secs_f64() * 1000.0)?;
+                writeln!(
+                    f,
+                    "  {:<30} {:>12.3} ms",
+                    label,
+                    duration.as_secs_f64() * 1000.0
+                )?;
             }
-            writeln!(f, "  {:<30} {:>12.3} ms", "TOTAL", self.total_time().as_secs_f64() * 1000.0)?;
+            writeln!(
+                f,
+                "  {:<30} {:>12.3} ms",
+                "TOTAL",
+                self.total_time().as_secs_f64() * 1000.0
+            )?;
             writeln!(f)?;
         }
 
@@ -278,7 +291,8 @@ impl ParseProfiler {
     {
         self.profiler.start("total_parse");
         self.profiler.count("input_size_bytes", input.len() as u64);
-        self.profiler.count("input_size_lines", input.lines().count() as u64);
+        self.profiler
+            .count("input_size_lines", input.lines().count() as u64);
 
         let result = parse_fn(input, &mut self.profiler);
 

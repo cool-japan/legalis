@@ -449,6 +449,7 @@ pub struct DocumentDiff {
 
 impl DocumentDiff {
     /// Returns true if there are any changes.
+    #[allow(dead_code)]
     pub fn has_changes(&self) -> bool {
         !self.added_imports.is_empty()
             || !self.removed_imports.is_empty()
@@ -458,6 +459,7 @@ impl DocumentDiff {
     }
 
     /// Returns a summary of changes as a string.
+    #[allow(dead_code)]
     pub fn summary(&self) -> String {
         let mut parts = Vec::new();
 

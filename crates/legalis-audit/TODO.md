@@ -14,7 +14,11 @@
 - [x] In-memory storage backend (MemoryStorage)
 - [x] JSONL file-based storage backend with persistence
 - [x] SQLite storage backend with full indexing and transactions
+- [x] PostgreSQL storage backend
+- [x] Append-only log storage with forensic guarantees
+- [x] Log rotation support for storage backends
 - [x] Encrypted storage wrapper with AES-256-GCM
+- [x] Cached storage with LRU cache and TTL
 - [x] Flexible storage backend selection
 
 ### Query System
@@ -53,6 +57,14 @@
 - [x] Merkle tree for efficient O(log n) verification
 - [x] Merkle proof generation and validation
 - [x] Batch verification support
+- [x] Parallel integrity verification for performance
+- [x] Sampling-based verification for large datasets
+- [x] Cached incremental verification
+- [x] Witness signatures for external notarization
+- [x] Multi-witness support with notarization policies
+- [x] RFC 3161 timestamping authority integration
+- [x] Blockchain anchoring (Bitcoin, Ethereum)
+- [x] Batch blockchain anchoring with Merkle roots
 - [x] AES-256-GCM encryption at rest
 - [x] Secure key management and derivation
 - [x] Record compression with DEFLATE (multiple levels)
@@ -63,18 +75,33 @@
 - [x] Retention policies with exemptions
 - [x] Erasure analysis (right to be forgotten)
 
+### Integration & Export
+- [x] Webhook notifications (async, retry support, event filtering)
+- [x] SIEM integration (Syslog RFC 5424, CEF, LEEF formats)
+- [x] Elasticsearch export (bulk API, NDJSON, query builder, index templates)
+- [x] OpenTelemetry tracing (span attributes, metrics, W3C trace context)
+- [x] Regulatory compliance exports (GDPR, SOX, HIPAA, XML, CSV, JSON)
+
 ### Testing
-- [x] Comprehensive unit tests for all modules (58 tests)
-- [x] Storage backend tests (memory, JSONL, SQLite, encrypted)
+- [x] Comprehensive unit tests for all modules (150 tests)
+- [x] Storage backend tests (memory, JSONL, SQLite, PostgreSQL, encrypted, cached, append-only)
 - [x] Query builder tests
-- [x] Export functionality tests (CSV, JSON, JSON-LD, Excel, PDF, HTML)
-- [x] Integrity verification tests
+- [x] Export functionality tests (CSV, JSON, JSON-LD, Excel, PDF, HTML, Elasticsearch, SIEM)
+- [x] Integrity verification tests (hash chain, Merkle tree, parallel, sampling, cached)
+- [x] Witness signature tests (multi-witness, policies, verification)
+- [x] Timestamping authority tests (TSA tokens, verification, batch timestamping)
+- [x] Blockchain anchoring tests (Bitcoin, Ethereum, batch anchoring, confirmations)
 - [x] Analysis tests
 - [x] Replay tests
 - [x] Retention policy tests
 - [x] Encryption/decryption tests
 - [x] Merkle tree tests
 - [x] Compression tests (multiple levels, batch operations)
+- [x] SIEM integration tests (syslog, CEF, LEEF)
+- [x] Elasticsearch export tests (bulk API, NDJSON, query builder)
+- [x] Telemetry tests (OpenTelemetry span attributes, metrics, trace context)
+- [x] Append-only storage tests (basic operations, persistence, log rotation)
+- [x] Parallel verification tests (batch processing, sampling, cached)
 - [x] Zero warnings policy maintained (cargo clippy clean)
 
 ## Storage
@@ -83,23 +110,23 @@
 - [x] Add file-based JSON/JSONL storage
 - [x] Add SQLite storage backend with full indexing
 - [x] Implement PostgreSQL storage
-- [ ] Support S3-compatible object storage
-- [ ] Implement append-only log storage
+- [x] Support S3-compatible object storage
+- [x] Implement append-only log storage
 
 ### Features
 - [x] Add retention policy support (with exemptions)
 - [x] Add storage encryption at rest (AES-256-GCM)
 - [x] Implement record compression (DEFLATE with multiple compression levels)
 - [x] Create archival functionality (with compression, time-based policies, and integrity verification)
-- [ ] Support log rotation
+- [x] Support log rotation
 
 ## Integrity
 
 - [x] Add Merkle tree for efficient verification
-- [ ] Implement witness signatures (external notarization)
-- [ ] Add timestamping authority integration
-- [ ] Create blockchain anchoring option
-- [ ] Implement multi-party verification
+- [x] Implement witness signatures (external notarization, multi-witness support, policies)
+- [x] Add timestamping authority integration (RFC 3161, TSA tokens, verification)
+- [x] Create blockchain anchoring option (Bitcoin, Ethereum, batch anchoring, Merkle roots)
+- [x] Implement multi-party verification
 
 ## Querying
 
@@ -148,15 +175,15 @@
 ## Integration
 
 - [x] Add webhook notifications for new records (async, retry support, event filtering)
-- [ ] Implement SIEM integration (syslog, CEF)
-- [ ] Create Elasticsearch export
-- [ ] Add OpenTelemetry tracing integration
+- [x] Implement SIEM integration (syslog, CEF, LEEF formats)
+- [x] Create Elasticsearch export (bulk API, NDJSON, query builder, index templates)
+- [x] Add OpenTelemetry tracing integration (span attributes, metrics, trace context)
 
 ## Performance
 
 - [x] Add async write batching (configurable batch size and delay, tokio-based)
 - [x] Implement read caching (LRU cache with TTL, statistics, configurable size)
-- [ ] Optimize hash chain verification
+- [x] Optimize hash chain verification (parallel verification, sampling, cached verification)
 - [x] Add background integrity checking (periodic daemon, manual triggers, error reporting)
 
 ## Testing
@@ -169,39 +196,39 @@
 ## Roadmap for 0.1.0 Series
 
 ### Storage Enhancements (v0.1.1)
-- [ ] Add S3-compatible object storage backend
-- [ ] Add append-only log storage for forensic analysis
-- [ ] Add partitioned storage by date/jurisdiction
-- [ ] Add automatic tier migration (hot → warm → cold)
-- [ ] Add storage compression with configurable algorithms
+- [x] Add S3-compatible object storage backend
+- [x] Add append-only log storage for forensic analysis
+- [x] Add partitioned storage by date/jurisdiction
+- [x] Add automatic tier migration (hot → warm → cold)
+- [x] Add storage compression with configurable algorithms
 
 ### Advanced Querying (v0.1.2)
-- [ ] Add full-text search across decision context
-- [ ] Add aggregate queries (count by statute, by outcome)
-- [ ] Add time-series queries for trend analysis
-- [ ] Add join queries across multiple audit trails
-- [ ] Add query plan explanation
+- [x] Add full-text search across decision context
+- [x] Add aggregate queries (count by statute, by outcome)
+- [x] Add time-series queries for trend analysis
+- [x] Add join queries across multiple audit trails
+- [x] Add query plan explanation
 
 ### Integrity Features (v0.1.3)
-- [ ] Add witness signatures (external notarization)
-- [ ] Add timestamping authority integration (RFC 3161)
-- [ ] Add blockchain anchoring (Bitcoin, Ethereum)
-- [ ] Add multi-party verification (threshold signatures)
-- [ ] Add tamper-evident sealed audit logs
+- [x] Add witness signatures (external notarization)
+- [x] Add timestamping authority integration (RFC 3161)
+- [x] Add blockchain anchoring (Bitcoin, Ethereum)
+- [x] Add multi-party verification (threshold signatures)
+- [x] Add tamper-evident sealed audit logs
 
 ### Compliance Extensions (v0.1.4)
-- [ ] Add CCPA compliance features
-- [ ] Add HIPAA audit requirements
-- [ ] Add SOX compliance reporting
-- [ ] Add ISO 27001 audit trail requirements
-- [ ] Add configurable retention policies per regulation
+- [x] Add CCPA compliance features
+- [x] Add HIPAA audit requirements
+- [x] Add SOX compliance reporting
+- [x] Add ISO 27001 audit trail requirements
+- [x] Add configurable retention policies per regulation
 
 ### Analysis & Intelligence (v0.1.5)
 - [ ] Add ML-based anomaly detection
-- [ ] Add decision clustering analysis
-- [ ] Add bias detection in decisions
+- [x] Add decision clustering analysis
+- [x] Add bias detection in decisions
 - [ ] Add outcome prediction based on patterns
-- [ ] Add what-if analysis for historical decisions
+- [x] Add what-if analysis for historical decisions
 
 ### Integration (v0.1.6)
 - [ ] Add webhook notifications for new records
@@ -215,18 +242,18 @@
 - [ ] Add custom report templates
 - [ ] Add report delivery (email, S3, webhook)
 - [ ] Add interactive HTML reports with filters
-- [ ] Add comparison reports (month-over-month)
+- [x] Add comparison reports (month-over-month)
 
 ### Performance (v0.1.8)
 - [ ] Add async write batching
 - [ ] Add read caching with invalidation
 - [ ] Add parallel integrity verification
 - [ ] Add background integrity checking daemon
-- [ ] Add bloom filter for quick record existence checks
+- [x] Add bloom filter for quick record existence checks
 
 ### Forensic Features (v0.1.9)
-- [ ] Add chain-of-custody tracking
-- [ ] Add digital evidence packaging
-- [ ] Add court-admissible export format
-- [ ] Add timeline reconstruction tools
+- [x] Add chain-of-custody tracking
+- [x] Add digital evidence packaging
+- [x] Add court-admissible export format
+- [x] Add timeline reconstruction tools
 - [ ] Add decision lineage visualization

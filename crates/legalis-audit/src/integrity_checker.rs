@@ -7,7 +7,7 @@ use crate::{AuditError, AuditRecord, AuditResult};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::interval;
 
 /// Configuration for background integrity checking.
@@ -147,7 +147,9 @@ impl IntegrityChecker {
         self.sender
             .send(IntegrityCommand::Check)
             .await
-            .map_err(|_| AuditError::StorageError("Integrity checker channel closed".to_string()))?;
+            .map_err(|_| {
+                AuditError::StorageError("Integrity checker channel closed".to_string())
+            })?;
         Ok(())
     }
 
@@ -156,7 +158,9 @@ impl IntegrityChecker {
         self.sender
             .send(IntegrityCommand::Shutdown)
             .await
-            .map_err(|_| AuditError::StorageError("Integrity checker channel closed".to_string()))?;
+            .map_err(|_| {
+                AuditError::StorageError("Integrity checker channel closed".to_string())
+            })?;
         Ok(())
     }
 

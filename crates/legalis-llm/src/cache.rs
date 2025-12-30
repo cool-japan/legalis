@@ -925,3 +925,257 @@ mod tests {
         let _ = std::fs::remove_dir_all(temp_dir);
     }
 }
+
+/// Async-aware cache using tokio primitives for better async performance.
+pub struct AsyncCache {
+    cache: Arc<tokio::sync::RwLock<HashMap<u64, CachedResponse>>>,
+    config: CacheConfig,
+    stats: Arc<tokio::sync::RwLock<CacheStats>>,
+}
+
+impl AsyncCache {
+    /// Creates a new async cache with default configuration.
+    pub fn new() -> Self {
+        Self::with_config(CacheConfig::default())
+    }
+
+    /// Creates a new async cache with custom configuration.
+    pub fn with_config(config: CacheConfig) -> Self {
+        Self {
+            cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            config,
+            stats: Arc::new(tokio::sync::RwLock::new(CacheStats::default())),
+        }
+    }
+
+    /// Computes a hash key for a prompt.
+    fn hash_prompt(prompt: &str) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+        prompt.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Gets a cached response if available and not expired.
+    pub async fn get(&self, prompt: &str) -> Option<String> {
+        if !self.config.enabled {
+            return None;
+        }
+
+        let key = Self::hash_prompt(prompt);
+        let mut cache = self.cache.write().await;
+        let mut stats = self.stats.write().await;
+
+        if let Some(entry) = cache.get_mut(&key) {
+            if entry.is_expired() {
+                cache.remove(&key);
+                stats.misses += 1;
+                None
+            } else {
+                entry.increment_hit_count();
+                stats.hits += 1;
+                Some(entry.response.clone())
+            }
+        } else {
+            stats.misses += 1;
+            None
+        }
+    }
+
+    /// Stores a response in the cache.
+    pub async fn set(&self, prompt: &str, response: String) {
+        if !self.config.enabled {
+            return;
+        }
+
+        let key = Self::hash_prompt(prompt);
+        let mut cache = self.cache.write().await;
+
+        // Evict oldest entry if cache is full
+        if cache.len() >= self.config.max_entries {
+            if let Some(oldest_key) = cache
+                .iter()
+                .min_by_key(|(_, v)| v.created_at)
+                .map(|(k, _)| *k)
+            {
+                cache.remove(&oldest_key);
+                let mut stats = self.stats.write().await;
+                stats.evictions += 1;
+            }
+        }
+
+        let cached = CachedResponse::new(response, self.config.default_ttl);
+        cache.insert(key, cached);
+
+        let mut stats = self.stats.write().await;
+        stats.entries = cache.len();
+    }
+
+    /// Gets cache statistics.
+    pub async fn stats(&self) -> CacheStats {
+        self.stats.read().await.clone()
+    }
+
+    /// Clears all cached entries.
+    pub async fn clear(&self) {
+        let mut cache = self.cache.write().await;
+        cache.clear();
+        let mut stats = self.stats.write().await;
+        stats.entries = 0;
+    }
+
+    /// Pre-warms the cache with a set of common prompts and responses.
+    pub async fn warm(&self, entries: Vec<(String, String)>) {
+        for (prompt, response) in entries {
+            self.set(&prompt, response).await;
+        }
+    }
+
+    /// Removes expired entries from the cache.
+    pub async fn evict_expired(&self) -> usize {
+        let mut cache = self.cache.write().await;
+        let before_count = cache.len();
+
+        cache.retain(|_, entry| !entry.is_expired());
+
+        let evicted = before_count - cache.len();
+        let mut stats = self.stats.write().await;
+        stats.evictions += evicted;
+        stats.entries = cache.len();
+
+        evicted
+    }
+}
+
+impl Default for AsyncCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cache warming utility for preloading common prompts.
+pub struct CacheWarmer {
+    warming_prompts: Vec<(String, String)>,
+}
+
+impl CacheWarmer {
+    /// Creates a new cache warmer.
+    pub fn new() -> Self {
+        Self {
+            warming_prompts: Vec::new(),
+        }
+    }
+
+    /// Adds a prompt-response pair to the warming set.
+    pub fn add_entry(mut self, prompt: impl Into<String>, response: impl Into<String>) -> Self {
+        self.warming_prompts.push((prompt.into(), response.into()));
+        self
+    }
+
+    /// Loads common legal prompts for warming.
+    pub fn with_legal_templates(mut self) -> Self {
+        self.warming_prompts.extend(vec![
+            (
+                "What is consideration in contract law?".to_string(),
+                "Consideration is something of value exchanged between parties...".to_string(),
+            ),
+            (
+                "Define mens rea".to_string(),
+                "Mens rea is the mental element of a crime...".to_string(),
+            ),
+            (
+                "What is the statute of limitations?".to_string(),
+                "The statute of limitations is a law that sets the maximum time...".to_string(),
+            ),
+        ]);
+        self
+    }
+
+    /// Warms the given cache with the stored prompts.
+    pub async fn warm_cache(&self, cache: &AsyncCache) {
+        cache.warm(self.warming_prompts.clone()).await;
+    }
+}
+
+impl Default for CacheWarmer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod async_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_async_cache_basic() {
+        let cache = AsyncCache::new();
+
+        cache.set("test prompt", "test response".to_string()).await;
+        let result = cache.get("test prompt").await;
+
+        assert_eq!(result, Some("test response".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_miss() {
+        let cache = AsyncCache::new();
+        let result = cache.get("nonexistent").await;
+
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_stats() {
+        let cache = AsyncCache::new();
+
+        cache.set("prompt1", "response1".to_string()).await;
+        let _ = cache.get("prompt1").await;
+        let _ = cache.get("prompt2").await;
+
+        let stats = cache.stats().await;
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 1);
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_expiry() {
+        let config = CacheConfig::new().with_default_ttl(Duration::from_millis(10));
+        let cache = AsyncCache::with_config(config);
+
+        cache.set("prompt", "response".to_string()).await;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        let result = cache.get("prompt").await;
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_cache_warmer() {
+        let cache = AsyncCache::new();
+        let warmer = CacheWarmer::new()
+            .add_entry("q1", "a1")
+            .add_entry("q2", "a2");
+
+        warmer.warm_cache(&cache).await;
+
+        assert_eq!(cache.get("q1").await, Some("a1".to_string()));
+        assert_eq!(cache.get("q2").await, Some("a2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_evict_expired() {
+        let config = CacheConfig::new().with_default_ttl(Duration::from_millis(10));
+        let cache = AsyncCache::with_config(config);
+
+        cache.set("prompt1", "response1".to_string()).await;
+        cache.set("prompt2", "response2".to_string()).await;
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let evicted = cache.evict_expired().await;
+
+        assert_eq!(evicted, 2);
+        let stats = cache.stats().await;
+        assert_eq!(stats.entries, 0);
+    }
+}

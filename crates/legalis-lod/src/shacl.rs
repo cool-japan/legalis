@@ -48,6 +48,299 @@ impl ShaclShapeGenerator {
         shapes
     }
 
+    /// Generates comprehensive SHACL shape library including custom ontology shapes.
+    pub fn generate_comprehensive_shapes(&self) -> Vec<Triple> {
+        let mut shapes = Vec::new();
+
+        // Base shapes
+        shapes.extend(self.generate_statute_shapes());
+
+        // Custom ontology shapes
+        shapes.extend(self.create_discretion_zone_shape());
+        shapes.extend(self.create_simulation_result_shape());
+        shapes.extend(self.create_temporal_snapshot_shape());
+
+        // Knowledge graph shapes
+        shapes.extend(self.create_entity_shape());
+        shapes.extend(self.create_relationship_shape());
+
+        shapes
+    }
+
+    /// Creates the Discretion Zone shape.
+    fn create_discretion_zone_shape(&self) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let shape_uri = format!("{}shapes/DiscretionZoneShape", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("sh:NodeShape".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:targetClass".to_string(),
+            object: RdfValue::Uri("legalis:DiscretionZone".to_string()),
+        });
+
+        // Label property (required)
+        let label_prop = format!("{}/label", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(label_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("rdfs:label".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop.clone(),
+            predicate: "sh:minCount".to_string(),
+            object: RdfValue::integer(1),
+        });
+
+        triples.push(Triple {
+            subject: label_prop,
+            predicate: "sh:datatype".to_string(),
+            object: RdfValue::Uri("xsd:string".to_string()),
+        });
+
+        // Definition property (required)
+        let def_prop = format!("{}/definition", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri,
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(def_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: def_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("skos:definition".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: def_prop.clone(),
+            predicate: "sh:minCount".to_string(),
+            object: RdfValue::integer(1),
+        });
+
+        triples.push(Triple {
+            subject: def_prop,
+            predicate: "sh:datatype".to_string(),
+            object: RdfValue::Uri("xsd:string".to_string()),
+        });
+
+        triples
+    }
+
+    /// Creates the Simulation Result shape.
+    fn create_simulation_result_shape(&self) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let shape_uri = format!("{}shapes/SimulationResultShape", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("sh:NodeShape".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:targetClass".to_string(),
+            object: RdfValue::Uri("legalis:SimulationResult".to_string()),
+        });
+
+        // Label property (required)
+        let label_prop = format!("{}/label", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(label_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("rdfs:label".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop,
+            predicate: "sh:minCount".to_string(),
+            object: RdfValue::integer(1),
+        });
+
+        // Applies to property (required)
+        let applies_prop = format!("{}/appliesTo", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri,
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(applies_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: applies_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("legalis:appliesTo".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: applies_prop.clone(),
+            predicate: "sh:minCount".to_string(),
+            object: RdfValue::integer(1),
+        });
+
+        triples.push(Triple {
+            subject: applies_prop,
+            predicate: "sh:nodeKind".to_string(),
+            object: RdfValue::Uri("sh:IRI".to_string()),
+        });
+
+        triples
+    }
+
+    /// Creates the Temporal Snapshot shape.
+    fn create_temporal_snapshot_shape(&self) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let shape_uri = format!("{}shapes/TemporalSnapshotShape", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("sh:NodeShape".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:targetClass".to_string(),
+            object: RdfValue::Uri("legalis:TemporalSnapshot".to_string()),
+        });
+
+        // Snapshot of property (required)
+        let snapshot_prop = format!("{}/snapshotOf", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(snapshot_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: snapshot_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("legalis:snapshotOf".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: snapshot_prop.clone(),
+            predicate: "sh:minCount".to_string(),
+            object: RdfValue::integer(1),
+        });
+
+        triples.push(Triple {
+            subject: snapshot_prop,
+            predicate: "sh:nodeKind".to_string(),
+            object: RdfValue::Uri("sh:IRI".to_string()),
+        });
+
+        // Valid from property (optional, must be date if present)
+        let from_prop = format!("{}/validFrom", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri,
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(from_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: from_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("legalis:validFrom".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: from_prop,
+            predicate: "sh:datatype".to_string(),
+            object: RdfValue::Uri("xsd:date".to_string()),
+        });
+
+        triples
+    }
+
+    /// Creates a generic Entity shape.
+    fn create_entity_shape(&self) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let shape_uri = format!("{}shapes/EntityShape", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("sh:NodeShape".to_string()),
+        });
+
+        // Label property (optional but recommended)
+        let label_prop = format!("{}/label", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri,
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(label_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop.clone(),
+            predicate: "sh:path".to_string(),
+            object: RdfValue::Uri("rdfs:label".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: label_prop,
+            predicate: "sh:datatype".to_string(),
+            object: RdfValue::Uri("xsd:string".to_string()),
+        });
+
+        triples
+    }
+
+    /// Creates a Relationship shape.
+    fn create_relationship_shape(&self) -> Vec<Triple> {
+        let mut triples = Vec::new();
+        let shape_uri = format!("{}shapes/RelationshipShape", self.namespaces.base);
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri("sh:NodeShape".to_string()),
+        });
+
+        triples.push(Triple {
+            subject: shape_uri.clone(),
+            predicate: "sh:description".to_string(),
+            object: RdfValue::string(
+                "Validates that relationships have valid subjects and objects",
+            ),
+        });
+
+        // Subject must be an IRI
+        let subj_prop = format!("{}/subject", shape_uri);
+        triples.push(Triple {
+            subject: shape_uri,
+            predicate: "sh:property".to_string(),
+            object: RdfValue::Uri(subj_prop.clone()),
+        });
+
+        triples.push(Triple {
+            subject: subj_prop,
+            predicate: "sh:nodeKind".to_string(),
+            object: RdfValue::Uri("sh:IRI".to_string()),
+        });
+
+        triples
+    }
+
     /// Creates the main Statute shape.
     fn create_statute_shape(&self) -> Vec<Triple> {
         let mut triples = Vec::new();
@@ -608,5 +901,68 @@ mod tests {
         assert!(turtle.contains("@prefix sh:"));
         assert!(turtle.contains("sh:NodeShape"));
         assert!(turtle.contains("sh:targetClass"));
+    }
+
+    #[test]
+    fn test_comprehensive_shapes() {
+        let generator = ShaclShapeGenerator::new();
+        let shapes = generator.generate_comprehensive_shapes();
+
+        // Should have more shapes than basic statute shapes
+        let basic_count = generator.generate_statute_shapes().len();
+        assert!(shapes.len() > basic_count);
+
+        // Should contain custom ontology shapes
+        assert!(
+            shapes
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("DiscretionZone")))
+        );
+        assert!(
+            shapes
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("SimulationResult")))
+        );
+    }
+
+    #[test]
+    fn test_discretion_zone_shape() {
+        let generator = ShaclShapeGenerator::new();
+        let shapes = generator.create_discretion_zone_shape();
+
+        assert!(!shapes.is_empty());
+        assert!(shapes.iter().any(|t| t.predicate == "sh:targetClass"));
+        assert!(shapes.iter().any(|t| t.predicate == "sh:property"));
+    }
+
+    #[test]
+    fn test_simulation_result_shape() {
+        let generator = ShaclShapeGenerator::new();
+        let shapes = generator.create_simulation_result_shape();
+
+        assert!(!shapes.is_empty());
+        assert!(
+            shapes
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "legalis:SimulationResult"))
+        );
+    }
+
+    #[test]
+    fn test_temporal_snapshot_shape() {
+        let generator = ShaclShapeGenerator::new();
+        let shapes = generator.create_temporal_snapshot_shape();
+
+        assert!(!shapes.is_empty());
+        assert!(
+            shapes
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "legalis:TemporalSnapshot"))
+        );
+        assert!(
+            shapes
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u == "xsd:date"))
+        );
     }
 }

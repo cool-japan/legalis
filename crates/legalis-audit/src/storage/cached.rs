@@ -175,10 +175,7 @@ impl CachedStorage {
 
         if cache.len() >= self.config.max_entries {
             // Find LRU entry
-            if let Some((&lru_key, _)) = cache
-                .iter()
-                .min_by_key(|(_, entry)| entry.last_accessed)
-            {
+            if let Some((&lru_key, _)) = cache.iter().min_by_key(|(_, entry)| entry.last_accessed) {
                 cache.remove(&lru_key);
 
                 if self.config.enable_stats {

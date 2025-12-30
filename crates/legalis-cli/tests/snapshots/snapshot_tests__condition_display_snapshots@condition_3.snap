@@ -1,0 +1,5 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: display
+---
+(age >= 21 AND has_attribute(licensed))

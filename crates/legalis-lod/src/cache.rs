@@ -154,6 +154,179 @@ pub fn statute_cache_key(statute_id: &str, format: &str) -> String {
     format!("{}:{}", statute_id, format)
 }
 
+/// Query result cache for SPARQL-like queries.
+#[derive(Debug)]
+pub struct QueryCache<V> {
+    cache: ExportCache<String, V>,
+}
+
+impl<V: Clone> QueryCache<V> {
+    /// Creates a new query cache.
+    pub fn new(max_size: usize, ttl: Duration) -> Self {
+        Self {
+            cache: ExportCache::new(max_size, ttl),
+        }
+    }
+
+    /// Gets cached query results.
+    pub fn get_query_result(&mut self, query: &str) -> Option<V> {
+        self.cache.get(&Self::hash_query(query))
+    }
+
+    /// Caches query results.
+    pub fn cache_query_result(&mut self, query: &str, result: V) {
+        self.cache.insert(Self::hash_query(query), result);
+    }
+
+    /// Invalidates cache for a specific query.
+    pub fn invalidate(&mut self, query: &str) {
+        let key = Self::hash_query(query);
+        self.cache.cache.remove(&key);
+        self.cache.access_order.retain(|k| k != &key);
+    }
+
+    /// Invalidates all cached queries.
+    pub fn invalidate_all(&mut self) {
+        self.cache.clear();
+    }
+
+    /// Cleans up expired entries.
+    pub fn cleanup(&mut self) {
+        self.cache.cleanup_expired();
+    }
+
+    /// Returns cache statistics.
+    pub fn stats(&self) -> CacheStats {
+        self.cache.stats()
+    }
+
+    /// Creates a hash for a query string (simple implementation).
+    fn hash_query(query: &str) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hasher;
+
+        let mut hasher = DefaultHasher::new();
+        hasher.write(query.as_bytes());
+        format!("query:{:x}", hasher.finish())
+    }
+}
+
+/// Incremental update tracker for RDF graphs.
+#[derive(Debug, Clone)]
+pub struct IncrementalUpdateTracker {
+    /// Last update timestamp
+    last_update: Instant,
+    /// Modified subjects
+    modified_subjects: Vec<String>,
+    /// Deleted subjects
+    deleted_subjects: Vec<String>,
+    /// Added subjects
+    added_subjects: Vec<String>,
+}
+
+impl Default for IncrementalUpdateTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IncrementalUpdateTracker {
+    /// Creates a new incremental update tracker.
+    pub fn new() -> Self {
+        Self {
+            last_update: Instant::now(),
+            modified_subjects: Vec::new(),
+            deleted_subjects: Vec::new(),
+            added_subjects: Vec::new(),
+        }
+    }
+
+    /// Records a modification to a subject.
+    pub fn record_modification(&mut self, subject: impl Into<String>) {
+        let subject = subject.into();
+        if !self.modified_subjects.contains(&subject) {
+            self.modified_subjects.push(subject);
+        }
+        self.last_update = Instant::now();
+    }
+
+    /// Records deletion of a subject.
+    pub fn record_deletion(&mut self, subject: impl Into<String>) {
+        let subject = subject.into();
+        if !self.deleted_subjects.contains(&subject) {
+            self.deleted_subjects.push(subject);
+        }
+        self.last_update = Instant::now();
+    }
+
+    /// Records addition of a subject.
+    pub fn record_addition(&mut self, subject: impl Into<String>) {
+        let subject = subject.into();
+        if !self.added_subjects.contains(&subject) {
+            self.added_subjects.push(subject);
+        }
+        self.last_update = Instant::now();
+    }
+
+    /// Returns all modified subjects.
+    pub fn get_modifications(&self) -> &[String] {
+        &self.modified_subjects
+    }
+
+    /// Returns all deleted subjects.
+    pub fn get_deletions(&self) -> &[String] {
+        &self.deleted_subjects
+    }
+
+    /// Returns all added subjects.
+    pub fn get_additions(&self) -> &[String] {
+        &self.added_subjects
+    }
+
+    /// Checks if there are any pending updates.
+    pub fn has_updates(&self) -> bool {
+        !self.modified_subjects.is_empty()
+            || !self.deleted_subjects.is_empty()
+            || !self.added_subjects.is_empty()
+    }
+
+    /// Returns the time since last update.
+    pub fn time_since_update(&self) -> Duration {
+        self.last_update.elapsed()
+    }
+
+    /// Clears all tracked updates.
+    pub fn clear(&mut self) {
+        self.modified_subjects.clear();
+        self.deleted_subjects.clear();
+        self.added_subjects.clear();
+        self.last_update = Instant::now();
+    }
+
+    /// Returns update statistics.
+    pub fn stats(&self) -> UpdateStats {
+        UpdateStats {
+            modified_count: self.modified_subjects.len(),
+            deleted_count: self.deleted_subjects.len(),
+            added_count: self.added_subjects.len(),
+            last_update_seconds: self.last_update.elapsed().as_secs(),
+        }
+    }
+}
+
+/// Update statistics.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateStats {
+    /// Number of modified subjects
+    pub modified_count: usize,
+    /// Number of deleted subjects
+    pub deleted_count: usize,
+    /// Number of added subjects
+    pub added_count: usize,
+    /// Seconds since last update
+    pub last_update_seconds: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,5 +451,93 @@ mod tests {
         assert_eq!(key1, "statute-1:turtle");
         assert_ne!(key1, key2);
         assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn test_query_cache() {
+        let mut cache: QueryCache<Vec<String>> = QueryCache::new(10, Duration::from_secs(60));
+
+        let query = "SELECT * WHERE { ?s ?p ?o }";
+        let results = vec!["result1".to_string(), "result2".to_string()];
+
+        cache.cache_query_result(query, results.clone());
+        assert_eq!(cache.get_query_result(query), Some(results));
+    }
+
+    #[test]
+    fn test_query_cache_invalidate() {
+        let mut cache: QueryCache<Vec<String>> = QueryCache::new(10, Duration::from_secs(60));
+
+        let query = "SELECT * WHERE { ?s ?p ?o }";
+        let results = vec!["result1".to_string()];
+
+        cache.cache_query_result(query, results);
+        assert!(cache.get_query_result(query).is_some());
+
+        cache.invalidate(query);
+        assert!(cache.get_query_result(query).is_none());
+    }
+
+    #[test]
+    fn test_query_cache_invalidate_all() {
+        let mut cache: QueryCache<Vec<String>> = QueryCache::new(10, Duration::from_secs(60));
+
+        cache.cache_query_result("query1", vec!["result1".to_string()]);
+        cache.cache_query_result("query2", vec!["result2".to_string()]);
+
+        cache.invalidate_all();
+        assert!(cache.get_query_result("query1").is_none());
+        assert!(cache.get_query_result("query2").is_none());
+    }
+
+    #[test]
+    fn test_incremental_update_tracker() {
+        let mut tracker = IncrementalUpdateTracker::new();
+
+        tracker.record_addition("subject1");
+        tracker.record_modification("subject2");
+        tracker.record_deletion("subject3");
+
+        assert!(tracker.has_updates());
+        assert_eq!(tracker.get_additions().len(), 1);
+        assert_eq!(tracker.get_modifications().len(), 1);
+        assert_eq!(tracker.get_deletions().len(), 1);
+    }
+
+    #[test]
+    fn test_incremental_update_tracker_stats() {
+        let mut tracker = IncrementalUpdateTracker::new();
+
+        tracker.record_addition("subject1");
+        tracker.record_modification("subject2");
+
+        let stats = tracker.stats();
+        assert_eq!(stats.added_count, 1);
+        assert_eq!(stats.modified_count, 1);
+        assert_eq!(stats.deleted_count, 0);
+    }
+
+    #[test]
+    fn test_incremental_update_tracker_clear() {
+        let mut tracker = IncrementalUpdateTracker::new();
+
+        tracker.record_addition("subject1");
+        tracker.record_modification("subject2");
+
+        assert!(tracker.has_updates());
+
+        tracker.clear();
+        assert!(!tracker.has_updates());
+        assert_eq!(tracker.get_additions().len(), 0);
+    }
+
+    #[test]
+    fn test_incremental_update_tracker_no_duplicates() {
+        let mut tracker = IncrementalUpdateTracker::new();
+
+        tracker.record_addition("subject1");
+        tracker.record_addition("subject1");
+
+        assert_eq!(tracker.get_additions().len(), 1);
     }
 }

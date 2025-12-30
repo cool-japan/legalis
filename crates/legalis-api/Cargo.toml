@@ -6,6 +6,12 @@ license.workspace = true
 rust-version.workspace = true
 description = "REST/GraphQL API server for Legalis-RS"
 
+[features]
+default = []
+redis-cache = ["redis"]
+oauth2-auth = ["oauth2", "reqwest"]
+otel-tracing = ["opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "tracing-opentelemetry"]
+
 [dependencies]
 legalis-core.workspace = true
 legalis-dsl.workspace = true
@@ -34,3 +40,13 @@ base64 = "0.22"
 async-graphql = "7.0"
 async-graphql-axum = "7.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
+oauth2 = { version = "4.4", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
+url = "2.5"
+opentelemetry = { version = "0.24", optional = true }
+opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.17", optional = true }
+tracing-opentelemetry = { version = "0.25", optional = true }
+regex = "1.11"
+rand = "0.9.1"

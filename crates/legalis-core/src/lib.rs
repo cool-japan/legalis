@@ -285,12 +285,13 @@
 pub mod case_law;
 pub mod const_collections;
 pub mod formats;
+pub mod testing;
 pub mod transactions;
 pub mod typed_attributes;
 pub mod typed_effects;
 pub mod workflows;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
@@ -711,6 +712,252 @@ impl fmt::Display for DurationUnit {
     }
 }
 
+/// Three-valued logic result with uncertainty propagation.
+///
+/// Represents the result of partial evaluation where some data may be unknown.
+/// Each value includes a confidence score (0.0 to 1.0) representing certainty.
+///
+/// # Uncertainty Propagation
+///
+/// - **AND**: Confidence is minimum of operands; False propagates immediately
+/// - **OR**: Confidence is minimum of operands; True propagates immediately
+/// - **NOT**: Confidence is preserved; value is inverted
+///
+/// # Examples
+///
+/// ```
+/// # use legalis_core::PartialBool;
+/// let definite_true = PartialBool::true_with_confidence(1.0);
+/// let uncertain = PartialBool::unknown(0.5, "missing data");
+/// let definite_false = PartialBool::false_with_confidence(1.0);
+///
+/// assert!(matches!(definite_true, PartialBool::True { confidence, .. } if confidence == 1.0));
+/// assert!(matches!(uncertain, PartialBool::Unknown { confidence, .. } if confidence == 0.5));
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum PartialBool {
+    /// Definitely true with confidence score.
+    True {
+        /// Confidence in this result (0.0 to 1.0).
+        confidence: f64,
+        /// Optional reason or explanation.
+        reason: String,
+    },
+    /// Definitely false with confidence score.
+    False {
+        /// Confidence in this result (0.0 to 1.0).
+        confidence: f64,
+        /// Optional reason or explanation.
+        reason: String,
+    },
+    /// Unknown (insufficient data) with confidence score.
+    Unknown {
+        /// Confidence in knowing it's unknown (0.0 to 1.0).
+        confidence: f64,
+        /// Reason why value is unknown.
+        reason: String,
+    },
+}
+
+impl PartialBool {
+    /// Creates a True value with the given confidence.
+    #[must_use]
+    pub fn true_with_confidence(confidence: f64) -> Self {
+        Self::True {
+            confidence,
+            reason: String::new(),
+        }
+    }
+
+    /// Creates a True value with confidence and reason.
+    #[must_use]
+    pub fn true_with_confidence_and_reason(confidence: f64, reason: &str) -> Self {
+        Self::True {
+            confidence,
+            reason: reason.to_string(),
+        }
+    }
+
+    /// Creates a False value with the given confidence.
+    #[must_use]
+    pub fn false_with_confidence(confidence: f64) -> Self {
+        Self::False {
+            confidence,
+            reason: String::new(),
+        }
+    }
+
+    /// Creates a False value with confidence and reason.
+    #[must_use]
+    pub fn false_with_confidence_and_reason(confidence: f64, reason: &str) -> Self {
+        Self::False {
+            confidence,
+            reason: reason.to_string(),
+        }
+    }
+
+    /// Creates an Unknown value with confidence and reason.
+    #[must_use]
+    pub fn unknown(confidence: f64, reason: &str) -> Self {
+        Self::Unknown {
+            confidence,
+            reason: reason.to_string(),
+        }
+    }
+
+    /// Returns the confidence score.
+    #[must_use]
+    pub fn confidence(&self) -> f64 {
+        match self {
+            Self::True { confidence, .. }
+            | Self::False { confidence, .. }
+            | Self::Unknown { confidence, .. } => *confidence,
+        }
+    }
+
+    /// Returns the reason or explanation.
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        match self {
+            Self::True { reason, .. }
+            | Self::False { reason, .. }
+            | Self::Unknown { reason, .. } => reason,
+        }
+    }
+
+    /// Checks if the result is definitely true.
+    #[must_use]
+    pub fn is_true(&self) -> bool {
+        matches!(self, Self::True { .. })
+    }
+
+    /// Checks if the result is definitely false.
+    #[must_use]
+    pub fn is_false(&self) -> bool {
+        matches!(self, Self::False { .. })
+    }
+
+    /// Checks if the result is unknown.
+    #[must_use]
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown { .. })
+    }
+}
+
+impl fmt::Display for PartialBool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::True { confidence, reason } => {
+                if reason.is_empty() {
+                    write!(f, "True (confidence: {:.2})", confidence)
+                } else {
+                    write!(
+                        f,
+                        "True (confidence: {:.2}, reason: {})",
+                        confidence, reason
+                    )
+                }
+            }
+            Self::False { confidence, reason } => {
+                if reason.is_empty() {
+                    write!(f, "False (confidence: {:.2})", confidence)
+                } else {
+                    write!(
+                        f,
+                        "False (confidence: {:.2}, reason: {})",
+                        confidence, reason
+                    )
+                }
+            }
+            Self::Unknown { confidence, reason } => {
+                write!(
+                    f,
+                    "Unknown (confidence: {:.2}, reason: {})",
+                    confidence, reason
+                )
+            }
+        }
+    }
+}
+
+/// Detailed explanation of a condition evaluation.
+///
+/// Contains the evaluation result, the condition evaluated, and a trace
+/// of all sub-evaluations that led to the final result.
+///
+/// # Examples
+///
+/// ```
+/// # use legalis_core::{Condition, ComparisonOp, AttributeBasedContext, EvaluationExplanation};
+/// # use std::collections::HashMap;
+/// let mut attributes = HashMap::new();
+/// attributes.insert("age".to_string(), "25".to_string());
+/// attributes.insert("income".to_string(), "50000".to_string());
+/// let ctx = AttributeBasedContext::new(attributes);
+///
+/// let age_check = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+/// let income_check = Condition::income(ComparisonOp::GreaterOrEqual, 30000);
+/// let condition = age_check.and(income_check);
+///
+/// let (result, explanation) = condition.evaluate_with_explanation(&ctx).unwrap();
+/// assert!(result);
+/// println!("Explanation:\n{}", explanation);
+/// ```
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct EvaluationExplanation {
+    /// The condition that was evaluated (formatted as string).
+    pub condition: String,
+    /// The final evaluation result.
+    pub conclusion: bool,
+    /// Step-by-step trace of the evaluation.
+    pub steps: Vec<ExplanationStep>,
+}
+
+impl fmt::Display for EvaluationExplanation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Evaluation of: {}", self.condition)?;
+        writeln!(f, "Result: {}", self.conclusion)?;
+        writeln!(f, "\nEvaluation trace:")?;
+        for (i, step) in self.steps.iter().enumerate() {
+            let indent = "  ".repeat(step.depth);
+            writeln!(
+                f,
+                "{}{}. {} -> {} ({}μs)",
+                indent,
+                i + 1,
+                step.condition,
+                step.result,
+                step.duration_micros
+            )?;
+            if !step.details.is_empty() {
+                writeln!(f, "{}   Details: {}", indent, step.details)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A single step in the evaluation trace.
+///
+/// Records one condition evaluation including timing and context.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ExplanationStep {
+    /// The condition being evaluated (formatted as string).
+    pub condition: String,
+    /// The result of this evaluation step.
+    pub result: bool,
+    /// Additional details about how the result was determined.
+    pub details: String,
+    /// Nesting depth (for compound conditions).
+    pub depth: usize,
+    /// Time taken for this evaluation step (in microseconds).
+    pub duration_micros: u64,
+}
+
 /// Condition type for statute preconditions.
 ///
 /// Conditions represent the requirements that must be met for a statute to apply.
@@ -905,7 +1152,10 @@ impl Condition {
             }
             Self::Not(inner) => 1 + inner.count_conditions(),
             Self::Composite { conditions, .. } => {
-                1 + conditions.iter().map(|(_, c)| c.count_conditions()).sum::<usize>()
+                1 + conditions
+                    .iter()
+                    .map(|(_, c)| c.count_conditions())
+                    .sum::<usize>()
             }
             Self::Probabilistic { condition, .. } => 1 + condition.count_conditions(),
             _ => 1,
@@ -1044,7 +1294,10 @@ impl Condition {
     /// );
     /// ```
     pub fn composite(conditions: Vec<(f64, Box<Condition>)>, threshold: f64) -> Self {
-        Self::Composite { conditions, threshold }
+        Self::Composite {
+            conditions,
+            threshold,
+        }
     }
 
     /// Creates a new Threshold condition for aggregate scoring.
@@ -1065,7 +1318,11 @@ impl Condition {
     /// );
     /// ```
     pub fn threshold(attributes: Vec<(String, f64)>, operator: ComparisonOp, value: f64) -> Self {
-        Self::Threshold { attributes, operator, value }
+        Self::Threshold {
+            attributes,
+            operator,
+            value,
+        }
     }
 
     /// Creates a new Fuzzy condition for gradual membership.
@@ -1085,8 +1342,16 @@ impl Condition {
     ///     0.5
     /// );
     /// ```
-    pub fn fuzzy(attribute: String, membership_points: Vec<(f64, f64)>, min_membership: f64) -> Self {
-        Self::Fuzzy { attribute, membership_points, min_membership }
+    pub fn fuzzy(
+        attribute: String,
+        membership_points: Vec<(f64, f64)>,
+        min_membership: f64,
+    ) -> Self {
+        Self::Fuzzy {
+            attribute,
+            membership_points,
+            min_membership,
+        }
     }
 
     /// Creates a new Probabilistic condition.
@@ -1107,7 +1372,11 @@ impl Condition {
     /// );
     /// ```
     pub fn probabilistic(condition: Box<Condition>, probability: f64, threshold: f64) -> Self {
-        Self::Probabilistic { condition, probability, threshold }
+        Self::Probabilistic {
+            condition,
+            probability,
+            threshold,
+        }
     }
 
     /// Creates a new Temporal condition with decay/growth over time.
@@ -1567,7 +1836,10 @@ impl Condition {
                 let before_end = end.is_none_or(|e| current_date <= e);
                 Ok(after_start && before_end)
             }
-            Self::Composite { conditions, threshold } => {
+            Self::Composite {
+                conditions,
+                threshold,
+            } => {
                 let mut total_score = 0.0;
                 for (weight, condition) in conditions {
                     let satisfied = condition.evaluate_with_depth(context, depth + 1)?;
@@ -1577,7 +1849,11 @@ impl Condition {
                 }
                 Ok(total_score >= *threshold)
             }
-            Self::Threshold { attributes, operator, value } => {
+            Self::Threshold {
+                attributes,
+                operator,
+                value,
+            } => {
                 let mut total = 0.0;
                 for (attr_name, multiplier) in attributes {
                     // Try to get attribute as f64
@@ -1591,7 +1867,11 @@ impl Condition {
                 }
                 Ok(operator.compare_f64(total, *value))
             }
-            Self::Fuzzy { attribute, membership_points, min_membership } => {
+            Self::Fuzzy {
+                attribute,
+                membership_points,
+                min_membership,
+            } => {
                 // Get attribute value
                 let attr_value = context
                     .get_attribute(attribute)
@@ -1608,7 +1888,8 @@ impl Condition {
                 } else {
                     // Sort points by value
                     let mut sorted = membership_points.clone();
-                    sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                    sorted
+                        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
                     // Find interpolation range
                     if attr_value <= sorted[0].0 {
@@ -1633,7 +1914,11 @@ impl Condition {
 
                 Ok(membership >= *min_membership)
             }
-            Self::Probabilistic { condition, probability, threshold } => {
+            Self::Probabilistic {
+                condition,
+                probability,
+                threshold,
+            } => {
                 // Evaluate the base condition
                 let satisfied = condition.evaluate_with_depth(context, depth + 1)?;
 
@@ -1650,15 +1935,16 @@ impl Condition {
                 target_value,
             } => {
                 // Get current timestamp from context
-                let current_time = context
-                    .get_current_timestamp()
-                    .ok_or_else(|| EvaluationError::MissingContext {
+                let current_time = context.get_current_timestamp().ok_or_else(|| {
+                    EvaluationError::MissingContext {
                         description: "current timestamp".to_string(),
-                    })?;
+                    }
+                })?;
 
                 // Calculate time elapsed (in some unit, e.g., years)
                 // Assuming timestamps are Unix timestamps (seconds)
-                let time_elapsed = (current_time - reference_time) as f64 / (365.25 * 24.0 * 3600.0); // Convert to years
+                let time_elapsed =
+                    (current_time - reference_time) as f64 / (365.25 * 24.0 * 3600.0); // Convert to years
 
                 // Apply decay/growth: value = base_value * (1 + rate)^time_elapsed
                 let current_value = base_value * (1.0 + rate).powf(time_elapsed);
@@ -1669,6 +1955,381 @@ impl Condition {
             Self::Custom { description } => Err(EvaluationError::Custom {
                 message: format!("Cannot evaluate custom condition: {}", description),
             }),
+        }
+    }
+
+    /// Evaluates the condition with detailed step-by-step explanation.
+    ///
+    /// This method provides a full trace of the evaluation process, useful for:
+    /// - Debugging complex conditions
+    /// - Explaining legal decisions to users
+    /// - Auditing and compliance
+    /// - Educational purposes
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp, AttributeBasedContext};
+    /// # use std::collections::HashMap;
+    /// let mut attributes = HashMap::new();
+    /// attributes.insert("age".to_string(), "25".to_string());
+    /// attributes.insert("income".to_string(), "50000".to_string());
+    /// let ctx = AttributeBasedContext::new(attributes);
+    ///
+    /// let age_check = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+    /// let income_check = Condition::income(ComparisonOp::GreaterOrEqual, 30000);
+    /// let condition = age_check.and(income_check);
+    ///
+    /// let (result, explanation) = condition.evaluate_with_explanation(&ctx).unwrap();
+    /// assert!(result);
+    /// assert!(explanation.steps.len() >= 3); // AND, Age, Income checks
+    /// assert!(explanation.conclusion);
+    /// ```
+    pub fn evaluate_with_explanation<C: EvaluationContext>(
+        &self,
+        context: &C,
+    ) -> Result<(bool, EvaluationExplanation), EvaluationError> {
+        let mut steps = Vec::new();
+        let result = self.evaluate_with_explanation_recursive(context, 0, &mut steps)?;
+
+        let explanation = EvaluationExplanation {
+            condition: format!("{}", self),
+            conclusion: result,
+            steps,
+        };
+
+        Ok((result, explanation))
+    }
+
+    /// Internal recursive helper for evaluation with explanation.
+    fn evaluate_with_explanation_recursive<C: EvaluationContext>(
+        &self,
+        context: &C,
+        depth: usize,
+        steps: &mut Vec<ExplanationStep>,
+    ) -> Result<bool, EvaluationError> {
+        const MAX_DEPTH: usize = 100;
+
+        if depth > MAX_DEPTH {
+            return Err(EvaluationError::MaxDepthExceeded {
+                max_depth: MAX_DEPTH,
+            });
+        }
+
+        let start_time = std::time::Instant::now();
+
+        let (result, details) = match self {
+            Self::And(left, right) => {
+                let left_result =
+                    left.evaluate_with_explanation_recursive(context, depth + 1, steps)?;
+                if !left_result {
+                    (
+                        false,
+                        "AND operation short-circuited (left operand is false)".to_string(),
+                    )
+                } else {
+                    let right_result =
+                        right.evaluate_with_explanation_recursive(context, depth + 1, steps)?;
+                    (
+                        right_result,
+                        format!("AND: left={}, right={}", left_result, right_result),
+                    )
+                }
+            }
+            Self::Or(left, right) => {
+                let left_result =
+                    left.evaluate_with_explanation_recursive(context, depth + 1, steps)?;
+                if left_result {
+                    (
+                        true,
+                        "OR operation short-circuited (left operand is true)".to_string(),
+                    )
+                } else {
+                    let right_result =
+                        right.evaluate_with_explanation_recursive(context, depth + 1, steps)?;
+                    (
+                        right_result,
+                        format!("OR: left={}, right={}", left_result, right_result),
+                    )
+                }
+            }
+            Self::Not(inner) => {
+                let inner_result =
+                    inner.evaluate_with_explanation_recursive(context, depth + 1, steps)?;
+                (
+                    !inner_result,
+                    format!("NOT: inner={} -> {}", inner_result, !inner_result),
+                )
+            }
+            Self::Age { operator, value } => {
+                let age = context
+                    .get_age()
+                    .ok_or_else(|| EvaluationError::MissingAttribute {
+                        key: "age".to_string(),
+                    })?;
+                let result = operator.compare_u32(age, *value);
+                (
+                    result,
+                    format!("Age check: {} {} {} = {}", age, operator, value, result),
+                )
+            }
+            Self::Income { operator, value } => {
+                let income =
+                    context
+                        .get_income()
+                        .ok_or_else(|| EvaluationError::MissingAttribute {
+                            key: "income".to_string(),
+                        })?;
+                let result = operator.compare_u64(income, *value);
+                (
+                    result,
+                    format!(
+                        "Income check: {} {} {} = {}",
+                        income, operator, value, result
+                    ),
+                )
+            }
+            Self::HasAttribute { key } => {
+                let has_it = context.get_attribute(key).is_some();
+                (has_it, format!("HasAttribute '{}': {}", key, has_it))
+            }
+            Self::AttributeEquals { key, value } => {
+                let actual = context.get_attribute(key);
+                let equals = actual.as_ref() == Some(value);
+                (
+                    equals,
+                    format!(
+                        "AttributeEquals '{}': expected='{}', actual={:?}, result={}",
+                        key, value, actual, equals
+                    ),
+                )
+            }
+            _ => {
+                // For other condition types, use regular evaluation
+                let result = self.evaluate_with_depth(context, depth)?;
+                (
+                    result,
+                    format!("Condition '{}' evaluated to {}", self, result),
+                )
+            }
+        };
+
+        let elapsed = start_time.elapsed().as_micros() as u64;
+
+        steps.push(ExplanationStep {
+            condition: format!("{}", self),
+            result,
+            details,
+            depth,
+            duration_micros: elapsed,
+        });
+
+        Ok(result)
+    }
+
+    /// Performs partial evaluation, allowing unknown values.
+    ///
+    /// Unlike `evaluate()`, this method can handle cases where some attributes
+    /// or context values are unknown. It returns a three-valued logic result:
+    /// - `PartialBool::True` - Definitely true
+    /// - `PartialBool::False` - Definitely false
+    /// - `PartialBool::Unknown` - Cannot determine (missing data)
+    ///
+    /// This is useful for:
+    /// - Pre-checking eligibility with incomplete data
+    /// - Planning data collection (what's missing?)
+    /// - Optimistic evaluation strategies
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Condition, ComparisonOp, PartialBool, AttributeBasedContext};
+    /// # use std::collections::HashMap;
+    /// let mut attributes = HashMap::new();
+    /// attributes.insert("age".to_string(), "25".to_string());
+    /// // income is missing
+    /// let ctx = AttributeBasedContext::new(attributes);
+    ///
+    /// let age_check = Condition::age(ComparisonOp::GreaterOrEqual, 18);
+    /// let income_check = Condition::income(ComparisonOp::GreaterOrEqual, 30000);
+    ///
+    /// // Age check has data -> True
+    /// assert!(matches!(age_check.partial_evaluate(&ctx), PartialBool::True { .. }));
+    ///
+    /// // Income check is missing data -> Unknown
+    /// assert!(matches!(income_check.partial_evaluate(&ctx), PartialBool::Unknown { .. }));
+    ///
+    /// // AND with unknown propagates uncertainty
+    /// let condition = age_check.and(income_check);
+    /// assert!(matches!(condition.partial_evaluate(&ctx), PartialBool::Unknown { .. }));
+    /// ```
+    pub fn partial_evaluate<C: EvaluationContext>(&self, context: &C) -> PartialBool {
+        self.partial_evaluate_with_depth(context, 0)
+    }
+
+    /// Internal recursive helper for partial evaluation.
+    fn partial_evaluate_with_depth<C: EvaluationContext>(
+        &self,
+        context: &C,
+        depth: usize,
+    ) -> PartialBool {
+        const MAX_DEPTH: usize = 100;
+
+        if depth > MAX_DEPTH {
+            return PartialBool::unknown(0.0, "Maximum depth exceeded");
+        }
+
+        match self {
+            // Three-valued logic for AND with uncertainty propagation
+            Self::And(left, right) => {
+                let left_result = left.partial_evaluate_with_depth(context, depth + 1);
+                let right_result = right.partial_evaluate_with_depth(context, depth + 1);
+
+                match (&left_result, &right_result) {
+                    (PartialBool::False { .. }, _) => left_result, // False AND anything = False
+                    (_, PartialBool::False { .. }) => right_result, // anything AND False = False
+                    (
+                        PartialBool::True { confidence: c1, .. },
+                        PartialBool::True { confidence: c2, .. },
+                    ) => {
+                        // Both true: confidence is minimum of both
+                        PartialBool::true_with_confidence((*c1).min(*c2))
+                    }
+                    (
+                        PartialBool::Unknown {
+                            confidence: c1,
+                            reason: r1,
+                        },
+                        PartialBool::Unknown {
+                            confidence: c2,
+                            reason: r2,
+                        },
+                    ) => {
+                        // Both unknown: combine uncertainties
+                        let combined_confidence = (*c1).min(*c2);
+                        PartialBool::unknown(combined_confidence, &format!("{} AND {}", r1, r2))
+                    }
+                    _ => {
+                        // One true, one unknown: result is unknown
+                        PartialBool::unknown(0.5, "AND with unknown operand")
+                    }
+                }
+            }
+            // Three-valued logic for OR with uncertainty propagation
+            Self::Or(left, right) => {
+                let left_result = left.partial_evaluate_with_depth(context, depth + 1);
+                let right_result = right.partial_evaluate_with_depth(context, depth + 1);
+
+                match (&left_result, &right_result) {
+                    (PartialBool::True { .. }, _) => left_result, // True OR anything = True
+                    (_, PartialBool::True { .. }) => right_result, // anything OR True = True
+                    (
+                        PartialBool::False { confidence: c1, .. },
+                        PartialBool::False { confidence: c2, .. },
+                    ) => {
+                        // Both false: confidence is minimum of both
+                        PartialBool::false_with_confidence((*c1).min(*c2))
+                    }
+                    (
+                        PartialBool::Unknown {
+                            confidence: c1,
+                            reason: r1,
+                        },
+                        PartialBool::Unknown {
+                            confidence: c2,
+                            reason: r2,
+                        },
+                    ) => {
+                        // Both unknown: combine uncertainties
+                        let combined_confidence = (*c1).min(*c2);
+                        PartialBool::unknown(combined_confidence, &format!("{} OR {}", r1, r2))
+                    }
+                    _ => {
+                        // One false, one unknown: result is unknown
+                        PartialBool::unknown(0.5, "OR with unknown operand")
+                    }
+                }
+            }
+            // NOT inverts the partial value
+            Self::Not(inner) => {
+                let inner_result = inner.partial_evaluate_with_depth(context, depth + 1);
+                match inner_result {
+                    PartialBool::True { confidence, reason } => {
+                        PartialBool::false_with_confidence_and_reason(
+                            confidence,
+                            &format!("NOT ({})", reason),
+                        )
+                    }
+                    PartialBool::False { confidence, reason } => {
+                        PartialBool::true_with_confidence_and_reason(
+                            confidence,
+                            &format!("NOT ({})", reason),
+                        )
+                    }
+                    PartialBool::Unknown { confidence, reason } => {
+                        PartialBool::unknown(confidence, &format!("NOT ({})", reason))
+                    }
+                }
+            }
+            // Simple conditions
+            Self::Age { operator, value } => match context.get_age() {
+                Some(age) => {
+                    let result = operator.compare_u32(age, *value);
+                    if result {
+                        PartialBool::true_with_confidence(1.0)
+                    } else {
+                        PartialBool::false_with_confidence(1.0)
+                    }
+                }
+                None => PartialBool::unknown(0.0, "age attribute missing"),
+            },
+            Self::Income { operator, value } => match context.get_income() {
+                Some(income) => {
+                    let result = operator.compare_u64(income, *value);
+                    if result {
+                        PartialBool::true_with_confidence(1.0)
+                    } else {
+                        PartialBool::false_with_confidence(1.0)
+                    }
+                }
+                None => PartialBool::unknown(0.0, "income attribute missing"),
+            },
+            Self::HasAttribute { key } => match context.get_attribute(key) {
+                Some(_) => PartialBool::true_with_confidence(1.0),
+                None => PartialBool::false_with_confidence(1.0),
+            },
+            Self::AttributeEquals { key, value } => match context.get_attribute(key) {
+                Some(actual) => {
+                    if &actual == value {
+                        PartialBool::true_with_confidence(1.0)
+                    } else {
+                        PartialBool::false_with_confidence(1.0)
+                    }
+                }
+                None => PartialBool::unknown(0.0, &format!("attribute '{}' missing", key)),
+            },
+            Self::DateRange { start, end } => match context.get_current_date() {
+                Some(current_date) => {
+                    let after_start = start.is_none_or(|s| current_date >= s);
+                    let before_end = end.is_none_or(|e| current_date <= e);
+                    let result = after_start && before_end;
+                    if result {
+                        PartialBool::true_with_confidence(1.0)
+                    } else {
+                        PartialBool::false_with_confidence(1.0)
+                    }
+                }
+                None => PartialBool::unknown(0.0, "current date missing"),
+            },
+            // For other complex conditions, try to evaluate or return unknown
+            _ => match self.evaluate(context) {
+                Ok(result) => {
+                    if result {
+                        PartialBool::true_with_confidence(1.0)
+                    } else {
+                        PartialBool::false_with_confidence(1.0)
+                    }
+                }
+                Err(_) => PartialBool::unknown(0.0, "evaluation failed or data missing"),
+            },
         }
     }
 }
@@ -2084,7 +2745,11 @@ impl fmt::Display for Condition {
                 membership_points,
                 min_membership,
             } => {
-                write!(f, "fuzzy({}, membership={:?}) >= {}", attribute, membership_points, min_membership)
+                write!(
+                    f,
+                    "fuzzy({}, membership={:?}) >= {}",
+                    attribute, membership_points, min_membership
+                )
             }
             Self::Probabilistic {
                 condition,
@@ -2443,11 +3108,9 @@ impl<'a, C: EvaluationContext> EvaluationContext for DefaultValueContext<'a, C> 
     }
 
     fn get_age(&self) -> Option<u32> {
-        self.inner.get_age().or_else(|| {
-            self.defaults
-                .get("age")
-                .and_then(|s| s.parse::<u32>().ok())
-        })
+        self.inner
+            .get_age()
+            .or_else(|| self.defaults.get("age").and_then(|s| s.parse::<u32>().ok()))
     }
 
     fn get_income(&self) -> Option<u64> {
@@ -2575,7 +3238,9 @@ impl<'a, C1: EvaluationContext, C2: EvaluationContext> EvaluationContext
     ) -> bool {
         self.primary
             .check_relationship(relationship_type, target_id)
-            || self.fallback.check_relationship(relationship_type, target_id)
+            || self
+                .fallback
+                .check_relationship(relationship_type, target_id)
     }
 
     fn get_residency_months(&self) -> Option<u32> {
@@ -2855,7 +3520,10 @@ impl Condition {
             }
 
             // Composite and Probabilistic have nested conditions, evaluate them recursively
-            Self::Composite { conditions, threshold } => {
+            Self::Composite {
+                conditions,
+                threshold,
+            } => {
                 // Evaluate all conditions in parallel
                 let results: Vec<_> = conditions
                     .par_iter()
@@ -2877,8 +3545,13 @@ impl Condition {
                 Ok(total_score >= *threshold)
             }
 
-            Self::Probabilistic { condition, probability, threshold } => {
-                let satisfied = condition.evaluate_parallel_with_depth(context, depth + 1, max_depth)?;
+            Self::Probabilistic {
+                condition,
+                probability,
+                threshold,
+            } => {
+                let satisfied =
+                    condition.evaluate_parallel_with_depth(context, depth + 1, max_depth)?;
                 let effective_probability = if satisfied { *probability } else { 0.0 };
                 Ok(effective_probability >= *threshold)
             }
@@ -4345,6 +5018,428 @@ impl FromIterator<Statute> for StatuteRegistry {
     }
 }
 
+/// Statute dependency graph for tracking relationships between statutes.
+///
+/// The `StatuteGraph` maintains a directed graph where nodes are statutes
+/// and edges represent various relationships (derivation, amendments, cross-references).
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{StatuteGraph, Statute, Effect};
+///
+/// let mut graph = StatuteGraph::new();
+///
+/// let federal_law = Statute::new("federal-1", "Federal Law", Effect::grant("Benefit"));
+/// let state_law = Statute::new("state-1", "State Law", Effect::grant("Benefit"))
+///     .with_derives_from("federal-1");
+///
+/// graph.add_statute(federal_law);
+/// graph.add_statute(state_law);
+///
+/// let derived = graph.find_derived_from("federal-1");
+/// assert_eq!(derived.len(), 1);
+/// ```
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct StatuteGraph {
+    /// All statutes in the graph
+    statutes: std::collections::HashMap<String, Statute>,
+    /// Adjacency list: statute_id -> list of related statute IDs
+    derivation_edges: std::collections::HashMap<String, Vec<String>>,
+}
+
+impl StatuteGraph {
+    /// Creates a new empty statute graph.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            statutes: std::collections::HashMap::new(),
+            derivation_edges: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Adds a statute to the graph.
+    ///
+    /// This automatically builds derivation edges based on the statute's `derives_from` field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteGraph, Statute, Effect};
+    ///
+    /// let mut graph = StatuteGraph::new();
+    /// let statute = Statute::new("law-1", "Law", Effect::grant("Benefit"));
+    /// graph.add_statute(statute);
+    ///
+    /// assert_eq!(graph.len(), 1);
+    /// ```
+    pub fn add_statute(&mut self, statute: Statute) {
+        let id = statute.id.clone();
+
+        // Build derivation edges
+        for source_id in &statute.derives_from {
+            self.derivation_edges
+                .entry(source_id.clone())
+                .or_default()
+                .push(id.clone());
+        }
+
+        self.statutes.insert(id, statute);
+    }
+
+    /// Returns the number of statutes in the graph.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.statutes.len()
+    }
+
+    /// Returns whether the graph is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.statutes.is_empty()
+    }
+
+    /// Gets a statute by ID.
+    #[must_use]
+    pub fn get(&self, id: &str) -> Option<&Statute> {
+        self.statutes.get(id)
+    }
+
+    /// Finds all statutes derived from a given statute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteGraph, Statute, Effect};
+    ///
+    /// let mut graph = StatuteGraph::new();
+    ///
+    /// graph.add_statute(Statute::new("parent", "Parent", Effect::grant("Benefit")));
+    /// graph.add_statute(Statute::new("child", "Child", Effect::grant("Benefit"))
+    ///     .with_derives_from("parent"));
+    ///
+    /// let derived = graph.find_derived_from("parent");
+    /// assert_eq!(derived.len(), 1);
+    /// assert_eq!(derived[0].id, "child");
+    /// ```
+    #[must_use]
+    pub fn find_derived_from(&self, source_id: &str) -> Vec<&Statute> {
+        self.derivation_edges
+            .get(source_id)
+            .map(|ids| ids.iter().filter_map(|id| self.statutes.get(id)).collect())
+            .unwrap_or_default()
+    }
+
+    /// Finds all statutes that a given statute is derived from (its sources).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteGraph, Statute, Effect};
+    ///
+    /// let mut graph = StatuteGraph::new();
+    ///
+    /// graph.add_statute(Statute::new("source-1", "Source 1", Effect::grant("B1")));
+    /// graph.add_statute(Statute::new("source-2", "Source 2", Effect::grant("B2")));
+    /// graph.add_statute(Statute::new("derived", "Derived", Effect::grant("B"))
+    ///     .with_derives_from("source-1")
+    ///     .with_derives_from("source-2"));
+    ///
+    /// let sources = graph.find_sources("derived");
+    /// assert_eq!(sources.len(), 2);
+    /// ```
+    #[must_use]
+    pub fn find_sources(&self, statute_id: &str) -> Vec<&Statute> {
+        self.statutes
+            .get(statute_id)
+            .map(|statute| {
+                statute
+                    .derives_from
+                    .iter()
+                    .filter_map(|id| self.statutes.get(id))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Finds the transitive closure of all statutes derived from a given statute.
+    ///
+    /// This includes direct derivatives and all their derivatives recursively.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteGraph, Statute, Effect};
+    ///
+    /// let mut graph = StatuteGraph::new();
+    ///
+    /// graph.add_statute(Statute::new("root", "Root", Effect::grant("B")));
+    /// graph.add_statute(Statute::new("child", "Child", Effect::grant("B"))
+    ///     .with_derives_from("root"));
+    /// graph.add_statute(Statute::new("grandchild", "Grandchild", Effect::grant("B"))
+    ///     .with_derives_from("child"));
+    ///
+    /// let all_derived = graph.find_all_derived_from("root");
+    /// assert_eq!(all_derived.len(), 2); // child and grandchild
+    /// ```
+    #[must_use]
+    pub fn find_all_derived_from(&self, source_id: &str) -> Vec<&Statute> {
+        let mut result = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = vec![source_id];
+
+        while let Some(current_id) = queue.pop() {
+            if !visited.insert(current_id) {
+                continue; // Already visited
+            }
+
+            if let Some(derived_ids) = self.derivation_edges.get(current_id) {
+                for derived_id in derived_ids {
+                    if let Some(statute) = self.statutes.get(derived_id) {
+                        result.push(statute);
+                        queue.push(derived_id);
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Detects cycles in the derivation graph.
+    ///
+    /// Returns statute IDs that form derivation cycles (circular dependencies).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteGraph, Statute, Effect};
+    ///
+    /// let mut graph = StatuteGraph::new();
+    ///
+    /// // Normal case: no cycles
+    /// graph.add_statute(Statute::new("a", "A", Effect::grant("B")));
+    /// graph.add_statute(Statute::new("b", "B", Effect::grant("B"))
+    ///     .with_derives_from("a"));
+    ///
+    /// assert!(graph.detect_cycles().is_empty());
+    /// ```
+    #[must_use]
+    pub fn detect_cycles(&self) -> Vec<Vec<String>> {
+        let mut cycles = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        let mut rec_stack = std::collections::HashSet::new();
+        let mut path = Vec::new();
+
+        for id in self.statutes.keys() {
+            if !visited.contains(id.as_str()) {
+                self.detect_cycles_dfs(id, &mut visited, &mut rec_stack, &mut path, &mut cycles);
+            }
+        }
+
+        cycles
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn detect_cycles_dfs(
+        &self,
+        node: &str,
+        visited: &mut std::collections::HashSet<String>,
+        rec_stack: &mut std::collections::HashSet<String>,
+        path: &mut Vec<String>,
+        cycles: &mut Vec<Vec<String>>,
+    ) {
+        visited.insert(node.to_string());
+        rec_stack.insert(node.to_string());
+        path.push(node.to_string());
+
+        if let Some(neighbors) = self.derivation_edges.get(node) {
+            for neighbor in neighbors {
+                if !visited.contains(neighbor) {
+                    self.detect_cycles_dfs(neighbor, visited, rec_stack, path, cycles);
+                } else if rec_stack.contains(neighbor) {
+                    // Found a cycle
+                    if let Some(pos) = path.iter().position(|x| x == neighbor) {
+                        cycles.push(path[pos..].to_vec());
+                    }
+                }
+            }
+        }
+
+        path.pop();
+        rec_stack.remove(node);
+    }
+
+    /// Returns an iterator over all statutes in the graph.
+    pub fn iter(&self) -> impl Iterator<Item = &Statute> {
+        self.statutes.values()
+    }
+}
+
+impl Default for StatuteGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cross-jurisdiction statute equivalence detector.
+///
+/// This analyzer identifies statutes from different jurisdictions that serve
+/// equivalent legal purposes, even if their exact wording differs.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{CrossJurisdictionAnalyzer, Statute, Effect, Condition, ComparisonOp};
+///
+/// let us_law = Statute::new("us-voting", "Voting Rights", Effect::grant("Vote"))
+///     .with_jurisdiction("US")
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// let uk_law = Statute::new("uk-voting", "Electoral Rights", Effect::grant("Vote"))
+///     .with_jurisdiction("UK")
+///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18));
+///
+/// let analyzer = CrossJurisdictionAnalyzer::new();
+/// let candidates = vec![uk_law.clone()];
+/// let equiv = analyzer.find_equivalents(&us_law, &candidates);
+///
+/// assert_eq!(equiv.len(), 1);
+/// ```
+pub struct CrossJurisdictionAnalyzer {
+    /// Similarity threshold (0.0 to 1.0)
+    similarity_threshold: f64,
+}
+
+impl CrossJurisdictionAnalyzer {
+    /// Creates a new cross-jurisdiction analyzer with default threshold (0.7).
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            similarity_threshold: 0.7,
+        }
+    }
+
+    /// Creates a new analyzer with a custom similarity threshold.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::CrossJurisdictionAnalyzer;
+    ///
+    /// let analyzer = CrossJurisdictionAnalyzer::with_threshold(0.8);
+    /// ```
+    #[must_use]
+    pub fn with_threshold(threshold: f64) -> Self {
+        Self {
+            similarity_threshold: threshold.clamp(0.0, 1.0),
+        }
+    }
+
+    /// Finds statutes from different jurisdictions that are equivalent to the given statute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{CrossJurisdictionAnalyzer, Statute, Effect, Condition, ComparisonOp};
+    ///
+    /// let reference = Statute::new("ref", "Age Requirement", Effect::grant("Benefit"))
+    ///     .with_jurisdiction("US")
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 21));
+    ///
+    /// let candidate = Statute::new("can", "Age Eligibility", Effect::grant("Benefit"))
+    ///     .with_jurisdiction("CA")
+    ///     .with_precondition(Condition::age(ComparisonOp::GreaterOrEqual, 21));
+    ///
+    /// let analyzer = CrossJurisdictionAnalyzer::new();
+    /// let candidates = vec![candidate];
+    /// let equivalents = analyzer.find_equivalents(&reference, &candidates);
+    ///
+    /// assert_eq!(equivalents.len(), 1);
+    /// ```
+    #[must_use]
+    pub fn find_equivalents<'a>(
+        &self,
+        reference: &Statute,
+        candidates: &'a [Statute],
+    ) -> Vec<&'a Statute> {
+        candidates
+            .iter()
+            .filter(|candidate| {
+                // Don't compare statutes from the same jurisdiction
+                if reference.jurisdiction == candidate.jurisdiction {
+                    return false;
+                }
+
+                let similarity = self.calculate_similarity(reference, candidate);
+                similarity >= self.similarity_threshold
+            })
+            .collect()
+    }
+
+    /// Calculates similarity score between two statutes (0.0 to 1.0).
+    ///
+    /// Higher scores indicate greater equivalence.
+    #[must_use]
+    pub fn calculate_similarity(&self, s1: &Statute, s2: &Statute) -> f64 {
+        let mut score = 0.0;
+        let mut weight_sum = 0.0;
+
+        // Effect similarity (weight: 0.4)
+        let effect_weight = 0.4;
+        if s1.effect.effect_type == s2.effect.effect_type {
+            score += effect_weight;
+        }
+        weight_sum += effect_weight;
+
+        // Precondition count similarity (weight: 0.3)
+        let precond_weight = 0.3;
+        let precond_similarity = if s1.preconditions.is_empty() && s2.preconditions.is_empty() {
+            1.0
+        } else {
+            let min_count = s1.preconditions.len().min(s2.preconditions.len()) as f64;
+            let max_count = s1.preconditions.len().max(s2.preconditions.len()) as f64;
+            if max_count == 0.0 {
+                0.0
+            } else {
+                min_count / max_count
+            }
+        };
+        score += precond_weight * precond_similarity;
+        weight_sum += precond_weight;
+
+        // Entity type similarity (weight: 0.3)
+        let entity_weight = 0.3;
+        let entity_similarity = if s1.applies_to.is_empty() && s2.applies_to.is_empty() {
+            1.0 // Both apply to all entities
+        } else {
+            let common = s1
+                .applies_to
+                .iter()
+                .filter(|t| s2.applies_to.contains(t))
+                .count() as f64;
+            let total = (s1.applies_to.len() + s2.applies_to.len()) as f64;
+            if total == 0.0 {
+                0.0
+            } else {
+                2.0 * common / total // Jaccard similarity
+            }
+        };
+        score += entity_weight * entity_similarity;
+        weight_sum += entity_weight;
+
+        score / weight_sum
+    }
+}
+
+impl Default for CrossJurisdictionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Legal effect produced when statute conditions are met.
 ///
 /// Effects represent the legal consequences that occur when a statute's conditions are satisfied.
@@ -4442,11 +5537,747 @@ impl Effect {
     pub fn prohibition(description: impl Into<String>) -> Self {
         Self::new(EffectType::Prohibition, description)
     }
+
+    /// Composes multiple effects with priority ordering.
+    ///
+    /// Creates a `ComposedEffect` that represents the combination of multiple effects.
+    /// Effects are applied in the order specified, with earlier effects having higher priority
+    /// for conflict resolution.
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Effect, EffectType, CompositionStrategy};
+    /// let grant = Effect::grant("access to resource");
+    /// let obligation = Effect::obligation("must report annually");
+    /// let revoke = Effect::revoke("temporary access");
+    ///
+    /// let composed = Effect::compose(vec![grant, obligation, revoke]);
+    /// assert_eq!(composed.effects.len(), 3);
+    /// assert_eq!(composed.resolution_strategy, CompositionStrategy::FirstWins);
+    /// ```
+    pub fn compose(effects: Vec<Effect>) -> ComposedEffect {
+        ComposedEffect::new(effects)
+    }
+
+    /// Computes the inverse effect for rollback operations.
+    ///
+    /// Returns the effect that would reverse this effect's action.
+    /// For example, Grant ↔ Revoke, Obligation ↔ lifting of obligation.
+    ///
+    /// # Returns
+    /// - `Some(Effect)` if an inverse exists
+    /// - `None` if the effect cannot be inverted (e.g., Custom effects)
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Effect, EffectType};
+    /// let grant = Effect::grant("access to resource");
+    /// let inverse = grant.inverse().unwrap();
+    /// assert_eq!(inverse.effect_type, EffectType::Revoke);
+    /// assert_eq!(inverse.description, "access to resource");
+    ///
+    /// let obligation = Effect::obligation("must file taxes");
+    /// let inverse_obligation = obligation.inverse().unwrap();
+    /// assert_eq!(inverse_obligation.effect_type, EffectType::Grant);
+    /// assert!(inverse_obligation.description.contains("relief from"));
+    /// ```
+    #[must_use]
+    pub fn inverse(&self) -> Option<Effect> {
+        let (inverse_type, inverse_description) = match self.effect_type {
+            EffectType::Grant => (EffectType::Revoke, self.description.clone()),
+            EffectType::Revoke => (EffectType::Grant, self.description.clone()),
+            EffectType::Obligation => (
+                EffectType::Grant,
+                format!("relief from {}", self.description),
+            ),
+            EffectType::Prohibition => (
+                EffectType::Grant,
+                format!("permission for {}", self.description),
+            ),
+            EffectType::MonetaryTransfer => {
+                // Reverse the monetary transfer (e.g., tax → refund)
+                let desc = if self.description.contains("tax") {
+                    self.description.replace("tax", "refund")
+                } else if self.description.contains("fine") {
+                    self.description.replace("fine", "reimbursement")
+                } else {
+                    format!("reverse {}", self.description)
+                };
+                (EffectType::MonetaryTransfer, desc)
+            }
+            EffectType::StatusChange => {
+                // For status changes, we'd need to know the old status
+                // Mark it as a reverse status change
+                (
+                    EffectType::StatusChange,
+                    format!("reverse {}", self.description),
+                )
+            }
+            EffectType::Custom => return None, // Cannot invert custom effects generically
+        };
+
+        let mut inverse = Effect::new(inverse_type, inverse_description);
+        // Copy parameters but mark as inverse
+        inverse.parameters = self.parameters.clone();
+        inverse
+            .parameters
+            .insert("_is_inverse".to_string(), "true".to_string());
+        inverse.parameters.insert(
+            "_original_type".to_string(),
+            format!("{:?}", self.effect_type),
+        );
+
+        Some(inverse)
+    }
+
+    /// Checks if this effect is an inverse of another effect.
+    #[must_use]
+    pub fn is_inverse_of(&self, other: &Effect) -> bool {
+        if let Some(inv) = other.inverse() {
+            self.effect_type == inv.effect_type
+                && (self.description == inv.description
+                    || self.description.contains(&other.description))
+        } else {
+            false
+        }
+    }
+
+    /// Creates a temporal effect with start/end times and recurrence.
+    ///
+    /// Wraps this effect in a `TemporalEffect` that controls when the effect is active.
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Effect, RecurrencePattern};
+    /// # use chrono::{NaiveDate, Utc};
+    /// let grant = Effect::grant("seasonal parking permit");
+    /// let start = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
+    /// let end = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap();
+    ///
+    /// let temporal = grant.with_temporal_validity(start, Some(end), None);
+    /// assert!(temporal.is_active_on(NaiveDate::from_ymd_opt(2025, 7, 15).unwrap()));
+    /// assert!(!temporal.is_active_on(NaiveDate::from_ymd_opt(2025, 10, 1).unwrap()));
+    /// ```
+    #[must_use]
+    pub fn with_temporal_validity(
+        self,
+        start: NaiveDate,
+        end: Option<NaiveDate>,
+        recurrence: Option<RecurrencePattern>,
+    ) -> TemporalEffect {
+        TemporalEffect::new(self, start, end, recurrence)
+    }
+
+    /// Creates a conditional effect that depends on runtime conditions.
+    ///
+    /// The effect will only be applied if the condition evaluates to true
+    /// at the time of application.
+    ///
+    /// # Example
+    /// ```
+    /// # use legalis_core::{Effect, Condition, ComparisonOp};
+    /// let grant = Effect::grant("bonus payment");
+    /// let condition = Condition::income(ComparisonOp::GreaterOrEqual, 50000);
+    ///
+    /// let conditional = grant.when(condition);
+    /// assert_eq!(conditional.effect.description, "bonus payment");
+    /// ```
+    #[must_use]
+    pub fn when(self, condition: Condition) -> ConditionalEffect {
+        ConditionalEffect::new(self, condition)
+    }
 }
 
 impl fmt::Display for Effect {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.effect_type, self.description)
+    }
+}
+
+/// Composed effect combining multiple effects with priority ordering.
+///
+/// When multiple effects need to be applied together, a ComposedEffect
+/// provides conflict resolution strategies and ordering guarantees.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Effect, ComposedEffect, CompositionStrategy};
+/// let effects = vec![
+///     Effect::grant("resource access"),
+///     Effect::obligation("annual reporting"),
+/// ];
+/// let composed = ComposedEffect::new(effects)
+///     .with_resolution_strategy(CompositionStrategy::MostSpecific);
+///
+/// assert_eq!(composed.effects.len(), 2);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct ComposedEffect {
+    /// The effects to be composed (applied in order).
+    pub effects: Vec<Effect>,
+    /// Strategy for resolving conflicts between effects.
+    pub resolution_strategy: CompositionStrategy,
+}
+
+impl ComposedEffect {
+    /// Creates a new composed effect with default conflict resolution (FirstWins).
+    #[must_use]
+    pub fn new(effects: Vec<Effect>) -> Self {
+        Self {
+            effects,
+            resolution_strategy: CompositionStrategy::FirstWins,
+        }
+    }
+
+    /// Sets the conflict resolution strategy.
+    #[must_use]
+    pub fn with_resolution_strategy(mut self, strategy: CompositionStrategy) -> Self {
+        self.resolution_strategy = strategy;
+        self
+    }
+
+    /// Adds an effect to the composition.
+    pub fn add_effect(&mut self, effect: Effect) {
+        self.effects.push(effect);
+    }
+
+    /// Returns the number of effects.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.effects.len()
+    }
+
+    /// Checks if there are no effects.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.effects.is_empty()
+    }
+
+    /// Resolves the composition to a single effective result.
+    ///
+    /// Applies the conflict resolution strategy to determine which effects take precedence.
+    #[must_use]
+    pub fn resolve(&self) -> Vec<&Effect> {
+        match self.resolution_strategy {
+            CompositionStrategy::FirstWins => {
+                // First effect of each type wins
+                let mut seen_types = std::collections::HashSet::new();
+                self.effects
+                    .iter()
+                    .filter(|e| seen_types.insert(e.effect_type.clone()))
+                    .collect()
+            }
+            CompositionStrategy::LastWins => {
+                // Last effect of each type wins
+                let mut result = std::collections::HashMap::new();
+                for effect in &self.effects {
+                    result.insert(effect.effect_type.clone(), effect);
+                }
+                result.values().copied().collect()
+            }
+            CompositionStrategy::MostSpecific => {
+                // Prefer effects with more parameters (more specific)
+                let mut result = std::collections::HashMap::new();
+                for effect in &self.effects {
+                    result
+                        .entry(effect.effect_type.clone())
+                        .and_modify(|e: &mut &Effect| {
+                            if effect.parameter_count() > e.parameter_count() {
+                                *e = effect;
+                            }
+                        })
+                        .or_insert(effect);
+                }
+                result.values().copied().collect()
+            }
+            CompositionStrategy::AllApply => {
+                // All effects apply (no conflict resolution)
+                self.effects.iter().collect()
+            }
+        }
+    }
+}
+
+impl fmt::Display for ComposedEffect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ComposedEffect[")?;
+        for (i, effect) in self.effects.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", effect)?;
+        }
+        write!(f, "]")
+    }
+}
+
+/// Strategies for resolving conflicts between composed effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum CompositionStrategy {
+    /// First effect of each type wins (default).
+    FirstWins,
+    /// Last effect of each type wins (later overrides earlier).
+    LastWins,
+    /// Most specific effect wins (most parameters).
+    MostSpecific,
+    /// All effects apply (no deduplication).
+    AllApply,
+}
+
+impl fmt::Display for CompositionStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FirstWins => write!(f, "FirstWins"),
+            Self::LastWins => write!(f, "LastWins"),
+            Self::MostSpecific => write!(f, "MostSpecific"),
+            Self::AllApply => write!(f, "AllApply"),
+        }
+    }
+}
+
+/// Effect with temporal validity constraints.
+///
+/// Wraps an effect with start/end dates and optional recurrence pattern.
+/// The effect is only active during specified time periods.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Effect, TemporalEffect, RecurrencePattern};
+/// # use chrono::NaiveDate;
+/// let effect = Effect::grant("summer internship");
+/// let start = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
+/// let end = NaiveDate::from_ymd_opt(2025, 8, 31).unwrap();
+///
+/// let temporal = TemporalEffect::new(effect, start, Some(end), None);
+/// assert!(temporal.is_active_on(NaiveDate::from_ymd_opt(2025, 7, 15).unwrap()));
+/// assert!(!temporal.is_active_on(NaiveDate::from_ymd_opt(2025, 9, 1).unwrap()));
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct TemporalEffect {
+    /// The underlying effect.
+    pub effect: Effect,
+    /// Start date (inclusive).
+    pub start_date: NaiveDate,
+    /// End date (inclusive), if any.
+    pub end_date: Option<NaiveDate>,
+    /// Recurrence pattern, if any.
+    pub recurrence: Option<RecurrencePattern>,
+}
+
+impl TemporalEffect {
+    /// Creates a new temporal effect.
+    #[must_use]
+    pub fn new(
+        effect: Effect,
+        start_date: NaiveDate,
+        end_date: Option<NaiveDate>,
+        recurrence: Option<RecurrencePattern>,
+    ) -> Self {
+        Self {
+            effect,
+            start_date,
+            end_date,
+            recurrence,
+        }
+    }
+
+    /// Checks if the effect is active on a given date.
+    #[must_use]
+    pub fn is_active_on(&self, date: NaiveDate) -> bool {
+        // Check basic date range
+        if date < self.start_date {
+            return false;
+        }
+        if let Some(end) = self.end_date {
+            if date > end {
+                return false;
+            }
+        }
+
+        // Check recurrence pattern if present
+        if let Some(ref pattern) = self.recurrence {
+            pattern.matches(date, self.start_date)
+        } else {
+            true
+        }
+    }
+
+    /// Returns the next activation date after the given date.
+    #[must_use]
+    pub fn next_activation(&self, after: NaiveDate) -> Option<NaiveDate> {
+        if let Some(ref pattern) = self.recurrence {
+            pattern.next_occurrence(after, self.start_date, self.end_date)
+        } else if after < self.start_date {
+            Some(self.start_date)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for TemporalEffect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (active from {}", self.effect, self.start_date)?;
+        if let Some(end) = self.end_date {
+            write!(f, " to {}", end)?;
+        }
+        if let Some(ref rec) = self.recurrence {
+            write!(f, ", {}", rec)?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// Recurrence patterns for temporal effects.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum RecurrencePattern {
+    /// Recurs daily.
+    Daily,
+    /// Recurs weekly (every N weeks).
+    Weekly { interval: u32 },
+    /// Recurs monthly (every N months, on same day).
+    Monthly { interval: u32 },
+    /// Recurs yearly (every N years, on same date).
+    Yearly { interval: u32 },
+    /// Recurs on specific days of week (0=Sunday, 6=Saturday).
+    DaysOfWeek { days: Vec<u32> },
+    /// Custom cron-like pattern (simplified).
+    Custom { description: String },
+}
+
+impl RecurrencePattern {
+    /// Checks if the pattern matches a given date.
+    #[must_use]
+    pub fn matches(&self, date: NaiveDate, start: NaiveDate) -> bool {
+        match self {
+            Self::Daily => true,
+            Self::Weekly { interval } => {
+                let days_diff = (date - start).num_days();
+                days_diff >= 0 && days_diff % ((*interval as i64) * 7) == 0
+            }
+            Self::Monthly { interval } => {
+                let months_diff = (date.year() - start.year()) * 12
+                    + (date.month() as i32 - start.month() as i32);
+                months_diff >= 0
+                    && months_diff % (*interval as i32) == 0
+                    && date.day() == start.day()
+            }
+            Self::Yearly { interval } => {
+                let years_diff = date.year() - start.year();
+                years_diff >= 0
+                    && years_diff % (*interval as i32) == 0
+                    && date.month() == start.month()
+                    && date.day() == start.day()
+            }
+            Self::DaysOfWeek { days } => {
+                let weekday = date.weekday().num_days_from_sunday();
+                days.contains(&weekday)
+            }
+            Self::Custom { .. } => true, // Custom patterns need external evaluation
+        }
+    }
+
+    /// Finds the next occurrence after a given date.
+    #[must_use]
+    pub fn next_occurrence(
+        &self,
+        after: NaiveDate,
+        start: NaiveDate,
+        end: Option<NaiveDate>,
+    ) -> Option<NaiveDate> {
+        let mut candidate = after.succ_opt()?;
+
+        // Search up to 1 year ahead
+        for _ in 0..365 {
+            if let Some(end_date) = end {
+                if candidate > end_date {
+                    return None;
+                }
+            }
+            if candidate >= start && self.matches(candidate, start) {
+                return Some(candidate);
+            }
+            candidate = candidate.succ_opt()?;
+        }
+        None
+    }
+}
+
+impl fmt::Display for RecurrencePattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Daily => write!(f, "daily"),
+            Self::Weekly { interval } => write!(f, "every {} week(s)", interval),
+            Self::Monthly { interval } => write!(f, "every {} month(s)", interval),
+            Self::Yearly { interval } => write!(f, "every {} year(s)", interval),
+            Self::DaysOfWeek { days } => {
+                write!(f, "on days: ")?;
+                for (i, day) in days.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", day)?;
+                }
+                Ok(())
+            }
+            Self::Custom { description } => write!(f, "custom: {}", description),
+        }
+    }
+}
+
+/// Effect that depends on runtime conditions.
+///
+/// The effect is only applied if the condition evaluates to true.
+/// This allows for dynamic, context-dependent effects.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Effect, ConditionalEffect, Condition, ComparisonOp, AttributeBasedContext};
+/// # use std::collections::HashMap;
+/// let effect = Effect::grant("senior discount");
+/// let condition = Condition::age(ComparisonOp::GreaterOrEqual, 65);
+/// let conditional = ConditionalEffect::new(effect, condition);
+///
+/// let mut attributes = HashMap::new();
+/// attributes.insert("age".to_string(), "70".to_string());
+/// let ctx = AttributeBasedContext::new(attributes);
+///
+/// assert!(conditional.should_apply(&ctx).unwrap());
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ConditionalEffect {
+    /// The effect to apply conditionally.
+    pub effect: Effect,
+    /// The condition that must be satisfied.
+    pub condition: Condition,
+}
+
+impl ConditionalEffect {
+    /// Creates a new conditional effect.
+    #[must_use]
+    pub fn new(effect: Effect, condition: Condition) -> Self {
+        Self { effect, condition }
+    }
+
+    /// Checks if the effect should be applied given an evaluation context.
+    pub fn should_apply<C: EvaluationContext>(&self, context: &C) -> Result<bool, EvaluationError> {
+        self.condition.evaluate(context)
+    }
+
+    /// Applies the effect if the condition is met, returns the effect or None.
+    pub fn apply_if<C: EvaluationContext>(
+        &self,
+        context: &C,
+    ) -> Result<Option<&Effect>, EvaluationError> {
+        if self.should_apply(context)? {
+            Ok(Some(&self.effect))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl fmt::Display for ConditionalEffect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} WHEN {}", self.effect, self.condition)
+    }
+}
+
+/// Effect dependency graph for tracking and detecting cycles.
+///
+/// Tracks dependencies between effects to ensure proper ordering
+/// and detect circular dependencies.
+///
+/// # Example
+/// ```
+/// # use legalis_core::{Effect, EffectDependencyGraph};
+/// let mut graph = EffectDependencyGraph::new();
+/// let e1 = Effect::grant("base access");
+/// let e2 = Effect::grant("extended access");
+/// let e3 = Effect::obligation("reporting");
+///
+/// graph.add_effect("e1".to_string(), e1);
+/// graph.add_effect("e2".to_string(), e2);
+/// graph.add_effect("e3".to_string(), e3);
+///
+/// graph.add_dependency("e2", "e1"); // e2 depends on e1
+/// graph.add_dependency("e3", "e2"); // e3 depends on e2
+///
+/// assert!(!graph.has_cycle());
+/// assert_eq!(graph.topological_sort().unwrap(), vec!["e1", "e2", "e3"]);
+/// ```
+#[derive(Debug, Clone)]
+pub struct EffectDependencyGraph {
+    /// Effects indexed by ID.
+    effects: std::collections::HashMap<String, Effect>,
+    /// Dependencies: effect_id -> list of effect_ids it depends on.
+    dependencies: std::collections::HashMap<String, Vec<String>>,
+}
+
+impl EffectDependencyGraph {
+    /// Creates a new empty dependency graph.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            effects: std::collections::HashMap::new(),
+            dependencies: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Adds an effect to the graph.
+    pub fn add_effect(&mut self, id: String, effect: Effect) {
+        self.effects.insert(id.clone(), effect);
+        self.dependencies.entry(id).or_default();
+    }
+
+    /// Adds a dependency: `from` depends on `to`.
+    ///
+    /// Returns an error if it would create a cycle.
+    pub fn add_dependency(&mut self, from: &str, to: &str) -> Result<(), String> {
+        if !self.effects.contains_key(from) {
+            return Err(format!("Effect '{}' not found", from));
+        }
+        if !self.effects.contains_key(to) {
+            return Err(format!("Effect '{}' not found", to));
+        }
+
+        // Add the dependency
+        self.dependencies
+            .entry(from.to_string())
+            .or_default()
+            .push(to.to_string());
+
+        // Check for cycles
+        if self.has_cycle() {
+            // Remove the dependency we just added
+            if let Some(deps) = self.dependencies.get_mut(from) {
+                deps.retain(|d| d != to);
+            }
+            return Err(format!(
+                "Adding dependency {} -> {} would create a cycle",
+                from, to
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Checks if the graph contains a cycle.
+    #[must_use]
+    pub fn has_cycle(&self) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        let mut rec_stack = std::collections::HashSet::new();
+
+        for node in self.effects.keys() {
+            if self.has_cycle_util(node, &mut visited, &mut rec_stack) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Helper function for cycle detection (DFS).
+    fn has_cycle_util(
+        &self,
+        node: &str,
+        visited: &mut std::collections::HashSet<String>,
+        rec_stack: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        if rec_stack.contains(node) {
+            return true;
+        }
+        if visited.contains(node) {
+            return false;
+        }
+
+        visited.insert(node.to_string());
+        rec_stack.insert(node.to_string());
+
+        if let Some(deps) = self.dependencies.get(node) {
+            for dep in deps {
+                if self.has_cycle_util(dep, visited, rec_stack) {
+                    return true;
+                }
+            }
+        }
+
+        rec_stack.remove(node);
+        false
+    }
+
+    /// Returns a topological sort of the effects (dependency order).
+    ///
+    /// Returns None if there's a cycle.
+    #[must_use]
+    pub fn topological_sort(&self) -> Option<Vec<String>> {
+        if self.has_cycle() {
+            return None;
+        }
+
+        let mut visited = std::collections::HashSet::new();
+        let mut stack = Vec::new();
+
+        for node in self.effects.keys() {
+            if !visited.contains(node) {
+                self.topological_sort_util(node, &mut visited, &mut stack);
+            }
+        }
+
+        // Stack is already in correct dependency order (dependencies first)
+        Some(stack)
+    }
+
+    /// Helper for topological sort (DFS).
+    fn topological_sort_util(
+        &self,
+        node: &str,
+        visited: &mut std::collections::HashSet<String>,
+        stack: &mut Vec<String>,
+    ) {
+        visited.insert(node.to_string());
+
+        if let Some(deps) = self.dependencies.get(node) {
+            for dep in deps {
+                if !visited.contains(dep) {
+                    self.topological_sort_util(dep, visited, stack);
+                }
+            }
+        }
+
+        stack.push(node.to_string());
+    }
+
+    /// Gets an effect by ID.
+    #[must_use]
+    pub fn get_effect(&self, id: &str) -> Option<&Effect> {
+        self.effects.get(id)
+    }
+
+    /// Returns the number of effects in the graph.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.effects.len()
+    }
+
+    /// Checks if the graph is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.effects.is_empty()
+    }
+}
+
+impl Default for EffectDependencyGraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -4673,6 +6504,74 @@ impl fmt::Display for TemporalValidity {
 ///
 /// assert!(employment_termination.discretion_logic.is_some());
 /// ```
+/// A structured exception to a statute's application.
+///
+/// Exceptions represent specific circumstances where a statute does not apply,
+/// even when its preconditions would otherwise be satisfied.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{StatuteException, Condition, ComparisonOp};
+///
+/// let exception = StatuteException::new(
+///     "minor-exception",
+///     "Exception for minors",
+///     Condition::age(ComparisonOp::LessThan, 18)
+/// );
+///
+/// assert_eq!(exception.id, "minor-exception");
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct StatuteException {
+    /// Unique identifier for this exception
+    pub id: String,
+    /// Description of the exception
+    pub description: String,
+    /// Condition under which the exception applies
+    pub condition: Condition,
+}
+
+impl StatuteException {
+    /// Creates a new statute exception.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteException, Condition, ComparisonOp};
+    ///
+    /// let exception = StatuteException::new(
+    ///     "medical-exception",
+    ///     "Exception for medical emergencies",
+    ///     Condition::has_attribute("medical_emergency")
+    /// );
+    /// ```
+    #[must_use]
+    pub fn new(
+        id: impl Into<String>,
+        description: impl Into<String>,
+        condition: Condition,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            description: description.into(),
+            condition,
+        }
+    }
+}
+
+impl std::fmt::Display for StatuteException {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Exception '{}': {} when {}",
+            self.id, self.description, self.condition
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -4693,6 +6592,12 @@ pub struct Statute {
     pub version: u32,
     /// Jurisdiction identifier
     pub jurisdiction: Option<String>,
+    /// Derivation source - the statute(s) this one is derived from
+    pub derives_from: Vec<String>,
+    /// Applicable entity types - what types of entities this statute applies to
+    pub applies_to: Vec<String>,
+    /// Structured exceptions - conditions under which this statute does not apply
+    pub exceptions: Vec<StatuteException>,
 }
 
 impl Statute {
@@ -4707,6 +6612,9 @@ impl Statute {
             temporal_validity: TemporalValidity::default(),
             version: 1,
             jurisdiction: None,
+            derives_from: Vec::new(),
+            applies_to: Vec::new(),
+            exceptions: Vec::new(),
         }
     }
 
@@ -4737,6 +6645,62 @@ impl Statute {
     /// Sets the jurisdiction.
     pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
         self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+
+    /// Adds a statute ID that this statute is derived from.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType};
+    ///
+    /// let derived = Statute::new("state-law-1", "State Law", Effect::grant("Benefit"))
+    ///     .with_derives_from("federal-law-1");
+    ///
+    /// assert_eq!(derived.derives_from, vec!["federal-law-1"]);
+    /// ```
+    pub fn with_derives_from(mut self, source_id: impl Into<String>) -> Self {
+        self.derives_from.push(source_id.into());
+        self
+    }
+
+    /// Adds an entity type that this statute applies to.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType};
+    ///
+    /// let law = Statute::new("business-law-1", "Business Regulation", Effect::grant("License"))
+    ///     .with_applies_to("Corporation")
+    ///     .with_applies_to("LLC");
+    ///
+    /// assert!(law.applies_to.contains(&"Corporation".to_string()));
+    /// ```
+    pub fn with_applies_to(mut self, entity_type: impl Into<String>) -> Self {
+        self.applies_to.push(entity_type.into());
+        self
+    }
+
+    /// Adds an exception to this statute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType, StatuteException, Condition, ComparisonOp};
+    ///
+    /// let law = Statute::new("tax-law-1", "Income Tax", Effect::grant("Tax liability"))
+    ///     .with_exception(StatuteException::new(
+    ///         "minor-exception",
+    ///         "Minors are exempt",
+    ///         Condition::age(ComparisonOp::LessThan, 18)
+    ///     ));
+    ///
+    /// assert_eq!(law.exceptions.len(), 1);
+    /// ```
+    pub fn with_exception(mut self, exception: StatuteException) -> Self {
+        self.exceptions.push(exception);
         self
     }
 
@@ -4772,6 +6736,116 @@ impl Statute {
     /// Returns a reference to the preconditions.
     pub fn preconditions(&self) -> &[Condition] {
         &self.preconditions
+    }
+
+    /// Returns whether this statute is derived from other statutes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect};
+    ///
+    /// let derived = Statute::new("derived", "Derived Law", Effect::grant("Benefit"))
+    ///     .with_derives_from("source-law");
+    ///
+    /// assert!(derived.is_derived());
+    /// ```
+    #[must_use]
+    pub fn is_derived(&self) -> bool {
+        !self.derives_from.is_empty()
+    }
+
+    /// Returns the IDs of statutes this statute is derived from.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect};
+    ///
+    /// let derived = Statute::new("derived", "Derived Law", Effect::grant("Benefit"))
+    ///     .with_derives_from("source-1")
+    ///     .with_derives_from("source-2");
+    ///
+    /// assert_eq!(derived.derivation_sources(), &["source-1", "source-2"]);
+    /// ```
+    pub fn derivation_sources(&self) -> &[String] {
+        &self.derives_from
+    }
+
+    /// Returns whether this statute applies to a specific entity type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect};
+    ///
+    /// let law = Statute::new("law-1", "Law", Effect::grant("License"))
+    ///     .with_applies_to("Corporation");
+    ///
+    /// assert!(law.applies_to_entity_type("Corporation"));
+    /// assert!(!law.applies_to_entity_type("Individual"));
+    /// ```
+    #[must_use]
+    pub fn applies_to_entity_type(&self, entity_type: &str) -> bool {
+        self.applies_to.iter().any(|t| t == entity_type)
+    }
+
+    /// Returns whether this statute has any entity type restrictions.
+    ///
+    /// If this returns `false`, the statute applies to all entity types.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect};
+    ///
+    /// let general_law = Statute::new("law-1", "General Law", Effect::grant("Benefit"));
+    /// assert!(!general_law.has_entity_restrictions());
+    ///
+    /// let specific_law = Statute::new("law-2", "Specific Law", Effect::grant("Benefit"))
+    ///     .with_applies_to("Corporation");
+    /// assert!(specific_law.has_entity_restrictions());
+    /// ```
+    #[must_use]
+    pub fn has_entity_restrictions(&self) -> bool {
+        !self.applies_to.is_empty()
+    }
+
+    /// Returns the entity types this statute applies to.
+    pub fn applicable_entity_types(&self) -> &[String] {
+        &self.applies_to
+    }
+
+    /// Returns whether this statute has exceptions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, StatuteException, Condition, ComparisonOp};
+    ///
+    /// let law = Statute::new("law-1", "Law", Effect::grant("Benefit"))
+    ///     .with_exception(StatuteException::new(
+    ///         "exc-1",
+    ///         "Exception",
+    ///         Condition::age(ComparisonOp::LessThan, 18)
+    ///     ));
+    ///
+    /// assert!(law.has_exceptions());
+    /// ```
+    #[must_use]
+    pub fn has_exceptions(&self) -> bool {
+        !self.exceptions.is_empty()
+    }
+
+    /// Returns a reference to the exceptions.
+    pub fn exception_list(&self) -> &[StatuteException] {
+        &self.exceptions
+    }
+
+    /// Returns the number of exceptions.
+    #[must_use]
+    pub fn exception_count(&self) -> usize {
+        self.exceptions.len()
     }
 
     /// Validates the statute and returns a list of validation errors.
@@ -6361,6 +8435,595 @@ impl fmt::Display for ContradictionType {
 }
 
 // ============================================================================
+// Fluent Builders for Enhanced Developer Experience
+// ============================================================================
+
+/// Builder for constructing `Condition` objects with a fluent API.
+///
+/// Provides a convenient way to construct complex conditions with chaining.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{ConditionBuilder, ComparisonOp};
+///
+/// let condition = ConditionBuilder::new()
+///     .age(ComparisonOp::GreaterOrEqual, 18)
+///     .and()
+///     .income(ComparisonOp::LessThan, 50000)
+///     .build();
+///
+/// assert!(!condition.to_string().is_empty());
+/// ```
+#[derive(Debug, Clone)]
+pub struct ConditionBuilder {
+    conditions: Vec<Condition>,
+    operation: ConditionOperation,
+}
+
+#[derive(Debug, Clone)]
+enum ConditionOperation {
+    None,
+    And,
+    Or,
+}
+
+impl ConditionBuilder {
+    /// Creates a new condition builder.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            conditions: Vec::new(),
+            operation: ConditionOperation::None,
+        }
+    }
+
+    /// Adds an age condition.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{ConditionBuilder, ComparisonOp};
+    ///
+    /// let cond = ConditionBuilder::new()
+    ///     .age(ComparisonOp::GreaterOrEqual, 21)
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn age(mut self, operator: ComparisonOp, value: u32) -> Self {
+        self.conditions.push(Condition::Age { operator, value });
+        self
+    }
+
+    /// Adds an income condition.
+    #[must_use]
+    pub fn income(mut self, operator: ComparisonOp, value: u64) -> Self {
+        self.conditions.push(Condition::Income { operator, value });
+        self
+    }
+
+    /// Adds a has-attribute condition.
+    #[must_use]
+    pub fn has_attribute(mut self, attr: impl Into<String>) -> Self {
+        self.conditions
+            .push(Condition::HasAttribute { key: attr.into() });
+        self
+    }
+
+    /// Adds an attribute-equals condition.
+    #[must_use]
+    pub fn attribute_equals(mut self, attr: impl Into<String>, value: impl Into<String>) -> Self {
+        self.conditions.push(Condition::AttributeEquals {
+            key: attr.into(),
+            value: value.into(),
+        });
+        self
+    }
+
+    /// Adds a custom condition.
+    #[must_use]
+    pub fn custom(mut self, description: impl Into<String>) -> Self {
+        self.conditions.push(Condition::Custom {
+            description: description.into(),
+        });
+        self
+    }
+
+    /// Combines the next condition with AND logic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{ConditionBuilder, ComparisonOp};
+    ///
+    /// let cond = ConditionBuilder::new()
+    ///     .age(ComparisonOp::GreaterOrEqual, 18)
+    ///     .and()
+    ///     .income(ComparisonOp::LessThan, 50000)
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn and(mut self) -> Self {
+        self.operation = ConditionOperation::And;
+        self
+    }
+
+    /// Combines the next condition with OR logic.
+    #[must_use]
+    pub fn or(mut self) -> Self {
+        self.operation = ConditionOperation::Or;
+        self
+    }
+
+    /// Builds the final condition.
+    ///
+    /// If multiple conditions were added, they are combined according to the
+    /// specified operations (AND/OR).
+    #[must_use]
+    pub fn build(self) -> Condition {
+        if self.conditions.is_empty() {
+            Condition::Custom {
+                description: "true".to_string(),
+            }
+        } else if self.conditions.len() == 1 {
+            self.conditions.into_iter().next().unwrap()
+        } else {
+            // Combine all conditions with the operation
+            let mut result = self.conditions[0].clone();
+            for cond in self.conditions.into_iter().skip(1) {
+                result = match self.operation {
+                    ConditionOperation::And => Condition::And(Box::new(result), Box::new(cond)),
+                    ConditionOperation::Or => Condition::Or(Box::new(result), Box::new(cond)),
+                    ConditionOperation::None => Condition::And(Box::new(result), Box::new(cond)),
+                };
+            }
+            result
+        }
+    }
+}
+
+impl Default for ConditionBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Builder for constructing `Effect` objects with a fluent API.
+///
+/// Provides a convenient way to construct effects with parameters.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{EffectBuilder, EffectType};
+///
+/// let effect = EffectBuilder::new()
+///     .effect_type(EffectType::Grant)
+///     .description("Tax credit")
+///     .parameter("amount", "1000")
+///     .parameter("currency", "USD")
+///     .build();
+///
+/// assert_eq!(effect.effect_type, EffectType::Grant);
+/// assert_eq!(effect.parameters.get("amount"), Some(&"1000".to_string()));
+/// ```
+#[derive(Debug, Clone)]
+pub struct EffectBuilder {
+    effect_type: Option<EffectType>,
+    description: Option<String>,
+    parameters: std::collections::HashMap<String, String>,
+}
+
+impl EffectBuilder {
+    /// Creates a new effect builder.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            effect_type: None,
+            description: None,
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Creates a builder initialized with an effect type and description.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{EffectBuilder, EffectType};
+    ///
+    /// let effect = EffectBuilder::grant("Tax credit")
+    ///     .parameter("amount", "1000")
+    ///     .build();
+    ///
+    /// assert_eq!(effect.effect_type, EffectType::Grant);
+    /// ```
+    #[must_use]
+    pub fn grant(description: impl Into<String>) -> Self {
+        Self {
+            effect_type: Some(EffectType::Grant),
+            description: Some(description.into()),
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Creates a builder for a revoke effect.
+    #[must_use]
+    pub fn revoke(description: impl Into<String>) -> Self {
+        Self {
+            effect_type: Some(EffectType::Revoke),
+            description: Some(description.into()),
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Creates a builder for an obligation effect.
+    #[must_use]
+    pub fn obligation(description: impl Into<String>) -> Self {
+        Self {
+            effect_type: Some(EffectType::Obligation),
+            description: Some(description.into()),
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Sets the effect type.
+    #[must_use]
+    pub fn effect_type(mut self, effect_type: EffectType) -> Self {
+        self.effect_type = Some(effect_type);
+        self
+    }
+
+    /// Sets the description.
+    #[must_use]
+    pub fn description(mut self, desc: impl Into<String>) -> Self {
+        self.description = Some(desc.into());
+        self
+    }
+
+    /// Adds a parameter to the effect.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{EffectBuilder, EffectType};
+    ///
+    /// let effect = EffectBuilder::new()
+    ///     .effect_type(EffectType::MonetaryTransfer)
+    ///     .description("Tax payment")
+    ///     .parameter("amount", "5000")
+    ///     .parameter("currency", "USD")
+    ///     .build();
+    ///
+    /// assert_eq!(effect.parameters.len(), 2);
+    /// ```
+    #[must_use]
+    pub fn parameter(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.parameters.insert(key.into(), value.into());
+        self
+    }
+
+    /// Builds the final effect.
+    ///
+    /// # Panics
+    ///
+    /// Panics if effect_type or description is not set.
+    #[must_use]
+    pub fn build(self) -> Effect {
+        Effect {
+            effect_type: self.effect_type.expect("Effect type must be set"),
+            description: self.description.expect("Description must be set"),
+            parameters: self.parameters,
+        }
+    }
+
+    /// Builds the effect, returning an error if required fields are missing.
+    pub fn try_build(self) -> Result<Effect, String> {
+        let effect_type = self.effect_type.ok_or("Effect type not set")?;
+        let description = self.description.ok_or("Description not set")?;
+        Ok(Effect {
+            effect_type,
+            description,
+            parameters: self.parameters,
+        })
+    }
+}
+
+impl Default for EffectBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Simple builder for constructing `Statute` objects with template support
+/// and progressive validation.
+///
+/// Unlike `TypedStatuteBuilder`, this builder is runtime-validated and provides
+/// convenience methods like `from_template()` and progressive validation.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{StatuteBuilder, Effect, EffectType, Condition, ComparisonOp};
+///
+/// let statute = StatuteBuilder::new()
+///     .id("tax-law-1")
+///     .title("Tax Credit Law")
+///     .effect(Effect::new(EffectType::Grant, "Tax credit"))
+///     .precondition(Condition::age(ComparisonOp::GreaterOrEqual, 18))
+///     .validate_progressive(true)
+///     .build()
+///     .expect("Failed to build statute");
+///
+/// assert_eq!(statute.id, "tax-law-1");
+/// ```
+#[derive(Debug, Clone)]
+pub struct StatuteBuilder {
+    id: Option<String>,
+    title: Option<String>,
+    effect: Option<Effect>,
+    preconditions: Vec<Condition>,
+    discretion_logic: Option<String>,
+    temporal_validity: TemporalValidity,
+    version: u32,
+    jurisdiction: Option<String>,
+    derives_from: Vec<String>,
+    applies_to: Vec<String>,
+    exceptions: Vec<StatuteException>,
+    progressive_validation: bool,
+    validation_errors: Vec<ValidationError>,
+}
+
+impl StatuteBuilder {
+    /// Creates a new statute builder.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            id: None,
+            title: None,
+            effect: None,
+            preconditions: Vec::new(),
+            discretion_logic: None,
+            temporal_validity: TemporalValidity::default(),
+            version: 1,
+            jurisdiction: None,
+            derives_from: Vec::new(),
+            applies_to: Vec::new(),
+            exceptions: Vec::new(),
+            progressive_validation: false,
+            validation_errors: Vec::new(),
+        }
+    }
+
+    /// Creates a builder from an existing statute template.
+    ///
+    /// This copies all fields from the template statute, allowing you to modify
+    /// specific fields while keeping others the same.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteBuilder, Statute, Effect, EffectType};
+    ///
+    /// let template = Statute::new("template-1", "Template Law", Effect::grant("Benefit"))
+    ///     .with_version(1)
+    ///     .with_jurisdiction("US");
+    ///
+    /// let derived = StatuteBuilder::from_template(&template)
+    ///     .id("derived-1")
+    ///     .title("Derived Law")
+    ///     .build()
+    ///     .expect("Failed to build");
+    ///
+    /// assert_eq!(derived.jurisdiction, Some("US".to_string()));
+    /// assert_eq!(derived.version, 1);
+    /// ```
+    #[must_use]
+    pub fn from_template(template: &Statute) -> Self {
+        Self {
+            id: Some(template.id.clone()),
+            title: Some(template.title.clone()),
+            effect: Some(template.effect.clone()),
+            preconditions: template.preconditions.clone(),
+            discretion_logic: template.discretion_logic.clone(),
+            temporal_validity: template.temporal_validity.clone(),
+            version: template.version,
+            jurisdiction: template.jurisdiction.clone(),
+            derives_from: template.derives_from.clone(),
+            applies_to: template.applies_to.clone(),
+            exceptions: template.exceptions.clone(),
+            progressive_validation: false,
+            validation_errors: Vec::new(),
+        }
+    }
+
+    /// Enables or disables progressive validation.
+    ///
+    /// When enabled, the builder validates each field as it's set and accumulates
+    /// validation errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{StatuteBuilder, Effect, EffectType};
+    ///
+    /// let result = StatuteBuilder::new()
+    ///     .validate_progressive(true)
+    ///     .id("") // Invalid ID - empty
+    ///     .title("Test")
+    ///     .effect(Effect::grant("Benefit"))
+    ///     .build();
+    ///
+    /// assert!(result.is_err());
+    /// ```
+    #[must_use]
+    pub fn validate_progressive(mut self, enabled: bool) -> Self {
+        self.progressive_validation = enabled;
+        self
+    }
+
+    /// Sets the statute ID.
+    #[must_use]
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        let id = id.into();
+        if self.progressive_validation {
+            if id.is_empty() {
+                self.validation_errors.push(ValidationError::EmptyId);
+            } else if !self.is_valid_id(&id) {
+                self.validation_errors
+                    .push(ValidationError::InvalidId(id.clone()));
+            }
+        }
+        self.id = Some(id);
+        self
+    }
+
+    /// Sets the statute title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        let title = title.into();
+        if self.progressive_validation && title.is_empty() {
+            self.validation_errors.push(ValidationError::EmptyTitle);
+        }
+        self.title = Some(title);
+        self
+    }
+
+    /// Sets the effect.
+    #[must_use]
+    pub fn effect(mut self, effect: Effect) -> Self {
+        if self.progressive_validation && effect.description.is_empty() {
+            self.validation_errors
+                .push(ValidationError::EmptyEffectDescription);
+        }
+        self.effect = Some(effect);
+        self
+    }
+
+    /// Adds a precondition.
+    #[must_use]
+    pub fn precondition(mut self, condition: Condition) -> Self {
+        self.preconditions.push(condition);
+        self
+    }
+
+    /// Sets the discretion logic.
+    #[must_use]
+    pub fn discretion(mut self, logic: impl Into<String>) -> Self {
+        self.discretion_logic = Some(logic.into());
+        self
+    }
+
+    /// Sets temporal validity.
+    #[must_use]
+    pub fn temporal_validity(mut self, validity: TemporalValidity) -> Self {
+        self.temporal_validity = validity;
+        self
+    }
+
+    /// Sets the version.
+    #[must_use]
+    pub fn version(mut self, version: u32) -> Self {
+        if self.progressive_validation && version == 0 {
+            self.validation_errors.push(ValidationError::InvalidVersion);
+        }
+        self.version = version;
+        self
+    }
+
+    /// Sets the jurisdiction.
+    #[must_use]
+    pub fn jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+        self.jurisdiction = Some(jurisdiction.into());
+        self
+    }
+
+    /// Adds a derivation source.
+    #[must_use]
+    pub fn derives_from(mut self, source: impl Into<String>) -> Self {
+        self.derives_from.push(source.into());
+        self
+    }
+
+    /// Adds an applicable entity type.
+    #[must_use]
+    pub fn applies_to(mut self, entity_type: impl Into<String>) -> Self {
+        self.applies_to.push(entity_type.into());
+        self
+    }
+
+    /// Adds an exception.
+    #[must_use]
+    pub fn exception(mut self, exception: StatuteException) -> Self {
+        self.exceptions.push(exception);
+        self
+    }
+
+    /// Returns accumulated validation errors (when progressive validation is enabled).
+    #[must_use]
+    pub fn validation_errors(&self) -> &[ValidationError] {
+        &self.validation_errors
+    }
+
+    /// Checks if an ID is valid.
+    fn is_valid_id(&self, id: &str) -> bool {
+        !id.is_empty()
+            && id
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            && id.chars().next().is_some_and(|c| c.is_alphabetic())
+    }
+
+    /// Builds the statute, returning an error if required fields are missing or validation fails.
+    pub fn build(self) -> Result<Statute, Vec<ValidationError>> {
+        let mut errors = self.validation_errors;
+
+        // Check required fields
+        if self.id.is_none() {
+            errors.push(ValidationError::EmptyId);
+        }
+        if self.title.is_none() {
+            errors.push(ValidationError::EmptyTitle);
+        }
+        if self.effect.is_none() {
+            errors.push(ValidationError::EmptyEffectDescription);
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let statute = Statute {
+            id: self.id.unwrap(),
+            title: self.title.unwrap(),
+            effect: self.effect.unwrap(),
+            preconditions: self.preconditions,
+            discretion_logic: self.discretion_logic,
+            temporal_validity: self.temporal_validity,
+            version: self.version,
+            jurisdiction: self.jurisdiction,
+            derives_from: self.derives_from,
+            applies_to: self.applies_to,
+            exceptions: self.exceptions,
+        };
+
+        // Final validation
+        let validation_errors = statute.validate();
+        if !validation_errors.is_empty() {
+            Err(validation_errors)
+        } else {
+            Ok(statute)
+        }
+    }
+}
+
+impl Default for StatuteBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
 // Typestate Builder Pattern for Compile-Time Verification
 // ============================================================================
 
@@ -6575,6 +9238,9 @@ impl TypedStatuteBuilder<HasId, HasTitle, HasEffect> {
             temporal_validity: self.temporal_validity,
             version: self.version,
             jurisdiction: self.jurisdiction,
+            derives_from: Vec::new(),
+            applies_to: Vec::new(),
+            exceptions: Vec::new(),
         }
     }
 }
@@ -6986,6 +9652,136 @@ macro_rules! define_custom_condition {
             }
         }
     };
+}
+
+// Helper macro for adding conditions
+#[doc(hidden)]
+#[macro_export]
+macro_rules! statute_impl_add_conditions {
+    ($statute:ident, age >= $age:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::age($crate::ComparisonOp::GreaterOrEqual, $age)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, age > $age:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::age($crate::ComparisonOp::GreaterThan, $age)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, age < $age:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::age($crate::ComparisonOp::LessThan, $age)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, age <= $age:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::age($crate::ComparisonOp::LessOrEqual, $age)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, income >= $income:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::income($crate::ComparisonOp::GreaterOrEqual, $income)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, income < $income:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::income($crate::ComparisonOp::LessThan, $income)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident, has_attribute $attr:expr, $($rest:tt)*) => {
+        $statute = $statute.with_precondition(
+            $crate::Condition::has_attribute($attr)
+        );
+        statute_impl_add_conditions!($statute, $($rest)*);
+    };
+    ($statute:ident,) => {};
+    ($statute:ident) => {};
+}
+
+// Helper macro for adding exceptions
+#[doc(hidden)]
+#[macro_export]
+macro_rules! statute_impl_add_exceptions {
+    // We'll just skip exceptions for now - users can add them manually
+    // This is a simplified version for the macro
+    ($statute:ident, $($rest:tt)*) => {};
+}
+
+/// Declarative macro for defining statutes with a clean, readable syntax.
+///
+/// This macro provides a convenient way to define statutes using a declarative syntax
+/// that resembles natural language and legal documents.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{statute, EffectType};
+///
+/// let voting_law = statute! {
+///     id: "voting-rights-2025",
+///     title: "Voting Rights Act",
+///     effect: Grant("Right to vote in federal elections"),
+///     jurisdiction: "US",
+///     version: 1,
+/// };
+///
+/// assert_eq!(voting_law.id, "voting-rights-2025");
+/// assert_eq!(voting_law.jurisdiction, Some("US".to_string()));
+/// ```
+///
+/// Simple syntax:
+///
+/// ```
+/// use legalis_core::{statute, EffectType};
+///
+/// let tax_law = statute! {
+///     id: "income-tax-2025",
+///     title: "Income Tax Law",
+///     effect: Obligation("Pay income tax"),
+///     jurisdiction: "US",
+/// };
+///
+/// assert_eq!(tax_law.id, "income-tax-2025");
+/// ```
+#[macro_export]
+macro_rules! statute {
+    // Syntax with all optional fields
+    (
+        id: $id:expr,
+        title: $title:expr,
+        effect: $effect_type:ident($effect_desc:expr)
+        $(, jurisdiction: $jurisdiction:expr)?
+        $(, version: $version:expr)?
+        $(, discretion: $discretion:expr)?
+        $(,)?
+    ) => {{
+        let mut statute = $crate::Statute::new(
+            $id,
+            $title,
+            $crate::Effect::new(
+                $crate::EffectType::$effect_type,
+                $effect_desc
+            )
+        );
+
+        $(
+            statute = statute.with_jurisdiction($jurisdiction);
+        )?
+        $(
+            statute = statute.with_version($version);
+        )?
+        $(
+            statute = statute.with_discretion($discretion);
+        )?
+
+        statute
+    }};
 }
 
 #[cfg(test)]

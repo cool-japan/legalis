@@ -3,7 +3,10 @@
 //! This module provides specialized AI agents that work together to perform
 //! complex legal tasks like statute interpretation, verification, drafting, and research.
 
-use crate::{LLMProvider, legal::{Jurisdiction, LegalCitation}};
+use crate::{
+    LLMProvider,
+    legal::{Jurisdiction, LegalCitation},
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -26,10 +29,18 @@ impl AgentRole {
     #[allow(dead_code)]
     pub fn description(&self) -> &str {
         match self {
-            AgentRole::LegalExpert => "Legal expert specializing in statute interpretation and legal analysis",
-            AgentRole::Reviewer => "Legal reviewer for verification, quality control, and consistency checking",
-            AgentRole::Drafter => "Legal drafter for creating statutes, contracts, and legal documents",
-            AgentRole::Researcher => "Legal researcher for finding case law, precedents, and legal authorities",
+            AgentRole::LegalExpert => {
+                "Legal expert specializing in statute interpretation and legal analysis"
+            }
+            AgentRole::Reviewer => {
+                "Legal reviewer for verification, quality control, and consistency checking"
+            }
+            AgentRole::Drafter => {
+                "Legal drafter for creating statutes, contracts, and legal documents"
+            }
+            AgentRole::Researcher => {
+                "Legal researcher for finding case law, precedents, and legal authorities"
+            }
         }
     }
 }
@@ -262,11 +273,7 @@ impl<P: LLMProvider> DrafterAgent<P> {
     }
 
     /// Drafts a statute based on requirements.
-    pub async fn draft_statute(
-        &self,
-        title: &str,
-        requirements: &[String],
-    ) -> Result<AgentResult> {
+    pub async fn draft_statute(&self, title: &str, requirements: &[String]) -> Result<AgentResult> {
         let requirements_str = requirements
             .iter()
             .enumerate()
@@ -400,10 +407,7 @@ Identify relevant cases, holdings, and legal principles."#,
     }
 
     /// Finds supporting authority for a legal argument.
-    pub async fn find_supporting_authority(
-        &self,
-        argument: &str,
-    ) -> Result<Vec<LegalCitation>> {
+    pub async fn find_supporting_authority(&self, argument: &str) -> Result<Vec<LegalCitation>> {
         let jurisdiction_context = self
             .jurisdiction
             .as_ref()
@@ -544,7 +548,7 @@ impl<P: LLMProvider + Clone> AgentOrchestrator<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{providers::MockProvider, legal::Jurisdiction};
+    use crate::{legal::Jurisdiction, providers::MockProvider};
 
     #[tokio::test]
     async fn test_legal_expert_agent() {
@@ -604,7 +608,7 @@ mod tests {
         let agent = DrafterAgent::new(provider);
 
         let result = agent
-            .draft_statute("Test Statute", &vec!["Requirement 1".to_string()])
+            .draft_statute("Test Statute", &["Requirement 1".to_string()])
             .await
             .unwrap();
 

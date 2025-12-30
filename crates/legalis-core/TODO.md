@@ -728,51 +728,110 @@
 - [x] Support for Limited application when following with modifications
 - [x] All doc tests passing (4 new doc tests)
 
-### Evaluation Enhancements (v0.1.3) - PARTIALLY COMPLETED
+### Evaluation Enhancements (v0.1.3) - COMPLETED
 - [x] Add `DefaultValueContext` - wrapper providing default values for missing attributes
 - [x] Add `FallbackContext` - wrapper providing fallback evaluation strategies
 - [x] Added `with_default()` builder method for adding individual defaults
 - [x] Implemented full `EvaluationContext` trait for both wrappers
 - [x] Fallback uses OR logic for geographic and relationship checks
-- [x] All doc tests passing (2 new doc tests)
-- [ ] Add `Condition::evaluate_with_explanation()` - detailed step-by-step explanation
-- [ ] Add `Condition::partial_evaluate()` - partial evaluation with unknowns
-- [ ] Add uncertainty propagation in compound conditions
+- [x] Add `Condition::evaluate_with_explanation()` - detailed step-by-step explanation
+- [x] Add `Condition::partial_evaluate()` - partial evaluation with unknowns
+- [x] Add uncertainty propagation in compound conditions
+- [x] Added `PartialBool` enum with three-valued logic (True, False, Unknown)
+- [x] Added confidence scores (0.0-1.0) for uncertainty tracking
+- [x] Implemented uncertainty propagation using probability theory
+- [x] Added `EvaluationExplanation` struct for detailed evaluation traces
+- [x] Added `ExplanationStep` struct for step-by-step tracking
+- [x] Short-circuit evaluation preserved in explanations
+- [x] Helper methods: `is_true()`, `is_false()`, `is_unknown()`, `confidence()`, `reason()`
+- [x] All doc tests passing (6 new doc tests: PartialBool, EvaluationExplanation, evaluate_with_explanation, partial_evaluate)
+- [x] Total test coverage: 131 unit tests + 89 doc tests = 220 tests
 
-### Effect System Extensions (v0.1.4)
-- [ ] Add `Effect::compose()` - compose multiple effects with priority ordering
-- [ ] Add `Effect::inverse()` - compute inverse effect for rollback
-- [ ] Add `TemporalEffect` - effects with start/end times and recurrence
-- [ ] Add `ConditionalEffect` - effects that depend on runtime conditions
-- [ ] Add effect dependency tracking and cycle detection
+### Effect System Extensions (v0.1.4) - COMPLETED
+- [x] Add `Effect::compose()` - compose multiple effects with priority ordering
+- [x] Add `Effect::inverse()` - compute inverse effect for rollback
+- [x] Add `TemporalEffect` - effects with start/end times and recurrence
+- [x] Add `ConditionalEffect` - effects that depend on runtime conditions
+- [x] Add effect dependency tracking and cycle detection
+- [x] Added `ComposedEffect` struct with conflict resolution strategies
+- [x] Added `CompositionStrategy` enum (FirstWins, LastWins, MostSpecific, AllApply)
+- [x] Added `Effect::inverse()` with automatic inverse computation for Grant↔Revoke, Obligation→Relief, etc.
+- [x] Added `Effect::is_inverse_of()` helper method
+- [x] Added `TemporalEffect` with start/end dates and recurrence patterns
+- [x] Added `RecurrencePattern` enum (Daily, Weekly, Monthly, Yearly, DaysOfWeek, Custom)
+- [x] Added `Effect::with_temporal_validity()` builder method
+- [x] Added `ConditionalEffect` for runtime condition-dependent effects
+- [x] Added `Effect::when()` builder method for conditional effects
+- [x] Added `EffectDependencyGraph` with cycle detection
+- [x] Implemented topological sort for proper dependency ordering
+- [x] Added helper methods: `is_active_on()`, `next_activation()`, `should_apply()`, `apply_if()`
+- [x] All doc tests passing (8 new doc tests: ComposedEffect, TemporalEffect, ConditionalEffect, EffectDependencyGraph, Effect::compose, Effect::inverse)
+- [x] Total test coverage: 131 unit tests + 97 doc tests + 1 compile_fail test = 229 tests (up from 220)
 
-### Statute Relationship Improvements (v0.1.5)
-- [ ] Add `Statute::derives_from()` - track derivation relationships
-- [ ] Add `Statute::applies_to()` - specify applicable entity types
-- [ ] Add `Statute::exceptions()` - structured exception handling
-- [ ] Add `StatuteGraph` - full dependency graph with visualization hooks
-- [ ] Add cross-jurisdiction statute equivalence detection
+### Statute Relationship Improvements (v0.1.5) - COMPLETED
+- [x] Add `Statute::derives_from()` - track derivation relationships
+- [x] Add `Statute::applies_to()` - specify applicable entity types
+- [x] Add `Statute::exceptions()` - structured exception handling
+- [x] Add `StatuteGraph` - full dependency graph with visualization hooks
+- [x] Add cross-jurisdiction statute equivalence detection
+- [x] Added `StatuteException` struct for structured exception handling
+- [x] Added builder methods: `with_derives_from()`, `with_applies_to()`, `with_exception()`
+- [x] Added helper methods: `is_derived()`, `derivation_sources()`, `applies_to_entity_type()`, `has_entity_restrictions()`, `applicable_entity_types()`, `has_exceptions()`, `exception_list()`, `exception_count()`
+- [x] Implemented `StatuteGraph` with cycle detection and transitive closure analysis
+- [x] Added `CrossJurisdictionAnalyzer` with similarity-based equivalence detection
+- [x] All doc tests passing (117 doc tests total)
+- [x] 0 warnings (adhering to NO WARNINGS POLICY) ✓
 
-### Builder Pattern Extensions (v0.1.6)
-- [ ] Add `StatuteBuilder::from_template()` - build from statute templates
-- [ ] Add `StatuteBuilder::validate_progressive()` - validation at each step
-- [ ] Add `ConditionBuilder` - fluent API for complex condition construction
-- [ ] Add `EffectBuilder` - fluent API for effect construction
-- [ ] Add macro `statute!` for declarative statute definition
+### Builder Pattern Extensions (v0.1.6) - COMPLETED
+- [x] Add `StatuteBuilder::from_template()` - build from statute templates
+- [x] Add `StatuteBuilder::validate_progressive()` - validation at each step
+- [x] Add `ConditionBuilder` - fluent API for complex condition construction
+- [x] Add `EffectBuilder` - fluent API for effect construction
+- [x] Add macro `statute!` for declarative statute definition
+- [x] Implemented `ConditionBuilder` with fluent API for building complex conditions
+- [x] Added methods: `age()`, `income()`, `has_attribute()`, `attribute_equals()`, `custom()`, `and()`, `or()`, `build()`
+- [x] Implemented `EffectBuilder` with fluent API and convenience constructors
+- [x] Added methods: `grant()`, `revoke()`, `obligation()`, `effect_type()`, `description()`, `parameter()`, `build()`, `try_build()`
+- [x] Implemented `StatuteBuilder` with template support and progressive validation
+- [x] Added `from_template()` method to create statutes from existing templates
+- [x] Added `validate_progressive()` to enable field-by-field validation
+- [x] Added `validation_errors()` to inspect accumulated errors
+- [x] Implemented `statute!` declarative macro for clean syntax
+- [x] All doc tests passing (127 doc tests total, up from 117)
+- [x] 0 warnings (adhering to NO WARNINGS POLICY) ✓
+- [x] Total test coverage: 131 unit tests + 127 doc tests + 1 compile_fail test = 259 tests (up from 250)
 
-### Serialization & Interoperability (v0.1.7)
-- [ ] Add `Statute::to_yaml()` / `from_yaml()` - YAML serialization
-- [ ] Add `Statute::to_toml()` / `from_toml()` - TOML serialization
-- [ ] Add streaming deserialization for large statute collections
-- [ ] Add schema migration support for version changes
-- [ ] Add `Statute::hash()` - content-addressable statute hashing
+### Serialization & Interoperability (v0.1.7) - COMPLETED
+- [x] Add `Statute::to_yaml()` / `from_yaml()` - YAML serialization
+- [x] Add `Statute::to_toml()` / `from_toml()` - TOML serialization
+- [x] Add streaming deserialization for large statute collections
+- [x] Add schema migration support for version changes
+- [x] Add `Statute::hash()` - content-addressable statute hashing
+- [x] Added `YamlConverter` struct with `to_yaml()`, `from_yaml()`, and `from_yaml_multi()` methods
+- [x] Added `TomlConverter` struct with `to_toml()` and `from_toml()` methods
+- [x] Added `StreamingDeserializer` with `from_yaml_stream()` and `from_json_stream()` methods
+- [x] Added `StatuteHasher` with `hash()` and `verify()` methods using SHA-256
+- [x] Added `SchemaMigration` with `migrate()`, `can_migrate()`, and `current_version()` methods
+- [x] Added comprehensive tests for all new features (11 new tests)
+- [x] All doc tests passing (147 doc tests total, up from 136)
+- [x] All unit tests passing (140 unit tests)
+- [x] 0 warnings (adhering to NO WARNINGS POLICY) ✓
 
-### Testing Utilities (v0.1.8)
-- [ ] Add `StatuteTestBuilder` - test fixture generation
-- [ ] Add `ConditionGenerator` - random condition generation for property tests
-- [ ] Add `EvaluationContextMock` - mock context for testing
-- [ ] Add snapshot testing utilities for statute serialization
-- [ ] Add mutation testing support for condition logic
+### Testing Utilities (v0.1.8) - COMPLETED
+- [x] Add `StatuteTestBuilder` - test fixture generation
+- [x] Add `ConditionGenerator` - random condition generation for property tests
+- [x] Add `EvaluationContextMock` - mock context for testing
+- [x] Add snapshot testing utilities for statute serialization
+- [x] Add mutation testing support for condition logic
+- [x] Added `StatuteTestBuilder` with fluent API for test fixture generation
+- [x] Added `ConditionGenerator` for random condition generation with controlled nesting
+- [x] Added `EvaluationContextMock` implementing `EvaluationContext` trait
+- [x] Added `SnapshotTester` for snapshot testing with JSON/YAML/TOML support
+- [x] Added `MutationTester` for mutation testing of condition logic
+- [x] Added comprehensive tests for all testing utilities (8 new tests)
+- [x] All doc tests passing (157 doc tests total, up from 147)
+- [x] All unit tests passing (148 unit tests)
+- [x] 0 warnings (adhering to NO WARNINGS POLICY) ✓
 
 ### Performance & Memory (v0.1.9)
 - [ ] Add arena allocator for bulk statute operations

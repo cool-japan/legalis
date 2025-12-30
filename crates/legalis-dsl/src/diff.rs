@@ -46,7 +46,10 @@ pub enum Change {
     /// Effect modified
     EffectModified { old: String, new: String },
     /// Discretion changed
-    DiscretionChanged { old: Option<String>, new: Option<String> },
+    DiscretionChanged {
+        old: Option<String>,
+        new: Option<String>,
+    },
     /// Exception added
     ExceptionAdded { description: String },
     /// Exception removed
@@ -67,16 +70,12 @@ impl DocumentDiff {
         let old_ids: HashSet<&String> = old_doc.statutes.iter().map(|s| &s.id).collect();
         let new_ids: HashSet<&String> = new_doc.statutes.iter().map(|s| &s.id).collect();
 
-        let mut added_statutes: Vec<String> = new_ids
-            .difference(&old_ids)
-            .map(|s| (*s).clone())
-            .collect();
+        let mut added_statutes: Vec<String> =
+            new_ids.difference(&old_ids).map(|s| (*s).clone()).collect();
         added_statutes.sort();
 
-        let mut removed_statutes: Vec<String> = old_ids
-            .difference(&new_ids)
-            .map(|s| (*s).clone())
-            .collect();
+        let mut removed_statutes: Vec<String> =
+            old_ids.difference(&new_ids).map(|s| (*s).clone()).collect();
         removed_statutes.sort();
 
         let common_ids: Vec<_> = old_ids.intersection(&new_ids).collect();

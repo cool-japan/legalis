@@ -1136,6 +1136,14 @@ pub enum PrincipleCheck {
     Proportionality,
     /// Accessibility verification
     Accessibility,
+    /// Freedom of expression analysis
+    FreedomOfExpression,
+    /// Property rights verification
+    PropertyRights,
+    /// Procedural due process (detailed)
+    ProceduralDueProcess,
+    /// Equal protection analysis (comprehensive)
+    EqualProtection,
     /// Custom check with description and implementation
     Custom {
         /// Description of the custom check
@@ -1616,6 +1624,453 @@ pub fn check_retroactivity(statute: &Statute) -> PrincipleCheckResult {
                     .to_string(),
             );
         }
+    }
+
+    if issues.is_empty() {
+        let mut result = PrincipleCheckResult::pass();
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Checks freedom of expression principles.
+///
+/// Verifies that statutes do not unduly restrict speech, press, assembly,
+/// or other expressive activities without compelling justification.
+pub fn check_freedom_of_expression(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Check for prohibitions or obligations that might restrict expression
+    if matches!(
+        statute.effect.effect_type,
+        legalis_core::EffectType::Prohibition | legalis_core::EffectType::Obligation
+    ) {
+        let effect_desc_lower = statute.effect.description.to_lowercase();
+        let title_lower = statute.title.to_lowercase();
+
+        // Check for speech-related restrictions
+        let speech_keywords = [
+            "speech",
+            "speak",
+            "express",
+            "say",
+            "publish",
+            "broadcast",
+            "communicate",
+            "media",
+            "press",
+            "assembly",
+            "protest",
+            "demonstration",
+            "petition",
+            "religion",
+            "belief",
+            "opinion",
+        ];
+
+        let affects_expression = speech_keywords
+            .iter()
+            .any(|keyword| effect_desc_lower.contains(keyword) || title_lower.contains(keyword));
+
+        if affects_expression {
+            // Check if there's a compelling justification
+            let has_justification = effect_desc_lower.contains("safety")
+                || effect_desc_lower.contains("security")
+                || effect_desc_lower.contains("public health")
+                || effect_desc_lower.contains("emergency")
+                || effect_desc_lower.contains("imminent")
+                || effect_desc_lower.contains("violence")
+                || statute.discretion_logic.is_some();
+
+            if !has_justification {
+                issues.push(format!(
+                    "Statute '{}' may restrict freedom of expression without clear compelling justification",
+                    statute.id
+                ));
+                suggestions.push(
+                    "Add explicit justification for expression restrictions (e.g., public safety, imminent harm)"
+                        .to_string(),
+                );
+                suggestions.push(
+                    "Consider narrow tailoring to minimize impact on protected speech".to_string(),
+                );
+            } else {
+                suggestions.push(
+                    "Ensure restrictions are narrowly tailored and use least restrictive means"
+                        .to_string(),
+                );
+            }
+
+            // Check for prior restraint
+            if effect_desc_lower.contains("prior")
+                || effect_desc_lower.contains("advance")
+                || effect_desc_lower.contains("pre-approval")
+                || effect_desc_lower.contains("permit required")
+            {
+                issues.push(
+                    "Statute may impose prior restraint on expression, which is generally unconstitutional"
+                        .to_string(),
+                );
+                suggestions.push(
+                    "Consider post-publication remedies instead of prior restraint".to_string(),
+                );
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        let mut result = PrincipleCheckResult::pass();
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Checks property rights principles.
+///
+/// Verifies that statutes respect property rights and provide just compensation
+/// for takings or restrictions on property use.
+pub fn check_property_rights(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    let effect_desc_lower = statute.effect.description.to_lowercase();
+    let title_lower = statute.title.to_lowercase();
+
+    // Check for property-related effects
+    let property_keywords = [
+        "property",
+        "land",
+        "real estate",
+        "possession",
+        "ownership",
+        "seizure",
+        "confiscation",
+        "taking",
+        "eminent domain",
+        "expropriation",
+        "restriction",
+        "use",
+        "development",
+    ];
+
+    let affects_property = property_keywords
+        .iter()
+        .any(|keyword| effect_desc_lower.contains(keyword) || title_lower.contains(keyword));
+
+    if affects_property {
+        // Check for takings or restrictions
+        if matches!(
+            statute.effect.effect_type,
+            legalis_core::EffectType::Revoke
+                | legalis_core::EffectType::Prohibition
+                | legalis_core::EffectType::Obligation
+        ) {
+            // Check for compensation provisions
+            let has_compensation = effect_desc_lower.contains("compensation")
+                || effect_desc_lower.contains("reimbursement")
+                || effect_desc_lower.contains("payment")
+                || statute
+                    .effect
+                    .parameters
+                    .contains_key("compensation_amount");
+
+            if (effect_desc_lower.contains("taking")
+                || effect_desc_lower.contains("seiz")
+                || effect_desc_lower.contains("confiscat"))
+                && !has_compensation
+            {
+                issues.push(format!(
+                    "Statute '{}' may involve property taking without just compensation",
+                    statute.id
+                ));
+                suggestions.push(
+                    "Provide just compensation for property takings as required by law".to_string(),
+                );
+            }
+
+            // Check for regulatory takings
+            if effect_desc_lower.contains("prohibit")
+                || effect_desc_lower.contains("restrict")
+                || effect_desc_lower.contains("limit")
+            {
+                suggestions.push(
+                    "Consider whether regulatory restrictions constitute a taking requiring compensation"
+                        .to_string(),
+                );
+                suggestions.push(
+                    "Ensure restrictions permit economically viable use of property".to_string(),
+                );
+            }
+        }
+
+        // Check for due process in property deprivation
+        if matches!(statute.effect.effect_type, legalis_core::EffectType::Revoke) {
+            let has_procedure = effect_desc_lower.contains("hearing")
+                || effect_desc_lower.contains("notice")
+                || effect_desc_lower.contains("appeal")
+                || statute.discretion_logic.is_some();
+
+            if !has_procedure {
+                issues.push(
+                    "Property deprivation may lack adequate procedural safeguards".to_string(),
+                );
+                suggestions.push(
+                    "Provide notice and opportunity for hearing before property deprivation"
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        let mut result = PrincipleCheckResult::pass();
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Checks procedural due process principles (detailed).
+///
+/// Verifies that statutes provide adequate procedural safeguards when depriving
+/// individuals of life, liberty, or property interests.
+pub fn check_procedural_due_process(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Identify deprivations requiring due process
+    let requires_due_process = matches!(
+        statute.effect.effect_type,
+        legalis_core::EffectType::Revoke
+            | legalis_core::EffectType::Prohibition
+            | legalis_core::EffectType::MonetaryTransfer
+    );
+
+    if requires_due_process {
+        let effect_desc_lower = statute.effect.description.to_lowercase();
+
+        // Required procedural elements
+        let has_notice = effect_desc_lower.contains("notice")
+            || effect_desc_lower.contains("notification")
+            || effect_desc_lower.contains("inform");
+
+        let has_hearing = effect_desc_lower.contains("hearing")
+            || effect_desc_lower.contains("proceeding")
+            || effect_desc_lower.contains("tribunal");
+
+        let has_representation = effect_desc_lower.contains("represent")
+            || effect_desc_lower.contains("counsel")
+            || effect_desc_lower.contains("attorney")
+            || effect_desc_lower.contains("lawyer");
+
+        let has_appeal = effect_desc_lower.contains("appeal")
+            || effect_desc_lower.contains("review")
+            || effect_desc_lower.contains("reconsideration");
+
+        let has_evidence = effect_desc_lower.contains("evidence")
+            || effect_desc_lower.contains("testimony")
+            || effect_desc_lower.contains("witness");
+
+        // Check for critical procedural safeguards
+        if !has_notice {
+            issues.push("Statute lacks explicit notice requirement before deprivation".to_string());
+            suggestions
+                .push("Add requirement for adequate notice before taking action".to_string());
+        }
+
+        if !has_hearing {
+            issues.push("Statute lacks explicit hearing or opportunity to be heard".to_string());
+            suggestions
+                .push("Provide opportunity for hearing before final deprivation".to_string());
+        }
+
+        if !has_representation {
+            suggestions
+                .push("Consider allowing right to legal representation in proceedings".to_string());
+        }
+
+        if !has_appeal {
+            suggestions.push(
+                "Consider providing appeal or review mechanism for adverse decisions".to_string(),
+            );
+        }
+
+        if !has_evidence {
+            suggestions.push(
+                "Allow parties to present evidence and confront adverse evidence".to_string(),
+            );
+        }
+
+        // Check for impartiality
+        if statute.discretion_logic.is_some() {
+            suggestions.push(
+                "Ensure decision-makers are impartial and free from conflicts of interest"
+                    .to_string(),
+            );
+        }
+
+        // Check for timely proceedings
+        if !effect_desc_lower.contains("timely")
+            && !effect_desc_lower.contains("prompt")
+            && !effect_desc_lower.contains("within")
+        {
+            suggestions
+                .push("Specify timeframes to ensure timely resolution of proceedings".to_string());
+        }
+    }
+
+    if issues.is_empty() {
+        let mut result = PrincipleCheckResult::pass();
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    } else {
+        let mut result = PrincipleCheckResult::fail(issues);
+        for suggestion in suggestions {
+            result = result.with_suggestion(suggestion);
+        }
+        result
+    }
+}
+
+/// Checks equal protection principles (comprehensive).
+///
+/// Verifies that statutes treat similarly situated persons equally and
+/// that any differential treatment has adequate justification.
+pub fn check_equal_protection(statute: &Statute) -> PrincipleCheckResult {
+    let mut issues = Vec::new();
+    let mut suggestions = Vec::new();
+
+    // Check for classifications based on protected characteristics
+    let mut classifications = Vec::new();
+
+    for condition in &statute.preconditions {
+        match condition {
+            legalis_core::Condition::Age { .. } => {
+                classifications.push(("age", "intermediate scrutiny"));
+            }
+            legalis_core::Condition::AttributeEquals { key, value } => {
+                let key_lower = key.to_lowercase();
+                let value_lower = value.to_lowercase();
+                let combined = format!("{} {}", key_lower, value_lower);
+
+                // Suspect classifications (strict scrutiny)
+                if combined.contains("race")
+                    || combined.contains("national origin")
+                    || combined.contains("ethnicity")
+                {
+                    classifications.push(("race/national origin", "strict scrutiny"));
+                    issues.push(format!(
+                        "Classification based on race/national origin in '{}: {}' requires strict scrutiny",
+                        key, value
+                    ));
+                }
+
+                if combined.contains("religion") || combined.contains("religious") {
+                    classifications.push(("religion", "strict scrutiny"));
+                    issues.push(format!(
+                        "Classification based on religion in '{}: {}' requires strict scrutiny",
+                        key, value
+                    ));
+                }
+
+                // Quasi-suspect classifications (intermediate scrutiny)
+                if combined.contains("gender")
+                    || combined.contains("sex")
+                    || key_lower == "gender"
+                    || key_lower == "sex"
+                {
+                    classifications.push(("gender/sex", "intermediate scrutiny"));
+                    suggestions.push(format!(
+                        "Gender classification in '{}: {}' requires substantial justification",
+                        key, value
+                    ));
+                }
+
+                if combined.contains("citizenship") || combined.contains("alien") {
+                    classifications.push(("citizenship", "intermediate scrutiny"));
+                    suggestions.push(format!(
+                        "Citizenship classification in '{}: {}' may require heightened scrutiny",
+                        key, value
+                    ));
+                }
+            }
+            legalis_core::Condition::Income { .. } => {
+                classifications.push(("economic status", "rational basis"));
+                suggestions.push("Ensure economic classifications have rational basis".to_string());
+            }
+            _ => {}
+        }
+    }
+
+    // Check effect description for discriminatory language
+    let effect_desc_lower = statute.effect.description.to_lowercase();
+    if effect_desc_lower.contains("discriminat")
+        || effect_desc_lower.contains("preferential")
+        || effect_desc_lower.contains("exclusive")
+    {
+        issues.push("Effect description suggests potential discriminatory treatment".to_string());
+        suggestions.push(
+            "Ensure any differential treatment serves important governmental interest".to_string(),
+        );
+    }
+
+    // Provide guidance based on classifications found
+    if !classifications.is_empty() {
+        suggestions.push(format!(
+            "Statute contains {} classification(s) requiring review",
+            classifications.len()
+        ));
+
+        for (classification, standard) in &classifications {
+            if standard == &"strict scrutiny" {
+                suggestions.push(format!(
+                    "For {} classification: Must serve compelling governmental interest and be narrowly tailored",
+                    classification
+                ));
+            } else if standard == &"intermediate scrutiny" {
+                suggestions.push(format!(
+                    "For {} classification: Must serve important governmental interest and be substantially related",
+                    classification
+                ));
+            }
+        }
+    }
+
+    // Check for arbitrary classifications
+    if statute.preconditions.len() > 3 && statute.discretion_logic.is_none() {
+        suggestions.push(
+            "Complex preconditions without discretion logic may create arbitrary distinctions"
+                .to_string(),
+        );
+        suggestions.push(
+            "Consider adding discretion logic to explain classification rationale".to_string(),
+        );
     }
 
     if issues.is_empty() {
@@ -5873,6 +6328,12 @@ impl PrincipleRegistry {
                         PrincipleCheck::PrivacyImpact => check_privacy_impact(statute),
                         PrincipleCheck::Proportionality => check_proportionality(statute),
                         PrincipleCheck::Accessibility => check_accessibility(statute),
+                        PrincipleCheck::FreedomOfExpression => check_freedom_of_expression(statute),
+                        PrincipleCheck::PropertyRights => check_property_rights(statute),
+                        PrincipleCheck::ProceduralDueProcess => {
+                            check_procedural_due_process(statute)
+                        }
+                        PrincipleCheck::EqualProtection => check_equal_protection(statute),
                         PrincipleCheck::Custom { .. } => {
                             // Custom checks would be implemented here
                             PrincipleCheckResult::pass()
@@ -5908,6 +6369,16 @@ impl PrincipleRegistry {
                                 check_proportionality(statute).passed
                             }
                             PrincipleCheck::Accessibility => check_accessibility(statute).passed,
+                            PrincipleCheck::FreedomOfExpression => {
+                                check_freedom_of_expression(statute).passed
+                            }
+                            PrincipleCheck::PropertyRights => check_property_rights(statute).passed,
+                            PrincipleCheck::ProceduralDueProcess => {
+                                check_procedural_due_process(statute).passed
+                            }
+                            PrincipleCheck::EqualProtection => {
+                                check_equal_protection(statute).passed
+                            }
                             PrincipleCheck::Custom { .. } => true,
                         })
                     })
@@ -6834,13 +7305,25 @@ fn calculate_drafting_quality(statute: &Statute) -> f64 {
                 || statute.effect.description.to_lowercase().contains("allow")
         }
         legalis_core::EffectType::Prohibition => {
-            statute.effect.description.to_lowercase().contains("prohibit")
+            statute
+                .effect
+                .description
+                .to_lowercase()
+                .contains("prohibit")
                 || statute.effect.description.to_lowercase().contains("forbid")
-                || statute.effect.description.to_lowercase().contains("not allow")
+                || statute
+                    .effect
+                    .description
+                    .to_lowercase()
+                    .contains("not allow")
         }
         legalis_core::EffectType::Obligation => {
             statute.effect.description.to_lowercase().contains("must")
-                || statute.effect.description.to_lowercase().contains("require")
+                || statute
+                    .effect
+                    .description
+                    .to_lowercase()
+                    .contains("require")
                 || statute.effect.description.to_lowercase().contains("shall")
         }
         _ => true, // Other types are always consistent
@@ -7370,7 +7853,10 @@ pub fn detect_ambiguities(statute: &Statute) -> Vec<Ambiguity> {
                 ambiguities.push(Ambiguity::new(
                     AmbiguityType::ImplicitAssumption,
                     format!("preconditions[{}]", idx),
-                    format!("Custom condition may have implicit assumptions: '{}'", description),
+                    format!(
+                        "Custom condition may have implicit assumptions: '{}'",
+                        description
+                    ),
                     "Replace custom condition with explicit, testable conditions",
                     8,
                 ));
@@ -7433,26 +7919,19 @@ fn contains_vague_terms(text: &str) -> bool {
 /// Checks if text contains ambiguous quantifiers.
 fn contains_ambiguous_quantifiers(text: &str) -> bool {
     let ambiguous_quantifiers = [
-        "some",
-        "several",
-        "many",
-        "few",
-        "multiple",
-        "various",
-        "numerous",
-        "certain",
+        "some", "several", "many", "few", "multiple", "various", "numerous", "certain",
     ];
 
     let text_lower = text.to_lowercase();
-    ambiguous_quantifiers.iter().any(|quant| {
-        text_lower.contains(&format!(" {} ", quant)) || text_lower.starts_with(quant)
-    })
+    ambiguous_quantifiers
+        .iter()
+        .any(|quant| text_lower.contains(&format!(" {} ", quant)) || text_lower.starts_with(quant))
 }
 
 /// Detects overlapping conditions using SMT solver.
 #[cfg(feature = "z3-solver")]
 fn detect_overlapping_conditions(conditions: &[legalis_core::Condition]) -> Option<String> {
-    use crate::smt::{create_z3_context, SmtVerifier};
+    use crate::smt::{SmtVerifier, create_z3_context};
 
     if conditions.len() < 2 {
         return None;
@@ -7494,14 +7973,8 @@ pub fn ambiguity_report(statute: &Statute) -> String {
     }
 
     let mut report = String::new();
-    report.push_str(&format!(
-        "# Ambiguity Report for '{}'\n\n",
-        statute.id
-    ));
-    report.push_str(&format!(
-        "**Total Ambiguities**: {}\n\n",
-        ambiguities.len()
-    ));
+    report.push_str(&format!("# Ambiguity Report for '{}'\n\n", statute.id));
+    report.push_str(&format!("**Total Ambiguities**: {}\n\n", ambiguities.len()));
 
     // Group by severity
     let critical = ambiguities.iter().filter(|a| a.severity >= 8).count();
@@ -7524,7 +7997,12 @@ pub fn ambiguity_report(statute: &Statute) -> String {
     report.push_str("\n## Detected Ambiguities\n\n");
 
     for (idx, ambiguity) in ambiguities.iter().enumerate() {
-        report.push_str(&format!("### {}. {} (Severity: {})\n\n", idx + 1, ambiguity.ambiguity_type, ambiguity.severity));
+        report.push_str(&format!(
+            "### {}. {} (Severity: {})\n\n",
+            idx + 1,
+            ambiguity.ambiguity_type,
+            ambiguity.severity
+        ));
         report.push_str(&format!("- **Location**: `{}`\n", ambiguity.location));
         report.push_str(&format!("- **Issue**: {}\n", ambiguity.description));
         report.push_str(&format!("- **Suggestion**: {}\n\n", ambiguity.suggestion));
@@ -8710,6 +9188,1158 @@ pub fn consolidated_compliance_checklist(statutes: &[Statute]) -> String {
     }
 
     report
+}
+
+// ============================================================================
+// Reporting Extensions (v0.1.8)
+// ============================================================================
+
+/// Compliance certification document
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ComplianceCertification {
+    /// Certificate ID
+    pub certificate_id: String,
+    /// Certification date
+    pub certification_date: String,
+    /// Organization name
+    pub organization: String,
+    /// Statutes certified
+    pub statute_ids: Vec<String>,
+    /// Verification results summary
+    pub verification_summary: VerificationSummary,
+    /// Certifying authority
+    pub certifying_authority: String,
+    /// Certificate validity period
+    pub valid_until: Option<String>,
+    /// Additional notes
+    pub notes: Vec<String>,
+}
+
+/// Summary of verification results for certification
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerificationSummary {
+    /// Total statutes verified
+    pub total_statutes: usize,
+    /// Statutes passed
+    pub passed_count: usize,
+    /// Statutes failed
+    pub failed_count: usize,
+    /// Pass rate percentage
+    pub pass_rate: f64,
+    /// Critical errors found
+    pub critical_errors: usize,
+    /// Warnings found
+    pub warnings: usize,
+}
+
+/// Generates a compliance certification document
+pub fn generate_compliance_certification(
+    certificate_id: impl Into<String>,
+    organization: impl Into<String>,
+    certifying_authority: impl Into<String>,
+    statutes: &[Statute],
+    result: &VerificationResult,
+    valid_days: Option<u32>,
+) -> ComplianceCertification {
+    use chrono::{Duration, Utc};
+
+    let now = Utc::now();
+    let certification_date = now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+
+    let valid_until = valid_days.map(|days| {
+        (now + Duration::days(days as i64))
+            .format("%Y-%m-%d %H:%M:%S UTC")
+            .to_string()
+    });
+
+    let statute_ids: Vec<String> = statutes.iter().map(|s| s.id.clone()).collect();
+
+    let critical_errors = result
+        .errors
+        .iter()
+        .filter(|e| e.severity() == Severity::Critical)
+        .count();
+
+    let total_statutes = statutes.len();
+    let passed_count = if result.passed { total_statutes } else { 0 };
+    let failed_count = total_statutes - passed_count;
+    let pass_rate = if total_statutes > 0 {
+        (passed_count as f64 / total_statutes as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let verification_summary = VerificationSummary {
+        total_statutes,
+        passed_count,
+        failed_count,
+        pass_rate,
+        critical_errors,
+        warnings: result.warnings.len(),
+    };
+
+    ComplianceCertification {
+        certificate_id: certificate_id.into(),
+        certification_date,
+        organization: organization.into(),
+        statute_ids,
+        verification_summary,
+        certifying_authority: certifying_authority.into(),
+        valid_until,
+        notes: Vec::new(),
+    }
+}
+
+/// Exports compliance certification as a formatted report
+pub fn compliance_certification_report(cert: &ComplianceCertification) -> String {
+    let mut report = String::from("# COMPLIANCE CERTIFICATION\n\n");
+    report.push_str("---\n\n");
+
+    report.push_str(&format!("**Certificate ID**: {}\n\n", cert.certificate_id));
+    report.push_str(&format!(
+        "**Certification Date**: {}\n\n",
+        cert.certification_date
+    ));
+    report.push_str(&format!("**Organization**: {}\n\n", cert.organization));
+    report.push_str(&format!(
+        "**Certifying Authority**: {}\n\n",
+        cert.certifying_authority
+    ));
+
+    if let Some(ref valid_until) = cert.valid_until {
+        report.push_str(&format!("**Valid Until**: {}\n\n", valid_until));
+    }
+
+    report.push_str("---\n\n");
+    report.push_str("## Verification Summary\n\n");
+
+    let summary = &cert.verification_summary;
+    report.push_str(&format!(
+        "- **Total Statutes Verified**: {}\n",
+        summary.total_statutes
+    ));
+    report.push_str(&format!("- **Passed**: {}\n", summary.passed_count));
+    report.push_str(&format!("- **Failed**: {}\n", summary.failed_count));
+    report.push_str(&format!("- **Pass Rate**: {:.2}%\n", summary.pass_rate));
+    report.push_str(&format!(
+        "- **Critical Errors**: {}\n",
+        summary.critical_errors
+    ));
+    report.push_str(&format!("- **Warnings**: {}\n\n", summary.warnings));
+
+    report.push_str("## Certified Statutes\n\n");
+    for statute_id in &cert.statute_ids {
+        report.push_str(&format!("- {}\n", statute_id));
+    }
+    report.push('\n');
+
+    if !cert.notes.is_empty() {
+        report.push_str("## Additional Notes\n\n");
+        for note in &cert.notes {
+            report.push_str(&format!("- {}\n", note));
+        }
+        report.push('\n');
+    }
+
+    report.push_str("---\n\n");
+    report.push_str("This certification confirms that the listed statutes have been verified\n");
+    report.push_str("using the Legalis Verification System and meet the specified compliance\n");
+    report.push_str("requirements as of the certification date.\n");
+
+    report
+}
+
+/// Regulatory filing report for submitting to regulatory bodies
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RegulatoryFiling {
+    /// Filing ID
+    pub filing_id: String,
+    /// Filing date
+    pub filing_date: String,
+    /// Regulatory body
+    pub regulatory_body: String,
+    /// Filing type (e.g., "Annual Compliance", "New Statute", "Amendment")
+    pub filing_type: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Statutes included in filing
+    pub statutes: Vec<StatuteFilingInfo>,
+    /// Compliance status
+    pub compliance_status: String,
+    /// Supporting documentation references
+    pub documentation_refs: Vec<String>,
+}
+
+/// Information about a statute in a regulatory filing
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteFilingInfo {
+    /// Statute ID
+    pub statute_id: String,
+    /// Statute title
+    pub title: String,
+    /// Effective date
+    pub effective_date: Option<String>,
+    /// Enactment date
+    pub enactment_date: Option<String>,
+    /// Compliance status for this statute
+    pub status: String,
+    /// Issues found (if any)
+    pub issues: Vec<String>,
+}
+
+/// Generates a regulatory filing report
+#[allow(clippy::too_many_arguments)]
+pub fn generate_regulatory_filing(
+    filing_id: impl Into<String>,
+    regulatory_body: impl Into<String>,
+    filing_type: impl Into<String>,
+    jurisdiction: impl Into<String>,
+    statutes: &[Statute],
+    results: &[VerificationResult],
+) -> RegulatoryFiling {
+    use chrono::Utc;
+
+    let filing_date = Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+
+    let statute_infos: Vec<StatuteFilingInfo> = statutes
+        .iter()
+        .zip(results.iter())
+        .map(|(statute, result)| {
+            let status = if result.passed {
+                "Compliant".to_string()
+            } else if result.has_critical_errors() {
+                "Non-Compliant (Critical)".to_string()
+            } else {
+                "Non-Compliant".to_string()
+            };
+
+            let issues: Vec<String> = result.errors.iter().map(|e| format!("{}", e)).collect();
+
+            StatuteFilingInfo {
+                statute_id: statute.id.clone(),
+                title: statute.title.clone(),
+                effective_date: statute
+                    .temporal_validity
+                    .effective_date
+                    .as_ref()
+                    .map(|d| d.format("%Y-%m-%d").to_string()),
+                enactment_date: statute
+                    .temporal_validity
+                    .enacted_at
+                    .as_ref()
+                    .map(|dt| dt.format("%Y-%m-%d").to_string()),
+                status,
+                issues,
+            }
+        })
+        .collect();
+
+    let all_compliant = statute_infos.iter().all(|s| s.status == "Compliant");
+    let any_critical = statute_infos.iter().any(|s| s.status.contains("Critical"));
+
+    let compliance_status = if all_compliant {
+        "Fully Compliant".to_string()
+    } else if any_critical {
+        "Non-Compliant (Critical Issues)".to_string()
+    } else {
+        "Partially Compliant".to_string()
+    };
+
+    RegulatoryFiling {
+        filing_id: filing_id.into(),
+        filing_date,
+        regulatory_body: regulatory_body.into(),
+        filing_type: filing_type.into(),
+        jurisdiction: jurisdiction.into(),
+        statutes: statute_infos,
+        compliance_status,
+        documentation_refs: Vec::new(),
+    }
+}
+
+/// Exports regulatory filing as a formatted report
+pub fn regulatory_filing_report(filing: &RegulatoryFiling) -> String {
+    let mut report = String::from("# REGULATORY FILING REPORT\n\n");
+    report.push_str("---\n\n");
+
+    report.push_str(&format!("**Filing ID**: {}\n\n", filing.filing_id));
+    report.push_str(&format!("**Filing Date**: {}\n\n", filing.filing_date));
+    report.push_str(&format!(
+        "**Regulatory Body**: {}\n\n",
+        filing.regulatory_body
+    ));
+    report.push_str(&format!("**Filing Type**: {}\n\n", filing.filing_type));
+    report.push_str(&format!("**Jurisdiction**: {}\n\n", filing.jurisdiction));
+    report.push_str(&format!(
+        "**Compliance Status**: {}\n\n",
+        filing.compliance_status
+    ));
+
+    report.push_str("---\n\n");
+    report.push_str("## Statutes Included in Filing\n\n");
+
+    for (idx, statute_info) in filing.statutes.iter().enumerate() {
+        report.push_str(&format!("### {} - {}\n\n", idx + 1, statute_info.title));
+        report.push_str(&format!("**ID**: {}\n\n", statute_info.statute_id));
+        report.push_str(&format!("**Status**: {}\n\n", statute_info.status));
+
+        if let Some(ref enactment) = statute_info.enactment_date {
+            report.push_str(&format!("**Enactment Date**: {}\n\n", enactment));
+        }
+
+        if let Some(ref effective) = statute_info.effective_date {
+            report.push_str(&format!("**Effective Date**: {}\n\n", effective));
+        }
+
+        if !statute_info.issues.is_empty() {
+            report.push_str("**Issues Identified**:\n\n");
+            for issue in &statute_info.issues {
+                report.push_str(&format!("- {}\n", issue));
+            }
+            report.push('\n');
+        }
+    }
+
+    if !filing.documentation_refs.is_empty() {
+        report.push_str("## Supporting Documentation\n\n");
+        for doc_ref in &filing.documentation_refs {
+            report.push_str(&format!("- {}\n", doc_ref));
+        }
+        report.push('\n');
+    }
+
+    report.push_str("---\n\n");
+    report.push_str("This filing has been prepared in accordance with applicable regulatory\n");
+    report.push_str(
+        "requirements and includes all necessary verification and compliance information.\n",
+    );
+
+    report
+}
+
+/// Executive summary of verification results
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecutiveSummary {
+    /// Summary title
+    pub title: String,
+    /// Generation date
+    pub date: String,
+    /// Key findings
+    pub key_findings: Vec<String>,
+    /// Overall assessment
+    pub overall_assessment: String,
+    /// Statistics
+    pub statistics: SummaryStatistics,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+    /// Risk level (Low, Medium, High, Critical)
+    pub risk_level: String,
+}
+
+/// Statistics for executive summary
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SummaryStatistics {
+    /// Total statutes analyzed
+    pub total_statutes: usize,
+    /// Statutes with issues
+    pub statutes_with_issues: usize,
+    /// Total issues found
+    pub total_issues: usize,
+    /// Critical issues
+    pub critical_issues: usize,
+    /// High severity issues
+    pub high_severity_issues: usize,
+    /// Medium severity issues
+    pub medium_severity_issues: usize,
+    /// Average quality score
+    pub average_quality_score: f64,
+}
+
+/// Generates an executive summary from verification results
+pub fn generate_executive_summary(
+    title: impl Into<String>,
+    statutes: &[Statute],
+    result: &VerificationResult,
+) -> ExecutiveSummary {
+    use chrono::Utc;
+
+    let date = Utc::now().format("%Y-%m-%d").to_string();
+
+    let severity_counts = result.severity_counts();
+    let critical_issues = *severity_counts.get(&Severity::Critical).unwrap_or(&0);
+    let high_severity = *severity_counts.get(&Severity::Error).unwrap_or(&0);
+    let medium_severity = *severity_counts.get(&Severity::Warning).unwrap_or(&0);
+
+    let total_issues = result.errors.len();
+    let statutes_with_issues = if total_issues > 0 { statutes.len() } else { 0 };
+
+    // Calculate average quality score
+    let quality_scores: Vec<f64> = statutes
+        .iter()
+        .map(|s| analyze_quality(s).overall_score)
+        .collect();
+    let average_quality_score = if !quality_scores.is_empty() {
+        quality_scores.iter().sum::<f64>() / quality_scores.len() as f64
+    } else {
+        0.0
+    };
+
+    let statistics = SummaryStatistics {
+        total_statutes: statutes.len(),
+        statutes_with_issues,
+        total_issues,
+        critical_issues,
+        high_severity_issues: high_severity,
+        medium_severity_issues: medium_severity,
+        average_quality_score,
+    };
+
+    // Determine risk level
+    let risk_level = if critical_issues > 0 {
+        "Critical".to_string()
+    } else if high_severity > 5 {
+        "High".to_string()
+    } else if high_severity > 0 || medium_severity > 5 {
+        "Medium".to_string()
+    } else {
+        "Low".to_string()
+    };
+
+    // Generate key findings
+    let mut key_findings = Vec::new();
+
+    if result.passed {
+        key_findings.push("All statutes passed verification checks".to_string());
+    } else {
+        key_findings.push(format!(
+            "Found {} total issues across {} statutes",
+            total_issues, statutes_with_issues
+        ));
+    }
+
+    if critical_issues > 0 {
+        key_findings.push(format!(
+            "{} critical issues requiring immediate attention",
+            critical_issues
+        ));
+    }
+
+    if average_quality_score >= 80.0 {
+        key_findings.push(format!(
+            "High average quality score: {:.1}/100",
+            average_quality_score
+        ));
+    } else if average_quality_score < 60.0 {
+        key_findings.push(format!(
+            "Low average quality score: {:.1}/100 - improvement needed",
+            average_quality_score
+        ));
+    }
+
+    // Generate overall assessment
+    let overall_assessment = if critical_issues > 0 {
+        "Critical issues detected. Immediate remediation required before deployment.".to_string()
+    } else if high_severity > 0 {
+        "Significant issues found. Review and remediation recommended.".to_string()
+    } else if medium_severity > 0 {
+        "Minor issues identified. Consider addressing before final deployment.".to_string()
+    } else {
+        "No significant issues detected. Statutes are ready for deployment.".to_string()
+    };
+
+    // Generate recommendations
+    let mut recommendations = Vec::new();
+
+    if critical_issues > 0 {
+        recommendations.push("Address all critical issues before proceeding".to_string());
+    }
+
+    if average_quality_score < 70.0 {
+        recommendations.push("Improve statute quality scores through clearer drafting".to_string());
+    }
+
+    if !result.suggestions.is_empty() {
+        recommendations.push("Review and implement suggested improvements".to_string());
+    }
+
+    if recommendations.is_empty() {
+        recommendations.push("Continue regular verification checks".to_string());
+        recommendations.push("Monitor for any changes requiring re-verification".to_string());
+    }
+
+    ExecutiveSummary {
+        title: title.into(),
+        date,
+        key_findings,
+        overall_assessment,
+        statistics,
+        recommendations,
+        risk_level,
+    }
+}
+
+/// Exports executive summary as a formatted report
+pub fn executive_summary_report(summary: &ExecutiveSummary) -> String {
+    let mut report = String::from("# EXECUTIVE SUMMARY\n\n");
+
+    report.push_str(&format!("## {}\n\n", summary.title));
+    report.push_str(&format!("**Date**: {}\n\n", summary.date));
+    report.push_str(&format!("**Risk Level**: {}\n\n", summary.risk_level));
+
+    report.push_str("---\n\n");
+    report.push_str("## Overall Assessment\n\n");
+    report.push_str(&format!("{}\n\n", summary.overall_assessment));
+
+    report.push_str("## Key Findings\n\n");
+    for finding in &summary.key_findings {
+        report.push_str(&format!("- {}\n", finding));
+    }
+    report.push('\n');
+
+    report.push_str("## Statistics\n\n");
+    let stats = &summary.statistics;
+    report.push_str(&format!(
+        "- **Total Statutes Analyzed**: {}\n",
+        stats.total_statutes
+    ));
+    report.push_str(&format!(
+        "- **Statutes with Issues**: {}\n",
+        stats.statutes_with_issues
+    ));
+    report.push_str(&format!(
+        "- **Total Issues Found**: {}\n",
+        stats.total_issues
+    ));
+    report.push_str(&format!(
+        "- **Critical Issues**: {}\n",
+        stats.critical_issues
+    ));
+    report.push_str(&format!(
+        "- **High Severity Issues**: {}\n",
+        stats.high_severity_issues
+    ));
+    report.push_str(&format!(
+        "- **Medium Severity Issues**: {}\n",
+        stats.medium_severity_issues
+    ));
+    report.push_str(&format!(
+        "- **Average Quality Score**: {:.1}/100\n\n",
+        stats.average_quality_score
+    ));
+
+    report.push_str("## Recommendations\n\n");
+    for (idx, rec) in summary.recommendations.iter().enumerate() {
+        report.push_str(&format!("{}. {}\n", idx + 1, rec));
+    }
+    report.push('\n');
+
+    report.push_str("---\n\n");
+    report.push_str(
+        "*This executive summary provides a high-level overview of the verification results.*\n",
+    );
+    report.push_str("*For detailed findings, please refer to the complete verification report.*\n");
+
+    report
+}
+
+/// Report template for customizable report generation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReportTemplate {
+    /// Template name
+    pub name: String,
+    /// Sections to include in the report
+    pub sections: Vec<ReportSection>,
+    /// Header text
+    pub header: Option<String>,
+    /// Footer text
+    pub footer: Option<String>,
+    /// Whether to include table of contents
+    pub include_toc: bool,
+}
+
+/// Section in a report template
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ReportSection {
+    /// Executive summary section
+    ExecutiveSummary,
+    /// Verification results
+    VerificationResults,
+    /// Quality metrics
+    QualityMetrics,
+    /// Compliance checklist
+    ComplianceChecklist,
+    /// Conflict detection
+    ConflictDetection,
+    /// Statistical analysis
+    StatisticalAnalysis,
+    /// Ambiguity detection
+    AmbiguityDetection,
+    /// Regulatory impact
+    RegulatoryImpact,
+    /// Graph analysis
+    GraphAnalysis,
+    /// Custom section with markdown content
+    Custom { title: String, content: String },
+}
+
+impl ReportTemplate {
+    /// Creates a new report template
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            sections: Vec::new(),
+            header: None,
+            footer: None,
+            include_toc: false,
+        }
+    }
+
+    /// Adds a section to the template
+    pub fn with_section(mut self, section: ReportSection) -> Self {
+        self.sections.push(section);
+        self
+    }
+
+    /// Sets the header text
+    pub fn with_header(mut self, header: impl Into<String>) -> Self {
+        self.header = Some(header.into());
+        self
+    }
+
+    /// Sets the footer text
+    pub fn with_footer(mut self, footer: impl Into<String>) -> Self {
+        self.footer = Some(footer.into());
+        self
+    }
+
+    /// Enables table of contents
+    pub fn with_toc(mut self) -> Self {
+        self.include_toc = true;
+        self
+    }
+}
+
+/// Generates a custom report based on a template
+pub fn generate_custom_report(
+    template: &ReportTemplate,
+    statutes: &[Statute],
+    result: &VerificationResult,
+) -> String {
+    let mut report = String::new();
+
+    // Add header
+    if let Some(ref header) = template.header {
+        report.push_str(header);
+        report.push_str("\n\n---\n\n");
+    }
+
+    // Add table of contents if requested
+    if template.include_toc {
+        report.push_str("## Table of Contents\n\n");
+        for (idx, section) in template.sections.iter().enumerate() {
+            let section_name = match section {
+                ReportSection::ExecutiveSummary => "Executive Summary",
+                ReportSection::VerificationResults => "Verification Results",
+                ReportSection::QualityMetrics => "Quality Metrics",
+                ReportSection::ComplianceChecklist => "Compliance Checklist",
+                ReportSection::ConflictDetection => "Conflict Detection",
+                ReportSection::StatisticalAnalysis => "Statistical Analysis",
+                ReportSection::AmbiguityDetection => "Ambiguity Detection",
+                ReportSection::RegulatoryImpact => "Regulatory Impact Assessment",
+                ReportSection::GraphAnalysis => "Graph Analysis",
+                ReportSection::Custom { title, .. } => title,
+            };
+            report.push_str(&format!("{}. {}\n", idx + 1, section_name));
+        }
+        report.push_str("\n---\n\n");
+    }
+
+    // Generate each section
+    for section in &template.sections {
+        match section {
+            ReportSection::ExecutiveSummary => {
+                let summary = generate_executive_summary(&template.name, statutes, result);
+                report.push_str(&executive_summary_report(&summary));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::VerificationResults => {
+                report.push_str("# Verification Results\n\n");
+                report.push_str(&format!(
+                    "**Status**: {}\n\n",
+                    if result.passed { "PASSED" } else { "FAILED" }
+                ));
+
+                if !result.errors.is_empty() {
+                    report.push_str("## Errors\n\n");
+                    for (idx, error) in result.errors.iter().enumerate() {
+                        report.push_str(&format!(
+                            "{}. [{:?}] {}\n",
+                            idx + 1,
+                            error.severity(),
+                            error
+                        ));
+                    }
+                    report.push('\n');
+                }
+
+                if !result.warnings.is_empty() {
+                    report.push_str("## Warnings\n\n");
+                    for (idx, warning) in result.warnings.iter().enumerate() {
+                        report.push_str(&format!("{}. {}\n", idx + 1, warning));
+                    }
+                    report.push('\n');
+                }
+
+                report.push_str("---\n\n");
+            }
+            ReportSection::QualityMetrics => {
+                report.push_str(&quality_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::ComplianceChecklist => {
+                report.push_str(&consolidated_compliance_checklist(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::ConflictDetection => {
+                report.push_str(&conflict_detection_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::StatisticalAnalysis => {
+                report.push_str(&statistics_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::AmbiguityDetection => {
+                report.push_str(&batch_ambiguity_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::RegulatoryImpact => {
+                report.push_str(&regulatory_impact_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::GraphAnalysis => {
+                report.push_str(&graph_analysis_report(statutes));
+                report.push_str("\n---\n\n");
+            }
+            ReportSection::Custom { title, content } => {
+                report.push_str(&format!("# {}\n\n", title));
+                report.push_str(content);
+                report.push_str("\n\n---\n\n");
+            }
+        }
+    }
+
+    // Add footer
+    if let Some(ref footer) = template.footer {
+        report.push_str(footer);
+        report.push('\n');
+    }
+
+    report
+}
+
+/// Creates a standard comprehensive report template
+pub fn standard_report_template() -> ReportTemplate {
+    ReportTemplate::new("Standard Verification Report")
+        .with_header("# Legalis Verification Report")
+        .with_toc()
+        .with_section(ReportSection::ExecutiveSummary)
+        .with_section(ReportSection::VerificationResults)
+        .with_section(ReportSection::QualityMetrics)
+        .with_section(ReportSection::StatisticalAnalysis)
+        .with_footer("Generated by Legalis Verification System")
+}
+
+/// Creates a compliance-focused report template
+pub fn compliance_report_template() -> ReportTemplate {
+    ReportTemplate::new("Compliance Verification Report")
+        .with_header("# Compliance Verification Report")
+        .with_toc()
+        .with_section(ReportSection::ExecutiveSummary)
+        .with_section(ReportSection::ComplianceChecklist)
+        .with_section(ReportSection::ConflictDetection)
+        .with_section(ReportSection::AmbiguityDetection)
+        .with_footer("Generated by Legalis Verification System")
+}
+
+/// Creates a quality-focused report template
+pub fn quality_report_template() -> ReportTemplate {
+    ReportTemplate::new("Quality Assessment Report")
+        .with_header("# Quality Assessment Report")
+        .with_toc()
+        .with_section(ReportSection::QualityMetrics)
+        .with_section(ReportSection::AmbiguityDetection)
+        .with_section(ReportSection::StatisticalAnalysis)
+        .with_section(ReportSection::GraphAnalysis)
+        .with_footer("Generated by Legalis Verification System")
+}
+
+// ============================================================================
+// Scheduled Report Generation (v0.1.8)
+// ============================================================================
+
+/// Schedule configuration for automated report generation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReportSchedule {
+    /// Schedule identifier
+    pub id: String,
+    /// Human-readable schedule name
+    pub name: String,
+    /// Report template to use
+    pub template: ReportTemplate,
+    /// Cron expression for scheduling (e.g., "0 0 * * *" for daily at midnight)
+    pub cron_expression: String,
+    /// Output directory for generated reports
+    pub output_directory: String,
+    /// Output format (markdown, html, json, pdf)
+    pub output_format: ReportOutputFormat,
+    /// Whether the schedule is active
+    pub enabled: bool,
+    /// Optional recipient email addresses
+    pub recipients: Vec<String>,
+    /// Last execution timestamp (RFC 3339)
+    pub last_execution: Option<String>,
+    /// Next scheduled execution timestamp (RFC 3339)
+    pub next_execution: Option<String>,
+}
+
+/// Output format for scheduled reports
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ReportOutputFormat {
+    /// Markdown format
+    Markdown,
+    /// HTML format
+    Html,
+    /// JSON format
+    Json,
+    /// PDF format (requires pdf feature)
+    #[cfg(feature = "pdf")]
+    Pdf,
+}
+
+impl std::fmt::Display for ReportOutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReportOutputFormat::Markdown => write!(f, "markdown"),
+            ReportOutputFormat::Html => write!(f, "html"),
+            ReportOutputFormat::Json => write!(f, "json"),
+            #[cfg(feature = "pdf")]
+            ReportOutputFormat::Pdf => write!(f, "pdf"),
+        }
+    }
+}
+
+impl ReportSchedule {
+    /// Creates a new report schedule
+    pub fn new(id: impl Into<String>, name: impl Into<String>, template: ReportTemplate) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            template,
+            cron_expression: "0 0 * * *".to_string(), // Default: daily at midnight
+            output_directory: "./reports".to_string(),
+            output_format: ReportOutputFormat::Markdown,
+            enabled: true,
+            recipients: Vec::new(),
+            last_execution: None,
+            next_execution: None,
+        }
+    }
+
+    /// Sets the cron expression for scheduling
+    pub fn with_cron(mut self, cron_expression: impl Into<String>) -> Self {
+        self.cron_expression = cron_expression.into();
+        self
+    }
+
+    /// Sets the output directory
+    pub fn with_output_directory(mut self, directory: impl Into<String>) -> Self {
+        self.output_directory = directory.into();
+        self
+    }
+
+    /// Sets the output format
+    pub fn with_format(mut self, format: ReportOutputFormat) -> Self {
+        self.output_format = format;
+        self
+    }
+
+    /// Adds a recipient email address
+    pub fn with_recipient(mut self, email: impl Into<String>) -> Self {
+        self.recipients.push(email.into());
+        self
+    }
+
+    /// Enables or disables the schedule
+    pub fn set_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+/// Result of a scheduled report execution
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ScheduledReportResult {
+    /// Schedule ID that was executed
+    pub schedule_id: String,
+    /// Execution timestamp (RFC 3339)
+    pub execution_time: String,
+    /// Whether the report generation succeeded
+    pub success: bool,
+    /// Path to the generated report file
+    pub output_path: Option<String>,
+    /// Error message if generation failed
+    pub error: Option<String>,
+    /// Report file size in bytes
+    pub file_size_bytes: Option<u64>,
+}
+
+/// Executes a scheduled report generation
+///
+/// This function generates a report based on the schedule configuration
+/// and saves it to the specified output directory.
+pub fn execute_scheduled_report(
+    schedule: &ReportSchedule,
+    statutes: &[Statute],
+    result: &VerificationResult,
+) -> ScheduledReportResult {
+    let execution_time = chrono::Utc::now().to_rfc3339();
+
+    // Generate the report content
+    let report_content = generate_custom_report(&schedule.template, statutes, result);
+
+    // Create output filename with timestamp
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let extension = match schedule.output_format {
+        ReportOutputFormat::Markdown => "md",
+        ReportOutputFormat::Html => "html",
+        ReportOutputFormat::Json => "json",
+        #[cfg(feature = "pdf")]
+        ReportOutputFormat::Pdf => "pdf",
+    };
+
+    let filename = format!(
+        "{}_{}.{}",
+        schedule.name.replace(' ', "_"),
+        timestamp,
+        extension
+    );
+    let output_path = format!("{}/{}", schedule.output_directory, filename);
+
+    // Format the content based on output format
+    let formatted_content = match schedule.output_format {
+        ReportOutputFormat::Markdown => report_content,
+        ReportOutputFormat::Html => {
+            // Convert markdown to HTML (simplified - in production use a proper markdown parser)
+            format!(
+                "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<pre>{}</pre>\n</body>\n</html>",
+                schedule.name, report_content
+            )
+        }
+        ReportOutputFormat::Json => {
+            // Create a JSON wrapper
+            serde_json::json!({
+                "schedule_id": schedule.id,
+                "generation_time": execution_time,
+                "report_content": report_content,
+                "statute_count": statutes.len(),
+                "has_errors": !result.errors.is_empty(),
+                "error_count": result.errors.len(),
+                "warning_count": result.warnings.len(),
+            })
+            .to_string()
+        }
+        #[cfg(feature = "pdf")]
+        ReportOutputFormat::Pdf => {
+            // For PDF, we would use the printpdf crate
+            // This is a placeholder - actual PDF generation would be more complex
+            report_content
+        }
+    };
+
+    // Attempt to write the report to file
+    match std::fs::create_dir_all(&schedule.output_directory) {
+        Ok(_) => match std::fs::write(&output_path, formatted_content.as_bytes()) {
+            Ok(_) => {
+                let file_size = std::fs::metadata(&output_path).ok().map(|m| m.len());
+
+                ScheduledReportResult {
+                    schedule_id: schedule.id.clone(),
+                    execution_time,
+                    success: true,
+                    output_path: Some(output_path),
+                    error: None,
+                    file_size_bytes: file_size,
+                }
+            }
+            Err(e) => ScheduledReportResult {
+                schedule_id: schedule.id.clone(),
+                execution_time,
+                success: false,
+                output_path: None,
+                error: Some(format!("Failed to write report file: {}", e)),
+                file_size_bytes: None,
+            },
+        },
+        Err(e) => ScheduledReportResult {
+            schedule_id: schedule.id.clone(),
+            execution_time,
+            success: false,
+            output_path: None,
+            error: Some(format!("Failed to create output directory: {}", e)),
+            file_size_bytes: None,
+        },
+    }
+}
+
+/// Manages multiple report schedules
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReportScheduler {
+    /// Active schedules
+    pub schedules: Vec<ReportSchedule>,
+    /// Execution history
+    pub history: Vec<ScheduledReportResult>,
+}
+
+impl ReportScheduler {
+    /// Creates a new report scheduler
+    pub fn new() -> Self {
+        Self {
+            schedules: Vec::new(),
+            history: Vec::new(),
+        }
+    }
+
+    /// Adds a schedule to the scheduler
+    pub fn add_schedule(&mut self, schedule: ReportSchedule) {
+        self.schedules.push(schedule);
+    }
+
+    /// Removes a schedule by ID
+    pub fn remove_schedule(&mut self, schedule_id: &str) -> bool {
+        if let Some(pos) = self.schedules.iter().position(|s| s.id == schedule_id) {
+            self.schedules.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Gets a schedule by ID
+    pub fn get_schedule(&self, schedule_id: &str) -> Option<&ReportSchedule> {
+        self.schedules.iter().find(|s| s.id == schedule_id)
+    }
+
+    /// Gets a mutable schedule by ID
+    pub fn get_schedule_mut(&mut self, schedule_id: &str) -> Option<&mut ReportSchedule> {
+        self.schedules.iter_mut().find(|s| s.id == schedule_id)
+    }
+
+    /// Lists all schedules
+    pub fn list_schedules(&self) -> &[ReportSchedule] {
+        &self.schedules
+    }
+
+    /// Lists only enabled schedules
+    pub fn list_enabled_schedules(&self) -> Vec<&ReportSchedule> {
+        self.schedules.iter().filter(|s| s.enabled).collect()
+    }
+
+    /// Executes all enabled schedules that are due
+    ///
+    /// This checks each enabled schedule and executes it if it's time.
+    /// Returns the list of execution results.
+    ///
+    /// # Arguments
+    /// * `statutes` - The statutes to include in the report
+    /// * `result` - The verification result to include in the report
+    pub fn execute_due_schedules(
+        &mut self,
+        statutes: &[Statute],
+        result: &VerificationResult,
+    ) -> Vec<ScheduledReportResult> {
+        let mut execution_results = Vec::new();
+
+        for schedule in &self.schedules {
+            if schedule.enabled {
+                // In a real implementation, we would parse the cron expression
+                // and check if the schedule is due. For now, we'll execute all enabled schedules.
+                let exec_result = execute_scheduled_report(schedule, statutes, result);
+                execution_results.push(exec_result);
+            }
+        }
+
+        // Add results to history
+        self.history.extend(execution_results.clone());
+
+        execution_results
+    }
+
+    /// Gets the execution history
+    pub fn get_history(&self) -> &[ScheduledReportResult] {
+        &self.history
+    }
+
+    /// Gets execution history for a specific schedule
+    pub fn get_schedule_history(&self, schedule_id: &str) -> Vec<&ScheduledReportResult> {
+        self.history
+            .iter()
+            .filter(|r| r.schedule_id == schedule_id)
+            .collect()
+    }
+
+    /// Clears the execution history
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+    }
+
+    /// Exports scheduler configuration to JSON
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Imports scheduler configuration from JSON
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+}
+
+impl Default for ReportScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Creates a daily compliance report schedule
+pub fn daily_compliance_schedule() -> ReportSchedule {
+    ReportSchedule::new(
+        "daily-compliance",
+        "Daily Compliance Report",
+        compliance_report_template(),
+    )
+    .with_cron("0 0 * * *") // Daily at midnight
+    .with_format(ReportOutputFormat::Html)
+}
+
+/// Creates a weekly quality report schedule
+pub fn weekly_quality_schedule() -> ReportSchedule {
+    ReportSchedule::new(
+        "weekly-quality",
+        "Weekly Quality Assessment",
+        quality_report_template(),
+    )
+    .with_cron("0 0 * * 0") // Weekly on Sunday at midnight
+    .with_format(ReportOutputFormat::Markdown)
+}
+
+/// Creates a monthly comprehensive report schedule
+pub fn monthly_comprehensive_schedule() -> ReportSchedule {
+    ReportSchedule::new(
+        "monthly-comprehensive",
+        "Monthly Comprehensive Report",
+        standard_report_template(),
+    )
+    .with_cron("0 0 1 * *") // Monthly on the 1st at midnight
+    .with_format(ReportOutputFormat::Html)
 }
 
 // ============================================================================
@@ -10350,6 +11980,1442 @@ pub fn dashboard_markdown_summary(dashboard: &MetricsDashboard) -> String {
             report.push_str(&format!("- **Most Stable**: {}\n", most_stable));
         }
         report.push('\n');
+    }
+
+    report
+}
+
+// ============================================================================
+// Cross-Statute Analysis (v0.1.4)
+// ============================================================================
+
+/// Represents an interaction between two statutes
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteInteraction {
+    /// First statute ID
+    pub statute_a: String,
+    /// Second statute ID
+    pub statute_b: String,
+    /// Type of interaction
+    pub interaction_type: InteractionType,
+    /// Description of the interaction
+    pub description: String,
+    /// Severity level of the interaction
+    pub severity: Severity,
+    /// Recommendation for handling the interaction
+    pub recommendation: String,
+}
+
+/// Types of interactions between statutes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum InteractionType {
+    /// One statute modifies another
+    Modification,
+    /// One statute extends another
+    Extension,
+    /// Statutes complement each other
+    Complementary,
+    /// One statute supersedes another
+    Supersession,
+    /// Statutes have mutual dependency
+    MutualDependency,
+    /// One statute contradicts another
+    Contradiction,
+    /// Statutes have overlapping scope
+    Overlap,
+}
+
+impl std::fmt::Display for InteractionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Modification => write!(f, "Modification"),
+            Self::Extension => write!(f, "Extension"),
+            Self::Complementary => write!(f, "Complementary"),
+            Self::Supersession => write!(f, "Supersession"),
+            Self::MutualDependency => write!(f, "Mutual Dependency"),
+            Self::Contradiction => write!(f, "Contradiction"),
+            Self::Overlap => write!(f, "Overlap"),
+        }
+    }
+}
+
+/// Analyzes interactions between statutes
+pub fn analyze_statute_interactions(statutes: &[Statute]) -> Vec<StatuteInteraction> {
+    let mut interactions = Vec::new();
+
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let statute_a = &statutes[i];
+            let statute_b = &statutes[j];
+
+            // Check for mutual references (mutual dependency)
+            let a_refs_b = extract_statute_references_from_conditions(&statute_a.preconditions)
+                .contains(&statute_b.id);
+            let b_refs_a = extract_statute_references_from_conditions(&statute_b.preconditions)
+                .contains(&statute_a.id);
+
+            if a_refs_b && b_refs_a {
+                interactions.push(StatuteInteraction {
+                    statute_a: statute_a.id.clone(),
+                    statute_b: statute_b.id.clone(),
+                    interaction_type: InteractionType::MutualDependency,
+                    description: format!(
+                        "{} and {} have mutual dependencies",
+                        statute_a.id, statute_b.id
+                    ),
+                    severity: Severity::Warning,
+                    recommendation:
+                        "Review mutual dependencies for circular logic and consider refactoring"
+                            .to_string(),
+                });
+            }
+
+            // Check for modifications (one references the other with Revoke effect)
+            if a_refs_b && matches!(statute_a.effect.effect_type, EffectType::Revoke) {
+                interactions.push(StatuteInteraction {
+                    statute_a: statute_a.id.clone(),
+                    statute_b: statute_b.id.clone(),
+                    interaction_type: InteractionType::Modification,
+                    description: format!("{} modifies or revokes {}", statute_a.id, statute_b.id),
+                    severity: Severity::Info,
+                    recommendation: "Ensure modification is intentional and properly documented"
+                        .to_string(),
+                });
+            }
+
+            // Check for extensions (one references the other with Grant effect)
+            if a_refs_b && matches!(statute_a.effect.effect_type, EffectType::Grant) {
+                interactions.push(StatuteInteraction {
+                    statute_a: statute_a.id.clone(),
+                    statute_b: statute_b.id.clone(),
+                    interaction_type: InteractionType::Extension,
+                    description: format!("{} extends {}", statute_a.id, statute_b.id),
+                    severity: Severity::Info,
+                    recommendation: "Verify that extension is coherent with base statute"
+                        .to_string(),
+                });
+            }
+
+            // Check for contradictions (conflicting effects)
+            if effects_contradict(&statute_a.effect, &statute_b.effect)
+                && conditions_overlap(&statute_a.preconditions, &statute_b.preconditions)
+            {
+                interactions.push(StatuteInteraction {
+                    statute_a: statute_a.id.clone(),
+                    statute_b: statute_b.id.clone(),
+                    interaction_type: InteractionType::Contradiction,
+                    description: format!(
+                        "{} and {} have contradictory effects with overlapping conditions",
+                        statute_a.id, statute_b.id
+                    ),
+                    severity: Severity::Critical,
+                    recommendation:
+                        "Resolve contradiction by clarifying precedence or narrowing conditions"
+                            .to_string(),
+                });
+            }
+
+            // Check for overlaps (same jurisdiction and similar conditions)
+            if statute_a.jurisdiction == statute_b.jurisdiction {
+                let similarity = semantic_similarity(statute_a, statute_b).0;
+                if similarity > 0.6 {
+                    interactions.push(StatuteInteraction {
+                        statute_a: statute_a.id.clone(),
+                        statute_b: statute_b.id.clone(),
+                        interaction_type: InteractionType::Overlap,
+                        description: format!(
+                            "{} and {} have significant overlap (similarity: {:.1}%)",
+                            statute_a.id,
+                            statute_b.id,
+                            similarity * 100.0
+                        ),
+                        severity: Severity::Warning,
+                        recommendation: "Consider consolidating overlapping statutes".to_string(),
+                    });
+                }
+            }
+
+            // Check for complementary relationships (same jurisdiction, different but compatible effects)
+            if statute_a.jurisdiction == statute_b.jurisdiction
+                && !effects_contradict(&statute_a.effect, &statute_b.effect)
+                && (a_refs_b || b_refs_a)
+            {
+                interactions.push(StatuteInteraction {
+                    statute_a: statute_a.id.clone(),
+                    statute_b: statute_b.id.clone(),
+                    interaction_type: InteractionType::Complementary,
+                    description: format!(
+                        "{} and {} complement each other",
+                        statute_a.id, statute_b.id
+                    ),
+                    severity: Severity::Info,
+                    recommendation: "Document complementary relationship for clarity".to_string(),
+                });
+            }
+        }
+    }
+
+    interactions
+}
+
+/// Report on statute interactions
+pub fn statute_interaction_report(interactions: &[StatuteInteraction]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Statute Interaction Analysis\n\n");
+    report.push_str(&format!(
+        "**Total Interactions**: {}\n\n",
+        interactions.len()
+    ));
+
+    // Group by interaction type
+    let mut by_type: HashMap<InteractionType, Vec<&StatuteInteraction>> = HashMap::new();
+    for interaction in interactions {
+        by_type
+            .entry(interaction.interaction_type)
+            .or_default()
+            .push(interaction);
+    }
+
+    for (interaction_type, items) in by_type.iter() {
+        report.push_str(&format!(
+            "## {} ({} interactions)\n\n",
+            interaction_type,
+            items.len()
+        ));
+
+        for interaction in items {
+            report.push_str(&format!(
+                "### {} ↔ {}\n\n",
+                interaction.statute_a, interaction.statute_b
+            ));
+            report.push_str(&format!("- **Severity**: {}\n", interaction.severity));
+            report.push_str(&format!("- **Description**: {}\n", interaction.description));
+            report.push_str(&format!(
+                "- **Recommendation**: {}\n\n",
+                interaction.recommendation
+            ));
+        }
+    }
+
+    report
+}
+
+/// Represents a regulatory overlap between statutes
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RegulatoryOverlap {
+    /// IDs of overlapping statutes
+    pub statute_ids: Vec<String>,
+    /// The area of overlap
+    pub overlap_area: OverlapArea,
+    /// Description of the overlap
+    pub description: String,
+    /// Severity of the overlap
+    pub severity: Severity,
+    /// Suggestion for resolution
+    pub resolution: String,
+}
+
+/// Areas where statutes can overlap
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum OverlapArea {
+    /// Jurisdiction overlap
+    Jurisdiction,
+    /// Subject matter overlap
+    SubjectMatter,
+    /// Temporal overlap
+    Temporal,
+    /// Population overlap (same target group)
+    Population,
+    /// Enforcement overlap
+    Enforcement,
+}
+
+impl std::fmt::Display for OverlapArea {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Jurisdiction => write!(f, "Jurisdiction"),
+            Self::SubjectMatter => write!(f, "Subject Matter"),
+            Self::Temporal => write!(f, "Temporal"),
+            Self::Population => write!(f, "Population"),
+            Self::Enforcement => write!(f, "Enforcement"),
+        }
+    }
+}
+
+/// Detects regulatory overlaps between statutes
+pub fn detect_regulatory_overlaps(statutes: &[Statute]) -> Vec<RegulatoryOverlap> {
+    let mut overlaps = Vec::new();
+
+    // Group by jurisdiction
+    let mut by_jurisdiction: HashMap<String, Vec<&Statute>> = HashMap::new();
+    for statute in statutes {
+        if let Some(jurisdiction) = &statute.jurisdiction {
+            by_jurisdiction
+                .entry(jurisdiction.clone())
+                .or_default()
+                .push(statute);
+        }
+    }
+
+    // Check for overlaps within each jurisdiction
+    for (jurisdiction, group) in by_jurisdiction.iter() {
+        if group.len() < 2 {
+            continue;
+        }
+
+        for i in 0..group.len() {
+            for j in (i + 1)..group.len() {
+                let statute_a = group[i];
+                let statute_b = group[j];
+
+                // Check for temporal overlap
+                let tv_a = &statute_a.temporal_validity;
+                let tv_b = &statute_b.temporal_validity;
+                if temporal_validity_overlaps(tv_a, tv_b) {
+                    overlaps.push(RegulatoryOverlap {
+                        statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                        overlap_area: OverlapArea::Temporal,
+                        description: format!(
+                            "{} and {} have overlapping validity periods in {}",
+                            statute_a.id, statute_b.id, jurisdiction
+                        ),
+                        severity: Severity::Warning,
+                        resolution: "Clarify which statute takes precedence during overlap period"
+                            .to_string(),
+                    });
+                }
+
+                // Check for population overlap (similar age/income conditions)
+                let a_has_age = has_age_condition(&statute_a.preconditions);
+                let b_has_age = has_age_condition(&statute_b.preconditions);
+                let a_has_income = has_income_condition(&statute_a.preconditions);
+                let b_has_income = has_income_condition(&statute_b.preconditions);
+
+                if (a_has_age && b_has_age) || (a_has_income && b_has_income) {
+                    let cond_overlap =
+                        conditions_overlap(&statute_a.preconditions, &statute_b.preconditions);
+                    if cond_overlap {
+                        overlaps.push(RegulatoryOverlap {
+                            statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                            overlap_area: OverlapArea::Population,
+                            description: format!(
+                                "{} and {} target overlapping populations",
+                                statute_a.id, statute_b.id
+                            ),
+                            severity: Severity::Info,
+                            resolution: "Verify that overlapping coverage is intentional"
+                                .to_string(),
+                        });
+                    }
+                }
+
+                // Check for subject matter overlap (title similarity)
+                let title_sim = title_similarity(&statute_a.title, &statute_b.title);
+                if title_sim > 0.5 {
+                    overlaps.push(RegulatoryOverlap {
+                        statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                        overlap_area: OverlapArea::SubjectMatter,
+                        description: format!(
+                            "{} and {} address similar subject matter (similarity: {:.1}%)",
+                            statute_a.id,
+                            statute_b.id,
+                            title_sim * 100.0
+                        ),
+                        severity: Severity::Info,
+                        resolution: "Consider consolidating if they address the same topic"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    overlaps
+}
+
+/// Report on regulatory overlaps
+pub fn regulatory_overlap_report(overlaps: &[RegulatoryOverlap]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Regulatory Overlap Analysis\n\n");
+    report.push_str(&format!("**Total Overlaps**: {}\n\n", overlaps.len()));
+
+    // Group by overlap area
+    let mut by_area: HashMap<OverlapArea, Vec<&RegulatoryOverlap>> = HashMap::new();
+    for overlap in overlaps {
+        by_area
+            .entry(overlap.overlap_area.clone())
+            .or_default()
+            .push(overlap);
+    }
+
+    for (area, items) in by_area.iter() {
+        report.push_str(&format!("## {} Overlaps ({} found)\n\n", area, items.len()));
+
+        for overlap in items {
+            report.push_str(&format!(
+                "### Statutes: {}\n\n",
+                overlap.statute_ids.join(", ")
+            ));
+            report.push_str(&format!("- **Severity**: {}\n", overlap.severity));
+            report.push_str(&format!("- **Description**: {}\n", overlap.description));
+            report.push_str(&format!("- **Resolution**: {}\n\n", overlap.resolution));
+        }
+    }
+
+    report
+}
+
+/// Represents a conflict cascade - how conflicts propagate through statute dependencies
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConflictCascade {
+    /// The original conflicting statutes
+    pub origin_statutes: Vec<String>,
+    /// Statutes affected by the cascade
+    pub affected_statutes: Vec<String>,
+    /// Cascade depth (levels of propagation)
+    pub depth: usize,
+    /// Description of the cascade
+    pub description: String,
+    /// Impact severity
+    pub severity: Severity,
+}
+
+/// Predicts conflict cascades based on statute dependencies
+pub fn predict_conflict_cascades(
+    statutes: &[Statute],
+    conflicts: &[StatuteConflict],
+) -> Vec<ConflictCascade> {
+    let mut cascades = Vec::new();
+
+    // Build dependency graph
+    let mut deps: HashMap<String, Vec<String>> = HashMap::new();
+    for statute in statutes {
+        let refs = extract_statute_references_from_conditions(&statute.preconditions);
+        deps.insert(statute.id.clone(), refs.into_iter().collect());
+    }
+
+    // For each conflict, trace its impact
+    for conflict in conflicts {
+        let origin = conflict.statute_ids.clone();
+
+        // Find all statutes that depend on the conflicting statutes
+        let mut affected = HashSet::new();
+        let mut to_visit = origin.clone();
+        let mut depth = 0;
+
+        while !to_visit.is_empty() && depth < 10 {
+            let mut next_level = Vec::new();
+
+            for statute in statutes {
+                if affected.contains(&statute.id) || origin.contains(&statute.id) {
+                    continue;
+                }
+
+                let refs = extract_statute_references_from_conditions(&statute.preconditions);
+                for visited in &to_visit {
+                    if refs.contains(visited) {
+                        affected.insert(statute.id.clone());
+                        next_level.push(statute.id.clone());
+                    }
+                }
+            }
+
+            to_visit = next_level;
+            depth += 1;
+        }
+
+        if !affected.is_empty() {
+            let severity = if depth > 3 {
+                Severity::Critical
+            } else if depth > 1 {
+                Severity::Error
+            } else {
+                Severity::Warning
+            };
+
+            let affected_count = affected.len();
+            let affected_statutes: Vec<_> = affected.into_iter().collect();
+
+            cascades.push(ConflictCascade {
+                origin_statutes: origin,
+                affected_statutes,
+                depth,
+                description: format!(
+                    "Conflict cascade affecting {} statutes across {} levels",
+                    affected_count, depth
+                ),
+                severity,
+            });
+        }
+    }
+
+    cascades
+}
+
+/// Report on conflict cascades
+pub fn conflict_cascade_report(cascades: &[ConflictCascade]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Conflict Cascade Analysis\n\n");
+    report.push_str(&format!("**Total Cascades**: {}\n\n", cascades.len()));
+
+    if cascades.is_empty() {
+        report.push_str("No conflict cascades detected. This is good!\n");
+        return report;
+    }
+
+    // Sort by severity and depth
+    let mut sorted_cascades = cascades.to_vec();
+    sorted_cascades.sort_by(|a, b| b.severity.cmp(&a.severity).then(b.depth.cmp(&a.depth)));
+
+    for cascade in &sorted_cascades {
+        report.push_str(&format!(
+            "## Cascade from: {}\n\n",
+            cascade.origin_statutes.join(", ")
+        ));
+        report.push_str(&format!("- **Severity**: {}\n", cascade.severity));
+        report.push_str(&format!("- **Depth**: {} levels\n", cascade.depth));
+        report.push_str(&format!(
+            "- **Affected Statutes** ({}):\n",
+            cascade.affected_statutes.len()
+        ));
+
+        for statute_id in &cascade.affected_statutes {
+            report.push_str(&format!("  - {}\n", statute_id));
+        }
+
+        report.push_str(&format!("\n{}\n\n", cascade.description));
+
+        if cascade.depth > 2 {
+            report.push_str("⚠️ **Warning**: Deep cascade detected. Consider refactoring to reduce dependencies.\n\n");
+        }
+    }
+
+    report
+}
+
+/// Enhanced coverage gap with more detailed analysis
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EnhancedCoverageGap {
+    /// Type of gap
+    pub gap_type: GapType,
+    /// Description of the gap
+    pub description: String,
+    /// Example scenario that falls in the gap
+    pub example_scenario: String,
+    /// Severity of the gap
+    pub severity: Severity,
+    /// Related statutes that create the gap
+    pub related_statutes: Vec<String>,
+    /// Suggested statute to fill the gap
+    pub suggested_coverage: String,
+}
+
+/// Types of coverage gaps
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum GapType {
+    /// Age range not covered
+    AgeGap,
+    /// Income range not covered
+    IncomeGap,
+    /// Jurisdiction not covered
+    JurisdictionGap,
+    /// Temporal gap (time period not covered)
+    TemporalGap,
+    /// Effect type not covered
+    EffectGap,
+    /// Logical gap in conditions
+    LogicalGap,
+}
+
+impl std::fmt::Display for GapType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AgeGap => write!(f, "Age Gap"),
+            Self::IncomeGap => write!(f, "Income Gap"),
+            Self::JurisdictionGap => write!(f, "Jurisdiction Gap"),
+            Self::TemporalGap => write!(f, "Temporal Gap"),
+            Self::EffectGap => write!(f, "Effect Gap"),
+            Self::LogicalGap => write!(f, "Logical Gap"),
+        }
+    }
+}
+
+/// Analyzes coverage gaps in statutes with enhanced detection
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_enhanced_coverage_gaps(statutes: &[Statute]) -> Vec<EnhancedCoverageGap> {
+    let mut gaps = Vec::new();
+
+    // Age gap analysis
+    let mut age_thresholds: Vec<(i32, &Statute)> = Vec::new();
+    for statute in statutes {
+        if let Some(age) = extract_age_threshold(&statute.preconditions) {
+            age_thresholds.push((age, statute));
+        }
+    }
+    age_thresholds.sort_by_key(|(age, _)| *age);
+
+    for i in 0..age_thresholds.len().saturating_sub(1) {
+        let (age1, statute1) = age_thresholds[i];
+        let (age2, statute2) = age_thresholds[i + 1];
+        let gap_size = age2 - age1;
+
+        if gap_size > 5 {
+            gaps.push(EnhancedCoverageGap {
+                gap_type: GapType::AgeGap,
+                description: format!("Age gap between {} and {}", age1, age2),
+                example_scenario: format!("Individuals aged {} are not covered", age1 + 1),
+                severity: if gap_size > 10 {
+                    Severity::Warning
+                } else {
+                    Severity::Info
+                },
+                related_statutes: vec![statute1.id.clone(), statute2.id.clone()],
+                suggested_coverage: format!(
+                    "Consider adding statute for ages {} to {}",
+                    age1 + 1,
+                    age2 - 1
+                ),
+            });
+        }
+    }
+
+    // Income gap analysis
+    let mut income_thresholds: Vec<(i32, &Statute)> = Vec::new();
+    for statute in statutes {
+        if let Some(income) = extract_income_threshold(&statute.preconditions) {
+            income_thresholds.push((income, statute));
+        }
+    }
+    income_thresholds.sort_by_key(|(income, _)| *income);
+
+    for i in 0..income_thresholds.len().saturating_sub(1) {
+        let (income1, statute1) = income_thresholds[i];
+        let (income2, statute2) = income_thresholds[i + 1];
+        let gap_size = income2 - income1;
+
+        if gap_size > 10000 {
+            gaps.push(EnhancedCoverageGap {
+                gap_type: GapType::IncomeGap,
+                description: format!("Income gap between ${} and ${}", income1, income2),
+                example_scenario: format!("Individuals earning ${} are not covered", income1 + 1),
+                severity: if gap_size > 50000 {
+                    Severity::Warning
+                } else {
+                    Severity::Info
+                },
+                related_statutes: vec![statute1.id.clone(), statute2.id.clone()],
+                suggested_coverage: format!(
+                    "Consider adding statute for income range ${} to ${}",
+                    income1 + 1,
+                    income2 - 1
+                ),
+            });
+        }
+    }
+
+    // Jurisdiction gap analysis
+    let missing_jurisdiction_statutes: Vec<_> = statutes
+        .iter()
+        .filter(|s| s.jurisdiction.is_none())
+        .collect();
+
+    if !missing_jurisdiction_statutes.is_empty() {
+        gaps.push(EnhancedCoverageGap {
+            gap_type: GapType::JurisdictionGap,
+            description: format!(
+                "{} statutes without jurisdiction",
+                missing_jurisdiction_statutes.len()
+            ),
+            example_scenario: "Statutes without jurisdiction may be ambiguous".to_string(),
+            severity: Severity::Warning,
+            related_statutes: missing_jurisdiction_statutes
+                .iter()
+                .map(|s| s.id.clone())
+                .collect(),
+            suggested_coverage: "Add jurisdiction to all statutes".to_string(),
+        });
+    }
+
+    // Temporal gap analysis
+    let mut temporal_ranges: Vec<(&Statute, &legalis_core::TemporalValidity)> = Vec::new();
+    for statute in statutes {
+        let tv = &statute.temporal_validity;
+        temporal_ranges.push((statute, tv));
+    }
+
+    // Sort by effective date
+    temporal_ranges.sort_by(|a, b| a.1.effective_date.cmp(&b.1.effective_date));
+
+    for i in 0..temporal_ranges.len().saturating_sub(1) {
+        let (statute1, tv1) = temporal_ranges[i];
+        let (statute2, tv2) = temporal_ranges[i + 1];
+
+        if let (Some(end1), Some(start2)) = (&tv1.expiry_date, &tv2.effective_date) {
+            if start2 > end1 {
+                let gap_days = (start2.signed_duration_since(*end1)).num_days();
+                if gap_days > 30 {
+                    gaps.push(EnhancedCoverageGap {
+                        gap_type: GapType::TemporalGap,
+                        description: format!("Temporal gap of {} days", gap_days),
+                        example_scenario: format!(
+                            "Period from {} to {} is not covered",
+                            end1, start2
+                        ),
+                        severity: if gap_days > 365 {
+                            Severity::Warning
+                        } else {
+                            Severity::Info
+                        },
+                        related_statutes: vec![statute1.id.clone(), statute2.id.clone()],
+                        suggested_coverage: format!(
+                            "Consider adding coverage for the period {} to {}",
+                            end1, start2
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    gaps
+}
+
+/// Report on enhanced coverage gaps
+pub fn enhanced_coverage_gap_report(gaps: &[EnhancedCoverageGap]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Enhanced Coverage Gap Analysis\n\n");
+    report.push_str(&format!("**Total Gaps**: {}\n\n", gaps.len()));
+
+    if gaps.is_empty() {
+        report.push_str("No significant coverage gaps detected.\n");
+        return report;
+    }
+
+    // Group by gap type
+    let mut by_type: HashMap<GapType, Vec<&EnhancedCoverageGap>> = HashMap::new();
+    for gap in gaps {
+        by_type.entry(gap.gap_type).or_default().push(gap);
+    }
+
+    for (gap_type, items) in by_type.iter() {
+        report.push_str(&format!("## {} ({} gaps)\n\n", gap_type, items.len()));
+
+        for gap in items {
+            report.push_str(&format!("### {}\n\n", gap.description));
+            report.push_str(&format!("- **Severity**: {}\n", gap.severity));
+            report.push_str(&format!("- **Example**: {}\n", gap.example_scenario));
+            report.push_str(&format!(
+                "- **Related Statutes**: {}\n",
+                gap.related_statutes.join(", ")
+            ));
+            report.push_str(&format!("- **Suggestion**: {}\n\n", gap.suggested_coverage));
+        }
+    }
+
+    report
+}
+
+/// Represents a redundancy in the statute set
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RedundancyInstance {
+    /// IDs of redundant statutes
+    pub statute_ids: Vec<String>,
+    /// Type of redundancy
+    pub redundancy_type: RedundancyType,
+    /// Description
+    pub description: String,
+    /// Suggested elimination strategy
+    pub elimination_strategy: String,
+    /// Potential savings (estimated complexity reduction)
+    pub potential_savings: f64,
+}
+
+/// Types of redundancy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum RedundancyType {
+    /// Duplicate statutes
+    Duplicate,
+    /// Subsumed (one statute is completely covered by another)
+    Subsumed,
+    /// Overlapping conditions
+    OverlappingConditions,
+    /// Equivalent effects
+    EquivalentEffects,
+}
+
+impl std::fmt::Display for RedundancyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Duplicate => write!(f, "Duplicate"),
+            Self::Subsumed => write!(f, "Subsumed"),
+            Self::OverlappingConditions => write!(f, "Overlapping Conditions"),
+            Self::EquivalentEffects => write!(f, "Equivalent Effects"),
+        }
+    }
+}
+
+/// Detects redundancies and suggests elimination strategies
+pub fn suggest_redundancy_elimination(statutes: &[Statute]) -> Vec<RedundancyInstance> {
+    let mut redundancies = Vec::new();
+
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let statute_a = &statutes[i];
+            let statute_b = &statutes[j];
+
+            let similarity = semantic_similarity(statute_a, statute_b).0;
+
+            // Check for duplicates (very high similarity)
+            if similarity > 0.95 {
+                let complexity_a = analyze_complexity(statute_a).complexity_score;
+                let complexity_b = analyze_complexity(statute_b).complexity_score;
+
+                redundancies.push(RedundancyInstance {
+                    statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                    redundancy_type: RedundancyType::Duplicate,
+                    description: format!(
+                        "{} and {} are nearly identical (similarity: {:.1}%)",
+                        statute_a.id,
+                        statute_b.id,
+                        similarity * 100.0
+                    ),
+                    elimination_strategy: if complexity_a <= complexity_b {
+                        format!(
+                            "Consider removing {} and keeping {}",
+                            statute_b.id, statute_a.id
+                        )
+                    } else {
+                        format!(
+                            "Consider removing {} and keeping {}",
+                            statute_a.id, statute_b.id
+                        )
+                    },
+                    potential_savings: (complexity_a + complexity_b) as f64 / 2.0,
+                });
+            }
+            // Check for subsumption (one is a subset of the other)
+            else if similarity > 0.8 {
+                redundancies.push(RedundancyInstance {
+                    statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                    redundancy_type: RedundancyType::Subsumed,
+                    description: format!(
+                        "{} may be subsumed by {} (similarity: {:.1}%)",
+                        statute_a.id,
+                        statute_b.id,
+                        similarity * 100.0
+                    ),
+                    elimination_strategy: "Review whether one statute can be merged into the other"
+                        .to_string(),
+                    potential_savings: 10.0,
+                });
+            }
+
+            // Check for overlapping conditions
+            if conditions_overlap(&statute_a.preconditions, &statute_b.preconditions) {
+                // If effects are also similar, this is a redundancy
+                if statute_a.effect.effect_type == statute_b.effect.effect_type {
+                    redundancies.push(RedundancyInstance {
+                        statute_ids: vec![statute_a.id.clone(), statute_b.id.clone()],
+                        redundancy_type: RedundancyType::OverlappingConditions,
+                        description: format!(
+                            "{} and {} have overlapping conditions and similar effects",
+                            statute_a.id, statute_b.id
+                        ),
+                        elimination_strategy:
+                            "Consider consolidating into a single statute with combined conditions"
+                                .to_string(),
+                        potential_savings: 15.0,
+                    });
+                }
+            }
+        }
+    }
+
+    redundancies
+}
+
+/// Report on redundancy elimination suggestions
+pub fn redundancy_elimination_report(redundancies: &[RedundancyInstance]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Redundancy Elimination Analysis\n\n");
+    report.push_str(&format!(
+        "**Total Redundancies**: {}\n\n",
+        redundancies.len()
+    ));
+
+    if redundancies.is_empty() {
+        report.push_str("No redundancies detected. Statute set is lean!\n");
+        return report;
+    }
+
+    let total_savings: f64 = redundancies.iter().map(|r| r.potential_savings).sum();
+    report.push_str(&format!(
+        "**Potential Complexity Savings**: {:.1}\n\n",
+        total_savings
+    ));
+
+    // Group by redundancy type
+    let mut by_type: HashMap<RedundancyType, Vec<&RedundancyInstance>> = HashMap::new();
+    for redundancy in redundancies {
+        by_type
+            .entry(redundancy.redundancy_type)
+            .or_default()
+            .push(redundancy);
+    }
+
+    for (redundancy_type, items) in by_type.iter() {
+        report.push_str(&format!(
+            "## {} ({} instances)\n\n",
+            redundancy_type,
+            items.len()
+        ));
+
+        for redundancy in items {
+            report.push_str(&format!(
+                "### Statutes: {}\n\n",
+                redundancy.statute_ids.join(", ")
+            ));
+            report.push_str(&format!("- **Description**: {}\n", redundancy.description));
+            report.push_str(&format!(
+                "- **Strategy**: {}\n",
+                redundancy.elimination_strategy
+            ));
+            report.push_str(&format!(
+                "- **Savings**: {:.1} complexity points\n\n",
+                redundancy.potential_savings
+            ));
+        }
+    }
+
+    report
+}
+
+// Helper functions for enhanced analysis
+
+/// Extracts age threshold from conditions
+fn extract_age_threshold(conditions: &[legalis_core::Condition]) -> Option<i32> {
+    for cond in conditions {
+        if let Some(age) = extract_age_from_condition(cond) {
+            return Some(age);
+        }
+    }
+    None
+}
+
+/// Helper to extract age from a single condition (recursively)
+fn extract_age_from_condition(cond: &legalis_core::Condition) -> Option<i32> {
+    use legalis_core::Condition;
+    match cond {
+        Condition::Age { value, .. } => Some(*value as i32),
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            extract_age_from_condition(left).or_else(|| extract_age_from_condition(right))
+        }
+        Condition::Not(inner) => extract_age_from_condition(inner),
+        _ => None,
+    }
+}
+
+/// Extracts income threshold from conditions
+fn extract_income_threshold(conditions: &[legalis_core::Condition]) -> Option<i32> {
+    for cond in conditions {
+        if let Some(income) = extract_income_from_condition(cond) {
+            return Some(income);
+        }
+    }
+    None
+}
+
+/// Helper to extract income from a single condition (recursively)
+fn extract_income_from_condition(cond: &legalis_core::Condition) -> Option<i32> {
+    use legalis_core::Condition;
+    match cond {
+        Condition::Income { value, .. } => Some(*value as i32),
+        Condition::And(left, right) | Condition::Or(left, right) => {
+            extract_income_from_condition(left).or_else(|| extract_income_from_condition(right))
+        }
+        Condition::Not(inner) => extract_income_from_condition(inner),
+        _ => None,
+    }
+}
+
+// ============================================================================
+// Proof Generation (v0.1.5)
+// ============================================================================
+
+/// Represents a step in a verification proof
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProofStep {
+    /// Step number
+    pub step_number: usize,
+    /// Type of proof step
+    pub step_type: ProofStepType,
+    /// Description of what this step proves
+    pub description: String,
+    /// The formula or condition being proven
+    pub formula: String,
+    /// Justification for this step
+    pub justification: String,
+    /// References to previous steps this depends on
+    pub depends_on: Vec<usize>,
+}
+
+/// Types of proof steps
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ProofStepType {
+    /// Assumption or premise
+    Premise,
+    /// Logical deduction
+    Deduction,
+    /// Contradiction found
+    Contradiction,
+    /// SMT solver result
+    SmtResult,
+    /// Substitution or simplification
+    Simplification,
+    /// Conclusion
+    Conclusion,
+}
+
+impl std::fmt::Display for ProofStepType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Premise => write!(f, "Premise"),
+            Self::Deduction => write!(f, "Deduction"),
+            Self::Contradiction => write!(f, "Contradiction"),
+            Self::SmtResult => write!(f, "SMT Result"),
+            Self::Simplification => write!(f, "Simplification"),
+            Self::Conclusion => write!(f, "Conclusion"),
+        }
+    }
+}
+
+/// A complete verification proof
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerificationProof {
+    /// Statute being verified
+    pub statute_id: String,
+    /// What is being proven
+    pub claim: String,
+    /// The proof steps
+    pub steps: Vec<ProofStep>,
+    /// Whether the proof is complete
+    pub is_complete: bool,
+    /// Timestamp when proof was generated
+    pub generated_at: String,
+}
+
+impl VerificationProof {
+    /// Creates a new empty proof
+    pub fn new(statute_id: impl Into<String>, claim: impl Into<String>) -> Self {
+        Self {
+            statute_id: statute_id.into(),
+            claim: claim.into(),
+            steps: Vec::new(),
+            is_complete: false,
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a proof step
+    pub fn add_step(&mut self, step: ProofStep) {
+        self.steps.push(step);
+    }
+
+    /// Marks the proof as complete
+    pub fn complete(mut self) -> Self {
+        self.is_complete = true;
+        self
+    }
+
+    /// Generates a human-readable proof text
+    pub fn to_human_readable(&self) -> String {
+        let mut output = String::new();
+
+        output.push_str("# Verification Proof\n\n");
+        output.push_str(&format!("**Statute**: {}\n", self.statute_id));
+        output.push_str(&format!("**Claim**: {}\n", self.claim));
+        output.push_str(&format!("**Generated**: {}\n", self.generated_at));
+        output.push_str(&format!(
+            "**Status**: {}\n\n",
+            if self.is_complete {
+                "Complete"
+            } else {
+                "Incomplete"
+            }
+        ));
+
+        output.push_str("## Proof Steps\n\n");
+
+        for step in &self.steps {
+            output.push_str(&format!(
+                "### Step {} - {}\n\n",
+                step.step_number, step.step_type
+            ));
+            output.push_str(&format!("**Description**: {}\n\n", step.description));
+            output.push_str(&format!("**Formula**: `{}`\n\n", step.formula));
+            output.push_str(&format!("**Justification**: {}\n\n", step.justification));
+
+            if !step.depends_on.is_empty() {
+                output.push_str(&format!(
+                    "**Depends on steps**: {}\n\n",
+                    step.depends_on
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+
+        if self.is_complete {
+            output.push_str(
+                "## Conclusion\n\nThe proof is complete and the claim has been verified.\n",
+            );
+        }
+
+        output
+    }
+}
+
+/// Proof certificate for formal verification
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProofCertificate {
+    /// Certificate ID
+    pub certificate_id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Verification claim
+    pub claim: String,
+    /// Proof method used
+    pub proof_method: String,
+    /// The complete proof
+    pub proof: VerificationProof,
+    /// Certificate issuer
+    pub issuer: String,
+    /// Issuance date
+    pub issued_at: String,
+    /// Validity period in days
+    pub valid_for_days: Option<u32>,
+    /// Digital signature (placeholder for actual signature)
+    pub signature: Option<String>,
+}
+
+impl ProofCertificate {
+    /// Creates a new proof certificate
+    pub fn new(
+        statute_id: impl Into<String>,
+        claim: impl Into<String>,
+        proof: VerificationProof,
+    ) -> Self {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let statute_id = statute_id.into();
+        let claim = claim.into();
+
+        // Generate certificate ID from statute_id and timestamp
+        let mut hasher = DefaultHasher::new();
+        statute_id.hash(&mut hasher);
+        chrono::Utc::now().timestamp().hash(&mut hasher);
+        let certificate_id = format!("CERT-{:016x}", hasher.finish());
+
+        Self {
+            certificate_id,
+            statute_id,
+            claim,
+            proof_method: "SMT-based formal verification".to_string(),
+            proof,
+            issuer: "Legalis Verifier".to_string(),
+            issued_at: chrono::Utc::now().to_rfc3339(),
+            valid_for_days: Some(365),
+            signature: None,
+        }
+    }
+
+    /// Exports certificate to JSON
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Exports certificate to human-readable format
+    pub fn to_human_readable(&self) -> String {
+        let mut output = String::new();
+
+        output.push_str("╔════════════════════════════════════════════════════════════════╗\n");
+        output.push_str("║          FORMAL VERIFICATION CERTIFICATE                       ║\n");
+        output.push_str("╚════════════════════════════════════════════════════════════════╝\n\n");
+
+        output.push_str(&format!("Certificate ID: {}\n", self.certificate_id));
+        output.push_str(&format!("Statute: {}\n", self.statute_id));
+        output.push_str(&format!("Claim: {}\n", self.claim));
+        output.push_str(&format!("Proof Method: {}\n", self.proof_method));
+        output.push_str(&format!("Issued By: {}\n", self.issuer));
+        output.push_str(&format!("Issued At: {}\n", self.issued_at));
+
+        if let Some(days) = self.valid_for_days {
+            output.push_str(&format!("Valid For: {} days\n", days));
+        }
+
+        output.push_str(&format!(
+            "\nProof Status: {}\n",
+            if self.proof.is_complete {
+                "✓ Complete"
+            } else {
+                "✗ Incomplete"
+            }
+        ));
+        output.push_str(&format!("Proof Steps: {}\n\n", self.proof.steps.len()));
+
+        output.push_str(&self.proof.to_human_readable());
+
+        output.push_str("\n╔════════════════════════════════════════════════════════════════╗\n");
+        output.push_str("║  This certificate attests that the statute has been formally   ║\n");
+        output.push_str("║  verified using automated theorem proving techniques.          ║\n");
+        output.push_str("╚════════════════════════════════════════════════════════════════╝\n");
+
+        output
+    }
+}
+
+/// Generates a proof for circular reference detection
+pub fn generate_circular_reference_proof(
+    _statutes: &[Statute],
+    cycle: &[String],
+) -> VerificationProof {
+    let mut proof = VerificationProof::new(
+        cycle.first().cloned().unwrap_or_default(),
+        format!(
+            "Circular reference detected in statutes: {}",
+            cycle.join(" → ")
+        ),
+    );
+
+    // Step 1: List the statutes in the cycle
+    proof.add_step(ProofStep {
+        step_number: 1,
+        step_type: ProofStepType::Premise,
+        description: "Statutes involved in potential cycle".to_string(),
+        formula: format!("Cycle = [{}]", cycle.join(", ")),
+        justification: "Identified through dependency graph analysis".to_string(),
+        depends_on: vec![],
+    });
+
+    // Step 2: Show each reference in the cycle
+    for (i, (from, to)) in cycle
+        .iter()
+        .zip(cycle.iter().cycle().skip(1))
+        .enumerate()
+        .take(cycle.len())
+    {
+        proof.add_step(ProofStep {
+            step_number: i + 2,
+            step_type: ProofStepType::Deduction,
+            description: format!("Reference from {} to {}", from, to),
+            formula: format!("{} → {}", from, to),
+            justification: "Extracted from statute preconditions".to_string(),
+            depends_on: vec![1],
+        });
+    }
+
+    // Final step: Conclude circular reference
+    let final_step = cycle.len() + 2;
+    proof.add_step(ProofStep {
+        step_number: final_step,
+        step_type: ProofStepType::Contradiction,
+        description: "Circular reference detected".to_string(),
+        formula: format!("{} → {} → ... → {}", cycle[0], cycle[1], cycle[0]),
+        justification: format!(
+            "The chain of references forms a cycle, violating acyclicity requirement. {} steps in cycle.",
+            cycle.len()
+        ),
+        depends_on: (2..final_step).collect(),
+    });
+
+    proof.complete()
+}
+
+/// Exports proof in DOT format for visualization
+pub fn export_proof_dot(proof: &VerificationProof) -> String {
+    let mut dot = String::new();
+
+    dot.push_str("digraph VerificationProof {\n");
+    dot.push_str("  rankdir=TB;\n");
+    dot.push_str("  node [shape=box, style=filled, fillcolor=lightblue];\n\n");
+
+    // Add nodes for each step
+    for step in &proof.steps {
+        let color = match step.step_type {
+            ProofStepType::Premise => "lightgreen",
+            ProofStepType::Deduction => "lightblue",
+            ProofStepType::Contradiction => "salmon",
+            ProofStepType::SmtResult => "lightyellow",
+            ProofStepType::Simplification => "lightcyan",
+            ProofStepType::Conclusion => "lightgreen",
+        };
+
+        let label = format!(
+            "Step {}\\n{}\\n{}",
+            step.step_number,
+            step.step_type,
+            step.description.chars().take(40).collect::<String>()
+        );
+
+        dot.push_str(&format!(
+            "  step{} [label=\"{}\", fillcolor={}];\n",
+            step.step_number, label, color
+        ));
+    }
+
+    dot.push('\n');
+
+    // Add edges for dependencies
+    for step in &proof.steps {
+        for dep in &step.depends_on {
+            dot.push_str(&format!("  step{} -> step{};\n", dep, step.step_number));
+        }
+    }
+
+    dot.push_str("}\n");
+    dot
+}
+
+/// Interactive proof explorer data structure
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InteractiveProof {
+    /// The proof
+    pub proof: VerificationProof,
+    /// Current step being viewed
+    pub current_step: usize,
+    /// Whether to show all dependencies
+    pub show_dependencies: bool,
+    /// Navigation history
+    pub history: Vec<usize>,
+}
+
+impl InteractiveProof {
+    /// Creates a new interactive proof explorer
+    pub fn new(proof: VerificationProof) -> Self {
+        Self {
+            proof,
+            current_step: 0,
+            show_dependencies: true,
+            history: vec![0],
+        }
+    }
+
+    /// Navigates to a specific step
+    pub fn goto_step(&mut self, step_number: usize) -> Result<&ProofStep, String> {
+        if step_number >= self.proof.steps.len() {
+            return Err(format!("Step {} does not exist", step_number));
+        }
+
+        self.current_step = step_number;
+        self.history.push(step_number);
+        Ok(&self.proof.steps[step_number])
+    }
+
+    /// Goes to the next step
+    pub fn next_step(&mut self) -> Option<&ProofStep> {
+        if self.current_step + 1 < self.proof.steps.len() {
+            self.current_step += 1;
+            self.history.push(self.current_step);
+            Some(&self.proof.steps[self.current_step])
+        } else {
+            None
+        }
+    }
+
+    /// Goes to the previous step
+    pub fn previous_step(&mut self) -> Option<&ProofStep> {
+        if self.current_step > 0 {
+            self.current_step -= 1;
+            self.history.push(self.current_step);
+            Some(&self.proof.steps[self.current_step])
+        } else {
+            None
+        }
+    }
+
+    /// Gets the current step
+    pub fn current(&self) -> Option<&ProofStep> {
+        self.proof.steps.get(self.current_step)
+    }
+
+    /// Exports to JSON for web interface
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+}
+
+/// Compresses a proof by removing redundant steps
+pub fn compress_proof(proof: VerificationProof) -> VerificationProof {
+    let mut compressed = VerificationProof::new(&proof.statute_id, &proof.claim);
+    compressed.generated_at = proof.generated_at;
+
+    // Keep only essential steps: premises, contradictions, and conclusions
+    let mut essential_steps: Vec<ProofStep> = Vec::new();
+    let mut step_mapping: HashMap<usize, usize> = HashMap::new();
+    let mut new_step_number = 1;
+
+    for step in &proof.steps {
+        let is_essential = matches!(
+            step.step_type,
+            ProofStepType::Premise | ProofStepType::Contradiction | ProofStepType::Conclusion
+        ) || step.depends_on.is_empty(); // Keep steps with no dependencies (axioms)
+
+        if is_essential {
+            step_mapping.insert(step.step_number, new_step_number);
+
+            let mut new_step = step.clone();
+            new_step.step_number = new_step_number;
+
+            // Update dependencies to point to compressed step numbers
+            new_step.depends_on = step
+                .depends_on
+                .iter()
+                .filter_map(|&old_num| step_mapping.get(&old_num).copied())
+                .collect();
+
+            essential_steps.push(new_step);
+            new_step_number += 1;
+        }
+    }
+
+    compressed.steps = essential_steps;
+    compressed.is_complete = proof.is_complete;
+
+    compressed
+}
+
+/// Generates a proof comparison report
+pub fn proof_comparison_report(
+    original: &VerificationProof,
+    compressed: &VerificationProof,
+) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Proof Compression Analysis\n\n");
+    report.push_str(&format!("**Original Steps**: {}\n", original.steps.len()));
+    report.push_str(&format!(
+        "**Compressed Steps**: {}\n",
+        compressed.steps.len()
+    ));
+    report.push_str(&format!(
+        "**Compression Ratio**: {:.1}%\n\n",
+        (1.0 - (compressed.steps.len() as f64 / original.steps.len() as f64)) * 100.0
+    ));
+
+    report.push_str("## Retained Steps\n\n");
+    for step in &compressed.steps {
+        report.push_str(&format!(
+            "- Step {}: {} - {}\n",
+            step.step_number, step.step_type, step.description
+        ));
     }
 
     report
@@ -12430,17 +15496,15 @@ mod tests {
                 .with_effective_date(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
                 .with_expiry_date(chrono::NaiveDate::from_ymd_opt(2030, 12, 31).unwrap()),
         )
-        .with_precondition(
-            legalis_core::Condition::And(
-                Box::new(legalis_core::Condition::Age {
-                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                    value: 18,
-                }),
-                Box::new(legalis_core::Condition::HasAttribute {
-                    key: "citizenship".to_string(),
-                }),
-            )
-        );
+        .with_precondition(legalis_core::Condition::And(
+            Box::new(legalis_core::Condition::Age {
+                operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(legalis_core::Condition::HasAttribute {
+                key: "citizenship".to_string(),
+            }),
+        ));
 
         let metrics = analyze_quality(&statute);
 
@@ -12455,13 +15519,8 @@ mod tests {
     #[test]
     fn test_testability_score_low() {
         // Less testable statute with fuzzy/custom conditions
-        let statute = Statute::new(
-            "fuzzy-law",
-            "Vague Law",
-            Effect::grant("some benefit"),
-        )
-        .with_precondition(
-            legalis_core::Condition::And(
+        let statute = Statute::new("fuzzy-law", "Vague Law", Effect::grant("some benefit"))
+            .with_precondition(legalis_core::Condition::And(
                 Box::new(legalis_core::Condition::Custom {
                     description: "must demonstrate good character".to_string(),
                 }),
@@ -12470,8 +15529,7 @@ mod tests {
                     membership_points: vec![(300.0, 0.0), (700.0, 0.5), (850.0, 1.0)],
                     min_membership: 0.7,
                 }),
-            )
-        );
+            ));
 
         let metrics = analyze_quality(&statute);
 
@@ -12486,18 +15544,14 @@ mod tests {
     #[test]
     fn test_maintainability_score_high() {
         // Highly maintainable statute
-        let statute = Statute::new(
-            "maintainable-law",
-            "Simple Rule",
-            Effect::grant("benefit"),
-        )
-        .with_jurisdiction("US")
-        .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()))
-        .with_discretion("Clear documentation explaining the purpose and application")
-        .with_precondition(legalis_core::Condition::Age {
-            operator: legalis_core::ComparisonOp::GreaterOrEqual,
-            value: 18,
-        });
+        let statute = Statute::new("maintainable-law", "Simple Rule", Effect::grant("benefit"))
+            .with_jurisdiction("US")
+            .with_temporal_validity(TemporalValidity::new().with_enacted_at(chrono::Utc::now()))
+            .with_discretion("Clear documentation explaining the purpose and application")
+            .with_precondition(legalis_core::Condition::Age {
+                operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                value: 18,
+            });
 
         let metrics = analyze_quality(&statute);
 
@@ -12512,46 +15566,45 @@ mod tests {
     #[test]
     fn test_maintainability_score_low() {
         // Poorly maintainable statute
-        let statute = Statute::new("unmaintainable-law", "", Effect::grant(""))
-            .with_precondition(
-                legalis_core::Condition::And(
-                    Box::new(legalis_core::Condition::And(
-                        Box::new(legalis_core::Condition::Or(
-                            Box::new(legalis_core::Condition::Age {
-                                operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                                value: 18,
-                            }),
-                            Box::new(legalis_core::Condition::Age {
-                                operator: legalis_core::ComparisonOp::LessThan,
-                                value: 65,
-                            }),
-                        )),
-                        Box::new(legalis_core::Condition::And(
-                            Box::new(legalis_core::Condition::Income {
-                                operator: legalis_core::ComparisonOp::GreaterThan,
-                                value: 25000,
-                            }),
-                            Box::new(legalis_core::Condition::Income {
-                                operator: legalis_core::ComparisonOp::LessThan,
-                                value: 75000,
-                            }),
-                        )),
+        let statute = Statute::new("unmaintainable-law", "", Effect::grant("")).with_precondition(
+            legalis_core::Condition::And(
+                Box::new(legalis_core::Condition::And(
+                    Box::new(legalis_core::Condition::Or(
+                        Box::new(legalis_core::Condition::Age {
+                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                            value: 18,
+                        }),
+                        Box::new(legalis_core::Condition::Age {
+                            operator: legalis_core::ComparisonOp::LessThan,
+                            value: 65,
+                        }),
                     )),
+                    Box::new(legalis_core::Condition::And(
+                        Box::new(legalis_core::Condition::Income {
+                            operator: legalis_core::ComparisonOp::GreaterThan,
+                            value: 25000,
+                        }),
+                        Box::new(legalis_core::Condition::Income {
+                            operator: legalis_core::ComparisonOp::LessThan,
+                            value: 75000,
+                        }),
+                    )),
+                )),
+                Box::new(legalis_core::Condition::And(
+                    Box::new(legalis_core::Condition::HasAttribute {
+                        key: "attr1".to_string(),
+                    }),
                     Box::new(legalis_core::Condition::And(
                         Box::new(legalis_core::Condition::HasAttribute {
-                            key: "attr1".to_string(),
+                            key: "attr2".to_string(),
                         }),
-                        Box::new(legalis_core::Condition::And(
-                            Box::new(legalis_core::Condition::HasAttribute {
-                                key: "attr2".to_string(),
-                            }),
-                            Box::new(legalis_core::Condition::HasAttribute {
-                                key: "attr3".to_string(),
-                            }),
-                        )),
+                        Box::new(legalis_core::Condition::HasAttribute {
+                            key: "attr3".to_string(),
+                        }),
                     )),
-                )
-            );
+                )),
+            ),
+        );
 
         let metrics = analyze_quality(&statute);
 
@@ -12641,9 +15694,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm))
+        );
     }
 
     #[test]
@@ -12657,9 +15712,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::VagueTerm))
+        );
     }
 
     #[test]
@@ -12669,9 +15726,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect))
+        );
     }
 
     #[test]
@@ -12681,9 +15740,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::UnclearEffect))
+        );
     }
 
     #[test]
@@ -12712,9 +15773,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         // Should detect missing discretion for complex conditions (>3 preconditions)
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::MissingDiscretion)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::MissingDiscretion))
+        );
     }
 
     #[test]
@@ -12724,9 +15787,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity))
+        );
     }
 
     #[test]
@@ -12736,9 +15801,11 @@ mod tests {
 
         let ambiguities = detect_ambiguities(&statute);
 
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::TemporalAmbiguity))
+        );
     }
 
     #[test]
@@ -12752,9 +15819,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities.iter().any(
-            |a| matches!(a.ambiguity_type, AmbiguityType::QuantifierAmbiguity)
-        ));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::QuantifierAmbiguity))
+        );
     }
 
     #[test]
@@ -12767,9 +15836,11 @@ mod tests {
         let ambiguities = detect_ambiguities(&statute);
 
         assert!(!ambiguities.is_empty());
-        assert!(ambiguities
-            .iter()
-            .any(|a| matches!(a.ambiguity_type, AmbiguityType::ImplicitAssumption)));
+        assert!(
+            ambiguities
+                .iter()
+                .any(|a| matches!(a.ambiguity_type, AmbiguityType::ImplicitAssumption))
+        );
     }
 
     #[test]
@@ -13355,5 +16426,317 @@ mod tests {
         assert!(report.contains("**Total Statutes**: 2"));
         assert!(report.contains("law1"));
         assert!(report.contains("law2"));
+    }
+
+    // ========================================================================
+    // Tests for Reporting Extensions (v0.1.8)
+    // ========================================================================
+
+    #[test]
+    fn test_generate_compliance_certification() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law 1", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Test Law 2", Effect::grant("license")).with_precondition(
+                Condition::Income {
+                    operator: ComparisonOp::GreaterThan,
+                    value: 30000,
+                },
+            ),
+        ];
+
+        let result = VerificationResult::pass();
+
+        let cert = generate_compliance_certification(
+            "CERT-2025-001",
+            "Test Organization",
+            "Legalis Certifying Authority",
+            &statutes,
+            &result,
+            Some(365),
+        );
+
+        assert_eq!(cert.certificate_id, "CERT-2025-001");
+        assert_eq!(cert.organization, "Test Organization");
+        assert_eq!(cert.certifying_authority, "Legalis Certifying Authority");
+        assert_eq!(cert.statute_ids.len(), 2);
+        assert_eq!(cert.verification_summary.total_statutes, 2);
+        assert_eq!(cert.verification_summary.passed_count, 2);
+        assert_eq!(cert.verification_summary.failed_count, 0);
+        assert_eq!(cert.verification_summary.pass_rate, 100.0);
+        assert!(cert.valid_until.is_some());
+    }
+
+    #[test]
+    fn test_compliance_certification_report() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+
+        let result = VerificationResult::pass();
+
+        let cert = generate_compliance_certification(
+            "CERT-TEST",
+            "Org",
+            "Authority",
+            &statutes,
+            &result,
+            None,
+        );
+
+        let report = compliance_certification_report(&cert);
+
+        assert!(report.contains("# COMPLIANCE CERTIFICATION"));
+        assert!(report.contains("CERT-TEST"));
+        assert!(report.contains("Org"));
+        assert!(report.contains("Authority"));
+        assert!(report.contains("Verification Summary"));
+        assert!(report.contains("law1"));
+    }
+
+    #[test]
+    fn test_generate_regulatory_filing() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law 1", Effect::grant("benefit")).with_jurisdiction("US"),
+            Statute::new("law2", "Test Law 2", Effect::prohibition("action"))
+                .with_jurisdiction("US"),
+        ];
+
+        let results = vec![
+            VerificationResult::pass(),
+            VerificationResult::fail(vec![VerificationError::Ambiguity {
+                message: "Test error".to_string(),
+            }]),
+        ];
+
+        let filing = generate_regulatory_filing(
+            "FILING-2025-001",
+            "Federal Regulatory Commission",
+            "Annual Compliance",
+            "US",
+            &statutes,
+            &results,
+        );
+
+        assert_eq!(filing.filing_id, "FILING-2025-001");
+        assert_eq!(filing.regulatory_body, "Federal Regulatory Commission");
+        assert_eq!(filing.filing_type, "Annual Compliance");
+        assert_eq!(filing.jurisdiction, "US");
+        assert_eq!(filing.statutes.len(), 2);
+        assert_eq!(filing.statutes[0].status, "Compliant");
+        assert_eq!(filing.statutes[1].status, "Non-Compliant");
+        assert_eq!(filing.compliance_status, "Partially Compliant");
+    }
+
+    #[test]
+    fn test_regulatory_filing_report() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+
+        let results = vec![VerificationResult::pass()];
+
+        let filing = generate_regulatory_filing(
+            "FILING-TEST",
+            "Test Body",
+            "Test Type",
+            "Test Jurisdiction",
+            &statutes,
+            &results,
+        );
+
+        let report = regulatory_filing_report(&filing);
+
+        assert!(report.contains("# REGULATORY FILING REPORT"));
+        assert!(report.contains("FILING-TEST"));
+        assert!(report.contains("Test Body"));
+        assert!(report.contains("Test Type"));
+        assert!(report.contains("Test Jurisdiction"));
+        assert!(report.contains("Fully Compliant"));
+    }
+
+    #[test]
+    fn test_generate_executive_summary() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law 1", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+            Statute::new("law2", "Test Law 2", Effect::grant("license")).with_precondition(
+                Condition::Income {
+                    operator: ComparisonOp::GreaterThan,
+                    value: 30000,
+                },
+            ),
+        ];
+
+        let result = VerificationResult::pass();
+
+        let summary = generate_executive_summary("Test Verification", &statutes, &result);
+
+        assert_eq!(summary.title, "Test Verification");
+        assert!(!summary.date.is_empty());
+        assert_eq!(summary.risk_level, "Low");
+        assert_eq!(summary.statistics.total_statutes, 2);
+        assert_eq!(summary.statistics.statutes_with_issues, 0);
+        assert_eq!(summary.statistics.total_issues, 0);
+        assert!(!summary.key_findings.is_empty());
+        assert!(!summary.recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_executive_summary_with_errors() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+
+        let result = VerificationResult::fail(vec![VerificationError::CircularReference {
+            message: "Test error".to_string(),
+        }]);
+
+        let summary = generate_executive_summary("Test", &statutes, &result);
+
+        assert_eq!(summary.risk_level, "Critical");
+        assert_eq!(summary.statistics.critical_issues, 1);
+        assert!(summary.overall_assessment.contains("Critical"));
+    }
+
+    #[test]
+    fn test_executive_summary_report() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+
+        let result = VerificationResult::pass();
+
+        let summary = generate_executive_summary("Test", &statutes, &result);
+        let report = executive_summary_report(&summary);
+
+        assert!(report.contains("# EXECUTIVE SUMMARY"));
+        assert!(report.contains("Test"));
+        assert!(report.contains("Risk Level"));
+        assert!(report.contains("Overall Assessment"));
+        assert!(report.contains("Key Findings"));
+        assert!(report.contains("Statistics"));
+        assert!(report.contains("Recommendations"));
+    }
+
+    #[test]
+    fn test_report_template_creation() {
+        let template = ReportTemplate::new("Test Template")
+            .with_header("# Test Header")
+            .with_footer("Test Footer")
+            .with_toc()
+            .with_section(ReportSection::ExecutiveSummary)
+            .with_section(ReportSection::VerificationResults);
+
+        assert_eq!(template.name, "Test Template");
+        assert_eq!(template.header, Some("# Test Header".to_string()));
+        assert_eq!(template.footer, Some("Test Footer".to_string()));
+        assert!(template.include_toc);
+        assert_eq!(template.sections.len(), 2);
+    }
+
+    #[test]
+    fn test_generate_custom_report() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law", Effect::grant("benefit")).with_precondition(
+                Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                },
+            ),
+        ];
+
+        let result = VerificationResult::pass();
+
+        let template = ReportTemplate::new("Custom Report")
+            .with_header("# Custom Header")
+            .with_section(ReportSection::ExecutiveSummary)
+            .with_section(ReportSection::VerificationResults)
+            .with_footer("Custom Footer");
+
+        let report = generate_custom_report(&template, &statutes, &result);
+
+        assert!(report.contains("# Custom Header"));
+        assert!(report.contains("Custom Footer"));
+        assert!(report.contains("# EXECUTIVE SUMMARY"));
+        assert!(report.contains("# Verification Results"));
+    }
+
+    #[test]
+    fn test_standard_report_template() {
+        let template = standard_report_template();
+
+        assert_eq!(template.name, "Standard Verification Report");
+        assert!(template.include_toc);
+        assert!(!template.sections.is_empty());
+        assert!(template.header.is_some());
+        assert!(template.footer.is_some());
+    }
+
+    #[test]
+    fn test_compliance_report_template() {
+        let template = compliance_report_template();
+
+        assert_eq!(template.name, "Compliance Verification Report");
+        assert!(template.include_toc);
+        assert!(!template.sections.is_empty());
+    }
+
+    #[test]
+    fn test_quality_report_template() {
+        let template = quality_report_template();
+
+        assert_eq!(template.name, "Quality Assessment Report");
+        assert!(template.include_toc);
+        assert!(!template.sections.is_empty());
+    }
+
+    #[test]
+    fn test_custom_report_with_all_sections() {
+        let statutes = vec![
+            Statute::new("law1", "Test Law", Effect::grant("benefit"))
+                .with_precondition(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: 18,
+                })
+                .with_jurisdiction("US"),
+        ];
+
+        let result = VerificationResult::pass();
+
+        let template = ReportTemplate::new("Comprehensive Test")
+            .with_toc()
+            .with_section(ReportSection::ExecutiveSummary)
+            .with_section(ReportSection::VerificationResults)
+            .with_section(ReportSection::QualityMetrics)
+            .with_section(ReportSection::ComplianceChecklist)
+            .with_section(ReportSection::StatisticalAnalysis);
+
+        let report = generate_custom_report(&template, &statutes, &result);
+
+        assert!(report.contains("Table of Contents"));
+        assert!(report.contains("Executive Summary"));
+        assert!(report.contains("Verification Results"));
+        assert!(report.contains("Quality"));
+        assert!(report.contains("Compliance"));
+        assert!(report.contains("Statistics"));
+    }
+
+    #[test]
+    fn test_custom_report_section() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+
+        let result = VerificationResult::pass();
+
+        let template =
+            ReportTemplate::new("Custom Section Test").with_section(ReportSection::Custom {
+                title: "Custom Section Title".to_string(),
+                content: "This is custom content for testing.".to_string(),
+            });
+
+        let report = generate_custom_report(&template, &statutes, &result);
+
+        assert!(report.contains("# Custom Section Title"));
+        assert!(report.contains("This is custom content for testing."));
     }
 }

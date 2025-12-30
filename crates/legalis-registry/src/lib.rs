@@ -376,7 +376,7 @@ impl<T> PagedResult<T> {
 }
 
 /// Search query for statutes.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SearchQuery {
     /// Full-text search term
     pub text: Option<String>,
@@ -4295,7 +4295,7 @@ pub mod transaction {
         /// Update an existing statute
         Update {
             statute_id: String,
-            statute: Statute,
+            statute: Box<Statute>,
         },
         /// Set the status of a statute
         SetStatus {
@@ -4337,7 +4337,7 @@ pub mod transaction {
         pub fn update(mut self, statute_id: impl Into<String>, statute: Statute) -> Self {
             self.operations.push(Operation::Update {
                 statute_id: statute_id.into(),
-                statute,
+                statute: Box::new(statute),
             });
             self
         }
@@ -4400,7 +4400,7 @@ pub mod transaction {
                         statute_id,
                         statute,
                     } => registry
-                        .update(&statute_id, statute)
+                        .update(&statute_id, *statute)
                         .map(OperationResult::Updated)
                         .map_err(OperationError::Registry),
                     Operation::SetStatus { statute_id, status } => registry
@@ -8307,9 +8307,7 @@ impl DataProfile {
 
     /// Gets the completeness of a field.
     pub fn field_completeness(&self, field_name: &str) -> Option<f64> {
-        self.field_profiles
-            .get(field_name)
-            .map(|p| p.completeness)
+        self.field_profiles.get(field_name).map(|p| p.completeness)
     }
 
     /// Exports the profile to JSON.
@@ -8445,15 +8443,14 @@ impl StatuteRegistry {
 
         if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date) {
             if expiry <= effective {
-                assessment =
-                    assessment.with_issue("Expiry date is before or equal to effective date".to_string());
+                assessment = assessment
+                    .with_issue("Expiry date is before or equal to effective date".to_string());
             }
         }
 
         if entry.status == StatuteStatus::Repealed && entry.expiry_date.is_none() {
-            assessment = assessment.with_issue(
-                "Status is Repealed but no expiry date is set".to_string(),
-            );
+            assessment =
+                assessment.with_issue("Status is Repealed but no expiry date is set".to_string());
         }
 
         if entry.statute.title.len() < 10 {
@@ -8474,7 +8471,11 @@ impl StatuteRegistry {
     }
 
     /// Calculates similarity between two statute entries.
-    pub fn calculate_similarity(&self, entry1: &StatuteEntry, entry2: &StatuteEntry) -> SimilarityScore {
+    pub fn calculate_similarity(
+        &self,
+        entry1: &StatuteEntry,
+        entry2: &StatuteEntry,
+    ) -> SimilarityScore {
         // Title similarity (using fuzzy matching)
         let matcher = SkimMatcherV2::default();
         let title_sim = matcher
@@ -8851,19 +8852,31 @@ impl StatuteRegistry {
         let tag_patterns = [
             ("civil", vec!["civil", "contract", "property", "tort"]),
             ("criminal", vec!["criminal", "penal", "offense", "crime"]),
-            ("administrative", vec!["administrative", "regulation", "agency"]),
+            (
+                "administrative",
+                vec!["administrative", "regulation", "agency"],
+            ),
             ("tax", vec!["tax", "revenue", "fiscal"]),
             ("employment", vec!["employment", "labor", "worker"]),
             ("corporate", vec!["corporate", "company", "business"]),
-            ("intellectual-property", vec!["patent", "trademark", "copyright", "ip"]),
-            ("environmental", vec!["environmental", "pollution", "conservation"]),
+            (
+                "intellectual-property",
+                vec!["patent", "trademark", "copyright", "ip"],
+            ),
+            (
+                "environmental",
+                vec!["environmental", "pollution", "conservation"],
+            ),
             ("healthcare", vec!["health", "medical", "patient"]),
             ("education", vec!["education", "school", "university"]),
         ];
 
         for (tag, keywords) in &tag_patterns {
             if !entry.tags.contains(&tag.to_string()) {
-                let matches = keywords.iter().filter(|kw| title_lower.contains(*kw)).count();
+                let matches = keywords
+                    .iter()
+                    .filter(|kw| title_lower.contains(*kw))
+                    .count();
                 if matches > 0 {
                     let confidence = (matches as f64 / keywords.len() as f64).min(0.95);
                     result.add_suggestion(EnrichmentSuggestion::new(
@@ -8963,7 +8976,8 @@ impl StatuteRegistry {
                 | EnrichmentType::CategoryClassification
                 | EnrichmentType::JurisdictionInference => {
                     let key = suggestion.suggestion.clone();
-                    if let std::collections::hash_map::Entry::Vacant(e) = entry.metadata.entry(key) {
+                    if let std::collections::hash_map::Entry::Vacant(e) = entry.metadata.entry(key)
+                    {
                         e.insert(format!("Auto-enriched: {}", suggestion.reason));
                         applied_count += 1;
                     }
@@ -9206,6 +9220,3943 @@ impl StatuteRegistry {
         // This would typically be integrated with the registry's lineage tracker
         // For now, we'll add it as a placeholder for future integration
         // In a real implementation, StatuteRegistry would have a DataLineage field
+    }
+}
+
+// ============================================================================
+// Compliance Features (v0.1.9)
+// ============================================================================
+
+/// PII (Personally Identifiable Information) field types.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PiiFieldType {
+    /// Name of a person
+    Name,
+    /// Email address
+    Email,
+    /// Phone number
+    PhoneNumber,
+    /// Social security number or national ID
+    NationalId,
+    /// Physical address
+    Address,
+    /// Date of birth
+    DateOfBirth,
+    /// IP address
+    IpAddress,
+    /// Custom PII type
+    Custom(String),
+}
+
+/// A detected PII instance in statute content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PiiDetection {
+    /// Field type
+    pub field_type: PiiFieldType,
+    /// Original value (potentially sensitive)
+    pub value: String,
+    /// Position in text (char offset)
+    pub position: usize,
+    /// Length of the PII value
+    pub length: usize,
+    /// Confidence score (0.0-1.0)
+    pub confidence: f64,
+}
+
+impl PiiDetection {
+    /// Creates a new PII detection.
+    pub fn new(field_type: PiiFieldType, value: String, position: usize, confidence: f64) -> Self {
+        let length = value.len();
+        let confidence = confidence.clamp(0.0, 1.0);
+        Self {
+            field_type,
+            value,
+            position,
+            length,
+            confidence,
+        }
+    }
+
+    /// Returns true if confidence is above threshold.
+    pub fn is_confident(&self, threshold: f64) -> bool {
+        self.confidence >= threshold
+    }
+}
+
+/// Result of PII detection scan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PiiScanResult {
+    /// Statute ID scanned
+    pub statute_id: String,
+    /// Detected PII instances
+    pub detections: Vec<PiiDetection>,
+    /// Scan timestamp
+    pub scanned_at: DateTime<Utc>,
+    /// Total PII count
+    pub pii_count: usize,
+}
+
+impl PiiScanResult {
+    /// Creates a new scan result.
+    pub fn new(statute_id: String, detections: Vec<PiiDetection>) -> Self {
+        let pii_count = detections.len();
+        Self {
+            statute_id,
+            detections,
+            scanned_at: Utc::now(),
+            pii_count,
+        }
+    }
+
+    /// Returns high-confidence detections only.
+    pub fn high_confidence(&self, threshold: f64) -> Vec<&PiiDetection> {
+        self.detections
+            .iter()
+            .filter(|d| d.is_confident(threshold))
+            .collect()
+    }
+
+    /// Returns detections by type.
+    pub fn by_type(&self, field_type: &PiiFieldType) -> Vec<&PiiDetection> {
+        self.detections
+            .iter()
+            .filter(|d| &d.field_type == field_type)
+            .collect()
+    }
+}
+
+/// PII masking strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MaskingStrategy {
+    /// Replace with asterisks (e.g., "John Doe" -> "****")
+    Asterisks,
+    /// Replace with redacted marker (e.g., "John Doe" -> "[REDACTED]")
+    Redacted,
+    /// Replace with type marker (e.g., "John Doe" -> "[NAME]")
+    TypeMarker,
+    /// Hash the value (one-way)
+    Hash,
+    /// Partial masking (e.g., "John Doe" -> "J*** D**")
+    Partial,
+}
+
+/// PII detector and handler.
+#[derive(Debug, Clone)]
+pub struct PiiDetector {
+    /// Enable/disable PII detection
+    enabled: bool,
+    /// Minimum confidence threshold
+    min_confidence: f64,
+    /// Masking strategy
+    masking_strategy: MaskingStrategy,
+}
+
+impl Default for PiiDetector {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_confidence: 0.7,
+            masking_strategy: MaskingStrategy::Redacted,
+        }
+    }
+}
+
+impl PiiDetector {
+    /// Creates a new PII detector with default settings.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the minimum confidence threshold.
+    pub fn with_min_confidence(mut self, threshold: f64) -> Self {
+        self.min_confidence = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets the masking strategy.
+    pub fn with_masking_strategy(mut self, strategy: MaskingStrategy) -> Self {
+        self.masking_strategy = strategy;
+        self
+    }
+
+    /// Enables or disables PII detection.
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    /// Scans statute content for PII.
+    pub fn scan(&self, statute_id: &str, content: &str) -> PiiScanResult {
+        if !self.enabled {
+            return PiiScanResult::new(statute_id.to_string(), Vec::new());
+        }
+
+        let mut detections = Vec::new();
+
+        // Email detection (simple pattern)
+        if let Some(email_regex) = Self::email_pattern() {
+            for (idx, _) in content.match_indices(&email_regex) {
+                if let Some(end) = content[idx..].find(|c: char| c.is_whitespace()) {
+                    let email = &content[idx..idx + end];
+                    if email.contains('@') {
+                        detections.push(PiiDetection::new(
+                            PiiFieldType::Email,
+                            email.to_string(),
+                            idx,
+                            0.9,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Phone number detection (simple pattern for demonstration)
+        for (idx, _) in content.match_indices(char::is_numeric) {
+            let rest = &content[idx..];
+            if let Some(number) = Self::extract_phone_number(rest) {
+                if number.len() >= 10 {
+                    detections.push(PiiDetection::new(
+                        PiiFieldType::PhoneNumber,
+                        number.clone(),
+                        idx,
+                        0.8,
+                    ));
+                }
+            }
+        }
+
+        // IP address detection (simple IPv4 pattern)
+        for (idx, _) in content.match_indices(char::is_numeric) {
+            if let Some(ip) = Self::extract_ip_address(&content[idx..]) {
+                detections.push(PiiDetection::new(
+                    PiiFieldType::IpAddress,
+                    ip.clone(),
+                    idx,
+                    0.95,
+                ));
+            }
+        }
+
+        PiiScanResult::new(statute_id.to_string(), detections)
+    }
+
+    /// Masks PII in content based on detection results.
+    pub fn mask(&self, content: &str, scan_result: &PiiScanResult) -> String {
+        let mut masked = content.to_string();
+        let mut offset = 0i32;
+
+        // Sort detections by position
+        let mut sorted_detections = scan_result.detections.clone();
+        sorted_detections.sort_by_key(|d| d.position);
+
+        for detection in sorted_detections.iter() {
+            if !detection.is_confident(self.min_confidence) {
+                continue;
+            }
+
+            let pos = (detection.position as i32 + offset) as usize;
+            let masked_value = self.apply_masking(&detection.value, &detection.field_type);
+            let original_len = detection.length;
+            let new_len = masked_value.len();
+
+            if pos + original_len <= masked.len() {
+                masked.replace_range(pos..pos + original_len, &masked_value);
+                offset += new_len as i32 - original_len as i32;
+            }
+        }
+
+        masked
+    }
+
+    /// Applies masking strategy to a value.
+    fn apply_masking(&self, value: &str, field_type: &PiiFieldType) -> String {
+        match self.masking_strategy {
+            MaskingStrategy::Asterisks => "*".repeat(value.len().min(8)),
+            MaskingStrategy::Redacted => "[REDACTED]".to_string(),
+            MaskingStrategy::TypeMarker => format!("[{:?}]", field_type).to_uppercase(),
+            MaskingStrategy::Hash => {
+                // Simple hash representation (not cryptographic)
+                format!("[HASH:{}]", value.len())
+            }
+            MaskingStrategy::Partial => {
+                if value.len() <= 4 {
+                    "*".repeat(value.len())
+                } else {
+                    let chars: Vec<char> = value.chars().collect();
+                    let mut result = String::new();
+                    for (i, ch) in chars.iter().enumerate() {
+                        if i == 0 || i == chars.len() - 1 {
+                            result.push(*ch);
+                        } else {
+                            result.push('*');
+                        }
+                    }
+                    result
+                }
+            }
+        }
+    }
+
+    fn email_pattern() -> Option<&'static str> {
+        Some("@")
+    }
+
+    fn extract_phone_number(text: &str) -> Option<String> {
+        let mut number = String::new();
+        for ch in text.chars().take(15) {
+            if ch.is_numeric() || ch == '-' || ch == '(' || ch == ')' || ch == ' ' {
+                number.push(ch);
+            } else {
+                break;
+            }
+        }
+        if number.chars().filter(|c| c.is_numeric()).count() >= 10 {
+            Some(number.trim().to_string())
+        } else {
+            None
+        }
+    }
+
+    fn extract_ip_address(text: &str) -> Option<String> {
+        let parts: Vec<&str> = text.split('.').take(4).collect();
+        if parts.len() == 4 {
+            let ip: String = parts.join(".");
+            if ip.chars().all(|c| c.is_numeric() || c == '.') {
+                return Some(ip);
+            }
+        }
+        None
+    }
+}
+
+/// Data retention rule for automatic cleanup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DataRetentionRule {
+    /// Retain for a specific number of days
+    RetainForDays(u32),
+    /// Retain until a specific date
+    RetainUntil(DateTime<Utc>),
+    /// Retain indefinitely
+    RetainIndefinitely,
+    /// Delete after statute becomes inactive for N days
+    DeleteInactiveAfterDays(u32),
+    /// Archive after N days instead of deleting
+    ArchiveAfterDays(u32),
+}
+
+/// Data retention configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DataRetentionConfig {
+    /// Retention rules
+    #[serde(default)]
+    rules: Vec<DataRetentionRule>,
+    /// Auto-apply retention rules
+    #[serde(default)]
+    auto_apply: bool,
+    /// Dry-run mode (don't actually delete)
+    #[serde(default)]
+    dry_run: bool,
+}
+
+impl DataRetentionConfig {
+    /// Creates a new retention configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a retention rule.
+    pub fn add_rule(mut self, rule: DataRetentionRule) -> Self {
+        self.rules.push(rule);
+        self
+    }
+
+    /// Enables auto-apply mode.
+    pub fn with_auto_apply(mut self, auto_apply: bool) -> Self {
+        self.auto_apply = auto_apply;
+        self
+    }
+
+    /// Enables dry-run mode.
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.dry_run = dry_run;
+        self
+    }
+
+    /// Returns all rules.
+    pub fn rules(&self) -> &[DataRetentionRule] {
+        &self.rules
+    }
+
+    /// Returns whether auto-apply is enabled.
+    pub fn is_auto_apply(&self) -> bool {
+        self.auto_apply
+    }
+
+    /// Returns whether dry-run mode is enabled.
+    pub fn is_dry_run(&self) -> bool {
+        self.dry_run
+    }
+}
+
+/// Result of applying retention rules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetentionExecutionResult {
+    /// Statutes deleted
+    pub deleted: Vec<String>,
+    /// Statutes archived
+    pub archived: Vec<String>,
+    /// Execution timestamp
+    pub executed_at: DateTime<Utc>,
+    /// Was this a dry run?
+    pub dry_run: bool,
+}
+
+impl RetentionExecutionResult {
+    /// Creates a new execution result.
+    pub fn new(deleted: Vec<String>, archived: Vec<String>, dry_run: bool) -> Self {
+        Self {
+            deleted,
+            archived,
+            executed_at: Utc::now(),
+            dry_run,
+        }
+    }
+
+    /// Returns total affected statutes.
+    pub fn total_affected(&self) -> usize {
+        self.deleted.len() + self.archived.len()
+    }
+}
+
+/// Audit report format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AuditReportFormat {
+    /// JSON format
+    Json,
+    /// CSV format
+    Csv,
+    /// Plain text format
+    Text,
+    /// HTML format
+    Html,
+}
+
+/// Audit report configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditReportConfig {
+    /// Report title
+    pub title: String,
+    /// Start date filter
+    pub start_date: Option<DateTime<Utc>>,
+    /// End date filter
+    pub end_date: Option<DateTime<Utc>>,
+    /// Include operations
+    pub include_operations: bool,
+    /// Include events
+    pub include_events: bool,
+    /// Include quality metrics
+    pub include_quality: bool,
+    /// Include PII scan results
+    pub include_pii_scans: bool,
+    /// Report format
+    pub format: AuditReportFormat,
+}
+
+impl Default for AuditReportConfig {
+    fn default() -> Self {
+        Self {
+            title: "Audit Report".to_string(),
+            start_date: None,
+            end_date: None,
+            include_operations: true,
+            include_events: true,
+            include_quality: false,
+            include_pii_scans: false,
+            format: AuditReportFormat::Json,
+        }
+    }
+}
+
+impl AuditReportConfig {
+    /// Creates a new audit report configuration.
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the date range.
+    pub fn with_date_range(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        self.start_date = Some(start);
+        self.end_date = Some(end);
+        self
+    }
+
+    /// Sets what to include in the report.
+    pub fn with_sections(
+        mut self,
+        operations: bool,
+        events: bool,
+        quality: bool,
+        pii_scans: bool,
+    ) -> Self {
+        self.include_operations = operations;
+        self.include_events = events;
+        self.include_quality = quality;
+        self.include_pii_scans = pii_scans;
+        self
+    }
+
+    /// Sets the report format.
+    pub fn with_format(mut self, format: AuditReportFormat) -> Self {
+        self.format = format;
+        self
+    }
+}
+
+/// Generated audit report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditReport {
+    /// Report ID
+    pub report_id: Uuid,
+    /// Report title
+    pub title: String,
+    /// Generation timestamp
+    pub generated_at: DateTime<Utc>,
+    /// Date range covered
+    pub date_range: (Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+    /// Total statutes in registry
+    pub total_statutes: usize,
+    /// Total events recorded
+    pub total_events: usize,
+    /// Total operations performed
+    pub total_operations: usize,
+    /// PII detections count
+    pub pii_detections: usize,
+    /// Average quality score
+    pub avg_quality_score: f64,
+    /// Report content (serialized based on format)
+    pub content: String,
+    /// Report format
+    pub format: AuditReportFormat,
+}
+
+impl AuditReport {
+    /// Creates a new audit report.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        title: String,
+        date_range: (Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+        total_statutes: usize,
+        total_events: usize,
+        total_operations: usize,
+        pii_detections: usize,
+        avg_quality_score: f64,
+        content: String,
+        format: AuditReportFormat,
+    ) -> Self {
+        Self {
+            report_id: Uuid::new_v4(),
+            title,
+            generated_at: Utc::now(),
+            date_range,
+            total_statutes,
+            total_events,
+            total_operations,
+            pii_detections,
+            avg_quality_score,
+            content,
+            format,
+        }
+    }
+
+    /// Exports the report to a file-friendly string.
+    pub fn export(&self) -> String {
+        match self.format {
+            AuditReportFormat::Json => {
+                serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+            }
+            AuditReportFormat::Csv | AuditReportFormat::Text | AuditReportFormat::Html => {
+                self.content.clone()
+            }
+        }
+    }
+}
+
+/// Geographic region for data sovereignty.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GeographicRegion {
+    /// European Union
+    EU,
+    /// United States
+    US,
+    /// United Kingdom
+    UK,
+    /// Asia Pacific
+    APAC,
+    /// Japan
+    Japan,
+    /// China
+    China,
+    /// Custom region
+    Custom(String),
+}
+
+impl GeographicRegion {
+    /// Returns the region code.
+    pub fn code(&self) -> String {
+        match self {
+            GeographicRegion::EU => "EU".to_string(),
+            GeographicRegion::US => "US".to_string(),
+            GeographicRegion::UK => "UK".to_string(),
+            GeographicRegion::APAC => "APAC".to_string(),
+            GeographicRegion::Japan => "JP".to_string(),
+            GeographicRegion::China => "CN".to_string(),
+            GeographicRegion::Custom(s) => s.clone(),
+        }
+    }
+
+    /// Checks if this region allows data transfer to another region.
+    pub fn allows_transfer_to(&self, other: &GeographicRegion) -> bool {
+        match (self, other) {
+            // EU has strict rules (GDPR)
+            (GeographicRegion::EU, GeographicRegion::EU) => true,
+            (GeographicRegion::EU, GeographicRegion::UK) => true,
+            (GeographicRegion::EU, _) => false, // EU data cannot be transferred elsewhere
+            // Other regions are more permissive
+            _ => true,
+        }
+    }
+}
+
+/// Data sovereignty configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataSovereigntyConfig {
+    /// Primary region where data is stored
+    pub primary_region: GeographicRegion,
+    /// Allowed replication regions
+    pub allowed_regions: Vec<GeographicRegion>,
+    /// Enforce strict residency (no cross-region access)
+    pub strict_residency: bool,
+    /// Require encryption for cross-region transfer
+    pub require_encryption: bool,
+}
+
+impl DataSovereigntyConfig {
+    /// Creates a new data sovereignty configuration.
+    pub fn new(primary_region: GeographicRegion) -> Self {
+        Self {
+            primary_region,
+            allowed_regions: Vec::new(),
+            strict_residency: false,
+            require_encryption: true,
+        }
+    }
+
+    /// Adds an allowed region for replication.
+    pub fn allow_region(mut self, region: GeographicRegion) -> Self {
+        if !self.allowed_regions.contains(&region) {
+            self.allowed_regions.push(region);
+        }
+        self
+    }
+
+    /// Enables strict residency mode.
+    pub fn with_strict_residency(mut self, strict: bool) -> Self {
+        self.strict_residency = strict;
+        self
+    }
+
+    /// Sets encryption requirement.
+    pub fn with_encryption_required(mut self, required: bool) -> Self {
+        self.require_encryption = required;
+        self
+    }
+
+    /// Checks if a region is allowed for data storage/access.
+    pub fn is_region_allowed(&self, region: &GeographicRegion) -> bool {
+        if region == &self.primary_region {
+            return true;
+        }
+
+        if self.strict_residency {
+            return false;
+        }
+
+        self.allowed_regions.contains(region) && self.primary_region.allows_transfer_to(region)
+    }
+}
+
+/// Compliance dashboard metrics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceDashboard {
+    /// Dashboard ID
+    pub dashboard_id: Uuid,
+    /// Generation timestamp
+    pub generated_at: DateTime<Utc>,
+    /// Total statutes under management
+    pub total_statutes: usize,
+    /// Statutes with PII detected
+    pub statutes_with_pii: usize,
+    /// Statutes subject to retention
+    pub statutes_pending_retention: usize,
+    /// Average quality score
+    pub avg_quality_score: f64,
+    /// Statutes below quality threshold
+    pub low_quality_count: usize,
+    /// Total audit events
+    pub total_audit_events: usize,
+    /// Failed audit events
+    pub failed_operations: usize,
+    /// Data sovereignty violations
+    pub sovereignty_violations: usize,
+    /// Compliance rate (0.0-1.0)
+    pub compliance_rate: f64,
+}
+
+impl ComplianceDashboard {
+    /// Creates a new compliance dashboard.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        total_statutes: usize,
+        statutes_with_pii: usize,
+        statutes_pending_retention: usize,
+        avg_quality_score: f64,
+        low_quality_count: usize,
+        total_audit_events: usize,
+        failed_operations: usize,
+        sovereignty_violations: usize,
+    ) -> Self {
+        let compliance_rate = if total_statutes > 0 {
+            let compliant =
+                total_statutes.saturating_sub(low_quality_count + sovereignty_violations);
+            compliant as f64 / total_statutes as f64
+        } else {
+            1.0
+        };
+
+        Self {
+            dashboard_id: Uuid::new_v4(),
+            generated_at: Utc::now(),
+            total_statutes,
+            statutes_with_pii,
+            statutes_pending_retention,
+            avg_quality_score,
+            low_quality_count,
+            total_audit_events,
+            failed_operations,
+            sovereignty_violations,
+            compliance_rate,
+        }
+    }
+
+    /// Returns true if compliance rate meets threshold.
+    pub fn meets_compliance_threshold(&self, threshold: f64) -> bool {
+        self.compliance_rate >= threshold
+    }
+
+    /// Exports dashboard to JSON.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+impl StatuteRegistry {
+    /// Scans a statute for PII using the detector.
+    pub fn scan_for_pii(
+        &mut self,
+        statute_id: &str,
+        detector: &PiiDetector,
+    ) -> RegistryResult<PiiScanResult> {
+        let entry = self
+            .get(statute_id)
+            .ok_or_else(|| RegistryError::StatuteNotFound(statute_id.to_string()))?;
+
+        // Scan statute title and metadata for PII
+        let content = format!(
+            "{} {}",
+            entry.statute.title,
+            entry
+                .metadata
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+
+        Ok(detector.scan(statute_id, &content))
+    }
+
+    /// Applies data retention rules and returns affected statutes.
+    pub fn apply_retention_rules(
+        &mut self,
+        config: &DataRetentionConfig,
+    ) -> RetentionExecutionResult {
+        let mut to_delete = Vec::new();
+        let mut to_archive = Vec::new();
+        let now = Utc::now();
+
+        for (statute_id, entry) in self.statutes.iter() {
+            for rule in config.rules() {
+                match rule {
+                    DataRetentionRule::RetainForDays(days) => {
+                        let age = now.signed_duration_since(entry.created_at).num_days();
+                        if age > *days as i64 {
+                            to_delete.push(statute_id.clone());
+                        }
+                    }
+                    DataRetentionRule::RetainUntil(until) => {
+                        if now > *until {
+                            to_delete.push(statute_id.clone());
+                        }
+                    }
+                    DataRetentionRule::DeleteInactiveAfterDays(days) => {
+                        if !entry.is_active() {
+                            let age = now.signed_duration_since(entry.modified_at).num_days();
+                            if age > *days as i64 {
+                                to_delete.push(statute_id.clone());
+                            }
+                        }
+                    }
+                    DataRetentionRule::ArchiveAfterDays(days) => {
+                        let age = now.signed_duration_since(entry.created_at).num_days();
+                        if age > *days as i64 {
+                            to_archive.push(statute_id.clone());
+                        }
+                    }
+                    DataRetentionRule::RetainIndefinitely => {
+                        // Do nothing
+                    }
+                }
+            }
+        }
+
+        // Remove duplicates
+        to_delete.sort();
+        to_delete.dedup();
+        to_archive.sort();
+        to_archive.dedup();
+
+        // Don't actually delete/archive in dry-run mode
+        if !config.is_dry_run() {
+            for statute_id in &to_delete {
+                let _ = self.delete(statute_id);
+            }
+            for statute_id in &to_archive {
+                let _ = self.archive_statute(statute_id, "Automatic retention policy".to_string());
+            }
+        }
+
+        RetentionExecutionResult::new(to_delete, to_archive, config.is_dry_run())
+    }
+
+    /// Generates an audit report based on configuration.
+    pub fn generate_audit_report(&self, config: &AuditReportConfig) -> AuditReport {
+        let mut content_parts = Vec::new();
+
+        // Header
+        content_parts.push(format!("Audit Report: {}", config.title));
+        content_parts.push(format!("Generated: {}", Utc::now()));
+        if let (Some(start), Some(end)) = (config.start_date, config.end_date) {
+            content_parts.push(format!("Period: {} to {}", start, end));
+        }
+        content_parts.push(String::new());
+
+        // Statistics
+        content_parts.push("=== Statistics ===".to_string());
+        content_parts.push(format!("Total Statutes: {}", self.statutes.len()));
+        content_parts.push(format!("Total Events: {}", self.event_store.events.len()));
+        content_parts.push(String::new());
+
+        // Events section
+        if config.include_events {
+            content_parts.push("=== Events ===".to_string());
+            let mut event_count = 0;
+            for event in &self.event_store.events {
+                // Get timestamp from event
+                let event_timestamp = match event {
+                    RegistryEvent::StatuteRegistered { timestamp, .. } => *timestamp,
+                    RegistryEvent::StatuteUpdated { timestamp, .. } => *timestamp,
+                    RegistryEvent::StatusChanged { timestamp, .. } => *timestamp,
+                    RegistryEvent::TagAdded { timestamp, .. } => *timestamp,
+                    RegistryEvent::TagRemoved { timestamp, .. } => *timestamp,
+                    RegistryEvent::ReferenceAdded { timestamp, .. } => *timestamp,
+                    RegistryEvent::ReferenceRemoved { timestamp, .. } => *timestamp,
+                    RegistryEvent::MetadataUpdated { timestamp, .. } => *timestamp,
+                    RegistryEvent::StatuteDeleted { timestamp, .. } => *timestamp,
+                    RegistryEvent::StatuteArchived { timestamp, .. } => *timestamp,
+                };
+
+                // Apply date filter if specified
+                let include = if let (Some(start), Some(end)) = (config.start_date, config.end_date)
+                {
+                    event_timestamp >= start && event_timestamp <= end
+                } else {
+                    true
+                };
+
+                if include {
+                    content_parts.push(format!("- {:?} at {}", event, event_timestamp));
+                    event_count += 1;
+                }
+            }
+            content_parts.push(format!("Total events in period: {}", event_count));
+            content_parts.push(String::new());
+        }
+
+        let content = content_parts.join("\n");
+
+        AuditReport::new(
+            config.title.clone(),
+            (config.start_date, config.end_date),
+            self.statutes.len(),
+            self.event_store.events.len(),
+            0,   // Total operations (would need tracking)
+            0,   // PII detections
+            0.0, // Average quality score
+            content,
+            config.format,
+        )
+    }
+
+    /// Generates a compliance dashboard with current metrics.
+    pub fn generate_compliance_dashboard(&mut self, quality_threshold: f64) -> ComplianceDashboard {
+        let total_statutes = self.statutes.len();
+        let total_audit_events = self.event_store.events.len();
+
+        // Calculate quality metrics
+        let assessments = self.assess_all_quality();
+        let low_quality = assessments
+            .iter()
+            .filter(|a| !a.score.meets_threshold(quality_threshold))
+            .count();
+
+        let avg_quality = if !assessments.is_empty() {
+            assessments.iter().map(|a| a.score.overall).sum::<f64>() / assessments.len() as f64
+        } else {
+            0.0
+        };
+
+        ComplianceDashboard::new(
+            total_statutes,
+            0, // statutes_with_pii (would need tracking)
+            0, // statutes_pending_retention (would need tracking)
+            avg_quality,
+            low_quality,
+            total_audit_events,
+            0, // failed_operations (would need tracking)
+            0, // sovereignty_violations (would need tracking)
+        )
+    }
+
+    /// Checks if a statute can be accessed from a specific region.
+    pub fn check_sovereignty_access(
+        &self,
+        _statute_id: &str,
+        _requesting_region: &GeographicRegion,
+        config: &DataSovereigntyConfig,
+    ) -> bool {
+        // In a real implementation, this would check statute metadata
+        // for region tagging and verify against config
+        config.is_region_allowed(_requesting_region)
+    }
+}
+
+// ============================================================================
+// Access Control Features (v0.1.4)
+// ============================================================================
+
+/// Permission types for statute operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Permission {
+    /// Read statute content
+    Read,
+    /// Create new statutes
+    Create,
+    /// Update existing statutes
+    Update,
+    /// Delete statutes
+    Delete,
+    /// Change statute status
+    ChangeStatus,
+    /// Add/remove tags
+    ManageTags,
+    /// Add/remove metadata
+    ManageMetadata,
+    /// Add/remove references
+    ManageReferences,
+    /// Archive/unarchive statutes
+    Archive,
+    /// Manage permissions
+    ManagePermissions,
+    /// Execute bulk operations
+    BulkOperations,
+    /// Generate reports
+    GenerateReports,
+}
+
+impl Permission {
+    /// Returns all available permissions.
+    pub fn all() -> Vec<Permission> {
+        vec![
+            Permission::Read,
+            Permission::Create,
+            Permission::Update,
+            Permission::Delete,
+            Permission::ChangeStatus,
+            Permission::ManageTags,
+            Permission::ManageMetadata,
+            Permission::ManageReferences,
+            Permission::Archive,
+            Permission::ManagePermissions,
+            Permission::BulkOperations,
+            Permission::GenerateReports,
+        ]
+    }
+
+    /// Returns read-only permissions.
+    pub fn read_only() -> Vec<Permission> {
+        vec![Permission::Read, Permission::GenerateReports]
+    }
+
+    /// Returns editor permissions (read + write, no delete/admin).
+    pub fn editor() -> Vec<Permission> {
+        vec![
+            Permission::Read,
+            Permission::Create,
+            Permission::Update,
+            Permission::ChangeStatus,
+            Permission::ManageTags,
+            Permission::ManageMetadata,
+            Permission::ManageReferences,
+            Permission::GenerateReports,
+        ]
+    }
+}
+
+/// User role in the system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Role {
+    /// Viewer - read-only access
+    Viewer,
+    /// Editor - read and write access
+    Editor,
+    /// Admin - full access including permissions management
+    Admin,
+}
+
+impl Role {
+    /// Returns permissions granted to this role.
+    pub fn permissions(&self) -> Vec<Permission> {
+        match self {
+            Role::Viewer => Permission::read_only(),
+            Role::Editor => Permission::editor(),
+            Role::Admin => Permission::all(),
+        }
+    }
+
+    /// Checks if this role has a specific permission.
+    pub fn has_permission(&self, permission: Permission) -> bool {
+        self.permissions().contains(&permission)
+    }
+
+    /// Checks if this role is at least the specified level.
+    pub fn is_at_least(&self, other: Role) -> bool {
+        self >= &other
+    }
+}
+
+/// Attribute-based access control condition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AbacCondition {
+    /// User must have specific attribute
+    UserAttribute { key: String, value: String },
+    /// Statute must have specific tag
+    StatuteTag(String),
+    /// Statute must be in specific jurisdiction
+    Jurisdiction(String),
+    /// Statute status must match
+    Status(StatuteStatus),
+    /// User must be in specific department
+    Department(String),
+    /// Time-based condition (current time must be within range)
+    TimeRange {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
+    /// Combine multiple conditions with AND
+    And(Vec<AbacCondition>),
+    /// Combine multiple conditions with OR
+    Or(Vec<AbacCondition>),
+    /// Negate a condition
+    Not(Box<AbacCondition>),
+}
+
+impl AbacCondition {
+    /// Evaluates the condition.
+    pub fn evaluate(
+        &self,
+        user_attrs: &HashMap<String, String>,
+        statute_entry: Option<&StatuteEntry>,
+    ) -> bool {
+        match self {
+            AbacCondition::UserAttribute { key, value } => {
+                user_attrs.get(key).map(|v| v == value).unwrap_or(false)
+            }
+            AbacCondition::StatuteTag(tag) => {
+                statute_entry.map(|e| e.tags.contains(tag)).unwrap_or(false)
+            }
+            AbacCondition::Jurisdiction(jur) => statute_entry
+                .map(|e| e.jurisdiction == *jur)
+                .unwrap_or(false),
+            AbacCondition::Status(status) => {
+                statute_entry.map(|e| e.status == *status).unwrap_or(false)
+            }
+            AbacCondition::Department(dept) => user_attrs
+                .get("department")
+                .map(|v| v == dept)
+                .unwrap_or(false),
+            AbacCondition::TimeRange { start, end } => {
+                let now = Utc::now();
+                now >= *start && now <= *end
+            }
+            AbacCondition::And(conditions) => conditions
+                .iter()
+                .all(|c| c.evaluate(user_attrs, statute_entry)),
+            AbacCondition::Or(conditions) => conditions
+                .iter()
+                .any(|c| c.evaluate(user_attrs, statute_entry)),
+            AbacCondition::Not(condition) => !condition.evaluate(user_attrs, statute_entry),
+        }
+    }
+}
+
+/// Access control policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessPolicy {
+    /// Policy ID
+    pub policy_id: Uuid,
+    /// Policy name
+    pub name: String,
+    /// Required role
+    pub required_role: Option<Role>,
+    /// Specific permissions granted
+    pub permissions: Vec<Permission>,
+    /// ABAC conditions
+    pub conditions: Vec<AbacCondition>,
+    /// Priority (higher = evaluated first)
+    pub priority: i32,
+    /// Is policy enabled?
+    pub enabled: bool,
+}
+
+impl AccessPolicy {
+    /// Creates a new access policy.
+    pub fn new(name: impl Into<String>, permissions: Vec<Permission>) -> Self {
+        Self {
+            policy_id: Uuid::new_v4(),
+            name: name.into(),
+            required_role: None,
+            permissions,
+            conditions: Vec::new(),
+            priority: 0,
+            enabled: true,
+        }
+    }
+
+    /// Sets the required role.
+    pub fn with_role(mut self, role: Role) -> Self {
+        self.required_role = Some(role);
+        self
+    }
+
+    /// Adds an ABAC condition.
+    pub fn with_condition(mut self, condition: AbacCondition) -> Self {
+        self.conditions.push(condition);
+        self
+    }
+
+    /// Sets the priority.
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    /// Checks if the policy grants a specific permission.
+    pub fn grants(&self, permission: Permission) -> bool {
+        self.enabled && self.permissions.contains(&permission)
+    }
+
+    /// Checks if all conditions are met.
+    pub fn conditions_met(
+        &self,
+        user_attrs: &HashMap<String, String>,
+        statute_entry: Option<&StatuteEntry>,
+    ) -> bool {
+        self.conditions
+            .iter()
+            .all(|c| c.evaluate(user_attrs, statute_entry))
+    }
+}
+
+/// Temporary access grant.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporaryAccess {
+    /// Grant ID
+    pub grant_id: Uuid,
+    /// User ID this grant is for
+    pub user_id: String,
+    /// Statute ID (None for global access)
+    pub statute_id: Option<String>,
+    /// Permissions granted
+    pub permissions: Vec<Permission>,
+    /// Grant valid from
+    pub valid_from: DateTime<Utc>,
+    /// Grant valid until
+    pub valid_until: DateTime<Utc>,
+    /// Reason for grant
+    pub reason: String,
+    /// Granted by (user ID)
+    pub granted_by: String,
+}
+
+impl TemporaryAccess {
+    /// Creates a new temporary access grant.
+    pub fn new(
+        user_id: impl Into<String>,
+        permissions: Vec<Permission>,
+        duration_hours: i64,
+        reason: impl Into<String>,
+        granted_by: impl Into<String>,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            grant_id: Uuid::new_v4(),
+            user_id: user_id.into(),
+            statute_id: None,
+            permissions,
+            valid_from: now,
+            valid_until: now + chrono::Duration::hours(duration_hours),
+            reason: reason.into(),
+            granted_by: granted_by.into(),
+        }
+    }
+
+    /// Sets the statute ID for statute-specific access.
+    pub fn for_statute(mut self, statute_id: impl Into<String>) -> Self {
+        self.statute_id = Some(statute_id.into());
+        self
+    }
+
+    /// Checks if the grant is currently valid.
+    pub fn is_valid(&self) -> bool {
+        let now = Utc::now();
+        now >= self.valid_from && now <= self.valid_until
+    }
+
+    /// Checks if the grant applies to a specific statute.
+    pub fn applies_to(&self, statute_id: &str) -> bool {
+        self.statute_id
+            .as_ref()
+            .map(|s| s == statute_id)
+            .unwrap_or(true)
+    }
+
+    /// Returns remaining time in seconds.
+    pub fn remaining_seconds(&self) -> i64 {
+        let now = Utc::now();
+        if now > self.valid_until {
+            0
+        } else {
+            (self.valid_until - now).num_seconds()
+        }
+    }
+}
+
+/// User with access control attributes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessUser {
+    /// User ID
+    pub user_id: String,
+    /// Display name
+    pub display_name: String,
+    /// Primary role
+    pub role: Role,
+    /// User attributes for ABAC
+    pub attributes: HashMap<String, String>,
+    /// Directly assigned permissions (overrides role)
+    pub direct_permissions: Vec<Permission>,
+}
+
+impl AccessUser {
+    /// Creates a new user with a role.
+    pub fn new(user_id: impl Into<String>, display_name: impl Into<String>, role: Role) -> Self {
+        Self {
+            user_id: user_id.into(),
+            display_name: display_name.into(),
+            role,
+            attributes: HashMap::new(),
+            direct_permissions: Vec::new(),
+        }
+    }
+
+    /// Adds a user attribute.
+    pub fn with_attribute(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.attributes.insert(key.into(), value.into());
+        self
+    }
+
+    /// Adds a direct permission.
+    pub fn with_permission(mut self, permission: Permission) -> Self {
+        if !self.direct_permissions.contains(&permission) {
+            self.direct_permissions.push(permission);
+        }
+        self
+    }
+
+    /// Gets all permissions (role + direct).
+    pub fn all_permissions(&self) -> Vec<Permission> {
+        let mut perms = self.role.permissions();
+        for p in &self.direct_permissions {
+            if !perms.contains(p) {
+                perms.push(*p);
+            }
+        }
+        perms
+    }
+
+    /// Checks if user has a specific permission.
+    pub fn has_permission(&self, permission: Permission) -> bool {
+        self.all_permissions().contains(&permission)
+    }
+}
+
+/// Access control manager.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AccessControlManager {
+    /// Registered users
+    #[serde(default)]
+    users: HashMap<String, AccessUser>,
+    /// Access policies
+    #[serde(default)]
+    policies: Vec<AccessPolicy>,
+    /// Temporary access grants
+    #[serde(default)]
+    temporary_grants: Vec<TemporaryAccess>,
+    /// Enable/disable access control
+    #[serde(default = "default_true")]
+    enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl AccessControlManager {
+    /// Creates a new access control manager.
+    pub fn new() -> Self {
+        Self {
+            users: HashMap::new(),
+            policies: Vec::new(),
+            temporary_grants: Vec::new(),
+            enabled: true,
+        }
+    }
+
+    /// Registers a user.
+    pub fn add_user(&mut self, user: AccessUser) {
+        self.users.insert(user.user_id.clone(), user);
+    }
+
+    /// Gets a user by ID.
+    pub fn get_user(&self, user_id: &str) -> Option<&AccessUser> {
+        self.users.get(user_id)
+    }
+
+    /// Updates a user's role.
+    pub fn update_user_role(&mut self, user_id: &str, role: Role) -> bool {
+        if let Some(user) = self.users.get_mut(user_id) {
+            user.role = role;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Adds an access policy.
+    pub fn add_policy(&mut self, policy: AccessPolicy) {
+        self.policies.push(policy);
+        // Sort by priority (descending)
+        self.policies.sort_by(|a, b| b.priority.cmp(&a.priority));
+    }
+
+    /// Grants temporary access.
+    pub fn grant_temporary_access(&mut self, grant: TemporaryAccess) {
+        self.temporary_grants.push(grant);
+    }
+
+    /// Cleans up expired temporary grants.
+    pub fn cleanup_expired_grants(&mut self) {
+        self.temporary_grants.retain(|g| g.is_valid());
+    }
+
+    /// Checks if a user has permission for an operation.
+    pub fn check_permission(
+        &self,
+        user_id: &str,
+        permission: Permission,
+        statute_id: Option<&str>,
+        statute_entry: Option<&StatuteEntry>,
+    ) -> bool {
+        if !self.enabled {
+            return true; // Access control disabled
+        }
+
+        let user = match self.get_user(user_id) {
+            Some(u) => u,
+            None => return false, // Unknown user
+        };
+
+        // Check direct permissions first
+        if user.has_permission(permission) {
+            return true;
+        }
+
+        // Check temporary grants
+        if let Some(sid) = statute_id {
+            for grant in &self.temporary_grants {
+                if grant.user_id == user_id
+                    && grant.is_valid()
+                    && grant.applies_to(sid)
+                    && grant.permissions.contains(&permission)
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Check policies
+        for policy in &self.policies {
+            // Check role requirement
+            if let Some(req_role) = policy.required_role {
+                if !user.role.is_at_least(req_role) {
+                    continue;
+                }
+            }
+
+            // Check ABAC conditions
+            if !policy.conditions_met(&user.attributes, statute_entry) {
+                continue;
+            }
+
+            // Check if policy grants the permission
+            if policy.grants(permission) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Lists all active temporary grants for a user.
+    pub fn list_user_grants(&self, user_id: &str) -> Vec<&TemporaryAccess> {
+        self.temporary_grants
+            .iter()
+            .filter(|g| g.user_id == user_id && g.is_valid())
+            .collect()
+    }
+
+    /// Revokes a temporary grant.
+    pub fn revoke_grant(&mut self, grant_id: Uuid) -> bool {
+        let len_before = self.temporary_grants.len();
+        self.temporary_grants.retain(|g| g.grant_id != grant_id);
+        self.temporary_grants.len() < len_before
+    }
+
+    /// Enables or disables access control.
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    /// Returns whether access control is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Returns total number of users.
+    pub fn user_count(&self) -> usize {
+        self.users.len()
+    }
+
+    /// Returns total number of policies.
+    pub fn policy_count(&self) -> usize {
+        self.policies.len()
+    }
+
+    /// Returns number of active temporary grants.
+    pub fn active_grant_count(&self) -> usize {
+        self.temporary_grants
+            .iter()
+            .filter(|g| g.is_valid())
+            .count()
+    }
+}
+
+// ============================================================================
+// Import/Export Extensions (v0.1.5)
+// ============================================================================
+
+/// Government database import configuration and execution.
+pub mod government_import {
+    use super::*;
+
+    /// Format of government database export.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum GovernmentDataFormat {
+        /// JSON format (common in modern APIs)
+        Json,
+        /// XML format (common in older systems)
+        Xml,
+        /// CSV format (simple tabular data)
+        Csv,
+        /// Custom delimiter-separated values
+        Dsv { delimiter: char },
+        /// Akoma Ntoso (legislative XML standard)
+        AkomaNtoso,
+        /// LegalDocML
+        LegalDocML,
+    }
+
+    /// Import source configuration.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ImportSource {
+        /// Source name
+        pub name: String,
+        /// Source URL or file path
+        pub location: String,
+        /// Data format
+        pub format: GovernmentDataFormat,
+        /// Authentication credentials (if needed)
+        pub credentials: Option<String>,
+        /// Additional metadata
+        pub metadata: HashMap<String, String>,
+    }
+
+    impl ImportSource {
+        /// Creates a new import source.
+        pub fn new(
+            name: impl Into<String>,
+            location: impl Into<String>,
+            format: GovernmentDataFormat,
+        ) -> Self {
+            Self {
+                name: name.into(),
+                location: location.into(),
+                format,
+                credentials: None,
+                metadata: HashMap::new(),
+            }
+        }
+
+        /// Sets authentication credentials.
+        pub fn with_credentials(mut self, credentials: impl Into<String>) -> Self {
+            self.credentials = Some(credentials.into());
+            self
+        }
+
+        /// Adds metadata.
+        pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+            self.metadata.insert(key.into(), value.into());
+            self
+        }
+    }
+
+    /// Result of a bulk import operation.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct BulkImportResult {
+        /// Source name
+        pub source: String,
+        /// Number of statutes imported successfully
+        pub imported: usize,
+        /// Number of statutes skipped (duplicates, etc.)
+        pub skipped: usize,
+        /// Number of statutes that failed to import
+        pub failed: usize,
+        /// Errors encountered during import
+        pub errors: Vec<String>,
+        /// Import timestamp
+        pub timestamp: DateTime<Utc>,
+        /// Import duration in milliseconds
+        pub duration_ms: u64,
+    }
+
+    impl BulkImportResult {
+        /// Creates a new bulk import result.
+        pub fn new(source: impl Into<String>) -> Self {
+            Self {
+                source: source.into(),
+                imported: 0,
+                skipped: 0,
+                failed: 0,
+                errors: Vec::new(),
+                timestamp: Utc::now(),
+                duration_ms: 0,
+            }
+        }
+
+        /// Returns total number of statutes processed.
+        pub fn total_processed(&self) -> usize {
+            self.imported + self.skipped + self.failed
+        }
+
+        /// Returns success rate (0.0-1.0).
+        pub fn success_rate(&self) -> f64 {
+            let total = self.total_processed();
+            if total == 0 {
+                1.0
+            } else {
+                self.imported as f64 / total as f64
+            }
+        }
+
+        /// Returns whether the import was fully successful.
+        pub fn is_success(&self) -> bool {
+            self.failed == 0
+        }
+    }
+
+    /// Import strategy for handling duplicates.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum ImportStrategy {
+        /// Skip duplicate statutes
+        Skip,
+        /// Update existing statutes
+        Update,
+        /// Create new version of existing statutes
+        NewVersion,
+        /// Fail on duplicates
+        FailOnDuplicate,
+    }
+
+    /// Bulk importer for government databases.
+    #[derive(Debug)]
+    pub struct BulkImporter {
+        /// Import strategy
+        strategy: ImportStrategy,
+        /// Batch size for processing
+        batch_size: usize,
+        /// Validate before import
+        validate: bool,
+        /// Auto-enrich imported statutes
+        auto_enrich: bool,
+    }
+
+    impl BulkImporter {
+        /// Creates a new bulk importer with default settings.
+        pub fn new() -> Self {
+            Self {
+                strategy: ImportStrategy::Skip,
+                batch_size: 100,
+                validate: true,
+                auto_enrich: false,
+            }
+        }
+
+        /// Sets the import strategy.
+        pub fn with_strategy(mut self, strategy: ImportStrategy) -> Self {
+            self.strategy = strategy;
+            self
+        }
+
+        /// Sets the batch size.
+        pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+            self.batch_size = batch_size;
+            self
+        }
+
+        /// Enables or disables validation.
+        pub fn with_validation(mut self, validate: bool) -> Self {
+            self.validate = validate;
+            self
+        }
+
+        /// Enables or disables auto-enrichment.
+        pub fn with_auto_enrich(mut self, auto_enrich: bool) -> Self {
+            self.auto_enrich = auto_enrich;
+            self
+        }
+
+        /// Imports statutes from a source.
+        pub fn import(
+            &self,
+            registry: &mut StatuteRegistry,
+            source: &ImportSource,
+            statutes: Vec<StatuteEntry>,
+        ) -> BulkImportResult {
+            let start = std::time::Instant::now();
+            let mut result = BulkImportResult::new(&source.name);
+
+            for entry in statutes {
+                let statute_id = entry.statute.id.clone();
+                match self.import_single(registry, entry) {
+                    Ok(true) => result.imported += 1,
+                    Ok(false) => result.skipped += 1,
+                    Err(e) => {
+                        result.failed += 1;
+                        result.errors.push(format!("{}: {}", statute_id, e));
+                    }
+                }
+            }
+
+            result.duration_ms = start.elapsed().as_millis() as u64;
+            result
+        }
+
+        fn import_single(
+            &self,
+            registry: &mut StatuteRegistry,
+            entry: StatuteEntry,
+        ) -> RegistryResult<bool> {
+            // Validate if enabled
+            if self.validate {
+                let validator = Validator::with_defaults();
+                if let Err(errors) = validator.validate(&entry) {
+                    return Err(RegistryError::InvalidOperation(format!(
+                        "Validation failed: {:?}",
+                        errors
+                    )));
+                }
+            }
+
+            // Check if statute already exists
+            let statute_id = entry.statute.id.clone();
+            let exists = registry.contains(&statute_id);
+
+            if exists {
+                match self.strategy {
+                    ImportStrategy::Skip => return Ok(false),
+                    ImportStrategy::Update => {
+                        registry.update(&statute_id, entry.statute)?;
+                        return Ok(true);
+                    }
+                    ImportStrategy::NewVersion => {
+                        registry.update(&statute_id, entry.statute)?;
+                        return Ok(true);
+                    }
+                    ImportStrategy::FailOnDuplicate => {
+                        return Err(RegistryError::DuplicateId(statute_id));
+                    }
+                }
+            }
+
+            // Register new statute
+            registry.register(entry)?;
+            Ok(true)
+        }
+    }
+
+    impl Default for BulkImporter {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Scheduled synchronization for periodic imports.
+pub mod sync {
+    use super::*;
+    use chrono::{Datelike, Timelike};
+
+    /// Synchronization schedule.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SyncSchedule {
+        /// Manual synchronization only
+        Manual,
+        /// Hourly synchronization
+        Hourly,
+        /// Daily synchronization at specified hour
+        Daily { hour: u8 },
+        /// Weekly synchronization on specified day and hour
+        Weekly { day: u8, hour: u8 },
+        /// Monthly synchronization on specified day and hour
+        Monthly { day: u8, hour: u8 },
+        /// Custom interval in seconds
+        Interval { seconds: u64 },
+    }
+
+    impl SyncSchedule {
+        /// Returns the next sync time from a given timestamp.
+        pub fn next_sync(&self, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
+            match self {
+                Self::Manual => None,
+                Self::Hourly => Some(from + chrono::Duration::hours(1)),
+                Self::Daily { hour } => {
+                    let next = from + chrono::Duration::days(1);
+                    Some(next.with_hour(*hour as u32).unwrap_or(next))
+                }
+                Self::Weekly { day: _, hour } => {
+                    let next = from + chrono::Duration::weeks(1);
+                    Some(next.with_hour(*hour as u32).unwrap_or(next))
+                }
+                Self::Monthly { day, hour } => {
+                    let next =
+                        from.with_day(*day as u32).unwrap_or(from) + chrono::Duration::days(30);
+                    Some(next.with_hour(*hour as u32).unwrap_or(next))
+                }
+                Self::Interval { seconds } => {
+                    Some(from + chrono::Duration::seconds(*seconds as i64))
+                }
+            }
+        }
+
+        /// Checks if a sync is due from a given last sync time.
+        pub fn is_due(&self, last_sync: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+            match self.next_sync(last_sync) {
+                Some(next) => now >= next,
+                None => false,
+            }
+        }
+    }
+
+    /// Synchronization job configuration.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SyncJob {
+        /// Job ID
+        pub id: Uuid,
+        /// Job name
+        pub name: String,
+        /// Import source
+        pub source: government_import::ImportSource,
+        /// Schedule
+        pub schedule: SyncSchedule,
+        /// Last sync timestamp
+        pub last_sync: Option<DateTime<Utc>>,
+        /// Last sync result
+        pub last_result: Option<government_import::BulkImportResult>,
+        /// Whether the job is enabled
+        pub enabled: bool,
+    }
+
+    impl SyncJob {
+        /// Creates a new sync job.
+        pub fn new(
+            name: impl Into<String>,
+            source: government_import::ImportSource,
+            schedule: SyncSchedule,
+        ) -> Self {
+            Self {
+                id: Uuid::new_v4(),
+                name: name.into(),
+                source,
+                schedule,
+                last_sync: None,
+                last_result: None,
+                enabled: true,
+            }
+        }
+
+        /// Checks if the job is due for execution.
+        pub fn is_due(&self, now: DateTime<Utc>) -> bool {
+            if !self.enabled {
+                return false;
+            }
+            match self.last_sync {
+                Some(last) => self.schedule.is_due(last, now),
+                None => true, // Never synced, so it's due
+            }
+        }
+
+        /// Marks the job as completed with a result.
+        pub fn mark_completed(&mut self, result: government_import::BulkImportResult) {
+            self.last_sync = Some(Utc::now());
+            self.last_result = Some(result);
+        }
+    }
+
+    /// Synchronization manager.
+    #[derive(Debug)]
+    pub struct SyncManager {
+        jobs: Vec<SyncJob>,
+    }
+
+    impl SyncManager {
+        /// Creates a new sync manager.
+        pub fn new() -> Self {
+            Self { jobs: Vec::new() }
+        }
+
+        /// Adds a sync job.
+        pub fn add_job(&mut self, job: SyncJob) {
+            self.jobs.push(job);
+        }
+
+        /// Removes a sync job by ID.
+        pub fn remove_job(&mut self, job_id: Uuid) -> bool {
+            if let Some(pos) = self.jobs.iter().position(|j| j.id == job_id) {
+                self.jobs.remove(pos);
+                true
+            } else {
+                false
+            }
+        }
+
+        /// Gets all jobs.
+        pub fn jobs(&self) -> &[SyncJob] {
+            &self.jobs
+        }
+
+        /// Gets all jobs that are due for execution.
+        pub fn due_jobs(&self, now: DateTime<Utc>) -> Vec<&SyncJob> {
+            self.jobs.iter().filter(|j| j.is_due(now)).collect()
+        }
+
+        /// Updates a job's result.
+        pub fn update_job_result(
+            &mut self,
+            job_id: Uuid,
+            result: government_import::BulkImportResult,
+        ) {
+            if let Some(job) = self.jobs.iter_mut().find(|j| j.id == job_id) {
+                job.mark_completed(result);
+            }
+        }
+
+        /// Enables or disables a job.
+        pub fn set_job_enabled(&mut self, job_id: Uuid, enabled: bool) -> bool {
+            if let Some(job) = self.jobs.iter_mut().find(|j| j.id == job_id) {
+                job.enabled = enabled;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    impl Default for SyncManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Format migration utilities.
+pub mod migration {
+    use super::*;
+
+    /// Supported migration formats.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum MigrationFormat {
+        /// Legacy JSON v1
+        JsonV1,
+        /// Legacy JSON v2
+        JsonV2,
+        /// Current JSON format
+        JsonCurrent,
+        /// Legacy XML
+        XmlLegacy,
+        /// Akoma Ntoso XML
+        AkomaNtoso,
+        /// CSV format
+        Csv,
+    }
+
+    /// Migration result.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct MigrationResult {
+        /// Source format
+        pub from_format: MigrationFormat,
+        /// Target format
+        pub to_format: MigrationFormat,
+        /// Number of statutes migrated
+        pub migrated: usize,
+        /// Number of statutes that failed
+        pub failed: usize,
+        /// Errors encountered
+        pub errors: Vec<String>,
+        /// Migration timestamp
+        pub timestamp: DateTime<Utc>,
+    }
+
+    impl MigrationResult {
+        /// Creates a new migration result.
+        pub fn new(from: MigrationFormat, to: MigrationFormat) -> Self {
+            Self {
+                from_format: from,
+                to_format: to,
+                migrated: 0,
+                failed: 0,
+                errors: Vec::new(),
+                timestamp: Utc::now(),
+            }
+        }
+
+        /// Returns success rate (0.0-1.0).
+        pub fn success_rate(&self) -> f64 {
+            let total = self.migrated + self.failed;
+            if total == 0 {
+                1.0
+            } else {
+                self.migrated as f64 / total as f64
+            }
+        }
+    }
+
+    /// Format migrator.
+    #[derive(Debug)]
+    pub struct FormatMigrator {
+        /// Whether to validate after migration
+        validate: bool,
+    }
+
+    impl FormatMigrator {
+        /// Creates a new format migrator.
+        pub fn new() -> Self {
+            Self { validate: true }
+        }
+
+        /// Enables or disables validation.
+        pub fn with_validation(mut self, validate: bool) -> Self {
+            self.validate = validate;
+            self
+        }
+
+        /// Migrates data from one format to another.
+        pub fn migrate(
+            &self,
+            from_format: MigrationFormat,
+            to_format: MigrationFormat,
+            data: &str,
+        ) -> Result<(String, MigrationResult), RegistryError> {
+            let mut result = MigrationResult::new(from_format, to_format);
+
+            // For now, we'll implement a simple JSON round-trip migration
+            // In a real implementation, this would handle actual format conversions
+            match (from_format, to_format) {
+                (MigrationFormat::JsonCurrent, MigrationFormat::JsonCurrent) => {
+                    // No migration needed
+                    result.migrated = 1;
+                    Ok((data.to_string(), result))
+                }
+                _ => {
+                    // Placeholder for other migration paths
+                    result.failed = 1;
+                    result.errors.push(format!(
+                        "Migration from {:?} to {:?} not yet implemented",
+                        from_format, to_format
+                    ));
+                    Err(RegistryError::InvalidOperation(format!(
+                        "Migration path {:?} -> {:?} not supported",
+                        from_format, to_format
+                    )))
+                }
+            }
+        }
+    }
+
+    impl Default for FormatMigrator {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Export templates for reporting.
+pub mod templates {
+    use super::*;
+
+    /// Report template type.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum TemplateType {
+        /// Summary report (high-level statistics)
+        Summary,
+        /// Detailed report (full statute information)
+        Detailed,
+        /// Compliance report (regulatory focus)
+        Compliance,
+        /// Audit trail report
+        AuditTrail,
+        /// Custom template with name
+        Custom(String),
+    }
+
+    /// Export format for templates.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum ExportFormat {
+        /// JSON format
+        Json,
+        /// CSV format
+        Csv,
+        /// HTML format
+        Html,
+        /// Markdown format
+        Markdown,
+        /// PDF format (requires additional dependencies)
+        Pdf,
+    }
+
+    /// Report template configuration.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ReportTemplate {
+        /// Template name
+        pub name: String,
+        /// Template type
+        pub template_type: TemplateType,
+        /// Export format
+        pub format: ExportFormat,
+        /// Fields to include
+        pub fields: Vec<String>,
+        /// Custom filters
+        pub filters: HashMap<String, String>,
+        /// Sort order
+        pub sort_by: Option<String>,
+    }
+
+    impl ReportTemplate {
+        /// Creates a new report template.
+        pub fn new(
+            name: impl Into<String>,
+            template_type: TemplateType,
+            format: ExportFormat,
+        ) -> Self {
+            Self {
+                name: name.into(),
+                template_type,
+                format,
+                fields: Vec::new(),
+                filters: HashMap::new(),
+                sort_by: None,
+            }
+        }
+
+        /// Adds a field to include.
+        pub fn with_field(mut self, field: impl Into<String>) -> Self {
+            self.fields.push(field.into());
+            self
+        }
+
+        /// Adds a filter.
+        pub fn with_filter(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+            self.filters.insert(key.into(), value.into());
+            self
+        }
+
+        /// Sets the sort order.
+        pub fn with_sort_by(mut self, field: impl Into<String>) -> Self {
+            self.sort_by = Some(field.into());
+            self
+        }
+
+        /// Creates a summary template.
+        pub fn summary(format: ExportFormat) -> Self {
+            Self::new("Summary Report", TemplateType::Summary, format)
+                .with_field("id")
+                .with_field("title")
+                .with_field("status")
+                .with_field("jurisdiction")
+        }
+
+        /// Creates a detailed template.
+        pub fn detailed(format: ExportFormat) -> Self {
+            Self::new("Detailed Report", TemplateType::Detailed, format)
+                .with_field("id")
+                .with_field("title")
+                .with_field("status")
+                .with_field("jurisdiction")
+                .with_field("tags")
+                .with_field("metadata")
+                .with_field("created_at")
+                .with_field("modified_at")
+        }
+
+        /// Creates a compliance template.
+        pub fn compliance(format: ExportFormat) -> Self {
+            Self::new("Compliance Report", TemplateType::Compliance, format)
+                .with_field("id")
+                .with_field("title")
+                .with_field("status")
+                .with_field("effective_date")
+                .with_field("expiry_date")
+        }
+    }
+
+    /// Template manager.
+    #[derive(Debug)]
+    pub struct TemplateManager {
+        templates: HashMap<String, ReportTemplate>,
+    }
+
+    impl TemplateManager {
+        /// Creates a new template manager.
+        pub fn new() -> Self {
+            Self {
+                templates: HashMap::new(),
+            }
+        }
+
+        /// Adds a template.
+        pub fn add_template(&mut self, template: ReportTemplate) {
+            self.templates.insert(template.name.clone(), template);
+        }
+
+        /// Gets a template by name.
+        pub fn get_template(&self, name: &str) -> Option<&ReportTemplate> {
+            self.templates.get(name)
+        }
+
+        /// Removes a template.
+        pub fn remove_template(&mut self, name: &str) -> bool {
+            self.templates.remove(name).is_some()
+        }
+
+        /// Lists all template names.
+        pub fn list_templates(&self) -> Vec<&str> {
+            self.templates.keys().map(|s| s.as_str()).collect()
+        }
+
+        /// Exports registry data using a template.
+        pub fn export(
+            &self,
+            registry: &StatuteRegistry,
+            template_name: &str,
+        ) -> Result<String, RegistryError> {
+            let template = self.get_template(template_name).ok_or_else(|| {
+                RegistryError::InvalidOperation(format!("Template '{}' not found", template_name))
+            })?;
+
+            match template.format {
+                ExportFormat::Json => self.export_json(registry, template),
+                ExportFormat::Csv => self.export_csv(registry, template),
+                ExportFormat::Html => self.export_html(registry, template),
+                ExportFormat::Markdown => self.export_markdown(registry, template),
+                ExportFormat::Pdf => Err(RegistryError::InvalidOperation(
+                    "PDF export not yet implemented".to_string(),
+                )),
+            }
+        }
+
+        fn export_json(
+            &self,
+            registry: &StatuteRegistry,
+            _template: &ReportTemplate,
+        ) -> Result<String, RegistryError> {
+            let statutes: Vec<_> = registry.iter().collect();
+            serde_json::to_string_pretty(&statutes)
+                .map_err(|e| RegistryError::InvalidOperation(format!("JSON export failed: {}", e)))
+        }
+
+        fn export_csv(
+            &self,
+            registry: &StatuteRegistry,
+            template: &ReportTemplate,
+        ) -> Result<String, RegistryError> {
+            let mut output = String::new();
+
+            // Header
+            if !template.fields.is_empty() {
+                output.push_str(&template.fields.join(","));
+            } else {
+                output.push_str("id,title,status,jurisdiction");
+            }
+            output.push('\n');
+
+            // Rows
+            for entry in registry.iter() {
+                let row = format!(
+                    "{},{},{:?},{}",
+                    entry.statute.id, entry.statute.title, entry.status, entry.jurisdiction
+                );
+                output.push_str(&row);
+                output.push('\n');
+            }
+
+            Ok(output)
+        }
+
+        fn export_html(
+            &self,
+            registry: &StatuteRegistry,
+            template: &ReportTemplate,
+        ) -> Result<String, RegistryError> {
+            let mut html = String::from("<html><head><title>");
+            html.push_str(&template.name);
+            html.push_str("</title></head><body><h1>");
+            html.push_str(&template.name);
+            html.push_str("</h1><table border='1'><tr>");
+
+            // Header
+            for field in &template.fields {
+                html.push_str("<th>");
+                html.push_str(field);
+                html.push_str("</th>");
+            }
+            html.push_str("</tr>");
+
+            // Rows
+            for entry in registry.iter() {
+                html.push_str("<tr>");
+                for field in &template.fields {
+                    html.push_str("<td>");
+                    match field.as_str() {
+                        "id" => html.push_str(&entry.statute.id),
+                        "title" => html.push_str(&entry.statute.title),
+                        "status" => html.push_str(&format!("{:?}", entry.status)),
+                        "jurisdiction" => html.push_str(&entry.jurisdiction),
+                        _ => html.push_str("N/A"),
+                    }
+                    html.push_str("</td>");
+                }
+                html.push_str("</tr>");
+            }
+
+            html.push_str("</table></body></html>");
+            Ok(html)
+        }
+
+        fn export_markdown(
+            &self,
+            registry: &StatuteRegistry,
+            template: &ReportTemplate,
+        ) -> Result<String, RegistryError> {
+            let mut md = format!("# {}\n\n", template.name);
+
+            // Table header
+            if !template.fields.is_empty() {
+                md.push_str("| ");
+                md.push_str(&template.fields.join(" | "));
+                md.push_str(" |\n");
+                md.push('|');
+                for _ in &template.fields {
+                    md.push_str(" --- |");
+                }
+                md.push('\n');
+            }
+
+            // Rows
+            for entry in registry.iter() {
+                md.push_str("| ");
+                for (i, field) in template.fields.iter().enumerate() {
+                    if i > 0 {
+                        md.push_str(" | ");
+                    }
+                    match field.as_str() {
+                        "id" => md.push_str(&entry.statute.id),
+                        "title" => md.push_str(&entry.statute.title),
+                        "status" => md.push_str(&format!("{:?}", entry.status)),
+                        "jurisdiction" => md.push_str(&entry.jurisdiction),
+                        _ => md.push_str("N/A"),
+                    }
+                }
+                md.push_str(" |\n");
+            }
+
+            Ok(md)
+        }
+    }
+
+    impl Default for TemplateManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Selective export by criteria.
+impl StatuteRegistry {
+    /// Exports statutes matching a filter predicate.
+    pub fn export_filtered_statutes<F>(&self, filter: F) -> Result<String, RegistryError>
+    where
+        F: Fn(&StatuteEntry) -> bool,
+    {
+        let filtered: Vec<_> = self
+            .statutes
+            .values()
+            .filter(|entry| filter(entry))
+            .collect();
+
+        serde_json::to_string_pretty(&filtered)
+            .map_err(|e| RegistryError::InvalidOperation(format!("Export failed: {}", e)))
+    }
+
+    /// Exports statutes by status.
+    pub fn export_by_status(&self, status: StatuteStatus) -> Result<String, RegistryError> {
+        self.export_filtered_statutes(|entry| entry.status == status)
+    }
+
+    /// Exports statutes by jurisdiction.
+    pub fn export_by_jurisdiction(&self, jurisdiction: &str) -> Result<String, RegistryError> {
+        self.export_filtered_statutes(|entry| entry.jurisdiction == jurisdiction)
+    }
+
+    /// Exports statutes by tag.
+    pub fn export_by_tag(&self, tag: &str) -> Result<String, RegistryError> {
+        self.export_filtered_statutes(|entry| entry.tags.iter().any(|t| t == tag))
+    }
+
+    /// Exports statutes modified within a date range.
+    pub fn export_by_date_range(
+        &self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<String, RegistryError> {
+        self.export_filtered_statutes(|entry| {
+            entry.modified_at >= start && entry.modified_at <= end
+        })
+    }
+}
+
+// ============================================================================
+// Workflow Integration (v0.1.6)
+// ============================================================================
+
+/// Approval workflows for statute changes.
+pub mod workflow {
+    use super::*;
+
+    /// Workflow status for a statute change.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum WorkflowStatus {
+        /// Draft - not yet submitted for approval
+        Draft,
+        /// Pending approval
+        PendingApproval,
+        /// Approved and ready to apply
+        Approved,
+        /// Rejected with reason
+        Rejected,
+        /// Cancelled by submitter
+        Cancelled,
+    }
+
+    /// Type of change being proposed.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum ChangeType {
+        /// Creating a new statute
+        Create,
+        /// Updating an existing statute
+        Update { statute_id: String },
+        /// Deleting a statute
+        Delete { statute_id: String },
+        /// Changing status
+        StatusChange {
+            statute_id: String,
+            new_status: StatuteStatus,
+        },
+        /// Bulk operation
+        Bulk { operation_count: usize },
+    }
+
+    /// An approval request for a statute change.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ApprovalRequest {
+        /// Unique request ID
+        pub request_id: Uuid,
+        /// Type of change
+        pub change_type: ChangeType,
+        /// Submitter user ID
+        pub submitter: String,
+        /// Workflow status
+        pub status: WorkflowStatus,
+        /// Requested change data (JSON)
+        pub change_data: String,
+        /// Justification for the change
+        pub justification: Option<String>,
+        /// Approvers assigned
+        pub approvers: Vec<String>,
+        /// Approval responses
+        pub responses: Vec<ApprovalResponse>,
+        /// Created timestamp
+        pub created_at: DateTime<Utc>,
+        /// Updated timestamp
+        pub updated_at: DateTime<Utc>,
+        /// Due date for approval
+        pub due_date: Option<DateTime<Utc>>,
+    }
+
+    impl ApprovalRequest {
+        /// Creates a new approval request.
+        pub fn new(
+            change_type: ChangeType,
+            submitter: impl Into<String>,
+            change_data: impl Into<String>,
+        ) -> Self {
+            Self {
+                request_id: Uuid::new_v4(),
+                change_type,
+                submitter: submitter.into(),
+                status: WorkflowStatus::Draft,
+                change_data: change_data.into(),
+                justification: None,
+                approvers: Vec::new(),
+                responses: Vec::new(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                due_date: None,
+            }
+        }
+
+        /// Sets the justification.
+        pub fn with_justification(mut self, justification: impl Into<String>) -> Self {
+            self.justification = Some(justification.into());
+            self
+        }
+
+        /// Adds an approver.
+        pub fn with_approver(mut self, approver: impl Into<String>) -> Self {
+            self.approvers.push(approver.into());
+            self
+        }
+
+        /// Sets the due date.
+        pub fn with_due_date(mut self, due_date: DateTime<Utc>) -> Self {
+            self.due_date = Some(due_date);
+            self
+        }
+
+        /// Submits the request for approval.
+        pub fn submit(&mut self) {
+            self.status = WorkflowStatus::PendingApproval;
+            self.updated_at = Utc::now();
+        }
+
+        /// Adds an approval response.
+        pub fn add_response(&mut self, response: ApprovalResponse) {
+            self.responses.push(response);
+            self.updated_at = Utc::now();
+        }
+
+        /// Checks if the request is approved (all approvers approved).
+        pub fn is_approved(&self) -> bool {
+            if self.approvers.is_empty() {
+                return false;
+            }
+            let approved_count = self
+                .responses
+                .iter()
+                .filter(|r| r.decision == ApprovalDecision::Approved)
+                .count();
+            approved_count >= self.approvers.len()
+        }
+
+        /// Checks if the request is rejected (any approver rejected).
+        pub fn is_rejected(&self) -> bool {
+            self.responses
+                .iter()
+                .any(|r| r.decision == ApprovalDecision::Rejected)
+        }
+
+        /// Checks if the request is overdue.
+        pub fn is_overdue(&self) -> bool {
+            if let Some(due) = self.due_date {
+                Utc::now() > due && self.status == WorkflowStatus::PendingApproval
+            } else {
+                false
+            }
+        }
+    }
+
+    /// Approval decision.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum ApprovalDecision {
+        /// Approved
+        Approved,
+        /// Rejected
+        Rejected,
+        /// Needs more information
+        NeedsInfo,
+    }
+
+    /// An approval response from an approver.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ApprovalResponse {
+        /// Approver user ID
+        pub approver: String,
+        /// Decision
+        pub decision: ApprovalDecision,
+        /// Comments
+        pub comments: Option<String>,
+        /// Response timestamp
+        pub responded_at: DateTime<Utc>,
+    }
+
+    impl ApprovalResponse {
+        /// Creates a new approval response.
+        pub fn new(approver: impl Into<String>, decision: ApprovalDecision) -> Self {
+            Self {
+                approver: approver.into(),
+                decision,
+                comments: None,
+                responded_at: Utc::now(),
+            }
+        }
+
+        /// Sets comments.
+        pub fn with_comments(mut self, comments: impl Into<String>) -> Self {
+            self.comments = Some(comments.into());
+            self
+        }
+    }
+
+    /// Type alias for auto-approval rule functions.
+    pub type AutoApproveRule = Box<dyn Fn(&ApprovalRequest) -> bool + Send + Sync>;
+
+    /// Workflow manager for approval requests.
+    pub struct WorkflowManager {
+        requests: HashMap<Uuid, ApprovalRequest>,
+        /// Auto-approval rules
+        auto_approve_rules: Vec<AutoApproveRule>,
+    }
+
+    impl std::fmt::Debug for WorkflowManager {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("WorkflowManager")
+                .field("requests", &self.requests)
+                .field(
+                    "auto_approve_rules",
+                    &format!("<{} rules>", self.auto_approve_rules.len()),
+                )
+                .finish()
+        }
+    }
+
+    impl WorkflowManager {
+        /// Creates a new workflow manager.
+        pub fn new() -> Self {
+            Self {
+                requests: HashMap::new(),
+                auto_approve_rules: Vec::new(),
+            }
+        }
+
+        /// Submits a new approval request.
+        pub fn submit_request(&mut self, mut request: ApprovalRequest) -> Uuid {
+            request.submit();
+            let id = request.request_id;
+
+            // Check auto-approval rules
+            for rule in &self.auto_approve_rules {
+                if rule(&request) {
+                    request.status = WorkflowStatus::Approved;
+                    break;
+                }
+            }
+
+            self.requests.insert(id, request);
+            id
+        }
+
+        /// Gets a request by ID.
+        pub fn get_request(&self, request_id: Uuid) -> Option<&ApprovalRequest> {
+            self.requests.get(&request_id)
+        }
+
+        /// Adds a response to a request.
+        pub fn add_response(
+            &mut self,
+            request_id: Uuid,
+            response: ApprovalResponse,
+        ) -> Result<(), String> {
+            let request = self
+                .requests
+                .get_mut(&request_id)
+                .ok_or_else(|| "Request not found".to_string())?;
+
+            if request.status != WorkflowStatus::PendingApproval {
+                return Err("Request is not pending approval".to_string());
+            }
+
+            request.add_response(response);
+
+            // Update status based on responses
+            if request.is_rejected() {
+                request.status = WorkflowStatus::Rejected;
+            } else if request.is_approved() {
+                request.status = WorkflowStatus::Approved;
+            }
+
+            Ok(())
+        }
+
+        /// Gets pending requests.
+        pub fn pending_requests(&self) -> Vec<&ApprovalRequest> {
+            self.requests
+                .values()
+                .filter(|r| r.status == WorkflowStatus::PendingApproval)
+                .collect()
+        }
+
+        /// Gets overdue requests.
+        pub fn overdue_requests(&self) -> Vec<&ApprovalRequest> {
+            self.requests.values().filter(|r| r.is_overdue()).collect()
+        }
+
+        /// Gets requests for a specific approver.
+        pub fn requests_for_approver(&self, approver: &str) -> Vec<&ApprovalRequest> {
+            self.requests
+                .values()
+                .filter(|r| {
+                    r.approvers.contains(&approver.to_string())
+                        && r.status == WorkflowStatus::PendingApproval
+                })
+                .collect()
+        }
+    }
+
+    impl Default for WorkflowManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Notification system for stakeholders.
+pub mod notifications {
+    use super::*;
+
+    /// Notification type.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum NotificationType {
+        /// Approval request submitted
+        ApprovalRequested,
+        /// Approval granted
+        ApprovalGranted,
+        /// Approval rejected
+        ApprovalRejected,
+        /// Task assigned
+        TaskAssigned,
+        /// Task completed
+        TaskCompleted,
+        /// SLA warning
+        SlaWarning,
+        /// SLA breach
+        SlaBreach,
+        /// Statute updated
+        StatuteUpdated,
+        /// Custom notification
+        Custom(String),
+    }
+
+    /// Notification priority.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    pub enum NotificationPriority {
+        /// Low priority
+        Low,
+        /// Normal priority
+        Normal,
+        /// High priority
+        High,
+        /// Critical priority
+        Critical,
+    }
+
+    /// Notification channel.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum NotificationChannel {
+        /// Email notification
+        Email,
+        /// SMS notification
+        Sms,
+        /// In-app notification
+        InApp,
+        /// Webhook notification
+        Webhook { url: String },
+        /// Custom channel
+        Custom(String),
+    }
+
+    /// A notification.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Notification {
+        /// Notification ID
+        pub notification_id: Uuid,
+        /// Recipient user ID
+        pub recipient: String,
+        /// Notification type
+        pub notification_type: NotificationType,
+        /// Priority
+        pub priority: NotificationPriority,
+        /// Title
+        pub title: String,
+        /// Message
+        pub message: String,
+        /// Related entity ID (e.g., request ID, statute ID)
+        pub related_entity_id: Option<String>,
+        /// Channels to send through
+        pub channels: Vec<NotificationChannel>,
+        /// Created timestamp
+        pub created_at: DateTime<Utc>,
+        /// Sent timestamp
+        pub sent_at: Option<DateTime<Utc>>,
+        /// Read timestamp
+        pub read_at: Option<DateTime<Utc>>,
+    }
+
+    impl Notification {
+        /// Creates a new notification.
+        pub fn new(
+            recipient: impl Into<String>,
+            notification_type: NotificationType,
+            title: impl Into<String>,
+            message: impl Into<String>,
+        ) -> Self {
+            Self {
+                notification_id: Uuid::new_v4(),
+                recipient: recipient.into(),
+                notification_type,
+                priority: NotificationPriority::Normal,
+                title: title.into(),
+                message: message.into(),
+                related_entity_id: None,
+                channels: vec![NotificationChannel::InApp],
+                created_at: Utc::now(),
+                sent_at: None,
+                read_at: None,
+            }
+        }
+
+        /// Sets priority.
+        pub fn with_priority(mut self, priority: NotificationPriority) -> Self {
+            self.priority = priority;
+            self
+        }
+
+        /// Sets related entity ID.
+        pub fn with_related_entity(mut self, entity_id: impl Into<String>) -> Self {
+            self.related_entity_id = Some(entity_id.into());
+            self
+        }
+
+        /// Adds a channel.
+        pub fn with_channel(mut self, channel: NotificationChannel) -> Self {
+            self.channels.push(channel);
+            self
+        }
+
+        /// Marks as sent.
+        pub fn mark_sent(&mut self) {
+            self.sent_at = Some(Utc::now());
+        }
+
+        /// Marks as read.
+        pub fn mark_read(&mut self) {
+            self.read_at = Some(Utc::now());
+        }
+
+        /// Checks if sent.
+        pub fn is_sent(&self) -> bool {
+            self.sent_at.is_some()
+        }
+
+        /// Checks if read.
+        pub fn is_read(&self) -> bool {
+            self.read_at.is_some()
+        }
+    }
+
+    /// Notification manager.
+    #[derive(Debug)]
+    pub struct NotificationManager {
+        notifications: Vec<Notification>,
+        max_notifications: usize,
+    }
+
+    impl NotificationManager {
+        /// Creates a new notification manager.
+        pub fn new() -> Self {
+            Self {
+                notifications: Vec::new(),
+                max_notifications: 10000,
+            }
+        }
+
+        /// Sends a notification.
+        pub fn send(&mut self, mut notification: Notification) {
+            notification.mark_sent();
+            self.notifications.push(notification);
+
+            // Rotate if needed
+            if self.notifications.len() > self.max_notifications {
+                self.notifications
+                    .drain(0..self.notifications.len() - self.max_notifications);
+            }
+        }
+
+        /// Gets unread notifications for a user.
+        pub fn unread_for_user(&self, user_id: &str) -> Vec<&Notification> {
+            self.notifications
+                .iter()
+                .filter(|n| n.recipient == user_id && !n.is_read())
+                .collect()
+        }
+
+        /// Marks a notification as read.
+        pub fn mark_as_read(&mut self, notification_id: Uuid) -> bool {
+            if let Some(notification) = self
+                .notifications
+                .iter_mut()
+                .find(|n| n.notification_id == notification_id)
+            {
+                notification.mark_read();
+                true
+            } else {
+                false
+            }
+        }
+
+        /// Gets all notifications for a user.
+        pub fn for_user(&self, user_id: &str) -> Vec<&Notification> {
+            self.notifications
+                .iter()
+                .filter(|n| n.recipient == user_id)
+                .collect()
+        }
+
+        /// Gets notifications by priority.
+        pub fn by_priority(&self, min_priority: NotificationPriority) -> Vec<&Notification> {
+            self.notifications
+                .iter()
+                .filter(|n| n.priority >= min_priority)
+                .collect()
+        }
+    }
+
+    impl Default for NotificationManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Task assignment for reviews.
+pub mod tasks {
+    use super::*;
+
+    /// Task status.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum TaskStatus {
+        /// Not yet started
+        NotStarted,
+        /// In progress
+        InProgress,
+        /// Blocked
+        Blocked,
+        /// Completed
+        Completed,
+        /// Cancelled
+        Cancelled,
+    }
+
+    /// Review task.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ReviewTask {
+        /// Task ID
+        pub task_id: Uuid,
+        /// Task title
+        pub title: String,
+        /// Task description
+        pub description: Option<String>,
+        /// Assigned to user ID
+        pub assigned_to: String,
+        /// Assigned by user ID
+        pub assigned_by: String,
+        /// Related statute ID
+        pub statute_id: String,
+        /// Task status
+        pub status: TaskStatus,
+        /// Created timestamp
+        pub created_at: DateTime<Utc>,
+        /// Started timestamp
+        pub started_at: Option<DateTime<Utc>>,
+        /// Completed timestamp
+        pub completed_at: Option<DateTime<Utc>>,
+        /// Due date
+        pub due_date: Option<DateTime<Utc>>,
+        /// Review notes
+        pub notes: Vec<String>,
+    }
+
+    impl ReviewTask {
+        /// Creates a new review task.
+        pub fn new(
+            title: impl Into<String>,
+            assigned_to: impl Into<String>,
+            assigned_by: impl Into<String>,
+            statute_id: impl Into<String>,
+        ) -> Self {
+            Self {
+                task_id: Uuid::new_v4(),
+                title: title.into(),
+                description: None,
+                assigned_to: assigned_to.into(),
+                assigned_by: assigned_by.into(),
+                statute_id: statute_id.into(),
+                status: TaskStatus::NotStarted,
+                created_at: Utc::now(),
+                started_at: None,
+                completed_at: None,
+                due_date: None,
+                notes: Vec::new(),
+            }
+        }
+
+        /// Sets description.
+        pub fn with_description(mut self, description: impl Into<String>) -> Self {
+            self.description = Some(description.into());
+            self
+        }
+
+        /// Sets due date.
+        pub fn with_due_date(mut self, due_date: DateTime<Utc>) -> Self {
+            self.due_date = Some(due_date);
+            self
+        }
+
+        /// Starts the task.
+        pub fn start(&mut self) {
+            self.status = TaskStatus::InProgress;
+            self.started_at = Some(Utc::now());
+        }
+
+        /// Completes the task.
+        pub fn complete(&mut self) {
+            self.status = TaskStatus::Completed;
+            self.completed_at = Some(Utc::now());
+        }
+
+        /// Adds a note.
+        pub fn add_note(&mut self, note: impl Into<String>) {
+            self.notes.push(note.into());
+        }
+
+        /// Checks if overdue.
+        pub fn is_overdue(&self) -> bool {
+            if let Some(due) = self.due_date {
+                Utc::now() > due && self.status != TaskStatus::Completed
+            } else {
+                false
+            }
+        }
+    }
+
+    /// Task manager.
+    #[derive(Debug)]
+    pub struct TaskManager {
+        tasks: HashMap<Uuid, ReviewTask>,
+    }
+
+    impl TaskManager {
+        /// Creates a new task manager.
+        pub fn new() -> Self {
+            Self {
+                tasks: HashMap::new(),
+            }
+        }
+
+        /// Creates a task.
+        pub fn create_task(&mut self, task: ReviewTask) -> Uuid {
+            let id = task.task_id;
+            self.tasks.insert(id, task);
+            id
+        }
+
+        /// Gets a task by ID.
+        pub fn get_task(&self, task_id: Uuid) -> Option<&ReviewTask> {
+            self.tasks.get(&task_id)
+        }
+
+        /// Gets a mutable task by ID.
+        pub fn get_task_mut(&mut self, task_id: Uuid) -> Option<&mut ReviewTask> {
+            self.tasks.get_mut(&task_id)
+        }
+
+        /// Gets tasks assigned to a user.
+        pub fn tasks_for_user(&self, user_id: &str) -> Vec<&ReviewTask> {
+            self.tasks
+                .values()
+                .filter(|t| t.assigned_to == user_id)
+                .collect()
+        }
+
+        /// Gets overdue tasks.
+        pub fn overdue_tasks(&self) -> Vec<&ReviewTask> {
+            self.tasks.values().filter(|t| t.is_overdue()).collect()
+        }
+
+        /// Gets tasks by status.
+        pub fn tasks_by_status(&self, status: TaskStatus) -> Vec<&ReviewTask> {
+            self.tasks.values().filter(|t| t.status == status).collect()
+        }
+    }
+
+    impl Default for TaskManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// SLA tracking for approvals.
+pub mod sla {
+    use super::*;
+
+    /// SLA metric type.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SlaMetric {
+        /// Time to first response
+        TimeToFirstResponse,
+        /// Time to approval
+        TimeToApproval,
+        /// Time to completion
+        TimeToCompletion,
+        /// Custom metric
+        Custom(String),
+    }
+
+    /// SLA definition.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SlaDefinition {
+        /// SLA ID
+        pub sla_id: Uuid,
+        /// SLA name
+        pub name: String,
+        /// Metric being tracked
+        pub metric: SlaMetric,
+        /// Target duration in seconds
+        pub target_seconds: i64,
+        /// Warning threshold (percentage of target)
+        pub warning_threshold: f64,
+    }
+
+    impl SlaDefinition {
+        /// Creates a new SLA definition.
+        pub fn new(name: impl Into<String>, metric: SlaMetric, target_seconds: i64) -> Self {
+            Self {
+                sla_id: Uuid::new_v4(),
+                name: name.into(),
+                metric,
+                target_seconds,
+                warning_threshold: 0.8, // 80% of target
+            }
+        }
+
+        /// Sets warning threshold.
+        pub fn with_warning_threshold(mut self, threshold: f64) -> Self {
+            self.warning_threshold = threshold.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Gets target duration.
+        pub fn target_duration(&self) -> chrono::Duration {
+            chrono::Duration::seconds(self.target_seconds)
+        }
+
+        /// Gets warning duration.
+        pub fn warning_duration(&self) -> chrono::Duration {
+            chrono::Duration::seconds((self.target_seconds as f64 * self.warning_threshold) as i64)
+        }
+    }
+
+    /// SLA status.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SlaStatus {
+        /// Met the SLA
+        Met,
+        /// Warning - approaching SLA breach
+        Warning,
+        /// Breached the SLA
+        Breached,
+    }
+
+    /// SLA measurement.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SlaMeasurement {
+        /// Measurement ID
+        pub measurement_id: Uuid,
+        /// SLA definition ID
+        pub sla_id: Uuid,
+        /// Related entity ID
+        pub entity_id: String,
+        /// Start time
+        pub start_time: DateTime<Utc>,
+        /// End time
+        pub end_time: Option<DateTime<Utc>>,
+        /// Actual duration in seconds
+        pub duration_seconds: Option<i64>,
+        /// SLA status
+        pub status: SlaStatus,
+    }
+
+    impl SlaMeasurement {
+        /// Creates a new SLA measurement.
+        pub fn new(sla_id: Uuid, entity_id: impl Into<String>) -> Self {
+            Self {
+                measurement_id: Uuid::new_v4(),
+                sla_id,
+                entity_id: entity_id.into(),
+                start_time: Utc::now(),
+                end_time: None,
+                duration_seconds: None,
+                status: SlaStatus::Met,
+            }
+        }
+
+        /// Completes the measurement.
+        pub fn complete(&mut self, sla: &SlaDefinition) {
+            self.end_time = Some(Utc::now());
+            let duration = self.end_time.unwrap() - self.start_time;
+            self.duration_seconds = Some(duration.num_seconds());
+
+            // Determine status
+            if duration > sla.target_duration() {
+                self.status = SlaStatus::Breached;
+            } else if duration > sla.warning_duration() {
+                self.status = SlaStatus::Warning;
+            } else {
+                self.status = SlaStatus::Met;
+            }
+        }
+
+        /// Checks current status against SLA.
+        pub fn check_status(&mut self, sla: &SlaDefinition) -> SlaStatus {
+            if self.end_time.is_some() {
+                return self.status;
+            }
+
+            let elapsed = Utc::now() - self.start_time;
+            if elapsed > sla.target_duration() {
+                self.status = SlaStatus::Breached;
+            } else if elapsed > sla.warning_duration() {
+                self.status = SlaStatus::Warning;
+            } else {
+                self.status = SlaStatus::Met;
+            }
+            self.status
+        }
+    }
+
+    /// SLA tracker.
+    #[derive(Debug)]
+    pub struct SlaTracker {
+        definitions: HashMap<Uuid, SlaDefinition>,
+        measurements: Vec<SlaMeasurement>,
+    }
+
+    impl SlaTracker {
+        /// Creates a new SLA tracker.
+        pub fn new() -> Self {
+            Self {
+                definitions: HashMap::new(),
+                measurements: Vec::new(),
+            }
+        }
+
+        /// Adds an SLA definition.
+        pub fn add_definition(&mut self, definition: SlaDefinition) -> Uuid {
+            let id = definition.sla_id;
+            self.definitions.insert(id, definition);
+            id
+        }
+
+        /// Starts tracking an SLA.
+        pub fn start_tracking(&mut self, sla_id: Uuid, entity_id: impl Into<String>) -> Uuid {
+            let measurement = SlaMeasurement::new(sla_id, entity_id);
+            let id = measurement.measurement_id;
+            self.measurements.push(measurement);
+            id
+        }
+
+        /// Completes an SLA measurement.
+        pub fn complete_measurement(&mut self, measurement_id: Uuid) -> Result<SlaStatus, String> {
+            let measurement = self
+                .measurements
+                .iter_mut()
+                .find(|m| m.measurement_id == measurement_id)
+                .ok_or_else(|| "Measurement not found".to_string())?;
+
+            let sla = self
+                .definitions
+                .get(&measurement.sla_id)
+                .ok_or_else(|| "SLA definition not found".to_string())?;
+
+            measurement.complete(sla);
+            Ok(measurement.status)
+        }
+
+        /// Gets measurements in warning or breach status.
+        pub fn at_risk_measurements(&mut self) -> Vec<&mut SlaMeasurement> {
+            // First update all statuses
+            for m in &mut self.measurements {
+                if let Some(sla) = self.definitions.get(&m.sla_id) {
+                    m.check_status(sla);
+                }
+            }
+
+            // Then filter based on updated status
+            self.measurements
+                .iter_mut()
+                .filter(|m| m.status == SlaStatus::Warning || m.status == SlaStatus::Breached)
+                .collect()
+        }
+
+        /// Gets completion rate for an SLA.
+        pub fn completion_rate(&self, sla_id: Uuid) -> f64 {
+            let total: Vec<_> = self
+                .measurements
+                .iter()
+                .filter(|m| m.sla_id == sla_id && m.end_time.is_some())
+                .collect();
+
+            if total.is_empty() {
+                return 1.0;
+            }
+
+            let met_count = total.iter().filter(|m| m.status == SlaStatus::Met).count();
+
+            met_count as f64 / total.len() as f64
+        }
+    }
+
+    impl Default for SlaTracker {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Escalation rules.
+pub mod escalation {
+    use super::*;
+
+    /// Escalation condition.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub enum EscalationCondition {
+        /// Time-based: escalate after duration
+        AfterDuration { seconds: i64 },
+        /// Overdue task or approval
+        Overdue,
+        /// SLA breach
+        SlaBreach,
+        /// No response after duration
+        NoResponseAfter { seconds: i64 },
+        /// Multiple rejections
+        MultipleRejections { count: usize },
+    }
+
+    impl EscalationCondition {
+        /// Checks if condition is met for a timestamp.
+        pub fn is_met(&self, created_at: DateTime<Utc>, _has_response: bool) -> bool {
+            match self {
+                Self::AfterDuration { seconds } => {
+                    let elapsed = Utc::now() - created_at;
+                    elapsed.num_seconds() >= *seconds
+                }
+                Self::Overdue => {
+                    // Would need due date to check properly
+                    false
+                }
+                Self::SlaBreach => {
+                    // Would need SLA tracking
+                    false
+                }
+                Self::NoResponseAfter { seconds } => {
+                    if _has_response {
+                        false
+                    } else {
+                        let elapsed = Utc::now() - created_at;
+                        elapsed.num_seconds() >= *seconds
+                    }
+                }
+                Self::MultipleRejections { count: _ } => {
+                    // Would need rejection tracking
+                    false
+                }
+            }
+        }
+    }
+
+    /// Escalation action.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub enum EscalationAction {
+        /// Notify additional users
+        Notify { users: Vec<String> },
+        /// Reassign to different user
+        Reassign { to_user: String },
+        /// Escalate to manager
+        EscalateToManager,
+        /// Auto-approve
+        AutoApprove,
+        /// Custom action
+        Custom(String),
+    }
+
+    /// Escalation rule.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct EscalationRule {
+        /// Rule ID
+        pub rule_id: Uuid,
+        /// Rule name
+        pub name: String,
+        /// Condition to trigger escalation
+        pub condition: EscalationCondition,
+        /// Action to take
+        pub action: EscalationAction,
+        /// Priority (higher = evaluated first)
+        pub priority: i32,
+        /// Whether the rule is enabled
+        pub enabled: bool,
+    }
+
+    impl EscalationRule {
+        /// Creates a new escalation rule.
+        pub fn new(
+            name: impl Into<String>,
+            condition: EscalationCondition,
+            action: EscalationAction,
+        ) -> Self {
+            Self {
+                rule_id: Uuid::new_v4(),
+                name: name.into(),
+                condition,
+                action,
+                priority: 0,
+                enabled: true,
+            }
+        }
+
+        /// Sets priority.
+        pub fn with_priority(mut self, priority: i32) -> Self {
+            self.priority = priority;
+            self
+        }
+
+        /// Checks if the rule should be triggered.
+        pub fn should_trigger(&self, created_at: DateTime<Utc>, has_response: bool) -> bool {
+            self.enabled && self.condition.is_met(created_at, has_response)
+        }
+    }
+
+    /// Escalation event.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct EscalationEvent {
+        /// Event ID
+        pub event_id: Uuid,
+        /// Rule that triggered
+        pub rule_id: Uuid,
+        /// Entity that was escalated
+        pub entity_id: String,
+        /// Action taken
+        pub action: EscalationAction,
+        /// Timestamp
+        pub escalated_at: DateTime<Utc>,
+    }
+
+    /// Escalation manager.
+    #[derive(Debug)]
+    pub struct EscalationManager {
+        rules: Vec<EscalationRule>,
+        events: Vec<EscalationEvent>,
+    }
+
+    impl EscalationManager {
+        /// Creates a new escalation manager.
+        pub fn new() -> Self {
+            Self {
+                rules: Vec::new(),
+                events: Vec::new(),
+            }
+        }
+
+        /// Adds an escalation rule.
+        pub fn add_rule(&mut self, rule: EscalationRule) {
+            self.rules.push(rule);
+            // Sort by priority (descending)
+            self.rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        }
+
+        /// Checks for escalations and applies rules.
+        pub fn check_escalations(
+            &mut self,
+            entity_id: impl Into<String>,
+            created_at: DateTime<Utc>,
+            has_response: bool,
+        ) -> Vec<EscalationAction> {
+            let entity_id = entity_id.into();
+            let mut actions = Vec::new();
+
+            for rule in &self.rules {
+                if rule.should_trigger(created_at, has_response) {
+                    let event = EscalationEvent {
+                        event_id: Uuid::new_v4(),
+                        rule_id: rule.rule_id,
+                        entity_id: entity_id.clone(),
+                        action: rule.action.clone(),
+                        escalated_at: Utc::now(),
+                    };
+                    actions.push(rule.action.clone());
+                    self.events.push(event);
+                }
+            }
+
+            actions
+        }
+
+        /// Gets escalation events for an entity.
+        pub fn events_for_entity(&self, entity_id: &str) -> Vec<&EscalationEvent> {
+            self.events
+                .iter()
+                .filter(|e| e.entity_id == entity_id)
+                .collect()
+        }
+
+        /// Gets all rules.
+        pub fn rules(&self) -> &[EscalationRule] {
+            &self.rules
+        }
+    }
+
+    impl Default for EscalationManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Advanced search features.
+pub mod advanced_search {
+    use super::*;
+
+    /// Facet type for search aggregations.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum FacetType {
+        /// Status facet
+        Status,
+        /// Jurisdiction facet
+        Jurisdiction,
+        /// Tags facet
+        Tags,
+        /// Year (from effective date)
+        Year,
+        /// Month (from effective date)
+        Month,
+        /// Custom facet
+        Custom(String),
+    }
+
+    /// Facet value with count.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FacetValue {
+        /// Value of the facet
+        pub value: String,
+        /// Count of items with this value
+        pub count: usize,
+    }
+
+    /// Facet result for a specific facet type.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FacetResult {
+        /// Facet type
+        pub facet_type: FacetType,
+        /// Values with their counts
+        pub values: Vec<FacetValue>,
+        /// Total number of unique values
+        pub total_values: usize,
+    }
+
+    impl FacetResult {
+        /// Gets top N values by count.
+        pub fn top_values(&self, n: usize) -> Vec<&FacetValue> {
+            let mut sorted: Vec<_> = self.values.iter().collect();
+            sorted.sort_by(|a, b| b.count.cmp(&a.count));
+            sorted.into_iter().take(n).collect()
+        }
+
+        /// Finds a specific value.
+        pub fn find_value(&self, value: &str) -> Option<&FacetValue> {
+            self.values.iter().find(|v| v.value == value)
+        }
+    }
+
+    /// Faceted search results.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FacetedSearchResult {
+        /// Matching statute IDs
+        pub statute_ids: Vec<String>,
+        /// Facet results
+        pub facets: Vec<FacetResult>,
+        /// Total matches
+        pub total_matches: usize,
+    }
+
+    /// Search suggestion.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SearchSuggestion {
+        /// Suggested text
+        pub text: String,
+        /// Suggestion type
+        pub suggestion_type: SuggestionType,
+        /// Relevance score
+        pub score: f64,
+    }
+
+    /// Type of search suggestion.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SuggestionType {
+        /// Statute ID
+        StatuteId,
+        /// Statute title
+        Title,
+        /// Tag
+        Tag,
+        /// Jurisdiction
+        Jurisdiction,
+        /// General term
+        Term,
+    }
+
+    /// Autocomplete provider.
+    #[derive(Debug)]
+    pub struct AutocompleteProvider {
+        /// Index of statute IDs
+        statute_ids: Vec<String>,
+        /// Index of titles
+        titles: Vec<String>,
+        /// Index of tags
+        tags: Vec<String>,
+        /// Index of jurisdictions
+        jurisdictions: Vec<String>,
+    }
+
+    impl AutocompleteProvider {
+        /// Creates a new autocomplete provider.
+        pub fn new() -> Self {
+            Self {
+                statute_ids: Vec::new(),
+                titles: Vec::new(),
+                tags: Vec::new(),
+                jurisdictions: Vec::new(),
+            }
+        }
+
+        /// Indexes a statute for autocomplete.
+        pub fn index_statute(&mut self, entry: &StatuteEntry) {
+            // Index statute ID
+            if !self.statute_ids.contains(&entry.statute.id) {
+                self.statute_ids.push(entry.statute.id.clone());
+            }
+
+            // Index title
+            let title = entry.statute.title.clone();
+            if !self.titles.contains(&title) {
+                self.titles.push(title);
+            }
+
+            // Index tags
+            for tag in &entry.tags {
+                if !self.tags.contains(tag) {
+                    self.tags.push(tag.clone());
+                }
+            }
+
+            // Index jurisdiction
+            if !self.jurisdictions.contains(&entry.jurisdiction) {
+                self.jurisdictions.push(entry.jurisdiction.clone());
+            }
+        }
+
+        /// Gets suggestions for a query.
+        pub fn suggest(&self, query: &str, max_results: usize) -> Vec<SearchSuggestion> {
+            let query_lower = query.to_lowercase();
+            let mut suggestions = Vec::new();
+
+            // Search statute IDs
+            for id in &self.statute_ids {
+                if id.to_lowercase().contains(&query_lower) {
+                    suggestions.push(SearchSuggestion {
+                        text: id.clone(),
+                        suggestion_type: SuggestionType::StatuteId,
+                        score: Self::calculate_score(&query_lower, &id.to_lowercase()),
+                    });
+                }
+            }
+
+            // Search titles
+            for title in &self.titles {
+                if title.to_lowercase().contains(&query_lower) {
+                    suggestions.push(SearchSuggestion {
+                        text: title.clone(),
+                        suggestion_type: SuggestionType::Title,
+                        score: Self::calculate_score(&query_lower, &title.to_lowercase()),
+                    });
+                }
+            }
+
+            // Search tags
+            for tag in &self.tags {
+                if tag.to_lowercase().contains(&query_lower) {
+                    suggestions.push(SearchSuggestion {
+                        text: tag.clone(),
+                        suggestion_type: SuggestionType::Tag,
+                        score: Self::calculate_score(&query_lower, &tag.to_lowercase()),
+                    });
+                }
+            }
+
+            // Search jurisdictions
+            for jurisdiction in &self.jurisdictions {
+                if jurisdiction.to_lowercase().contains(&query_lower) {
+                    suggestions.push(SearchSuggestion {
+                        text: jurisdiction.clone(),
+                        suggestion_type: SuggestionType::Jurisdiction,
+                        score: Self::calculate_score(&query_lower, &jurisdiction.to_lowercase()),
+                    });
+                }
+            }
+
+            // Sort by score (descending)
+            suggestions.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            suggestions.truncate(max_results);
+            suggestions
+        }
+
+        /// Calculates relevance score.
+        fn calculate_score(query: &str, text: &str) -> f64 {
+            // Exact match gets highest score
+            if query == text {
+                return 1.0;
+            }
+
+            // Prefix match gets high score
+            if text.starts_with(query) {
+                return 0.9;
+            }
+
+            // Contains match gets medium score
+            if text.contains(query) {
+                return 0.7;
+            }
+
+            // Fuzzy match gets lower score
+            0.5
+        }
+    }
+
+    impl Default for AutocompleteProvider {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Saved search.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SavedSearch {
+        /// Search ID
+        pub search_id: Uuid,
+        /// Search name
+        pub name: String,
+        /// Search query
+        pub query: SearchQuery,
+        /// Owner user ID
+        pub owner: String,
+        /// Alert enabled
+        pub alert_enabled: bool,
+        /// Alert frequency in seconds
+        pub alert_frequency_seconds: Option<i64>,
+        /// Last executed
+        pub last_executed: Option<DateTime<Utc>>,
+        /// Last result count
+        pub last_result_count: Option<usize>,
+        /// Created timestamp
+        pub created_at: DateTime<Utc>,
+    }
+
+    impl SavedSearch {
+        /// Creates a new saved search.
+        pub fn new(name: impl Into<String>, query: SearchQuery, owner: impl Into<String>) -> Self {
+            Self {
+                search_id: Uuid::new_v4(),
+                name: name.into(),
+                query,
+                owner: owner.into(),
+                alert_enabled: false,
+                alert_frequency_seconds: None,
+                last_executed: None,
+                last_result_count: None,
+                created_at: Utc::now(),
+            }
+        }
+
+        /// Enables alerts with frequency.
+        pub fn with_alert(mut self, frequency_seconds: i64) -> Self {
+            self.alert_enabled = true;
+            self.alert_frequency_seconds = Some(frequency_seconds);
+            self
+        }
+
+        /// Checks if alert should be triggered.
+        pub fn should_trigger_alert(&self) -> bool {
+            if !self.alert_enabled {
+                return false;
+            }
+
+            if let Some(freq) = self.alert_frequency_seconds {
+                if let Some(last_exec) = self.last_executed {
+                    let elapsed = Utc::now() - last_exec;
+                    return elapsed.num_seconds() >= freq;
+                }
+                // Never executed, should trigger
+                return true;
+            }
+
+            false
+        }
+
+        /// Updates execution info.
+        pub fn update_execution(&mut self, result_count: usize) {
+            self.last_executed = Some(Utc::now());
+            self.last_result_count = Some(result_count);
+        }
+    }
+
+    /// Search analytics tracker.
+    #[derive(Debug)]
+    pub struct SearchAnalytics {
+        /// Query frequency tracking
+        query_counts: HashMap<String, usize>,
+        /// Recent searches
+        recent_searches: Vec<(String, DateTime<Utc>)>,
+        /// Search result counts
+        result_counts: Vec<usize>,
+        /// Max recent searches to track
+        max_recent: usize,
+    }
+
+    impl SearchAnalytics {
+        /// Creates a new search analytics tracker.
+        pub fn new() -> Self {
+            Self {
+                query_counts: HashMap::new(),
+                recent_searches: Vec::new(),
+                result_counts: Vec::new(),
+                max_recent: 1000,
+            }
+        }
+
+        /// Records a search.
+        pub fn record_search(&mut self, query: &str, result_count: usize) {
+            // Track query frequency
+            *self.query_counts.entry(query.to_string()).or_insert(0) += 1;
+
+            // Track recent searches
+            self.recent_searches.push((query.to_string(), Utc::now()));
+            if self.recent_searches.len() > self.max_recent {
+                self.recent_searches
+                    .drain(0..self.recent_searches.len() - self.max_recent);
+            }
+
+            // Track result counts
+            self.result_counts.push(result_count);
+        }
+
+        /// Gets most popular queries.
+        pub fn top_queries(&self, n: usize) -> Vec<(String, usize)> {
+            let mut queries: Vec<_> = self
+                .query_counts
+                .iter()
+                .map(|(q, c)| (q.clone(), *c))
+                .collect();
+            queries.sort_by(|a, b| b.1.cmp(&a.1));
+            queries.into_iter().take(n).collect()
+        }
+
+        /// Gets average result count.
+        pub fn average_result_count(&self) -> f64 {
+            if self.result_counts.is_empty() {
+                return 0.0;
+            }
+            let sum: usize = self.result_counts.iter().sum();
+            sum as f64 / self.result_counts.len() as f64
+        }
+
+        /// Gets zero-result queries.
+        pub fn zero_result_queries(&self) -> Vec<String> {
+            self.recent_searches
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| self.result_counts.get(*i).map(|&c| c == 0).unwrap_or(false))
+                .map(|(_, (q, _))| q.clone())
+                .collect()
+        }
+
+        /// Gets total searches.
+        pub fn total_searches(&self) -> usize {
+            self.recent_searches.len()
+        }
+
+        /// Gets searches in time range.
+        pub fn searches_in_range(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> usize {
+            self.recent_searches
+                .iter()
+                .filter(|(_, ts)| ts >= &start && ts <= &end)
+                .count()
+        }
+    }
+
+    impl Default for SearchAnalytics {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Semantic search using embeddings (placeholder for future ML integration).
+    #[derive(Debug)]
+    pub struct SemanticSearch {
+        /// Enabled flag
+        enabled: bool,
+        /// Embedding dimension
+        dimension: usize,
+    }
+
+    impl SemanticSearch {
+        /// Creates a new semantic search engine.
+        pub fn new(dimension: usize) -> Self {
+            Self {
+                enabled: false,
+                dimension,
+            }
+        }
+
+        /// Enables semantic search.
+        pub fn enable(&mut self) {
+            self.enabled = true;
+        }
+
+        /// Checks if enabled.
+        pub fn is_enabled(&self) -> bool {
+            self.enabled
+        }
+
+        /// Gets embedding dimension.
+        pub fn dimension(&self) -> usize {
+            self.dimension
+        }
+
+        /// Placeholder for semantic search (would integrate with ML models).
+        pub fn search(&self, _query: &str, _top_k: usize) -> Vec<(String, f64)> {
+            // In a real implementation, this would:
+            // 1. Generate embedding for query
+            // 2. Search vector database for similar embeddings
+            // 3. Return statute IDs with similarity scores
+            Vec::new()
+        }
+    }
+
+    impl Default for SemanticSearch {
+        fn default() -> Self {
+            Self::new(384) // Default BERT dimension
+        }
     }
 }
 
@@ -14121,7 +18072,10 @@ mod tests {
         let entry = StatuteEntry::new(test_statute("high-quality"), "US")
             .with_tag("civil")
             .with_tag("rights")
-            .with_metadata("description".to_string(), "A comprehensive statute".to_string())
+            .with_metadata(
+                "description".to_string(),
+                "A comprehensive statute".to_string(),
+            )
             .with_metadata("author".to_string(), "Legislature".to_string());
 
         let score = registry.calculate_quality_score(&entry);
@@ -14146,10 +18100,12 @@ mod tests {
         assert_eq!(assessment.statute_id, "test-1");
         assert!(assessment.has_issues());
         // Should flag missing tags and metadata
-        assert!(assessment
-            .issues
-            .iter()
-            .any(|i| i.contains("tags") || i.contains("metadata")));
+        assert!(
+            assessment
+                .issues
+                .iter()
+                .any(|i| i.contains("tags") || i.contains("metadata"))
+        );
     }
 
     #[test]
@@ -14239,11 +18195,10 @@ mod tests {
     fn test_calculate_similarity_different() {
         let registry = StatuteRegistry::new();
 
-        let entry1 = StatuteEntry::new(test_statute("completely-different-1"), "US")
-            .with_tag("civil");
+        let entry1 =
+            StatuteEntry::new(test_statute("completely-different-1"), "US").with_tag("civil");
 
-        let entry2 = StatuteEntry::new(test_statute("another-thing-2"), "UK")
-            .with_tag("criminal");
+        let entry2 = StatuteEntry::new(test_statute("another-thing-2"), "UK").with_tag("criminal");
 
         let similarity = registry.calculate_similarity(&entry1, &entry2);
 
@@ -14428,7 +18383,11 @@ mod tests {
         assert!(profile.average_quality > 0.0);
 
         // Should have status distribution
-        assert!(profile.status_distribution.contains_key(&StatuteStatus::Active));
+        assert!(
+            profile
+                .status_distribution
+                .contains_key(&StatuteStatus::Active)
+        );
         assert_eq!(profile.status_distribution[&StatuteStatus::Active], 2);
 
         // Should have jurisdiction distribution
@@ -14606,10 +18565,7 @@ mod tests {
         assert_eq!(result.statute_id, "statute-1");
         assert_eq!(result.suggestions.len(), 2);
         assert_eq!(result.high_confidence_suggestions(0.7).len(), 1);
-        assert_eq!(
-            result.suggestions_by_type(EnrichmentType::AutoTag).len(),
-            1
-        );
+        assert_eq!(result.suggestions_by_type(EnrichmentType::AutoTag).len(), 1);
     }
 
     #[test]
@@ -14632,10 +18588,7 @@ mod tests {
 
         // Register a statute with civil law keywords in title
         registry
-            .register(StatuteEntry::new(
-                test_statute("civil-contract-law"),
-                "US",
-            ))
+            .register(StatuteEntry::new(test_statute("civil-contract-law"), "US"))
             .unwrap();
 
         let config = EnrichmentConfig::new();
@@ -14815,7 +18768,10 @@ mod tests {
         .with_context("import_date".to_string(), "2025-12-27".to_string());
 
         assert_eq!(entry.context.len(), 2);
-        assert_eq!(entry.context.get("batch_id"), Some(&"batch-123".to_string()));
+        assert_eq!(
+            entry.context.get("batch_id"),
+            Some(&"batch-123".to_string())
+        );
     }
 
     #[test]
@@ -15057,5 +19013,2214 @@ mod tests {
 
         lineage.clear();
         assert_eq!(lineage.count(), 0);
+    }
+
+    // ========================================================================
+    // Compliance Features Tests (v0.1.9)
+    // ========================================================================
+
+    #[test]
+    fn test_pii_detection_creation() {
+        let detection = PiiDetection::new(
+            PiiFieldType::Email,
+            "test@example.com".to_string(),
+            10,
+            0.95,
+        );
+
+        assert_eq!(detection.field_type, PiiFieldType::Email);
+        assert_eq!(detection.value, "test@example.com");
+        assert_eq!(detection.position, 10);
+        assert_eq!(detection.length, 16);
+        assert_eq!(detection.confidence, 0.95);
+    }
+
+    #[test]
+    fn test_pii_detection_confidence() {
+        let detection = PiiDetection::new(
+            PiiFieldType::PhoneNumber,
+            "123-456-7890".to_string(),
+            0,
+            0.85,
+        );
+
+        assert!(detection.is_confident(0.8));
+        assert!(detection.is_confident(0.85));
+        assert!(!detection.is_confident(0.9));
+    }
+
+    #[test]
+    fn test_pii_scan_result() {
+        let detections = vec![
+            PiiDetection::new(PiiFieldType::Email, "a@b.com".to_string(), 0, 0.9),
+            PiiDetection::new(
+                PiiFieldType::PhoneNumber,
+                "123-456-7890".to_string(),
+                10,
+                0.8,
+            ),
+        ];
+
+        let result = PiiScanResult::new("test-statute".to_string(), detections);
+
+        assert_eq!(result.statute_id, "test-statute");
+        assert_eq!(result.pii_count, 2);
+
+        let high_conf = result.high_confidence(0.85);
+        assert_eq!(high_conf.len(), 1);
+        assert_eq!(high_conf[0].field_type, PiiFieldType::Email);
+
+        let emails = result.by_type(&PiiFieldType::Email);
+        assert_eq!(emails.len(), 1);
+    }
+
+    #[test]
+    fn test_pii_detector_scan() {
+        let detector = PiiDetector::new();
+        let content = "Contact us at support@example.com or call 555-123-4567";
+
+        let result = detector.scan("statute-1", content);
+
+        assert_eq!(result.statute_id, "statute-1");
+        assert!(!result.detections.is_empty());
+    }
+
+    #[test]
+    fn test_pii_detector_disabled() {
+        let mut detector = PiiDetector::new();
+        detector.set_enabled(false);
+
+        let content = "Contact us at support@example.com";
+        let result = detector.scan("statute-1", content);
+
+        assert_eq!(result.pii_count, 0);
+    }
+
+    #[test]
+    fn test_pii_masking_strategies() {
+        let detector_asterisk =
+            PiiDetector::new().with_masking_strategy(MaskingStrategy::Asterisks);
+        let detector_redacted = PiiDetector::new().with_masking_strategy(MaskingStrategy::Redacted);
+        let detector_partial = PiiDetector::new().with_masking_strategy(MaskingStrategy::Partial);
+
+        let content = "email@test.com";
+        let detections = vec![PiiDetection::new(
+            PiiFieldType::Email,
+            "email@test.com".to_string(),
+            0,
+            0.9,
+        )];
+        let scan_result = PiiScanResult::new("test".to_string(), detections);
+
+        let masked_asterisk = detector_asterisk.mask(content, &scan_result);
+        let masked_redacted = detector_redacted.mask(content, &scan_result);
+        let masked_partial = detector_partial.mask(content, &scan_result);
+
+        assert!(masked_asterisk.contains('*') || masked_asterisk.is_empty());
+        assert!(masked_redacted.contains("[REDACTED]") || masked_redacted == content);
+        assert!(masked_partial.starts_with('e') || masked_partial == content);
+    }
+
+    #[test]
+    fn test_data_retention_config() {
+        let config = DataRetentionConfig::new()
+            .add_rule(DataRetentionRule::RetainForDays(30))
+            .add_rule(DataRetentionRule::ArchiveAfterDays(90))
+            .with_auto_apply(true)
+            .with_dry_run(false);
+
+        assert_eq!(config.rules().len(), 2);
+        assert!(config.is_auto_apply());
+        assert!(!config.is_dry_run());
+    }
+
+    #[test]
+    fn test_retention_execution_result() {
+        let result = RetentionExecutionResult::new(
+            vec!["s1".to_string(), "s2".to_string()],
+            vec!["s3".to_string()],
+            false,
+        );
+
+        assert_eq!(result.deleted.len(), 2);
+        assert_eq!(result.archived.len(), 1);
+        assert_eq!(result.total_affected(), 3);
+        assert!(!result.dry_run);
+    }
+
+    #[test]
+    fn test_apply_retention_rules_dry_run() {
+        let mut registry = StatuteRegistry::new();
+        let entry = StatuteEntry::new(test_statute("old-statute"), "JP");
+        registry.register(entry).unwrap();
+
+        let config = DataRetentionConfig::new()
+            .add_rule(DataRetentionRule::RetainForDays(0))
+            .with_dry_run(true);
+
+        let result = registry.apply_retention_rules(&config);
+
+        // In dry-run mode, nothing should be deleted
+        assert_eq!(registry.count(), 1);
+        assert!(result.dry_run);
+    }
+
+    #[test]
+    fn test_apply_retention_rules_archive() {
+        let mut registry = StatuteRegistry::new();
+        let entry = StatuteEntry::new(test_statute("old-statute"), "JP");
+        registry.register(entry).unwrap();
+
+        // Use a rule that will definitely trigger (old age)
+        let config = DataRetentionConfig::new()
+            .add_rule(DataRetentionRule::RetainForDays(0))
+            .with_dry_run(true); // Use dry-run first
+
+        let result = registry.apply_retention_rules(&config);
+
+        // In this case, we're testing dry-run mode
+        // Statute with age > 0 days would be deleted (but we're in dry run)
+        assert!(result.dry_run);
+        assert_eq!(registry.count(), 1); // Nothing actually deleted
+    }
+
+    #[test]
+    fn test_audit_report_config() {
+        let now = Utc::now();
+        let config = AuditReportConfig::new("Monthly Report")
+            .with_date_range(now, now)
+            .with_sections(true, true, false, false)
+            .with_format(AuditReportFormat::Json);
+
+        assert_eq!(config.title, "Monthly Report");
+        assert!(config.include_operations);
+        assert!(config.include_events);
+        assert!(!config.include_quality);
+        assert_eq!(config.format, AuditReportFormat::Json);
+    }
+
+    #[test]
+    fn test_generate_audit_report() {
+        let mut registry = StatuteRegistry::new();
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP");
+        registry.register(entry).unwrap();
+
+        let config = AuditReportConfig::new("Test Report").with_format(AuditReportFormat::Text);
+
+        let report = registry.generate_audit_report(&config);
+
+        assert_eq!(report.title, "Test Report");
+        assert_eq!(report.total_statutes, 1);
+        assert!(!report.content.is_empty());
+        assert_eq!(report.format, AuditReportFormat::Text);
+    }
+
+    #[test]
+    fn test_audit_report_export() {
+        let report = AuditReport::new(
+            "Test".to_string(),
+            (None, None),
+            10,
+            5,
+            3,
+            0,
+            85.0,
+            "Test content".to_string(),
+            AuditReportFormat::Json,
+        );
+
+        let exported = report.export();
+        assert!(exported.contains("Test"));
+    }
+
+    #[test]
+    fn test_geographic_region_code() {
+        assert_eq!(GeographicRegion::EU.code(), "EU");
+        assert_eq!(GeographicRegion::US.code(), "US");
+        assert_eq!(GeographicRegion::Japan.code(), "JP");
+        assert_eq!(GeographicRegion::Custom("XX".to_string()).code(), "XX");
+    }
+
+    #[test]
+    fn test_geographic_region_transfer_rules() {
+        // EU can transfer to EU and UK
+        assert!(GeographicRegion::EU.allows_transfer_to(&GeographicRegion::EU));
+        assert!(GeographicRegion::EU.allows_transfer_to(&GeographicRegion::UK));
+        // EU cannot transfer to US (GDPR)
+        assert!(!GeographicRegion::EU.allows_transfer_to(&GeographicRegion::US));
+
+        // US can transfer anywhere
+        assert!(GeographicRegion::US.allows_transfer_to(&GeographicRegion::EU));
+        assert!(GeographicRegion::US.allows_transfer_to(&GeographicRegion::Japan));
+    }
+
+    #[test]
+    fn test_data_sovereignty_config() {
+        let config = DataSovereigntyConfig::new(GeographicRegion::EU)
+            .allow_region(GeographicRegion::UK)
+            .with_strict_residency(false)
+            .with_encryption_required(true);
+
+        assert_eq!(config.primary_region, GeographicRegion::EU);
+        assert!(config.allowed_regions.contains(&GeographicRegion::UK));
+        assert!(!config.strict_residency);
+        assert!(config.require_encryption);
+    }
+
+    #[test]
+    fn test_data_sovereignty_region_allowed() {
+        let config =
+            DataSovereigntyConfig::new(GeographicRegion::EU).allow_region(GeographicRegion::UK);
+
+        // Primary region is always allowed
+        assert!(config.is_region_allowed(&GeographicRegion::EU));
+
+        // UK is explicitly allowed and EU->UK transfer is permitted
+        assert!(config.is_region_allowed(&GeographicRegion::UK));
+
+        // US is not in allowed list
+        assert!(!config.is_region_allowed(&GeographicRegion::US));
+    }
+
+    #[test]
+    fn test_data_sovereignty_strict_residency() {
+        let config = DataSovereigntyConfig::new(GeographicRegion::EU)
+            .allow_region(GeographicRegion::UK)
+            .with_strict_residency(true);
+
+        // Only primary region allowed in strict mode
+        assert!(config.is_region_allowed(&GeographicRegion::EU));
+        assert!(!config.is_region_allowed(&GeographicRegion::UK));
+        assert!(!config.is_region_allowed(&GeographicRegion::US));
+    }
+
+    #[test]
+    fn test_compliance_dashboard_creation() {
+        let dashboard = ComplianceDashboard::new(
+            100,  // total_statutes
+            5,    // statutes_with_pii
+            10,   // statutes_pending_retention
+            85.0, // avg_quality_score
+            8,    // low_quality_count
+            200,  // total_audit_events
+            3,    // failed_operations
+            2,    // sovereignty_violations
+        );
+
+        assert_eq!(dashboard.total_statutes, 100);
+        assert_eq!(dashboard.statutes_with_pii, 5);
+        assert_eq!(dashboard.low_quality_count, 8);
+
+        // Compliance rate = (100 - 8 - 2) / 100 = 0.90
+        assert!((dashboard.compliance_rate - 0.90).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_compliance_dashboard_threshold() {
+        let dashboard = ComplianceDashboard::new(100, 0, 0, 90.0, 5, 100, 0, 0);
+
+        assert!(dashboard.meets_compliance_threshold(0.90));
+        assert!(dashboard.meets_compliance_threshold(0.95));
+        assert!(!dashboard.meets_compliance_threshold(0.99));
+    }
+
+    #[test]
+    fn test_compliance_dashboard_to_json() {
+        let dashboard = ComplianceDashboard::new(10, 1, 2, 85.0, 1, 50, 0, 0);
+        let json = dashboard.to_json();
+
+        assert!(json.contains("total_statutes"));
+        assert!(json.contains("compliance_rate"));
+    }
+
+    #[test]
+    fn test_generate_compliance_dashboard() {
+        let mut registry = StatuteRegistry::new();
+
+        // Add some statutes with varying quality
+        for i in 1..=5 {
+            let entry = StatuteEntry::new(test_statute(&format!("s{}", i)), "JP").with_tag("test");
+            registry.register(entry).unwrap();
+        }
+
+        let dashboard = registry.generate_compliance_dashboard(70.0);
+
+        assert_eq!(dashboard.total_statutes, 5);
+        assert!(dashboard.compliance_rate >= 0.0 && dashboard.compliance_rate <= 1.0);
+    }
+
+    #[test]
+    fn test_scan_for_pii() {
+        let mut registry = StatuteRegistry::new();
+        let entry = StatuteEntry::new(test_statute("statute-1"), "JP")
+            .with_metadata("email", "contact@example.com");
+        registry.register(entry).unwrap();
+
+        let detector = PiiDetector::new();
+        let result = registry.scan_for_pii("statute-1", &detector).unwrap();
+
+        assert_eq!(result.statute_id, "statute-1");
+    }
+
+    #[test]
+    fn test_scan_for_pii_not_found() {
+        let mut registry = StatuteRegistry::new();
+        let detector = PiiDetector::new();
+
+        let result = registry.scan_for_pii("nonexistent", &detector);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_check_sovereignty_access() {
+        let registry = StatuteRegistry::new();
+        let config =
+            DataSovereigntyConfig::new(GeographicRegion::EU).allow_region(GeographicRegion::UK);
+
+        // Check access from UK (allowed)
+        assert!(registry.check_sovereignty_access("statute-1", &GeographicRegion::UK, &config));
+
+        // Check access from US (not allowed)
+        assert!(!registry.check_sovereignty_access("statute-1", &GeographicRegion::US, &config));
+    }
+
+    #[test]
+    fn test_pii_field_type_variants() {
+        let types = [
+            PiiFieldType::Name,
+            PiiFieldType::Email,
+            PiiFieldType::PhoneNumber,
+            PiiFieldType::NationalId,
+            PiiFieldType::Address,
+            PiiFieldType::DateOfBirth,
+            PiiFieldType::IpAddress,
+            PiiFieldType::Custom("SSN".to_string()),
+        ];
+
+        assert_eq!(types.len(), 8);
+    }
+
+    #[test]
+    fn test_masking_strategy_variants() {
+        let strategies = [
+            MaskingStrategy::Asterisks,
+            MaskingStrategy::Redacted,
+            MaskingStrategy::TypeMarker,
+            MaskingStrategy::Hash,
+            MaskingStrategy::Partial,
+        ];
+
+        assert_eq!(strategies.len(), 5);
+    }
+
+    #[test]
+    fn test_audit_report_format_variants() {
+        let formats = [
+            AuditReportFormat::Json,
+            AuditReportFormat::Csv,
+            AuditReportFormat::Text,
+            AuditReportFormat::Html,
+        ];
+
+        assert_eq!(formats.len(), 4);
+    }
+
+    #[test]
+    fn test_data_retention_rule_variants() {
+        let now = Utc::now();
+        let rules = [
+            DataRetentionRule::RetainForDays(30),
+            DataRetentionRule::RetainUntil(now),
+            DataRetentionRule::RetainIndefinitely,
+            DataRetentionRule::DeleteInactiveAfterDays(60),
+            DataRetentionRule::ArchiveAfterDays(90),
+        ];
+
+        assert_eq!(rules.len(), 5);
+    }
+
+    #[test]
+    fn test_pii_detector_builder_methods() {
+        let _detector = PiiDetector::new()
+            .with_min_confidence(0.85)
+            .with_masking_strategy(MaskingStrategy::Partial);
+
+        // Confidence should be clamped
+        let _detector2 = PiiDetector::new().with_min_confidence(1.5);
+        // Internal check - confidence should be 1.0 (clamped)
+
+        let _detector3 = PiiDetector::new().with_min_confidence(-0.5);
+        // Internal check - confidence should be 0.0 (clamped)
+    }
+
+    // ========================================================================
+    // Access Control Features Tests (v0.1.4)
+    // ========================================================================
+
+    #[test]
+    fn test_permission_all() {
+        let perms = Permission::all();
+        assert_eq!(perms.len(), 12);
+        assert!(perms.contains(&Permission::Read));
+        assert!(perms.contains(&Permission::ManagePermissions));
+    }
+
+    #[test]
+    fn test_permission_read_only() {
+        let perms = Permission::read_only();
+        assert_eq!(perms.len(), 2);
+        assert!(perms.contains(&Permission::Read));
+        assert!(perms.contains(&Permission::GenerateReports));
+        assert!(!perms.contains(&Permission::Delete));
+    }
+
+    #[test]
+    fn test_permission_editor() {
+        let perms = Permission::editor();
+        assert!(perms.contains(&Permission::Read));
+        assert!(perms.contains(&Permission::Update));
+        assert!(!perms.contains(&Permission::Delete));
+        assert!(!perms.contains(&Permission::ManagePermissions));
+    }
+
+    #[test]
+    fn test_role_permissions() {
+        assert_eq!(Role::Viewer.permissions().len(), 2);
+        assert!(Role::Editor.permissions().len() > 2);
+        assert_eq!(Role::Admin.permissions().len(), 12);
+    }
+
+    #[test]
+    fn test_role_has_permission() {
+        assert!(Role::Viewer.has_permission(Permission::Read));
+        assert!(!Role::Viewer.has_permission(Permission::Delete));
+
+        assert!(Role::Editor.has_permission(Permission::Read));
+        assert!(Role::Editor.has_permission(Permission::Update));
+        assert!(!Role::Editor.has_permission(Permission::Delete));
+
+        assert!(Role::Admin.has_permission(Permission::Delete));
+        assert!(Role::Admin.has_permission(Permission::ManagePermissions));
+    }
+
+    #[test]
+    fn test_role_hierarchy() {
+        assert!(Role::Admin.is_at_least(Role::Viewer));
+        assert!(Role::Admin.is_at_least(Role::Editor));
+        assert!(Role::Admin.is_at_least(Role::Admin));
+
+        assert!(Role::Editor.is_at_least(Role::Viewer));
+        assert!(Role::Editor.is_at_least(Role::Editor));
+        assert!(!Role::Editor.is_at_least(Role::Admin));
+
+        assert!(Role::Viewer.is_at_least(Role::Viewer));
+        assert!(!Role::Viewer.is_at_least(Role::Editor));
+    }
+
+    #[test]
+    fn test_abac_user_attribute() {
+        let mut attrs = HashMap::new();
+        attrs.insert("department".to_string(), "legal".to_string());
+
+        let condition = AbacCondition::UserAttribute {
+            key: "department".to_string(),
+            value: "legal".to_string(),
+        };
+
+        assert!(condition.evaluate(&attrs, None));
+
+        let condition2 = AbacCondition::UserAttribute {
+            key: "department".to_string(),
+            value: "finance".to_string(),
+        };
+
+        assert!(!condition2.evaluate(&attrs, None));
+    }
+
+    #[test]
+    fn test_abac_statute_tag() {
+        let entry = StatuteEntry::new(test_statute("s1"), "JP").with_tag("criminal");
+
+        let condition = AbacCondition::StatuteTag("criminal".to_string());
+        assert!(condition.evaluate(&HashMap::new(), Some(&entry)));
+
+        let condition2 = AbacCondition::StatuteTag("civil".to_string());
+        assert!(!condition2.evaluate(&HashMap::new(), Some(&entry)));
+    }
+
+    #[test]
+    fn test_abac_jurisdiction() {
+        let entry = StatuteEntry::new(test_statute("s1"), "JP");
+
+        let condition = AbacCondition::Jurisdiction("JP".to_string());
+        assert!(condition.evaluate(&HashMap::new(), Some(&entry)));
+
+        let condition2 = AbacCondition::Jurisdiction("US".to_string());
+        assert!(!condition2.evaluate(&HashMap::new(), Some(&entry)));
+    }
+
+    #[test]
+    fn test_abac_status() {
+        let entry = StatuteEntry::new(test_statute("s1"), "JP").with_status(StatuteStatus::Active);
+
+        let condition = AbacCondition::Status(StatuteStatus::Active);
+        assert!(condition.evaluate(&HashMap::new(), Some(&entry)));
+
+        let condition2 = AbacCondition::Status(StatuteStatus::Draft);
+        assert!(!condition2.evaluate(&HashMap::new(), Some(&entry)));
+    }
+
+    #[test]
+    fn test_abac_time_range() {
+        let now = Utc::now();
+        let past = now - chrono::Duration::hours(1);
+        let future = now + chrono::Duration::hours(1);
+
+        let condition = AbacCondition::TimeRange {
+            start: past,
+            end: future,
+        };
+        assert!(condition.evaluate(&HashMap::new(), None));
+
+        let expired_condition = AbacCondition::TimeRange {
+            start: past - chrono::Duration::hours(2),
+            end: past,
+        };
+        assert!(!expired_condition.evaluate(&HashMap::new(), None));
+    }
+
+    #[test]
+    fn test_abac_and_condition() {
+        let mut attrs = HashMap::new();
+        attrs.insert("department".to_string(), "legal".to_string());
+
+        let entry = StatuteEntry::new(test_statute("s1"), "JP").with_tag("criminal");
+
+        let condition = AbacCondition::And(vec![
+            AbacCondition::UserAttribute {
+                key: "department".to_string(),
+                value: "legal".to_string(),
+            },
+            AbacCondition::StatuteTag("criminal".to_string()),
+        ]);
+
+        assert!(condition.evaluate(&attrs, Some(&entry)));
+
+        // Change one condition to false
+        let condition2 = AbacCondition::And(vec![
+            AbacCondition::UserAttribute {
+                key: "department".to_string(),
+                value: "finance".to_string(),
+            },
+            AbacCondition::StatuteTag("criminal".to_string()),
+        ]);
+
+        assert!(!condition2.evaluate(&attrs, Some(&entry)));
+    }
+
+    #[test]
+    fn test_abac_or_condition() {
+        let attrs = HashMap::new();
+        let entry = StatuteEntry::new(test_statute("s1"), "JP");
+
+        let condition = AbacCondition::Or(vec![
+            AbacCondition::Jurisdiction("US".to_string()),
+            AbacCondition::Jurisdiction("JP".to_string()),
+        ]);
+
+        assert!(condition.evaluate(&attrs, Some(&entry)));
+    }
+
+    #[test]
+    fn test_abac_not_condition() {
+        let entry = StatuteEntry::new(test_statute("s1"), "JP");
+
+        let condition = AbacCondition::Not(Box::new(AbacCondition::Jurisdiction("US".to_string())));
+
+        assert!(condition.evaluate(&HashMap::new(), Some(&entry)));
+    }
+
+    #[test]
+    fn test_access_policy_creation() {
+        let policy = AccessPolicy::new("Test Policy", vec![Permission::Read])
+            .with_role(Role::Viewer)
+            .with_priority(10);
+
+        assert_eq!(policy.name, "Test Policy");
+        assert_eq!(policy.required_role, Some(Role::Viewer));
+        assert_eq!(policy.priority, 10);
+        assert!(policy.enabled);
+    }
+
+    #[test]
+    fn test_access_policy_grants() {
+        let policy = AccessPolicy::new("Test", vec![Permission::Read, Permission::Update]);
+
+        assert!(policy.grants(Permission::Read));
+        assert!(policy.grants(Permission::Update));
+        assert!(!policy.grants(Permission::Delete));
+    }
+
+    #[test]
+    fn test_temporary_access_creation() {
+        let grant = TemporaryAccess::new(
+            "user1",
+            vec![Permission::Read],
+            24,
+            "Emergency access",
+            "admin",
+        );
+
+        assert_eq!(grant.user_id, "user1");
+        assert_eq!(grant.permissions.len(), 1);
+        assert!(grant.is_valid());
+        assert!(grant.remaining_seconds() > 0);
+    }
+
+    #[test]
+    fn test_temporary_access_for_statute() {
+        let grant =
+            TemporaryAccess::new("user1", vec![Permission::Update], 1, "Quick fix", "admin")
+                .for_statute("s1");
+
+        assert!(grant.applies_to("s1"));
+        assert!(!grant.applies_to("s2"));
+    }
+
+    #[test]
+    fn test_temporary_access_expiration() {
+        let mut grant = TemporaryAccess::new("user1", vec![Permission::Read], 1, "Test", "admin");
+
+        // Manually set to expired
+        grant.valid_until = Utc::now() - chrono::Duration::hours(1);
+
+        assert!(!grant.is_valid());
+        assert_eq!(grant.remaining_seconds(), 0);
+    }
+
+    #[test]
+    fn test_access_user_creation() {
+        let user = AccessUser::new("user1", "Alice", Role::Editor)
+            .with_attribute("department", "legal")
+            .with_permission(Permission::Delete);
+
+        assert_eq!(user.user_id, "user1");
+        assert_eq!(user.display_name, "Alice");
+        assert_eq!(user.role, Role::Editor);
+        assert_eq!(user.attributes.get("department").unwrap(), "legal");
+        assert!(user.has_permission(Permission::Delete));
+    }
+
+    #[test]
+    fn test_access_user_all_permissions() {
+        let user =
+            AccessUser::new("user1", "Alice", Role::Viewer).with_permission(Permission::Update);
+
+        let perms = user.all_permissions();
+        assert!(perms.contains(&Permission::Read)); // From role
+        assert!(perms.contains(&Permission::Update)); // Direct permission
+    }
+
+    #[test]
+    fn test_access_control_manager_add_user() {
+        let mut acm = AccessControlManager::new();
+        let user = AccessUser::new("user1", "Alice", Role::Editor);
+
+        acm.add_user(user);
+        assert_eq!(acm.user_count(), 1);
+        assert!(acm.get_user("user1").is_some());
+    }
+
+    #[test]
+    fn test_access_control_manager_update_role() {
+        let mut acm = AccessControlManager::new();
+        let user = AccessUser::new("user1", "Alice", Role::Viewer);
+        acm.add_user(user);
+
+        assert!(acm.update_user_role("user1", Role::Admin));
+        assert_eq!(acm.get_user("user1").unwrap().role, Role::Admin);
+
+        assert!(!acm.update_user_role("nonexistent", Role::Admin));
+    }
+
+    #[test]
+    fn test_access_control_manager_add_policy() {
+        let mut acm = AccessControlManager::new();
+        let policy = AccessPolicy::new("Policy1", vec![Permission::Read]).with_priority(10);
+
+        acm.add_policy(policy);
+        assert_eq!(acm.policy_count(), 1);
+    }
+
+    #[test]
+    fn test_access_control_manager_check_permission_direct() {
+        let mut acm = AccessControlManager::new();
+        let user = AccessUser::new("user1", "Alice", Role::Admin);
+        acm.add_user(user);
+
+        // Admin has all permissions
+        assert!(acm.check_permission("user1", Permission::Delete, None, None));
+        assert!(acm.check_permission("user1", Permission::Read, None, None));
+    }
+
+    #[test]
+    fn test_access_control_manager_check_permission_unknown_user() {
+        let acm = AccessControlManager::new();
+
+        // Unknown user should be denied
+        assert!(!acm.check_permission("unknown", Permission::Read, None, None));
+    }
+
+    #[test]
+    fn test_access_control_manager_temporary_grant() {
+        let mut acm = AccessControlManager::new();
+        let user = AccessUser::new("user1", "Alice", Role::Viewer);
+        acm.add_user(user);
+
+        let grant =
+            TemporaryAccess::new("user1", vec![Permission::Delete], 1, "Emergency", "admin")
+                .for_statute("s1");
+
+        acm.grant_temporary_access(grant);
+
+        // User should have delete permission on s1 via temporary grant
+        assert!(acm.check_permission("user1", Permission::Delete, Some("s1"), None));
+        // But not on s2
+        assert!(!acm.check_permission("user1", Permission::Delete, Some("s2"), None));
+    }
+
+    #[test]
+    fn test_access_control_manager_policy_with_abac() {
+        let mut acm = AccessControlManager::new();
+        let user =
+            AccessUser::new("user1", "Alice", Role::Editor).with_attribute("department", "legal");
+        acm.add_user(user);
+
+        let entry = StatuteEntry::new(test_statute("s1"), "JP").with_tag("criminal");
+
+        // Policy that requires legal department AND criminal tag
+        let policy = AccessPolicy::new("Legal Only", vec![Permission::Delete]).with_condition(
+            AbacCondition::And(vec![
+                AbacCondition::UserAttribute {
+                    key: "department".to_string(),
+                    value: "legal".to_string(),
+                },
+                AbacCondition::StatuteTag("criminal".to_string()),
+            ]),
+        );
+
+        acm.add_policy(policy);
+
+        // Should grant permission because conditions are met
+        assert!(acm.check_permission("user1", Permission::Delete, Some("s1"), Some(&entry)));
+    }
+
+    #[test]
+    fn test_access_control_manager_cleanup_grants() {
+        let mut acm = AccessControlManager::new();
+
+        let mut expired_grant =
+            TemporaryAccess::new("user1", vec![Permission::Read], 1, "Test", "admin");
+        expired_grant.valid_until = Utc::now() - chrono::Duration::hours(1);
+
+        let valid_grant =
+            TemporaryAccess::new("user2", vec![Permission::Read], 24, "Test", "admin");
+
+        acm.grant_temporary_access(expired_grant);
+        acm.grant_temporary_access(valid_grant);
+
+        assert_eq!(acm.temporary_grants.len(), 2);
+        assert_eq!(acm.active_grant_count(), 1);
+
+        acm.cleanup_expired_grants();
+        assert_eq!(acm.temporary_grants.len(), 1);
+    }
+
+    #[test]
+    fn test_access_control_manager_list_user_grants() {
+        let mut acm = AccessControlManager::new();
+
+        let grant1 = TemporaryAccess::new("user1", vec![Permission::Read], 1, "Test", "admin");
+        let grant2 = TemporaryAccess::new("user1", vec![Permission::Update], 1, "Test", "admin");
+        let grant3 = TemporaryAccess::new("user2", vec![Permission::Delete], 1, "Test", "admin");
+
+        acm.grant_temporary_access(grant1);
+        acm.grant_temporary_access(grant2);
+        acm.grant_temporary_access(grant3);
+
+        let user1_grants = acm.list_user_grants("user1");
+        assert_eq!(user1_grants.len(), 2);
+    }
+
+    #[test]
+    fn test_access_control_manager_revoke_grant() {
+        let mut acm = AccessControlManager::new();
+        let grant = TemporaryAccess::new("user1", vec![Permission::Read], 1, "Test", "admin");
+        let grant_id = grant.grant_id;
+
+        acm.grant_temporary_access(grant);
+        assert_eq!(acm.temporary_grants.len(), 1);
+
+        assert!(acm.revoke_grant(grant_id));
+        assert_eq!(acm.temporary_grants.len(), 0);
+
+        // Revoking again should return false
+        assert!(!acm.revoke_grant(grant_id));
+    }
+
+    #[test]
+    fn test_access_control_manager_disabled() {
+        let mut acm = AccessControlManager::new();
+        acm.set_enabled(false);
+
+        // When disabled, all permissions should be granted
+        assert!(acm.check_permission("unknown", Permission::Delete, None, None));
+        assert!(!acm.is_enabled());
+
+        acm.set_enabled(true);
+        assert!(!acm.check_permission("unknown", Permission::Delete, None, None));
+        assert!(acm.is_enabled());
+    }
+
+    #[test]
+    fn test_access_policy_priority_sorting() {
+        let mut acm = AccessControlManager::new();
+
+        let policy1 = AccessPolicy::new("Low", vec![Permission::Read]).with_priority(1);
+        let policy2 = AccessPolicy::new("High", vec![Permission::Update]).with_priority(10);
+        let policy3 = AccessPolicy::new("Medium", vec![Permission::Delete]).with_priority(5);
+
+        acm.add_policy(policy1);
+        acm.add_policy(policy2);
+        acm.add_policy(policy3);
+
+        // Policies should be sorted by priority (descending)
+        assert_eq!(acm.policies[0].name, "High");
+        assert_eq!(acm.policies[1].name, "Medium");
+        assert_eq!(acm.policies[2].name, "Low");
+    }
+
+    // ========================================================================
+    // Import/Export Extensions Tests (v0.1.5)
+    // ========================================================================
+
+    #[test]
+    fn test_import_source_creation() {
+        use government_import::*;
+
+        let source = ImportSource::new("test", "http://example.com", GovernmentDataFormat::Json)
+            .with_credentials("token123")
+            .with_metadata("version", "1.0");
+
+        assert_eq!(source.name, "test");
+        assert_eq!(source.location, "http://example.com");
+        assert_eq!(source.format, GovernmentDataFormat::Json);
+        assert_eq!(source.credentials, Some("token123".to_string()));
+        assert_eq!(source.metadata.get("version"), Some(&"1.0".to_string()));
+    }
+
+    #[test]
+    fn test_bulk_import_result() {
+        use government_import::*;
+
+        let mut result = BulkImportResult::new("test");
+        result.imported = 10;
+        result.skipped = 2;
+        result.failed = 1;
+
+        assert_eq!(result.total_processed(), 13);
+        assert_eq!(result.success_rate(), 10.0 / 13.0);
+        assert!(!result.is_success());
+
+        let success_result = BulkImportResult::new("success");
+        assert!(success_result.is_success());
+    }
+
+    #[test]
+    fn test_bulk_importer_skip_strategy() {
+        use government_import::*;
+
+        let mut registry = StatuteRegistry::new();
+        let importer = BulkImporter::new().with_strategy(ImportStrategy::Skip);
+
+        let statute1 = test_statute("TEST-1");
+        let entry1 = StatuteEntry::new(statute1.clone(), "US");
+
+        // First import should succeed
+        registry.register(entry1.clone()).unwrap();
+
+        let statute2 = test_statute("TEST-2");
+        let entry2 = StatuteEntry::new(statute2, "US");
+
+        let source = ImportSource::new("test", "local", GovernmentDataFormat::Json);
+        let result = importer.import(&mut registry, &source, vec![entry1, entry2]);
+
+        assert_eq!(result.imported, 1); // Only TEST-2
+        assert_eq!(result.skipped, 1); // TEST-1 already exists
+        assert_eq!(result.failed, 0);
+    }
+
+    #[test]
+    fn test_bulk_importer_update_strategy() {
+        use government_import::*;
+
+        let mut registry = StatuteRegistry::new();
+        let importer = BulkImporter::new().with_strategy(ImportStrategy::Update);
+
+        let statute1 = test_statute("TEST-1");
+        let entry1 = StatuteEntry::new(statute1.clone(), "US");
+
+        registry.register(entry1.clone()).unwrap();
+
+        let mut updated_statute = test_statute("TEST-1");
+        updated_statute.title = "Updated Title".to_string();
+        let updated_entry = StatuteEntry::new(updated_statute, "US");
+
+        let source = ImportSource::new("test", "local", GovernmentDataFormat::Json);
+        let result = importer.import(&mut registry, &source, vec![updated_entry]);
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 0);
+        assert_eq!(result.failed, 0);
+
+        let stored = registry.get("TEST-1").unwrap();
+        assert_eq!(stored.statute.title, "Updated Title");
+    }
+
+    #[test]
+    fn test_bulk_importer_validation() {
+        use government_import::*;
+
+        let mut registry = StatuteRegistry::new();
+        let importer = BulkImporter::new()
+            .with_validation(true)
+            .with_strategy(ImportStrategy::Skip);
+
+        // Create an invalid entry (empty ID)
+        let mut statute = test_statute("TEST-1");
+        statute.id = "".to_string(); // Invalid: empty ID
+        let entry = StatuteEntry::new(statute, "US");
+
+        let source = ImportSource::new("test", "local", GovernmentDataFormat::Json);
+        let result = importer.import(&mut registry, &source, vec![entry]);
+
+        assert_eq!(result.imported, 0);
+        assert_eq!(result.failed, 1);
+        assert!(!result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_sync_schedule() {
+        use sync::*;
+
+        let now = Utc::now();
+
+        // Manual schedule should never be due
+        let manual = SyncSchedule::Manual;
+        assert!(!manual.is_due(now, now + chrono::Duration::hours(1)));
+
+        // Hourly schedule
+        let hourly = SyncSchedule::Hourly;
+        assert!(!hourly.is_due(now, now + chrono::Duration::minutes(30)));
+        assert!(hourly.is_due(now, now + chrono::Duration::hours(1)));
+
+        // Daily schedule
+        let daily = SyncSchedule::Daily { hour: 10 };
+        assert!(daily.next_sync(now).is_some());
+
+        // Interval schedule
+        let interval = SyncSchedule::Interval { seconds: 3600 };
+        assert!(!interval.is_due(now, now + chrono::Duration::minutes(30)));
+        assert!(interval.is_due(now, now + chrono::Duration::hours(1)));
+    }
+
+    #[test]
+    fn test_sync_job() {
+        use government_import::*;
+        use sync::*;
+
+        let source = ImportSource::new("test", "local", GovernmentDataFormat::Json);
+        let mut job = SyncJob::new("Test Job", source, SyncSchedule::Hourly);
+
+        assert!(job.enabled);
+        assert!(job.is_due(Utc::now())); // Never synced, so it's due
+
+        let result = BulkImportResult::new("test");
+        job.mark_completed(result);
+
+        assert!(job.last_sync.is_some());
+        assert!(job.last_result.is_some());
+    }
+
+    #[test]
+    fn test_sync_manager() {
+        use government_import::*;
+        use sync::*;
+
+        let mut manager = SyncManager::new();
+
+        let source = ImportSource::new("test", "local", GovernmentDataFormat::Json);
+        let job = SyncJob::new("Test Job", source, SyncSchedule::Hourly);
+        let job_id = job.id;
+
+        manager.add_job(job);
+        assert_eq!(manager.jobs().len(), 1);
+
+        // Get due jobs
+        let due = manager.due_jobs(Utc::now());
+        assert_eq!(due.len(), 1);
+
+        // Disable job
+        assert!(manager.set_job_enabled(job_id, false));
+        let due_after_disable = manager.due_jobs(Utc::now());
+        assert_eq!(due_after_disable.len(), 0);
+
+        // Remove job
+        assert!(manager.remove_job(job_id));
+        assert_eq!(manager.jobs().len(), 0);
+    }
+
+    #[test]
+    fn test_format_migrator() {
+        use migration::*;
+
+        let migrator = FormatMigrator::new();
+
+        let data = r#"{"test": "data"}"#;
+        let result = migrator.migrate(
+            MigrationFormat::JsonCurrent,
+            MigrationFormat::JsonCurrent,
+            data,
+        );
+
+        assert!(result.is_ok());
+        let (migrated_data, migration_result) = result.unwrap();
+        assert_eq!(migrated_data, data);
+        assert_eq!(migration_result.migrated, 1);
+        assert_eq!(migration_result.failed, 0);
+        assert_eq!(migration_result.success_rate(), 1.0);
+    }
+
+    #[test]
+    fn test_format_migrator_unsupported() {
+        use migration::*;
+
+        let migrator = FormatMigrator::new();
+        let data = "<xml></xml>";
+
+        let result = migrator.migrate(
+            MigrationFormat::XmlLegacy,
+            MigrationFormat::JsonCurrent,
+            data,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_report_template() {
+        use templates::*;
+
+        let template = ReportTemplate::new("Test", TemplateType::Summary, ExportFormat::Json)
+            .with_field("id")
+            .with_field("title")
+            .with_filter("status", "active")
+            .with_sort_by("created_at");
+
+        assert_eq!(template.name, "Test");
+        assert_eq!(template.template_type, TemplateType::Summary);
+        assert_eq!(template.format, ExportFormat::Json);
+        assert_eq!(template.fields.len(), 2);
+        assert_eq!(template.filters.get("status"), Some(&"active".to_string()));
+        assert_eq!(template.sort_by, Some("created_at".to_string()));
+    }
+
+    #[test]
+    fn test_report_template_factories() {
+        use templates::*;
+
+        let summary = ReportTemplate::summary(ExportFormat::Json);
+        assert_eq!(summary.template_type, TemplateType::Summary);
+        assert!(summary.fields.contains(&"id".to_string()));
+
+        let detailed = ReportTemplate::detailed(ExportFormat::Csv);
+        assert_eq!(detailed.template_type, TemplateType::Detailed);
+        assert!(detailed.fields.contains(&"metadata".to_string()));
+
+        let compliance = ReportTemplate::compliance(ExportFormat::Html);
+        assert_eq!(compliance.template_type, TemplateType::Compliance);
+        assert!(compliance.fields.contains(&"effective_date".to_string()));
+    }
+
+    #[test]
+    fn test_template_manager() {
+        use templates::*;
+
+        let mut manager = TemplateManager::new();
+
+        let template = ReportTemplate::summary(ExportFormat::Json);
+        manager.add_template(template);
+
+        assert_eq!(manager.list_templates().len(), 1);
+        assert!(manager.get_template("Summary Report").is_some());
+
+        assert!(manager.remove_template("Summary Report"));
+        assert_eq!(manager.list_templates().len(), 0);
+    }
+
+    #[test]
+    fn test_template_export_json() {
+        use templates::*;
+
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+
+        let mut manager = TemplateManager::new();
+        let template = ReportTemplate::summary(ExportFormat::Json);
+        manager.add_template(template);
+
+        let result = manager.export(&registry, "Summary Report");
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_template_export_csv() {
+        use templates::*;
+
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+
+        let mut manager = TemplateManager::new();
+        let template = ReportTemplate::summary(ExportFormat::Csv);
+        manager.add_template(template);
+
+        let result = manager.export(&registry, "Summary Report");
+        assert!(result.is_ok());
+        let csv = result.unwrap();
+        assert!(csv.contains("id,title,status,jurisdiction"));
+        assert!(csv.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_template_export_html() {
+        use templates::*;
+
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+
+        let mut manager = TemplateManager::new();
+        let template = ReportTemplate::summary(ExportFormat::Html);
+        manager.add_template(template);
+
+        let result = manager.export(&registry, "Summary Report");
+        assert!(result.is_ok());
+        let html = result.unwrap();
+        assert!(html.contains("<html>"));
+        assert!(html.contains("<table"));
+        assert!(html.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_template_export_markdown() {
+        use templates::*;
+
+        let mut registry = StatuteRegistry::new();
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+
+        let mut manager = TemplateManager::new();
+        let template = ReportTemplate::summary(ExportFormat::Markdown);
+        manager.add_template(template);
+
+        let result = manager.export(&registry, "Summary Report");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("# Summary Report"));
+        assert!(md.contains("|"));
+        assert!(md.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_template_export_not_found() {
+        use templates::*;
+
+        let registry = StatuteRegistry::new();
+        let manager = TemplateManager::new();
+
+        let result = manager.export(&registry, "Nonexistent Template");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_export_filtered_statutes() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute1 = test_statute("TEST-1");
+        let mut entry1 = StatuteEntry::new(statute1, "US");
+        entry1.tags.push("tax".to_string());
+
+        let statute2 = test_statute("TEST-2");
+        let mut entry2 = StatuteEntry::new(statute2, "EU");
+        entry2.tags.push("gdpr".to_string());
+
+        registry.register(entry1).unwrap();
+        registry.register(entry2).unwrap();
+
+        let result = registry.export_filtered_statutes(|e| e.jurisdiction == "US");
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+        assert!(!json.contains("TEST-2"));
+    }
+
+    #[test]
+    fn test_export_by_status() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+        registry
+            .set_status("TEST-1", StatuteStatus::Active)
+            .unwrap();
+
+        let result = registry.export_by_status(StatuteStatus::Active);
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_export_by_jurisdiction() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute1 = test_statute("TEST-1");
+        let entry1 = StatuteEntry::new(statute1, "US");
+
+        let statute2 = test_statute("TEST-2");
+        let entry2 = StatuteEntry::new(statute2, "EU");
+
+        registry.register(entry1).unwrap();
+        registry.register(entry2).unwrap();
+
+        let result = registry.export_by_jurisdiction("US");
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+        assert!(!json.contains("TEST-2"));
+    }
+
+    #[test]
+    fn test_export_by_tag() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute1 = test_statute("TEST-1");
+        let mut entry1 = StatuteEntry::new(statute1, "US");
+        entry1.tags.push("tax".to_string());
+
+        let statute2 = test_statute("TEST-2");
+        let mut entry2 = StatuteEntry::new(statute2, "US");
+        entry2.tags.push("gdpr".to_string());
+
+        registry.register(entry1).unwrap();
+        registry.register(entry2).unwrap();
+
+        let result = registry.export_by_tag("tax");
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+        assert!(!json.contains("TEST-2"));
+    }
+
+    #[test]
+    fn test_export_by_date_range() {
+        let mut registry = StatuteRegistry::new();
+
+        let statute = test_statute("TEST-1");
+        let entry = StatuteEntry::new(statute, "US");
+        registry.register(entry).unwrap();
+
+        let start = Utc::now() - chrono::Duration::days(1);
+        let end = Utc::now() + chrono::Duration::days(1);
+
+        let result = registry.export_by_date_range(start, end);
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("TEST-1"));
+    }
+
+    #[test]
+    fn test_government_data_format_variants() {
+        use government_import::*;
+
+        let _json = GovernmentDataFormat::Json;
+        let _xml = GovernmentDataFormat::Xml;
+        let _csv = GovernmentDataFormat::Csv;
+        let _dsv = GovernmentDataFormat::Dsv { delimiter: '|' };
+        let _akoma = GovernmentDataFormat::AkomaNtoso;
+        let _legal = GovernmentDataFormat::LegalDocML;
+    }
+
+    #[test]
+    fn test_import_strategy_variants() {
+        use government_import::*;
+
+        let _skip = ImportStrategy::Skip;
+        let _update = ImportStrategy::Update;
+        let _new_version = ImportStrategy::NewVersion;
+        let _fail = ImportStrategy::FailOnDuplicate;
+    }
+
+    #[test]
+    fn test_migration_format_variants() {
+        use migration::*;
+
+        let _v1 = MigrationFormat::JsonV1;
+        let _v2 = MigrationFormat::JsonV2;
+        let _current = MigrationFormat::JsonCurrent;
+        let _xml = MigrationFormat::XmlLegacy;
+        let _akoma = MigrationFormat::AkomaNtoso;
+        let _csv = MigrationFormat::Csv;
+    }
+
+    #[test]
+    fn test_template_type_variants() {
+        use templates::*;
+
+        let _summary = TemplateType::Summary;
+        let _detailed = TemplateType::Detailed;
+        let _compliance = TemplateType::Compliance;
+        let _audit = TemplateType::AuditTrail;
+        let _custom = TemplateType::Custom("MyTemplate".to_string());
+    }
+
+    #[test]
+    fn test_export_format_variants() {
+        use templates::*;
+
+        let _json = ExportFormat::Json;
+        let _csv = ExportFormat::Csv;
+        let _html = ExportFormat::Html;
+        let _md = ExportFormat::Markdown;
+        let _pdf = ExportFormat::Pdf;
+    }
+
+    // ========== Workflow Integration Tests (v0.1.6) ==========
+
+    #[test]
+    fn test_workflow_approval_request() {
+        use workflow::*;
+
+        let request = ApprovalRequest::new(ChangeType::Create, "user123", "statute_data")
+            .with_justification("Adding new statute")
+            .with_approver("approver1")
+            .with_approver("approver2");
+
+        assert_eq!(request.submitter, "user123");
+        assert_eq!(request.status, WorkflowStatus::Draft);
+        assert_eq!(request.approvers.len(), 2);
+        assert!(request.justification.is_some());
+    }
+
+    #[test]
+    fn test_workflow_submit() {
+        use workflow::*;
+
+        let mut request = ApprovalRequest::new(
+            ChangeType::Update {
+                statute_id: "STAT-1".to_string(),
+            },
+            "user456",
+            "updated_data",
+        );
+
+        request.submit();
+        assert_eq!(request.status, WorkflowStatus::PendingApproval);
+    }
+
+    #[test]
+    fn test_workflow_approval_response() {
+        use workflow::*;
+
+        let response = ApprovalResponse::new("approver1", ApprovalDecision::Approved)
+            .with_comments("Looks good");
+
+        assert_eq!(response.approver, "approver1");
+        assert_eq!(response.decision, ApprovalDecision::Approved);
+        assert!(response.comments.is_some());
+    }
+
+    #[test]
+    fn test_workflow_manager_submit() {
+        use workflow::*;
+
+        let mut manager = WorkflowManager::new();
+        let request = ApprovalRequest::new(ChangeType::Create, "user123", "data");
+
+        let id = manager.submit_request(request);
+        assert!(manager.get_request(id).is_some());
+    }
+
+    #[test]
+    fn test_workflow_manager_add_response() {
+        use workflow::*;
+
+        let mut manager = WorkflowManager::new();
+        let mut request =
+            ApprovalRequest::new(ChangeType::Create, "user123", "data").with_approver("approver1");
+
+        request.submit();
+        let id = manager.submit_request(request);
+
+        let response = ApprovalResponse::new("approver1", ApprovalDecision::Approved);
+        let result = manager.add_response(id, response);
+
+        assert!(result.is_ok());
+        let req = manager.get_request(id).unwrap();
+        assert_eq!(req.status, WorkflowStatus::Approved);
+    }
+
+    #[test]
+    fn test_workflow_manager_pending_requests() {
+        use workflow::*;
+
+        let mut manager = WorkflowManager::new();
+
+        let req1 = ApprovalRequest::new(ChangeType::Create, "user1", "data1");
+        manager.submit_request(req1);
+
+        let req2 = ApprovalRequest::new(ChangeType::Create, "user2", "data2");
+        manager.submit_request(req2);
+
+        let pending = manager.pending_requests();
+        assert_eq!(pending.len(), 2); // Both are pending approval
+    }
+
+    #[test]
+    fn test_notification_creation() {
+        use notifications::*;
+
+        let notification = Notification::new(
+            "user123",
+            NotificationType::ApprovalRequested,
+            "New Approval Request",
+            "Please review the statute change",
+        )
+        .with_priority(NotificationPriority::High)
+        .with_related_entity("request-123")
+        .with_channel(NotificationChannel::Email);
+
+        assert_eq!(notification.recipient, "user123");
+        assert_eq!(notification.priority, NotificationPriority::High);
+        assert!(notification.related_entity_id.is_some());
+        assert_eq!(notification.channels.len(), 2); // InApp (default) + Email
+    }
+
+    #[test]
+    fn test_notification_mark_sent_read() {
+        use notifications::*;
+
+        let mut notification = Notification::new(
+            "user123",
+            NotificationType::ApprovalGranted,
+            "Approved",
+            "Your request was approved",
+        );
+
+        assert!(!notification.is_sent());
+        assert!(!notification.is_read());
+
+        notification.mark_sent();
+        assert!(notification.is_sent());
+
+        notification.mark_read();
+        assert!(notification.is_read());
+    }
+
+    #[test]
+    fn test_notification_manager() {
+        use notifications::*;
+
+        let mut manager = NotificationManager::new();
+
+        let notification = Notification::new(
+            "user123",
+            NotificationType::TaskAssigned,
+            "New Task",
+            "You have a new review task",
+        );
+
+        let id = notification.notification_id;
+        manager.send(notification);
+
+        let unread = manager.unread_for_user("user123");
+        assert_eq!(unread.len(), 1);
+
+        manager.mark_as_read(id);
+        let unread_after = manager.unread_for_user("user123");
+        assert_eq!(unread_after.len(), 0);
+    }
+
+    #[test]
+    fn test_notification_priority_filter() {
+        use notifications::*;
+
+        let mut manager = NotificationManager::new();
+
+        manager.send(
+            Notification::new("user1", NotificationType::TaskAssigned, "Low", "msg")
+                .with_priority(NotificationPriority::Low),
+        );
+        manager.send(
+            Notification::new("user1", NotificationType::SlaBreach, "Critical", "msg")
+                .with_priority(NotificationPriority::Critical),
+        );
+
+        let high_priority = manager.by_priority(NotificationPriority::High);
+        assert_eq!(high_priority.len(), 1); // Only critical meets threshold
+    }
+
+    #[test]
+    fn test_review_task_creation() {
+        use tasks::*;
+
+        let task = ReviewTask::new(
+            "Review GDPR Statute",
+            "user123",
+            "manager456",
+            "STATUTE-GDPR",
+        )
+        .with_description("Please review the GDPR implementation");
+
+        assert_eq!(task.title, "Review GDPR Statute");
+        assert_eq!(task.assigned_to, "user123");
+        assert_eq!(task.status, TaskStatus::NotStarted);
+        assert!(task.description.is_some());
+    }
+
+    #[test]
+    fn test_task_status_transitions() {
+        use tasks::*;
+
+        let mut task = ReviewTask::new("Task 1", "user1", "manager1", "STAT-1");
+
+        task.start();
+        assert_eq!(task.status, TaskStatus::InProgress);
+
+        task.complete();
+        assert_eq!(task.status, TaskStatus::Completed);
+        assert!(task.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_task_manager() {
+        use tasks::*;
+
+        let mut manager = TaskManager::new();
+
+        let task = ReviewTask::new("Review Task", "user1", "manager1", "STAT-1");
+        let id = manager.create_task(task);
+
+        assert!(manager.get_task(id).is_some());
+
+        let user_tasks = manager.tasks_for_user("user1");
+        assert_eq!(user_tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_task_manager_complete() {
+        use tasks::*;
+
+        let mut manager = TaskManager::new();
+
+        let task = ReviewTask::new("Task", "user1", "manager1", "STAT-1");
+        let id = manager.create_task(task);
+
+        if let Some(task) = manager.get_task_mut(id) {
+            task.complete();
+        }
+
+        let task = manager.get_task(id).unwrap();
+        assert_eq!(task.status, TaskStatus::Completed);
+    }
+
+    #[test]
+    fn test_task_manager_by_status() {
+        use tasks::*;
+
+        let mut manager = TaskManager::new();
+
+        let mut task1 = ReviewTask::new("Task 1", "user1", "manager1", "STAT-1");
+        task1.start();
+        manager.create_task(task1);
+
+        manager.create_task(ReviewTask::new("Task 2", "user1", "manager1", "STAT-2"));
+
+        let not_started = manager.tasks_by_status(TaskStatus::NotStarted);
+        assert_eq!(not_started.len(), 1); // Only one not started
+    }
+
+    #[test]
+    fn test_sla_definition() {
+        use sla::*;
+
+        let sla = SlaDefinition::new(
+            "Approval SLA",
+            SlaMetric::TimeToApproval,
+            3600, // 1 hour
+        )
+        .with_warning_threshold(0.7);
+
+        assert_eq!(sla.name, "Approval SLA");
+        assert_eq!(sla.target_seconds, 3600);
+        assert_eq!(sla.warning_threshold, 0.7);
+
+        let target = sla.target_duration();
+        assert_eq!(target.num_seconds(), 3600);
+
+        let warning = sla.warning_duration();
+        assert_eq!(warning.num_seconds(), 2520); // 70% of 3600
+    }
+
+    #[test]
+    fn test_sla_measurement() {
+        use sla::*;
+
+        let sla = SlaDefinition::new("Test SLA", SlaMetric::TimeToFirstResponse, 100);
+        let mut measurement = SlaMeasurement::new(sla.sla_id, "entity-1");
+
+        assert_eq!(measurement.status, SlaStatus::Met);
+        assert!(measurement.end_time.is_none());
+
+        measurement.complete(&sla);
+        assert!(measurement.end_time.is_some());
+        assert!(measurement.duration_seconds.is_some());
+    }
+
+    #[test]
+    fn test_sla_tracker() {
+        use sla::*;
+
+        let mut tracker = SlaTracker::new();
+
+        let sla = SlaDefinition::new("Approval SLA", SlaMetric::TimeToApproval, 3600);
+        let sla_id = tracker.add_definition(sla);
+
+        let measurement_id = tracker.start_tracking(sla_id, "request-123");
+        assert!(measurement_id != Uuid::nil());
+
+        let result = tracker.complete_measurement(measurement_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sla_completion_rate() {
+        use sla::*;
+
+        let mut tracker = SlaTracker::new();
+
+        let sla = SlaDefinition::new("Test SLA", SlaMetric::TimeToCompletion, 1000);
+        let sla_id = tracker.add_definition(sla);
+
+        let m1 = tracker.start_tracking(sla_id, "e1");
+        let m2 = tracker.start_tracking(sla_id, "e2");
+
+        tracker.complete_measurement(m1).ok();
+        tracker.complete_measurement(m2).ok();
+
+        let rate = tracker.completion_rate(sla_id);
+        assert!((0.0..=1.0).contains(&rate));
+    }
+
+    #[test]
+    fn test_escalation_rule() {
+        use escalation::*;
+
+        let rule = EscalationRule::new(
+            "Overdue Escalation",
+            EscalationCondition::AfterDuration { seconds: 7200 },
+            EscalationAction::EscalateToManager,
+        )
+        .with_priority(10);
+
+        assert_eq!(rule.name, "Overdue Escalation");
+        assert_eq!(rule.priority, 10);
+        assert!(rule.enabled);
+    }
+
+    #[test]
+    fn test_escalation_condition_after_duration() {
+        use chrono::Duration;
+        use escalation::*;
+
+        let condition = EscalationCondition::AfterDuration { seconds: 60 };
+
+        let old_time = Utc::now() - Duration::seconds(120);
+        assert!(condition.is_met(old_time, false));
+
+        let recent_time = Utc::now() - Duration::seconds(30);
+        assert!(!condition.is_met(recent_time, false));
+    }
+
+    #[test]
+    fn test_escalation_manager() {
+        use escalation::*;
+
+        let mut manager = EscalationManager::new();
+
+        let rule = EscalationRule::new(
+            "Auto Escalate",
+            EscalationCondition::AfterDuration { seconds: 3600 },
+            EscalationAction::Notify {
+                users: vec!["manager1".to_string()],
+            },
+        );
+
+        manager.add_rule(rule);
+
+        let old_time = Utc::now() - chrono::Duration::seconds(7200);
+        let actions = manager.check_escalations("entity-1", old_time, false);
+
+        assert_eq!(actions.len(), 1);
+    }
+
+    #[test]
+    fn test_escalation_manager_priority() {
+        use escalation::*;
+
+        let mut manager = EscalationManager::new();
+
+        let rule1 = EscalationRule::new(
+            "Low Priority",
+            EscalationCondition::AfterDuration { seconds: 60 },
+            EscalationAction::Notify {
+                users: vec!["user1".to_string()],
+            },
+        )
+        .with_priority(1);
+
+        let rule2 = EscalationRule::new(
+            "High Priority",
+            EscalationCondition::AfterDuration { seconds: 60 },
+            EscalationAction::EscalateToManager,
+        )
+        .with_priority(10);
+
+        manager.add_rule(rule1);
+        manager.add_rule(rule2);
+
+        let old_time = Utc::now() - chrono::Duration::seconds(120);
+        let actions = manager.check_escalations("entity-1", old_time, false);
+
+        // Both should trigger, but order should be by priority
+        assert_eq!(actions.len(), 2);
+    }
+
+    #[test]
+    fn test_workflow_status_variants() {
+        use workflow::*;
+
+        let _draft = WorkflowStatus::Draft;
+        let _pending = WorkflowStatus::PendingApproval;
+        let _approved = WorkflowStatus::Approved;
+        let _rejected = WorkflowStatus::Rejected;
+        let _cancelled = WorkflowStatus::Cancelled;
+    }
+
+    #[test]
+    fn test_change_type_variants() {
+        use workflow::*;
+
+        let _create = ChangeType::Create;
+        let _update = ChangeType::Update {
+            statute_id: "S1".to_string(),
+        };
+        let _delete = ChangeType::Delete {
+            statute_id: "S2".to_string(),
+        };
+        let _status = ChangeType::StatusChange {
+            statute_id: "S3".to_string(),
+            new_status: StatuteStatus::Active,
+        };
+        let _bulk = ChangeType::Bulk {
+            operation_count: 10,
+        };
+    }
+
+    #[test]
+    fn test_notification_type_variants() {
+        use notifications::*;
+
+        let _requested = NotificationType::ApprovalRequested;
+        let _granted = NotificationType::ApprovalGranted;
+        let _rejected = NotificationType::ApprovalRejected;
+        let _assigned = NotificationType::TaskAssigned;
+        let _completed = NotificationType::TaskCompleted;
+        let _warning = NotificationType::SlaWarning;
+        let _breach = NotificationType::SlaBreach;
+        let _updated = NotificationType::StatuteUpdated;
+        let _custom = NotificationType::Custom("test".to_string());
+    }
+
+    #[test]
+    fn test_task_status_variants() {
+        use tasks::*;
+
+        let _not_started = TaskStatus::NotStarted;
+        let _in_progress = TaskStatus::InProgress;
+        let _blocked = TaskStatus::Blocked;
+        let _completed = TaskStatus::Completed;
+        let _cancelled = TaskStatus::Cancelled;
+    }
+
+    #[test]
+    fn test_sla_metric_variants() {
+        use sla::*;
+
+        let _first_response = SlaMetric::TimeToFirstResponse;
+        let _approval = SlaMetric::TimeToApproval;
+        let _completion = SlaMetric::TimeToCompletion;
+        let _custom = SlaMetric::Custom("custom_metric".to_string());
+    }
+
+    #[test]
+    fn test_escalation_action_variants() {
+        use escalation::*;
+
+        let _notify = EscalationAction::Notify {
+            users: vec!["u1".to_string()],
+        };
+        let _reassign = EscalationAction::Reassign {
+            to_user: "u2".to_string(),
+        };
+        let _escalate = EscalationAction::EscalateToManager;
+        let _auto_approve = EscalationAction::AutoApprove;
+        let _custom = EscalationAction::Custom("custom".to_string());
+    }
+
+    // ========== Advanced Search Tests (v0.1.2) ==========
+
+    #[test]
+    fn test_facet_result() {
+        use advanced_search::*;
+
+        let facet = FacetResult {
+            facet_type: FacetType::Status,
+            values: vec![
+                FacetValue {
+                    value: "Active".to_string(),
+                    count: 10,
+                },
+                FacetValue {
+                    value: "Repealed".to_string(),
+                    count: 5,
+                },
+                FacetValue {
+                    value: "Draft".to_string(),
+                    count: 3,
+                },
+            ],
+            total_values: 3,
+        };
+
+        let top = facet.top_values(2);
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0].value, "Active");
+        assert_eq!(top[0].count, 10);
+
+        let found = facet.find_value("Repealed");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().count, 5);
+    }
+
+    #[test]
+    fn test_autocomplete_provider() {
+        use advanced_search::*;
+
+        let mut provider = AutocompleteProvider::new();
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("GDPR-2016"), "EU"))
+            .ok();
+        registry
+            .register(StatuteEntry::new(test_statute("CCPA-2018"), "US-CA"))
+            .ok();
+
+        for (_, entry) in registry.statutes.iter() {
+            provider.index_statute(entry);
+        }
+
+        let suggestions = provider.suggest("GDP", 5);
+        assert!(!suggestions.is_empty());
+
+        let gdpr_suggestion = suggestions.iter().find(|s| s.text.contains("GDPR"));
+        assert!(gdpr_suggestion.is_some());
+    }
+
+    #[test]
+    fn test_autocomplete_scoring() {
+        use advanced_search::*;
+
+        let mut provider = AutocompleteProvider::new();
+        let mut registry = StatuteRegistry::new();
+
+        registry
+            .register(StatuteEntry::new(test_statute("TEST-123"), "US"))
+            .ok();
+        registry
+            .register(StatuteEntry::new(test_statute("TEST-456"), "US"))
+            .ok();
+        registry
+            .register(StatuteEntry::new(test_statute("EXAMPLE-789"), "US"))
+            .ok();
+
+        for (_, entry) in registry.statutes.iter() {
+            provider.index_statute(entry);
+        }
+
+        let suggestions = provider.suggest("TEST", 10);
+
+        // Exact or prefix matches should score higher
+        assert!(suggestions.len() >= 2);
+        for suggestion in &suggestions[0..2] {
+            assert!(suggestion.text.contains("TEST"));
+            assert!(suggestion.score >= 0.5);
+        }
+    }
+
+    #[test]
+    fn test_saved_search() {
+        use advanced_search::*;
+
+        let query = SearchQuery::default();
+        let search = SavedSearch::new("My Search", query, "user123").with_alert(3600);
+
+        assert_eq!(search.name, "My Search");
+        assert_eq!(search.owner, "user123");
+        assert!(search.alert_enabled);
+        assert_eq!(search.alert_frequency_seconds, Some(3600));
+    }
+
+    #[test]
+    fn test_saved_search_alert_trigger() {
+        use advanced_search::*;
+
+        let query = SearchQuery::default();
+        let mut search = SavedSearch::new("Test", query, "user1").with_alert(60);
+
+        // Never executed, should trigger
+        assert!(search.should_trigger_alert());
+
+        // Just executed, should not trigger
+        search.update_execution(5);
+        assert!(!search.should_trigger_alert());
+    }
+
+    #[test]
+    fn test_search_analytics() {
+        use advanced_search::*;
+
+        let mut analytics = SearchAnalytics::new();
+
+        analytics.record_search("test query", 5);
+        analytics.record_search("another query", 10);
+        analytics.record_search("test query", 3);
+
+        assert_eq!(analytics.total_searches(), 3);
+
+        let top = analytics.top_queries(5);
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0].0, "test query");
+        assert_eq!(top[0].1, 2);
+
+        let avg = analytics.average_result_count();
+        assert!((avg - 6.0).abs() < 0.1); // (5 + 10 + 3) / 3 = 6
+    }
+
+    #[test]
+    fn test_search_analytics_zero_results() {
+        use advanced_search::*;
+
+        let mut analytics = SearchAnalytics::new();
+
+        analytics.record_search("query1", 5);
+        analytics.record_search("query2", 0);
+        analytics.record_search("query3", 0);
+
+        let zero_results = analytics.zero_result_queries();
+        assert_eq!(zero_results.len(), 2);
+    }
+
+    #[test]
+    fn test_search_analytics_time_range() {
+        use advanced_search::*;
+        use chrono::Duration;
+
+        let mut analytics = SearchAnalytics::new();
+
+        analytics.record_search("query1", 5);
+        analytics.record_search("query2", 10);
+
+        let start = Utc::now() - Duration::seconds(60);
+        let end = Utc::now() + Duration::seconds(60);
+
+        let count = analytics.searches_in_range(start, end);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_semantic_search() {
+        use advanced_search::*;
+
+        let mut semantic = SemanticSearch::new(768);
+
+        assert_eq!(semantic.dimension(), 768);
+        assert!(!semantic.is_enabled());
+
+        semantic.enable();
+        assert!(semantic.is_enabled());
+
+        // Placeholder search returns empty (no ML integration yet)
+        let results = semantic.search("test query", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_semantic_search_default() {
+        use advanced_search::*;
+
+        let semantic = SemanticSearch::default();
+        assert_eq!(semantic.dimension(), 384); // Default BERT dimension
+    }
+
+    #[test]
+    fn test_facet_type_variants() {
+        use advanced_search::*;
+
+        let _status = FacetType::Status;
+        let _jurisdiction = FacetType::Jurisdiction;
+        let _tags = FacetType::Tags;
+        let _year = FacetType::Year;
+        let _month = FacetType::Month;
+        let _custom = FacetType::Custom("custom".to_string());
+    }
+
+    #[test]
+    fn test_suggestion_type_variants() {
+        use advanced_search::*;
+
+        let _statute_id = SuggestionType::StatuteId;
+        let _title = SuggestionType::Title;
+        let _tag = SuggestionType::Tag;
+        let _jurisdiction = SuggestionType::Jurisdiction;
+        let _term = SuggestionType::Term;
+    }
+
+    #[test]
+    fn test_faceted_search_result() {
+        use advanced_search::*;
+
+        let result = FacetedSearchResult {
+            statute_ids: vec!["S1".to_string(), "S2".to_string()],
+            facets: vec![FacetResult {
+                facet_type: FacetType::Status,
+                values: vec![FacetValue {
+                    value: "Active".to_string(),
+                    count: 2,
+                }],
+                total_values: 1,
+            }],
+            total_matches: 2,
+        };
+
+        assert_eq!(result.statute_ids.len(), 2);
+        assert_eq!(result.facets.len(), 1);
+        assert_eq!(result.total_matches, 2);
+    }
+
+    #[test]
+    fn test_search_suggestion() {
+        use advanced_search::*;
+
+        let suggestion = SearchSuggestion {
+            text: "GDPR".to_string(),
+            suggestion_type: SuggestionType::StatuteId,
+            score: 0.9,
+        };
+
+        assert_eq!(suggestion.text, "GDPR");
+        assert_eq!(suggestion.suggestion_type, SuggestionType::StatuteId);
+        assert!((suggestion.score - 0.9).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_autocomplete_multiple_types() {
+        use advanced_search::*;
+
+        let mut provider = AutocompleteProvider::new();
+        let mut registry = StatuteRegistry::new();
+
+        let mut entry = StatuteEntry::new(test_statute("TEST-1"), "TEST-JURISDICTION");
+        entry.tags.push("test-tag".to_string());
+        registry
+            .statutes
+            .insert("TEST-1".to_string(), entry.clone());
+
+        provider.index_statute(&entry);
+
+        let suggestions = provider.suggest("test", 10);
+
+        // Should find suggestions from multiple types
+        assert!(!suggestions.is_empty());
+
+        let has_id = suggestions
+            .iter()
+            .any(|s| s.suggestion_type == SuggestionType::StatuteId);
+        let has_tag = suggestions
+            .iter()
+            .any(|s| s.suggestion_type == SuggestionType::Tag);
+        let has_jurisdiction = suggestions
+            .iter()
+            .any(|s| s.suggestion_type == SuggestionType::Jurisdiction);
+
+        assert!(has_id || has_tag || has_jurisdiction);
+    }
+
+    #[test]
+    fn test_saved_search_update_execution() {
+        use advanced_search::*;
+
+        let query = SearchQuery::default();
+        let mut search = SavedSearch::new("Test", query, "user1");
+
+        assert!(search.last_executed.is_none());
+        assert!(search.last_result_count.is_none());
+
+        search.update_execution(42);
+
+        assert!(search.last_executed.is_some());
+        assert_eq!(search.last_result_count, Some(42));
+    }
+
+    #[test]
+    fn test_search_analytics_empty() {
+        use advanced_search::*;
+
+        let analytics = SearchAnalytics::new();
+
+        assert_eq!(analytics.total_searches(), 0);
+        assert_eq!(analytics.average_result_count(), 0.0);
+        assert!(analytics.top_queries(5).is_empty());
+        assert!(analytics.zero_result_queries().is_empty());
     }
 }

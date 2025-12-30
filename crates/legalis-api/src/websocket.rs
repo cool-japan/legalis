@@ -2,8 +2,8 @@
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
         State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::IntoResponse,
 };
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
-use crate::{auth::AuthUser, AppState};
+use crate::{AppState, auth::AuthUser};
 
 /// WebSocket notification types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,9 +52,25 @@ pub enum WsNotification {
         void_rate: f64,
     },
     /// System status update
-    SystemStatus {
-        status: String,
-        message: String,
+    SystemStatus { status: String, message: String },
+    /// Collaborative edit operation applied
+    EditOperation {
+        document_id: String,
+        operation: crate::collaborative::EditOperation,
+        version: u64,
+        session_id: String,
+    },
+    /// Edit conflict detected
+    EditConflict {
+        document_id: String,
+        conflict: crate::collaborative::EditConflict,
+    },
+    /// User presence updated
+    PresenceUpdate {
+        resource_id: String,
+        user_id: String,
+        username: String,
+        activity: String,
     },
 }
 
@@ -131,7 +147,10 @@ pub async fn ws_handler(
 
 /// Handles a WebSocket connection.
 async fn handle_socket(socket: WebSocket, user: AuthUser, state: Arc<AppState>) {
-    info!("WebSocket connection established for user: {}", user.username);
+    info!(
+        "WebSocket connection established for user: {}",
+        user.username
+    );
 
     let (mut sender, mut receiver) = socket.split();
 
@@ -188,10 +207,7 @@ async fn handle_socket(socket: WebSocket, user: AuthUser, state: Arc<AppState>) 
         while let Some(msg) = receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    debug!(
-                        "Received WebSocket message from {}: {}",
-                        username, text
-                    );
+                    debug!("Received WebSocket message from {}: {}", username, text);
 
                     match serde_json::from_str::<WsClientMessage>(&text) {
                         Ok(WsClientMessage::Subscribe { events }) => {
@@ -235,7 +251,10 @@ async fn handle_socket(socket: WebSocket, user: AuthUser, state: Arc<AppState>) 
         }
     }
 
-    info!("WebSocket connection terminated for user: {}", user.username);
+    info!(
+        "WebSocket connection terminated for user: {}",
+        user.username
+    );
 }
 
 /// Returns the notification type as a string for subscription filtering.
@@ -247,6 +266,9 @@ fn notification_type(notification: &WsNotification) -> String {
         WsNotification::VerificationCompleted { .. } => "verification_completed".to_string(),
         WsNotification::SimulationCompleted { .. } => "simulation_completed".to_string(),
         WsNotification::SystemStatus { .. } => "system_status".to_string(),
+        WsNotification::EditOperation { .. } => "edit_operation".to_string(),
+        WsNotification::EditConflict { .. } => "edit_conflict".to_string(),
+        WsNotification::PresenceUpdate { .. } => "presence_update".to_string(),
     }
 }
 

@@ -4,7 +4,10 @@
 //! long legal documents, including sliding windows, hierarchical summarization,
 //! RAG-based context building, importance scoring, and automatic pruning.
 
-use crate::{LLMProvider, rag::{DocumentChunk, ChunkingStrategy}};
+use crate::{
+    LLMProvider,
+    rag::{ChunkingStrategy, DocumentChunk},
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -14,6 +17,7 @@ pub struct SlidingWindowContext {
     /// Window size in tokens
     window_size: usize,
     /// Overlap between windows
+    #[allow(dead_code)]
     overlap: usize,
     /// Current chunks in the window
     chunks: VecDeque<DocumentChunk>,
@@ -84,6 +88,7 @@ pub struct SummaryNode {
     /// Summary text
     pub summary: String,
     /// Children summaries (if not leaf)
+    #[allow(clippy::vec_box)]
     pub children: Vec<Box<SummaryNode>>,
     /// Original text (for leaf nodes)
     pub original_text: Option<String>,
@@ -132,6 +137,7 @@ impl<P: LLMProvider> HierarchicalSummarizer<P> {
         self.build_hierarchy(leaf_summaries, 1).await
     }
 
+    #[allow(clippy::vec_box)]
     fn build_hierarchy(
         &self,
         nodes: Vec<Box<SummaryNode>>,
@@ -221,6 +227,7 @@ Provide a concise summary that captures the essential legal content."#,
         summaries
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn collect_summaries_at_level(
         &self,
         node: &SummaryNode,
@@ -422,9 +429,7 @@ impl<P: LLMProvider + Clone> RagContextBuilder<P> {
 
     fn chunk_document(&self, document: &str) -> Vec<DocumentChunk> {
         match self.chunking_strategy {
-            ChunkingStrategy::FixedSize { size } => {
-                self.chunk_fixed_size(document, size)
-            }
+            ChunkingStrategy::FixedSize { size } => self.chunk_fixed_size(document, size),
             ChunkingStrategy::SlidingWindow { size, overlap } => {
                 self.chunk_sliding_window(document, size, overlap)
             }
@@ -437,22 +442,30 @@ impl<P: LLMProvider + Clone> RagContextBuilder<P> {
 
     fn chunk_fixed_size(&self, document: &str, size: usize) -> Vec<DocumentChunk> {
         let mut chunks = Vec::new();
-        let mut idx = 0;
-        for (i, text_chunk) in document.chars().collect::<Vec<_>>().chunks(size).enumerate() {
+        for (i, text_chunk) in document
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(size)
+            .enumerate()
+        {
             chunks.push(DocumentChunk {
                 id: format!("chunk_{}", i),
                 content: text_chunk.iter().collect(),
                 document_id: "document".to_string(),
-                chunk_index: idx,
+                chunk_index: i,
                 metadata: None,
                 embedding: None,
             });
-            idx += 1;
         }
         chunks
     }
 
-    fn chunk_sliding_window(&self, document: &str, size: usize, overlap: usize) -> Vec<DocumentChunk> {
+    fn chunk_sliding_window(
+        &self,
+        document: &str,
+        size: usize,
+        overlap: usize,
+    ) -> Vec<DocumentChunk> {
         let mut chunks = Vec::new();
         let chars: Vec<char> = document.chars().collect();
         let mut idx = 0;

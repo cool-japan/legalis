@@ -3,12 +3,12 @@
 //! This module provides file watching and automatic validation capabilities
 //! for DSL files during development.
 
-use crate::{DslError, DslResult, LegalDslParser};
 use crate::validation::SemanticValidator;
+use crate::{DslError, DslResult, LegalDslParser};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use std::collections::HashMap;
 
 /// Configuration for watch mode.
 #[derive(Debug, Clone)]
@@ -125,13 +125,13 @@ impl FileWatcher {
 
     /// Validates a single file.
     fn validate_file(&self, path: &Path) -> DslResult<()> {
-        let content = fs::read_to_string(path).map_err(|e| {
-            DslError::parse_error(format!("Failed to read file {:?}: {}", path, e))
-        })?;
+        let content = fs::read_to_string(path)
+            .map_err(|e| DslError::parse_error(format!("Failed to read file {:?}: {}", path, e)))?;
 
         let doc = self.parser.parse_document(&content)?;
         if let Err(errors) = self.validator.validate_document(&doc) {
-            let error_msg = errors.iter()
+            let error_msg = errors
+                .iter()
                 .map(|e| e.to_string())
                 .collect::<Vec<_>>()
                 .join("; ");
@@ -160,7 +160,9 @@ impl FileWatcher {
                 let _ = self.scan_directory(path);
 
                 // Check all known files in directory
-                let files: Vec<_> = self.file_states.keys()
+                let files: Vec<_> = self
+                    .file_states
+                    .keys()
                     .filter(|p| p.starts_with(path))
                     .cloned()
                     .collect();
@@ -181,7 +183,8 @@ impl FileWatcher {
         if let Ok(metadata) = fs::metadata(path) {
             if let Ok(modified) = metadata.modified() {
                 let is_new = !self.file_states.contains_key(path);
-                let has_changed = self.file_states
+                let has_changed = self
+                    .file_states
                     .get(path)
                     .map(|last_modified| modified > *last_modified)
                     .unwrap_or(true);
@@ -306,14 +309,17 @@ mod tests {
     fn test_validate_file_error() -> std::io::Result<()> {
         let mut temp_file = NamedTempFile::new()?;
         // Write invalid syntax that will definitely fail parsing
-        writeln!(temp_file, "STATUTE {{")?;  // Missing ID and title
+        writeln!(temp_file, "STATUTE {{")?; // Missing ID and title
         temp_file.flush()?;
 
         let config = WatchConfig::new();
         let watcher = FileWatcher::new(config);
 
         let result = watcher.validate_file(temp_file.path());
-        assert!(result.is_err(), "Expected validation to fail for invalid syntax");
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for invalid syntax"
+        );
 
         Ok(())
     }

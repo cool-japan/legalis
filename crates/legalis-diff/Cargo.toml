@@ -16,6 +16,7 @@ rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"
+proptest = "1.5"
 
 [[bench]]
 name = "diff_performance"

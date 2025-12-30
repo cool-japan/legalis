@@ -253,6 +253,8 @@ pub struct PortedStatute {
     pub changes: Vec<PortingChange>,
     /// Locale of the ported statute
     pub locale: Locale,
+    /// Compatibility score (0.0 to 1.0)
+    pub compatibility_score: f64,
 }
 
 /// A change made during porting.
@@ -324,6 +326,23 @@ pub enum Severity {
     Critical,
 }
 
+/// Risk category for classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RiskCategory {
+    /// Legal risks
+    Legal,
+    /// Cultural risks
+    Cultural,
+    /// Political risks
+    Political,
+    /// Economic risks
+    Economic,
+    /// Implementation risks
+    Implementation,
+    /// Technical risks
+    Technical,
+}
+
 /// AI-generated adaptation suggestion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdaptationSuggestion {
@@ -355,7 +374,7 @@ pub struct ConflictReport {
 }
 
 /// Types of conflicts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConflictType {
     /// Contradicts existing law
     Contradiction,
@@ -418,16 +437,18 @@ pub enum RiskLevel {
 /// A specific risk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Risk {
+    /// Risk identifier
+    pub id: String,
     /// Risk category
-    pub category: String,
+    pub category: RiskCategory,
     /// Description
     pub description: String,
-    /// Likelihood (0.0 - 1.0)
-    pub likelihood: f64,
+    /// Likelihood level
+    pub likelihood: RiskLevel,
     /// Impact (0.0 - 1.0)
     pub impact: f64,
     /// Severity
-    pub severity: Severity,
+    pub severity: RiskLevel,
 }
 
 /// Bilateral legal agreement template.
@@ -787,6 +808,2127 @@ pub trait PortingAdapter: Send + Sync {
     ) -> PortingResult<CompatibilityReport>;
 }
 
+// ============================================================================
+// Jurisdiction Database (v0.1.1)
+// ============================================================================
+
+/// Legal system classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LegalSystemType {
+    /// Common law system (precedent-based)
+    CommonLaw,
+    /// Civil law system (code-based)
+    CivilLaw,
+    /// Religious law system
+    ReligiousLaw,
+    /// Customary law system
+    CustomaryLaw,
+    /// Mixed/Hybrid system
+    Mixed,
+    /// Socialist law system
+    SocialistLaw,
+}
+
+/// Court level in judicial hierarchy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum CourtLevel {
+    /// Local/Municipal court
+    Local = 1,
+    /// District/Regional court
+    District = 2,
+    /// High/Appellate court
+    Appellate = 3,
+    /// Supreme/Constitutional court
+    Supreme = 4,
+    /// International court
+    International = 5,
+}
+
+/// Individual court in a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Court {
+    /// Court name
+    pub name: String,
+    /// Court level
+    pub level: CourtLevel,
+    /// Jurisdiction (geographic or subject-matter)
+    pub jurisdiction: String,
+    /// Whether this court can create binding precedent
+    pub precedent_setting: bool,
+    /// Number of judges
+    pub judges: Option<u32>,
+    /// Court website URL
+    pub url: Option<String>,
+}
+
+/// Court hierarchy for a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CourtHierarchy {
+    /// Courts organized by level
+    pub courts: Vec<Court>,
+    /// Appeal path description
+    pub appeal_path: String,
+    /// Whether jury trials are available
+    pub has_jury_trials: bool,
+    /// Constitutional court (if separate from supreme court)
+    pub constitutional_court: Option<String>,
+}
+
+impl CourtHierarchy {
+    /// Creates a new court hierarchy.
+    pub fn new() -> Self {
+        Self {
+            courts: Vec::new(),
+            appeal_path: String::new(),
+            has_jury_trials: false,
+            constitutional_court: None,
+        }
+    }
+
+    /// Adds a court to the hierarchy.
+    pub fn add_court(&mut self, court: Court) {
+        self.courts.push(court);
+    }
+
+    /// Gets courts by level.
+    pub fn courts_by_level(&self, level: CourtLevel) -> Vec<&Court> {
+        self.courts.iter().filter(|c| c.level == level).collect()
+    }
+}
+
+impl Default for CourtHierarchy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legislative process stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LegislativeStage {
+    /// Bill drafting
+    Drafting = 1,
+    /// Committee review
+    Committee = 2,
+    /// First reading
+    FirstReading = 3,
+    /// Second reading
+    SecondReading = 4,
+    /// Third reading
+    ThirdReading = 5,
+    /// Upper house (if bicameral)
+    UpperHouse = 6,
+    /// Executive approval
+    Executive = 7,
+    /// Publication
+    Publication = 8,
+}
+
+/// Legislative process for a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegislativeProcess {
+    /// Legislative body name
+    pub legislature_name: String,
+    /// Whether the legislature is bicameral
+    pub is_bicameral: bool,
+    /// Lower house name
+    pub lower_house: String,
+    /// Upper house name (if bicameral)
+    pub upper_house: Option<String>,
+    /// Legislative stages in order
+    pub stages: Vec<LegislativeStage>,
+    /// Typical duration (in days)
+    pub typical_duration_days: Option<u32>,
+    /// Whether initiatives/referendums are available
+    pub has_direct_democracy: bool,
+    /// Legislative session frequency
+    pub session_frequency: String,
+}
+
+impl LegislativeProcess {
+    /// Creates a new legislative process.
+    pub fn new(legislature_name: String, lower_house: String) -> Self {
+        Self {
+            legislature_name,
+            is_bicameral: false,
+            lower_house,
+            upper_house: None,
+            stages: vec![
+                LegislativeStage::Drafting,
+                LegislativeStage::Committee,
+                LegislativeStage::FirstReading,
+                LegislativeStage::SecondReading,
+                LegislativeStage::ThirdReading,
+                LegislativeStage::Executive,
+                LegislativeStage::Publication,
+            ],
+            typical_duration_days: None,
+            has_direct_democracy: false,
+            session_frequency: String::from("Annual"),
+        }
+    }
+
+    /// Makes the legislature bicameral.
+    pub fn with_upper_house(mut self, upper_house: String) -> Self {
+        self.is_bicameral = true;
+        self.upper_house = Some(upper_house);
+        if !self.stages.contains(&LegislativeStage::UpperHouse) {
+            self.stages.insert(5, LegislativeStage::UpperHouse);
+        }
+        self
+    }
+}
+
+/// Constitutional features.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ConstitutionalFeature {
+    /// Written constitution
+    WrittenConstitution,
+    /// Bill of rights
+    BillOfRights,
+    /// Separation of powers
+    SeparationOfPowers,
+    /// Federalism
+    Federalism,
+    /// Judicial review
+    JudicialReview,
+    /// Parliamentary sovereignty
+    ParliamentarySovereignty,
+    /// Presidential system
+    PresidentialSystem,
+    /// Parliamentary system
+    ParliamentarySystem,
+    /// Semi-presidential system
+    SemiPresidentialSystem,
+    /// Constitutional monarchy
+    ConstitutionalMonarchy,
+}
+
+/// Constitutional framework for a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstitutionalFramework {
+    /// Whether there is a written constitution
+    pub has_written_constitution: bool,
+    /// Constitution document name
+    pub constitution_name: Option<String>,
+    /// Year of current constitution
+    pub constitution_year: Option<u32>,
+    /// Constitutional features
+    pub features: Vec<ConstitutionalFeature>,
+    /// Amendment process difficulty (1-10, 10 = hardest)
+    pub amendment_difficulty: u8,
+    /// Fundamental rights enumerated
+    pub fundamental_rights: Vec<String>,
+    /// Government structure
+    pub government_structure: String,
+}
+
+impl ConstitutionalFramework {
+    /// Creates a new constitutional framework.
+    pub fn new() -> Self {
+        Self {
+            has_written_constitution: true,
+            constitution_name: None,
+            constitution_year: None,
+            features: Vec::new(),
+            amendment_difficulty: 5,
+            fundamental_rights: Vec::new(),
+            government_structure: String::new(),
+        }
+    }
+
+    /// Adds a constitutional feature.
+    pub fn add_feature(&mut self, feature: ConstitutionalFeature) {
+        if !self.features.contains(&feature) {
+            self.features.push(feature);
+        }
+    }
+
+    /// Checks if a feature is present.
+    pub fn has_feature(&self, feature: ConstitutionalFeature) -> bool {
+        self.features.contains(&feature)
+    }
+}
+
+impl Default for ConstitutionalFramework {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Comprehensive jurisdiction profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JurisdictionProfile {
+    /// Jurisdiction code (ISO 3166-1 alpha-2)
+    pub code: String,
+    /// Full jurisdiction name
+    pub name: String,
+    /// Legal system type
+    pub legal_system: LegalSystemType,
+    /// Court hierarchy
+    pub court_hierarchy: CourtHierarchy,
+    /// Legislative process
+    pub legislative_process: LegislativeProcess,
+    /// Constitutional framework
+    pub constitutional_framework: ConstitutionalFramework,
+    /// Official languages
+    pub official_languages: Vec<String>,
+    /// Population (latest estimate)
+    pub population: Option<u64>,
+    /// GDP per capita (USD)
+    pub gdp_per_capita: Option<f64>,
+    /// Human Development Index
+    pub hdi: Option<f64>,
+    /// Legal tradition influences
+    pub legal_influences: Vec<String>,
+    /// Notable legal characteristics
+    pub characteristics: Vec<String>,
+}
+
+impl JurisdictionProfile {
+    /// Creates a new jurisdiction profile.
+    pub fn new(code: String, name: String, legal_system: LegalSystemType) -> Self {
+        Self {
+            code,
+            name,
+            legal_system,
+            court_hierarchy: CourtHierarchy::new(),
+            legislative_process: LegislativeProcess::new(
+                String::from("Legislature"),
+                String::from("Chamber"),
+            ),
+            constitutional_framework: ConstitutionalFramework::new(),
+            official_languages: Vec::new(),
+            population: None,
+            gdp_per_capita: None,
+            hdi: None,
+            legal_influences: Vec::new(),
+            characteristics: Vec::new(),
+        }
+    }
+
+    /// Calculates compatibility score with another jurisdiction.
+    pub fn compatibility_score(&self, other: &JurisdictionProfile) -> f64 {
+        let mut score = 0.0;
+        let mut factors = 0.0;
+
+        // Legal system similarity (weight: 3.0)
+        if self.legal_system == other.legal_system {
+            score += 3.0;
+        } else if matches!(
+            (self.legal_system, other.legal_system),
+            (LegalSystemType::Mixed, _) | (_, LegalSystemType::Mixed)
+        ) {
+            score += 1.5;
+        }
+        factors += 3.0;
+
+        // Constitutional features overlap (weight: 2.0)
+        let self_features: std::collections::HashSet<_> =
+            self.constitutional_framework.features.iter().collect();
+        let other_features: std::collections::HashSet<_> =
+            other.constitutional_framework.features.iter().collect();
+        let overlap = self_features.intersection(&other_features).count();
+        let total = self_features.union(&other_features).count();
+        if total > 0 {
+            score += 2.0 * (overlap as f64 / total as f64);
+        }
+        factors += 2.0;
+
+        // Legislative structure similarity (weight: 1.0)
+        if self.legislative_process.is_bicameral == other.legislative_process.is_bicameral {
+            score += 1.0;
+        } else {
+            score += 0.5;
+        }
+        factors += 1.0;
+
+        // Economic development similarity (weight: 1.0)
+        if let (Some(self_gdp), Some(other_gdp)) = (self.gdp_per_capita, other.gdp_per_capita) {
+            let ratio = self_gdp.min(other_gdp) / self_gdp.max(other_gdp);
+            score += ratio;
+        }
+        factors += 1.0;
+
+        // Normalize to 0.0-1.0
+        score / factors
+    }
+}
+
+/// Jurisdiction database with comprehensive profiles.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JurisdictionDatabase {
+    /// Profiles indexed by jurisdiction code
+    profiles: HashMap<String, JurisdictionProfile>,
+}
+
+impl JurisdictionDatabase {
+    /// Creates a new jurisdiction database.
+    pub fn new() -> Self {
+        Self {
+            profiles: HashMap::new(),
+        }
+    }
+
+    /// Adds a jurisdiction profile.
+    pub fn add_profile(&mut self, profile: JurisdictionProfile) {
+        self.profiles.insert(profile.code.clone(), profile);
+    }
+
+    /// Gets a jurisdiction profile by code.
+    pub fn get_profile(&self, code: &str) -> Option<&JurisdictionProfile> {
+        self.profiles.get(code)
+    }
+
+    /// Gets a mutable jurisdiction profile by code.
+    pub fn get_profile_mut(&mut self, code: &str) -> Option<&mut JurisdictionProfile> {
+        self.profiles.get_mut(code)
+    }
+
+    /// Lists all jurisdiction codes.
+    pub fn list_codes(&self) -> Vec<&String> {
+        self.profiles.keys().collect()
+    }
+
+    /// Finds jurisdictions by legal system type.
+    pub fn find_by_legal_system(&self, system: LegalSystemType) -> Vec<&JurisdictionProfile> {
+        self.profiles
+            .values()
+            .filter(|p| p.legal_system == system)
+            .collect()
+    }
+
+    /// Finds most compatible jurisdictions for a given one.
+    pub fn find_compatible(&self, code: &str, min_score: f64) -> Vec<(&JurisdictionProfile, f64)> {
+        if let Some(source) = self.get_profile(code) {
+            let mut compatible: Vec<_> = self
+                .profiles
+                .values()
+                .filter(|p| p.code != code)
+                .map(|p| {
+                    let score = source.compatibility_score(p);
+                    (p, score)
+                })
+                .filter(|(_, score)| *score >= min_score)
+                .collect();
+            compatible.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            compatible
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Creates a database with comprehensive profiles for major jurisdictions.
+    pub fn with_major_jurisdictions() -> Self {
+        let mut db = Self::new();
+
+        // United States
+        let mut us = JurisdictionProfile::new(
+            String::from("US"),
+            String::from("United States"),
+            LegalSystemType::CommonLaw,
+        );
+        us.official_languages = vec![String::from("en")];
+        us.population = Some(331_000_000);
+        us.gdp_per_capita = Some(69_287.0);
+        us.hdi = Some(0.921);
+        us.legal_influences = vec![String::from("English common law")];
+        us.constitutional_framework = {
+            let mut cf = ConstitutionalFramework::new();
+            cf.has_written_constitution = true;
+            cf.constitution_name = Some(String::from("Constitution of the United States"));
+            cf.constitution_year = Some(1789);
+            cf.add_feature(ConstitutionalFeature::WrittenConstitution);
+            cf.add_feature(ConstitutionalFeature::BillOfRights);
+            cf.add_feature(ConstitutionalFeature::SeparationOfPowers);
+            cf.add_feature(ConstitutionalFeature::Federalism);
+            cf.add_feature(ConstitutionalFeature::JudicialReview);
+            cf.add_feature(ConstitutionalFeature::PresidentialSystem);
+            cf.amendment_difficulty = 9;
+            cf.government_structure = String::from("Federal presidential constitutional republic");
+            cf.fundamental_rights = vec![
+                String::from("Freedom of speech"),
+                String::from("Freedom of religion"),
+                String::from("Right to bear arms"),
+                String::from("Due process"),
+                String::from("Equal protection"),
+            ];
+            cf
+        };
+        us.legislative_process = LegislativeProcess::new(
+            String::from("United States Congress"),
+            String::from("House of Representatives"),
+        )
+        .with_upper_house(String::from("Senate"));
+        us.court_hierarchy = {
+            let mut ch = CourtHierarchy::new();
+            ch.add_court(Court {
+                name: String::from("Supreme Court of the United States"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("Federal"),
+                precedent_setting: true,
+                judges: Some(9),
+                url: Some(String::from("https://www.supremecourt.gov")),
+            });
+            ch.add_court(Court {
+                name: String::from("U.S. Courts of Appeals"),
+                level: CourtLevel::Appellate,
+                jurisdiction: String::from("Federal circuits"),
+                precedent_setting: true,
+                judges: Some(179),
+                url: None,
+            });
+            ch.add_court(Court {
+                name: String::from("U.S. District Courts"),
+                level: CourtLevel::District,
+                jurisdiction: String::from("Federal districts"),
+                precedent_setting: false,
+                judges: Some(677),
+                url: None,
+            });
+            ch.has_jury_trials = true;
+            ch.appeal_path = String::from("District → Appeals → Supreme Court");
+            ch
+        };
+        db.add_profile(us);
+
+        // Japan
+        let mut jp = JurisdictionProfile::new(
+            String::from("JP"),
+            String::from("Japan"),
+            LegalSystemType::CivilLaw,
+        );
+        jp.official_languages = vec![String::from("ja")];
+        jp.population = Some(125_000_000);
+        jp.gdp_per_capita = Some(39_285.0);
+        jp.hdi = Some(0.919);
+        jp.legal_influences = vec![
+            String::from("German civil law"),
+            String::from("French civil law"),
+            String::from("Anglo-American law (post-WWII)"),
+        ];
+        jp.constitutional_framework = {
+            let mut cf = ConstitutionalFramework::new();
+            cf.has_written_constitution = true;
+            cf.constitution_name = Some(String::from("Constitution of Japan"));
+            cf.constitution_year = Some(1947);
+            cf.add_feature(ConstitutionalFeature::WrittenConstitution);
+            cf.add_feature(ConstitutionalFeature::BillOfRights);
+            cf.add_feature(ConstitutionalFeature::SeparationOfPowers);
+            cf.add_feature(ConstitutionalFeature::JudicialReview);
+            cf.add_feature(ConstitutionalFeature::ParliamentarySystem);
+            cf.add_feature(ConstitutionalFeature::ConstitutionalMonarchy);
+            cf.amendment_difficulty = 10;
+            cf.government_structure = String::from("Unitary parliamentary constitutional monarchy");
+            cf.fundamental_rights = vec![
+                String::from("Equality under the law"),
+                String::from("Freedom of thought and conscience"),
+                String::from("Academic freedom"),
+                String::from("Right to life, liberty, and pursuit of happiness"),
+                String::from("Pacifism (Article 9)"),
+            ];
+            cf
+        };
+        jp.legislative_process = LegislativeProcess::new(
+            String::from("National Diet"),
+            String::from("House of Representatives"),
+        )
+        .with_upper_house(String::from("House of Councillors"));
+        jp.court_hierarchy = {
+            let mut ch = CourtHierarchy::new();
+            ch.add_court(Court {
+                name: String::from("Supreme Court of Japan"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("National"),
+                precedent_setting: true,
+                judges: Some(15),
+                url: Some(String::from("https://www.courts.go.jp")),
+            });
+            ch.add_court(Court {
+                name: String::from("High Courts"),
+                level: CourtLevel::Appellate,
+                jurisdiction: String::from("Regional"),
+                precedent_setting: false,
+                judges: Some(350),
+                url: None,
+            });
+            ch.add_court(Court {
+                name: String::from("District Courts"),
+                level: CourtLevel::District,
+                jurisdiction: String::from("Prefectural"),
+                precedent_setting: false,
+                judges: Some(900),
+                url: None,
+            });
+            ch.has_jury_trials = false;
+            ch.appeal_path = String::from("District → High → Supreme Court");
+            ch
+        };
+        db.add_profile(jp);
+
+        // United Kingdom
+        let mut gb = JurisdictionProfile::new(
+            String::from("GB"),
+            String::from("United Kingdom"),
+            LegalSystemType::CommonLaw,
+        );
+        gb.official_languages = vec![String::from("en")];
+        gb.population = Some(67_000_000);
+        gb.gdp_per_capita = Some(46_510.0);
+        gb.hdi = Some(0.929);
+        gb.legal_influences = vec![String::from("English common law tradition")];
+        gb.constitutional_framework = {
+            let mut cf = ConstitutionalFramework::new();
+            cf.has_written_constitution = false;
+            cf.constitution_name = None;
+            cf.add_feature(ConstitutionalFeature::ParliamentarySovereignty);
+            cf.add_feature(ConstitutionalFeature::ParliamentarySystem);
+            cf.add_feature(ConstitutionalFeature::ConstitutionalMonarchy);
+            cf.amendment_difficulty = 3;
+            cf.government_structure = String::from("Unitary parliamentary constitutional monarchy");
+            cf.fundamental_rights = vec![
+                String::from("Rights under common law"),
+                String::from("Human Rights Act 1998"),
+                String::from("Magna Carta principles"),
+            ];
+            cf
+        };
+        gb.legislative_process = LegislativeProcess::new(
+            String::from("Parliament of the United Kingdom"),
+            String::from("House of Commons"),
+        )
+        .with_upper_house(String::from("House of Lords"));
+        gb.court_hierarchy = {
+            let mut ch = CourtHierarchy::new();
+            ch.add_court(Court {
+                name: String::from("Supreme Court of the United Kingdom"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("National"),
+                precedent_setting: true,
+                judges: Some(12),
+                url: Some(String::from("https://www.supremecourt.uk")),
+            });
+            ch.add_court(Court {
+                name: String::from("Court of Appeal"),
+                level: CourtLevel::Appellate,
+                jurisdiction: String::from("England and Wales"),
+                precedent_setting: true,
+                judges: Some(39),
+                url: None,
+            });
+            ch.add_court(Court {
+                name: String::from("High Court"),
+                level: CourtLevel::District,
+                jurisdiction: String::from("England and Wales"),
+                precedent_setting: true,
+                judges: Some(108),
+                url: None,
+            });
+            ch.has_jury_trials = true;
+            ch.appeal_path = String::from("High Court → Court of Appeal → Supreme Court");
+            ch
+        };
+        db.add_profile(gb);
+
+        // Germany
+        let mut de = JurisdictionProfile::new(
+            String::from("DE"),
+            String::from("Germany"),
+            LegalSystemType::CivilLaw,
+        );
+        de.official_languages = vec![String::from("de")];
+        de.population = Some(83_000_000);
+        de.gdp_per_capita = Some(50_795.0);
+        de.hdi = Some(0.942);
+        de.legal_influences = vec![String::from("Roman law"), String::from("Germanic law")];
+        de.constitutional_framework = {
+            let mut cf = ConstitutionalFramework::new();
+            cf.has_written_constitution = true;
+            cf.constitution_name = Some(String::from("Basic Law (Grundgesetz)"));
+            cf.constitution_year = Some(1949);
+            cf.add_feature(ConstitutionalFeature::WrittenConstitution);
+            cf.add_feature(ConstitutionalFeature::BillOfRights);
+            cf.add_feature(ConstitutionalFeature::SeparationOfPowers);
+            cf.add_feature(ConstitutionalFeature::Federalism);
+            cf.add_feature(ConstitutionalFeature::JudicialReview);
+            cf.add_feature(ConstitutionalFeature::ParliamentarySystem);
+            cf.amendment_difficulty = 8;
+            cf.government_structure = String::from("Federal parliamentary republic");
+            cf.fundamental_rights = vec![
+                String::from("Human dignity"),
+                String::from("Right to life and physical integrity"),
+                String::from("Equality before the law"),
+                String::from("Freedom of faith and conscience"),
+                String::from("Freedom of expression"),
+            ];
+            cf
+        };
+        de.legislative_process =
+            LegislativeProcess::new(String::from("German Parliament"), String::from("Bundestag"))
+                .with_upper_house(String::from("Bundesrat"));
+        de.court_hierarchy = {
+            let mut ch = CourtHierarchy::new();
+            ch.add_court(Court {
+                name: String::from("Federal Constitutional Court"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("Constitutional"),
+                precedent_setting: true,
+                judges: Some(16),
+                url: Some(String::from("https://www.bundesverfassungsgericht.de")),
+            });
+            ch.add_court(Court {
+                name: String::from("Federal Court of Justice"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("Civil and Criminal"),
+                precedent_setting: true,
+                judges: Some(127),
+                url: None,
+            });
+            ch.constitutional_court = Some(String::from("Federal Constitutional Court"));
+            ch.has_jury_trials = false;
+            ch.appeal_path = String::from("Regional → Higher Regional → Federal");
+            ch
+        };
+        db.add_profile(de);
+
+        // France
+        let mut fr = JurisdictionProfile::new(
+            String::from("FR"),
+            String::from("France"),
+            LegalSystemType::CivilLaw,
+        );
+        fr.official_languages = vec![String::from("fr")];
+        fr.population = Some(67_000_000);
+        fr.gdp_per_capita = Some(44_408.0);
+        fr.hdi = Some(0.903);
+        fr.legal_influences = vec![String::from("Napoleonic Code"), String::from("Roman law")];
+        fr.constitutional_framework = {
+            let mut cf = ConstitutionalFramework::new();
+            cf.has_written_constitution = true;
+            cf.constitution_name = Some(String::from("Constitution of the Fifth Republic"));
+            cf.constitution_year = Some(1958);
+            cf.add_feature(ConstitutionalFeature::WrittenConstitution);
+            cf.add_feature(ConstitutionalFeature::BillOfRights);
+            cf.add_feature(ConstitutionalFeature::SeparationOfPowers);
+            cf.add_feature(ConstitutionalFeature::JudicialReview);
+            cf.add_feature(ConstitutionalFeature::SemiPresidentialSystem);
+            cf.amendment_difficulty = 7;
+            cf.government_structure = String::from("Unitary semi-presidential republic");
+            cf.fundamental_rights = vec![
+                String::from("Liberty"),
+                String::from("Equality"),
+                String::from("Fraternity"),
+                String::from("Secularism (laïcité)"),
+                String::from("Rights of Man and Citizen"),
+            ];
+            cf
+        };
+        fr.legislative_process = LegislativeProcess::new(
+            String::from("French Parliament"),
+            String::from("National Assembly"),
+        )
+        .with_upper_house(String::from("Senate"));
+        fr.court_hierarchy = {
+            let mut ch = CourtHierarchy::new();
+            ch.add_court(Court {
+                name: String::from("Constitutional Council"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("Constitutional"),
+                precedent_setting: true,
+                judges: Some(9),
+                url: Some(String::from("https://www.conseil-constitutionnel.fr")),
+            });
+            ch.add_court(Court {
+                name: String::from("Court of Cassation"),
+                level: CourtLevel::Supreme,
+                jurisdiction: String::from("Civil and Criminal"),
+                precedent_setting: true,
+                judges: Some(150),
+                url: None,
+            });
+            ch.constitutional_court = Some(String::from("Constitutional Council"));
+            ch.has_jury_trials = true;
+            ch.appeal_path = String::from("First Instance → Appeal → Cassation");
+            ch
+        };
+        db.add_profile(fr);
+
+        db
+    }
+}
+
+impl Default for JurisdictionDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Semantic Mapping (v0.1.2)
+// ============================================================================
+
+/// Concept equivalence entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConceptEquivalence {
+    /// Source concept
+    pub source_concept: String,
+    /// Target concept
+    pub target_concept: String,
+    /// Equivalence score (0.0-1.0, 1.0 = perfect match)
+    pub equivalence_score: f64,
+    /// Semantic distance (0.0-1.0, 0.0 = identical)
+    pub semantic_distance: f64,
+    /// Context requirements
+    pub context: Vec<String>,
+    /// Notes on usage differences
+    pub notes: Option<String>,
+}
+
+impl ConceptEquivalence {
+    /// Creates a new concept equivalence.
+    pub fn new(source_concept: String, target_concept: String, equivalence_score: f64) -> Self {
+        Self {
+            source_concept,
+            target_concept,
+            equivalence_score,
+            semantic_distance: 1.0 - equivalence_score,
+            context: Vec::new(),
+            notes: None,
+        }
+    }
+
+    /// Adds context requirement.
+    pub fn with_context(mut self, context: String) -> Self {
+        self.context.push(context);
+        self
+    }
+
+    /// Adds notes.
+    pub fn with_notes(mut self, notes: String) -> Self {
+        self.notes = Some(notes);
+        self
+    }
+}
+
+/// Concept equivalence database.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConceptEquivalenceDatabase {
+    /// Equivalences indexed by source jurisdiction and concept
+    equivalences: HashMap<String, Vec<ConceptEquivalence>>,
+}
+
+impl ConceptEquivalenceDatabase {
+    /// Creates a new concept equivalence database.
+    pub fn new() -> Self {
+        Self {
+            equivalences: HashMap::new(),
+        }
+    }
+
+    /// Adds a concept equivalence.
+    pub fn add_equivalence(&mut self, jurisdiction_pair: String, equivalence: ConceptEquivalence) {
+        self.equivalences
+            .entry(jurisdiction_pair)
+            .or_default()
+            .push(equivalence);
+    }
+
+    /// Finds equivalences for a concept.
+    pub fn find_equivalences(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        concept: &str,
+    ) -> Vec<&ConceptEquivalence> {
+        let key = format!("{}->{}", source_jurisdiction, target_jurisdiction);
+        self.equivalences
+            .get(&key)
+            .map(|equivs| {
+                equivs
+                    .iter()
+                    .filter(|e| {
+                        e.source_concept.eq_ignore_ascii_case(concept)
+                            || e.source_concept.contains(concept)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Gets the best match for a concept.
+    pub fn best_match(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        concept: &str,
+    ) -> Option<&ConceptEquivalence> {
+        let matches = self.find_equivalences(source_jurisdiction, target_jurisdiction, concept);
+        matches.into_iter().max_by(|a, b| {
+            a.equivalence_score
+                .partial_cmp(&b.equivalence_score)
+                .unwrap()
+        })
+    }
+}
+
+impl Default for ConceptEquivalenceDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legal term entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalTerm {
+    /// Term in source language/jurisdiction
+    pub term: String,
+    /// Definition
+    pub definition: String,
+    /// Jurisdiction code
+    pub jurisdiction: String,
+    /// Legal domain (e.g., "criminal", "civil", "constitutional")
+    pub domain: String,
+    /// Related terms
+    pub related_terms: Vec<String>,
+}
+
+impl LegalTerm {
+    /// Creates a new legal term.
+    pub fn new(term: String, definition: String, jurisdiction: String, domain: String) -> Self {
+        Self {
+            term,
+            definition,
+            jurisdiction,
+            domain,
+            related_terms: Vec::new(),
+        }
+    }
+}
+
+/// Legal term translation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TermTranslation {
+    /// Source term
+    pub source_term: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target term
+    pub target_term: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Translation accuracy (0.0-1.0)
+    pub accuracy: f64,
+    /// Whether this is a direct translation or approximation
+    pub is_direct: bool,
+    /// Context where this translation is valid
+    pub valid_contexts: Vec<String>,
+    /// Usage notes
+    pub notes: Option<String>,
+}
+
+impl TermTranslation {
+    /// Creates a new term translation.
+    pub fn new(
+        source_term: String,
+        source_jurisdiction: String,
+        target_term: String,
+        target_jurisdiction: String,
+        accuracy: f64,
+        is_direct: bool,
+    ) -> Self {
+        Self {
+            source_term,
+            source_jurisdiction,
+            target_term,
+            target_jurisdiction,
+            accuracy,
+            is_direct,
+            valid_contexts: Vec::new(),
+            notes: None,
+        }
+    }
+}
+
+/// Legal term translation matrix.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TermTranslationMatrix {
+    /// Translations indexed by source jurisdiction->target jurisdiction
+    translations: HashMap<String, Vec<TermTranslation>>,
+    /// Terms indexed by jurisdiction
+    terms: HashMap<String, Vec<LegalTerm>>,
+}
+
+impl TermTranslationMatrix {
+    /// Creates a new term translation matrix.
+    pub fn new() -> Self {
+        Self {
+            translations: HashMap::new(),
+            terms: HashMap::new(),
+        }
+    }
+
+    /// Adds a term to the dictionary.
+    pub fn add_term(&mut self, term: LegalTerm) {
+        self.terms
+            .entry(term.jurisdiction.clone())
+            .or_default()
+            .push(term);
+    }
+
+    /// Adds a translation.
+    pub fn add_translation(&mut self, translation: TermTranslation) {
+        let key = format!(
+            "{}->{}",
+            translation.source_jurisdiction, translation.target_jurisdiction
+        );
+        self.translations.entry(key).or_default().push(translation);
+    }
+
+    /// Finds translations for a term.
+    pub fn find_translations(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        term: &str,
+    ) -> Vec<&TermTranslation> {
+        let key = format!("{}->{}", source_jurisdiction, target_jurisdiction);
+        self.translations
+            .get(&key)
+            .map(|trans| {
+                trans
+                    .iter()
+                    .filter(|t| t.source_term.eq_ignore_ascii_case(term))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Gets the best translation for a term.
+    pub fn best_translation(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        term: &str,
+        context: Option<&str>,
+    ) -> Option<&TermTranslation> {
+        let translations = self.find_translations(source_jurisdiction, target_jurisdiction, term);
+
+        if let Some(ctx) = context {
+            // First try to find a translation valid in this context
+            if let Some(trans) = translations.iter().find(|t| {
+                t.valid_contexts.is_empty() || t.valid_contexts.iter().any(|c| c.contains(ctx))
+            }) {
+                return Some(trans);
+            }
+        }
+
+        // Otherwise, return the most accurate translation
+        translations
+            .into_iter()
+            .max_by(|a, b| a.accuracy.partial_cmp(&b.accuracy).unwrap())
+    }
+
+    /// Gets terms for a jurisdiction.
+    pub fn get_terms(&self, jurisdiction: &str) -> Vec<&LegalTerm> {
+        self.terms
+            .get(jurisdiction)
+            .map(|terms| terms.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets terms for a jurisdiction and domain.
+    pub fn get_terms_by_domain(&self, jurisdiction: &str, domain: &str) -> Vec<&LegalTerm> {
+        self.get_terms(jurisdiction)
+            .into_iter()
+            .filter(|t| t.domain.eq_ignore_ascii_case(domain))
+            .collect()
+    }
+
+    /// Creates a matrix with common legal term translations.
+    pub fn with_common_translations() -> Self {
+        let mut matrix = Self::new();
+
+        // US -> JP criminal law terms
+        matrix.add_translation(TermTranslation::new(
+            String::from("felony"),
+            String::from("US"),
+            String::from("重罪"),
+            String::from("JP"),
+            0.9,
+            true,
+        ));
+
+        matrix.add_translation(TermTranslation::new(
+            String::from("misdemeanor"),
+            String::from("US"),
+            String::from("軽罪"),
+            String::from("JP"),
+            0.9,
+            true,
+        ));
+
+        matrix.add_translation(TermTranslation::new(
+            String::from("indictment"),
+            String::from("US"),
+            String::from("起訴"),
+            String::from("JP"),
+            0.85,
+            true,
+        ));
+
+        // JP -> US criminal law terms
+        matrix.add_translation(TermTranslation::new(
+            String::from("起訴"),
+            String::from("JP"),
+            String::from("indictment"),
+            String::from("US"),
+            0.85,
+            true,
+        ));
+
+        matrix.add_translation(TermTranslation::new(
+            String::from("判決"),
+            String::from("JP"),
+            String::from("judgment"),
+            String::from("US"),
+            0.9,
+            true,
+        ));
+
+        // Common law -> civil law terms
+        matrix.add_translation(TermTranslation::new(
+            String::from("precedent"),
+            String::from("GB"),
+            String::from("jurisprudence"),
+            String::from("FR"),
+            0.7,
+            false,
+        ));
+
+        matrix.add_translation(TermTranslation::new(
+            String::from("case law"),
+            String::from("US"),
+            String::from("判例法"),
+            String::from("JP"),
+            0.85,
+            true,
+        ));
+
+        matrix
+    }
+}
+
+impl Default for TermTranslationMatrix {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Semantic distance calculator.
+#[derive(Debug, Clone)]
+pub struct SemanticDistanceCalculator {
+    /// Concept equivalence database
+    concept_db: ConceptEquivalenceDatabase,
+}
+
+impl SemanticDistanceCalculator {
+    /// Creates a new semantic distance calculator.
+    pub fn new(concept_db: ConceptEquivalenceDatabase) -> Self {
+        Self { concept_db }
+    }
+
+    /// Calculates semantic distance between two concepts.
+    pub fn calculate_distance(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        source_concept: &str,
+        target_concept: &str,
+    ) -> f64 {
+        // Try to find an equivalence entry
+        if let Some(equiv) =
+            self.concept_db
+                .best_match(source_jurisdiction, target_jurisdiction, source_concept)
+        {
+            if equiv.target_concept.eq_ignore_ascii_case(target_concept) {
+                return equiv.semantic_distance;
+            }
+        }
+
+        // Fall back to simple string similarity
+        self.string_similarity_distance(source_concept, target_concept)
+    }
+
+    /// Calculates distance based on string similarity.
+    fn string_similarity_distance(&self, a: &str, b: &str) -> f64 {
+        if a.eq_ignore_ascii_case(b) {
+            return 0.0;
+        }
+
+        // Simple Levenshtein-based approximation
+        let max_len = a.len().max(b.len());
+        if max_len == 0 {
+            return 0.0;
+        }
+
+        let edit_distance = self.levenshtein_distance(a, b);
+        (edit_distance as f64) / (max_len as f64)
+    }
+
+    /// Calculates Levenshtein distance.
+    #[allow(clippy::needless_range_loop)]
+    fn levenshtein_distance(&self, a: &str, b: &str) -> usize {
+        let a_chars: Vec<char> = a.chars().collect();
+        let b_chars: Vec<char> = b.chars().collect();
+        let a_len = a_chars.len();
+        let b_len = b_chars.len();
+
+        if a_len == 0 {
+            return b_len;
+        }
+        if b_len == 0 {
+            return a_len;
+        }
+
+        let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
+
+        // Initialize first column and row (standard Levenshtein algorithm)
+        for i in 0..=a_len {
+            matrix[i][0] = i;
+        }
+        for j in 0..=b_len {
+            matrix[0][j] = j;
+        }
+
+        for i in 1..=a_len {
+            for j in 1..=b_len {
+                let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                    0
+                } else {
+                    1
+                };
+                matrix[i][j] = (matrix[i - 1][j] + 1)
+                    .min(matrix[i][j - 1] + 1)
+                    .min(matrix[i - 1][j - 1] + cost);
+            }
+        }
+
+        matrix[a_len][b_len]
+    }
+}
+
+/// Context-aware term mapper.
+#[derive(Debug, Clone)]
+pub struct ContextAwareTermMapper {
+    /// Term translation matrix
+    translation_matrix: TermTranslationMatrix,
+    /// Context rules
+    context_rules: HashMap<String, Vec<String>>,
+}
+
+impl ContextAwareTermMapper {
+    /// Creates a new context-aware term mapper.
+    pub fn new(translation_matrix: TermTranslationMatrix) -> Self {
+        Self {
+            translation_matrix,
+            context_rules: HashMap::new(),
+        }
+    }
+
+    /// Adds a context rule.
+    pub fn add_context_rule(&mut self, context: String, keywords: Vec<String>) {
+        self.context_rules.insert(context, keywords);
+    }
+
+    /// Maps a term with context awareness.
+    pub fn map_term(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        term: &str,
+        context_text: &str,
+    ) -> Option<String> {
+        // Determine context from text
+        let context = self.detect_context(context_text);
+
+        // Find best translation
+        if let Some(translation) = self.translation_matrix.best_translation(
+            source_jurisdiction,
+            target_jurisdiction,
+            term,
+            context.as_deref(),
+        ) {
+            return Some(translation.target_term.clone());
+        }
+
+        None
+    }
+
+    /// Detects context from text.
+    fn detect_context(&self, text: &str) -> Option<String> {
+        let text_lower = text.to_lowercase();
+
+        for (context, keywords) in &self.context_rules {
+            if keywords.iter().any(|kw| text_lower.contains(kw)) {
+                return Some(context.clone());
+            }
+        }
+
+        None
+    }
+}
+
+/// Jurisdiction-specific legal dictionary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalDictionary {
+    /// Jurisdiction code
+    pub jurisdiction: String,
+    /// Terms in this dictionary
+    pub terms: Vec<LegalTerm>,
+    /// Dictionary metadata
+    pub metadata: HashMap<String, String>,
+}
+
+impl LegalDictionary {
+    /// Creates a new legal dictionary.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            jurisdiction,
+            terms: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Adds a term to the dictionary.
+    pub fn add_term(&mut self, term: LegalTerm) {
+        self.terms.push(term);
+    }
+
+    /// Finds a term by name.
+    pub fn find_term(&self, term_name: &str) -> Option<&LegalTerm> {
+        self.terms
+            .iter()
+            .find(|t| t.term.eq_ignore_ascii_case(term_name))
+    }
+
+    /// Gets terms by domain.
+    pub fn get_by_domain(&self, domain: &str) -> Vec<&LegalTerm> {
+        self.terms
+            .iter()
+            .filter(|t| t.domain.eq_ignore_ascii_case(domain))
+            .collect()
+    }
+
+    /// Creates a US legal dictionary with common terms.
+    pub fn us_dictionary() -> Self {
+        let mut dict = Self::new(String::from("US"));
+
+        dict.add_term(LegalTerm::new(
+            String::from("felony"),
+            String::from("A serious crime punishable by imprisonment for more than one year"),
+            String::from("US"),
+            String::from("criminal"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("misdemeanor"),
+            String::from("A less serious crime punishable by up to one year in jail"),
+            String::from("US"),
+            String::from("criminal"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("tort"),
+            String::from("A civil wrong that causes harm or loss"),
+            String::from("US"),
+            String::from("civil"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("precedent"),
+            String::from("A legal decision that serves as an authoritative rule in future cases"),
+            String::from("US"),
+            String::from("common law"),
+        ));
+
+        dict
+    }
+
+    /// Creates a Japan legal dictionary with common terms.
+    pub fn japan_dictionary() -> Self {
+        let mut dict = Self::new(String::from("JP"));
+
+        dict.add_term(LegalTerm::new(
+            String::from("重罪"),
+            String::from("重大な犯罪"),
+            String::from("JP"),
+            String::from("criminal"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("軽罪"),
+            String::from("比較的軽微な犯罪"),
+            String::from("JP"),
+            String::from("criminal"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("不法行為"),
+            String::from("他人の権利を侵害する行為"),
+            String::from("JP"),
+            String::from("civil"),
+        ));
+
+        dict.add_term(LegalTerm::new(
+            String::from("判例"),
+            String::from("裁判所の判断の先例"),
+            String::from("JP"),
+            String::from("civil law"),
+        ));
+
+        dict
+    }
+}
+
+// ============================================================================
+// Cultural Adaptation (v0.1.3)
+// ============================================================================
+
+/// Religious/cultural exception type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CulturalExceptionType {
+    /// Religious observance
+    Religious,
+    /// Cultural practice
+    Cultural,
+    /// Traditional custom
+    Traditional,
+    /// Ethical consideration
+    Ethical,
+    /// Dietary restriction
+    Dietary,
+    /// Dress code
+    DressCode,
+    /// Gender-specific
+    GenderSpecific,
+    /// Family structure
+    FamilyStructure,
+}
+
+/// Cultural exception rule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalException {
+    /// Exception type
+    pub exception_type: CulturalExceptionType,
+    /// Jurisdiction code
+    pub jurisdiction: String,
+    /// Description
+    pub description: String,
+    /// Legal basis
+    pub legal_basis: Option<String>,
+    /// Applicable domains
+    pub applicable_domains: Vec<String>,
+    /// Conflict resolution strategy
+    pub resolution_strategy: String,
+}
+
+impl CulturalException {
+    /// Creates a new cultural exception.
+    pub fn new(
+        exception_type: CulturalExceptionType,
+        jurisdiction: String,
+        description: String,
+    ) -> Self {
+        Self {
+            exception_type,
+            jurisdiction,
+            description,
+            legal_basis: None,
+            applicable_domains: Vec::new(),
+            resolution_strategy: String::from("Defer to local law"),
+        }
+    }
+
+    /// Adds legal basis.
+    pub fn with_legal_basis(mut self, legal_basis: String) -> Self {
+        self.legal_basis = Some(legal_basis);
+        self
+    }
+
+    /// Adds applicable domain.
+    pub fn with_domain(mut self, domain: String) -> Self {
+        self.applicable_domains.push(domain);
+        self
+    }
+}
+
+/// Cultural exception registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalExceptionRegistry {
+    /// Exceptions indexed by jurisdiction
+    exceptions: HashMap<String, Vec<CulturalException>>,
+}
+
+impl CulturalExceptionRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self {
+            exceptions: HashMap::new(),
+        }
+    }
+
+    /// Adds an exception.
+    pub fn add_exception(&mut self, exception: CulturalException) {
+        self.exceptions
+            .entry(exception.jurisdiction.clone())
+            .or_default()
+            .push(exception);
+    }
+
+    /// Gets exceptions for a jurisdiction.
+    pub fn get_exceptions(&self, jurisdiction: &str) -> Vec<&CulturalException> {
+        self.exceptions
+            .get(jurisdiction)
+            .map(|excs| excs.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets exceptions by type.
+    pub fn get_by_type(
+        &self,
+        jurisdiction: &str,
+        exception_type: CulturalExceptionType,
+    ) -> Vec<&CulturalException> {
+        self.get_exceptions(jurisdiction)
+            .into_iter()
+            .filter(|e| e.exception_type == exception_type)
+            .collect()
+    }
+
+    /// Creates a registry with common exceptions.
+    pub fn with_common_exceptions() -> Self {
+        let mut registry = Self::new();
+
+        // Japan - Religious exceptions
+        registry.add_exception(
+            CulturalException::new(
+                CulturalExceptionType::Religious,
+                String::from("JP"),
+                String::from("Shinto shrine visits and ceremonies"),
+            )
+            .with_legal_basis(String::from(
+                "Freedom of religion - Constitution Article 20",
+            ))
+            .with_domain(String::from("labor"))
+            .with_domain(String::from("education")),
+        );
+
+        // US - Religious exceptions
+        registry.add_exception(
+            CulturalException::new(
+                CulturalExceptionType::Religious,
+                String::from("US"),
+                String::from("Religious accommodation in workplace"),
+            )
+            .with_legal_basis(String::from("Title VII of Civil Rights Act"))
+            .with_domain(String::from("employment")),
+        );
+
+        // FR - Secular exceptions
+        registry.add_exception(
+            CulturalException::new(
+                CulturalExceptionType::Religious,
+                String::from("FR"),
+                String::from("Laïcité - strict separation of religion and state"),
+            )
+            .with_legal_basis(String::from("French Constitution Article 1"))
+            .with_domain(String::from("public service"))
+            .with_domain(String::from("education")),
+        );
+
+        registry
+    }
+}
+
+impl Default for CulturalExceptionRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Calendar system type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CalendarSystem {
+    /// Gregorian calendar
+    Gregorian,
+    /// Japanese imperial calendar
+    Japanese,
+    /// Islamic calendar
+    Islamic,
+    /// Hebrew calendar
+    Hebrew,
+    /// Chinese calendar
+    Chinese,
+    /// Buddhist calendar
+    Buddhist,
+}
+
+/// Holiday type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HolidayType {
+    /// National holiday
+    National,
+    /// Religious holiday
+    Religious,
+    /// Cultural observance
+    Cultural,
+    /// Regional holiday
+    Regional,
+}
+
+/// Holiday definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Holiday {
+    /// Holiday name
+    pub name: String,
+    /// Holiday type
+    pub holiday_type: HolidayType,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Date (month, day) - for fixed holidays
+    pub fixed_date: Option<(u8, u8)>,
+    /// Whether it's a legal non-working day
+    pub is_legal_holiday: bool,
+    /// Legal implications
+    pub legal_implications: Vec<String>,
+}
+
+impl Holiday {
+    /// Creates a new holiday.
+    pub fn new(name: String, holiday_type: HolidayType, jurisdiction: String) -> Self {
+        Self {
+            name,
+            holiday_type,
+            jurisdiction,
+            fixed_date: None,
+            is_legal_holiday: false,
+            legal_implications: Vec::new(),
+        }
+    }
+
+    /// Sets fixed date.
+    pub fn with_fixed_date(mut self, month: u8, day: u8) -> Self {
+        self.fixed_date = Some((month, day));
+        self
+    }
+
+    /// Marks as legal holiday.
+    pub fn as_legal_holiday(mut self) -> Self {
+        self.is_legal_holiday = true;
+        self
+    }
+}
+
+/// Holiday calendar adapter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HolidayCalendar {
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Calendar system
+    pub calendar_system: CalendarSystem,
+    /// Holidays
+    pub holidays: Vec<Holiday>,
+}
+
+impl HolidayCalendar {
+    /// Creates a new holiday calendar.
+    pub fn new(jurisdiction: String, calendar_system: CalendarSystem) -> Self {
+        Self {
+            jurisdiction,
+            calendar_system,
+            holidays: Vec::new(),
+        }
+    }
+
+    /// Adds a holiday.
+    pub fn add_holiday(&mut self, holiday: Holiday) {
+        self.holidays.push(holiday);
+    }
+
+    /// Gets holidays by type.
+    pub fn get_by_type(&self, holiday_type: HolidayType) -> Vec<&Holiday> {
+        self.holidays
+            .iter()
+            .filter(|h| h.holiday_type == holiday_type)
+            .collect()
+    }
+
+    /// Creates US calendar.
+    pub fn us_calendar() -> Self {
+        let mut calendar = Self::new(String::from("US"), CalendarSystem::Gregorian);
+
+        let mut new_year = Holiday::new(
+            String::from("New Year's Day"),
+            HolidayType::National,
+            String::from("US"),
+        )
+        .with_fixed_date(1, 1)
+        .as_legal_holiday();
+        new_year
+            .legal_implications
+            .push(String::from("Federal holiday - offices closed"));
+        calendar.add_holiday(new_year);
+
+        let mut independence = Holiday::new(
+            String::from("Independence Day"),
+            HolidayType::National,
+            String::from("US"),
+        )
+        .with_fixed_date(7, 4)
+        .as_legal_holiday();
+        independence
+            .legal_implications
+            .push(String::from("Federal holiday - offices closed"));
+        calendar.add_holiday(independence);
+
+        calendar
+    }
+
+    /// Creates Japan calendar.
+    pub fn japan_calendar() -> Self {
+        let mut calendar = Self::new(String::from("JP"), CalendarSystem::Japanese);
+
+        let mut new_year = Holiday::new(
+            String::from("元日 (New Year's Day)"),
+            HolidayType::National,
+            String::from("JP"),
+        )
+        .with_fixed_date(1, 1)
+        .as_legal_holiday();
+        new_year
+            .legal_implications
+            .push(String::from("National holiday - banks closed"));
+        calendar.add_holiday(new_year);
+
+        let mut constitution = Holiday::new(
+            String::from("憲法記念日 (Constitution Day)"),
+            HolidayType::National,
+            String::from("JP"),
+        )
+        .with_fixed_date(5, 3)
+        .as_legal_holiday();
+        constitution
+            .legal_implications
+            .push(String::from("National holiday - government offices closed"));
+        calendar.add_holiday(constitution);
+
+        calendar
+    }
+}
+
+/// Currency unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Currency {
+    USD,
+    JPY,
+    EUR,
+    GBP,
+    CNY,
+}
+
+impl Currency {
+    /// Gets the currency code.
+    pub fn code(&self) -> &str {
+        match self {
+            Currency::USD => "USD",
+            Currency::JPY => "JPY",
+            Currency::EUR => "EUR",
+            Currency::GBP => "GBP",
+            Currency::CNY => "CNY",
+        }
+    }
+
+    /// Gets the currency symbol.
+    pub fn symbol(&self) -> &str {
+        match self {
+            Currency::USD => "$",
+            Currency::JPY => "¥",
+            Currency::EUR => "€",
+            Currency::GBP => "£",
+            Currency::CNY => "¥",
+        }
+    }
+}
+
+/// Monetary conversion with legal implications.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonetaryConversion {
+    /// Source amount
+    pub source_amount: f64,
+    /// Source currency
+    pub source_currency: Currency,
+    /// Target amount
+    pub target_amount: f64,
+    /// Target currency
+    pub target_currency: Currency,
+    /// Exchange rate used
+    pub exchange_rate: f64,
+    /// Conversion date
+    pub conversion_date: Option<String>,
+    /// Legal significance threshold
+    pub legal_significance: Option<String>,
+}
+
+impl MonetaryConversion {
+    /// Creates a new monetary conversion.
+    pub fn new(
+        source_amount: f64,
+        source_currency: Currency,
+        target_currency: Currency,
+        exchange_rate: f64,
+    ) -> Self {
+        Self {
+            source_amount,
+            source_currency,
+            target_amount: source_amount * exchange_rate,
+            target_currency,
+            exchange_rate,
+            conversion_date: None,
+            legal_significance: None,
+        }
+    }
+
+    /// Checks if amount exceeds a legal threshold.
+    pub fn exceeds_threshold(&self, threshold: f64) -> bool {
+        self.target_amount >= threshold
+    }
+}
+
+/// Monetary adapter for legal contexts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonetaryAdapter {
+    /// Exchange rates (base currency to target)
+    exchange_rates: HashMap<String, f64>,
+    /// Legal thresholds by jurisdiction
+    legal_thresholds: HashMap<String, Vec<(String, f64)>>,
+}
+
+impl MonetaryAdapter {
+    /// Creates a new monetary adapter.
+    pub fn new() -> Self {
+        Self {
+            exchange_rates: HashMap::new(),
+            legal_thresholds: HashMap::new(),
+        }
+    }
+
+    /// Adds an exchange rate.
+    pub fn add_rate(&mut self, from: Currency, to: Currency, rate: f64) {
+        let key = format!("{}->{}", from.code(), to.code());
+        self.exchange_rates.insert(key, rate);
+    }
+
+    /// Adds a legal threshold.
+    pub fn add_threshold(&mut self, jurisdiction: String, description: String, amount: f64) {
+        self.legal_thresholds
+            .entry(jurisdiction)
+            .or_default()
+            .push((description, amount));
+    }
+
+    /// Converts amount with legal context.
+    pub fn convert(&self, amount: f64, from: Currency, to: Currency) -> Option<MonetaryConversion> {
+        let key = format!("{}->{}", from.code(), to.code());
+        self.exchange_rates
+            .get(&key)
+            .map(|rate| MonetaryConversion::new(amount, from, to, *rate))
+    }
+
+    /// Creates adapter with common rates and thresholds.
+    pub fn with_common_rates() -> Self {
+        let mut adapter = Self::new();
+
+        // Exchange rates (approximate)
+        adapter.add_rate(Currency::USD, Currency::JPY, 150.0);
+        adapter.add_rate(Currency::JPY, Currency::USD, 0.0067);
+        adapter.add_rate(Currency::USD, Currency::EUR, 0.92);
+        adapter.add_rate(Currency::EUR, Currency::USD, 1.09);
+        adapter.add_rate(Currency::GBP, Currency::USD, 1.27);
+        adapter.add_rate(Currency::USD, Currency::GBP, 0.79);
+
+        // Legal thresholds
+        adapter.add_threshold(
+            String::from("US"),
+            String::from("Felony theft threshold"),
+            1000.0,
+        );
+        adapter.add_threshold(
+            String::from("JP"),
+            String::from("Major theft threshold (重罪窃盗)"),
+            150_000.0,
+        );
+        adapter.add_threshold(
+            String::from("US"),
+            String::from("Federal reporting requirement"),
+            10_000.0,
+        );
+
+        adapter
+    }
+}
+
+impl Default for MonetaryAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Age of majority definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgeOfMajority {
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Age of majority
+    pub age: u8,
+    /// Exceptions
+    pub exceptions: Vec<String>,
+    /// Legal implications
+    pub legal_implications: Vec<String>,
+}
+
+impl AgeOfMajority {
+    /// Creates a new age of majority.
+    pub fn new(jurisdiction: String, age: u8) -> Self {
+        Self {
+            jurisdiction,
+            age,
+            exceptions: Vec::new(),
+            legal_implications: Vec::new(),
+        }
+    }
+}
+
+/// Age of majority mapper.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgeOfMajorityMapper {
+    /// Age of majority by jurisdiction
+    ages: HashMap<String, AgeOfMajority>,
+}
+
+impl AgeOfMajorityMapper {
+    /// Creates a new mapper.
+    pub fn new() -> Self {
+        Self {
+            ages: HashMap::new(),
+        }
+    }
+
+    /// Adds age of majority.
+    pub fn add_age(&mut self, age: AgeOfMajority) {
+        self.ages.insert(age.jurisdiction.clone(), age);
+    }
+
+    /// Gets age of majority for jurisdiction.
+    pub fn get_age(&self, jurisdiction: &str) -> Option<&AgeOfMajority> {
+        self.ages.get(jurisdiction)
+    }
+
+    /// Maps age reference from source to target jurisdiction.
+    pub fn map_age_reference(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+    ) -> Option<String> {
+        if let (Some(source), Some(target)) = (
+            self.get_age(source_jurisdiction),
+            self.get_age(target_jurisdiction),
+        ) {
+            if source.age != target.age {
+                return Some(format!(
+                    "Age adjusted from {} to {} for {}",
+                    source.age, target.age, target_jurisdiction
+                ));
+            }
+        }
+        None
+    }
+
+    /// Creates mapper with common jurisdictions.
+    pub fn with_common_jurisdictions() -> Self {
+        let mut mapper = Self::new();
+
+        let mut us = AgeOfMajority::new(String::from("US"), 18);
+        us.legal_implications.push(String::from("Voting rights"));
+        us.legal_implications
+            .push(String::from("Contract capacity"));
+        us.exceptions.push(String::from("Alcohol: 21 years"));
+        mapper.add_age(us);
+
+        let mut jp = AgeOfMajority::new(String::from("JP"), 18);
+        jp.legal_implications
+            .push(String::from("Full legal capacity"));
+        jp.legal_implications
+            .push(String::from("Marriage without parental consent"));
+        jp.exceptions
+            .push(String::from("Alcohol and tobacco: 20 years (until 2022)"));
+        mapper.add_age(jp);
+
+        let mut gb = AgeOfMajority::new(String::from("GB"), 18);
+        gb.legal_implications
+            .push(String::from("Full contractual capacity"));
+        gb.legal_implications.push(String::from("Voting rights"));
+        mapper.add_age(gb);
+
+        mapper
+    }
+}
+
+impl Default for AgeOfMajorityMapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legal capacity type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LegalCapacityType {
+    /// Contractual capacity
+    Contractual,
+    /// Testamentary capacity
+    Testamentary,
+    /// Criminal responsibility
+    CriminalResponsibility,
+    /// Voting capacity
+    Voting,
+    /// Marriage capacity
+    Marriage,
+    /// Employment capacity
+    Employment,
+}
+
+/// Legal capacity rule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalCapacityRule {
+    /// Capacity type
+    pub capacity_type: LegalCapacityType,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Minimum age
+    pub minimum_age: u8,
+    /// Conditions
+    pub conditions: Vec<String>,
+    /// Exceptions
+    pub exceptions: Vec<String>,
+}
+
+impl LegalCapacityRule {
+    /// Creates a new legal capacity rule.
+    pub fn new(capacity_type: LegalCapacityType, jurisdiction: String, minimum_age: u8) -> Self {
+        Self {
+            capacity_type,
+            jurisdiction,
+            minimum_age,
+            conditions: Vec::new(),
+            exceptions: Vec::new(),
+        }
+    }
+}
+
+/// Legal capacity adapter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalCapacityAdapter {
+    /// Rules indexed by jurisdiction
+    rules: HashMap<String, Vec<LegalCapacityRule>>,
+}
+
+impl LegalCapacityAdapter {
+    /// Creates a new adapter.
+    pub fn new() -> Self {
+        Self {
+            rules: HashMap::new(),
+        }
+    }
+
+    /// Adds a rule.
+    pub fn add_rule(&mut self, rule: LegalCapacityRule) {
+        self.rules
+            .entry(rule.jurisdiction.clone())
+            .or_default()
+            .push(rule);
+    }
+
+    /// Gets rules for jurisdiction.
+    pub fn get_rules(&self, jurisdiction: &str) -> Vec<&LegalCapacityRule> {
+        self.rules
+            .get(jurisdiction)
+            .map(|rules| rules.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets rule by type.
+    pub fn get_rule(
+        &self,
+        jurisdiction: &str,
+        capacity_type: LegalCapacityType,
+    ) -> Option<&LegalCapacityRule> {
+        self.get_rules(jurisdiction)
+            .into_iter()
+            .find(|r| r.capacity_type == capacity_type)
+    }
+
+    /// Creates adapter with common rules.
+    pub fn with_common_rules() -> Self {
+        let mut adapter = Self::new();
+
+        // US rules
+        let mut us_contract =
+            LegalCapacityRule::new(LegalCapacityType::Contractual, String::from("US"), 18);
+        us_contract
+            .exceptions
+            .push(String::from("Necessaries doctrine for minors"));
+        adapter.add_rule(us_contract);
+
+        adapter.add_rule(LegalCapacityRule::new(
+            LegalCapacityType::Voting,
+            String::from("US"),
+            18,
+        ));
+
+        adapter.add_rule(LegalCapacityRule::new(
+            LegalCapacityType::CriminalResponsibility,
+            String::from("US"),
+            18,
+        ));
+
+        // Japan rules
+        adapter.add_rule(LegalCapacityRule::new(
+            LegalCapacityType::Contractual,
+            String::from("JP"),
+            18,
+        ));
+
+        let mut jp_marriage =
+            LegalCapacityRule::new(LegalCapacityType::Marriage, String::from("JP"), 18);
+        jp_marriage.conditions.push(String::from(
+            "Parental consent required until age 20 (pre-2022)",
+        ));
+        adapter.add_rule(jp_marriage);
+
+        adapter.add_rule(LegalCapacityRule::new(
+            LegalCapacityType::CriminalResponsibility,
+            String::from("JP"),
+            14,
+        ));
+
+        adapter
+    }
+}
+
+impl Default for LegalCapacityAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Basic porting engine.
 pub struct PortingEngine {
     /// Source jurisdiction
@@ -848,11 +2990,34 @@ impl PortingEngine {
         // Update statute ID for target jurisdiction
         adapted.id = format!("{}-{}", self.target.id.to_lowercase(), statute.id);
 
+        // Calculate compatibility score based on changes
+        let compatibility_score = if changes.is_empty() {
+            1.0
+        } else {
+            let incompatible_count = changes
+                .iter()
+                .filter(|c| matches!(c.change_type, ChangeType::Incompatible))
+                .count();
+            let major_count = changes
+                .iter()
+                .filter(|c| {
+                    matches!(
+                        c.change_type,
+                        ChangeType::CulturalAdaptation | ChangeType::Translation
+                    )
+                })
+                .count();
+
+            // Decrease score based on severity of changes
+            1.0 - (incompatible_count as f64 * 0.3 + major_count as f64 * 0.1).min(0.9)
+        };
+
         Ok(PortedStatute {
             original_id: statute.id.clone(),
             statute: adapted,
             changes,
             locale: self.target.locale.clone(),
+            compatibility_score,
         })
     }
 
@@ -1184,11 +3349,12 @@ impl PortingEngine {
         // Legal system mismatch risk
         if self.source.legal_system != self.target.legal_system {
             risks.push(Risk {
-                category: "Legal System".to_string(),
+                id: uuid::Uuid::new_v4().to_string(),
+                category: RiskCategory::Legal,
                 description: "Different legal systems may cause interpretation issues".to_string(),
-                likelihood: 0.7,
+                likelihood: RiskLevel::Medium,
                 impact: 0.6,
-                severity: Severity::Warning,
+                severity: RiskLevel::Medium,
             });
         }
 
@@ -1201,14 +3367,15 @@ impl PortingEngine {
 
         if cultural_changes > 0 {
             risks.push(Risk {
-                category: "Cultural Adaptation".to_string(),
+                id: uuid::Uuid::new_v4().to_string(),
+                category: RiskCategory::Cultural,
                 description: format!(
                     "{} cultural adaptations may affect statute applicability",
                     cultural_changes
                 ),
-                likelihood: 0.5,
+                likelihood: RiskLevel::Medium,
                 impact: 0.5,
-                severity: Severity::Info,
+                severity: RiskLevel::Low,
             });
         }
 
@@ -1221,11 +3388,12 @@ impl PortingEngine {
 
         if incompatibilities > 0 {
             risks.push(Risk {
-                category: "Incompatibility".to_string(),
+                id: uuid::Uuid::new_v4().to_string(),
+                category: RiskCategory::Legal,
                 description: format!("{} incompatibilities detected", incompatibilities),
-                likelihood: 0.9,
+                likelihood: RiskLevel::High,
                 impact: 0.8,
-                severity: Severity::Error,
+                severity: RiskLevel::High,
             });
         }
 
@@ -1233,7 +3401,18 @@ impl PortingEngine {
         let risk_score = if risks.is_empty() {
             0.1
         } else {
-            risks.iter().map(|r| r.likelihood * r.impact).sum::<f64>() / risks.len() as f64
+            // Convert RiskLevel to numeric value for calculation
+            let risk_level_to_f64 = |level: RiskLevel| match level {
+                RiskLevel::Low => 0.25,
+                RiskLevel::Medium => 0.5,
+                RiskLevel::High => 0.75,
+                RiskLevel::Critical => 1.0,
+            };
+            risks
+                .iter()
+                .map(|r| risk_level_to_f64(r.likelihood) * r.impact)
+                .sum::<f64>()
+                / risks.len() as f64
         };
 
         let risk_level = match risk_score {
@@ -2408,6 +4587,4904 @@ pub enum DiffChangeType {
     Removed,
 }
 
+// ============================================================================
+// Conflict Resolution Framework (v0.1.4)
+// ============================================================================
+
+/// Conflict precedent from previous porting operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictPrecedent {
+    /// Precedent ID
+    pub id: String,
+    /// Source jurisdiction where conflict occurred
+    pub source_jurisdiction: String,
+    /// Target jurisdiction where conflict occurred
+    pub target_jurisdiction: String,
+    /// Conflict type
+    pub conflict_type: ConflictType,
+    /// Conflict description
+    pub description: String,
+    /// Resolution strategy that was used
+    pub resolution_used: String,
+    /// Effectiveness score (0.0 - 1.0)
+    pub effectiveness: f64,
+    /// Expert who resolved it
+    pub resolved_by: Option<String>,
+    /// Timestamp of resolution
+    pub resolved_at: String,
+    /// Lessons learned
+    pub lessons_learned: Vec<String>,
+    /// Applicable statute types
+    pub applicable_statute_types: Vec<String>,
+    /// Tags for categorization
+    pub tags: Vec<String>,
+}
+
+/// Database of conflict precedents for learning from past resolutions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConflictPrecedentDatabase {
+    /// All stored precedents
+    precedents: Vec<ConflictPrecedent>,
+    /// Index by jurisdiction pair for fast lookup
+    jurisdiction_index: HashMap<(String, String), Vec<usize>>,
+}
+
+impl ConflictPrecedentDatabase {
+    /// Creates a new empty precedent database.
+    pub fn new() -> Self {
+        Self {
+            precedents: Vec::new(),
+            jurisdiction_index: HashMap::new(),
+        }
+    }
+
+    /// Adds a precedent to the database.
+    pub fn add_precedent(&mut self, precedent: ConflictPrecedent) {
+        let idx = self.precedents.len();
+        let key = (
+            precedent.source_jurisdiction.clone(),
+            precedent.target_jurisdiction.clone(),
+        );
+
+        self.jurisdiction_index.entry(key).or_default().push(idx);
+
+        self.precedents.push(precedent);
+    }
+
+    /// Finds relevant precedents for a conflict.
+    pub fn find_relevant_precedents(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+        conflict_type: &ConflictType,
+    ) -> Vec<&ConflictPrecedent> {
+        let key = (
+            source_jurisdiction.to_string(),
+            target_jurisdiction.to_string(),
+        );
+
+        if let Some(indices) = self.jurisdiction_index.get(&key) {
+            indices
+                .iter()
+                .filter_map(|&idx| self.precedents.get(idx))
+                .filter(|p| {
+                    // Match by conflict type
+                    std::mem::discriminant(&p.conflict_type)
+                        == std::mem::discriminant(conflict_type)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Gets precedents with high effectiveness (>= 0.7).
+    pub fn get_effective_precedents(&self) -> Vec<&ConflictPrecedent> {
+        self.precedents
+            .iter()
+            .filter(|p| p.effectiveness >= 0.7)
+            .collect()
+    }
+
+    /// Gets all precedents.
+    pub fn all_precedents(&self) -> &[ConflictPrecedent] {
+        &self.precedents
+    }
+}
+
+/// Negotiated resolution template for common conflict patterns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NegotiatedResolutionTemplate {
+    /// Template ID
+    pub id: String,
+    /// Template name
+    pub name: String,
+    /// Conflict types this template addresses
+    pub conflict_types: Vec<ConflictType>,
+    /// Source jurisdiction patterns (e.g., "CommonLaw", "CivilLaw", or specific countries)
+    pub source_patterns: Vec<String>,
+    /// Target jurisdiction patterns
+    pub target_patterns: Vec<String>,
+    /// Resolution approach description
+    pub approach: String,
+    /// Specific negotiation steps
+    pub negotiation_steps: Vec<NegotiationStep>,
+    /// Fallback strategies if negotiation fails
+    pub fallback_strategies: Vec<String>,
+    /// Success rate of this template (0.0 - 1.0)
+    pub success_rate: f64,
+    /// Typical stakeholders involved
+    pub stakeholders: Vec<String>,
+    /// Required approvals
+    pub required_approvals: Vec<String>,
+}
+
+/// Step in a negotiation process.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NegotiationStep {
+    /// Step number
+    pub step_number: usize,
+    /// Step description
+    pub description: String,
+    /// Stakeholders involved in this step
+    pub involved_parties: Vec<String>,
+    /// Expected outcome
+    pub expected_outcome: String,
+    /// Time estimate (in days)
+    pub estimated_days: u32,
+}
+
+/// Human-in-the-loop conflict resolution workflow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictResolutionWorkflow {
+    /// Workflow ID
+    pub id: String,
+    /// Conflict being resolved
+    pub conflict: ConflictReport,
+    /// Current state
+    pub state: ResolutionWorkflowState,
+    /// Proposed resolution
+    pub proposed_resolution: Option<String>,
+    /// Stakeholder reviews
+    pub stakeholder_reviews: Vec<StakeholderReview>,
+    /// Expert consultations
+    pub expert_consultations: Vec<ExpertConsultation>,
+    /// Final decision
+    pub final_decision: Option<ResolutionDecision>,
+    /// Created at timestamp
+    pub created_at: String,
+    /// Updated at timestamp
+    pub updated_at: String,
+    /// Escalation level
+    pub escalation_level: EscalationLevel,
+}
+
+/// State of conflict resolution workflow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResolutionWorkflowState {
+    /// Initial assessment
+    InitialAssessment,
+    /// Awaiting expert input
+    AwaitingExpert,
+    /// Stakeholder review
+    StakeholderReview,
+    /// Negotiation in progress
+    NegotiationInProgress,
+    /// Decision pending
+    DecisionPending,
+    /// Resolved
+    Resolved,
+    /// Escalated
+    Escalated,
+    /// Abandoned
+    Abandoned,
+}
+
+/// Review from a stakeholder on a proposed resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StakeholderReview {
+    /// Reviewer ID
+    pub reviewer_id: String,
+    /// Reviewer name
+    pub reviewer_name: String,
+    /// Stakeholder role
+    pub role: String,
+    /// Review timestamp
+    pub reviewed_at: String,
+    /// Recommendation
+    pub recommendation: StakeholderRecommendation,
+    /// Comments
+    pub comments: String,
+    /// Concerns raised
+    pub concerns: Vec<String>,
+    /// Suggested modifications
+    pub modifications: Vec<String>,
+}
+
+/// Stakeholder recommendation on resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StakeholderRecommendation {
+    /// Approve the proposed resolution
+    Approve,
+    /// Approve with modifications
+    ApproveWithModifications,
+    /// Request alternative approach
+    RequestAlternative,
+    /// Reject
+    Reject,
+}
+
+/// Expert consultation for conflict resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpertConsultation {
+    /// Consultation ID
+    pub id: String,
+    /// Expert ID
+    pub expert_id: String,
+    /// Expert name
+    pub expert_name: String,
+    /// Area of expertise
+    pub expertise_area: String,
+    /// Consultation timestamp
+    pub consulted_at: String,
+    /// Expert opinion
+    pub opinion: String,
+    /// Recommended approach
+    pub recommended_approach: String,
+    /// Confidence level (0.0 - 1.0)
+    pub confidence: f64,
+    /// References to legal precedents
+    pub legal_references: Vec<String>,
+}
+
+/// Final decision on conflict resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolutionDecision {
+    /// Decision ID
+    pub id: String,
+    /// Decision maker ID
+    pub decision_maker_id: String,
+    /// Decision maker role
+    pub decision_maker_role: String,
+    /// Timestamp of decision
+    pub decided_at: String,
+    /// Chosen resolution strategy
+    pub chosen_strategy: String,
+    /// Rationale for decision
+    pub rationale: String,
+    /// Implementation plan
+    pub implementation_plan: Vec<String>,
+    /// Monitoring requirements
+    pub monitoring_requirements: Vec<String>,
+    /// Risk acceptance
+    pub accepted_risks: Vec<String>,
+}
+
+/// Escalation level for conflicts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EscalationLevel {
+    /// Routine - can be resolved by standard procedures
+    Routine,
+    /// Elevated - requires expert consultation
+    Elevated,
+    /// High - requires stakeholder involvement
+    High,
+    /// Critical - requires senior decision maker
+    Critical,
+}
+
+/// Enhanced conflict detector with severity analysis.
+#[derive(Debug, Clone)]
+pub struct ConflictDetector {
+    /// Precedent database for learning
+    pub precedent_db: ConflictPrecedentDatabase,
+    /// Resolution templates
+    pub templates: Vec<NegotiatedResolutionTemplate>,
+}
+
+impl ConflictDetector {
+    /// Creates a new conflict detector.
+    pub fn new() -> Self {
+        Self {
+            precedent_db: ConflictPrecedentDatabase::new(),
+            templates: Vec::new(),
+        }
+    }
+
+    /// Creates a detector with precedent database.
+    pub fn with_precedents(precedent_db: ConflictPrecedentDatabase) -> Self {
+        Self {
+            precedent_db,
+            templates: Vec::new(),
+        }
+    }
+
+    /// Analyzes conflict severity based on multiple factors.
+    pub fn analyze_severity(
+        &self,
+        conflict: &ConflictReport,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> Severity {
+        let mut severity_score = 0;
+
+        // Base severity from conflict type
+        severity_score += match conflict.conflict_type {
+            ConflictType::Contradiction => 3,
+            ConflictType::CulturalIncompatibility => 2,
+            ConflictType::SystemMismatch => 2,
+            ConflictType::Overlap => 1,
+            ConflictType::Procedural => 1,
+        };
+
+        // Adjust based on legal system compatibility
+        if source_jurisdiction.legal_system != target_jurisdiction.legal_system {
+            severity_score += 1;
+        }
+
+        // Check if there are precedents that can help
+        let precedents = self.precedent_db.find_relevant_precedents(
+            &source_jurisdiction.id,
+            &target_jurisdiction.id,
+            &conflict.conflict_type,
+        );
+
+        if precedents.is_empty() {
+            // No precedents - more severe
+            severity_score += 1;
+        } else {
+            // Has precedents with low effectiveness - moderate severity
+            let avg_effectiveness: f64 =
+                precedents.iter().map(|p| p.effectiveness).sum::<f64>() / precedents.len() as f64;
+            if avg_effectiveness < 0.5 {
+                severity_score += 1;
+            }
+        }
+
+        // Map score to severity
+        match severity_score {
+            0..=2 => Severity::Info,
+            3..=4 => Severity::Warning,
+            5..=6 => Severity::Error,
+            _ => Severity::Critical,
+        }
+    }
+
+    /// Recommends resolution strategies based on precedents and templates.
+    pub fn recommend_strategies(
+        &self,
+        conflict: &ConflictReport,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> Vec<String> {
+        let mut strategies = Vec::new();
+
+        // Get strategies from precedents
+        let precedents = self.precedent_db.find_relevant_precedents(
+            &source_jurisdiction.id,
+            &target_jurisdiction.id,
+            &conflict.conflict_type,
+        );
+
+        for precedent in precedents.iter().take(3) {
+            if precedent.effectiveness >= 0.7 {
+                strategies.push(format!(
+                    "{} (proven effective: {:.0}%)",
+                    precedent.resolution_used,
+                    precedent.effectiveness * 100.0
+                ));
+            }
+        }
+
+        // Get strategies from templates
+        for template in &self.templates {
+            if template.conflict_types.contains(&conflict.conflict_type) {
+                strategies.push(format!(
+                    "{} (template: {}, success rate: {:.0}%)",
+                    template.approach,
+                    template.name,
+                    template.success_rate * 100.0
+                ));
+            }
+        }
+
+        // Add default strategies if none found
+        if strategies.is_empty() {
+            strategies.extend(conflict.resolutions.clone());
+        }
+
+        strategies
+    }
+
+    /// Creates a resolution workflow for human review.
+    pub fn create_resolution_workflow(
+        &self,
+        conflict: ConflictReport,
+    ) -> ConflictResolutionWorkflow {
+        let severity = conflict.severity;
+        let escalation_level = match severity {
+            Severity::Info => EscalationLevel::Routine,
+            Severity::Warning => EscalationLevel::Elevated,
+            Severity::Error => EscalationLevel::High,
+            Severity::Critical => EscalationLevel::Critical,
+        };
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        ConflictResolutionWorkflow {
+            id: format!("workflow-{}", uuid::Uuid::new_v4()),
+            conflict,
+            state: ResolutionWorkflowState::InitialAssessment,
+            proposed_resolution: None,
+            stakeholder_reviews: Vec::new(),
+            expert_consultations: Vec::new(),
+            final_decision: None,
+            created_at: now.clone(),
+            updated_at: now,
+            escalation_level,
+        }
+    }
+
+    /// Adds a template to the detector.
+    pub fn add_template(&mut self, template: NegotiatedResolutionTemplate) {
+        self.templates.push(template);
+    }
+}
+
+impl Default for ConflictDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// AI-Assisted Porting (v0.1.5)
+// ============================================================================
+
+/// LLM-based adaptation suggestion with detailed analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmAdaptationSuggestion {
+    /// Suggestion ID
+    pub id: String,
+    /// Statute ID this applies to
+    pub statute_id: String,
+    /// Section or aspect being adapted
+    pub section: Option<String>,
+    /// Suggested adaptation text
+    pub suggestion: String,
+    /// Detailed rationale from LLM
+    pub rationale: String,
+    /// Confidence score (0.0 - 1.0)
+    pub confidence: f64,
+    /// Category of adaptation
+    pub category: AdaptationCategory,
+    /// Source jurisdiction context considered
+    pub source_context: Vec<String>,
+    /// Target jurisdiction context considered
+    pub target_context: Vec<String>,
+    /// Alternative suggestions
+    pub alternatives: Vec<String>,
+    /// Potential risks identified
+    pub risks: Vec<String>,
+    /// Legal references supporting the suggestion
+    pub legal_references: Vec<String>,
+}
+
+/// Category of LLM adaptation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AdaptationCategory {
+    /// Terminological adaptation
+    Terminology,
+    /// Procedural adaptation
+    Procedural,
+    /// Cultural/social adaptation
+    Cultural,
+    /// Numerical value adaptation
+    Numerical,
+    /// Structural reorganization
+    Structural,
+    /// Legal principle adaptation
+    LegalPrinciple,
+    /// Compliance requirement
+    Compliance,
+}
+
+/// Similar statute found across jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarStatute {
+    /// Statute from the database
+    pub statute: Statute,
+    /// Jurisdiction where this statute exists
+    pub jurisdiction: String,
+    /// Similarity score (0.0 - 1.0)
+    pub similarity_score: f64,
+    /// Matching features
+    pub matching_features: Vec<MatchingFeature>,
+    /// Key differences
+    pub differences: Vec<String>,
+    /// Relevance explanation
+    pub relevance: String,
+}
+
+/// Feature that matches between statutes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchingFeature {
+    /// Feature type
+    pub feature_type: FeatureType,
+    /// Description of the match
+    pub description: String,
+    /// Match strength (0.0 - 1.0)
+    pub strength: f64,
+}
+
+/// Type of matching feature.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FeatureType {
+    /// Similar legal effect
+    LegalEffect,
+    /// Similar structure
+    Structure,
+    /// Similar terminology
+    Terminology,
+    /// Similar scope
+    Scope,
+    /// Similar conditions
+    Conditions,
+    /// Similar penalties/remedies
+    Remedies,
+}
+
+/// Gap analysis result identifying missing elements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GapAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Source statute analyzed
+    pub source_statute_id: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Identified gaps
+    pub gaps: Vec<Gap>,
+    /// Coverage score (0.0 - 1.0, higher is better)
+    pub coverage_score: f64,
+    /// Overall assessment
+    pub assessment: String,
+    /// Recommendations to address gaps
+    pub recommendations: Vec<String>,
+}
+
+/// A gap identified in the porting process.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Gap {
+    /// Gap type
+    pub gap_type: GapType,
+    /// Description
+    pub description: String,
+    /// Severity
+    pub severity: Severity,
+    /// Missing element
+    pub missing_element: String,
+    /// Why it's important
+    pub importance: String,
+    /// Suggested solutions
+    pub solutions: Vec<String>,
+}
+
+/// Type of gap.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GapType {
+    /// Missing legal concept
+    MissingConcept,
+    /// Missing procedural element
+    MissingProcedure,
+    /// Missing enforcement mechanism
+    MissingEnforcement,
+    /// Missing safeguard
+    MissingSafeguard,
+    /// Insufficient specificity
+    InsufficientSpecificity,
+    /// Missing cultural consideration
+    MissingCulturalElement,
+}
+
+/// Cultural sensitivity analysis result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalSensitivityAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Statute analyzed
+    pub statute_id: String,
+    /// Overall sensitivity score (0.0 - 1.0, higher means more sensitive)
+    pub sensitivity_score: f64,
+    /// Identified issues
+    pub issues: Vec<CulturalIssue>,
+    /// Safe aspects
+    pub safe_aspects: Vec<String>,
+    /// Overall assessment
+    pub assessment: String,
+    /// Required consultations
+    pub required_consultations: Vec<String>,
+}
+
+/// Cultural sensitivity issue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalIssue {
+    /// Issue type
+    pub issue_type: CulturalIssueType,
+    /// Description
+    pub description: String,
+    /// Severity
+    pub severity: Severity,
+    /// Affected text/section
+    pub affected_section: String,
+    /// Why it's sensitive
+    pub explanation: String,
+    /// Suggested adaptations
+    pub adaptations: Vec<String>,
+    /// Stakeholders to consult
+    pub stakeholders_to_consult: Vec<String>,
+}
+
+/// Type of cultural sensitivity issue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CulturalIssueType {
+    /// Religious sensitivity
+    Religious,
+    /// Traditional practice conflict
+    Traditional,
+    /// Social norm mismatch
+    SocialNorm,
+    /// Gender-related sensitivity
+    Gender,
+    /// Family structure sensitivity
+    Family,
+    /// Language/terminology sensitivity
+    Language,
+    /// Historical sensitivity
+    Historical,
+}
+
+/// Plain language explanation of a statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlainLanguageExplanation {
+    /// Explanation ID
+    pub id: String,
+    /// Statute being explained
+    pub statute_id: String,
+    /// Target audience level
+    pub audience_level: AudienceLevel,
+    /// Summary (1-2 sentences)
+    pub summary: String,
+    /// Detailed explanation
+    pub explanation: String,
+    /// Key points
+    pub key_points: Vec<String>,
+    /// Practical examples
+    pub examples: Vec<String>,
+    /// Common questions and answers
+    pub faqs: Vec<FrequentlyAskedQuestion>,
+    /// Readability score (0.0 - 1.0)
+    pub readability_score: f64,
+}
+
+/// Target audience level for explanations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AudienceLevel {
+    /// General public with no legal background
+    GeneralPublic,
+    /// Business professionals
+    Business,
+    /// Government officials
+    Government,
+    /// Legal practitioners
+    Legal,
+    /// Academic/researchers
+    Academic,
+}
+
+/// FAQ entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrequentlyAskedQuestion {
+    /// Question
+    pub question: String,
+    /// Answer
+    pub answer: String,
+    /// Related topics
+    pub related_topics: Vec<String>,
+}
+
+/// AI-powered porting assistant.
+#[derive(Clone)]
+pub struct AiPortingAssistant {
+    /// Text generator for LLM interactions
+    generator: Option<std::sync::Arc<dyn TextGenerator>>,
+}
+
+impl AiPortingAssistant {
+    /// Creates a new AI porting assistant.
+    pub fn new() -> Self {
+        Self { generator: None }
+    }
+
+    /// Creates an assistant with an LLM generator.
+    pub fn with_generator(generator: std::sync::Arc<dyn TextGenerator>) -> Self {
+        Self {
+            generator: Some(generator),
+        }
+    }
+
+    /// Generates LLM-based adaptation suggestions.
+    pub async fn generate_adaptation_suggestions(
+        &self,
+        statute: &Statute,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<Vec<LlmAdaptationSuggestion>> {
+        let mut suggestions = Vec::new();
+
+        // If we have an LLM generator, use it
+        if let Some(generator) = &self.generator {
+            let prompt = format!(
+                "Analyze porting statute '{}' from {} to {}. \
+                Source legal system: {:?}, Target legal system: {:?}. \
+                Provide detailed adaptation suggestions considering legal, cultural, and procedural differences.",
+                statute.title,
+                source_jurisdiction.name,
+                target_jurisdiction.name,
+                source_jurisdiction.legal_system,
+                target_jurisdiction.legal_system
+            );
+
+            let response = generator
+                .generate(&prompt)
+                .await
+                .map_err(PortingError::Llm)?;
+
+            // Parse LLM response into structured suggestions
+            // This is a simplified version - real implementation would use more sophisticated parsing
+            suggestions.push(LlmAdaptationSuggestion {
+                id: format!("llm-sugg-{}", uuid::Uuid::new_v4()),
+                statute_id: statute.id.clone(),
+                section: None,
+                suggestion: response.clone(),
+                rationale: "AI-generated analysis based on jurisdiction differences".to_string(),
+                confidence: 0.75,
+                category: AdaptationCategory::Cultural,
+                source_context: vec![format!(
+                    "{:?} legal system",
+                    source_jurisdiction.legal_system
+                )],
+                target_context: vec![format!(
+                    "{:?} legal system",
+                    target_jurisdiction.legal_system
+                )],
+                alternatives: vec![],
+                risks: vec![],
+                legal_references: vec![],
+            });
+        } else {
+            // Fallback: rule-based suggestions
+            if source_jurisdiction.legal_system != target_jurisdiction.legal_system {
+                suggestions.push(LlmAdaptationSuggestion {
+                    id: format!("rule-sugg-{}", uuid::Uuid::new_v4()),
+                    statute_id: statute.id.clone(),
+                    section: None,
+                    suggestion: format!(
+                        "Adapt procedural elements from {:?} to {:?} legal system",
+                        source_jurisdiction.legal_system, target_jurisdiction.legal_system
+                    ),
+                    rationale: "Legal system differences require procedural adaptation".to_string(),
+                    confidence: 0.8,
+                    category: AdaptationCategory::Procedural,
+                    source_context: vec![],
+                    target_context: vec![],
+                    alternatives: vec![],
+                    risks: vec!["May require expert legal review".to_string()],
+                    legal_references: vec![],
+                });
+            }
+        }
+
+        Ok(suggestions)
+    }
+
+    /// Discovers similar statutes across jurisdictions.
+    pub async fn discover_similar_statutes(
+        &self,
+        statute: &Statute,
+        jurisdictions: &[Jurisdiction],
+    ) -> PortingResult<Vec<SimilarStatute>> {
+        let mut similar = Vec::new();
+
+        // Simple similarity based on title matching
+        // Real implementation would use semantic similarity, embeddings, etc.
+        for jurisdiction in jurisdictions {
+            let similarity_score = self.calculate_similarity(statute, jurisdiction);
+
+            if similarity_score > 0.3 {
+                similar.push(SimilarStatute {
+                    statute: statute.clone(),
+                    jurisdiction: jurisdiction.id.clone(),
+                    similarity_score,
+                    matching_features: vec![MatchingFeature {
+                        feature_type: FeatureType::Terminology,
+                        description: "Similar legal terminology".to_string(),
+                        strength: similarity_score,
+                    }],
+                    differences: vec![],
+                    relevance: format!(
+                        "Found in {} legal system",
+                        match jurisdiction.legal_system {
+                            LegalSystem::CommonLaw => "common law",
+                            LegalSystem::CivilLaw => "civil law",
+                            _ => "other",
+                        }
+                    ),
+                });
+            }
+        }
+
+        // Sort by similarity score
+        similar.sort_by(|a, b| b.similarity_score.partial_cmp(&a.similarity_score).unwrap());
+
+        Ok(similar)
+    }
+
+    /// Performs automatic gap analysis.
+    pub async fn analyze_gaps(
+        &self,
+        statute: &Statute,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<GapAnalysis> {
+        let mut gaps = Vec::new();
+
+        // Check for enforcement mechanism
+        gaps.push(Gap {
+            gap_type: GapType::MissingEnforcement,
+            description: "Verify enforcement mechanisms exist in target jurisdiction".to_string(),
+            severity: Severity::Warning,
+            missing_element: "Enforcement authority".to_string(),
+            importance: "Required for effective statute implementation".to_string(),
+            solutions: vec![
+                "Identify equivalent enforcement body in target jurisdiction".to_string(),
+                "Establish new enforcement mechanism if needed".to_string(),
+            ],
+        });
+
+        // Check for cultural elements
+        if source_jurisdiction.cultural_params.prohibitions
+            != target_jurisdiction.cultural_params.prohibitions
+        {
+            gaps.push(Gap {
+                gap_type: GapType::MissingCulturalElement,
+                description: "Cultural prohibition differences detected".to_string(),
+                severity: Severity::Info,
+                missing_element: "Cultural context alignment".to_string(),
+                importance: "Ensures cultural appropriateness".to_string(),
+                solutions: vec![
+                    "Consult with cultural advisors".to_string(),
+                    "Adapt language and examples".to_string(),
+                ],
+            });
+        }
+
+        let coverage_score = 1.0 - (gaps.len() as f64 * 0.1).min(0.7);
+
+        Ok(GapAnalysis {
+            id: format!("gap-{}", uuid::Uuid::new_v4()),
+            source_statute_id: statute.id.clone(),
+            target_jurisdiction: target_jurisdiction.id.clone(),
+            gaps,
+            coverage_score,
+            assessment: if coverage_score > 0.7 {
+                "Good coverage with minor gaps".to_string()
+            } else {
+                "Significant gaps require attention".to_string()
+            },
+            recommendations: vec![
+                "Address identified gaps before implementation".to_string(),
+                "Conduct stakeholder review".to_string(),
+            ],
+        })
+    }
+
+    /// Checks for cultural sensitivity issues.
+    pub async fn check_cultural_sensitivity(
+        &self,
+        statute: &Statute,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<CulturalSensitivityAnalysis> {
+        let mut issues = Vec::new();
+
+        // Check for prohibitions
+        for prohibition in &target_jurisdiction.cultural_params.prohibitions {
+            issues.push(CulturalIssue {
+                issue_type: CulturalIssueType::Religious,
+                description: format!("Review for compliance with: {}", prohibition),
+                severity: Severity::Warning,
+                affected_section: "General".to_string(),
+                explanation: "Cultural/religious prohibition may affect statute applicability"
+                    .to_string(),
+                adaptations: vec![
+                    "Add exception clause if appropriate".to_string(),
+                    "Adjust language to respect cultural norms".to_string(),
+                ],
+                stakeholders_to_consult: vec![
+                    "Cultural affairs ministry".to_string(),
+                    "Religious leaders".to_string(),
+                ],
+            });
+        }
+
+        let sensitivity_score = if issues.is_empty() {
+            0.1 // Low sensitivity
+        } else {
+            0.5 + (issues.len() as f64 * 0.1).min(0.4)
+        };
+
+        Ok(CulturalSensitivityAnalysis {
+            id: format!("cultural-{}", uuid::Uuid::new_v4()),
+            statute_id: statute.id.clone(),
+            sensitivity_score,
+            issues,
+            safe_aspects: vec!["Legal framework structure".to_string()],
+            assessment: if sensitivity_score < 0.3 {
+                "Low cultural sensitivity concerns".to_string()
+            } else if sensitivity_score < 0.7 {
+                "Moderate cultural considerations needed".to_string()
+            } else {
+                "High cultural sensitivity - extensive consultation required".to_string()
+            },
+            required_consultations: vec!["Cultural advisors".to_string()],
+        })
+    }
+
+    /// Generates plain language explanation.
+    pub async fn generate_plain_explanation(
+        &self,
+        statute: &Statute,
+        audience_level: AudienceLevel,
+    ) -> PortingResult<PlainLanguageExplanation> {
+        let summary = match audience_level {
+            AudienceLevel::GeneralPublic => {
+                format!(
+                    "This law '{}' provides certain legal rights and responsibilities.",
+                    statute.title
+                )
+            }
+            AudienceLevel::Business => {
+                format!(
+                    "'{}' establishes legal framework affecting business operations.",
+                    statute.title
+                )
+            }
+            AudienceLevel::Government => {
+                format!(
+                    "'{}' defines statutory requirements for government implementation.",
+                    statute.title
+                )
+            }
+            AudienceLevel::Legal => {
+                format!(
+                    "Statute '{}' with effect: {:?}",
+                    statute.title, statute.effect.effect_type
+                )
+            }
+            AudienceLevel::Academic => {
+                format!(
+                    "Legal statute '{}' for academic analysis and research.",
+                    statute.title
+                )
+            }
+        };
+
+        let explanation = format!(
+            "The statute titled '{}' establishes legal provisions in its jurisdiction. \
+            It has been analyzed for potential porting to other legal systems.",
+            statute.title
+        );
+
+        Ok(PlainLanguageExplanation {
+            id: format!("explain-{}", uuid::Uuid::new_v4()),
+            statute_id: statute.id.clone(),
+            audience_level,
+            summary,
+            explanation,
+            key_points: vec![
+                "Defines legal rights and obligations".to_string(),
+                "Subject to jurisdictional requirements".to_string(),
+                "May require adaptation for different legal systems".to_string(),
+            ],
+            examples: vec!["Example: Implementation in similar jurisdictions".to_string()],
+            faqs: vec![FrequentlyAskedQuestion {
+                question: "What does this statute cover?".to_string(),
+                answer: "It establishes legal framework for specific matters.".to_string(),
+                related_topics: vec!["Legal compliance".to_string()],
+            }],
+            readability_score: 0.8,
+        })
+    }
+
+    /// Helper to calculate similarity score.
+    fn calculate_similarity(&self, _statute: &Statute, _jurisdiction: &Jurisdiction) -> f64 {
+        // Simplified similarity calculation
+        // Real implementation would use embeddings, semantic analysis, etc.
+        0.5
+    }
+}
+
+impl Default for AiPortingAssistant {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Validation Framework (v0.1.6)
+// ============================================================================
+
+/// Compliance check result for target jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TargetJurisdictionComplianceCheck {
+    /// Result ID
+    pub id: String,
+    /// Is compliant with target jurisdiction
+    pub is_compliant: bool,
+    /// Compliance score (0.0 to 1.0)
+    pub compliance_score: f64,
+    /// List of compliance issues
+    pub issues: Vec<ValidationComplianceIssue>,
+    /// Recommended modifications
+    pub recommendations: Vec<String>,
+    /// Target jurisdiction regulations checked
+    pub checked_regulations: Vec<String>,
+}
+
+/// Compliance issue detected during validation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationComplianceIssue {
+    /// Issue ID
+    pub id: String,
+    /// Issue severity
+    pub severity: ComplianceSeverity,
+    /// Issue category
+    pub category: ComplianceCategory,
+    /// Description of the issue
+    pub description: String,
+    /// Conflicting regulation reference
+    pub conflicting_regulation: String,
+    /// Suggested resolution
+    pub suggested_resolution: Option<String>,
+}
+
+/// Severity level of compliance issues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ComplianceSeverity {
+    /// Critical - statute cannot be adopted
+    Critical,
+    /// High - major modifications required
+    High,
+    /// Medium - moderate changes needed
+    Medium,
+    /// Low - minor adjustments suggested
+    Low,
+    /// Info - informational only
+    Info,
+}
+
+/// Category of compliance issues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ComplianceCategory {
+    /// Constitutional violation
+    Constitutional,
+    /// Regulatory conflict
+    Regulatory,
+    /// Procedural incompatibility
+    Procedural,
+    /// Cultural incompatibility
+    Cultural,
+    /// Technical standards mismatch
+    Technical,
+    /// Administrative burden
+    Administrative,
+}
+
+/// Target jurisdiction compliance checker.
+#[derive(Debug, Clone)]
+pub struct TargetJurisdictionChecker {
+    /// Target jurisdiction
+    #[allow(dead_code)]
+    target_jurisdiction: Jurisdiction,
+    /// Known regulations database
+    regulations: HashMap<String, RegulationEntry>,
+}
+
+/// Regulation entry in the database.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulationEntry {
+    /// Regulation ID
+    pub id: String,
+    /// Regulation title
+    pub title: String,
+    /// Regulatory authority
+    pub authority: String,
+    /// Regulation scope
+    pub scope: Vec<String>,
+    /// Mandatory requirements
+    pub requirements: Vec<String>,
+}
+
+impl TargetJurisdictionChecker {
+    /// Creates a new compliance checker.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        let mut regulations = HashMap::new();
+
+        // Initialize with some common regulations per jurisdiction
+        match target_jurisdiction.id.as_str() {
+            "US" => {
+                regulations.insert(
+                    "cfr-title-5".to_string(),
+                    RegulationEntry {
+                        id: "cfr-title-5".to_string(),
+                        title: "Code of Federal Regulations - Administrative Procedures"
+                            .to_string(),
+                        authority: "Federal Government".to_string(),
+                        scope: vec!["administrative".to_string(), "procedural".to_string()],
+                        requirements: vec![
+                            "Public comment period".to_string(),
+                            "Notice of rulemaking".to_string(),
+                        ],
+                    },
+                );
+            }
+            "JP" => {
+                regulations.insert(
+                    "gyosei-tetsuzuki".to_string(),
+                    RegulationEntry {
+                        id: "gyosei-tetsuzuki".to_string(),
+                        title: "行政手続法 (Administrative Procedure Act)".to_string(),
+                        authority: "国会 (Diet)".to_string(),
+                        scope: vec!["administrative".to_string(), "procedural".to_string()],
+                        requirements: vec![
+                            "意見公募 (Public comment)".to_string(),
+                            "理由の提示 (Reason disclosure)".to_string(),
+                        ],
+                    },
+                );
+            }
+            _ => {}
+        }
+
+        Self {
+            target_jurisdiction,
+            regulations,
+        }
+    }
+
+    /// Checks compliance of a ported statute.
+    pub fn check_compliance(&self, statute: &Statute) -> TargetJurisdictionComplianceCheck {
+        let mut issues = Vec::new();
+        let mut checked_regulations = Vec::new();
+
+        // Check against known regulations
+        for (reg_id, regulation) in &self.regulations {
+            checked_regulations.push(regulation.title.clone());
+
+            // Check if statute scope overlaps with regulation
+            if self.has_scope_overlap(statute, regulation) {
+                // Check specific requirements
+                for requirement in &regulation.requirements {
+                    if !self.meets_requirement(statute, requirement) {
+                        issues.push(ValidationComplianceIssue {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            severity: ComplianceSeverity::Medium,
+                            category: ComplianceCategory::Regulatory,
+                            description: format!("Does not meet requirement: {}", requirement),
+                            conflicting_regulation: reg_id.clone(),
+                            suggested_resolution: Some(format!(
+                                "Add provisions for {}",
+                                requirement
+                            )),
+                        });
+                    }
+                }
+            }
+        }
+
+        let compliance_score = if issues.is_empty() {
+            1.0
+        } else {
+            let critical_count = issues
+                .iter()
+                .filter(|i| i.severity == ComplianceSeverity::Critical)
+                .count();
+            let high_count = issues
+                .iter()
+                .filter(|i| i.severity == ComplianceSeverity::High)
+                .count();
+
+            if critical_count > 0 {
+                0.0
+            } else if high_count > 0 {
+                0.5
+            } else {
+                0.8
+            }
+        };
+
+        TargetJurisdictionComplianceCheck {
+            id: uuid::Uuid::new_v4().to_string(),
+            is_compliant: issues
+                .iter()
+                .all(|i| i.severity != ComplianceSeverity::Critical),
+            compliance_score,
+            issues,
+            recommendations: vec![
+                "Review all identified compliance issues".to_string(),
+                "Consult with local legal experts".to_string(),
+            ],
+            checked_regulations,
+        }
+    }
+
+    fn has_scope_overlap(&self, _statute: &Statute, _regulation: &RegulationEntry) -> bool {
+        // Simplified - in real implementation would analyze statute content
+        true
+    }
+
+    fn meets_requirement(&self, _statute: &Statute, _requirement: &str) -> bool {
+        // Simplified - in real implementation would check statute provisions
+        false
+    }
+}
+
+/// Constitutional compatibility analysis result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstitutionalAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Is compatible with constitution
+    pub is_compatible: bool,
+    /// Compatibility score (0.0 to 1.0)
+    pub compatibility_score: f64,
+    /// Constitutional issues identified
+    pub issues: Vec<ConstitutionalIssue>,
+    /// Relevant constitutional provisions
+    pub relevant_provisions: Vec<String>,
+    /// Recommended amendments
+    pub recommended_amendments: Vec<String>,
+}
+
+/// Constitutional issue identified.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstitutionalIssue {
+    /// Issue ID
+    pub id: String,
+    /// Issue type
+    pub issue_type: ConstitutionalIssueType,
+    /// Description
+    pub description: String,
+    /// Conflicting constitutional provision
+    pub conflicting_provision: String,
+    /// Severity
+    pub severity: ComplianceSeverity,
+    /// Suggested remedy
+    pub suggested_remedy: Option<String>,
+}
+
+/// Type of constitutional issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ConstitutionalIssueType {
+    /// Violates fundamental rights
+    FundamentalRights,
+    /// Exceeds legislative authority
+    LegislativeAuthority,
+    /// Separation of powers issue
+    SeparationOfPowers,
+    /// Federalism/jurisdictional conflict
+    Federalism,
+    /// Due process violation
+    DueProcess,
+    /// Equal protection violation
+    EqualProtection,
+}
+
+/// Constitutional compatibility analyzer.
+#[derive(Debug, Clone)]
+pub struct ConstitutionalAnalyzer {
+    /// Target jurisdiction
+    #[allow(dead_code)]
+    target_jurisdiction: Jurisdiction,
+    /// Constitutional provisions database
+    provisions: HashMap<String, ConstitutionalProvision>,
+}
+
+/// Constitutional provision entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstitutionalProvision {
+    /// Provision reference (e.g., "Article 14")
+    pub reference: String,
+    /// Provision text summary
+    pub text: String,
+    /// Category of rights/powers protected
+    pub category: ConstitutionalIssueType,
+}
+
+impl ConstitutionalAnalyzer {
+    /// Creates a new constitutional analyzer.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        let mut provisions = HashMap::new();
+
+        // Initialize with key constitutional provisions
+        match target_jurisdiction.id.as_str() {
+            "US" => {
+                provisions.insert(
+                    "amend-1".to_string(),
+                    ConstitutionalProvision {
+                        reference: "First Amendment".to_string(),
+                        text: "Freedom of speech, religion, press, assembly".to_string(),
+                        category: ConstitutionalIssueType::FundamentalRights,
+                    },
+                );
+                provisions.insert(
+                    "amend-14".to_string(),
+                    ConstitutionalProvision {
+                        reference: "Fourteenth Amendment".to_string(),
+                        text: "Equal protection and due process".to_string(),
+                        category: ConstitutionalIssueType::EqualProtection,
+                    },
+                );
+            }
+            "JP" => {
+                provisions.insert(
+                    "art-14".to_string(),
+                    ConstitutionalProvision {
+                        reference: "憲法第14条 (Article 14)".to_string(),
+                        text: "法の下の平等 (Equality under the law)".to_string(),
+                        category: ConstitutionalIssueType::EqualProtection,
+                    },
+                );
+                provisions.insert(
+                    "art-21".to_string(),
+                    ConstitutionalProvision {
+                        reference: "憲法第21条 (Article 21)".to_string(),
+                        text: "表現の自由 (Freedom of expression)".to_string(),
+                        category: ConstitutionalIssueType::FundamentalRights,
+                    },
+                );
+            }
+            _ => {}
+        }
+
+        Self {
+            target_jurisdiction,
+            provisions,
+        }
+    }
+
+    /// Analyzes constitutional compatibility.
+    pub fn analyze(&self, statute: &Statute) -> ConstitutionalAnalysis {
+        let mut issues = Vec::new();
+        let mut relevant_provisions = Vec::new();
+
+        // Check against constitutional provisions
+        for provision in self.provisions.values() {
+            relevant_provisions.push(provision.reference.clone());
+
+            // Check for potential conflicts
+            if self.may_conflict(statute, provision) {
+                issues.push(ConstitutionalIssue {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    issue_type: provision.category,
+                    description: format!("Potential conflict with {}", provision.reference),
+                    conflicting_provision: provision.reference.clone(),
+                    severity: ComplianceSeverity::High,
+                    suggested_remedy: Some(
+                        "Review and modify to ensure constitutional compliance".to_string(),
+                    ),
+                });
+            }
+        }
+
+        let compatibility_score = if issues.is_empty() {
+            1.0
+        } else {
+            let critical_count = issues
+                .iter()
+                .filter(|i| i.severity == ComplianceSeverity::Critical)
+                .count();
+            if critical_count > 0 { 0.0 } else { 0.6 }
+        };
+
+        ConstitutionalAnalysis {
+            id: uuid::Uuid::new_v4().to_string(),
+            is_compatible: issues
+                .iter()
+                .all(|i| i.severity != ComplianceSeverity::Critical),
+            compatibility_score,
+            issues,
+            relevant_provisions,
+            recommended_amendments: vec![
+                "Consult constitutional law experts".to_string(),
+                "Consider judicial review".to_string(),
+            ],
+        }
+    }
+
+    fn may_conflict(&self, _statute: &Statute, _provision: &ConstitutionalProvision) -> bool {
+        // Simplified - real implementation would analyze statute content
+        false
+    }
+}
+
+/// Treaty compliance check result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreatyComplianceResult {
+    /// Result ID
+    pub id: String,
+    /// Is compliant with treaties
+    pub is_compliant: bool,
+    /// Compliance score (0.0 to 1.0)
+    pub compliance_score: f64,
+    /// Treaty conflicts identified
+    pub conflicts: Vec<TreatyConflict>,
+    /// Applicable treaties checked
+    pub checked_treaties: Vec<String>,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+}
+
+/// Treaty conflict identified.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreatyConflict {
+    /// Conflict ID
+    pub id: String,
+    /// Treaty name
+    pub treaty_name: String,
+    /// Treaty article/provision
+    pub provision: String,
+    /// Conflict description
+    pub description: String,
+    /// Severity
+    pub severity: ComplianceSeverity,
+    /// Suggested resolution
+    pub suggested_resolution: Option<String>,
+}
+
+/// Treaty/international law compliance checker.
+#[derive(Debug, Clone)]
+pub struct TreatyTargetJurisdictionChecker {
+    /// Target jurisdiction
+    #[allow(dead_code)]
+    target_jurisdiction: Jurisdiction,
+    /// Applicable treaties database
+    treaties: HashMap<String, TreatyEntry>,
+}
+
+/// Treaty entry in the database.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreatyEntry {
+    /// Treaty ID
+    pub id: String,
+    /// Treaty full name
+    pub name: String,
+    /// Ratification status for jurisdiction
+    pub ratified: bool,
+    /// Key obligations
+    pub obligations: Vec<String>,
+    /// Prohibited actions
+    pub prohibitions: Vec<String>,
+}
+
+impl TreatyTargetJurisdictionChecker {
+    /// Creates a new treaty compliance checker.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        let mut treaties = HashMap::new();
+
+        // Add major international treaties
+        treaties.insert(
+            "iccpr".to_string(),
+            TreatyEntry {
+                id: "iccpr".to_string(),
+                name: "International Covenant on Civil and Political Rights".to_string(),
+                ratified: true,
+                obligations: vec![
+                    "Protect right to life".to_string(),
+                    "Ensure fair trial".to_string(),
+                    "Freedom of expression".to_string(),
+                ],
+                prohibitions: vec!["Torture".to_string(), "Arbitrary detention".to_string()],
+            },
+        );
+
+        treaties.insert(
+            "icescr".to_string(),
+            TreatyEntry {
+                id: "icescr".to_string(),
+                name: "International Covenant on Economic, Social and Cultural Rights".to_string(),
+                ratified: true,
+                obligations: vec![
+                    "Right to work".to_string(),
+                    "Right to education".to_string(),
+                    "Right to health".to_string(),
+                ],
+                prohibitions: vec![],
+            },
+        );
+
+        Self {
+            target_jurisdiction,
+            treaties,
+        }
+    }
+
+    /// Checks treaty compliance.
+    pub fn check_compliance(&self, statute: &Statute) -> TreatyComplianceResult {
+        let mut conflicts = Vec::new();
+        let mut checked_treaties = Vec::new();
+
+        for treaty in self.treaties.values() {
+            if !treaty.ratified {
+                continue;
+            }
+
+            checked_treaties.push(treaty.name.clone());
+
+            // Check prohibitions
+            for prohibition in &treaty.prohibitions {
+                if self.may_violate_prohibition(statute, prohibition) {
+                    conflicts.push(TreatyConflict {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        treaty_name: treaty.name.clone(),
+                        provision: prohibition.clone(),
+                        description: format!("May violate prohibition on {}", prohibition),
+                        severity: ComplianceSeverity::Critical,
+                        suggested_resolution: Some(
+                            "Remove provisions that violate treaty prohibition".to_string(),
+                        ),
+                    });
+                }
+            }
+        }
+
+        let compliance_score = if conflicts.is_empty() {
+            1.0
+        } else {
+            let critical_count = conflicts
+                .iter()
+                .filter(|c| c.severity == ComplianceSeverity::Critical)
+                .count();
+            if critical_count > 0 { 0.0 } else { 0.7 }
+        };
+
+        TreatyComplianceResult {
+            id: uuid::Uuid::new_v4().to_string(),
+            is_compliant: conflicts
+                .iter()
+                .all(|c| c.severity != ComplianceSeverity::Critical),
+            compliance_score,
+            conflicts,
+            checked_treaties,
+            recommendations: vec![
+                "Review all applicable international treaties".to_string(),
+                "Ensure compliance with treaty obligations".to_string(),
+            ],
+        }
+    }
+
+    fn may_violate_prohibition(&self, _statute: &Statute, _prohibition: &str) -> bool {
+        // Simplified - real implementation would analyze statute content
+        false
+    }
+}
+
+/// Human rights impact assessment result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HumanRightsAssessment {
+    /// Assessment ID
+    pub id: String,
+    /// Overall impact score (-1.0 to 1.0, where 1.0 is positive impact)
+    pub impact_score: f64,
+    /// Rights affected
+    pub affected_rights: Vec<AffectedRight>,
+    /// Vulnerable groups impacted
+    pub vulnerable_groups: Vec<VulnerableGroupImpact>,
+    /// Mitigation measures recommended
+    pub mitigation_measures: Vec<String>,
+    /// Overall assessment summary
+    pub summary: String,
+}
+
+/// A human right affected by the statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AffectedRight {
+    /// Right name
+    pub right: String,
+    /// Impact type
+    pub impact: RightImpactType,
+    /// Impact severity
+    pub severity: ImpactSeverity,
+    /// Description of impact
+    pub description: String,
+}
+
+/// Type of impact on a right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RightImpactType {
+    /// Enhances the right
+    Enhancement,
+    /// Neutral impact
+    Neutral,
+    /// Restricts the right
+    Restriction,
+    /// Potentially violates the right
+    Violation,
+}
+
+/// Severity of impact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ImpactSeverity {
+    /// Severe impact
+    Severe,
+    /// Moderate impact
+    Moderate,
+    /// Minor impact
+    Minor,
+    /// Negligible impact
+    Negligible,
+}
+
+/// Impact on a vulnerable group.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VulnerableGroupImpact {
+    /// Group name
+    pub group: String,
+    /// Impact description
+    pub impact: String,
+    /// Severity
+    pub severity: ImpactSeverity,
+    /// Recommended protections
+    pub recommended_protections: Vec<String>,
+}
+
+/// Human rights impact assessor.
+#[derive(Debug, Clone)]
+pub struct HumanRightsAssessor {
+    /// Target jurisdiction
+    #[allow(dead_code)]
+    target_jurisdiction: Jurisdiction,
+}
+
+impl HumanRightsAssessor {
+    /// Creates a new human rights assessor.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        Self {
+            target_jurisdiction,
+        }
+    }
+
+    /// Assesses human rights impact of a statute.
+    pub fn assess(&self, statute: &Statute) -> HumanRightsAssessment {
+        let mut affected_rights = Vec::new();
+        let mut vulnerable_groups = Vec::new();
+
+        // Analyze potential impacts on key rights
+        let rights_to_check = vec![
+            "Right to equality",
+            "Right to privacy",
+            "Freedom of expression",
+            "Right to fair trial",
+        ];
+
+        for right in rights_to_check {
+            let impact = self.assess_right_impact(statute, right);
+            if impact.impact != RightImpactType::Neutral {
+                affected_rights.push(impact);
+            }
+        }
+
+        // Check impact on vulnerable groups
+        let groups_to_check = vec![
+            "Children",
+            "Elderly",
+            "Persons with disabilities",
+            "Minorities",
+        ];
+
+        for group in groups_to_check {
+            if let Some(impact) = self.assess_group_impact(statute, group) {
+                vulnerable_groups.push(impact);
+            }
+        }
+
+        // Calculate overall impact score
+        let impact_score = self.calculate_impact_score(&affected_rights);
+
+        HumanRightsAssessment {
+            id: uuid::Uuid::new_v4().to_string(),
+            impact_score,
+            affected_rights,
+            vulnerable_groups,
+            mitigation_measures: vec![
+                "Include non-discrimination clauses".to_string(),
+                "Add safeguards for vulnerable groups".to_string(),
+                "Ensure proportionality of restrictions".to_string(),
+            ],
+            summary: if impact_score >= 0.0 {
+                "Statute has positive or neutral human rights impact".to_string()
+            } else {
+                "Statute may negatively impact human rights - review recommended".to_string()
+            },
+        }
+    }
+
+    fn assess_right_impact(&self, _statute: &Statute, right: &str) -> AffectedRight {
+        // Simplified - real implementation would analyze statute content
+        AffectedRight {
+            right: right.to_string(),
+            impact: RightImpactType::Neutral,
+            severity: ImpactSeverity::Negligible,
+            description: format!("No significant impact on {}", right),
+        }
+    }
+
+    fn assess_group_impact(
+        &self,
+        _statute: &Statute,
+        _group: &str,
+    ) -> Option<VulnerableGroupImpact> {
+        // Simplified - real implementation would analyze statute content
+        None
+    }
+
+    fn calculate_impact_score(&self, affected_rights: &[AffectedRight]) -> f64 {
+        if affected_rights.is_empty() {
+            return 0.0;
+        }
+
+        let mut total_score = 0.0;
+        for right in affected_rights {
+            let score = match right.impact {
+                RightImpactType::Enhancement => 1.0,
+                RightImpactType::Neutral => 0.0,
+                RightImpactType::Restriction => -0.5,
+                RightImpactType::Violation => -1.0,
+            };
+            total_score += score;
+        }
+
+        total_score / affected_rights.len() as f64
+    }
+}
+
+/// Enforceability prediction result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforceabilityPrediction {
+    /// Prediction ID
+    pub id: String,
+    /// Is statute enforceable
+    pub is_enforceable: bool,
+    /// Enforceability score (0.0 to 1.0)
+    pub enforceability_score: f64,
+    /// Enforcement challenges
+    pub challenges: Vec<EnforcementChallenge>,
+    /// Required enforcement mechanisms
+    pub required_mechanisms: Vec<String>,
+    /// Estimated implementation cost
+    pub estimated_cost: Option<f64>,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+}
+
+/// Enforcement challenge identified.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementChallenge {
+    /// Challenge ID
+    pub id: String,
+    /// Challenge type
+    pub challenge_type: EnforcementChallengeType,
+    /// Description
+    pub description: String,
+    /// Severity
+    pub severity: ImpactSeverity,
+    /// Suggested solution
+    pub suggested_solution: Option<String>,
+}
+
+/// Type of enforcement challenge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EnforcementChallengeType {
+    /// Lacks enforcement authority
+    Authority,
+    /// Insufficient resources
+    Resources,
+    /// Technical complexity
+    Technical,
+    /// Cultural resistance
+    Cultural,
+    /// Administrative capacity
+    Administrative,
+    /// Monitoring difficulty
+    Monitoring,
+}
+
+/// Enforceability predictor.
+#[derive(Debug, Clone)]
+pub struct EnforceabilityPredictor {
+    /// Target jurisdiction
+    #[allow(dead_code)]
+    target_jurisdiction: Jurisdiction,
+}
+
+impl EnforceabilityPredictor {
+    /// Creates a new enforceability predictor.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        Self {
+            target_jurisdiction,
+        }
+    }
+
+    /// Predicts enforceability of a statute.
+    pub fn predict(&self, statute: &Statute) -> EnforceabilityPrediction {
+        let mut challenges = Vec::new();
+        let mut required_mechanisms = Vec::new();
+
+        // Check for common enforcement challenges
+        if self.lacks_enforcement_authority(statute) {
+            challenges.push(EnforcementChallenge {
+                id: uuid::Uuid::new_v4().to_string(),
+                challenge_type: EnforcementChallengeType::Authority,
+                description: "Lacks clear enforcement authority".to_string(),
+                severity: ImpactSeverity::Severe,
+                suggested_solution: Some(
+                    "Designate enforcement agency and grant necessary authority".to_string(),
+                ),
+            });
+        }
+
+        if self.requires_significant_resources(statute) {
+            challenges.push(EnforcementChallenge {
+                id: uuid::Uuid::new_v4().to_string(),
+                challenge_type: EnforcementChallengeType::Resources,
+                description: "Requires significant enforcement resources".to_string(),
+                severity: ImpactSeverity::Moderate,
+                suggested_solution: Some(
+                    "Allocate budget for enforcement infrastructure".to_string(),
+                ),
+            });
+        }
+
+        // Identify required mechanisms
+        required_mechanisms.extend(vec![
+            "Enforcement agency designation".to_string(),
+            "Penalty structure".to_string(),
+            "Monitoring system".to_string(),
+            "Reporting requirements".to_string(),
+        ]);
+
+        let enforceability_score = if challenges.is_empty() {
+            0.9
+        } else {
+            let severe_count = challenges
+                .iter()
+                .filter(|c| c.severity == ImpactSeverity::Severe)
+                .count();
+            if severe_count > 0 { 0.3 } else { 0.6 }
+        };
+
+        EnforceabilityPrediction {
+            id: uuid::Uuid::new_v4().to_string(),
+            is_enforceable: enforceability_score >= 0.5,
+            enforceability_score,
+            challenges,
+            required_mechanisms,
+            estimated_cost: Some(100000.0), // Placeholder
+            recommendations: vec![
+                "Establish clear enforcement procedures".to_string(),
+                "Allocate adequate resources".to_string(),
+                "Train enforcement personnel".to_string(),
+            ],
+        }
+    }
+
+    fn lacks_enforcement_authority(&self, _statute: &Statute) -> bool {
+        // Simplified - real implementation would analyze statute provisions
+        false
+    }
+
+    fn requires_significant_resources(&self, _statute: &Statute) -> bool {
+        // Simplified - real implementation would estimate resource requirements
+        true
+    }
+}
+
+/// Comprehensive validation framework combining all validation types.
+#[derive(Debug, Clone)]
+pub struct ValidationFramework {
+    compliance_checker: TargetJurisdictionChecker,
+    constitutional_analyzer: ConstitutionalAnalyzer,
+    treaty_checker: TreatyTargetJurisdictionChecker,
+    human_rights_assessor: HumanRightsAssessor,
+    enforceability_predictor: EnforceabilityPredictor,
+}
+
+/// Comprehensive validation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationResult {
+    /// Result ID
+    pub id: String,
+    /// Overall validation passed
+    pub passed: bool,
+    /// Overall score (0.0 to 1.0)
+    pub overall_score: f64,
+    /// Compliance check result
+    pub compliance: TargetJurisdictionComplianceCheck,
+    /// Constitutional analysis
+    pub constitutional: ConstitutionalAnalysis,
+    /// Treaty compliance
+    pub treaty_compliance: TreatyComplianceResult,
+    /// Human rights assessment
+    pub human_rights: HumanRightsAssessment,
+    /// Enforceability prediction
+    pub enforceability: EnforceabilityPrediction,
+    /// Summary of validation
+    pub summary: String,
+}
+
+impl ValidationFramework {
+    /// Creates a new validation framework.
+    pub fn new(target_jurisdiction: Jurisdiction) -> Self {
+        Self {
+            compliance_checker: TargetJurisdictionChecker::new(target_jurisdiction.clone()),
+            constitutional_analyzer: ConstitutionalAnalyzer::new(target_jurisdiction.clone()),
+            treaty_checker: TreatyTargetJurisdictionChecker::new(target_jurisdiction.clone()),
+            human_rights_assessor: HumanRightsAssessor::new(target_jurisdiction.clone()),
+            enforceability_predictor: EnforceabilityPredictor::new(target_jurisdiction),
+        }
+    }
+
+    /// Performs comprehensive validation of a ported statute.
+    pub fn validate(&self, statute: &Statute) -> ValidationResult {
+        let compliance = self.compliance_checker.check_compliance(statute);
+        let constitutional = self.constitutional_analyzer.analyze(statute);
+        let treaty_compliance = self.treaty_checker.check_compliance(statute);
+        let human_rights = self.human_rights_assessor.assess(statute);
+        let enforceability = self.enforceability_predictor.predict(statute);
+
+        // Calculate overall score
+        let overall_score = (
+            compliance.compliance_score
+                + constitutional.compatibility_score
+                + treaty_compliance.compliance_score
+                + enforceability.enforceability_score
+                + (human_rights.impact_score + 1.0) / 2.0
+            // Normalize -1..1 to 0..1
+        ) / 5.0;
+
+        let passed = compliance.is_compliant
+            && constitutional.is_compatible
+            && treaty_compliance.is_compliant
+            && human_rights.impact_score >= 0.0
+            && enforceability.is_enforceable;
+
+        let summary = if passed {
+            format!("Validation passed with overall score {:.2}", overall_score)
+        } else {
+            format!(
+                "Validation failed - review required (score: {:.2})",
+                overall_score
+            )
+        };
+
+        ValidationResult {
+            id: uuid::Uuid::new_v4().to_string(),
+            passed,
+            overall_score,
+            compliance,
+            constitutional,
+            treaty_compliance,
+            human_rights,
+            enforceability,
+            summary,
+        }
+    }
+}
+
+// ============================================================================
+// Workflow Management (v0.1.7)
+// ============================================================================
+
+/// Porting project for managing multi-statute porting initiatives.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingProject {
+    /// Project ID
+    pub id: String,
+    /// Project name
+    pub name: String,
+    /// Project description
+    pub description: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Project status
+    pub status: ProjectStatus,
+    /// Statutes included in the project
+    pub statute_ids: Vec<String>,
+    /// Project stakeholders
+    pub stakeholders: Vec<Stakeholder>,
+    /// Project timeline
+    pub timeline: ProjectTimeline,
+    /// Created timestamp
+    pub created_at: String,
+    /// Last updated timestamp
+    pub updated_at: String,
+    /// Project metadata
+    pub metadata: HashMap<String, String>,
+}
+
+/// Project status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ProjectStatus {
+    /// Project planning phase
+    Planning,
+    /// In progress
+    InProgress,
+    /// Under review
+    UnderReview,
+    /// Approved
+    Approved,
+    /// Rejected
+    Rejected,
+    /// On hold
+    OnHold,
+    /// Completed
+    Completed,
+    /// Cancelled
+    Cancelled,
+}
+
+/// Stakeholder in a porting project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stakeholder {
+    /// Stakeholder ID
+    pub id: String,
+    /// Stakeholder name
+    pub name: String,
+    /// Email address
+    pub email: String,
+    /// Role in the project
+    pub role: StakeholderRole,
+    /// Notification preferences
+    pub notification_preferences: NotificationPreferences,
+}
+
+/// Stakeholder role in a porting project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StakeholderRole {
+    /// Project manager
+    ProjectManager,
+    /// Legal expert/reviewer
+    LegalExpert,
+    /// Technical reviewer
+    TechnicalReviewer,
+    /// Approver
+    Approver,
+    /// Observer
+    Observer,
+    /// Contributor
+    Contributor,
+}
+
+/// Notification preferences for stakeholders.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationPreferences {
+    /// Notify on status changes
+    pub on_status_change: bool,
+    /// Notify on deadline approaching
+    pub on_deadline_approaching: bool,
+    /// Notify on assignment
+    pub on_assignment: bool,
+    /// Notify on review request
+    pub on_review_request: bool,
+    /// Notification channels
+    pub channels: Vec<NotificationChannel>,
+}
+
+/// Notification channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NotificationChannel {
+    /// Email notification
+    Email,
+    /// In-app notification
+    InApp,
+    /// SMS notification
+    Sms,
+    /// Webhook
+    Webhook,
+    /// Website notification
+    Website,
+    /// Public notice (physical/official publication)
+    PublicNotice,
+}
+
+/// Project timeline with milestones and deadlines.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectTimeline {
+    /// Project start date
+    pub start_date: String,
+    /// Expected end date
+    pub end_date: String,
+    /// Milestones
+    pub milestones: Vec<Milestone>,
+    /// Current phase
+    pub current_phase: String,
+}
+
+/// Project milestone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Milestone {
+    /// Milestone ID
+    pub id: String,
+    /// Milestone name
+    pub name: String,
+    /// Milestone description
+    pub description: String,
+    /// Target date
+    pub target_date: String,
+    /// Completion status
+    pub completed: bool,
+    /// Completed date
+    pub completed_date: Option<String>,
+    /// Dependencies (other milestone IDs)
+    pub dependencies: Vec<String>,
+}
+
+/// Porting project manager.
+#[derive(Debug)]
+pub struct PortingProjectManager {
+    projects: HashMap<String, PortingProject>,
+}
+
+impl PortingProjectManager {
+    /// Creates a new project manager.
+    pub fn new() -> Self {
+        Self {
+            projects: HashMap::new(),
+        }
+    }
+
+    /// Creates a new porting project.
+    pub fn create_project(
+        &mut self,
+        name: String,
+        description: String,
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+    ) -> PortingProject {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let project = PortingProject {
+            id: id.clone(),
+            name,
+            description,
+            source_jurisdiction,
+            target_jurisdiction,
+            status: ProjectStatus::Planning,
+            statute_ids: Vec::new(),
+            stakeholders: Vec::new(),
+            timeline: ProjectTimeline {
+                start_date: now.clone(),
+                end_date: now.clone(),
+                milestones: Vec::new(),
+                current_phase: "Planning".to_string(),
+            },
+            created_at: now.clone(),
+            updated_at: now,
+            metadata: HashMap::new(),
+        };
+
+        self.projects.insert(id, project.clone());
+        project
+    }
+
+    /// Gets a project by ID.
+    pub fn get_project(&self, id: &str) -> Option<&PortingProject> {
+        self.projects.get(id)
+    }
+
+    /// Updates project status.
+    pub fn update_status(&mut self, project_id: &str, status: ProjectStatus) -> Option<()> {
+        let project = self.projects.get_mut(project_id)?;
+        project.status = status;
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        Some(())
+    }
+
+    /// Adds a statute to the project.
+    pub fn add_statute(&mut self, project_id: &str, statute_id: String) -> Option<()> {
+        let project = self.projects.get_mut(project_id)?;
+        project.statute_ids.push(statute_id);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        Some(())
+    }
+
+    /// Adds a stakeholder to the project.
+    pub fn add_stakeholder(&mut self, project_id: &str, stakeholder: Stakeholder) -> Option<()> {
+        let project = self.projects.get_mut(project_id)?;
+        project.stakeholders.push(stakeholder);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        Some(())
+    }
+
+    /// Adds a milestone to the project.
+    pub fn add_milestone(&mut self, project_id: &str, milestone: Milestone) -> Option<()> {
+        let project = self.projects.get_mut(project_id)?;
+        project.timeline.milestones.push(milestone);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        Some(())
+    }
+
+    /// Marks a milestone as completed.
+    pub fn complete_milestone(&mut self, project_id: &str, milestone_id: &str) -> Option<()> {
+        let project = self.projects.get_mut(project_id)?;
+        let milestone = project
+            .timeline
+            .milestones
+            .iter_mut()
+            .find(|m| m.id == milestone_id)?;
+        milestone.completed = true;
+        milestone.completed_date = Some(chrono::Utc::now().to_rfc3339());
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        Some(())
+    }
+
+    /// Lists all projects.
+    pub fn list_projects(&self) -> Vec<&PortingProject> {
+        self.projects.values().collect()
+    }
+
+    /// Lists projects by status.
+    pub fn list_projects_by_status(&self, status: ProjectStatus) -> Vec<&PortingProject> {
+        self.projects
+            .values()
+            .filter(|p| p.status == status)
+            .collect()
+    }
+}
+
+impl Default for PortingProjectManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Review workflow step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewWorkflowStep {
+    /// Step ID
+    pub id: String,
+    /// Step name
+    pub name: String,
+    /// Step order
+    pub order: u32,
+    /// Required reviewers (stakeholder IDs)
+    pub required_reviewers: Vec<String>,
+    /// Optional reviewers
+    pub optional_reviewers: Vec<String>,
+    /// Minimum approvals required
+    pub min_approvals: u32,
+    /// Step status
+    pub status: ReviewStepStatus,
+    /// Reviews submitted
+    pub reviews: Vec<WorkflowReview>,
+}
+
+/// Review step status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ReviewStepStatus {
+    /// Pending review
+    Pending,
+    /// In progress
+    InProgress,
+    /// Approved
+    Approved,
+    /// Rejected
+    Rejected,
+    /// Skipped
+    Skipped,
+}
+
+/// Review from a stakeholder in a workflow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowReview {
+    /// Review ID
+    pub id: String,
+    /// Reviewer stakeholder ID
+    pub reviewer_id: String,
+    /// Review decision
+    pub decision: ReviewDecision,
+    /// Review comments
+    pub comments: String,
+    /// Review timestamp
+    pub reviewed_at: String,
+    /// Recommended changes
+    pub recommended_changes: Vec<String>,
+}
+
+/// Review decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ReviewDecision {
+    /// Approve
+    Approve,
+    /// Approve with conditions
+    ApproveWithConditions,
+    /// Request changes
+    RequestChanges,
+    /// Reject
+    Reject,
+}
+
+/// Stakeholder review workflow manager.
+#[derive(Debug)]
+pub struct StakeholderReviewWorkflow {
+    workflows: HashMap<String, Vec<ReviewWorkflowStep>>,
+}
+
+impl StakeholderReviewWorkflow {
+    /// Creates a new review workflow manager.
+    pub fn new() -> Self {
+        Self {
+            workflows: HashMap::new(),
+        }
+    }
+
+    /// Creates a workflow for a project.
+    pub fn create_workflow(&mut self, project_id: String, steps: Vec<ReviewWorkflowStep>) {
+        self.workflows.insert(project_id, steps);
+    }
+
+    /// Submits a review for a workflow step.
+    pub fn submit_review(
+        &mut self,
+        project_id: &str,
+        step_id: &str,
+        review: WorkflowReview,
+    ) -> Option<()> {
+        let steps = self.workflows.get_mut(project_id)?;
+        let step = steps.iter_mut().find(|s| s.id == step_id)?;
+        step.reviews.push(review);
+
+        // Check if step should be approved
+        let approvals = step
+            .reviews
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r.decision,
+                    ReviewDecision::Approve | ReviewDecision::ApproveWithConditions
+                )
+            })
+            .count() as u32;
+
+        if approvals >= step.min_approvals {
+            step.status = ReviewStepStatus::Approved;
+        }
+
+        Some(())
+    }
+
+    /// Gets workflow status for a project.
+    pub fn get_workflow_status(&self, project_id: &str) -> Option<&Vec<ReviewWorkflowStep>> {
+        self.workflows.get(project_id)
+    }
+
+    /// Advances to next step if current is approved.
+    pub fn advance_workflow(&mut self, project_id: &str) -> Option<usize> {
+        let steps = self.workflows.get_mut(project_id)?;
+
+        let current_step = steps
+            .iter()
+            .position(|s| s.status == ReviewStepStatus::InProgress)?;
+
+        if steps[current_step].status == ReviewStepStatus::Approved
+            && current_step + 1 < steps.len()
+        {
+            steps[current_step + 1].status = ReviewStepStatus::InProgress;
+            return Some(current_step + 1);
+        }
+
+        None
+    }
+}
+
+impl Default for StakeholderReviewWorkflow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Porting iteration version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingIteration {
+    /// Iteration ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Iteration number
+    pub iteration_number: u32,
+    /// Statute snapshot
+    pub statute_snapshot: String,
+    /// Changes from previous iteration
+    pub changes: Vec<IterationChange>,
+    /// Created timestamp
+    pub created_at: String,
+    /// Created by (stakeholder ID)
+    pub created_by: String,
+    /// Iteration notes
+    pub notes: String,
+    /// Tags for categorization
+    pub tags: Vec<String>,
+}
+
+/// Change in an iteration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IterationChange {
+    /// Change ID
+    pub id: String,
+    /// Change type
+    pub change_type: IterationChangeType,
+    /// Field or section changed
+    pub field: String,
+    /// Previous value
+    pub previous_value: String,
+    /// New value
+    pub new_value: String,
+    /// Reason for change
+    pub reason: String,
+}
+
+/// Type of iteration change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IterationChangeType {
+    /// Added new content
+    Addition,
+    /// Modified existing content
+    Modification,
+    /// Removed content
+    Deletion,
+    /// Restructured content
+    Restructure,
+}
+
+/// Version control for porting iterations.
+#[derive(Debug)]
+pub struct PortingVersionControl {
+    iterations: HashMap<String, Vec<PortingIteration>>,
+}
+
+impl PortingVersionControl {
+    /// Creates a new version control system.
+    pub fn new() -> Self {
+        Self {
+            iterations: HashMap::new(),
+        }
+    }
+
+    /// Creates a new iteration.
+    pub fn create_iteration(
+        &mut self,
+        project_id: String,
+        statute_snapshot: String,
+        created_by: String,
+        notes: String,
+    ) -> PortingIteration {
+        let iterations = self.iterations.entry(project_id.clone()).or_default();
+        let iteration_number = (iterations.len() + 1) as u32;
+
+        let iteration = PortingIteration {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id,
+            iteration_number,
+            statute_snapshot,
+            changes: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            created_by,
+            notes,
+            tags: Vec::new(),
+        };
+
+        iterations.push(iteration.clone());
+        iteration
+    }
+
+    /// Gets all iterations for a project.
+    pub fn get_iterations(&self, project_id: &str) -> Option<&Vec<PortingIteration>> {
+        self.iterations.get(project_id)
+    }
+
+    /// Gets a specific iteration.
+    pub fn get_iteration(
+        &self,
+        project_id: &str,
+        iteration_number: u32,
+    ) -> Option<&PortingIteration> {
+        self.iterations
+            .get(project_id)?
+            .iter()
+            .find(|i| i.iteration_number == iteration_number)
+    }
+
+    /// Compares two iterations.
+    pub fn compare_iterations(
+        &self,
+        project_id: &str,
+        from_iteration: u32,
+        to_iteration: u32,
+    ) -> Option<Vec<IterationChange>> {
+        let iterations = self.iterations.get(project_id)?;
+        let _from = iterations
+            .iter()
+            .find(|i| i.iteration_number == from_iteration)?;
+        let to = iterations
+            .iter()
+            .find(|i| i.iteration_number == to_iteration)?;
+
+        // Simplified comparison - real implementation would do deep diff
+        Some(to.changes.clone())
+    }
+
+    /// Reverts to a previous iteration.
+    pub fn revert_to_iteration(
+        &mut self,
+        project_id: &str,
+        iteration_number: u32,
+        created_by: String,
+    ) -> Option<PortingIteration> {
+        let iteration = self.get_iteration(project_id, iteration_number)?.clone();
+
+        Some(self.create_iteration(
+            project_id.to_string(),
+            iteration.statute_snapshot.clone(),
+            created_by,
+            format!("Reverted to iteration {}", iteration_number),
+        ))
+    }
+}
+
+impl Default for PortingVersionControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Approval chain configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalChain {
+    /// Chain ID
+    pub id: String,
+    /// Chain name
+    pub name: String,
+    /// Approval steps
+    pub steps: Vec<ApprovalStep>,
+    /// Chain status
+    pub status: ApprovalChainStatus,
+}
+
+/// Approval step in the chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalStep {
+    /// Step ID
+    pub id: String,
+    /// Step name
+    pub name: String,
+    /// Step order
+    pub order: u32,
+    /// Approvers (stakeholder IDs)
+    pub approvers: Vec<String>,
+    /// Approval mode
+    pub approval_mode: ApprovalMode,
+    /// Step status
+    pub status: ApprovalStepStatus,
+    /// Approvals received
+    pub approvals: Vec<ApprovalRecord>,
+    /// Auto-approve after timeout
+    pub auto_approve_after: Option<u64>,
+}
+
+/// Approval mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ApprovalMode {
+    /// Any approver can approve
+    Any,
+    /// All approvers must approve
+    All,
+    /// Majority must approve
+    Majority,
+    /// Specific number must approve
+    Threshold(u32),
+}
+
+/// Approval step status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ApprovalStepStatus {
+    /// Waiting for approval
+    Pending,
+    /// Approved
+    Approved,
+    /// Rejected
+    Rejected,
+    /// Timed out
+    TimedOut,
+}
+
+/// Approval chain status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ApprovalChainStatus {
+    /// Not started
+    NotStarted,
+    /// In progress
+    InProgress,
+    /// Completed successfully
+    Completed,
+    /// Failed/rejected
+    Failed,
+}
+
+/// Individual approval record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalRecord {
+    /// Approval ID
+    pub id: String,
+    /// Approver ID
+    pub approver_id: String,
+    /// Approved or rejected
+    pub approved: bool,
+    /// Comments
+    pub comments: String,
+    /// Approval timestamp
+    pub approved_at: String,
+}
+
+/// Approval chain manager.
+#[derive(Debug)]
+pub struct ApprovalChainManager {
+    chains: HashMap<String, ApprovalChain>,
+}
+
+impl ApprovalChainManager {
+    /// Creates a new approval chain manager.
+    pub fn new() -> Self {
+        Self {
+            chains: HashMap::new(),
+        }
+    }
+
+    /// Creates an approval chain.
+    pub fn create_chain(&mut self, name: String, steps: Vec<ApprovalStep>) -> ApprovalChain {
+        let chain = ApprovalChain {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            steps,
+            status: ApprovalChainStatus::NotStarted,
+        };
+
+        self.chains.insert(chain.id.clone(), chain.clone());
+        chain
+    }
+
+    /// Submits an approval.
+    pub fn submit_approval(
+        &mut self,
+        chain_id: &str,
+        step_id: &str,
+        approval: ApprovalRecord,
+    ) -> Option<()> {
+        let chain = self.chains.get_mut(chain_id)?;
+        let step = chain.steps.iter_mut().find(|s| s.id == step_id)?;
+        step.approvals.push(approval);
+
+        // Check if step is approved based on mode
+        let approved_count = step.approvals.iter().filter(|a| a.approved).count();
+        let total_approvers = step.approvers.len();
+
+        let step_approved = match step.approval_mode {
+            ApprovalMode::Any => approved_count >= 1,
+            ApprovalMode::All => approved_count == total_approvers,
+            ApprovalMode::Majority => approved_count > total_approvers / 2,
+            ApprovalMode::Threshold(n) => approved_count >= n as usize,
+        };
+
+        if step_approved {
+            step.status = ApprovalStepStatus::Approved;
+        }
+
+        Some(())
+    }
+
+    /// Gets chain status.
+    pub fn get_chain(&self, chain_id: &str) -> Option<&ApprovalChain> {
+        self.chains.get(chain_id)
+    }
+
+    /// Advances chain to next step.
+    pub fn advance_chain(&mut self, chain_id: &str) -> Option<usize> {
+        let chain = self.chains.get_mut(chain_id)?;
+
+        let current_step = chain
+            .steps
+            .iter()
+            .position(|s| s.status == ApprovalStepStatus::Pending)?;
+
+        if chain.steps[current_step].status == ApprovalStepStatus::Approved {
+            if current_step + 1 < chain.steps.len() {
+                return Some(current_step + 1);
+            } else {
+                chain.status = ApprovalChainStatus::Completed;
+            }
+        }
+
+        None
+    }
+}
+
+impl Default for ApprovalChainManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Notification to be sent to stakeholders.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Notification {
+    /// Notification ID
+    pub id: String,
+    /// Recipient stakeholder ID
+    pub recipient_id: String,
+    /// Notification type
+    pub notification_type: NotificationType,
+    /// Notification title
+    pub title: String,
+    /// Notification message
+    pub message: String,
+    /// Related project ID
+    pub project_id: Option<String>,
+    /// Priority
+    pub priority: NotificationPriority,
+    /// Created timestamp
+    pub created_at: String,
+    /// Read status
+    pub read: bool,
+    /// Delivery channels
+    pub channels: Vec<NotificationChannel>,
+}
+
+/// Notification type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NotificationType {
+    /// Status change notification
+    StatusChange,
+    /// Deadline approaching
+    DeadlineApproaching,
+    /// Assignment notification
+    Assignment,
+    /// Review request
+    ReviewRequest,
+    /// Approval request
+    ApprovalRequest,
+    /// Milestone completed
+    MilestoneCompleted,
+    /// Project completed
+    ProjectCompleted,
+}
+
+/// Notification priority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NotificationPriority {
+    /// Low priority
+    Low,
+    /// Normal priority
+    Normal,
+    /// High priority
+    High,
+    /// Urgent
+    Urgent,
+}
+
+/// Deadline tracking entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeadlineTracker {
+    /// Tracker ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Deadline name
+    pub name: String,
+    /// Deadline date
+    pub deadline: String,
+    /// Warning threshold in days
+    pub warning_days: u32,
+    /// Status
+    pub status: DeadlineStatus,
+    /// Assigned stakeholder IDs
+    pub assigned_to: Vec<String>,
+}
+
+/// Deadline status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DeadlineStatus {
+    /// On track
+    OnTrack,
+    /// Approaching deadline
+    Approaching,
+    /// Overdue
+    Overdue,
+    /// Completed
+    Completed,
+}
+
+/// Notification and deadline manager.
+#[derive(Debug)]
+pub struct NotificationManager {
+    notifications: HashMap<String, Vec<Notification>>,
+    deadlines: HashMap<String, Vec<DeadlineTracker>>,
+}
+
+impl NotificationManager {
+    /// Creates a new notification manager.
+    pub fn new() -> Self {
+        Self {
+            notifications: HashMap::new(),
+            deadlines: HashMap::new(),
+        }
+    }
+
+    /// Sends a notification.
+    pub fn send_notification(&mut self, notification: Notification) {
+        let recipient_id = notification.recipient_id.clone();
+        self.notifications
+            .entry(recipient_id)
+            .or_default()
+            .push(notification);
+    }
+
+    /// Gets notifications for a stakeholder.
+    pub fn get_notifications(&self, stakeholder_id: &str) -> Vec<&Notification> {
+        self.notifications
+            .get(stakeholder_id)
+            .map(|n| n.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Marks notification as read.
+    pub fn mark_as_read(&mut self, stakeholder_id: &str, notification_id: &str) -> Option<()> {
+        let notifications = self.notifications.get_mut(stakeholder_id)?;
+        let notification = notifications.iter_mut().find(|n| n.id == notification_id)?;
+        notification.read = true;
+        Some(())
+    }
+
+    /// Adds a deadline tracker.
+    pub fn add_deadline(&mut self, deadline: DeadlineTracker) {
+        let project_id = deadline.project_id.clone();
+        self.deadlines.entry(project_id).or_default().push(deadline);
+    }
+
+    /// Gets deadlines for a project.
+    pub fn get_deadlines(&self, project_id: &str) -> Vec<&DeadlineTracker> {
+        self.deadlines
+            .get(project_id)
+            .map(|d| d.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Checks approaching deadlines and generates notifications.
+    pub fn check_deadlines(&mut self) -> Vec<Notification> {
+        let mut notifications = Vec::new();
+        let now = chrono::Utc::now();
+
+        for (project_id, deadlines) in &self.deadlines {
+            for deadline in deadlines {
+                if let Ok(deadline_date) = chrono::DateTime::parse_from_rfc3339(&deadline.deadline)
+                {
+                    let days_until = (deadline_date.signed_duration_since(now)).num_days();
+
+                    if days_until >= 0 && days_until <= deadline.warning_days as i64 {
+                        for stakeholder_id in &deadline.assigned_to {
+                            let notification = Notification {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                recipient_id: stakeholder_id.clone(),
+                                notification_type: NotificationType::DeadlineApproaching,
+                                title: format!("Deadline Approaching: {}", deadline.name),
+                                message: format!(
+                                    "Deadline '{}' is approaching in {} days",
+                                    deadline.name, days_until
+                                ),
+                                project_id: Some(project_id.clone()),
+                                priority: if days_until <= 3 {
+                                    NotificationPriority::Urgent
+                                } else {
+                                    NotificationPriority::High
+                                },
+                                created_at: now.to_rfc3339(),
+                                read: false,
+                                channels: vec![
+                                    NotificationChannel::Email,
+                                    NotificationChannel::InApp,
+                                ],
+                            };
+                            notifications.push(notification);
+                        }
+                    }
+                }
+            }
+        }
+
+        notifications
+    }
+}
+
+impl Default for NotificationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Reporting (v0.1.8)
+// ============================================================================
+
+/// Executive summary of a porting project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutiveSummary {
+    /// Project identifier
+    pub project_id: String,
+    /// Project title
+    pub title: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Number of statutes ported
+    pub statutes_count: usize,
+    /// Overall compatibility score (0.0 to 1.0)
+    pub compatibility_score: f64,
+    /// Overall risk level
+    pub risk_level: RiskLevel,
+    /// Key findings (3-5 bullet points)
+    pub key_findings: Vec<String>,
+    /// Main recommendations (3-5 bullet points)
+    pub recommendations: Vec<String>,
+    /// Timeline summary
+    pub timeline_summary: String,
+    /// Stakeholders involved
+    pub stakeholders: Vec<String>,
+    /// Generated timestamp
+    pub generated_at: String,
+}
+
+/// Generator for executive summaries.
+#[derive(Debug, Clone)]
+pub struct ExecutiveSummaryGenerator;
+
+impl ExecutiveSummaryGenerator {
+    /// Creates a new executive summary generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates an executive summary from a porting project.
+    pub fn generate(
+        &self,
+        project: &PortingProject,
+        ported_statutes: &[PortedStatute],
+    ) -> ExecutiveSummary {
+        let compatibility_score = if !ported_statutes.is_empty() {
+            ported_statutes
+                .iter()
+                .map(|s| s.compatibility_score)
+                .sum::<f64>()
+                / ported_statutes.len() as f64
+        } else {
+            0.0
+        };
+
+        let risk_level = if compatibility_score >= 0.8 {
+            RiskLevel::Low
+        } else if compatibility_score >= 0.5 {
+            RiskLevel::Medium
+        } else {
+            RiskLevel::High
+        };
+
+        let key_findings = self.extract_key_findings(ported_statutes);
+        let recommendations = self.generate_recommendations(ported_statutes, compatibility_score);
+
+        ExecutiveSummary {
+            project_id: project.id.clone(),
+            title: project.name.clone(),
+            source_jurisdiction: project.source_jurisdiction.clone(),
+            target_jurisdiction: project.target_jurisdiction.clone(),
+            statutes_count: ported_statutes.len(),
+            compatibility_score,
+            risk_level,
+            key_findings,
+            recommendations,
+            timeline_summary: format!(
+                "Created: {}, Last updated: {}",
+                project.created_at, project.updated_at
+            ),
+            stakeholders: project
+                .stakeholders
+                .iter()
+                .map(|s| s.name.clone())
+                .collect(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    fn extract_key_findings(&self, ported_statutes: &[PortedStatute]) -> Vec<String> {
+        let mut findings = Vec::new();
+
+        let total_changes: usize = ported_statutes.iter().map(|s| s.changes.len()).sum();
+        if total_changes > 0 {
+            findings.push(format!(
+                "Total of {} adaptations made across {} statutes",
+                total_changes,
+                ported_statutes.len()
+            ));
+        }
+
+        let cultural_changes = ported_statutes
+            .iter()
+            .flat_map(|s| &s.changes)
+            .filter(|c| matches!(c.change_type, ChangeType::CulturalAdaptation))
+            .count();
+        if cultural_changes > 0 {
+            findings.push(format!(
+                "{} cultural adaptations required",
+                cultural_changes
+            ));
+        }
+
+        let high_risk_count = ported_statutes
+            .iter()
+            .filter(|s| s.compatibility_score < 0.5)
+            .count();
+        if high_risk_count > 0 {
+            findings.push(format!(
+                "{} statutes require significant adaptation (compatibility < 50%)",
+                high_risk_count
+            ));
+        }
+
+        if findings.is_empty() {
+            findings.push("All statutes ported successfully with minimal adaptations".to_string());
+        }
+
+        findings
+    }
+
+    fn generate_recommendations(
+        &self,
+        ported_statutes: &[PortedStatute],
+        compatibility_score: f64,
+    ) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        if compatibility_score < 0.5 {
+            recommendations
+                .push("Comprehensive legal review recommended before implementation".to_string());
+            recommendations.push(
+                "Consider pilot program in limited jurisdiction before full rollout".to_string(),
+            );
+        } else if compatibility_score < 0.8 {
+            recommendations.push("Expert review recommended for adapted sections".to_string());
+        }
+
+        let needs_review = ported_statutes
+            .iter()
+            .filter(|s| !s.changes.is_empty())
+            .count();
+        if needs_review > 0 {
+            recommendations.push(format!(
+                "Review {} statutes with cultural adaptations",
+                needs_review
+            ));
+        }
+
+        if recommendations.is_empty() {
+            recommendations.push("Proceed with standard implementation process".to_string());
+        }
+
+        recommendations
+    }
+}
+
+impl Default for ExecutiveSummaryGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Detailed risk assessment report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskAssessmentReport {
+    /// Project identifier
+    pub project_id: String,
+    /// Report title
+    pub title: String,
+    /// Overall risk score (0.0 to 1.0)
+    pub overall_risk_score: f64,
+    /// Overall risk level
+    pub overall_risk_level: RiskLevel,
+    /// Risks by category
+    pub risks_by_category: HashMap<RiskCategory, Vec<Risk>>,
+    /// Risk mitigation strategies
+    pub mitigation_strategies: Vec<MitigationStrategy>,
+    /// Risk matrix visualization data
+    pub risk_matrix: RiskMatrix,
+    /// Generated timestamp
+    pub generated_at: String,
+}
+
+/// Risk matrix for visualization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskMatrix {
+    /// High-probability, high-impact risks
+    pub critical: Vec<String>,
+    /// High-probability, low-impact risks
+    pub moderate_high_prob: Vec<String>,
+    /// Low-probability, high-impact risks
+    pub moderate_high_impact: Vec<String>,
+    /// Low-probability, low-impact risks
+    pub low: Vec<String>,
+}
+
+/// Risk mitigation strategy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MitigationStrategy {
+    /// Risk being mitigated
+    pub risk_id: String,
+    /// Mitigation strategy description
+    pub strategy: String,
+    /// Expected effectiveness (0.0 to 1.0)
+    pub effectiveness: f64,
+    /// Implementation cost
+    pub cost: MitigationCost,
+    /// Priority
+    pub priority: Priority,
+}
+
+/// Cost of implementing a mitigation strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MitigationCost {
+    /// Low cost
+    Low,
+    /// Medium cost
+    Medium,
+    /// High cost
+    High,
+}
+
+/// Priority level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Priority {
+    /// Low priority
+    Low,
+    /// Medium priority
+    Medium,
+    /// High priority
+    High,
+    /// Critical priority
+    Critical,
+}
+
+/// Generator for risk assessment reports.
+#[derive(Debug, Clone)]
+pub struct RiskAssessmentReportGenerator;
+
+impl RiskAssessmentReportGenerator {
+    /// Creates a new risk assessment report generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates a risk assessment report.
+    pub fn generate(
+        &self,
+        project: &PortingProject,
+        risk_assessments: &[RiskAssessment],
+    ) -> RiskAssessmentReport {
+        let overall_risk_score = if !risk_assessments.is_empty() {
+            risk_assessments.iter().map(|r| r.risk_score).sum::<f64>()
+                / risk_assessments.len() as f64
+        } else {
+            0.0
+        };
+
+        let overall_risk_level = if overall_risk_score >= 0.7 {
+            RiskLevel::High
+        } else if overall_risk_score >= 0.4 {
+            RiskLevel::Medium
+        } else {
+            RiskLevel::Low
+        };
+
+        let mut risks_by_category: HashMap<RiskCategory, Vec<Risk>> = HashMap::new();
+        for assessment in risk_assessments {
+            for risk in &assessment.risks {
+                risks_by_category
+                    .entry(risk.category)
+                    .or_default()
+                    .push(risk.clone());
+            }
+        }
+
+        let mitigation_strategies = self.generate_mitigation_strategies(&risks_by_category);
+        let risk_matrix = self.build_risk_matrix(&risks_by_category);
+
+        RiskAssessmentReport {
+            project_id: project.id.clone(),
+            title: format!("Risk Assessment: {}", project.name),
+            overall_risk_score,
+            overall_risk_level,
+            risks_by_category,
+            mitigation_strategies,
+            risk_matrix,
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn generate_mitigation_strategies(
+        &self,
+        risks_by_category: &HashMap<RiskCategory, Vec<Risk>>,
+    ) -> Vec<MitigationStrategy> {
+        let mut strategies = Vec::new();
+
+        for (category, risks) in risks_by_category {
+            for risk in risks {
+                let strategy = match (category, risk.severity) {
+                    (RiskCategory::Legal, RiskLevel::High) => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: "Engage constitutional law experts for comprehensive review"
+                            .to_string(),
+                        effectiveness: 0.9,
+                        cost: MitigationCost::High,
+                        priority: Priority::Critical,
+                    },
+                    (RiskCategory::Cultural, RiskLevel::High) => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: "Conduct cultural sensitivity review with local experts"
+                            .to_string(),
+                        effectiveness: 0.85,
+                        cost: MitigationCost::Medium,
+                        priority: Priority::High,
+                    },
+                    (RiskCategory::Political, RiskLevel::High) => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: "Establish stakeholder consultation process".to_string(),
+                        effectiveness: 0.75,
+                        cost: MitigationCost::Medium,
+                        priority: Priority::High,
+                    },
+                    (RiskCategory::Economic, RiskLevel::High) => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: "Perform detailed cost-benefit analysis".to_string(),
+                        effectiveness: 0.8,
+                        cost: MitigationCost::Medium,
+                        priority: Priority::High,
+                    },
+                    (RiskCategory::Implementation, RiskLevel::High) => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: "Develop phased implementation plan with pilot program"
+                            .to_string(),
+                        effectiveness: 0.8,
+                        cost: MitigationCost::High,
+                        priority: Priority::High,
+                    },
+                    _ => MitigationStrategy {
+                        risk_id: risk.id.clone(),
+                        strategy: format!(
+                            "Standard {} risk mitigation procedures",
+                            format!("{:?}", category).to_lowercase()
+                        ),
+                        effectiveness: 0.7,
+                        cost: MitigationCost::Low,
+                        priority: Priority::Medium,
+                    },
+                };
+                strategies.push(strategy);
+            }
+        }
+
+        strategies
+    }
+
+    fn build_risk_matrix(
+        &self,
+        risks_by_category: &HashMap<RiskCategory, Vec<Risk>>,
+    ) -> RiskMatrix {
+        let mut critical = Vec::new();
+        let mut moderate_high_prob = Vec::new();
+        let mut moderate_high_impact = Vec::new();
+        let mut low = Vec::new();
+
+        for risks in risks_by_category.values() {
+            for risk in risks {
+                let risk_desc = format!("{}: {}", risk.id, risk.description);
+                match (risk.severity, risk.likelihood) {
+                    (RiskLevel::High, RiskLevel::High) => critical.push(risk_desc),
+                    (RiskLevel::High, _) => moderate_high_impact.push(risk_desc),
+                    (_, RiskLevel::High) => moderate_high_prob.push(risk_desc),
+                    _ => low.push(risk_desc),
+                }
+            }
+        }
+
+        RiskMatrix {
+            critical,
+            moderate_high_prob,
+            moderate_high_impact,
+            low,
+        }
+    }
+}
+
+impl Default for RiskAssessmentReportGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Implementation roadmap for a porting project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementationRoadmap {
+    /// Project identifier
+    pub project_id: String,
+    /// Roadmap title
+    pub title: String,
+    /// Implementation phases
+    pub phases: Vec<ImplementationPhase>,
+    /// Critical path items
+    pub critical_path: Vec<String>,
+    /// Resource requirements
+    pub resource_requirements: ResourceRequirements,
+    /// Estimated total duration (in days)
+    pub estimated_duration_days: u32,
+    /// Generated timestamp
+    pub generated_at: String,
+}
+
+/// Implementation phase.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementationPhase {
+    /// Phase number
+    pub phase_number: u32,
+    /// Phase name
+    pub name: String,
+    /// Phase description
+    pub description: String,
+    /// Tasks in this phase
+    pub tasks: Vec<ImplementationTask>,
+    /// Dependencies (phase numbers)
+    pub dependencies: Vec<u32>,
+    /// Estimated duration (in days)
+    pub estimated_duration_days: u32,
+    /// Success criteria
+    pub success_criteria: Vec<String>,
+}
+
+/// Implementation task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementationTask {
+    /// Task identifier
+    pub id: String,
+    /// Task name
+    pub name: String,
+    /// Task description
+    pub description: String,
+    /// Assigned role/team
+    pub assigned_to: String,
+    /// Estimated effort (in person-days)
+    pub estimated_effort_days: u32,
+    /// Priority
+    pub priority: Priority,
+    /// Dependencies (task IDs)
+    pub dependencies: Vec<String>,
+}
+
+/// Resource requirements for implementation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceRequirements {
+    /// Required personnel
+    pub personnel: Vec<PersonnelRequirement>,
+    /// Required budget
+    pub budget_estimate: BudgetEstimate,
+    /// Required infrastructure
+    pub infrastructure: Vec<String>,
+}
+
+/// Personnel requirement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonnelRequirement {
+    /// Role/expertise
+    pub role: String,
+    /// Number of people
+    pub count: u32,
+    /// Estimated time commitment (in person-days)
+    pub time_commitment_days: u32,
+}
+
+/// Budget estimate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetEstimate {
+    /// Currency code
+    pub currency: String,
+    /// Minimum estimate
+    pub min_amount: f64,
+    /// Maximum estimate
+    pub max_amount: f64,
+    /// Budget breakdown
+    pub breakdown: HashMap<String, f64>,
+}
+
+/// Generator for implementation roadmaps.
+#[derive(Debug, Clone)]
+pub struct ImplementationRoadmapGenerator;
+
+impl ImplementationRoadmapGenerator {
+    /// Creates a new implementation roadmap generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates an implementation roadmap.
+    pub fn generate(
+        &self,
+        project: &PortingProject,
+        ported_statutes: &[PortedStatute],
+    ) -> ImplementationRoadmap {
+        let phases = self.generate_phases(ported_statutes);
+        let critical_path = self.identify_critical_path(&phases);
+        let resource_requirements = self.estimate_resources(ported_statutes, &phases);
+        let estimated_duration_days = phases.iter().map(|p| p.estimated_duration_days).sum();
+
+        ImplementationRoadmap {
+            project_id: project.id.clone(),
+            title: format!("Implementation Roadmap: {}", project.name),
+            phases,
+            critical_path,
+            resource_requirements,
+            estimated_duration_days,
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    fn generate_phases(&self, ported_statutes: &[PortedStatute]) -> Vec<ImplementationPhase> {
+        vec![
+            ImplementationPhase {
+                phase_number: 1,
+                name: "Legal Review and Validation".to_string(),
+                description: "Comprehensive legal review of ported statutes".to_string(),
+                tasks: vec![
+                    ImplementationTask {
+                        id: "task-1-1".to_string(),
+                        name: "Constitutional compatibility review".to_string(),
+                        description: "Review all statutes for constitutional compatibility"
+                            .to_string(),
+                        assigned_to: "Constitutional Law Team".to_string(),
+                        estimated_effort_days: 10,
+                        priority: Priority::Critical,
+                        dependencies: vec![],
+                    },
+                    ImplementationTask {
+                        id: "task-1-2".to_string(),
+                        name: "Conflict detection and resolution".to_string(),
+                        description: "Identify and resolve conflicts with existing laws"
+                            .to_string(),
+                        assigned_to: "Legal Analysis Team".to_string(),
+                        estimated_effort_days: 8,
+                        priority: Priority::High,
+                        dependencies: vec!["task-1-1".to_string()],
+                    },
+                ],
+                dependencies: vec![],
+                estimated_duration_days: 15,
+                success_criteria: vec![
+                    "All constitutional issues identified and addressed".to_string(),
+                    "No unresolved conflicts with existing laws".to_string(),
+                ],
+            },
+            ImplementationPhase {
+                phase_number: 2,
+                name: "Stakeholder Consultation".to_string(),
+                description: "Engage stakeholders and gather feedback".to_string(),
+                tasks: vec![
+                    ImplementationTask {
+                        id: "task-2-1".to_string(),
+                        name: "Public comment period".to_string(),
+                        description: "Open public comment period for feedback".to_string(),
+                        assigned_to: "Public Affairs Team".to_string(),
+                        estimated_effort_days: 30,
+                        priority: Priority::High,
+                        dependencies: vec!["task-1-2".to_string()],
+                    },
+                    ImplementationTask {
+                        id: "task-2-2".to_string(),
+                        name: "Expert consultations".to_string(),
+                        description: "Conduct consultations with subject matter experts"
+                            .to_string(),
+                        assigned_to: "Policy Team".to_string(),
+                        estimated_effort_days: 15,
+                        priority: Priority::High,
+                        dependencies: vec!["task-1-2".to_string()],
+                    },
+                ],
+                dependencies: vec![1],
+                estimated_duration_days: 30,
+                success_criteria: vec![
+                    "All stakeholder feedback documented".to_string(),
+                    "Major concerns addressed".to_string(),
+                ],
+            },
+            ImplementationPhase {
+                phase_number: 3,
+                name: "Pilot Implementation".to_string(),
+                description: "Limited pilot rollout to test implementation".to_string(),
+                tasks: vec![ImplementationTask {
+                    id: "task-3-1".to_string(),
+                    name: format!(
+                        "Pilot program for {} statutes",
+                        ported_statutes.len().min(5)
+                    ),
+                    description: "Implement pilot program in limited jurisdiction".to_string(),
+                    assigned_to: "Implementation Team".to_string(),
+                    estimated_effort_days: 45,
+                    priority: Priority::High,
+                    dependencies: vec!["task-2-1".to_string(), "task-2-2".to_string()],
+                }],
+                dependencies: vec![2],
+                estimated_duration_days: 60,
+                success_criteria: vec![
+                    "Pilot successfully completed".to_string(),
+                    "Implementation issues identified and documented".to_string(),
+                ],
+            },
+            ImplementationPhase {
+                phase_number: 4,
+                name: "Full Rollout".to_string(),
+                description: "Complete implementation across jurisdiction".to_string(),
+                tasks: vec![ImplementationTask {
+                    id: "task-4-1".to_string(),
+                    name: "Full jurisdiction rollout".to_string(),
+                    description: "Implement all ported statutes across full jurisdiction"
+                        .to_string(),
+                    assigned_to: "Implementation Team".to_string(),
+                    estimated_effort_days: 90,
+                    priority: Priority::Critical,
+                    dependencies: vec!["task-3-1".to_string()],
+                }],
+                dependencies: vec![3],
+                estimated_duration_days: 120,
+                success_criteria: vec![
+                    "All statutes successfully implemented".to_string(),
+                    "Monitoring and enforcement mechanisms in place".to_string(),
+                ],
+            },
+        ]
+    }
+
+    fn identify_critical_path(&self, phases: &[ImplementationPhase]) -> Vec<String> {
+        let mut critical_path = Vec::new();
+        for phase in phases {
+            critical_path.push(format!(
+                "Phase {}: {} ({} days)",
+                phase.phase_number, phase.name, phase.estimated_duration_days
+            ));
+        }
+        critical_path
+    }
+
+    fn estimate_resources(
+        &self,
+        ported_statutes: &[PortedStatute],
+        phases: &[ImplementationPhase],
+    ) -> ResourceRequirements {
+        let statute_count = ported_statutes.len();
+        let complexity_factor = if statute_count > 20 { 1.5 } else { 1.0 };
+
+        let personnel = vec![
+            PersonnelRequirement {
+                role: "Legal Experts".to_string(),
+                count: (statute_count / 10).max(2) as u32,
+                time_commitment_days: (30.0 * complexity_factor) as u32,
+            },
+            PersonnelRequirement {
+                role: "Policy Analysts".to_string(),
+                count: (statute_count / 15).max(1) as u32,
+                time_commitment_days: (25.0 * complexity_factor) as u32,
+            },
+            PersonnelRequirement {
+                role: "Implementation Managers".to_string(),
+                count: 2,
+                time_commitment_days: phases.iter().map(|p| p.estimated_duration_days).sum(),
+            },
+        ];
+
+        let base_budget = statute_count as f64 * 50000.0;
+        let mut breakdown = HashMap::new();
+        breakdown.insert("Personnel".to_string(), base_budget * 0.6);
+        breakdown.insert("Consultation and Review".to_string(), base_budget * 0.2);
+        breakdown.insert(
+            "Infrastructure and Training".to_string(),
+            base_budget * 0.15,
+        );
+        breakdown.insert("Contingency".to_string(), base_budget * 0.05);
+
+        ResourceRequirements {
+            personnel,
+            budget_estimate: BudgetEstimate {
+                currency: "USD".to_string(),
+                min_amount: base_budget * 0.8,
+                max_amount: base_budget * 1.3,
+                breakdown,
+            },
+            infrastructure: vec![
+                "Legal database access".to_string(),
+                "Collaboration platform".to_string(),
+                "Document management system".to_string(),
+            ],
+        }
+    }
+}
+
+impl Default for ImplementationRoadmapGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cost-benefit analysis for a porting project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostBenefitAnalysis {
+    /// Project identifier
+    pub project_id: String,
+    /// Analysis title
+    pub title: String,
+    /// Total estimated costs
+    pub total_costs: CostBreakdown,
+    /// Total estimated benefits
+    pub total_benefits: BenefitAnalysis,
+    /// Net present value
+    pub net_present_value: f64,
+    /// Benefit-cost ratio
+    pub benefit_cost_ratio: f64,
+    /// Return on investment (percentage)
+    pub return_on_investment: f64,
+    /// Recommendation
+    pub recommendation: CBARecommendation,
+    /// Generated timestamp
+    pub generated_at: String,
+}
+
+/// Cost breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostBreakdown {
+    /// Currency code
+    pub currency: String,
+    /// Direct costs
+    pub direct_costs: f64,
+    /// Indirect costs
+    pub indirect_costs: f64,
+    /// Implementation costs
+    pub implementation_costs: f64,
+    /// Maintenance costs (annual)
+    pub maintenance_costs_annual: f64,
+    /// Total costs (5-year projection)
+    pub total_five_year: f64,
+}
+
+/// Benefit analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenefitAnalysis {
+    /// Currency code
+    pub currency: String,
+    /// Quantifiable benefits (5-year projection)
+    pub quantifiable_benefits: f64,
+    /// Qualitative benefits
+    pub qualitative_benefits: Vec<QualitativeBenefit>,
+    /// Economic impact
+    pub economic_impact: f64,
+    /// Social impact score (0.0 to 1.0)
+    pub social_impact_score: f64,
+}
+
+/// Qualitative benefit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeBenefit {
+    /// Benefit category
+    pub category: String,
+    /// Description
+    pub description: String,
+    /// Impact level
+    pub impact_level: ImpactLevel,
+}
+
+/// Impact level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ImpactLevel {
+    /// Low impact
+    Low,
+    /// Medium impact
+    Medium,
+    /// High impact
+    High,
+    /// Transformative impact
+    Transformative,
+}
+
+/// Cost-benefit analysis recommendation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CBARecommendation {
+    /// Strongly recommend proceeding
+    StronglyRecommend,
+    /// Recommend with conditions
+    RecommendWithConditions,
+    /// Neutral (requires further analysis)
+    Neutral,
+    /// Do not recommend
+    DoNotRecommend,
+}
+
+/// Generator for cost-benefit analysis.
+#[derive(Debug, Clone)]
+pub struct CostBenefitAnalyzer;
+
+impl CostBenefitAnalyzer {
+    /// Creates a new cost-benefit analyzer.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Performs cost-benefit analysis for a porting project.
+    pub fn analyze(
+        &self,
+        project: &PortingProject,
+        roadmap: &ImplementationRoadmap,
+        ported_statutes: &[PortedStatute],
+    ) -> CostBenefitAnalysis {
+        let total_costs = self.calculate_costs(
+            &roadmap.resource_requirements,
+            roadmap.estimated_duration_days,
+        );
+        let total_benefits = self.estimate_benefits(ported_statutes);
+
+        let net_present_value = total_benefits.quantifiable_benefits - total_costs.total_five_year;
+        let benefit_cost_ratio = if total_costs.total_five_year > 0.0 {
+            total_benefits.quantifiable_benefits / total_costs.total_five_year
+        } else {
+            0.0
+        };
+        let return_on_investment = if total_costs.total_five_year > 0.0 {
+            ((total_benefits.quantifiable_benefits - total_costs.total_five_year)
+                / total_costs.total_five_year)
+                * 100.0
+        } else {
+            0.0
+        };
+
+        let recommendation = if benefit_cost_ratio >= 2.0 && net_present_value > 1_000_000.0 {
+            CBARecommendation::StronglyRecommend
+        } else if benefit_cost_ratio >= 1.0 {
+            CBARecommendation::RecommendWithConditions
+        } else if benefit_cost_ratio >= 0.7 {
+            CBARecommendation::Neutral
+        } else {
+            CBARecommendation::DoNotRecommend
+        };
+
+        CostBenefitAnalysis {
+            project_id: project.id.clone(),
+            title: format!("Cost-Benefit Analysis: {}", project.name),
+            total_costs,
+            total_benefits,
+            net_present_value,
+            benefit_cost_ratio,
+            return_on_investment,
+            recommendation,
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    fn calculate_costs(
+        &self,
+        resources: &ResourceRequirements,
+        duration_days: u32,
+    ) -> CostBreakdown {
+        let direct_costs = resources.budget_estimate.min_amount;
+        let indirect_costs = direct_costs * 0.25;
+        let implementation_costs = (duration_days as f64 / 30.0) * 100_000.0;
+        let maintenance_costs_annual = direct_costs * 0.15;
+        let total_five_year =
+            direct_costs + indirect_costs + implementation_costs + (maintenance_costs_annual * 5.0);
+
+        CostBreakdown {
+            currency: resources.budget_estimate.currency.clone(),
+            direct_costs,
+            indirect_costs,
+            implementation_costs,
+            maintenance_costs_annual,
+            total_five_year,
+        }
+    }
+
+    fn estimate_benefits(&self, ported_statutes: &[PortedStatute]) -> BenefitAnalysis {
+        let statute_count = ported_statutes.len();
+        let avg_compatibility = if !ported_statutes.is_empty() {
+            ported_statutes
+                .iter()
+                .map(|s| s.compatibility_score)
+                .sum::<f64>()
+                / ported_statutes.len() as f64
+        } else {
+            0.0
+        };
+
+        let base_benefit_per_statute = 200_000.0;
+        let quantifiable_benefits =
+            statute_count as f64 * base_benefit_per_statute * avg_compatibility * 5.0;
+
+        let economic_impact = quantifiable_benefits * 1.5;
+        let social_impact_score = avg_compatibility * 0.9;
+
+        let qualitative_benefits = vec![
+            QualitativeBenefit {
+                category: "Legal Harmonization".to_string(),
+                description: "Improved legal compatibility between jurisdictions".to_string(),
+                impact_level: if avg_compatibility >= 0.8 {
+                    ImpactLevel::High
+                } else {
+                    ImpactLevel::Medium
+                },
+            },
+            QualitativeBenefit {
+                category: "Governance".to_string(),
+                description: "Enhanced legal framework and governance quality".to_string(),
+                impact_level: ImpactLevel::High,
+            },
+            QualitativeBenefit {
+                category: "International Cooperation".to_string(),
+                description: "Strengthened bilateral legal cooperation".to_string(),
+                impact_level: ImpactLevel::Medium,
+            },
+        ];
+
+        BenefitAnalysis {
+            currency: "USD".to_string(),
+            quantifiable_benefits,
+            qualitative_benefits,
+            economic_impact,
+            social_impact_score,
+        }
+    }
+}
+
+impl Default for CostBenefitAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Compliance certification for ported statutes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceCertification {
+    /// Certification identifier
+    pub id: String,
+    /// Project identifier
+    pub project_id: String,
+    /// Certification title
+    pub title: String,
+    /// Certification level
+    pub certification_level: CertificationLevel,
+    /// Certification status
+    pub status: CertificationStatus,
+    /// Certified statutes
+    pub certified_statutes: Vec<String>,
+    /// Validation results
+    pub validation_results: Vec<ValidationResult>,
+    /// Certifier information
+    pub certifier: CertifierInfo,
+    /// Certification date
+    pub certification_date: String,
+    /// Expiration date
+    pub expiration_date: Option<String>,
+    /// Conditions or limitations
+    pub conditions: Vec<String>,
+    /// Digital signature
+    pub signature: Option<String>,
+}
+
+/// Certification level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CertificationLevel {
+    /// Provisional certification
+    Provisional,
+    /// Standard certification
+    Standard,
+    /// Enhanced certification
+    Enhanced,
+    /// Full certification
+    Full,
+}
+
+/// Certification status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CertificationStatus {
+    /// Pending review
+    Pending,
+    /// Under review
+    UnderReview,
+    /// Certified
+    Certified,
+    /// Conditional certification
+    Conditional,
+    /// Revoked
+    Revoked,
+}
+
+/// Certifier information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertifierInfo {
+    /// Certifier name
+    pub name: String,
+    /// Organization
+    pub organization: String,
+    /// Credentials
+    pub credentials: Vec<String>,
+    /// Contact information
+    pub contact: String,
+}
+
+/// Compliance certification manager.
+#[derive(Debug, Clone)]
+pub struct ComplianceCertificationManager {
+    certifications: HashMap<String, ComplianceCertification>,
+}
+
+impl ComplianceCertificationManager {
+    /// Creates a new compliance certification manager.
+    pub fn new() -> Self {
+        Self {
+            certifications: HashMap::new(),
+        }
+    }
+
+    /// Issues a compliance certification.
+    pub fn issue_certification(
+        &mut self,
+        project_id: String,
+        validation_results: Vec<ValidationResult>,
+        certifier: CertifierInfo,
+    ) -> ComplianceCertification {
+        let id = uuid::Uuid::new_v4().to_string();
+
+        let overall_score = if !validation_results.is_empty() {
+            validation_results
+                .iter()
+                .map(|r| r.overall_score)
+                .sum::<f64>()
+                / validation_results.len() as f64
+        } else {
+            0.0
+        };
+
+        let certification_level = if overall_score >= 0.95 {
+            CertificationLevel::Full
+        } else if overall_score >= 0.85 {
+            CertificationLevel::Enhanced
+        } else if overall_score >= 0.75 {
+            CertificationLevel::Standard
+        } else {
+            CertificationLevel::Provisional
+        };
+
+        let status = if overall_score >= 0.75 {
+            CertificationStatus::Certified
+        } else if overall_score >= 0.6 {
+            CertificationStatus::Conditional
+        } else {
+            CertificationStatus::Pending
+        };
+
+        let certified_statutes: Vec<String> = validation_results
+            .iter()
+            .filter(|r| r.overall_score >= 0.75)
+            .map(|r| r.id.clone())
+            .collect();
+
+        let mut conditions = Vec::new();
+        if overall_score < 0.95 {
+            conditions.push("Periodic review required every 12 months".to_string());
+        }
+        if overall_score < 0.85 {
+            conditions.push("Implementation monitoring required".to_string());
+        }
+
+        let now = chrono::Utc::now();
+        let expiration = if overall_score >= 0.85 {
+            Some((now + chrono::Duration::days(365 * 3)).to_rfc3339())
+        } else {
+            Some((now + chrono::Duration::days(365)).to_rfc3339())
+        };
+
+        let certification = ComplianceCertification {
+            id: id.clone(),
+            project_id: project_id.clone(),
+            title: format!("Compliance Certification - Project {}", project_id),
+            certification_level,
+            status,
+            certified_statutes,
+            validation_results,
+            certifier,
+            certification_date: now.to_rfc3339(),
+            expiration_date: expiration,
+            conditions,
+            signature: Some(format!("CERT-{}", &id[..8])),
+        };
+
+        self.certifications.insert(id, certification.clone());
+        certification
+    }
+
+    /// Retrieves a certification by ID.
+    pub fn get_certification(&self, id: &str) -> Option<&ComplianceCertification> {
+        self.certifications.get(id)
+    }
+
+    /// Revokes a certification.
+    pub fn revoke_certification(&mut self, id: &str) -> Option<()> {
+        let cert = self.certifications.get_mut(id)?;
+        cert.status = CertificationStatus::Revoked;
+        Some(())
+    }
+}
+
+impl Default for ComplianceCertificationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Integration (v0.1.9)
+// ============================================================================
+
+/// REST API request types for porting service.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiPortingRequest {
+    /// Source jurisdiction code
+    pub source_jurisdiction: String,
+    /// Target jurisdiction code
+    pub target_jurisdiction: String,
+    /// Statute IDs to port
+    pub statute_ids: Vec<String>,
+    /// Porting options
+    pub options: PortingOptions,
+}
+
+/// REST API response for porting operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiPortingResponse {
+    /// Request ID
+    pub request_id: String,
+    /// Status of the request
+    pub status: ApiStatus,
+    /// Ported statutes (if completed)
+    pub results: Option<Vec<PortedStatute>>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+    /// Processing time in milliseconds
+    pub processing_time_ms: u64,
+}
+
+/// API status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApiStatus {
+    /// Request accepted and queued
+    Accepted,
+    /// Processing in progress
+    Processing,
+    /// Completed successfully
+    Completed,
+    /// Failed with error
+    Failed,
+}
+
+/// Bilateral agreement template library.
+#[derive(Debug, Clone)]
+pub struct BilateralAgreementTemplateLibrary {
+    templates: HashMap<String, BilateralAgreementTemplate>,
+}
+
+/// Bilateral agreement template.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BilateralAgreementTemplate {
+    /// Template identifier
+    pub id: String,
+    /// Template name
+    pub name: String,
+    /// Template description
+    pub description: String,
+    /// Applicable legal systems
+    pub applicable_systems: Vec<LegalSystem>,
+    /// Template sections
+    pub sections: Vec<TemplateSection>,
+    /// Required parameters
+    pub required_parameters: Vec<TemplateParameter>,
+    /// Optional parameters
+    pub optional_parameters: Vec<TemplateParameter>,
+}
+
+/// Template section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateSection {
+    /// Section number
+    pub section_number: u32,
+    /// Section title
+    pub title: String,
+    /// Section content template
+    pub content_template: String,
+    /// Required
+    pub required: bool,
+}
+
+/// Template parameter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateParameter {
+    /// Parameter name
+    pub name: String,
+    /// Parameter description
+    pub description: String,
+    /// Parameter type
+    pub parameter_type: ParameterType,
+    /// Default value
+    pub default_value: Option<String>,
+}
+
+/// Parameter type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ParameterType {
+    /// String parameter
+    String,
+    /// Numeric parameter
+    Number,
+    /// Date parameter
+    Date,
+    /// Boolean parameter
+    Boolean,
+    /// List parameter
+    List,
+}
+
+impl BilateralAgreementTemplateLibrary {
+    /// Creates a new template library.
+    pub fn new() -> Self {
+        let mut library = Self {
+            templates: HashMap::new(),
+        };
+        library.add_default_templates();
+        library
+    }
+
+    fn add_default_templates(&mut self) {
+        // General bilateral agreement template
+        self.add_template(BilateralAgreementTemplate {
+            id: "general-bilateral".to_string(),
+            name: "General Bilateral Legal Cooperation Agreement".to_string(),
+            description: "Standard template for bilateral legal cooperation".to_string(),
+            applicable_systems: vec![
+                LegalSystem::CivilLaw,
+                LegalSystem::CommonLaw,
+            ],
+            sections: vec![
+                TemplateSection {
+                    section_number: 1,
+                    title: "Parties and Purpose".to_string(),
+                    content_template: "This agreement is entered into between {{source_jurisdiction}} and {{target_jurisdiction}} for the purpose of {{purpose}}.".to_string(),
+                    required: true,
+                },
+                TemplateSection {
+                    section_number: 2,
+                    title: "Scope of Cooperation".to_string(),
+                    content_template: "The parties agree to cooperate in the following areas: {{cooperation_areas}}.".to_string(),
+                    required: true,
+                },
+                TemplateSection {
+                    section_number: 3,
+                    title: "Legal Framework Porting".to_string(),
+                    content_template: "The parties agree to facilitate the porting of legal frameworks according to the principles set forth in {{porting_principles}}.".to_string(),
+                    required: true,
+                },
+                TemplateSection {
+                    section_number: 4,
+                    title: "Cultural Adaptation".to_string(),
+                    content_template: "All ported statutes shall be adapted to respect the cultural, religious, and social norms of the target jurisdiction.".to_string(),
+                    required: true,
+                },
+                TemplateSection {
+                    section_number: 5,
+                    title: "Review and Approval Process".to_string(),
+                    content_template: "Ported statutes shall undergo review by {{review_body}} before implementation.".to_string(),
+                    required: true,
+                },
+            ],
+            required_parameters: vec![
+                TemplateParameter {
+                    name: "source_jurisdiction".to_string(),
+                    description: "Source jurisdiction name".to_string(),
+                    parameter_type: ParameterType::String,
+                    default_value: None,
+                },
+                TemplateParameter {
+                    name: "target_jurisdiction".to_string(),
+                    description: "Target jurisdiction name".to_string(),
+                    parameter_type: ParameterType::String,
+                    default_value: None,
+                },
+                TemplateParameter {
+                    name: "purpose".to_string(),
+                    description: "Purpose of the agreement".to_string(),
+                    parameter_type: ParameterType::String,
+                    default_value: Some("legal framework cooperation and mutual development".to_string()),
+                },
+            ],
+            optional_parameters: vec![
+                TemplateParameter {
+                    name: "cooperation_areas".to_string(),
+                    description: "Areas of legal cooperation".to_string(),
+                    parameter_type: ParameterType::List,
+                    default_value: Some("civil law, commercial law, administrative law".to_string()),
+                },
+            ],
+        });
+    }
+
+    /// Adds a template to the library.
+    pub fn add_template(&mut self, template: BilateralAgreementTemplate) {
+        self.templates.insert(template.id.clone(), template);
+    }
+
+    /// Retrieves a template by ID.
+    pub fn get_template(&self, id: &str) -> Option<&BilateralAgreementTemplate> {
+        self.templates.get(id)
+    }
+
+    /// Lists all available templates.
+    pub fn list_templates(&self) -> Vec<&BilateralAgreementTemplate> {
+        self.templates.values().collect()
+    }
+
+    /// Generates an agreement from a template.
+    pub fn generate_agreement(
+        &self,
+        template_id: &str,
+        parameters: &HashMap<String, String>,
+    ) -> Option<String> {
+        let template = self.get_template(template_id)?;
+        let mut agreement = String::new();
+
+        agreement.push_str(&format!("# {}\n\n", template.name));
+
+        for section in &template.sections {
+            agreement.push_str(&format!(
+                "## Section {}: {}\n\n",
+                section.section_number, section.title
+            ));
+
+            let mut content = section.content_template.clone();
+            for (key, value) in parameters {
+                content = content.replace(&format!("{{{{{}}}}}", key), value);
+            }
+
+            agreement.push_str(&format!("{}\n\n", content));
+        }
+
+        Some(agreement)
+    }
+}
+
+impl Default for BilateralAgreementTemplateLibrary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Regulatory sandbox for testing ported statutes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulatorySandbox {
+    /// Sandbox identifier
+    pub id: String,
+    /// Sandbox name
+    pub name: String,
+    /// Sandbox description
+    pub description: String,
+    /// Sandbox status
+    pub status: SandboxStatus,
+    /// Statutes being tested
+    pub test_statutes: Vec<String>,
+    /// Test scenarios
+    pub scenarios: Vec<TestScenario>,
+    /// Test results
+    pub results: Vec<SandboxTestResult>,
+    /// Start date
+    pub start_date: String,
+    /// End date
+    pub end_date: Option<String>,
+}
+
+/// Sandbox status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SandboxStatus {
+    /// Planning phase
+    Planning,
+    /// Active testing
+    Active,
+    /// Evaluation phase
+    Evaluation,
+    /// Completed
+    Completed,
+    /// Terminated
+    Terminated,
+}
+
+/// Test scenario in regulatory sandbox.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestScenario {
+    /// Scenario identifier
+    pub id: String,
+    /// Scenario name
+    pub name: String,
+    /// Scenario description
+    pub description: String,
+    /// Test parameters
+    pub parameters: HashMap<String, String>,
+    /// Expected outcomes
+    pub expected_outcomes: Vec<String>,
+}
+
+/// Sandbox test result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxTestResult {
+    /// Scenario identifier
+    pub scenario_id: String,
+    /// Test status
+    pub status: TestStatus,
+    /// Actual outcomes
+    pub actual_outcomes: Vec<String>,
+    /// Issues encountered
+    pub issues: Vec<String>,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+    /// Test date
+    pub test_date: String,
+}
+
+/// Test status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TestStatus {
+    /// Passed
+    Passed,
+    /// Passed with minor issues
+    PassedWithIssues,
+    /// Failed
+    Failed,
+    /// Inconclusive
+    Inconclusive,
+}
+
+/// Manager for regulatory sandboxes.
+#[derive(Debug, Clone)]
+pub struct RegulatorySandboxManager {
+    sandboxes: HashMap<String, RegulatorySandbox>,
+}
+
+impl RegulatorySandboxManager {
+    /// Creates a new regulatory sandbox manager.
+    pub fn new() -> Self {
+        Self {
+            sandboxes: HashMap::new(),
+        }
+    }
+
+    /// Creates a new regulatory sandbox.
+    pub fn create_sandbox(
+        &mut self,
+        name: String,
+        description: String,
+        test_statutes: Vec<String>,
+    ) -> RegulatorySandbox {
+        let id = uuid::Uuid::new_v4().to_string();
+        let sandbox = RegulatorySandbox {
+            id: id.clone(),
+            name,
+            description,
+            status: SandboxStatus::Planning,
+            test_statutes,
+            scenarios: Vec::new(),
+            results: Vec::new(),
+            start_date: chrono::Utc::now().to_rfc3339(),
+            end_date: None,
+        };
+        self.sandboxes.insert(id, sandbox.clone());
+        sandbox
+    }
+
+    /// Adds a test scenario to a sandbox.
+    pub fn add_scenario(&mut self, sandbox_id: &str, scenario: TestScenario) -> Option<()> {
+        let sandbox = self.sandboxes.get_mut(sandbox_id)?;
+        sandbox.scenarios.push(scenario);
+        Some(())
+    }
+
+    /// Records a test result.
+    pub fn record_result(&mut self, sandbox_id: &str, result: SandboxTestResult) -> Option<()> {
+        let sandbox = self.sandboxes.get_mut(sandbox_id)?;
+        sandbox.results.push(result);
+        Some(())
+    }
+
+    /// Activates a sandbox.
+    pub fn activate_sandbox(&mut self, sandbox_id: &str) -> Option<()> {
+        let sandbox = self.sandboxes.get_mut(sandbox_id)?;
+        sandbox.status = SandboxStatus::Active;
+        Some(())
+    }
+
+    /// Completes a sandbox.
+    pub fn complete_sandbox(&mut self, sandbox_id: &str) -> Option<()> {
+        let sandbox = self.sandboxes.get_mut(sandbox_id)?;
+        sandbox.status = SandboxStatus::Completed;
+        sandbox.end_date = Some(chrono::Utc::now().to_rfc3339());
+        Some(())
+    }
+
+    /// Retrieves a sandbox by ID.
+    pub fn get_sandbox(&self, sandbox_id: &str) -> Option<&RegulatorySandbox> {
+        self.sandboxes.get(sandbox_id)
+    }
+}
+
+impl Default for RegulatorySandboxManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Notification to affected parties.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AffectedPartyNotification {
+    /// Notification identifier
+    pub id: String,
+    /// Project identifier
+    pub project_id: String,
+    /// Notification title
+    pub title: String,
+    /// Notification content
+    pub content: String,
+    /// Affected party categories
+    pub affected_categories: Vec<AffectedPartyCategory>,
+    /// Distribution channels
+    pub channels: Vec<NotificationChannel>,
+    /// Notification date
+    pub notification_date: String,
+    /// Response deadline
+    pub response_deadline: Option<String>,
+    /// Feedback received
+    pub feedback: Vec<PublicFeedback>,
+}
+
+/// Category of affected party.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AffectedPartyCategory {
+    /// General public
+    GeneralPublic,
+    /// Business entities
+    Businesses,
+    /// Non-profit organizations
+    NonProfits,
+    /// Government agencies
+    GovernmentAgencies,
+    /// Legal professionals
+    LegalProfessionals,
+    /// Academic institutions
+    AcademicInstitutions,
+}
+
+/// Public feedback on a notification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicFeedback {
+    /// Feedback identifier
+    pub id: String,
+    /// Submitter information (optional/anonymous)
+    pub submitter: Option<String>,
+    /// Feedback category
+    pub category: FeedbackCategory,
+    /// Feedback content
+    pub content: String,
+    /// Submission date
+    pub submitted_at: String,
+}
+
+/// Feedback category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FeedbackCategory {
+    /// Support
+    Support,
+    /// Concern
+    Concern,
+    /// Question
+    Question,
+    /// Suggestion
+    Suggestion,
+    /// Objection
+    Objection,
+}
+
+/// Manager for affected party notifications.
+#[derive(Debug, Clone)]
+pub struct AffectedPartyNotificationManager {
+    notifications: HashMap<String, AffectedPartyNotification>,
+}
+
+impl AffectedPartyNotificationManager {
+    /// Creates a new affected party notification manager.
+    pub fn new() -> Self {
+        Self {
+            notifications: HashMap::new(),
+        }
+    }
+
+    /// Sends a notification to affected parties.
+    pub fn send_notification(
+        &mut self,
+        project_id: String,
+        title: String,
+        content: String,
+        affected_categories: Vec<AffectedPartyCategory>,
+        response_deadline_days: Option<u32>,
+    ) -> AffectedPartyNotification {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now();
+
+        let response_deadline = response_deadline_days
+            .map(|days| (now + chrono::Duration::days(days as i64)).to_rfc3339());
+
+        let notification = AffectedPartyNotification {
+            id: id.clone(),
+            project_id,
+            title,
+            content,
+            affected_categories,
+            channels: vec![
+                NotificationChannel::Email,
+                NotificationChannel::Website,
+                NotificationChannel::PublicNotice,
+            ],
+            notification_date: now.to_rfc3339(),
+            response_deadline,
+            feedback: Vec::new(),
+        };
+
+        self.notifications.insert(id, notification.clone());
+        notification
+    }
+
+    /// Records public feedback.
+    pub fn record_feedback(
+        &mut self,
+        notification_id: &str,
+        feedback: PublicFeedback,
+    ) -> Option<()> {
+        let notification = self.notifications.get_mut(notification_id)?;
+        notification.feedback.push(feedback);
+        Some(())
+    }
+
+    /// Retrieves a notification by ID.
+    pub fn get_notification(&self, notification_id: &str) -> Option<&AffectedPartyNotification> {
+        self.notifications.get(notification_id)
+    }
+
+    /// Lists all feedback for a notification.
+    pub fn list_feedback(&self, notification_id: &str) -> Option<&[PublicFeedback]> {
+        self.notifications
+            .get(notification_id)
+            .map(|n| n.feedback.as_slice())
+    }
+}
+
+impl Default for AffectedPartyNotificationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Public comment period for porting projects.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicCommentPeriod {
+    /// Comment period identifier
+    pub id: String,
+    /// Project identifier
+    pub project_id: String,
+    /// Period title
+    pub title: String,
+    /// Period description
+    pub description: String,
+    /// Start date
+    pub start_date: String,
+    /// End date
+    pub end_date: String,
+    /// Status
+    pub status: CommentPeriodStatus,
+    /// Documents available for comment
+    pub documents: Vec<CommentDocument>,
+    /// Submitted comments
+    pub comments: Vec<PublicComment>,
+    /// Public hearings scheduled
+    pub hearings: Vec<PublicHearing>,
+}
+
+/// Comment period status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommentPeriodStatus {
+    /// Upcoming
+    Upcoming,
+    /// Currently open
+    Open,
+    /// Closed
+    Closed,
+    /// Extended
+    Extended,
+}
+
+/// Document available for public comment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommentDocument {
+    /// Document identifier
+    pub id: String,
+    /// Document title
+    pub title: String,
+    /// Document type
+    pub document_type: DocumentType,
+    /// Document description
+    pub description: String,
+    /// Document URL or path
+    pub url: String,
+}
+
+/// Document type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentType {
+    /// Draft statute
+    DraftStatute,
+    /// Impact assessment
+    ImpactAssessment,
+    /// Explanatory memorandum
+    ExplanatoryMemorandum,
+    /// Technical report
+    TechnicalReport,
+}
+
+/// Public comment submitted during comment period.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicComment {
+    /// Comment identifier
+    pub id: String,
+    /// Commenter information
+    pub commenter: CommenterInfo,
+    /// Comment text
+    pub comment_text: String,
+    /// Related document ID
+    pub document_id: Option<String>,
+    /// Specific section referenced
+    pub section_reference: Option<String>,
+    /// Submission date
+    pub submitted_at: String,
+    /// Comment category
+    pub category: FeedbackCategory,
+}
+
+/// Information about a commenter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommenterInfo {
+    /// Name (optional for anonymous comments)
+    pub name: Option<String>,
+    /// Organization (if applicable)
+    pub organization: Option<String>,
+    /// Email
+    pub email: Option<String>,
+    /// Affiliation type
+    pub affiliation: AffectedPartyCategory,
+}
+
+/// Public hearing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicHearing {
+    /// Hearing identifier
+    pub id: String,
+    /// Hearing title
+    pub title: String,
+    /// Date and time
+    pub datetime: String,
+    /// Location
+    pub location: String,
+    /// Virtual meeting link
+    pub virtual_link: Option<String>,
+    /// Agenda
+    pub agenda: Vec<String>,
+    /// Registration required
+    pub registration_required: bool,
+}
+
+/// Manager for public comment periods.
+#[derive(Debug, Clone)]
+pub struct PublicCommentPeriodManager {
+    periods: HashMap<String, PublicCommentPeriod>,
+}
+
+impl PublicCommentPeriodManager {
+    /// Creates a new public comment period manager.
+    pub fn new() -> Self {
+        Self {
+            periods: HashMap::new(),
+        }
+    }
+
+    /// Opens a new public comment period.
+    pub fn open_comment_period(
+        &mut self,
+        project_id: String,
+        title: String,
+        description: String,
+        duration_days: u32,
+    ) -> PublicCommentPeriod {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now();
+        let end_date = now + chrono::Duration::days(duration_days as i64);
+
+        let period = PublicCommentPeriod {
+            id: id.clone(),
+            project_id,
+            title,
+            description,
+            start_date: now.to_rfc3339(),
+            end_date: end_date.to_rfc3339(),
+            status: CommentPeriodStatus::Open,
+            documents: Vec::new(),
+            comments: Vec::new(),
+            hearings: Vec::new(),
+        };
+
+        self.periods.insert(id, period.clone());
+        period
+    }
+
+    /// Adds a document to the comment period.
+    pub fn add_document(&mut self, period_id: &str, document: CommentDocument) -> Option<()> {
+        let period = self.periods.get_mut(period_id)?;
+        period.documents.push(document);
+        Some(())
+    }
+
+    /// Submits a public comment.
+    pub fn submit_comment(&mut self, period_id: &str, comment: PublicComment) -> Option<()> {
+        let period = self.periods.get_mut(period_id)?;
+        if period.status == CommentPeriodStatus::Open
+            || period.status == CommentPeriodStatus::Extended
+        {
+            period.comments.push(comment);
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    /// Schedules a public hearing.
+    pub fn schedule_hearing(&mut self, period_id: &str, hearing: PublicHearing) -> Option<()> {
+        let period = self.periods.get_mut(period_id)?;
+        period.hearings.push(hearing);
+        Some(())
+    }
+
+    /// Extends a comment period.
+    pub fn extend_period(&mut self, period_id: &str, additional_days: u32) -> Option<()> {
+        let period = self.periods.get_mut(period_id)?;
+        if let Ok(current_end) = chrono::DateTime::parse_from_rfc3339(&period.end_date) {
+            let new_end = current_end + chrono::Duration::days(additional_days as i64);
+            period.end_date = new_end.to_rfc3339();
+            period.status = CommentPeriodStatus::Extended;
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    /// Closes a comment period.
+    pub fn close_period(&mut self, period_id: &str) -> Option<()> {
+        let period = self.periods.get_mut(period_id)?;
+        period.status = CommentPeriodStatus::Closed;
+        Some(())
+    }
+
+    /// Retrieves a comment period by ID.
+    pub fn get_period(&self, period_id: &str) -> Option<&PublicCommentPeriod> {
+        self.periods.get(period_id)
+    }
+
+    /// Lists all comments for a period.
+    pub fn list_comments(&self, period_id: &str) -> Option<&[PublicComment]> {
+        self.periods.get(period_id).map(|p| p.comments.as_slice())
+    }
+
+    /// Generates a summary of public comments.
+    pub fn generate_comment_summary(&self, period_id: &str) -> Option<CommentSummary> {
+        let period = self.periods.get(period_id)?;
+
+        let total_comments = period.comments.len();
+        let mut category_counts: HashMap<FeedbackCategory, usize> = HashMap::new();
+        let mut affiliation_counts: HashMap<AffectedPartyCategory, usize> = HashMap::new();
+
+        for comment in &period.comments {
+            *category_counts.entry(comment.category).or_insert(0) += 1;
+            *affiliation_counts
+                .entry(comment.commenter.affiliation)
+                .or_insert(0) += 1;
+        }
+
+        Some(CommentSummary {
+            period_id: period_id.to_string(),
+            total_comments,
+            category_breakdown: category_counts,
+            affiliation_breakdown: affiliation_counts,
+            key_themes: self.extract_key_themes(&period.comments),
+        })
+    }
+
+    fn extract_key_themes(&self, _comments: &[PublicComment]) -> Vec<String> {
+        // Simplified key theme extraction
+        vec![
+            "Constitutional compatibility concerns".to_string(),
+            "Implementation timeline questions".to_string(),
+            "Cultural adaptation suggestions".to_string(),
+        ]
+    }
+}
+
+impl Default for PublicCommentPeriodManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Summary of public comments.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommentSummary {
+    /// Comment period identifier
+    pub period_id: String,
+    /// Total number of comments
+    pub total_comments: usize,
+    /// Breakdown by category
+    pub category_breakdown: HashMap<FeedbackCategory, usize>,
+    /// Breakdown by affiliation
+    pub affiliation_breakdown: HashMap<AffectedPartyCategory, usize>,
+    /// Key themes identified
+    pub key_themes: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3020,6 +10097,578 @@ mod tests {
         }
     }
 
+    // ========================================================================
+    // Tests for Conflict Resolution Framework (v0.1.4)
+    // ========================================================================
+
+    #[test]
+    fn test_conflict_precedent_database() {
+        let mut db = ConflictPrecedentDatabase::new();
+
+        let precedent1 = ConflictPrecedent {
+            id: "prec-1".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            conflict_type: ConflictType::SystemMismatch,
+            description: "Legal system mismatch resolved".to_string(),
+            resolution_used: "Adapt procedural elements".to_string(),
+            effectiveness: 0.85,
+            resolved_by: Some("Expert A".to_string()),
+            resolved_at: "2024-01-01T00:00:00Z".to_string(),
+            lessons_learned: vec!["Focus on procedural adaptation".to_string()],
+            applicable_statute_types: vec!["commercial".to_string()],
+            tags: vec!["system-mismatch".to_string()],
+        };
+
+        let precedent2 = ConflictPrecedent {
+            id: "prec-2".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            conflict_type: ConflictType::CulturalIncompatibility,
+            description: "Cultural conflict resolved".to_string(),
+            resolution_used: "Local adaptation with consultation".to_string(),
+            effectiveness: 0.75,
+            resolved_by: Some("Expert B".to_string()),
+            resolved_at: "2024-01-02T00:00:00Z".to_string(),
+            lessons_learned: vec!["Involve local stakeholders".to_string()],
+            applicable_statute_types: vec!["social".to_string()],
+            tags: vec!["cultural".to_string()],
+        };
+
+        db.add_precedent(precedent1);
+        db.add_precedent(precedent2);
+
+        assert_eq!(db.all_precedents().len(), 2);
+
+        let relevant = db.find_relevant_precedents("JP", "US", &ConflictType::SystemMismatch);
+        assert_eq!(relevant.len(), 1);
+        assert_eq!(relevant[0].id, "prec-1");
+
+        let effective = db.get_effective_precedents();
+        assert_eq!(effective.len(), 2);
+    }
+
+    #[test]
+    fn test_conflict_detector_severity_analysis() {
+        let mut detector = ConflictDetector::new();
+
+        // Add a precedent
+        let precedent = ConflictPrecedent {
+            id: "prec-1".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            conflict_type: ConflictType::Contradiction,
+            description: "Test conflict".to_string(),
+            resolution_used: "Test resolution".to_string(),
+            effectiveness: 0.9,
+            resolved_by: None,
+            resolved_at: "2024-01-01T00:00:00Z".to_string(),
+            lessons_learned: vec![],
+            applicable_statute_types: vec![],
+            tags: vec![],
+        };
+        detector.precedent_db.add_precedent(precedent);
+
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+
+        let conflict = ConflictReport {
+            statute_id: "test".to_string(),
+            conflict_type: ConflictType::Contradiction,
+            description: "Test conflict".to_string(),
+            severity: Severity::Warning,
+            resolutions: vec!["Test resolution".to_string()],
+        };
+
+        let severity = detector.analyze_severity(&conflict, &jp, &us);
+
+        // Should be at least Warning due to contradiction type and legal system mismatch
+        assert!(matches!(
+            severity,
+            Severity::Warning | Severity::Error | Severity::Critical
+        ));
+    }
+
+    #[test]
+    fn test_conflict_detector_recommend_strategies() {
+        let mut detector = ConflictDetector::new();
+
+        // Add a high-effectiveness precedent
+        let precedent = ConflictPrecedent {
+            id: "prec-1".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            conflict_type: ConflictType::SystemMismatch,
+            description: "Legal system mismatch".to_string(),
+            resolution_used: "Gradual adaptation with expert review".to_string(),
+            effectiveness: 0.85,
+            resolved_by: Some("Expert A".to_string()),
+            resolved_at: "2024-01-01T00:00:00Z".to_string(),
+            lessons_learned: vec![],
+            applicable_statute_types: vec![],
+            tags: vec![],
+        };
+        detector.precedent_db.add_precedent(precedent);
+
+        // Add a template
+        let template = NegotiatedResolutionTemplate {
+            id: "template-1".to_string(),
+            name: "System Mismatch Template".to_string(),
+            conflict_types: vec![ConflictType::SystemMismatch],
+            source_patterns: vec!["JP".to_string()],
+            target_patterns: vec!["US".to_string()],
+            approach: "Bilateral adaptation protocol".to_string(),
+            negotiation_steps: vec![],
+            fallback_strategies: vec![],
+            success_rate: 0.8,
+            stakeholders: vec![],
+            required_approvals: vec![],
+        };
+        detector.add_template(template);
+
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+
+        let conflict = ConflictReport {
+            statute_id: "test".to_string(),
+            conflict_type: ConflictType::SystemMismatch,
+            description: "System mismatch".to_string(),
+            severity: Severity::Warning,
+            resolutions: vec!["Default resolution".to_string()],
+        };
+
+        let strategies = detector.recommend_strategies(&conflict, &jp, &us);
+
+        assert!(!strategies.is_empty());
+        // Should include strategies from precedent and template
+        assert!(strategies.iter().any(|s| s.contains("effective")));
+        assert!(strategies.iter().any(|s| s.contains("template")));
+    }
+
+    #[test]
+    fn test_conflict_resolution_workflow_creation() {
+        let detector = ConflictDetector::new();
+
+        let conflict = ConflictReport {
+            statute_id: "test".to_string(),
+            conflict_type: ConflictType::Contradiction,
+            description: "Critical conflict".to_string(),
+            severity: Severity::Critical,
+            resolutions: vec!["Manual review required".to_string()],
+        };
+
+        let workflow = detector.create_resolution_workflow(conflict);
+
+        assert_eq!(workflow.state, ResolutionWorkflowState::InitialAssessment);
+        assert_eq!(workflow.escalation_level, EscalationLevel::Critical);
+        assert!(workflow.stakeholder_reviews.is_empty());
+        assert!(workflow.expert_consultations.is_empty());
+        assert!(workflow.proposed_resolution.is_none());
+        assert!(workflow.final_decision.is_none());
+    }
+
+    #[test]
+    fn test_negotiated_resolution_template() {
+        let template = NegotiatedResolutionTemplate {
+            id: "template-1".to_string(),
+            name: "Cultural Adaptation Template".to_string(),
+            conflict_types: vec![ConflictType::CulturalIncompatibility],
+            source_patterns: vec!["CivilLaw".to_string()],
+            target_patterns: vec!["CommonLaw".to_string()],
+            approach: "Phased adaptation with stakeholder consultation".to_string(),
+            negotiation_steps: vec![
+                NegotiationStep {
+                    step_number: 1,
+                    description: "Initial stakeholder meeting".to_string(),
+                    involved_parties: vec![
+                        "Legal experts".to_string(),
+                        "Cultural advisors".to_string(),
+                    ],
+                    expected_outcome: "Agreement on adaptation scope".to_string(),
+                    estimated_days: 5,
+                },
+                NegotiationStep {
+                    step_number: 2,
+                    description: "Draft adaptation proposal".to_string(),
+                    involved_parties: vec!["Legal drafters".to_string()],
+                    expected_outcome: "Initial proposal document".to_string(),
+                    estimated_days: 10,
+                },
+            ],
+            fallback_strategies: vec![
+                "Escalate to bilateral commission".to_string(),
+                "Seek international arbitration".to_string(),
+            ],
+            success_rate: 0.75,
+            stakeholders: vec![
+                "Source jurisdiction legal authority".to_string(),
+                "Target jurisdiction legal authority".to_string(),
+                "Cultural representatives".to_string(),
+            ],
+            required_approvals: vec![
+                "Legal committee".to_string(),
+                "Cultural affairs ministry".to_string(),
+            ],
+        };
+
+        assert_eq!(template.negotiation_steps.len(), 2);
+        assert_eq!(template.fallback_strategies.len(), 2);
+        assert_eq!(template.stakeholders.len(), 3);
+        assert!(template.success_rate > 0.5);
+        assert!(
+            template
+                .conflict_types
+                .contains(&ConflictType::CulturalIncompatibility)
+        );
+    }
+
+    #[test]
+    fn test_escalation_level_ordering() {
+        assert!(EscalationLevel::Routine < EscalationLevel::Elevated);
+        assert!(EscalationLevel::Elevated < EscalationLevel::High);
+        assert!(EscalationLevel::High < EscalationLevel::Critical);
+    }
+
+    #[test]
+    fn test_stakeholder_review() {
+        let review = StakeholderReview {
+            reviewer_id: "reviewer-1".to_string(),
+            reviewer_name: "Jane Smith".to_string(),
+            role: "Legal Counsel".to_string(),
+            reviewed_at: "2024-01-01T00:00:00Z".to_string(),
+            recommendation: StakeholderRecommendation::ApproveWithModifications,
+            comments: "Approve with minor adjustments to cultural references".to_string(),
+            concerns: vec!["Potential cultural sensitivity issue in section 3".to_string()],
+            modifications: vec![
+                "Adjust terminology in section 3".to_string(),
+                "Add explanatory note for cultural context".to_string(),
+            ],
+        };
+
+        assert_eq!(
+            review.recommendation,
+            StakeholderRecommendation::ApproveWithModifications
+        );
+        assert_eq!(review.concerns.len(), 1);
+        assert_eq!(review.modifications.len(), 2);
+    }
+
+    #[test]
+    fn test_expert_consultation() {
+        let consultation = ExpertConsultation {
+            id: "consult-1".to_string(),
+            expert_id: "expert-123".to_string(),
+            expert_name: "Dr. John Doe".to_string(),
+            expertise_area: "International Legal Systems".to_string(),
+            consulted_at: "2024-01-01T00:00:00Z".to_string(),
+            opinion: "The proposed adaptation is sound but requires additional safeguards"
+                .to_string(),
+            recommended_approach: "Implement with monitoring period".to_string(),
+            confidence: 0.9,
+            legal_references: vec![
+                "Treaty on Legal Harmonization, Art. 12".to_string(),
+                "Case Law: Smith v. State (2020)".to_string(),
+            ],
+        };
+
+        assert_eq!(consultation.confidence, 0.9);
+        assert_eq!(consultation.legal_references.len(), 2);
+        assert!(consultation.opinion.contains("safeguards"));
+    }
+
+    #[test]
+    fn test_resolution_decision() {
+        let decision = ResolutionDecision {
+            id: "decision-1".to_string(),
+            decision_maker_id: "dm-123".to_string(),
+            decision_maker_role: "Chief Legal Officer".to_string(),
+            decided_at: "2024-01-01T00:00:00Z".to_string(),
+            chosen_strategy: "Gradual implementation with monitoring".to_string(),
+            rationale: "Balances legal requirements with practical concerns".to_string(),
+            implementation_plan: vec![
+                "Phase 1: Pilot program in limited jurisdictions".to_string(),
+                "Phase 2: Full implementation with review checkpoints".to_string(),
+                "Phase 3: Final assessment and adjustments".to_string(),
+            ],
+            monitoring_requirements: vec![
+                "Monthly compliance reports".to_string(),
+                "Quarterly stakeholder reviews".to_string(),
+            ],
+            accepted_risks: vec!["Potential initial resistance from local authorities".to_string()],
+        };
+
+        assert_eq!(decision.implementation_plan.len(), 3);
+        assert_eq!(decision.monitoring_requirements.len(), 2);
+        assert_eq!(decision.accepted_risks.len(), 1);
+    }
+
+    // ========================================================================
+    // Tests for AI-Assisted Porting (v0.1.5)
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_ai_assistant_creation() {
+        let assistant = AiPortingAssistant::new();
+        assert!(assistant.generator.is_none());
+
+        let assistant_default = AiPortingAssistant::default();
+        assert!(assistant_default.generator.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_llm_adaptation_suggestions() {
+        let assistant = AiPortingAssistant::new();
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let suggestions = assistant
+            .generate_adaptation_suggestions(&statute, &jp, &us)
+            .await
+            .unwrap();
+
+        assert!(!suggestions.is_empty());
+        let first = &suggestions[0];
+        assert_eq!(first.statute_id, "test");
+        assert!(first.confidence > 0.0 && first.confidence <= 1.0);
+        assert!(!first.suggestion.is_empty());
+        assert!(matches!(
+            first.category,
+            AdaptationCategory::Procedural | AdaptationCategory::Cultural
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_similar_statute_discovery() {
+        let assistant = AiPortingAssistant::new();
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+        let jurisdictions = vec![test_jurisdiction_jp(), test_jurisdiction_us()];
+
+        let similar = assistant
+            .discover_similar_statutes(&statute, &jurisdictions)
+            .await
+            .unwrap();
+
+        // Should find at least one similar statute (similarity > 0.3)
+        assert!(!similar.is_empty());
+
+        for sim in &similar {
+            assert!(sim.similarity_score > 0.0 && sim.similarity_score <= 1.0);
+            assert!(!sim.matching_features.is_empty());
+        }
+
+        // Should be sorted by similarity score (descending)
+        for i in 1..similar.len() {
+            assert!(similar[i - 1].similarity_score >= similar[i].similarity_score);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_gap_analysis() {
+        let assistant = AiPortingAssistant::new();
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+
+        let gap_analysis = assistant.analyze_gaps(&statute, &jp, &us).await.unwrap();
+
+        assert_eq!(gap_analysis.source_statute_id, "test");
+        assert!(gap_analysis.coverage_score >= 0.0 && gap_analysis.coverage_score <= 1.0);
+        assert!(!gap_analysis.gaps.is_empty());
+        assert!(!gap_analysis.recommendations.is_empty());
+
+        for gap in &gap_analysis.gaps {
+            assert!(!gap.description.is_empty());
+            assert!(!gap.missing_element.is_empty());
+            assert!(!gap.solutions.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cultural_sensitivity_analysis() {
+        let assistant = AiPortingAssistant::new();
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+
+        // Create jurisdiction with cultural prohibitions
+        let mut params = CulturalParams::for_country("US");
+        params.prohibitions.push("alcohol".to_string());
+
+        let jurisdiction = Jurisdiction::new("TEST", "Test", Locale::new("en").with_country("US"))
+            .with_legal_system(LegalSystem::CommonLaw)
+            .with_cultural_params(params);
+
+        let analysis = assistant
+            .check_cultural_sensitivity(&statute, &jurisdiction)
+            .await
+            .unwrap();
+
+        assert_eq!(analysis.statute_id, "test");
+        assert!(analysis.sensitivity_score >= 0.0 && analysis.sensitivity_score <= 1.0);
+        assert!(!analysis.issues.is_empty());
+        assert!(!analysis.assessment.is_empty());
+
+        for issue in &analysis.issues {
+            assert!(!issue.description.is_empty());
+            assert!(!issue.explanation.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_plain_language_explanation() {
+        let assistant = AiPortingAssistant::new();
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        for audience_level in [
+            AudienceLevel::GeneralPublic,
+            AudienceLevel::Business,
+            AudienceLevel::Government,
+            AudienceLevel::Legal,
+            AudienceLevel::Academic,
+        ] {
+            let explanation = assistant
+                .generate_plain_explanation(&statute, audience_level)
+                .await
+                .unwrap();
+
+            assert_eq!(explanation.statute_id, "test");
+            assert_eq!(explanation.audience_level, audience_level);
+            assert!(!explanation.summary.is_empty());
+            assert!(!explanation.explanation.is_empty());
+            assert!(!explanation.key_points.is_empty());
+            assert!(explanation.readability_score > 0.0 && explanation.readability_score <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_adaptation_category() {
+        let categories = vec![
+            AdaptationCategory::Terminology,
+            AdaptationCategory::Procedural,
+            AdaptationCategory::Cultural,
+            AdaptationCategory::Numerical,
+            AdaptationCategory::Structural,
+            AdaptationCategory::LegalPrinciple,
+            AdaptationCategory::Compliance,
+        ];
+
+        for category in categories {
+            assert!(matches!(
+                category,
+                AdaptationCategory::Terminology
+                    | AdaptationCategory::Procedural
+                    | AdaptationCategory::Cultural
+                    | AdaptationCategory::Numerical
+                    | AdaptationCategory::Structural
+                    | AdaptationCategory::LegalPrinciple
+                    | AdaptationCategory::Compliance
+            ));
+        }
+    }
+
+    #[test]
+    fn test_gap_types() {
+        let gap_types = vec![
+            GapType::MissingConcept,
+            GapType::MissingProcedure,
+            GapType::MissingEnforcement,
+            GapType::MissingSafeguard,
+            GapType::InsufficientSpecificity,
+            GapType::MissingCulturalElement,
+        ];
+
+        for gap_type in gap_types {
+            assert!(matches!(
+                gap_type,
+                GapType::MissingConcept
+                    | GapType::MissingProcedure
+                    | GapType::MissingEnforcement
+                    | GapType::MissingSafeguard
+                    | GapType::InsufficientSpecificity
+                    | GapType::MissingCulturalElement
+            ));
+        }
+    }
+
+    #[test]
+    fn test_cultural_issue_types() {
+        let issue_types = vec![
+            CulturalIssueType::Religious,
+            CulturalIssueType::Traditional,
+            CulturalIssueType::SocialNorm,
+            CulturalIssueType::Gender,
+            CulturalIssueType::Family,
+            CulturalIssueType::Language,
+            CulturalIssueType::Historical,
+        ];
+
+        for issue_type in issue_types {
+            assert!(matches!(
+                issue_type,
+                CulturalIssueType::Religious
+                    | CulturalIssueType::Traditional
+                    | CulturalIssueType::SocialNorm
+                    | CulturalIssueType::Gender
+                    | CulturalIssueType::Family
+                    | CulturalIssueType::Language
+                    | CulturalIssueType::Historical
+            ));
+        }
+    }
+
+    #[test]
+    fn test_feature_types() {
+        let feature_types = vec![
+            FeatureType::LegalEffect,
+            FeatureType::Structure,
+            FeatureType::Terminology,
+            FeatureType::Scope,
+            FeatureType::Conditions,
+            FeatureType::Remedies,
+        ];
+
+        for feature_type in feature_types {
+            assert!(matches!(
+                feature_type,
+                FeatureType::LegalEffect
+                    | FeatureType::Structure
+                    | FeatureType::Terminology
+                    | FeatureType::Scope
+                    | FeatureType::Conditions
+                    | FeatureType::Remedies
+            ));
+        }
+    }
+
+    #[test]
+    fn test_audience_levels() {
+        let levels = vec![
+            AudienceLevel::GeneralPublic,
+            AudienceLevel::Business,
+            AudienceLevel::Government,
+            AudienceLevel::Legal,
+            AudienceLevel::Academic,
+        ];
+
+        for level in levels {
+            assert!(matches!(
+                level,
+                AudienceLevel::GeneralPublic
+                    | AudienceLevel::Business
+                    | AudienceLevel::Government
+                    | AudienceLevel::Legal
+                    | AudienceLevel::Academic
+            ));
+        }
+    }
+
     #[tokio::test]
     async fn test_multi_hop_port() {
         let jp = test_jurisdiction_jp();
@@ -3130,5 +10779,2331 @@ mod tests {
         assert!(md.contains("# Statute Diff"));
         assert!(md.contains("Similarity Score"));
         assert!(md.contains("```diff"));
+    }
+
+    // ========================================================================
+    // Jurisdiction Database Tests (v0.1.1)
+    // ========================================================================
+
+    #[test]
+    fn test_jurisdiction_profile_creation() {
+        let profile = JurisdictionProfile::new(
+            String::from("US"),
+            String::from("United States"),
+            LegalSystemType::CommonLaw,
+        );
+
+        assert_eq!(profile.code, "US");
+        assert_eq!(profile.name, "United States");
+        assert_eq!(profile.legal_system, LegalSystemType::CommonLaw);
+        assert!(profile.official_languages.is_empty());
+    }
+
+    #[test]
+    fn test_court_hierarchy() {
+        let mut hierarchy = CourtHierarchy::new();
+
+        hierarchy.add_court(Court {
+            name: String::from("Supreme Court"),
+            level: CourtLevel::Supreme,
+            jurisdiction: String::from("Federal"),
+            precedent_setting: true,
+            judges: Some(9),
+            url: None,
+        });
+
+        hierarchy.add_court(Court {
+            name: String::from("District Court"),
+            level: CourtLevel::District,
+            jurisdiction: String::from("Regional"),
+            precedent_setting: false,
+            judges: Some(100),
+            url: None,
+        });
+
+        assert_eq!(hierarchy.courts.len(), 2);
+        assert_eq!(hierarchy.courts_by_level(CourtLevel::Supreme).len(), 1);
+        assert_eq!(hierarchy.courts_by_level(CourtLevel::District).len(), 1);
+    }
+
+    #[test]
+    fn test_legislative_process() {
+        let process = LegislativeProcess::new(String::from("Congress"), String::from("House"))
+            .with_upper_house(String::from("Senate"));
+
+        assert!(process.is_bicameral);
+        assert_eq!(process.upper_house, Some(String::from("Senate")));
+        assert!(process.stages.contains(&LegislativeStage::UpperHouse));
+    }
+
+    #[test]
+    fn test_constitutional_framework() {
+        let mut framework = ConstitutionalFramework::new();
+        framework.add_feature(ConstitutionalFeature::WrittenConstitution);
+        framework.add_feature(ConstitutionalFeature::BillOfRights);
+        framework.add_feature(ConstitutionalFeature::Federalism);
+
+        assert!(framework.has_feature(ConstitutionalFeature::WrittenConstitution));
+        assert!(framework.has_feature(ConstitutionalFeature::BillOfRights));
+        assert!(framework.has_feature(ConstitutionalFeature::Federalism));
+        assert!(!framework.has_feature(ConstitutionalFeature::ParliamentarySovereignty));
+        assert_eq!(framework.features.len(), 3);
+    }
+
+    #[test]
+    fn test_jurisdiction_compatibility_score() {
+        let us = JurisdictionProfile::new(
+            String::from("US"),
+            String::from("United States"),
+            LegalSystemType::CommonLaw,
+        );
+
+        let gb = JurisdictionProfile::new(
+            String::from("GB"),
+            String::from("United Kingdom"),
+            LegalSystemType::CommonLaw,
+        );
+
+        let jp = JurisdictionProfile::new(
+            String::from("JP"),
+            String::from("Japan"),
+            LegalSystemType::CivilLaw,
+        );
+
+        // US and GB should be more compatible (both common law)
+        let us_gb_score = us.compatibility_score(&gb);
+        let us_jp_score = us.compatibility_score(&jp);
+
+        assert!(us_gb_score > us_jp_score);
+        assert!(us_gb_score >= 0.0 && us_gb_score <= 1.0);
+        assert!(us_jp_score >= 0.0 && us_jp_score <= 1.0);
+    }
+
+    #[test]
+    fn test_jurisdiction_database() {
+        let mut db = JurisdictionDatabase::new();
+
+        let us = JurisdictionProfile::new(
+            String::from("US"),
+            String::from("United States"),
+            LegalSystemType::CommonLaw,
+        );
+
+        let jp = JurisdictionProfile::new(
+            String::from("JP"),
+            String::from("Japan"),
+            LegalSystemType::CivilLaw,
+        );
+
+        db.add_profile(us);
+        db.add_profile(jp);
+
+        assert!(db.get_profile("US").is_some());
+        assert!(db.get_profile("JP").is_some());
+        assert!(db.get_profile("FR").is_none());
+        assert_eq!(db.list_codes().len(), 2);
+    }
+
+    #[test]
+    fn test_find_by_legal_system() {
+        let db = JurisdictionDatabase::with_major_jurisdictions();
+
+        let common_law = db.find_by_legal_system(LegalSystemType::CommonLaw);
+        let civil_law = db.find_by_legal_system(LegalSystemType::CivilLaw);
+
+        assert!(common_law.len() >= 2); // US, GB
+        assert!(civil_law.len() >= 3); // JP, DE, FR
+    }
+
+    #[test]
+    fn test_find_compatible_jurisdictions() {
+        let db = JurisdictionDatabase::with_major_jurisdictions();
+
+        let compatible = db.find_compatible("US", 0.5);
+
+        assert!(!compatible.is_empty());
+
+        // Verify scores are sorted in descending order
+        for i in 0..compatible.len().saturating_sub(1) {
+            assert!(compatible[i].1 >= compatible[i + 1].1);
+        }
+
+        // Verify all scores meet minimum threshold
+        for (_, score) in &compatible {
+            assert!(*score >= 0.5);
+        }
+    }
+
+    #[test]
+    fn test_major_jurisdictions_database() {
+        let db = JurisdictionDatabase::with_major_jurisdictions();
+
+        // Verify US profile
+        let us = db.get_profile("US").expect("US profile should exist");
+        assert_eq!(us.name, "United States");
+        assert_eq!(us.legal_system, LegalSystemType::CommonLaw);
+        assert!(
+            us.constitutional_framework
+                .has_feature(ConstitutionalFeature::Federalism)
+        );
+        assert!(us.legislative_process.is_bicameral);
+        assert!(us.court_hierarchy.has_jury_trials);
+
+        // Verify Japan profile
+        let jp = db.get_profile("JP").expect("JP profile should exist");
+        assert_eq!(jp.name, "Japan");
+        assert_eq!(jp.legal_system, LegalSystemType::CivilLaw);
+        assert!(
+            jp.constitutional_framework
+                .has_feature(ConstitutionalFeature::ParliamentarySystem)
+        );
+        assert!(!jp.court_hierarchy.has_jury_trials);
+
+        // Verify Germany profile
+        let de = db.get_profile("DE").expect("DE profile should exist");
+        assert_eq!(de.name, "Germany");
+        assert!(
+            de.constitutional_framework
+                .has_feature(ConstitutionalFeature::Federalism)
+        );
+        assert!(de.court_hierarchy.constitutional_court.is_some());
+
+        // Verify United Kingdom profile
+        let gb = db.get_profile("GB").expect("GB profile should exist");
+        assert_eq!(gb.name, "United Kingdom");
+        assert!(!gb.constitutional_framework.has_written_constitution);
+        assert!(
+            gb.constitutional_framework
+                .has_feature(ConstitutionalFeature::ParliamentarySovereignty)
+        );
+
+        // Verify France profile
+        let fr = db.get_profile("FR").expect("FR profile should exist");
+        assert_eq!(fr.name, "France");
+        assert!(
+            fr.constitutional_framework
+                .has_feature(ConstitutionalFeature::SemiPresidentialSystem)
+        );
+    }
+
+    #[test]
+    fn test_court_level_ordering() {
+        assert!(CourtLevel::Local < CourtLevel::District);
+        assert!(CourtLevel::District < CourtLevel::Appellate);
+        assert!(CourtLevel::Appellate < CourtLevel::Supreme);
+        assert!(CourtLevel::Supreme < CourtLevel::International);
+    }
+
+    #[test]
+    fn test_legislative_stage_ordering() {
+        assert!(LegislativeStage::Drafting < LegislativeStage::Committee);
+        assert!(LegislativeStage::Committee < LegislativeStage::FirstReading);
+        assert!(LegislativeStage::FirstReading < LegislativeStage::SecondReading);
+        assert!(LegislativeStage::SecondReading < LegislativeStage::ThirdReading);
+        assert!(LegislativeStage::ThirdReading < LegislativeStage::UpperHouse);
+        assert!(LegislativeStage::UpperHouse < LegislativeStage::Executive);
+        assert!(LegislativeStage::Executive < LegislativeStage::Publication);
+    }
+
+    // ========================================================================
+    // Semantic Mapping Tests (v0.1.2)
+    // ========================================================================
+
+    #[test]
+    fn test_concept_equivalence() {
+        let equiv = ConceptEquivalence::new(String::from("contract"), String::from("契約"), 0.95)
+            .with_context(String::from("civil law"))
+            .with_notes(String::from("Direct translation"));
+
+        assert_eq!(equiv.source_concept, "contract");
+        assert_eq!(equiv.target_concept, "契約");
+        assert_eq!(equiv.equivalence_score, 0.95);
+        assert!((equiv.semantic_distance - 0.05).abs() < 0.0001);
+        assert_eq!(equiv.context.len(), 1);
+        assert!(equiv.notes.is_some());
+    }
+
+    #[test]
+    fn test_concept_equivalence_database() {
+        let mut db = ConceptEquivalenceDatabase::new();
+
+        db.add_equivalence(
+            String::from("US->JP"),
+            ConceptEquivalence::new(String::from("contract"), String::from("契約"), 0.95),
+        );
+
+        db.add_equivalence(
+            String::from("US->JP"),
+            ConceptEquivalence::new(String::from("tort"), String::from("不法行為"), 0.9),
+        );
+
+        let matches = db.find_equivalences("US", "JP", "contract");
+        assert_eq!(matches.len(), 1);
+
+        let best = db.best_match("US", "JP", "contract");
+        assert!(best.is_some());
+        assert_eq!(best.unwrap().target_concept, "契約");
+    }
+
+    #[test]
+    fn test_term_translation() {
+        let translation = TermTranslation::new(
+            String::from("felony"),
+            String::from("US"),
+            String::from("重罪"),
+            String::from("JP"),
+            0.9,
+            true,
+        );
+
+        assert_eq!(translation.source_term, "felony");
+        assert_eq!(translation.target_term, "重罪");
+        assert_eq!(translation.accuracy, 0.9);
+        assert!(translation.is_direct);
+    }
+
+    #[test]
+    fn test_term_translation_matrix() {
+        let matrix = TermTranslationMatrix::with_common_translations();
+
+        let translations = matrix.find_translations("US", "JP", "felony");
+        assert!(!translations.is_empty());
+
+        let best = matrix.best_translation("US", "JP", "felony", None);
+        assert!(best.is_some());
+        assert_eq!(best.unwrap().target_term, "重罪");
+    }
+
+    #[test]
+    fn test_term_translation_context() {
+        let mut matrix = TermTranslationMatrix::new();
+
+        let mut criminal_trans = TermTranslation::new(
+            String::from("charge"),
+            String::from("US"),
+            String::from("起訴"),
+            String::from("JP"),
+            0.9,
+            true,
+        );
+        criminal_trans.valid_contexts = vec![String::from("criminal")];
+
+        let mut civil_trans = TermTranslation::new(
+            String::from("charge"),
+            String::from("US"),
+            String::from("料金"),
+            String::from("JP"),
+            0.8,
+            true,
+        );
+        civil_trans.valid_contexts = vec![String::from("civil"), String::from("contract")];
+
+        matrix.add_translation(criminal_trans);
+        matrix.add_translation(civil_trans);
+
+        let criminal_best = matrix.best_translation("US", "JP", "charge", Some("criminal"));
+        assert_eq!(criminal_best.unwrap().target_term, "起訴");
+
+        let civil_best = matrix.best_translation("US", "JP", "charge", Some("civil"));
+        assert_eq!(civil_best.unwrap().target_term, "料金");
+    }
+
+    #[test]
+    fn test_semantic_distance_calculator() {
+        let mut concept_db = ConceptEquivalenceDatabase::new();
+
+        concept_db.add_equivalence(
+            String::from("US->JP"),
+            ConceptEquivalence::new(String::from("contract"), String::from("契約"), 0.95),
+        );
+
+        let calculator = SemanticDistanceCalculator::new(concept_db);
+
+        let distance = calculator.calculate_distance("US", "JP", "contract", "契約");
+        assert!(distance >= 0.0 && distance <= 1.0);
+        assert!(distance < 0.1); // Should be low for known equivalence
+    }
+
+    #[test]
+    fn test_levenshtein_distance() {
+        let concept_db = ConceptEquivalenceDatabase::new();
+        let calculator = SemanticDistanceCalculator::new(concept_db);
+
+        // Identical strings
+        let dist1 = calculator.calculate_distance("US", "JP", "test", "test");
+        assert_eq!(dist1, 0.0);
+
+        // Different strings
+        let dist2 = calculator.calculate_distance("US", "JP", "contract", "compact");
+        assert!(dist2 > 0.0 && dist2 < 1.0);
+    }
+
+    #[test]
+    fn test_context_aware_term_mapper() {
+        let matrix = TermTranslationMatrix::with_common_translations();
+        let mut mapper = ContextAwareTermMapper::new(matrix);
+
+        mapper.add_context_rule(
+            String::from("criminal"),
+            vec![String::from("crime"), String::from("offense")],
+        );
+
+        let mapped = mapper.map_term("US", "JP", "felony", "serious crime");
+        assert!(mapped.is_some());
+        assert_eq!(mapped.unwrap(), "重罪");
+    }
+
+    #[test]
+    fn test_legal_dictionary() {
+        let dict = LegalDictionary::us_dictionary();
+
+        assert_eq!(dict.jurisdiction, "US");
+        assert!(!dict.terms.is_empty());
+
+        let felony = dict.find_term("felony");
+        assert!(felony.is_some());
+        assert_eq!(felony.unwrap().domain, "criminal");
+
+        let criminal_terms = dict.get_by_domain("criminal");
+        assert!(criminal_terms.len() >= 2);
+    }
+
+    #[test]
+    fn test_japan_dictionary() {
+        let dict = LegalDictionary::japan_dictionary();
+
+        assert_eq!(dict.jurisdiction, "JP");
+        assert!(!dict.terms.is_empty());
+
+        let felony = dict.find_term("重罪");
+        assert!(felony.is_some());
+
+        let criminal_terms = dict.get_by_domain("criminal");
+        assert!(criminal_terms.len() >= 2);
+    }
+
+    #[test]
+    fn test_legal_term_creation() {
+        let term = LegalTerm::new(
+            String::from("contract"),
+            String::from("An agreement between parties"),
+            String::from("US"),
+            String::from("civil"),
+        );
+
+        assert_eq!(term.term, "contract");
+        assert_eq!(term.jurisdiction, "US");
+        assert_eq!(term.domain, "civil");
+        assert!(term.related_terms.is_empty());
+    }
+
+    #[test]
+    fn test_term_translation_matrix_get_terms() {
+        let mut matrix = TermTranslationMatrix::new();
+
+        matrix.add_term(LegalTerm::new(
+            String::from("felony"),
+            String::from("Serious crime"),
+            String::from("US"),
+            String::from("criminal"),
+        ));
+
+        matrix.add_term(LegalTerm::new(
+            String::from("tort"),
+            String::from("Civil wrong"),
+            String::from("US"),
+            String::from("civil"),
+        ));
+
+        let us_terms = matrix.get_terms("US");
+        assert_eq!(us_terms.len(), 2);
+
+        let criminal_terms = matrix.get_terms_by_domain("US", "criminal");
+        assert_eq!(criminal_terms.len(), 1);
+        assert_eq!(criminal_terms[0].term, "felony");
+    }
+
+    // ========================================================================
+    // Cultural Adaptation Tests (v0.1.3)
+    // ========================================================================
+
+    #[test]
+    fn test_cultural_exception() {
+        let exception = CulturalException::new(
+            CulturalExceptionType::Religious,
+            String::from("US"),
+            String::from("Religious accommodation"),
+        )
+        .with_legal_basis(String::from("Title VII"))
+        .with_domain(String::from("employment"));
+
+        assert_eq!(exception.exception_type, CulturalExceptionType::Religious);
+        assert_eq!(exception.jurisdiction, "US");
+        assert!(exception.legal_basis.is_some());
+        assert_eq!(exception.applicable_domains.len(), 1);
+    }
+
+    #[test]
+    fn test_cultural_exception_registry() {
+        let registry = CulturalExceptionRegistry::with_common_exceptions();
+
+        let us_exceptions = registry.get_exceptions("US");
+        assert!(!us_exceptions.is_empty());
+
+        let jp_religious = registry.get_by_type("JP", CulturalExceptionType::Religious);
+        assert!(!jp_religious.is_empty());
+    }
+
+    #[test]
+    fn test_holiday_calendar() {
+        let mut calendar = HolidayCalendar::new(String::from("US"), CalendarSystem::Gregorian);
+
+        let holiday = Holiday::new(
+            String::from("Independence Day"),
+            HolidayType::National,
+            String::from("US"),
+        )
+        .with_fixed_date(7, 4)
+        .as_legal_holiday();
+
+        calendar.add_holiday(holiday);
+
+        assert_eq!(calendar.holidays.len(), 1);
+        assert_eq!(calendar.calendar_system, CalendarSystem::Gregorian);
+    }
+
+    #[test]
+    fn test_us_calendar() {
+        let calendar = HolidayCalendar::us_calendar();
+
+        assert_eq!(calendar.jurisdiction, "US");
+        assert_eq!(calendar.calendar_system, CalendarSystem::Gregorian);
+        assert!(calendar.holidays.len() >= 2);
+
+        let national_holidays = calendar.get_by_type(HolidayType::National);
+        assert!(national_holidays.len() >= 2);
+    }
+
+    #[test]
+    fn test_japan_calendar() {
+        let calendar = HolidayCalendar::japan_calendar();
+
+        assert_eq!(calendar.jurisdiction, "JP");
+        assert_eq!(calendar.calendar_system, CalendarSystem::Japanese);
+        assert!(calendar.holidays.len() >= 2);
+    }
+
+    #[test]
+    fn test_currency() {
+        assert_eq!(Currency::USD.code(), "USD");
+        assert_eq!(Currency::JPY.symbol(), "¥");
+        assert_eq!(Currency::EUR.code(), "EUR");
+        assert_eq!(Currency::GBP.symbol(), "£");
+    }
+
+    #[test]
+    fn test_monetary_conversion() {
+        let conversion = MonetaryConversion::new(100.0, Currency::USD, Currency::JPY, 150.0);
+
+        assert_eq!(conversion.source_amount, 100.0);
+        assert_eq!(conversion.source_currency, Currency::USD);
+        assert_eq!(conversion.target_amount, 15000.0);
+        assert_eq!(conversion.target_currency, Currency::JPY);
+        assert_eq!(conversion.exchange_rate, 150.0);
+    }
+
+    #[test]
+    fn test_monetary_conversion_threshold() {
+        let conversion = MonetaryConversion::new(100.0, Currency::USD, Currency::JPY, 150.0);
+
+        assert!(conversion.exceeds_threshold(10000.0));
+        assert!(!conversion.exceeds_threshold(20000.0));
+    }
+
+    #[test]
+    fn test_monetary_adapter() {
+        let adapter = MonetaryAdapter::with_common_rates();
+
+        let conversion = adapter.convert(1000.0, Currency::USD, Currency::JPY);
+        assert!(conversion.is_some());
+
+        let conv = conversion.unwrap();
+        assert_eq!(conv.target_amount, 150_000.0);
+    }
+
+    #[test]
+    fn test_age_of_majority() {
+        let age = AgeOfMajority::new(String::from("US"), 18);
+
+        assert_eq!(age.jurisdiction, "US");
+        assert_eq!(age.age, 18);
+        assert!(age.exceptions.is_empty());
+    }
+
+    #[test]
+    fn test_age_of_majority_mapper() {
+        let mapper = AgeOfMajorityMapper::with_common_jurisdictions();
+
+        let us_age = mapper.get_age("US");
+        assert!(us_age.is_some());
+        assert_eq!(us_age.unwrap().age, 18);
+
+        let jp_age = mapper.get_age("JP");
+        assert!(jp_age.is_some());
+        assert_eq!(jp_age.unwrap().age, 18);
+    }
+
+    #[test]
+    fn test_age_mapping() {
+        let mapper = AgeOfMajorityMapper::with_common_jurisdictions();
+
+        // US and JP both have age 18, so no mapping needed
+        let mapping = mapper.map_age_reference("US", "JP");
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_legal_capacity_rule() {
+        let rule = LegalCapacityRule::new(LegalCapacityType::Contractual, String::from("US"), 18);
+
+        assert_eq!(rule.capacity_type, LegalCapacityType::Contractual);
+        assert_eq!(rule.jurisdiction, "US");
+        assert_eq!(rule.minimum_age, 18);
+    }
+
+    #[test]
+    fn test_legal_capacity_adapter() {
+        let adapter = LegalCapacityAdapter::with_common_rules();
+
+        let us_rules = adapter.get_rules("US");
+        assert!(!us_rules.is_empty());
+
+        let us_contract = adapter.get_rule("US", LegalCapacityType::Contractual);
+        assert!(us_contract.is_some());
+        assert_eq!(us_contract.unwrap().minimum_age, 18);
+    }
+
+    #[test]
+    fn test_legal_capacity_differences() {
+        let adapter = LegalCapacityAdapter::with_common_rules();
+
+        let us_criminal = adapter.get_rule("US", LegalCapacityType::CriminalResponsibility);
+        let jp_criminal = adapter.get_rule("JP", LegalCapacityType::CriminalResponsibility);
+
+        assert!(us_criminal.is_some());
+        assert!(jp_criminal.is_some());
+
+        // US: 18, JP: 14
+        assert_eq!(us_criminal.unwrap().minimum_age, 18);
+        assert_eq!(jp_criminal.unwrap().minimum_age, 14);
+    }
+
+    // Validation Framework Tests (v0.1.6)
+
+    #[test]
+    fn test_compliance_checker() {
+        let us = test_jurisdiction_us();
+        let checker = TargetJurisdictionChecker::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Administrative Procedure",
+            Effect::new(EffectType::Grant, "Administrative rights"),
+        );
+
+        let result = checker.check_compliance(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(!result.checked_regulations.is_empty());
+        assert!(result.compliance_score >= 0.0 && result.compliance_score <= 1.0);
+    }
+
+    #[test]
+    fn test_compliance_severity_levels() {
+        let us = test_jurisdiction_us();
+        let checker = TargetJurisdictionChecker::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = checker.check_compliance(&statute);
+
+        // Check that severity levels are properly categorized
+        for issue in &result.issues {
+            assert!(matches!(
+                issue.severity,
+                ComplianceSeverity::Critical
+                    | ComplianceSeverity::High
+                    | ComplianceSeverity::Medium
+                    | ComplianceSeverity::Low
+                    | ComplianceSeverity::Info
+            ));
+        }
+    }
+
+    #[test]
+    fn test_constitutional_analyzer() {
+        let us = test_jurisdiction_us();
+        let analyzer = ConstitutionalAnalyzer::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Constitutional Statute",
+            Effect::new(EffectType::Grant, "Freedom rights"),
+        );
+
+        let result = analyzer.analyze(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(result.compatibility_score >= 0.0 && result.compatibility_score <= 1.0);
+        assert!(!result.relevant_provisions.is_empty());
+        assert!(!result.recommended_amendments.is_empty());
+    }
+
+    #[test]
+    fn test_constitutional_provisions_us() {
+        let us = test_jurisdiction_us();
+        let analyzer = ConstitutionalAnalyzer::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = analyzer.analyze(&statute);
+
+        // US should have First Amendment and Fourteenth Amendment provisions
+        assert!(
+            result
+                .relevant_provisions
+                .iter()
+                .any(|p| p.contains("Amendment"))
+        );
+    }
+
+    #[test]
+    fn test_constitutional_provisions_japan() {
+        let jp = test_jurisdiction_jp();
+        let analyzer = ConstitutionalAnalyzer::new(jp);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = analyzer.analyze(&statute);
+
+        // Japan should have Article provisions
+        assert!(
+            result
+                .relevant_provisions
+                .iter()
+                .any(|p| p.contains("Article") || p.contains("憲法"))
+        );
+    }
+
+    #[test]
+    fn test_treaty_compliance_checker() {
+        let us = test_jurisdiction_us();
+        let checker = TreatyTargetJurisdictionChecker::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Human Rights Statute",
+            Effect::new(EffectType::Grant, "Human rights"),
+        );
+
+        let result = checker.check_compliance(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(result.compliance_score >= 0.0 && result.compliance_score <= 1.0);
+        assert!(!result.checked_treaties.is_empty());
+        assert!(!result.recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_treaty_database() {
+        let us = test_jurisdiction_us();
+        let checker = TreatyTargetJurisdictionChecker::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = checker.check_compliance(&statute);
+
+        // Should check major international treaties
+        assert!(
+            result
+                .checked_treaties
+                .iter()
+                .any(|t| t.contains("International Covenant") || t.contains("Rights"))
+        );
+    }
+
+    #[test]
+    fn test_human_rights_assessor() {
+        let us = test_jurisdiction_us();
+        let assessor = HumanRightsAssessor::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Human Rights Statute",
+            Effect::new(EffectType::Grant, "Fundamental rights"),
+        );
+
+        let result = assessor.assess(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(result.impact_score >= -1.0 && result.impact_score <= 1.0);
+        assert!(!result.mitigation_measures.is_empty());
+        assert!(!result.summary.is_empty());
+    }
+
+    #[test]
+    fn test_human_rights_impact_types() {
+        let us = test_jurisdiction_us();
+        let assessor = HumanRightsAssessor::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = assessor.assess(&statute);
+
+        // Verify impact types are properly categorized
+        for right in &result.affected_rights {
+            assert!(matches!(
+                right.impact,
+                RightImpactType::Enhancement
+                    | RightImpactType::Neutral
+                    | RightImpactType::Restriction
+                    | RightImpactType::Violation
+            ));
+        }
+    }
+
+    #[test]
+    fn test_enforceability_predictor() {
+        let us = test_jurisdiction_us();
+        let predictor = EnforceabilityPredictor::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Enforcement Statute",
+            Effect::new(EffectType::Grant, "Enforcement powers"),
+        );
+
+        let result = predictor.predict(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(result.enforceability_score >= 0.0 && result.enforceability_score <= 1.0);
+        assert!(!result.required_mechanisms.is_empty());
+        assert!(!result.recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_enforcement_challenge_types() {
+        let us = test_jurisdiction_us();
+        let predictor = EnforceabilityPredictor::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = predictor.predict(&statute);
+
+        // Verify challenge types are properly categorized
+        for challenge in &result.challenges {
+            assert!(matches!(
+                challenge.challenge_type,
+                EnforcementChallengeType::Authority
+                    | EnforcementChallengeType::Resources
+                    | EnforcementChallengeType::Technical
+                    | EnforcementChallengeType::Cultural
+                    | EnforcementChallengeType::Administrative
+                    | EnforcementChallengeType::Monitoring
+            ));
+        }
+    }
+
+    #[test]
+    fn test_validation_framework_creation() {
+        let us = test_jurisdiction_us();
+        let framework = ValidationFramework::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Validation Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = framework.validate(&statute);
+
+        assert!(!result.id.is_empty());
+        assert!(result.overall_score >= 0.0 && result.overall_score <= 1.0);
+        assert!(!result.summary.is_empty());
+    }
+
+    #[test]
+    fn test_validation_framework_comprehensive() {
+        let us = test_jurisdiction_us();
+        let framework = ValidationFramework::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Comprehensive Statute",
+            Effect::new(EffectType::Grant, "Comprehensive rights"),
+        );
+
+        let result = framework.validate(&statute);
+
+        // All sub-validations should be present
+        assert!(!result.compliance.id.is_empty());
+        assert!(!result.constitutional.id.is_empty());
+        assert!(!result.treaty_compliance.id.is_empty());
+        assert!(!result.human_rights.id.is_empty());
+        assert!(!result.enforceability.id.is_empty());
+    }
+
+    #[test]
+    fn test_validation_overall_score_calculation() {
+        let us = test_jurisdiction_us();
+        let framework = ValidationFramework::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Score Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = framework.validate(&statute);
+
+        // Overall score should be calculated from all components
+        let expected_score = (result.compliance.compliance_score
+            + result.constitutional.compatibility_score
+            + result.treaty_compliance.compliance_score
+            + result.enforceability.enforceability_score
+            + (result.human_rights.impact_score + 1.0) / 2.0)
+            / 5.0;
+
+        assert!((result.overall_score - expected_score).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_validation_passed_criteria() {
+        let us = test_jurisdiction_us();
+        let framework = ValidationFramework::new(us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Passing Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let result = framework.validate(&statute);
+
+        // If validation passed, all components should be compliant
+        if result.passed {
+            assert!(result.compliance.is_compliant);
+            assert!(result.constitutional.is_compatible);
+            assert!(result.treaty_compliance.is_compliant);
+            assert!(result.human_rights.impact_score >= 0.0);
+            assert!(result.enforceability.is_enforceable);
+        }
+    }
+
+    #[test]
+    fn test_compliance_issue_categories() {
+        let issue = ValidationComplianceIssue {
+            id: "test-issue".to_string(),
+            severity: ComplianceSeverity::Medium,
+            category: ComplianceCategory::Regulatory,
+            description: "Test issue".to_string(),
+            conflicting_regulation: "test-reg".to_string(),
+            suggested_resolution: Some("Test resolution".to_string()),
+        };
+
+        assert!(matches!(
+            issue.category,
+            ComplianceCategory::Constitutional
+                | ComplianceCategory::Regulatory
+                | ComplianceCategory::Procedural
+                | ComplianceCategory::Cultural
+                | ComplianceCategory::Technical
+                | ComplianceCategory::Administrative
+        ));
+    }
+
+    #[test]
+    fn test_impact_severity_levels() {
+        let severities = vec![
+            ImpactSeverity::Severe,
+            ImpactSeverity::Moderate,
+            ImpactSeverity::Minor,
+            ImpactSeverity::Negligible,
+        ];
+
+        for severity in severities {
+            assert!(matches!(
+                severity,
+                ImpactSeverity::Severe
+                    | ImpactSeverity::Moderate
+                    | ImpactSeverity::Minor
+                    | ImpactSeverity::Negligible
+            ));
+        }
+    }
+
+    // Workflow Management Tests (v0.1.7)
+
+    #[test]
+    fn test_project_creation() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test Project".to_string(),
+            "Test description".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        assert!(!project.id.is_empty());
+        assert_eq!(project.name, "Test Project");
+        assert_eq!(project.status, ProjectStatus::Planning);
+        assert!(project.statute_ids.is_empty());
+        assert!(project.stakeholders.is_empty());
+    }
+
+    #[test]
+    fn test_project_status_update() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test".to_string(),
+            "Desc".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        manager.update_status(&project.id, ProjectStatus::InProgress);
+
+        let updated = manager.get_project(&project.id).unwrap();
+        assert_eq!(updated.status, ProjectStatus::InProgress);
+    }
+
+    #[test]
+    fn test_add_statute_to_project() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test".to_string(),
+            "Desc".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        manager.add_statute(&project.id, "statute-1".to_string());
+        manager.add_statute(&project.id, "statute-2".to_string());
+
+        let updated = manager.get_project(&project.id).unwrap();
+        assert_eq!(updated.statute_ids.len(), 2);
+        assert!(updated.statute_ids.contains(&"statute-1".to_string()));
+    }
+
+    #[test]
+    fn test_add_stakeholder_to_project() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test".to_string(),
+            "Desc".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        let stakeholder = Stakeholder {
+            id: "stakeholder-1".to_string(),
+            name: "John Doe".to_string(),
+            email: "john@example.com".to_string(),
+            role: StakeholderRole::LegalExpert,
+            notification_preferences: NotificationPreferences {
+                on_status_change: true,
+                on_deadline_approaching: true,
+                on_assignment: true,
+                on_review_request: true,
+                channels: vec![NotificationChannel::Email],
+            },
+        };
+
+        manager.add_stakeholder(&project.id, stakeholder);
+
+        let updated = manager.get_project(&project.id).unwrap();
+        assert_eq!(updated.stakeholders.len(), 1);
+        assert_eq!(updated.stakeholders[0].name, "John Doe");
+    }
+
+    #[test]
+    fn test_add_milestone() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test".to_string(),
+            "Desc".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        let milestone = Milestone {
+            id: "milestone-1".to_string(),
+            name: "Complete Draft".to_string(),
+            description: "Complete initial draft".to_string(),
+            target_date: "2025-12-31T00:00:00Z".to_string(),
+            completed: false,
+            completed_date: None,
+            dependencies: Vec::new(),
+        };
+
+        manager.add_milestone(&project.id, milestone);
+
+        let updated = manager.get_project(&project.id).unwrap();
+        assert_eq!(updated.timeline.milestones.len(), 1);
+    }
+
+    #[test]
+    fn test_complete_milestone() {
+        let mut manager = PortingProjectManager::new();
+        let project = manager.create_project(
+            "Test".to_string(),
+            "Desc".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+
+        let milestone = Milestone {
+            id: "milestone-1".to_string(),
+            name: "Complete Draft".to_string(),
+            description: "Complete initial draft".to_string(),
+            target_date: "2025-12-31T00:00:00Z".to_string(),
+            completed: false,
+            completed_date: None,
+            dependencies: Vec::new(),
+        };
+
+        manager.add_milestone(&project.id, milestone);
+        manager.complete_milestone(&project.id, "milestone-1");
+
+        let updated = manager.get_project(&project.id).unwrap();
+        assert!(updated.timeline.milestones[0].completed);
+        assert!(updated.timeline.milestones[0].completed_date.is_some());
+    }
+
+    #[test]
+    fn test_list_projects_by_status() {
+        let mut manager = PortingProjectManager::new();
+
+        manager.create_project(
+            "P1".to_string(),
+            "D1".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+        let p2 = manager.create_project(
+            "P2".to_string(),
+            "D2".to_string(),
+            "JP".to_string(),
+            "US".to_string(),
+        );
+        manager.update_status(&p2.id, ProjectStatus::InProgress);
+
+        let in_progress = manager.list_projects_by_status(ProjectStatus::InProgress);
+        assert_eq!(in_progress.len(), 1);
+
+        let planning = manager.list_projects_by_status(ProjectStatus::Planning);
+        assert_eq!(planning.len(), 1);
+    }
+
+    #[test]
+    fn test_review_workflow_creation() {
+        let mut workflow = StakeholderReviewWorkflow::new();
+
+        let step = ReviewWorkflowStep {
+            id: "step-1".to_string(),
+            name: "Legal Review".to_string(),
+            order: 1,
+            required_reviewers: vec!["reviewer-1".to_string()],
+            optional_reviewers: Vec::new(),
+            min_approvals: 1,
+            status: ReviewStepStatus::Pending,
+            reviews: Vec::new(),
+        };
+
+        workflow.create_workflow("project-1".to_string(), vec![step]);
+
+        let status = workflow.get_workflow_status("project-1");
+        assert!(status.is_some());
+        assert_eq!(status.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_submit_review() {
+        let mut workflow = StakeholderReviewWorkflow::new();
+
+        let step = ReviewWorkflowStep {
+            id: "step-1".to_string(),
+            name: "Legal Review".to_string(),
+            order: 1,
+            required_reviewers: vec!["reviewer-1".to_string()],
+            optional_reviewers: Vec::new(),
+            min_approvals: 1,
+            status: ReviewStepStatus::Pending,
+            reviews: Vec::new(),
+        };
+
+        workflow.create_workflow("project-1".to_string(), vec![step]);
+
+        let review = WorkflowReview {
+            id: "review-1".to_string(),
+            reviewer_id: "reviewer-1".to_string(),
+            decision: ReviewDecision::Approve,
+            comments: "Looks good".to_string(),
+            reviewed_at: chrono::Utc::now().to_rfc3339(),
+            recommended_changes: Vec::new(),
+        };
+
+        workflow.submit_review("project-1", "step-1", review);
+
+        let status = workflow.get_workflow_status("project-1").unwrap();
+        assert_eq!(status[0].reviews.len(), 1);
+        assert_eq!(status[0].status, ReviewStepStatus::Approved);
+    }
+
+    #[test]
+    fn test_version_control_iteration() {
+        let mut vc = PortingVersionControl::new();
+
+        let iteration = vc.create_iteration(
+            "project-1".to_string(),
+            "statute snapshot v1".to_string(),
+            "user-1".to_string(),
+            "Initial version".to_string(),
+        );
+
+        assert_eq!(iteration.iteration_number, 1);
+        assert_eq!(iteration.statute_snapshot, "statute snapshot v1");
+        assert_eq!(iteration.project_id, "project-1");
+    }
+
+    #[test]
+    fn test_multiple_iterations() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "First".to_string(),
+        );
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v2".to_string(),
+            "user-1".to_string(),
+            "Second".to_string(),
+        );
+
+        let iterations = vc.get_iterations("project-1").unwrap();
+        assert_eq!(iterations.len(), 2);
+        assert_eq!(iterations[0].iteration_number, 1);
+        assert_eq!(iterations[1].iteration_number, 2);
+    }
+
+    #[test]
+    fn test_get_specific_iteration() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "First".to_string(),
+        );
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v2".to_string(),
+            "user-1".to_string(),
+            "Second".to_string(),
+        );
+
+        let iteration = vc.get_iteration("project-1", 2).unwrap();
+        assert_eq!(iteration.statute_snapshot, "v2");
+    }
+
+    #[test]
+    fn test_revert_iteration() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "First".to_string(),
+        );
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v2".to_string(),
+            "user-1".to_string(),
+            "Second".to_string(),
+        );
+
+        let reverted = vc.revert_to_iteration("project-1", 1, "user-2".to_string());
+        assert!(reverted.is_some());
+
+        let iterations = vc.get_iterations("project-1").unwrap();
+        assert_eq!(iterations.len(), 3);
+        assert_eq!(iterations[2].statute_snapshot, "v1");
+    }
+
+    #[test]
+    fn test_approval_chain_creation() {
+        let mut manager = ApprovalChainManager::new();
+
+        let step = ApprovalStep {
+            id: "step-1".to_string(),
+            name: "Manager Approval".to_string(),
+            order: 1,
+            approvers: vec!["manager-1".to_string()],
+            approval_mode: ApprovalMode::Any,
+            status: ApprovalStepStatus::Pending,
+            approvals: Vec::new(),
+            auto_approve_after: None,
+        };
+
+        let chain = manager.create_chain("Test Chain".to_string(), vec![step]);
+
+        assert!(!chain.id.is_empty());
+        assert_eq!(chain.name, "Test Chain");
+        assert_eq!(chain.status, ApprovalChainStatus::NotStarted);
+        assert_eq!(chain.steps.len(), 1);
+    }
+
+    #[test]
+    fn test_submit_approval() {
+        let mut manager = ApprovalChainManager::new();
+
+        let step = ApprovalStep {
+            id: "step-1".to_string(),
+            name: "Manager Approval".to_string(),
+            order: 1,
+            approvers: vec!["manager-1".to_string()],
+            approval_mode: ApprovalMode::Any,
+            status: ApprovalStepStatus::Pending,
+            approvals: Vec::new(),
+            auto_approve_after: None,
+        };
+
+        let chain = manager.create_chain("Test Chain".to_string(), vec![step]);
+
+        let approval = ApprovalRecord {
+            id: "approval-1".to_string(),
+            approver_id: "manager-1".to_string(),
+            approved: true,
+            comments: "Approved".to_string(),
+            approved_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        manager.submit_approval(&chain.id, "step-1", approval);
+
+        let updated = manager.get_chain(&chain.id).unwrap();
+        assert_eq!(updated.steps[0].approvals.len(), 1);
+        assert_eq!(updated.steps[0].status, ApprovalStepStatus::Approved);
+    }
+
+    #[test]
+    fn test_approval_mode_all() {
+        let mut manager = ApprovalChainManager::new();
+
+        let step = ApprovalStep {
+            id: "step-1".to_string(),
+            name: "Multi Approval".to_string(),
+            order: 1,
+            approvers: vec!["approver-1".to_string(), "approver-2".to_string()],
+            approval_mode: ApprovalMode::All,
+            status: ApprovalStepStatus::Pending,
+            approvals: Vec::new(),
+            auto_approve_after: None,
+        };
+
+        let chain = manager.create_chain("Test Chain".to_string(), vec![step]);
+
+        let approval1 = ApprovalRecord {
+            id: "approval-1".to_string(),
+            approver_id: "approver-1".to_string(),
+            approved: true,
+            comments: "OK".to_string(),
+            approved_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        manager.submit_approval(&chain.id, "step-1", approval1);
+        let updated = manager.get_chain(&chain.id).unwrap();
+        assert_eq!(updated.steps[0].status, ApprovalStepStatus::Pending);
+
+        let approval2 = ApprovalRecord {
+            id: "approval-2".to_string(),
+            approver_id: "approver-2".to_string(),
+            approved: true,
+            comments: "OK".to_string(),
+            approved_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        manager.submit_approval(&chain.id, "step-1", approval2);
+        let updated = manager.get_chain(&chain.id).unwrap();
+        assert_eq!(updated.steps[0].status, ApprovalStepStatus::Approved);
+    }
+
+    #[test]
+    fn test_notification_manager() {
+        let mut manager = NotificationManager::new();
+
+        let notification = Notification {
+            id: "notif-1".to_string(),
+            recipient_id: "user-1".to_string(),
+            notification_type: NotificationType::StatusChange,
+            title: "Status Changed".to_string(),
+            message: "Project status changed to InProgress".to_string(),
+            project_id: Some("project-1".to_string()),
+            priority: NotificationPriority::Normal,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            read: false,
+            channels: vec![NotificationChannel::Email],
+        };
+
+        manager.send_notification(notification);
+
+        let notifications = manager.get_notifications("user-1");
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].title, "Status Changed");
+        assert!(!notifications[0].read);
+    }
+
+    #[test]
+    fn test_mark_notification_as_read() {
+        let mut manager = NotificationManager::new();
+
+        let notification = Notification {
+            id: "notif-1".to_string(),
+            recipient_id: "user-1".to_string(),
+            notification_type: NotificationType::StatusChange,
+            title: "Test".to_string(),
+            message: "Test message".to_string(),
+            project_id: None,
+            priority: NotificationPriority::Normal,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            read: false,
+            channels: vec![NotificationChannel::Email],
+        };
+
+        manager.send_notification(notification);
+        manager.mark_as_read("user-1", "notif-1");
+
+        let notifications = manager.get_notifications("user-1");
+        assert!(notifications[0].read);
+    }
+
+    #[test]
+    fn test_deadline_tracker() {
+        let mut manager = NotificationManager::new();
+
+        let deadline = DeadlineTracker {
+            id: "deadline-1".to_string(),
+            project_id: "project-1".to_string(),
+            name: "Final Review".to_string(),
+            deadline: "2026-01-15T00:00:00Z".to_string(),
+            warning_days: 7,
+            status: DeadlineStatus::OnTrack,
+            assigned_to: vec!["user-1".to_string()],
+        };
+
+        manager.add_deadline(deadline);
+
+        let deadlines = manager.get_deadlines("project-1");
+        assert_eq!(deadlines.len(), 1);
+        assert_eq!(deadlines[0].name, "Final Review");
+    }
+
+    #[test]
+    fn test_check_approaching_deadlines() {
+        let mut manager = NotificationManager::new();
+
+        let now = chrono::Utc::now();
+        let deadline_date = now + chrono::Duration::days(5);
+
+        let deadline = DeadlineTracker {
+            id: "deadline-1".to_string(),
+            project_id: "project-1".to_string(),
+            name: "Urgent Deadline".to_string(),
+            deadline: deadline_date.to_rfc3339(),
+            warning_days: 7,
+            status: DeadlineStatus::Approaching,
+            assigned_to: vec!["user-1".to_string()],
+        };
+
+        manager.add_deadline(deadline);
+
+        let notifications = manager.check_deadlines();
+        assert!(!notifications.is_empty());
+        assert_eq!(
+            notifications[0].notification_type,
+            NotificationType::DeadlineApproaching
+        );
+    }
+
+    #[test]
+    fn test_project_status_enum() {
+        assert!(matches!(ProjectStatus::Planning, ProjectStatus::Planning));
+        assert!(matches!(
+            ProjectStatus::InProgress,
+            ProjectStatus::InProgress
+        ));
+        assert!(matches!(ProjectStatus::Completed, ProjectStatus::Completed));
+    }
+
+    #[test]
+    fn test_stakeholder_roles() {
+        let role = StakeholderRole::LegalExpert;
+        assert_eq!(role, StakeholderRole::LegalExpert);
+
+        let roles = vec![
+            StakeholderRole::ProjectManager,
+            StakeholderRole::LegalExpert,
+            StakeholderRole::TechnicalReviewer,
+            StakeholderRole::Approver,
+            StakeholderRole::Observer,
+            StakeholderRole::Contributor,
+        ];
+
+        assert_eq!(roles.len(), 6);
+    }
+
+    #[test]
+    fn test_notification_channels() {
+        let channels = vec![
+            NotificationChannel::Email,
+            NotificationChannel::InApp,
+            NotificationChannel::Sms,
+            NotificationChannel::Webhook,
+        ];
+
+        assert_eq!(channels.len(), 4);
+    }
+
+    #[test]
+    fn test_iteration_change_types() {
+        assert!(matches!(
+            IterationChangeType::Addition,
+            IterationChangeType::Addition
+        ));
+        assert!(matches!(
+            IterationChangeType::Modification,
+            IterationChangeType::Modification
+        ));
+        assert!(matches!(
+            IterationChangeType::Deletion,
+            IterationChangeType::Deletion
+        ));
+        assert!(matches!(
+            IterationChangeType::Restructure,
+            IterationChangeType::Restructure
+        ));
+    }
+
+    // ========================================================================
+    // Tests for v0.1.8 Reporting Features
+    // ========================================================================
+
+    #[test]
+    fn test_executive_summary_generator() {
+        let generator = ExecutiveSummaryGenerator::new();
+        let project = create_test_project();
+        let statutes = create_test_ported_statutes(3);
+
+        let summary = generator.generate(&project, &statutes);
+
+        assert_eq!(summary.project_id, project.id);
+        assert_eq!(summary.statutes_count, 3);
+        assert!(summary.compatibility_score >= 0.0 && summary.compatibility_score <= 1.0);
+        assert!(!summary.key_findings.is_empty());
+        assert!(!summary.recommendations.is_empty());
+        assert!(!summary.stakeholders.is_empty());
+    }
+
+    #[test]
+    fn test_executive_summary_risk_levels() {
+        let generator = ExecutiveSummaryGenerator::new();
+        let project = create_test_project();
+
+        // Test low risk (high compatibility)
+        let high_compat_statutes = vec![create_test_ported_statute_with_score(0.9)];
+        let summary = generator.generate(&project, &high_compat_statutes);
+        assert_eq!(summary.risk_level, RiskLevel::Low);
+
+        // Test high risk (low compatibility)
+        let low_compat_statutes = vec![create_test_ported_statute_with_score(0.3)];
+        let summary = generator.generate(&project, &low_compat_statutes);
+        assert_eq!(summary.risk_level, RiskLevel::High);
+    }
+
+    #[test]
+    fn test_risk_assessment_report_generator() {
+        let generator = RiskAssessmentReportGenerator::new();
+        let project = create_test_project();
+        let risk_assessments = vec![create_test_risk_assessment()];
+
+        let report = generator.generate(&project, &risk_assessments);
+
+        assert_eq!(report.project_id, project.id);
+        assert!(report.overall_risk_score >= 0.0 && report.overall_risk_score <= 1.0);
+        assert!(!report.risks_by_category.is_empty());
+        assert!(!report.mitigation_strategies.is_empty());
+    }
+
+    #[test]
+    fn test_risk_matrix_categorization() {
+        let generator = RiskAssessmentReportGenerator::new();
+        let _project = create_test_project();
+
+        let mut risks_by_category: HashMap<RiskCategory, Vec<Risk>> = HashMap::new();
+        risks_by_category.insert(
+            RiskCategory::Legal,
+            vec![
+                Risk {
+                    id: "risk-1".to_string(),
+                    category: RiskCategory::Legal,
+                    description: "High-high risk".to_string(),
+                    likelihood: RiskLevel::High,
+                    impact: 0.9,
+                    severity: RiskLevel::High,
+                },
+                Risk {
+                    id: "risk-2".to_string(),
+                    category: RiskCategory::Legal,
+                    description: "Low-low risk".to_string(),
+                    likelihood: RiskLevel::Low,
+                    impact: 0.2,
+                    severity: RiskLevel::Low,
+                },
+            ],
+        );
+
+        let matrix = generator.build_risk_matrix(&risks_by_category);
+
+        assert!(!matrix.critical.is_empty());
+        assert!(!matrix.low.is_empty());
+    }
+
+    #[test]
+    fn test_implementation_roadmap_generator() {
+        let generator = ImplementationRoadmapGenerator::new();
+        let project = create_test_project();
+        let statutes = create_test_ported_statutes(5);
+
+        let roadmap = generator.generate(&project, &statutes);
+
+        assert_eq!(roadmap.project_id, project.id);
+        assert_eq!(roadmap.phases.len(), 4); // Legal Review, Stakeholder, Pilot, Rollout
+        assert!(!roadmap.critical_path.is_empty());
+        assert!(!roadmap.resource_requirements.personnel.is_empty());
+        assert!(roadmap.estimated_duration_days > 0);
+    }
+
+    #[test]
+    fn test_implementation_phases_dependencies() {
+        let generator = ImplementationRoadmapGenerator::new();
+        let project = create_test_project();
+        let statutes = create_test_ported_statutes(2);
+
+        let roadmap = generator.generate(&project, &statutes);
+
+        // Phase 1 should have no dependencies
+        assert!(roadmap.phases[0].dependencies.is_empty());
+
+        // Subsequent phases should depend on previous phases
+        assert!(!roadmap.phases[1].dependencies.is_empty());
+        assert!(!roadmap.phases[2].dependencies.is_empty());
+        assert!(!roadmap.phases[3].dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_cost_benefit_analyzer() {
+        let analyzer = CostBenefitAnalyzer::new();
+        let project = create_test_project();
+        let roadmap = ImplementationRoadmapGenerator::new()
+            .generate(&project, &create_test_ported_statutes(3));
+        let statutes = create_test_ported_statutes(3);
+
+        let analysis = analyzer.analyze(&project, &roadmap, &statutes);
+
+        assert_eq!(analysis.project_id, project.id);
+        assert!(analysis.total_costs.total_five_year > 0.0);
+        assert!(analysis.total_benefits.quantifiable_benefits >= 0.0);
+        assert!(analysis.net_present_value.is_finite());
+        assert!(!analysis.total_benefits.qualitative_benefits.is_empty());
+    }
+
+    #[test]
+    fn test_cost_benefit_recommendations() {
+        let analyzer = CostBenefitAnalyzer::new();
+        let project = create_test_project();
+
+        // Create high-benefit scenario
+        let high_compat_statutes = vec![
+            create_test_ported_statute_with_score(0.95),
+            create_test_ported_statute_with_score(0.92),
+            create_test_ported_statute_with_score(0.90),
+        ];
+        let roadmap =
+            ImplementationRoadmapGenerator::new().generate(&project, &high_compat_statutes);
+        let analysis = analyzer.analyze(&project, &roadmap, &high_compat_statutes);
+
+        // High compatibility should lead to positive recommendation
+        assert!(matches!(
+            analysis.recommendation,
+            CBARecommendation::StronglyRecommend | CBARecommendation::RecommendWithConditions
+        ));
+    }
+
+    #[test]
+    fn test_compliance_certification_manager() {
+        let mut manager = ComplianceCertificationManager::new();
+        let project_id = "test-project".to_string();
+        let validation_results = vec![create_test_validation_result(0.85)];
+        let certifier = CertifierInfo {
+            name: "John Doe".to_string(),
+            organization: "Legal Standards Board".to_string(),
+            credentials: vec!["Licensed Attorney".to_string()],
+            contact: "john@example.com".to_string(),
+        };
+
+        let cert = manager.issue_certification(project_id.clone(), validation_results, certifier);
+
+        assert_eq!(cert.project_id, project_id);
+        assert_eq!(cert.certification_level, CertificationLevel::Enhanced);
+        assert_eq!(cert.status, CertificationStatus::Certified);
+        assert!(cert.signature.is_some());
+        assert!(cert.expiration_date.is_some());
+    }
+
+    #[test]
+    fn test_certification_levels() {
+        let mut manager = ComplianceCertificationManager::new();
+        let certifier = CertifierInfo {
+            name: "Jane Smith".to_string(),
+            organization: "Compliance Authority".to_string(),
+            credentials: vec!["Certified Auditor".to_string()],
+            contact: "jane@example.com".to_string(),
+        };
+
+        // Full certification (score >= 0.95)
+        let full_cert = manager.issue_certification(
+            "proj1".to_string(),
+            vec![create_test_validation_result(0.96)],
+            certifier.clone(),
+        );
+        assert_eq!(full_cert.certification_level, CertificationLevel::Full);
+
+        // Enhanced certification (0.85 <= score < 0.95)
+        let enhanced_cert = manager.issue_certification(
+            "proj2".to_string(),
+            vec![create_test_validation_result(0.88)],
+            certifier.clone(),
+        );
+        assert_eq!(
+            enhanced_cert.certification_level,
+            CertificationLevel::Enhanced
+        );
+
+        // Standard certification (0.75 <= score < 0.85)
+        let standard_cert = manager.issue_certification(
+            "proj3".to_string(),
+            vec![create_test_validation_result(0.78)],
+            certifier.clone(),
+        );
+        assert_eq!(
+            standard_cert.certification_level,
+            CertificationLevel::Standard
+        );
+
+        // Provisional certification (score < 0.75)
+        let provisional_cert = manager.issue_certification(
+            "proj4".to_string(),
+            vec![create_test_validation_result(0.65)],
+            certifier,
+        );
+        assert_eq!(
+            provisional_cert.certification_level,
+            CertificationLevel::Provisional
+        );
+    }
+
+    #[test]
+    fn test_certification_revocation() {
+        let mut manager = ComplianceCertificationManager::new();
+        let certifier = CertifierInfo {
+            name: "Test Certifier".to_string(),
+            organization: "Test Org".to_string(),
+            credentials: vec!["Test Credential".to_string()],
+            contact: "test@example.com".to_string(),
+        };
+
+        let cert = manager.issue_certification(
+            "test-proj".to_string(),
+            vec![create_test_validation_result(0.85)],
+            certifier,
+        );
+
+        let cert_id = cert.id.clone();
+
+        // Revoke certification
+        assert!(manager.revoke_certification(&cert_id).is_some());
+
+        // Verify status changed
+        let revoked_cert = manager.get_certification(&cert_id).unwrap();
+        assert_eq!(revoked_cert.status, CertificationStatus::Revoked);
+    }
+
+    // ========================================================================
+    // Tests for v0.1.9 Integration Features
+    // ========================================================================
+
+    #[test]
+    fn test_bilateral_agreement_template_library() {
+        let library = BilateralAgreementTemplateLibrary::new();
+
+        // Check default template exists
+        let templates = library.list_templates();
+        assert!(!templates.is_empty());
+
+        // Get default template
+        let template = library.get_template("general-bilateral").unwrap();
+        assert_eq!(template.id, "general-bilateral");
+        assert!(!template.sections.is_empty());
+        assert!(!template.required_parameters.is_empty());
+    }
+
+    #[test]
+    fn test_template_agreement_generation() {
+        let library = BilateralAgreementTemplateLibrary::new();
+
+        let mut parameters = HashMap::new();
+        parameters.insert(
+            "source_jurisdiction".to_string(),
+            "United States".to_string(),
+        );
+        parameters.insert("target_jurisdiction".to_string(), "Japan".to_string());
+        parameters.insert("purpose".to_string(), "legal cooperation".to_string());
+
+        let agreement = library.generate_agreement("general-bilateral", &parameters);
+
+        assert!(agreement.is_some());
+        let text = agreement.unwrap();
+        assert!(text.contains("United States"));
+        assert!(text.contains("Japan"));
+        assert!(text.contains("legal cooperation"));
+    }
+
+    #[test]
+    fn test_add_custom_template() {
+        let mut library = BilateralAgreementTemplateLibrary::new();
+
+        let custom_template = BilateralAgreementTemplate {
+            id: "custom-test".to_string(),
+            name: "Custom Test Template".to_string(),
+            description: "A custom template for testing".to_string(),
+            applicable_systems: vec![LegalSystem::CivilLaw],
+            sections: vec![TemplateSection {
+                section_number: 1,
+                title: "Test Section".to_string(),
+                content_template: "Test content for {{param1}}".to_string(),
+                required: true,
+            }],
+            required_parameters: vec![TemplateParameter {
+                name: "param1".to_string(),
+                description: "Test parameter".to_string(),
+                parameter_type: ParameterType::String,
+                default_value: None,
+            }],
+            optional_parameters: vec![],
+        };
+
+        library.add_template(custom_template);
+        assert!(library.get_template("custom-test").is_some());
+    }
+
+    #[test]
+    fn test_regulatory_sandbox_manager() {
+        let mut manager = RegulatorySandboxManager::new();
+
+        let sandbox = manager.create_sandbox(
+            "Test Sandbox".to_string(),
+            "Testing ported statutes".to_string(),
+            vec!["statute-1".to_string(), "statute-2".to_string()],
+        );
+
+        assert_eq!(sandbox.status, SandboxStatus::Planning);
+        assert_eq!(sandbox.test_statutes.len(), 2);
+        assert!(sandbox.scenarios.is_empty());
+        assert!(sandbox.results.is_empty());
+    }
+
+    #[test]
+    fn test_sandbox_scenario_and_results() {
+        let mut manager = RegulatorySandboxManager::new();
+
+        let sandbox = manager.create_sandbox(
+            "Test Sandbox".to_string(),
+            "Testing".to_string(),
+            vec!["statute-1".to_string()],
+        );
+        let sandbox_id = sandbox.id.clone();
+
+        // Add scenario
+        let scenario = TestScenario {
+            id: "scenario-1".to_string(),
+            name: "Basic Test".to_string(),
+            description: "Test basic functionality".to_string(),
+            parameters: HashMap::new(),
+            expected_outcomes: vec!["Outcome 1".to_string()],
+        };
+        assert!(manager.add_scenario(&sandbox_id, scenario).is_some());
+
+        // Activate sandbox
+        assert!(manager.activate_sandbox(&sandbox_id).is_some());
+        let sandbox = manager.get_sandbox(&sandbox_id).unwrap();
+        assert_eq!(sandbox.status, SandboxStatus::Active);
+
+        // Record result
+        let result = SandboxTestResult {
+            scenario_id: "scenario-1".to_string(),
+            status: TestStatus::Passed,
+            actual_outcomes: vec!["Outcome 1".to_string()],
+            issues: vec![],
+            recommendations: vec![],
+            test_date: chrono::Utc::now().to_rfc3339(),
+        };
+        assert!(manager.record_result(&sandbox_id, result).is_some());
+
+        // Complete sandbox
+        assert!(manager.complete_sandbox(&sandbox_id).is_some());
+        let sandbox = manager.get_sandbox(&sandbox_id).unwrap();
+        assert_eq!(sandbox.status, SandboxStatus::Completed);
+        assert!(sandbox.end_date.is_some());
+    }
+
+    #[test]
+    fn test_affected_party_notification_manager() {
+        let mut manager = AffectedPartyNotificationManager::new();
+
+        let notification = manager.send_notification(
+            "proj-1".to_string(),
+            "New Porting Initiative".to_string(),
+            "We are porting statutes from jurisdiction A to B".to_string(),
+            vec![
+                AffectedPartyCategory::GeneralPublic,
+                AffectedPartyCategory::LegalProfessionals,
+            ],
+            Some(30),
+        );
+
+        assert_eq!(notification.project_id, "proj-1");
+        assert_eq!(notification.affected_categories.len(), 2);
+        assert!(notification.response_deadline.is_some());
+        assert!(notification.channels.contains(&NotificationChannel::Email));
+    }
+
+    #[test]
+    fn test_notification_feedback() {
+        let mut manager = AffectedPartyNotificationManager::new();
+
+        let notification = manager.send_notification(
+            "proj-1".to_string(),
+            "Test".to_string(),
+            "Content".to_string(),
+            vec![AffectedPartyCategory::GeneralPublic],
+            None,
+        );
+        let notif_id = notification.id.clone();
+
+        // Record feedback
+        let feedback = PublicFeedback {
+            id: uuid::Uuid::new_v4().to_string(),
+            submitter: Some("John Citizen".to_string()),
+            category: FeedbackCategory::Support,
+            content: "I support this initiative".to_string(),
+            submitted_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        assert!(manager.record_feedback(&notif_id, feedback).is_some());
+
+        let feedback_list = manager.list_feedback(&notif_id).unwrap();
+        assert_eq!(feedback_list.len(), 1);
+    }
+
+    #[test]
+    fn test_public_comment_period_manager() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Public Comment Period".to_string(),
+            "Comments on proposed statute porting".to_string(),
+            60,
+        );
+
+        assert_eq!(period.status, CommentPeriodStatus::Open);
+        assert_eq!(period.project_id, "proj-1");
+        assert!(period.comments.is_empty());
+        assert!(period.documents.is_empty());
+    }
+
+    #[test]
+    fn test_comment_period_document_management() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+
+        // Add document
+        let document = CommentDocument {
+            id: "doc-1".to_string(),
+            title: "Draft Statute".to_string(),
+            document_type: DocumentType::DraftStatute,
+            description: "Draft version for review".to_string(),
+            url: "https://example.com/draft.pdf".to_string(),
+        };
+
+        assert!(manager.add_document(&period_id, document).is_some());
+
+        let period = manager.get_period(&period_id).unwrap();
+        assert_eq!(period.documents.len(), 1);
+    }
+
+    #[test]
+    fn test_comment_submission() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+
+        // Submit comment
+        let comment = PublicComment {
+            id: uuid::Uuid::new_v4().to_string(),
+            commenter: CommenterInfo {
+                name: Some("Jane Doe".to_string()),
+                organization: Some("Citizens Alliance".to_string()),
+                email: Some("jane@example.com".to_string()),
+                affiliation: AffectedPartyCategory::GeneralPublic,
+            },
+            comment_text: "I have concerns about section 3".to_string(),
+            document_id: None,
+            section_reference: Some("Section 3".to_string()),
+            submitted_at: chrono::Utc::now().to_rfc3339(),
+            category: FeedbackCategory::Concern,
+        };
+
+        assert!(manager.submit_comment(&period_id, comment).is_some());
+
+        let comments = manager.list_comments(&period_id).unwrap();
+        assert_eq!(comments.len(), 1);
+    }
+
+    #[test]
+    fn test_comment_period_extension() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+        let original_end = period.end_date.clone();
+
+        // Extend period
+        assert!(manager.extend_period(&period_id, 15).is_some());
+
+        let period = manager.get_period(&period_id).unwrap();
+        assert_eq!(period.status, CommentPeriodStatus::Extended);
+        assert_ne!(period.end_date, original_end);
+    }
+
+    #[test]
+    fn test_comment_period_closure() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+
+        // Close period
+        assert!(manager.close_period(&period_id).is_some());
+
+        let period = manager.get_period(&period_id).unwrap();
+        assert_eq!(period.status, CommentPeriodStatus::Closed);
+
+        // Cannot submit comments to closed period
+        let comment = PublicComment {
+            id: uuid::Uuid::new_v4().to_string(),
+            commenter: CommenterInfo {
+                name: None,
+                organization: None,
+                email: None,
+                affiliation: AffectedPartyCategory::GeneralPublic,
+            },
+            comment_text: "Late comment".to_string(),
+            document_id: None,
+            section_reference: None,
+            submitted_at: chrono::Utc::now().to_rfc3339(),
+            category: FeedbackCategory::Question,
+        };
+
+        assert!(manager.submit_comment(&period_id, comment).is_none());
+    }
+
+    #[test]
+    fn test_comment_summary_generation() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+
+        // Submit multiple comments
+        for i in 0..5 {
+            let comment = PublicComment {
+                id: format!("comment-{}", i),
+                commenter: CommenterInfo {
+                    name: Some(format!("Commenter {}", i)),
+                    organization: None,
+                    email: None,
+                    affiliation: if i % 2 == 0 {
+                        AffectedPartyCategory::GeneralPublic
+                    } else {
+                        AffectedPartyCategory::Businesses
+                    },
+                },
+                comment_text: format!("Comment {}", i),
+                document_id: None,
+                section_reference: None,
+                submitted_at: chrono::Utc::now().to_rfc3339(),
+                category: if i % 2 == 0 {
+                    FeedbackCategory::Support
+                } else {
+                    FeedbackCategory::Concern
+                },
+            };
+            manager.submit_comment(&period_id, comment).unwrap();
+        }
+
+        let summary = manager.generate_comment_summary(&period_id).unwrap();
+
+        assert_eq!(summary.total_comments, 5);
+        assert!(!summary.category_breakdown.is_empty());
+        assert!(!summary.affiliation_breakdown.is_empty());
+        assert!(!summary.key_themes.is_empty());
+    }
+
+    #[test]
+    fn test_public_hearing_scheduling() {
+        let mut manager = PublicCommentPeriodManager::new();
+
+        let period = manager.open_comment_period(
+            "proj-1".to_string(),
+            "Test Period".to_string(),
+            "Description".to_string(),
+            30,
+        );
+        let period_id = period.id.clone();
+
+        // Schedule hearing
+        let hearing = PublicHearing {
+            id: "hearing-1".to_string(),
+            title: "Public Hearing on Statute Porting".to_string(),
+            datetime: "2025-02-15T10:00:00Z".to_string(),
+            location: "City Hall, Room 101".to_string(),
+            virtual_link: Some("https://meeting.example.com/hearing1".to_string()),
+            agenda: vec![
+                "Opening remarks".to_string(),
+                "Presentation of ported statutes".to_string(),
+                "Public questions and comments".to_string(),
+            ],
+            registration_required: true,
+        };
+
+        assert!(manager.schedule_hearing(&period_id, hearing).is_some());
+
+        let period = manager.get_period(&period_id).unwrap();
+        assert_eq!(period.hearings.len(), 1);
+        assert_eq!(period.hearings[0].agenda.len(), 3);
+    }
+
+    // ========================================================================
+    // Helper functions for tests
+    // ========================================================================
+
+    fn create_test_project() -> PortingProject {
+        PortingProject {
+            id: "test-project-1".to_string(),
+            name: "Test Porting Project".to_string(),
+            description: "A test project".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            status: ProjectStatus::InProgress,
+            statute_ids: vec!["statute-1".to_string(), "statute-2".to_string()],
+            stakeholders: vec![Stakeholder {
+                id: "stakeholder-1".to_string(),
+                name: "John Doe".to_string(),
+                email: "john@example.com".to_string(),
+                role: StakeholderRole::ProjectManager,
+                notification_preferences: NotificationPreferences {
+                    on_status_change: true,
+                    on_deadline_approaching: true,
+                    on_assignment: false,
+                    on_review_request: true,
+                    channels: vec![NotificationChannel::Email, NotificationChannel::InApp],
+                },
+            }],
+            timeline: ProjectTimeline {
+                start_date: chrono::Utc::now().to_rfc3339(),
+                end_date: (chrono::Utc::now() + chrono::Duration::days(180)).to_rfc3339(),
+                milestones: vec![],
+                current_phase: "Implementation".to_string(),
+            },
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    fn create_test_ported_statutes(count: usize) -> Vec<PortedStatute> {
+        (0..count)
+            .map(|i| PortedStatute {
+                original_id: format!("statute-{}", i),
+                statute: Statute::new(
+                    &format!("ported-{}", i),
+                    &format!("Test Statute {}", i),
+                    Effect::new(EffectType::Grant, "Test effect"),
+                ),
+                changes: vec![],
+                locale: Locale::new("en").with_country("US"),
+                compatibility_score: 0.85,
+            })
+            .collect()
+    }
+
+    fn create_test_ported_statute_with_score(score: f64) -> PortedStatute {
+        PortedStatute {
+            original_id: "test-statute".to_string(),
+            statute: Statute::new(
+                "ported-statute",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: score,
+        }
+    }
+
+    fn create_test_risk_assessment() -> RiskAssessment {
+        RiskAssessment {
+            risk_score: 0.5,
+            risk_level: RiskLevel::Medium,
+            risks: vec![Risk {
+                id: "risk-1".to_string(),
+                category: RiskCategory::Legal,
+                description: "Legal system mismatch".to_string(),
+                likelihood: RiskLevel::Medium,
+                impact: 0.6,
+                severity: RiskLevel::Medium,
+            }],
+            mitigations: vec!["Consult with legal experts".to_string()],
+        }
+    }
+
+    fn create_test_validation_result(score: f64) -> ValidationResult {
+        ValidationResult {
+            id: uuid::Uuid::new_v4().to_string(),
+            passed: score >= 0.75,
+            overall_score: score,
+            compliance: TargetJurisdictionComplianceCheck {
+                id: uuid::Uuid::new_v4().to_string(),
+                is_compliant: true,
+                compliance_score: score,
+                issues: vec![],
+                recommendations: vec![],
+                checked_regulations: vec![],
+            },
+            constitutional: ConstitutionalAnalysis {
+                id: uuid::Uuid::new_v4().to_string(),
+                is_compatible: true,
+                compatibility_score: score,
+                issues: vec![],
+                relevant_provisions: vec![],
+                recommended_amendments: vec![],
+            },
+            treaty_compliance: TreatyComplianceResult {
+                id: uuid::Uuid::new_v4().to_string(),
+                is_compliant: true,
+                compliance_score: score,
+                conflicts: vec![],
+                checked_treaties: vec![],
+                recommendations: vec![],
+            },
+            human_rights: HumanRightsAssessment {
+                id: uuid::Uuid::new_v4().to_string(),
+                impact_score: 0.0,
+                affected_rights: vec![],
+                vulnerable_groups: vec![],
+                mitigation_measures: vec![],
+                summary: "No human rights concerns identified".to_string(),
+            },
+            enforceability: EnforceabilityPrediction {
+                id: uuid::Uuid::new_v4().to_string(),
+                is_enforceable: true,
+                enforceability_score: score,
+                challenges: vec![],
+                required_mechanisms: vec![],
+                estimated_cost: None,
+                recommendations: vec![],
+            },
+            summary: format!("Validation passed with score {:.2}", score),
+        }
     }
 }

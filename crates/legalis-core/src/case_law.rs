@@ -698,10 +698,12 @@ impl CaseDatabase {
         for (i, case1) in binding_cases.iter().enumerate() {
             for case2 in binding_cases.iter().skip(i + 1) {
                 // Check if they address similar issues but reach different conclusions
-                let has_common_issue = case1
-                    .issues
-                    .iter()
-                    .any(|issue1| case2.issues.iter().any(|issue2| Self::issues_similar(issue1, issue2)));
+                let has_common_issue = case1.issues.iter().any(|issue1| {
+                    case2
+                        .issues
+                        .iter()
+                        .any(|issue2| Self::issues_similar(issue1, issue2))
+                });
 
                 if has_common_issue {
                     // Simple heuristic: check if holdings contain opposing keywords
@@ -711,7 +713,8 @@ impl CaseDatabase {
                     let conflict_detected = (holding1_lower.contains("not")
                         && !holding2_lower.contains("not"))
                         || (!holding1_lower.contains("not") && holding2_lower.contains("not"))
-                        || (holding1_lower.contains("liable") && holding2_lower.contains("not liable"))
+                        || (holding1_lower.contains("liable")
+                            && holding2_lower.contains("not liable"))
                         || (holding1_lower.contains("valid") && holding2_lower.contains("invalid"));
 
                     if conflict_detected {

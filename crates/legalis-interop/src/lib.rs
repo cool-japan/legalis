@@ -8,26 +8,44 @@
 //! - **LegalRuleML**: XML standard for legal rules
 //! - **LegalDocML**: OASIS legal document markup standard
 //! - **LKIF**: Legal Knowledge Interchange Format (ESTRELLA)
+//! - **LegalCite**: OASIS standard for legal citation (TC LegalCiteM)
+//! - **MetaLex**: CEN standard for legal document metadata (CWA 15710)
+//! - **MPEG-21 REL**: ISO standard for rights expression (ISO/IEC 21000-5)
+//! - **Creative Commons**: CC license format (RDF/XML)
+//! - **SPDX**: Software Package Data Exchange license expressions (ISO/IEC 5962:2021)
 
 pub mod akoma_ntoso;
 #[cfg(feature = "async")]
 pub mod async_converter;
+#[cfg(feature = "batch")]
+pub mod batch;
 pub mod cache;
 pub mod catala;
 pub mod compatibility;
 pub mod coverage;
+pub mod creative_commons;
 #[cfg(test)]
 mod edge_cases_tests;
 pub mod enhanced;
+pub mod error_handling;
 pub mod errors;
+pub mod format_detection;
 pub mod incremental;
 pub mod l4;
+pub mod legalcite;
 pub mod legaldocml;
 pub mod legalruleml;
 pub mod lkif;
+pub mod metalex;
+pub mod mpeg21_rel;
 pub mod optimizations;
+pub mod performance;
+pub mod quality;
+pub mod schema;
+pub mod spdx;
 pub mod stipula;
 pub mod streaming;
+pub mod transformation;
 pub mod validation;
 
 use legalis_core::Statute;
@@ -54,6 +72,9 @@ pub enum InteropError {
 
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
+    #[error("Validation error: {0}")]
+    ValidationError(String),
 }
 
 /// Result type for interop operations.
@@ -76,6 +97,16 @@ pub enum LegalFormat {
     LegalDocML,
     /// LKIF - Legal Knowledge Interchange Format
     LKIF,
+    /// LegalCite - OASIS standard for legal citation
+    LegalCite,
+    /// MetaLex - CEN standard for legal document metadata
+    MetaLex,
+    /// MPEG-21 REL - ISO standard for rights expression
+    Mpeg21Rel,
+    /// Creative Commons license format
+    CreativeCommons,
+    /// SPDX license expression format
+    Spdx,
     /// Native Legalis DSL format
     Legalis,
 }
@@ -91,6 +122,11 @@ impl LegalFormat {
             LegalFormat::LegalRuleML => "xml",
             LegalFormat::LegalDocML => "xml",
             LegalFormat::LKIF => "xml",
+            LegalFormat::LegalCite => "xml",
+            LegalFormat::MetaLex => "xml",
+            LegalFormat::Mpeg21Rel => "xml",
+            LegalFormat::CreativeCommons => "rdf",
+            LegalFormat::Spdx => "spdx",
             LegalFormat::Legalis => "legal",
         }
     }
@@ -102,6 +138,8 @@ impl LegalFormat {
             "stipula" => Some(LegalFormat::Stipula),
             "l4" => Some(LegalFormat::L4),
             "lkif" => Some(LegalFormat::LKIF),
+            "rdf" => Some(LegalFormat::CreativeCommons),
+            "spdx" => Some(LegalFormat::Spdx),
             "legal" => Some(LegalFormat::Legalis),
             _ => None,
         }
@@ -208,6 +246,11 @@ impl LegalConverter {
                 Box::new(legalruleml::LegalRuleMLImporter::new()),
                 Box::new(legaldocml::LegalDocMLImporter::new()),
                 Box::new(lkif::LkifImporter::new()),
+                Box::new(legalcite::LegalCiteImporter::new()),
+                Box::new(metalex::MetaLexImporter::new()),
+                Box::new(mpeg21_rel::Mpeg21RelImporter::new()),
+                Box::new(creative_commons::CreativeCommonsImporter::new()),
+                Box::new(spdx::SpdxImporter::new()),
             ],
             exporters: vec![
                 Box::new(catala::CatalaExporter::new()),
@@ -217,6 +260,11 @@ impl LegalConverter {
                 Box::new(legalruleml::LegalRuleMLExporter::new()),
                 Box::new(legaldocml::LegalDocMLExporter::new()),
                 Box::new(lkif::LkifExporter::new()),
+                Box::new(legalcite::LegalCiteExporter::new()),
+                Box::new(metalex::MetaLexExporter::new()),
+                Box::new(mpeg21_rel::Mpeg21RelExporter::new()),
+                Box::new(creative_commons::CreativeCommonsExporter::new()),
+                Box::new(spdx::SpdxExporter::new()),
             ],
             cache: None,
         }
@@ -1185,5 +1233,213 @@ declaration scope AdultRights:
         assert_eq!(validation.source_format, LegalFormat::Catala);
         assert_eq!(validation.target_format, LegalFormat::L4);
         assert!(validation.confidence <= 1.0);
+    }
+
+    // Tests for new formats (v0.1.1)
+
+    #[test]
+    fn test_legalcite_export_import_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "legal_reference"),
+        )
+        .with_jurisdiction("US");
+
+        let (legalcite_output, export_report) = converter
+            .export(&[statute], LegalFormat::LegalCite)
+            .unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(legalcite_output.contains("legalCite"));
+
+        let (imported, import_report) = converter
+            .import(&legalcite_output, LegalFormat::LegalCite)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert_eq!(imported.len(), 1);
+    }
+
+    #[test]
+    fn test_metalex_export_import_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let statute = Statute::new(
+            "article-1",
+            "Article 1",
+            Effect::new(EffectType::Grant, "provision"),
+        );
+
+        let (metalex_output, export_report) =
+            converter.export(&[statute], LegalFormat::MetaLex).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(metalex_output.contains("metalex"));
+
+        let (imported, import_report) = converter
+            .import(&metalex_output, LegalFormat::MetaLex)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert_eq!(imported.len(), 1);
+    }
+
+    #[test]
+    fn test_mpeg21_rel_export_import_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let statute = Statute::new(
+            "play-right",
+            "Play Right",
+            Effect::new(EffectType::Grant, "play"),
+        );
+
+        let (mpeg21_output, export_report) = converter
+            .export(&[statute], LegalFormat::Mpeg21Rel)
+            .unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+
+        let (imported, import_report) = converter
+            .import(&mpeg21_output, LegalFormat::Mpeg21Rel)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert_eq!(imported.len(), 1);
+    }
+
+    #[test]
+    fn test_creative_commons_export_import_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let statute = Statute::new(
+            "cc-permit",
+            "Permit Reproduction",
+            Effect::new(EffectType::Grant, "Reproduction"),
+        );
+
+        let (cc_output, export_report) = converter
+            .export(&[statute], LegalFormat::CreativeCommons)
+            .unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+
+        let (imported, import_report) = converter
+            .import(&cc_output, LegalFormat::CreativeCommons)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert!(!imported.is_empty());
+    }
+
+    #[test]
+    fn test_spdx_export_import_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let mut effect = Effect::new(EffectType::Grant, "use");
+        effect
+            .parameters
+            .insert("spdx_id".to_string(), "MIT".to_string());
+        let statute = Statute::new("mit_license", "License: MIT", effect);
+
+        let (spdx_output, export_report) = converter.export(&[statute], LegalFormat::Spdx).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert_eq!(spdx_output, "MIT");
+
+        let (imported, import_report) = converter.import(&spdx_output, LegalFormat::Spdx).unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert_eq!(imported.len(), 1);
+    }
+
+    #[test]
+    fn test_auto_detect_legalcite() {
+        let mut converter = LegalConverter::new();
+
+        let legalcite_source = r#"<LegalCiteDocument>
+            <legalCite>
+                <citations>
+                    <id>test-1</id>
+                    <title>Test Citation</title>
+                    <citation_type>statute</citation_type>
+                </citations>
+            </legalCite>
+        </LegalCiteDocument>"#;
+
+        let (statutes, report) = converter.auto_import(legalcite_source).unwrap();
+        assert_eq!(report.source_format, Some(LegalFormat::LegalCite));
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_detect_metalex() {
+        let mut converter = LegalConverter::new();
+
+        let metalex_source = r#"<MetaLexDocument>
+            <metalex>
+                <Body>
+                    <Article id="art-1">
+                        <Title>Test Article</Title>
+                    </Article>
+                </Body>
+            </metalex>
+        </MetaLexDocument>"#;
+
+        let (statutes, report) = converter.auto_import(metalex_source).unwrap();
+        assert_eq!(report.source_format, Some(LegalFormat::MetaLex));
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_detect_mpeg21_rel() {
+        let mut converter = LegalConverter::new();
+
+        let mpeg21_source = r#"<Mpeg21RelDocument>
+            <license>
+                <grant>
+                    <right>play</right>
+                </grant>
+            </license>
+        </Mpeg21RelDocument>"#;
+
+        let (statutes, report) = converter.auto_import(mpeg21_source).unwrap();
+        assert_eq!(report.source_format, Some(LegalFormat::Mpeg21Rel));
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_detect_creative_commons() {
+        let mut converter = LegalConverter::new();
+
+        let cc_source = "https://creativecommons.org/licenses/by/4.0/";
+
+        let (statutes, report) = converter.auto_import(cc_source).unwrap();
+        assert_eq!(report.source_format, Some(LegalFormat::CreativeCommons));
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_detect_spdx() {
+        let mut converter = LegalConverter::new();
+
+        let spdx_source = "MIT AND Apache-2.0";
+
+        let (statutes, report) = converter.auto_import(spdx_source).unwrap();
+        assert_eq!(report.source_format, Some(LegalFormat::Spdx));
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_new_formats_in_converter() {
+        let converter = LegalConverter::new();
+        let imports = converter.supported_imports();
+        let exports = converter.supported_exports();
+
+        // Check all new formats are registered
+        assert!(imports.contains(&LegalFormat::LegalCite));
+        assert!(imports.contains(&LegalFormat::MetaLex));
+        assert!(imports.contains(&LegalFormat::Mpeg21Rel));
+        assert!(imports.contains(&LegalFormat::CreativeCommons));
+        assert!(imports.contains(&LegalFormat::Spdx));
+
+        assert!(exports.contains(&LegalFormat::LegalCite));
+        assert!(exports.contains(&LegalFormat::MetaLex));
+        assert!(exports.contains(&LegalFormat::Mpeg21Rel));
+        assert!(exports.contains(&LegalFormat::CreativeCommons));
+        assert!(exports.contains(&LegalFormat::Spdx));
     }
 }

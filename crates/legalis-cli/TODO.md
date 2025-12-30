@@ -27,7 +27,7 @@
 
 ### Enhancements
 - [x] Add `--dry-run` flag for modify commands (init, format)
-- [ ] Implement `--interactive` mode for guided input
+- [x] Implement `--interactive` mode for guided input
 - [x] Add `--quiet` mode for scripting
 - [x] Create `--json-output` for machine parsing (already exists via --format)
 - [x] Add `--config` flag for config file
@@ -38,7 +38,7 @@
 - [x] Implement project-level configuration
 - [x] Create user-level global configuration
 - [x] Add environment variable overrides (LEGALIS_*)
-- [ ] Support config inheritance
+- [x] Support config inheritance
 
 ## Output
 
@@ -79,48 +79,48 @@
 
 ## Developer Experience
 
-- [ ] Add man page generation
-- [ ] Create interactive tutorials
-- [ ] Implement error suggestions
-- [ ] Add command aliases
-- [ ] Create plugin system
+- [x] Add man page generation
+- [x] Create interactive tutorials
+- [x] Implement error suggestions
+- [x] Add command aliases
+- [x] Create plugin system
 
 ## Performance
 
-- [ ] Add command caching
-- [ ] Implement lazy loading
-- [ ] Create parallel processing for batch ops
-- [ ] Add progress estimation
+- [x] Add command caching
+- [x] Implement lazy loading
+- [x] Create parallel processing for batch ops
+- [x] Add progress estimation
 
 ## Testing
 
-- [ ] Add integration tests for all commands
-- [ ] Create snapshot tests for output
-- [ ] Implement CLI contract tests
-- [ ] Add performance benchmarks
+- [x] Add integration tests for all commands
+- [x] Create snapshot tests for output
+- [x] Implement CLI contract tests
+- [x] Add performance benchmarks
 
 ## Roadmap for 0.1.0 Series
 
 ### Enhanced Commands (v0.1.1)
-- [ ] Add `explain` command - explain statute in natural language
-- [ ] Add `trace` command - trace condition evaluation path
-- [ ] Add `benchmark` command - benchmark verification/simulation
-- [ ] Add `migrate` command - migrate statutes between versions
-- [ ] Add `graph` command - generate dependency graphs
+- [x] Add `explain` command - explain statute in natural language
+- [x] Add `trace` command - trace condition evaluation path
+- [x] Add `benchmark` command - benchmark verification/simulation
+- [x] Add `migrate` command - migrate statutes between versions
+- [x] Add `graph` command - generate dependency graphs
 
 ### Interactive Features (v0.1.2)
-- [ ] Add interactive statute builder wizard
-- [ ] Add interactive conflict resolution UI
-- [ ] Add interactive diff viewer with accept/reject
-- [ ] Add interactive simulation parameter tuning
-- [ ] Add TUI dashboard for registry browsing
+- [x] Add interactive statute builder wizard
+- [x] Add interactive conflict resolution UI
+- [x] Add interactive diff viewer with accept/reject
+- [x] Add interactive simulation parameter tuning
+- [x] Add TUI dashboard for registry browsing
 
 ### Batch Operations (v0.1.3)
-- [ ] Add `batch` subcommand for bulk operations
-- [ ] Add parallel processing for batch verify
-- [ ] Add progress bars with ETA for long operations
-- [ ] Add resumable batch operations
-- [ ] Add batch operation journaling for recovery
+- [x] Add `batch` subcommand for bulk operations
+- [x] Add parallel processing for batch verify
+- [x] Add progress bars with ETA for long operations
+- [x] Add resumable batch operations
+- [x] Add batch operation journaling for recovery
 
 ### Profile & Debug (v0.1.4)
 - [ ] Add `profile` command - CPU/memory profiling

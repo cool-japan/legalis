@@ -402,13 +402,21 @@ impl InflationAdjuster {
 
     /// Convert nominal value to real value (base year dollars)
     pub fn to_real_value(&self, nominal_value: f64, year: u32) -> f64 {
-        let cpi = self.cpi_by_year.get(&year).copied().unwrap_or(self.base_cpi);
+        let cpi = self
+            .cpi_by_year
+            .get(&year)
+            .copied()
+            .unwrap_or(self.base_cpi);
         nominal_value * (self.base_cpi / cpi)
     }
 
     /// Convert real value to nominal value (current year dollars)
     pub fn to_nominal_value(&self, real_value: f64, year: u32) -> f64 {
-        let cpi = self.cpi_by_year.get(&year).copied().unwrap_or(self.base_cpi);
+        let cpi = self
+            .cpi_by_year
+            .get(&year)
+            .copied()
+            .unwrap_or(self.base_cpi);
         real_value * (cpi / self.base_cpi)
     }
 
@@ -426,8 +434,16 @@ impl InflationAdjuster {
 
     /// Calculate cumulative inflation between two years
     pub fn cumulative_inflation(&self, from_year: u32, to_year: u32) -> f64 {
-        let from_cpi = self.cpi_by_year.get(&from_year).copied().unwrap_or(self.base_cpi);
-        let to_cpi = self.cpi_by_year.get(&to_year).copied().unwrap_or(self.base_cpi);
+        let from_cpi = self
+            .cpi_by_year
+            .get(&from_year)
+            .copied()
+            .unwrap_or(self.base_cpi);
+        let to_cpi = self
+            .cpi_by_year
+            .get(&to_year)
+            .copied()
+            .unwrap_or(self.base_cpi);
         ((to_cpi - from_cpi) / from_cpi) * 100.0
     }
 }
@@ -487,29 +503,35 @@ impl GdpImpactAnalysis {
     /// Add direct government spending impact
     pub fn add_government_spending(&mut self, spending: f64) {
         let impact = spending * self.fiscal_multiplier;
-        self.component_impacts.insert(GdpComponent::Government, impact);
+        self.component_impacts
+            .insert(GdpComponent::Government, impact);
         self.recalculate_total_impact();
     }
 
     /// Add tax policy impact on consumption
     pub fn add_tax_impact(&mut self, tax_change: f64, marginal_propensity_to_consume: f64) {
         // Tax decrease increases disposable income and consumption
-        let consumption_impact = -tax_change * marginal_propensity_to_consume * self.fiscal_multiplier;
-        self.component_impacts.insert(GdpComponent::Consumption, consumption_impact);
+        let consumption_impact =
+            -tax_change * marginal_propensity_to_consume * self.fiscal_multiplier;
+        self.component_impacts
+            .insert(GdpComponent::Consumption, consumption_impact);
         self.recalculate_total_impact();
     }
 
     /// Add investment impact (from business tax changes, regulations, etc.)
     pub fn add_investment_impact(&mut self, investment_change: f64) {
         let impact = investment_change * self.fiscal_multiplier;
-        self.component_impacts.insert(GdpComponent::Investment, impact);
+        self.component_impacts
+            .insert(GdpComponent::Investment, impact);
         self.recalculate_total_impact();
     }
 
     /// Add trade impact
     pub fn add_trade_impact(&mut self, export_change: f64, import_change: f64) {
-        self.component_impacts.insert(GdpComponent::Exports, export_change);
-        self.component_impacts.insert(GdpComponent::Imports, import_change);
+        self.component_impacts
+            .insert(GdpComponent::Exports, export_change);
+        self.component_impacts
+            .insert(GdpComponent::Imports, import_change);
         self.recalculate_total_impact();
     }
 

@@ -6,9 +6,9 @@
 //! - Entity relationships
 //! - Amendment audit trails
 
-use crate::ast::{LegalDocument, StatuteNode};
 #[cfg(test)]
 use crate::ast::AmendmentNode;
+use crate::ast::{LegalDocument, StatuteNode};
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
@@ -111,9 +111,10 @@ impl VersionHistory {
         // Extract versions from amendments
         for amendment in &statute.amendments {
             let version = amendment.version.unwrap_or(1);
-            let effective_date = amendment.date.as_ref().and_then(|d| {
-                NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()
-            });
+            let effective_date = amendment
+                .date
+                .as_ref()
+                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
 
             versions.push(VersionEntry {
                 version,
@@ -333,7 +334,11 @@ fn infer_parent_jurisdiction(statute_id: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn create_test_statute(id: &str, requires: Vec<String>, supersedes: Vec<String>) -> StatuteNode {
+    fn create_test_statute(
+        id: &str,
+        requires: Vec<String>,
+        supersedes: Vec<String>,
+    ) -> StatuteNode {
         StatuteNode {
             id: id.to_string(),
             title: format!("Test Statute {}", id),

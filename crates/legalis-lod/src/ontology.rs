@@ -5,6 +5,7 @@
 //! - LKIF-Core (Legal Knowledge Interchange Format)
 //! - LegalRuleML
 //! - Akoma Ntoso
+//! - Custom Legalis Extensions (condition/effect relationships, discretion zones, simulation results)
 
 use crate::{RdfValue, Triple};
 use legalis_core::{Condition, EffectType, Statute};
@@ -183,10 +184,7 @@ pub mod lkif {
 
     /// Generates LKIF triples for a condition as a qualification.
     #[allow(dead_code)]
-    pub fn condition_to_lkif_triples(
-        condition_uri: &str,
-        _condition: &Condition,
-    ) -> Vec<Triple> {
+    pub fn condition_to_lkif_triples(condition_uri: &str, _condition: &Condition) -> Vec<Triple> {
         let mut triples = Vec::new();
 
         // Mark as qualification
@@ -287,10 +285,7 @@ pub mod legalruleml {
 
     /// Maps condition to LegalRuleML atom.
     #[allow(dead_code)]
-    pub fn condition_to_atom(
-        atom_uri: &str,
-        condition: &Condition,
-    ) -> Vec<Triple> {
+    pub fn condition_to_atom(atom_uri: &str, condition: &Condition) -> Vec<Triple> {
         let mut triples = Vec::new();
 
         triples.push(Triple {
@@ -451,10 +446,7 @@ pub mod akoma_ntoso {
 
     /// Generates Akoma Ntoso provision triples.
     #[allow(dead_code)]
-    pub fn create_provision(
-        provision_uri: &str,
-        content: &str,
-    ) -> Vec<Triple> {
+    pub fn create_provision(provision_uri: &str, content: &str) -> Vec<Triple> {
         let mut triples = Vec::new();
 
         triples.push(Triple {
@@ -473,6 +465,299 @@ pub mod akoma_ntoso {
     }
 }
 
+/// Custom Legalis ontology extensions.
+///
+/// This module provides custom vocabulary extensions for:
+/// - Condition/effect relationships
+/// - Discretion zone modeling
+/// - Simulation result representation
+pub mod custom {
+    use super::*;
+
+    /// Custom Legalis namespace (already defined in standard prefixes).
+    pub const NAMESPACE: &str = "https://legalis.dev/ontology#";
+
+    /// Condition-effect relationship types.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ConditionEffectRelation {
+        /// Condition is necessary for the effect
+        Necessary,
+        /// Condition is sufficient for the effect
+        Sufficient,
+        /// Condition is necessary and sufficient
+        NecessaryAndSufficient,
+        /// Condition modulates the effect (e.g., determines magnitude)
+        Modulates,
+        /// Condition blocks the effect
+        Blocks,
+        /// Condition triggers the effect
+        Triggers,
+    }
+
+    impl ConditionEffectRelation {
+        /// Returns the URI for this relationship type.
+        pub fn uri(&self) -> String {
+            let relation_name = match self {
+                Self::Necessary => "necessaryFor",
+                Self::Sufficient => "sufficientFor",
+                Self::NecessaryAndSufficient => "necessaryAndSufficientFor",
+                Self::Modulates => "modulates",
+                Self::Blocks => "blocks",
+                Self::Triggers => "triggers",
+            };
+            format!("{}{}", NAMESPACE, relation_name)
+        }
+
+        /// Returns the label for this relationship.
+        pub fn label(&self) -> &'static str {
+            match self {
+                Self::Necessary => "Necessary Condition",
+                Self::Sufficient => "Sufficient Condition",
+                Self::NecessaryAndSufficient => "Necessary and Sufficient Condition",
+                Self::Modulates => "Modulating Condition",
+                Self::Blocks => "Blocking Condition",
+                Self::Triggers => "Triggering Condition",
+            }
+        }
+    }
+
+    /// Discretion zone modeling vocabulary.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DiscretionZoneType {
+        /// Mandatory zone - no discretion
+        Mandatory,
+        /// Advisory zone - full discretion
+        Advisory,
+        /// Constrained zone - limited discretion with boundaries
+        Constrained,
+        /// Presumptive zone - default action with override
+        Presumptive,
+    }
+
+    impl DiscretionZoneType {
+        /// Returns the URI for this discretion zone type.
+        pub fn uri(&self) -> String {
+            let zone_name = match self {
+                Self::Mandatory => "MandatoryZone",
+                Self::Advisory => "AdvisoryZone",
+                Self::Constrained => "ConstrainedZone",
+                Self::Presumptive => "PresumptiveZone",
+            };
+            format!("{}{}", NAMESPACE, zone_name)
+        }
+
+        /// Returns the label.
+        pub fn label(&self) -> &'static str {
+            match self {
+                Self::Mandatory => "Mandatory Discretion Zone",
+                Self::Advisory => "Advisory Discretion Zone",
+                Self::Constrained => "Constrained Discretion Zone",
+                Self::Presumptive => "Presumptive Discretion Zone",
+            }
+        }
+
+        /// Returns the definition.
+        pub fn definition(&self) -> &'static str {
+            match self {
+                Self::Mandatory => "A zone where the action is mandatory with no discretion",
+                Self::Advisory => "A zone where the decision-maker has full discretion",
+                Self::Constrained => "A zone with limited discretion within specified boundaries",
+                Self::Presumptive => "A zone with a default action that can be overridden",
+            }
+        }
+    }
+
+    /// Simulation result types.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum SimulationResultType {
+        /// Success - effect was applied
+        Success,
+        /// Failure - effect was not applied
+        Failure,
+        /// Partial - effect was partially applied
+        Partial,
+        /// Deferred - decision was postponed
+        Deferred,
+        /// Alternative - alternative action was taken
+        Alternative,
+    }
+
+    impl SimulationResultType {
+        /// Returns the URI for this result type.
+        pub fn uri(&self) -> String {
+            let result_name = match self {
+                Self::Success => "SuccessResult",
+                Self::Failure => "FailureResult",
+                Self::Partial => "PartialResult",
+                Self::Deferred => "DeferredResult",
+                Self::Alternative => "AlternativeResult",
+            };
+            format!("{}{}", NAMESPACE, result_name)
+        }
+
+        /// Returns the label.
+        pub fn label(&self) -> &'static str {
+            match self {
+                Self::Success => "Success Result",
+                Self::Failure => "Failure Result",
+                Self::Partial => "Partial Result",
+                Self::Deferred => "Deferred Result",
+                Self::Alternative => "Alternative Result",
+            }
+        }
+    }
+
+    /// Generates condition-effect relationship triples.
+    pub fn create_condition_effect_relationship(
+        condition_uri: &str,
+        effect_uri: &str,
+        relation: ConditionEffectRelation,
+    ) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        triples.push(Triple {
+            subject: condition_uri.to_string(),
+            predicate: relation.uri(),
+            object: RdfValue::Uri(effect_uri.to_string()),
+        });
+
+        // Add inverse relationship
+        let inverse = match relation {
+            ConditionEffectRelation::Necessary => "hasNecessaryCondition",
+            ConditionEffectRelation::Sufficient => "hasSufficientCondition",
+            ConditionEffectRelation::NecessaryAndSufficient => "hasNecessaryAndSufficientCondition",
+            ConditionEffectRelation::Modulates => "isModulatedBy",
+            ConditionEffectRelation::Blocks => "isBlockedBy",
+            ConditionEffectRelation::Triggers => "isTriggeredBy",
+        };
+
+        triples.push(Triple {
+            subject: effect_uri.to_string(),
+            predicate: format!("{}{}", NAMESPACE, inverse),
+            object: RdfValue::Uri(condition_uri.to_string()),
+        });
+
+        triples
+    }
+
+    /// Generates discretion zone triples.
+    pub fn create_discretion_zone(
+        zone_uri: &str,
+        zone_type: DiscretionZoneType,
+        statute_uri: Option<&str>,
+    ) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        // Type
+        triples.push(Triple {
+            subject: zone_uri.to_string(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri(format!("{}DiscretionZone", NAMESPACE)),
+        });
+
+        triples.push(Triple {
+            subject: zone_uri.to_string(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri(zone_type.uri()),
+        });
+
+        // Label
+        triples.push(Triple {
+            subject: zone_uri.to_string(),
+            predicate: "rdfs:label".to_string(),
+            object: RdfValue::string(zone_type.label()),
+        });
+
+        // Definition
+        triples.push(Triple {
+            subject: zone_uri.to_string(),
+            predicate: "skos:definition".to_string(),
+            object: RdfValue::string(zone_type.definition()),
+        });
+
+        // Link to statute if provided
+        if let Some(statute) = statute_uri {
+            triples.push(Triple {
+                subject: statute.to_string(),
+                predicate: format!("{}hasDiscretionZone", NAMESPACE),
+                object: RdfValue::Uri(zone_uri.to_string()),
+            });
+        }
+
+        triples
+    }
+
+    /// Generates simulation result triples.
+    pub fn create_simulation_result(
+        result_uri: &str,
+        result_type: SimulationResultType,
+        statute_uri: &str,
+        explanation: Option<&str>,
+    ) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        // Type
+        triples.push(Triple {
+            subject: result_uri.to_string(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri(format!("{}SimulationResult", NAMESPACE)),
+        });
+
+        triples.push(Triple {
+            subject: result_uri.to_string(),
+            predicate: "rdf:type".to_string(),
+            object: RdfValue::Uri(result_type.uri()),
+        });
+
+        // Label
+        triples.push(Triple {
+            subject: result_uri.to_string(),
+            predicate: "rdfs:label".to_string(),
+            object: RdfValue::string(result_type.label()),
+        });
+
+        // Link to statute
+        triples.push(Triple {
+            subject: result_uri.to_string(),
+            predicate: format!("{}appliesTo", NAMESPACE),
+            object: RdfValue::Uri(statute_uri.to_string()),
+        });
+
+        // Explanation if provided
+        if let Some(exp) = explanation {
+            triples.push(Triple {
+                subject: result_uri.to_string(),
+                predicate: format!("{}explanation", NAMESPACE),
+                object: RdfValue::string(exp),
+            });
+        }
+
+        triples
+    }
+
+    /// Adds discretion zone modeling to statute with discretion logic.
+    pub fn add_discretion_zone_to_statute(
+        statute: &Statute,
+        subject_uri: &str,
+        base_uri: &str,
+    ) -> Vec<Triple> {
+        let mut triples = Vec::new();
+
+        if statute.discretion_logic.is_some() {
+            let zone_uri = format!("{}discretion-zone/{}", base_uri, &statute.id);
+
+            // Create a presumptive zone (default for discretion logic)
+            triples.extend(create_discretion_zone(
+                &zone_uri,
+                DiscretionZoneType::Presumptive,
+                Some(subject_uri),
+            ));
+        }
+
+        triples
+    }
+}
+
 /// Generates triples for all supported ontologies.
 pub fn generate_all_ontology_triples(
     subject_uri: &str,
@@ -485,7 +770,11 @@ pub fn generate_all_ontology_triples(
     triples.extend(fabio::statute_to_fabio_triples(subject_uri, statute));
 
     // LKIF triples
-    triples.extend(lkif::statute_to_lkif_triples(subject_uri, statute, base_uri));
+    triples.extend(lkif::statute_to_lkif_triples(
+        subject_uri,
+        statute,
+        base_uri,
+    ));
 
     // LegalRuleML triples
     triples.extend(legalruleml::statute_to_legalruleml_triples(
@@ -498,6 +787,13 @@ pub fn generate_all_ontology_triples(
     triples.extend(akoma_ntoso::statute_to_akoma_ntoso_triples(
         subject_uri,
         statute,
+        base_uri,
+    ));
+
+    // Custom Legalis extensions - discretion zone modeling
+    triples.extend(custom::add_discretion_zone_to_statute(
+        statute,
+        subject_uri,
         base_uri,
     ));
 
@@ -555,7 +851,11 @@ mod tests {
 
         assert!(!triples.is_empty());
         assert!(triples.iter().any(|t| t.predicate.contains("definesRule")));
-        assert!(triples.iter().any(|t| t.predicate.contains("hasConclusion")));
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate.contains("hasConclusion"))
+        );
     }
 
     #[test]
@@ -591,7 +891,11 @@ mod tests {
     #[test]
     fn test_fabio_types() {
         assert!(fabio::FabioType::Statute.uri().contains("Statute"));
-        assert!(fabio::FabioType::LegislativeAct.uri().contains("LegislativeAct"));
+        assert!(
+            fabio::FabioType::LegislativeAct
+                .uri()
+                .contains("LegislativeAct")
+        );
     }
 
     #[test]
@@ -603,6 +907,113 @@ mod tests {
         assert_eq!(
             lkif::NormType::from_effect_type(&EffectType::Obligation),
             Some(lkif::NormType::Obligation)
+        );
+    }
+
+    #[test]
+    fn test_custom_condition_effect_relationship() {
+        let triples = custom::create_condition_effect_relationship(
+            "http://example.org/condition/1",
+            "http://example.org/effect/1",
+            custom::ConditionEffectRelation::Necessary,
+        );
+
+        assert_eq!(triples.len(), 2);
+        assert!(triples.iter().any(|t| t.predicate.contains("necessaryFor")));
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate.contains("hasNecessaryCondition"))
+        );
+    }
+
+    #[test]
+    fn test_custom_discretion_zone() {
+        let triples = custom::create_discretion_zone(
+            "http://example.org/zone/1",
+            custom::DiscretionZoneType::Presumptive,
+            Some("http://example.org/statute/1"),
+        );
+
+        assert!(!triples.is_empty());
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("DiscretionZone")))
+        );
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("PresumptiveZone")))
+        );
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.predicate.contains("hasDiscretionZone"))
+        );
+    }
+
+    #[test]
+    fn test_custom_simulation_result() {
+        let triples = custom::create_simulation_result(
+            "http://example.org/result/1",
+            custom::SimulationResultType::Success,
+            "http://example.org/statute/1",
+            Some("All conditions met"),
+        );
+
+        assert!(!triples.is_empty());
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("SimulationResult")))
+        );
+        assert!(
+            triples
+                .iter()
+                .any(|t| matches!(&t.object, RdfValue::Uri(u) if u.contains("SuccessResult")))
+        );
+        assert!(triples.iter().any(|t| t.predicate.contains("appliesTo")));
+        assert!(triples.iter().any(|t| t.predicate.contains("explanation")));
+    }
+
+    #[test]
+    fn test_custom_discretion_zone_types() {
+        assert_eq!(
+            custom::DiscretionZoneType::Mandatory.label(),
+            "Mandatory Discretion Zone"
+        );
+        assert!(
+            custom::DiscretionZoneType::Constrained
+                .uri()
+                .contains("ConstrainedZone")
+        );
+        assert!(!custom::DiscretionZoneType::Advisory.definition().is_empty());
+    }
+
+    #[test]
+    fn test_custom_simulation_result_types() {
+        assert_eq!(
+            custom::SimulationResultType::Partial.label(),
+            "Partial Result"
+        );
+        assert!(
+            custom::SimulationResultType::Deferred
+                .uri()
+                .contains("DeferredResult")
+        );
+    }
+
+    #[test]
+    fn test_custom_condition_effect_relation_types() {
+        assert_eq!(
+            custom::ConditionEffectRelation::Sufficient.label(),
+            "Sufficient Condition"
+        );
+        assert!(
+            custom::ConditionEffectRelation::Modulates
+                .uri()
+                .contains("modulates")
         );
     }
 }

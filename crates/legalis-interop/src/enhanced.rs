@@ -156,12 +156,18 @@ impl EnhancedConverter {
     fn should_normalize(&self, format: LegalFormat) -> bool {
         match format {
             // Text-based formats benefit from normalization
-            LegalFormat::Catala | LegalFormat::Stipula | LegalFormat::L4 => true,
+            LegalFormat::Catala | LegalFormat::Stipula | LegalFormat::L4 | LegalFormat::Spdx => {
+                true
+            }
             // XML formats are whitespace-sensitive
             LegalFormat::AkomaNtoso
             | LegalFormat::LegalRuleML
             | LegalFormat::LegalDocML
-            | LegalFormat::LKIF => false,
+            | LegalFormat::LKIF
+            | LegalFormat::LegalCite
+            | LegalFormat::MetaLex
+            | LegalFormat::Mpeg21Rel
+            | LegalFormat::CreativeCommons => false,
             // Native format
             LegalFormat::Legalis => false,
         }

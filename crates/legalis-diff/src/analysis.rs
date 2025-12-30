@@ -1481,12 +1481,8 @@ pub fn estimate_migration_effort(diff: &crate::StatuteDiff) -> MigrationEffort {
         MigrationComplexity::Moderate => {
             "Staged migration with parallel operation period".to_string()
         }
-        MigrationComplexity::Complex => {
-            "Multi-phase migration with extensive testing".to_string()
-        }
-        MigrationComplexity::VeryComplex => {
-            "Complete redesign with gradual transition".to_string()
-        }
+        MigrationComplexity::Complex => "Multi-phase migration with extensive testing".to_string(),
+        MigrationComplexity::VeryComplex => "Complete redesign with gradual transition".to_string(),
     };
 
     MigrationEffort {

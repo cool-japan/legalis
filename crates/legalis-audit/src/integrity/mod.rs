@@ -4,6 +4,13 @@
 //! which allow for O(log n) verification of individual records instead of O(n)
 //! verification required for simple hash chains.
 
+pub mod blockchain;
+pub mod multiparty;
+pub mod parallel;
+pub mod sealed;
+pub mod timestamp;
+pub mod witness;
+
 use crate::{AuditRecord, AuditResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

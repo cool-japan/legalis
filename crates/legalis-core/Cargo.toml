@@ -11,16 +11,21 @@ default = ["serde"]
 serde = ["dep:serde", "dep:serde_json", "uuid/serde", "chrono/serde"]
 schema = ["dep:schemars", "serde"]
 parallel = ["dep:rayon"]
+yaml = ["dep:serde_yaml", "serde"]
+toml = ["dep:toml", "serde"]
 
 [dependencies]
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+serde_yaml = { version = "0.9", optional = true }
+toml = { version = "0.8", optional = true }
 schemars = { version = "0.8", features = ["uuid1", "chrono"], optional = true }
 rayon = { version = "1.10", optional = true }
 uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 regex = "1.11"
+sha2 = "0.10"
 
 [dev-dependencies]
 proptest = "1.5"

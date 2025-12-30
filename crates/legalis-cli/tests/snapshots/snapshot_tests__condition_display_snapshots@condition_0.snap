@@ -1,0 +1,5 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: display
+---
+age >= 18

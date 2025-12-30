@@ -547,7 +547,7 @@ mod tests {
 
         for i in 0..5 {
             let id = format!("statute-{}", i);
-            let statute = Statute::new(&id, &format!("Statute {}", i), Effect::grant("Grant"));
+            let statute = Statute::new(&id, format!("Statute {}", i), Effect::grant("Grant"));
             lookup.insert(statute).unwrap();
         }
 

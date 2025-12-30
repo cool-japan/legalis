@@ -46,14 +46,22 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub mod cache;
+pub mod dcat;
+pub mod external;
+pub mod knowledge_graph;
+pub mod ldn;
 pub mod linked_data;
 pub mod ontology;
+pub mod quality;
 pub mod rdfa;
+pub mod reasoning;
 pub mod shacl;
 pub mod shex;
 pub mod sparql;
+pub mod store;
 pub mod streaming;
 pub mod validation;
+pub mod versioning;
 pub mod void_desc;
 
 /// Errors during LOD export.

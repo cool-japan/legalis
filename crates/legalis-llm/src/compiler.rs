@@ -699,8 +699,9 @@ mod tests {
             },
             "version": 1,
             "jurisdiction": null,
-            "relations": [],
-            "amendments": []
+            "derives_from": [],
+            "applies_to": [],
+            "exceptions": []
         }"#;
 
         let provider = MockProvider::new().with_response("Parse", mock_response);

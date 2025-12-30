@@ -20,6 +20,8 @@ pub struct SparqlQueryBuilder {
     order_by: Option<String>,
     limit: Option<usize>,
     offset: Option<usize>,
+    distinct: bool,
+    group_by: Vec<String>,
 }
 
 impl Default for SparqlQueryBuilder {
@@ -39,6 +41,8 @@ impl SparqlQueryBuilder {
             order_by: None,
             limit: None,
             offset: None,
+            distinct: false,
+            group_by: Vec::new(),
         };
 
         // Add standard prefixes
@@ -94,6 +98,26 @@ impl SparqlQueryBuilder {
         self
     }
 
+    /// Enables DISTINCT modifier.
+    pub fn distinct(&mut self, distinct: bool) -> &mut Self {
+        self.distinct = distinct;
+        self
+    }
+
+    /// Adds a GROUP BY variable.
+    pub fn group_by(&mut self, var: impl Into<String>) -> &mut Self {
+        self.group_by.push(var.into());
+        self
+    }
+
+    /// Adds a property path pattern (SPARQL 1.1 feature).
+    /// Example: `?s legalis:hasPrecondition+ ?o` (one or more)
+    pub fn property_path(&mut self, subject: &str, path: &str, object: &str) -> &mut Self {
+        self.where_patterns
+            .push(format!("{} {} {} .", subject, path, object));
+        self
+    }
+
     /// Builds the SPARQL query string.
     pub fn build(&self) -> String {
         let mut query = String::new();
@@ -106,6 +130,9 @@ impl SparqlQueryBuilder {
 
         // SELECT
         query.push_str("SELECT ");
+        if self.distinct {
+            query.push_str("DISTINCT ");
+        }
         if self.select_vars.is_empty() {
             query.push('*');
         } else {
@@ -125,6 +152,11 @@ impl SparqlQueryBuilder {
         }
 
         query.push_str("}\n");
+
+        // GROUP BY
+        if !self.group_by.is_empty() {
+            query.push_str(&format!("GROUP BY {}\n", self.group_by.join(" ")));
+        }
 
         // ORDER BY
         if let Some(ref order) = self.order_by {
@@ -148,6 +180,47 @@ impl SparqlQueryBuilder {
 impl fmt::Display for SparqlQueryBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.build())
+    }
+}
+
+/// Property path builder for SPARQL 1.1 property paths.
+#[derive(Debug, Clone)]
+pub struct PropertyPath;
+
+impl PropertyPath {
+    /// Creates a zero-or-more path: `property*`
+    pub fn zero_or_more(property: &str) -> String {
+        format!("{}*", property)
+    }
+
+    /// Creates a one-or-more path: `property+`
+    pub fn one_or_more(property: &str) -> String {
+        format!("{}+", property)
+    }
+
+    /// Creates a zero-or-one path: `property?`
+    pub fn zero_or_one(property: &str) -> String {
+        format!("{}?", property)
+    }
+
+    /// Creates an alternative path: `property1|property2`
+    pub fn alternative(properties: &[&str]) -> String {
+        format!("({})", properties.join("|"))
+    }
+
+    /// Creates a sequence path: `property1/property2`
+    pub fn sequence(properties: &[&str]) -> String {
+        properties.join("/")
+    }
+
+    /// Creates an inverse path: `^property`
+    pub fn inverse(property: &str) -> String {
+        format!("^{}", property)
+    }
+
+    /// Creates a negated property set: `!(property1|property2)`
+    pub fn negated(properties: &[&str]) -> String {
+        format!("!({})", properties.join("|"))
     }
 }
 
@@ -412,6 +485,119 @@ impl SparqlTemplates {
         query.push_str("}\n");
         query
     }
+
+    /// Query using property paths to find all nested conditions (transitive).
+    /// Uses property path: legalis:hasPrecondition+ for one-or-more hops.
+    pub fn find_all_nested_conditions(statute_id: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n");
+        query.push_str("PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n\n");
+        query.push_str("SELECT ?condition ?condType\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!(
+            "  ?statute dcterms:identifier \"{}\" .\n",
+            statute_id
+        ));
+        query.push_str("  ?statute legalis:hasPrecondition+ ?condition .\n");
+        query.push_str("  ?condition rdf:type ?condType .\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// Query using property paths to navigate effect types.
+    /// Uses sequence path: legalis:hasEffect/legalis:effectType
+    pub fn find_statutes_by_effect_type_path(effect_type: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX eli: <http://data.europa.eu/eli/ontology#>\n\n");
+        query.push_str("SELECT ?statute ?title\n");
+        query.push_str("WHERE {\n");
+        query.push_str("  ?statute a legalis:Statute .\n");
+        query.push_str("  ?statute eli:title ?title .\n");
+        query.push_str(&format!(
+            "  ?statute legalis:hasEffect/legalis:effectType legalis:{} .\n",
+            effect_type
+        ));
+        query.push_str("}\n");
+        query
+    }
+
+    /// Query using alternative property paths to find conditions.
+    /// Uses alternative path: (legalis:leftOperand|legalis:rightOperand)
+    pub fn find_condition_operands(statute_id: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX dcterms: <http://purl.org/dc/terms/>\n\n");
+        query.push_str("SELECT ?condition ?operand\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!(
+            "  ?statute dcterms:identifier \"{}\" .\n",
+            statute_id
+        ));
+        query.push_str("  ?statute legalis:hasPrecondition ?condition .\n");
+        query.push_str("  ?condition (legalis:leftOperand|legalis:rightOperand) ?operand .\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// Query using inverse property paths to find what references a statute.
+    /// Uses inverse path: ^legalis:references
+    pub fn find_referencing_statutes(statute_uri: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX legalis: <https://legalis.dev/ontology#>\n");
+        query.push_str("PREFIX eli: <http://data.europa.eu/eli/ontology#>\n\n");
+        query.push_str("SELECT ?referencingStatute ?title\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!(
+            "  <{}> ^legalis:references ?referencingStatute .\n",
+            statute_uri
+        ));
+        query.push_str("  ?referencingStatute eli:title ?title .\n");
+        query.push_str("}\n");
+        query
+    }
+
+    /// Query using DISTINCT to find unique jurisdictions.
+    pub fn find_distinct_jurisdictions() -> String {
+        SparqlQueryBuilder::new()
+            .distinct(true)
+            .select("?jurisdiction")
+            .where_pattern("?statute a legalis:Statute .")
+            .where_pattern("?statute eli:jurisdiction ?jurisdiction .")
+            .order_by("?jurisdiction")
+            .build()
+    }
+
+    /// Query using GROUP BY to count statutes per jurisdiction.
+    pub fn count_statutes_per_jurisdiction() -> String {
+        let mut builder = SparqlQueryBuilder::new();
+        builder
+            .select("?jurisdiction")
+            .select("(COUNT(?statute) AS ?count)")
+            .where_pattern("?statute a legalis:Statute .")
+            .where_pattern("?statute eli:jurisdiction ?jurisdiction .")
+            .group_by("?jurisdiction")
+            .order_by("DESC(?count)");
+        builder.build()
+    }
+
+    /// Query to find related statutes using SKOS broader/narrower relationships.
+    /// Uses property path: skos:broader* for zero-or-more hops.
+    pub fn find_related_statutes_skos(statute_uri: &str) -> String {
+        let mut query = String::new();
+        query.push_str("PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n");
+        query.push_str("PREFIX eli: <http://data.europa.eu/eli/ontology#>\n\n");
+        query.push_str("SELECT ?relatedStatute ?title ?relation\n");
+        query.push_str("WHERE {\n");
+        query.push_str(&format!("  <{}> dcterms:subject ?concept .\n", statute_uri));
+        query.push_str("  ?concept skos:broader* ?relatedConcept .\n");
+        query.push_str("  ?relatedStatute dcterms:subject ?relatedConcept .\n");
+        query.push_str("  ?relatedStatute eli:title ?title .\n");
+        query.push_str(&format!("  FILTER(?relatedStatute != <{}>)\n", statute_uri));
+        query.push_str("}\n");
+        query
+    }
 }
 
 /// Federated query builder for querying multiple SPARQL endpoints.
@@ -558,9 +744,15 @@ pub struct SparqlUpdate {
 #[derive(Debug, Clone)]
 pub enum UpdateOperation {
     /// INSERT DATA operation
-    InsertData { graph: Option<String>, triples: String },
+    InsertData {
+        graph: Option<String>,
+        triples: String,
+    },
     /// DELETE DATA operation
-    DeleteData { graph: Option<String>, triples: String },
+    DeleteData {
+        graph: Option<String>,
+        triples: String,
+    },
     /// DELETE WHERE operation
     DeleteWhere { patterns: String },
     /// INSERT/DELETE operation
@@ -589,9 +781,18 @@ impl SparqlUpdate {
     pub fn new() -> Self {
         Self {
             prefixes: vec![
-                ("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string()),
-                ("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string()),
-                ("legalis".to_string(), "https://legalis.dev/ontology#".to_string()),
+                (
+                    "rdf".to_string(),
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+                ),
+                (
+                    "rdfs".to_string(),
+                    "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+                ),
+                (
+                    "legalis".to_string(),
+                    "https://legalis.dev/ontology#".to_string(),
+                ),
             ],
             operations: Vec::new(),
         }
@@ -902,12 +1103,18 @@ impl NamedGraphManager {
     }
 }
 
+/// Type alias for SPARQL query executor function.
+type QueryExecutor = Box<dyn Fn(&str) -> Result<String, String>>;
+
+/// Type alias for SPARQL update executor function.
+type UpdateExecutor = Box<dyn Fn(&str) -> Result<(), String>>;
+
 /// SPARQL endpoint framework (generic, can be used with any HTTP server).
 pub struct SparqlEndpoint {
     /// Query executor function
-    query_executor: Option<Box<dyn Fn(&str) -> Result<String, String>>>,
+    query_executor: Option<QueryExecutor>,
     /// Update executor function
-    update_executor: Option<Box<dyn Fn(&str) -> Result<(), String>>>,
+    update_executor: Option<UpdateExecutor>,
 }
 
 impl SparqlEndpoint {
@@ -1293,11 +1500,7 @@ mod tests {
         let mut manager = NamedGraphManager::new("https://example.org/");
         manager.register_graph("test", "Test Graph");
 
-        let query = manager.select_from_graph(
-            "test",
-            vec!["?s", "?p", "?o"],
-            vec!["?s ?p ?o ."],
-        );
+        let query = manager.select_from_graph("test", vec!["?s", "?p", "?o"], vec!["?s ?p ?o ."]);
 
         assert!(query.is_some());
         let query_str = query.unwrap();
@@ -1337,21 +1540,33 @@ mod tests {
 
     #[test]
     fn test_sparql_endpoint_validate_query() {
-        assert!(SparqlEndpoint::validate_query("SELECT * WHERE { ?s ?p ?o }"));
-        assert!(SparqlEndpoint::validate_query("CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }"));
+        assert!(SparqlEndpoint::validate_query(
+            "SELECT * WHERE { ?s ?p ?o }"
+        ));
+        assert!(SparqlEndpoint::validate_query(
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }"
+        ));
         assert!(SparqlEndpoint::validate_query("ASK { ?s ?p ?o }"));
-        assert!(SparqlEndpoint::validate_query("DESCRIBE <http://example.org/resource>"));
+        assert!(SparqlEndpoint::validate_query(
+            "DESCRIBE <http://example.org/resource>"
+        ));
         assert!(!SparqlEndpoint::validate_query("INVALID QUERY"));
     }
 
     #[test]
     fn test_sparql_endpoint_validate_update() {
-        assert!(SparqlEndpoint::validate_update("INSERT DATA { <s> <p> <o> }"));
-        assert!(SparqlEndpoint::validate_update("DELETE DATA { <s> <p> <o> }"));
+        assert!(SparqlEndpoint::validate_update(
+            "INSERT DATA { <s> <p> <o> }"
+        ));
+        assert!(SparqlEndpoint::validate_update(
+            "DELETE DATA { <s> <p> <o> }"
+        ));
         assert!(SparqlEndpoint::validate_update("CLEAR GRAPH <g>"));
         assert!(SparqlEndpoint::validate_update("DROP GRAPH <g>"));
         assert!(SparqlEndpoint::validate_update("CREATE GRAPH <g>"));
-        assert!(!SparqlEndpoint::validate_update("SELECT * WHERE { ?s ?p ?o }"));
+        assert!(!SparqlEndpoint::validate_update(
+            "SELECT * WHERE { ?s ?p ?o }"
+        ));
     }
 
     #[test]
@@ -1359,5 +1574,132 @@ mod tests {
         let endpoint = SparqlEndpoint::new();
         let result = endpoint.execute_query("SELECT * WHERE { ?s ?p ?o }");
         assert!(result.is_err());
+    }
+
+    // Property Path Tests
+    #[test]
+    fn test_property_path_zero_or_more() {
+        let path = PropertyPath::zero_or_more("legalis:hasPrecondition");
+        assert_eq!(path, "legalis:hasPrecondition*");
+    }
+
+    #[test]
+    fn test_property_path_one_or_more() {
+        let path = PropertyPath::one_or_more("legalis:hasPrecondition");
+        assert_eq!(path, "legalis:hasPrecondition+");
+    }
+
+    #[test]
+    fn test_property_path_zero_or_one() {
+        let path = PropertyPath::zero_or_one("legalis:hasEffect");
+        assert_eq!(path, "legalis:hasEffect?");
+    }
+
+    #[test]
+    fn test_property_path_alternative() {
+        let path = PropertyPath::alternative(&["legalis:leftOperand", "legalis:rightOperand"]);
+        assert_eq!(path, "(legalis:leftOperand|legalis:rightOperand)");
+    }
+
+    #[test]
+    fn test_property_path_sequence() {
+        let path = PropertyPath::sequence(&["legalis:hasEffect", "legalis:effectType"]);
+        assert_eq!(path, "legalis:hasEffect/legalis:effectType");
+    }
+
+    #[test]
+    fn test_property_path_inverse() {
+        let path = PropertyPath::inverse("legalis:references");
+        assert_eq!(path, "^legalis:references");
+    }
+
+    #[test]
+    fn test_property_path_negated() {
+        let path = PropertyPath::negated(&["rdf:type", "rdfs:subClassOf"]);
+        assert_eq!(path, "!(rdf:type|rdfs:subClassOf)");
+    }
+
+    #[test]
+    fn test_property_path_in_query() {
+        let mut builder = SparqlQueryBuilder::new();
+        builder
+            .select("?statute")
+            .select("?condition")
+            .where_pattern("?statute a legalis:Statute .")
+            .property_path("?statute", "legalis:hasPrecondition+", "?condition");
+
+        let query = builder.build();
+        assert!(query.contains("legalis:hasPrecondition+"));
+    }
+
+    #[test]
+    fn test_distinct_query() {
+        let mut builder = SparqlQueryBuilder::new();
+        builder
+            .distinct(true)
+            .select("?jurisdiction")
+            .where_pattern("?statute eli:jurisdiction ?jurisdiction .");
+
+        let query = builder.build();
+        assert!(query.contains("SELECT DISTINCT ?jurisdiction"));
+    }
+
+    #[test]
+    fn test_group_by_query() {
+        let mut builder = SparqlQueryBuilder::new();
+        builder
+            .select("?type")
+            .select("(COUNT(*) AS ?count)")
+            .where_pattern("?s rdf:type ?type .")
+            .group_by("?type");
+
+        let query = builder.build();
+        assert!(query.contains("GROUP BY ?type"));
+    }
+
+    #[test]
+    fn test_find_all_nested_conditions() {
+        let query = SparqlTemplates::find_all_nested_conditions("test-123");
+        assert!(query.contains("legalis:hasPrecondition+"));
+        assert!(query.contains("test-123"));
+    }
+
+    #[test]
+    fn test_find_statutes_by_effect_type_path() {
+        let query = SparqlTemplates::find_statutes_by_effect_type_path("GrantEffect");
+        assert!(query.contains("legalis:hasEffect/legalis:effectType"));
+        assert!(query.contains("GrantEffect"));
+    }
+
+    #[test]
+    fn test_find_condition_operands() {
+        let query = SparqlTemplates::find_condition_operands("test-123");
+        assert!(query.contains("(legalis:leftOperand|legalis:rightOperand)"));
+    }
+
+    #[test]
+    fn test_find_referencing_statutes() {
+        let query = SparqlTemplates::find_referencing_statutes("http://example.org/statute/123");
+        assert!(query.contains("^legalis:references"));
+    }
+
+    #[test]
+    fn test_find_distinct_jurisdictions() {
+        let query = SparqlTemplates::find_distinct_jurisdictions();
+        assert!(query.contains("SELECT DISTINCT"));
+        assert!(query.contains("eli:jurisdiction"));
+    }
+
+    #[test]
+    fn test_count_statutes_per_jurisdiction() {
+        let query = SparqlTemplates::count_statutes_per_jurisdiction();
+        assert!(query.contains("COUNT(?statute)"));
+        assert!(query.contains("GROUP BY ?jurisdiction"));
+    }
+
+    #[test]
+    fn test_find_related_statutes_skos() {
+        let query = SparqlTemplates::find_related_statutes_skos("http://example.org/statute/123");
+        assert!(query.contains("skos:broader*"));
     }
 }

@@ -247,7 +247,8 @@ Provide your analysis in the following JSON format:
 }}
 
 Be objective and consider that general legal information is not UPL."#,
-            strictness_desc, text = text
+            strictness_desc,
+            text = text
         );
 
         self.provider
@@ -421,7 +422,9 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
         // Check for sensitive information in input
         if let Some(ref protector) = self.confidentiality_protector {
             if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!("Input contains sensitive information that must be redacted"));
+                return Err(anyhow!(
+                    "Input contains sensitive information that must be redacted"
+                ));
             }
         }
 
@@ -462,7 +465,9 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
         // Similar checks as generate_text
         if let Some(ref protector) = self.confidentiality_protector {
             if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!("Input contains sensitive information that must be redacted"));
+                return Err(anyhow!(
+                    "Input contains sensitive information that must be redacted"
+                ));
             }
         }
 
@@ -487,7 +492,9 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
         // Check for sensitive information
         if let Some(ref protector) = self.confidentiality_protector {
             if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!("Input contains sensitive information that must be redacted"));
+                return Err(anyhow!(
+                    "Input contains sensitive information that must be redacted"
+                ));
             }
         }
 
@@ -577,14 +584,12 @@ mod tests {
 
     #[test]
     fn test_disclaimer_position() {
-        let disclaimer = LegalDisclaimer::new("NOTICE")
-            .with_position(DisclaimerPosition::Prepend);
+        let disclaimer = LegalDisclaimer::new("NOTICE").with_position(DisclaimerPosition::Prepend);
 
         let result = disclaimer.apply("Content");
         assert!(result.starts_with("NOTICE"));
 
-        let disclaimer = LegalDisclaimer::new("NOTICE")
-            .with_position(DisclaimerPosition::Append);
+        let disclaimer = LegalDisclaimer::new("NOTICE").with_position(DisclaimerPosition::Append);
 
         let result = disclaimer.apply("Content");
         assert!(result.ends_with("NOTICE"));

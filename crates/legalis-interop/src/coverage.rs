@@ -52,6 +52,11 @@ impl FormatCoverage {
             LegalFormat::LegalRuleML => Self::analyze_legalruleml(),
             LegalFormat::LegalDocML => Self::analyze_legaldocml(),
             LegalFormat::LKIF => Self::analyze_lkif(),
+            LegalFormat::LegalCite => Self::analyze_legalcite(),
+            LegalFormat::MetaLex => Self::analyze_metalex(),
+            LegalFormat::Mpeg21Rel => Self::analyze_mpeg21rel(),
+            LegalFormat::CreativeCommons => Self::analyze_creativecommons(),
+            LegalFormat::Spdx => Self::analyze_spdx(),
             LegalFormat::Legalis => Self::analyze_legalis(),
         }
     }
@@ -216,6 +221,76 @@ impl FormatCoverage {
 
         let partial = HashMap::new();
 
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_legalcite() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Citation metadata".to_string(),
+            "Jurisdiction".to_string(),
+            "Basic citation structure".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex preconditions".to_string(),
+            "Effect semantics beyond citations".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_metalex() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Document structure".to_string(),
+            "Article metadata".to_string(),
+            "Bibliographic information".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex preconditions".to_string(),
+            "Temporal aspects (full support)".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_mpeg21rel() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Rights grants".to_string(),
+            "Principal/resource model".to_string(),
+            "Basic permissions".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex legal preconditions".to_string(),
+            "General legal rules".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_creativecommons() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "License type detection".to_string(),
+            "Permissions/requirements/prohibitions".to_string(),
+            "URL-based license detection".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex legal rules".to_string(),
+            "Preconditions beyond license terms".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_spdx() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "License identifiers".to_string(),
+            "License expressions (AND/OR)".to_string(),
+            "License exceptions".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex legal rules".to_string(),
+            "Preconditions".to_string(),
+        ];
+        let partial = HashMap::new();
         (supported, unsupported, partial)
     }
 

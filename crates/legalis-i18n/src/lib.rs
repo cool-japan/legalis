@@ -3231,12 +3231,7 @@ impl DeadlineCalculator {
 
     /// Applies holiday rollover rules.
     /// If a deadline falls on a non-working day, roll to the next working day.
-    pub fn apply_holiday_rollover(
-        &self,
-        year: i32,
-        month: u32,
-        day: u32,
-    ) -> (i32, u32, u32) {
+    pub fn apply_holiday_rollover(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
         if self.jurisdiction.is_working_day(year, month, day) {
             return (year, month, day);
         }
@@ -3246,7 +3241,10 @@ impl DeadlineCalculator {
         for _ in 0..7 {
             // Search up to 7 days ahead
             current = self.add_one_day(current.0, current.1, current.2);
-            if self.jurisdiction.is_working_day(current.0, current.1, current.2) {
+            if self
+                .jurisdiction
+                .is_working_day(current.0, current.1, current.2)
+            {
                 return current;
             }
         }
@@ -3284,8 +3282,12 @@ impl DeadlineCalculator {
         threshold_days: i32,
     ) -> bool {
         let days_between = self.days_between(
-            deadline1_year, deadline1_month, deadline1_day,
-            deadline2_year, deadline2_month, deadline2_day,
+            deadline1_year,
+            deadline1_month,
+            deadline1_day,
+            deadline2_year,
+            deadline2_month,
+            deadline2_day,
         );
         days_between.abs() <= threshold_days
     }
@@ -3315,15 +3317,7 @@ impl DeadlineCalculator {
     }
 
     /// Helper: calculates days between two dates (approximate).
-    fn days_between(
-        &self,
-        y1: i32,
-        m1: u32,
-        d1: u32,
-        y2: i32,
-        m2: u32,
-        d2: u32,
-    ) -> i32 {
+    fn days_between(&self, y1: i32, m1: u32, d1: u32, y2: i32, m2: u32, d2: u32) -> i32 {
         // Simple approximation: 365 days per year, 30 days per month
         let days1 = y1 * 365 + (m1 as i32) * 30 + (d1 as i32);
         let days2 = y2 * 365 + (m2 as i32) * 30 + (d2 as i32);
@@ -3862,6 +3856,911 @@ impl CitationFormatter {
             "DE" | "FR" | "IT" | "ES" | "NL" | "PT" | "PL" => CitationStyle::European,
             _ => CitationStyle::Bluebook, // Default
         }
+    }
+}
+
+// ============================================================================
+// Citation Validation (v0.2.1)
+// ============================================================================
+
+/// Citation validation errors.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CitationError {
+    /// Missing required field
+    #[error("Missing required field: {field}")]
+    MissingField { field: String },
+    /// Invalid field format
+    #[error("Invalid format for field {field}: {reason}")]
+    InvalidFormat { field: String, reason: String },
+    /// Style-specific violation
+    #[error("Style violation for {style}: {reason}")]
+    StyleViolation { style: String, reason: String },
+    /// Parse error
+    #[error("Failed to parse citation: {reason}")]
+    ParseError { reason: String },
+    /// Unsupported conversion
+    #[error("Cannot convert from {from} to {to}: {reason}")]
+    UnsupportedConversion {
+        from: String,
+        to: String,
+        reason: String,
+    },
+}
+
+/// Citation type for validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CitationType {
+    /// Court case
+    Case,
+    /// Statute or legislation
+    Statute,
+    /// Legal journal article
+    Article,
+    /// Legal book or treatise
+    Book,
+}
+
+/// Validation rule for a citation component.
+#[derive(Debug, Clone)]
+pub struct CitationValidationRule {
+    /// Field name
+    pub field: String,
+    /// Whether field is required
+    pub required: bool,
+    /// Pattern validation (regex-like patterns)
+    pub pattern: Option<String>,
+    /// Custom validation function
+    pub validator: Option<fn(&str) -> Result<(), String>>,
+}
+
+impl CitationValidationRule {
+    /// Creates a required field rule.
+    pub fn required(field: impl Into<String>) -> Self {
+        Self {
+            field: field.into(),
+            required: true,
+            pattern: None,
+            validator: None,
+        }
+    }
+
+    /// Creates an optional field rule.
+    pub fn optional(field: impl Into<String>) -> Self {
+        Self {
+            field: field.into(),
+            required: false,
+            pattern: None,
+            validator: None,
+        }
+    }
+
+    /// Adds a pattern constraint.
+    pub fn with_pattern(mut self, pattern: impl Into<String>) -> Self {
+        self.pattern = Some(pattern.into());
+        self
+    }
+
+    /// Validates a value against this rule.
+    pub fn validate(&self, value: Option<&String>) -> Result<(), CitationError> {
+        // Check required
+        if self.required && value.is_none() {
+            return Err(CitationError::MissingField {
+                field: self.field.clone(),
+            });
+        }
+
+        // Validate pattern if value exists
+        if let Some(val) = value {
+            if let Some(pattern) = &self.pattern {
+                if !Self::matches_pattern(val, pattern) {
+                    return Err(CitationError::InvalidFormat {
+                        field: self.field.clone(),
+                        reason: format!("Does not match pattern: {}", pattern),
+                    });
+                }
+            }
+
+            // Custom validation
+            if let Some(validator) = self.validator {
+                if let Err(msg) = validator(val) {
+                    return Err(CitationError::InvalidFormat {
+                        field: self.field.clone(),
+                        reason: msg,
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Simple pattern matching (supports basic patterns).
+    fn matches_pattern(value: &str, pattern: &str) -> bool {
+        match pattern {
+            "numeric" => value.chars().all(|c| c.is_numeric()),
+            "alphanumeric" => value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c.is_whitespace()),
+            "year" => {
+                if let Ok(year) = value.parse::<i32>() {
+                    (1000..=9999).contains(&year)
+                } else {
+                    false
+                }
+            }
+            _ => true, // Unknown patterns always match
+        }
+    }
+}
+
+/// Citation parser for extracting components from citation strings.
+#[derive(Debug, Clone)]
+pub struct CitationParser {
+    style: CitationStyle,
+}
+
+impl CitationParser {
+    /// Creates a new citation parser for a specific style.
+    pub fn new(style: CitationStyle) -> Self {
+        Self { style }
+    }
+
+    /// Parses a case citation string into components.
+    pub fn parse_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        match &self.style {
+            CitationStyle::Bluebook => self.parse_bluebook_case(citation),
+            CitationStyle::OSCOLA => self.parse_oscola_case(citation),
+            CitationStyle::AGLC => self.parse_aglc_case(citation),
+            CitationStyle::McGill => self.parse_mcgill_case(citation),
+            CitationStyle::European => self.parse_european_case(citation),
+            CitationStyle::Japanese => self.parse_japanese_case(citation),
+            CitationStyle::Harvard => self.parse_harvard_case(citation),
+            CitationStyle::APA => self.parse_apa_case(citation),
+            CitationStyle::Chicago => self.parse_chicago_case(citation),
+            CitationStyle::Indian => self.parse_indian_case(citation),
+            CitationStyle::Custom(_) => self.parse_custom_case(citation),
+        }
+    }
+
+    /// Parses a statute citation string into components.
+    pub fn parse_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        match &self.style {
+            CitationStyle::Bluebook => self.parse_bluebook_statute(citation),
+            CitationStyle::OSCOLA => self.parse_oscola_statute(citation),
+            CitationStyle::AGLC => self.parse_aglc_statute(citation),
+            CitationStyle::McGill => self.parse_mcgill_statute(citation),
+            CitationStyle::European => self.parse_european_statute(citation),
+            CitationStyle::Japanese => self.parse_japanese_statute(citation),
+            CitationStyle::Harvard => self.parse_harvard_statute(citation),
+            CitationStyle::APA => self.parse_apa_statute(citation),
+            CitationStyle::Chicago => self.parse_chicago_statute(citation),
+            CitationStyle::Indian => self.parse_indian_statute(citation),
+            CitationStyle::Custom(_) => self.parse_custom_statute(citation),
+        }
+    }
+
+    // Bluebook case parser: "Case Name, Vol Reporter Page (Court Year)"
+    fn parse_bluebook_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Example: "Brown v. Board of Education, 347 U.S. 483 (1954)"
+        if citation.trim().is_empty() {
+            return Err(CitationError::ParseError {
+                reason: "Empty citation".to_string(),
+            });
+        }
+
+        let parts: Vec<&str> = citation.split(',').collect();
+        let title = parts[0].trim().to_string();
+
+        if title.is_empty() {
+            return Err(CitationError::ParseError {
+                reason: "Empty citation".to_string(),
+            });
+        }
+
+        let mut components = CitationComponents::new(title);
+
+        if parts.len() > 1 {
+            let citation_part = parts[1].trim();
+            let tokens: Vec<&str> = citation_part.split_whitespace().collect();
+
+            if tokens.len() >= 3 {
+                components.volume = Some(tokens[0].to_string());
+                components.reporter = Some(tokens[1].to_string());
+                components.page = Some(tokens[2].to_string());
+            }
+        }
+
+        // Extract year and court from parentheses
+        if let Some(paren_start) = citation.rfind('(') {
+            if let Some(paren_end) = citation.rfind(')') {
+                let paren_content = &citation[paren_start + 1..paren_end];
+                let paren_parts: Vec<&str> = paren_content.split_whitespace().collect();
+
+                // Last token is usually the year
+                if let Some(year_str) = paren_parts.last() {
+                    if let Ok(year) = year_str.parse::<i32>() {
+                        components.year = Some(year);
+                    }
+                }
+
+                // Other tokens are court
+                if paren_parts.len() > 1 {
+                    components.court = Some(paren_parts[..paren_parts.len() - 1].join(" "));
+                }
+            }
+        }
+
+        Ok(components)
+    }
+
+    // OSCOLA case parser: "Case Name [Year] Reporter Page (Court)"
+    fn parse_oscola_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Example: "R v Smith [2020] EWCA Crim 123"
+        let parts: Vec<&str> = citation.split('[').collect();
+        if parts.is_empty() {
+            return Err(CitationError::ParseError {
+                reason: "Empty citation".to_string(),
+            });
+        }
+
+        let title = parts[0].trim().to_string();
+        let mut components = CitationComponents::new(title);
+
+        if parts.len() > 1 {
+            if let Some(year_end) = parts[1].find(']') {
+                let year_str = &parts[1][..year_end];
+                if let Ok(year) = year_str.parse::<i32>() {
+                    components.year = Some(year);
+                }
+
+                let rest = parts[1][year_end + 1..].trim();
+                let tokens: Vec<&str> = rest.split_whitespace().collect();
+
+                if !tokens.is_empty() {
+                    components.reporter = Some(tokens[0].to_string());
+                }
+                if tokens.len() > 1 {
+                    components.page = Some(tokens[1].to_string());
+                }
+            }
+        }
+
+        Ok(components)
+    }
+
+    // Simplified parsers for other styles
+    fn parse_aglc_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Similar to OSCOLA
+        self.parse_oscola_case(citation)
+    }
+
+    fn parse_mcgill_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Similar to Bluebook
+        self.parse_bluebook_case(citation)
+    }
+
+    fn parse_european_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Simple title-based parsing
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    fn parse_japanese_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Japanese format: "Title 年号年 Reporter 頁"
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    fn parse_harvard_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_case(citation)
+    }
+
+    fn parse_apa_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_case(citation)
+    }
+
+    fn parse_chicago_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_case(citation)
+    }
+
+    fn parse_indian_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Indian format: "Case Name (Year) Volume Reporter Page (Court)"
+        self.parse_bluebook_case(citation)
+    }
+
+    fn parse_custom_case(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Generic parsing
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    // Statute parsers
+    fn parse_bluebook_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Example: "42 U.S.C. § 1983"
+        let mut components = CitationComponents::new(citation.trim());
+
+        let parts: Vec<&str> = citation.split('§').collect();
+        if parts.len() == 2 {
+            components.reporter = Some(parts[0].trim().to_string());
+            components.page = Some(parts[1].trim().to_string());
+        }
+
+        Ok(components)
+    }
+
+    fn parse_oscola_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        // Example: "Human Rights Act 1998, s 3"
+        let mut components = CitationComponents::new(citation.trim());
+
+        // Extract year if present
+        let words: Vec<&str> = citation.split_whitespace().collect();
+        for word in &words {
+            // Strip common punctuation and try to parse
+            let cleaned_word = word.trim_matches(|c: char| !c.is_numeric());
+            if let Ok(year) = cleaned_word.parse::<i32>() {
+                if (1000..=9999).contains(&year) {
+                    components.year = Some(year);
+                    break;
+                }
+            }
+        }
+
+        Ok(components)
+    }
+
+    fn parse_aglc_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_oscola_statute(citation)
+    }
+
+    fn parse_mcgill_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_statute(citation)
+    }
+
+    fn parse_european_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    fn parse_japanese_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    fn parse_harvard_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_statute(citation)
+    }
+
+    fn parse_apa_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_statute(citation)
+    }
+
+    fn parse_chicago_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        self.parse_bluebook_statute(citation)
+    }
+
+    fn parse_indian_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        Ok(CitationComponents::new(citation.trim()))
+    }
+
+    fn parse_custom_statute(&self, citation: &str) -> Result<CitationComponents, CitationError> {
+        Ok(CitationComponents::new(citation.trim()))
+    }
+}
+
+/// Citation validator for checking citations against style rules.
+#[derive(Debug, Clone)]
+pub struct CitationValidator {
+    style: CitationStyle,
+}
+
+impl CitationValidator {
+    /// Creates a new citation validator for a specific style.
+    pub fn new(style: CitationStyle) -> Self {
+        Self { style }
+    }
+
+    /// Validates a case citation.
+    pub fn validate_case(&self, components: &CitationComponents) -> Result<(), Vec<CitationError>> {
+        let rules = self.get_case_rules();
+        self.validate_with_rules(components, &rules)
+    }
+
+    /// Validates a statute citation.
+    pub fn validate_statute(
+        &self,
+        components: &CitationComponents,
+    ) -> Result<(), Vec<CitationError>> {
+        let rules = self.get_statute_rules();
+        self.validate_with_rules(components, &rules)
+    }
+
+    /// Validates components against a set of rules.
+    fn validate_with_rules(
+        &self,
+        components: &CitationComponents,
+        rules: &[CitationValidationRule],
+    ) -> Result<(), Vec<CitationError>> {
+        let mut errors = Vec::new();
+
+        // Convert year to string once if present
+        let year_str = components.year.map(|y| y.to_string());
+
+        for rule in rules {
+            let value = match rule.field.as_str() {
+                "title" => Some(&components.title),
+                "volume" => components.volume.as_ref(),
+                "reporter" => components.reporter.as_ref(),
+                "page" => components.page.as_ref(),
+                "court" => components.court.as_ref(),
+                "year" => year_str.as_ref(),
+                "jurisdiction" => components.jurisdiction.as_ref(),
+                _ => None,
+            };
+
+            if let Err(e) = rule.validate(value) {
+                errors.push(e);
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Gets validation rules for case citations based on style.
+    fn get_case_rules(&self) -> Vec<CitationValidationRule> {
+        match &self.style {
+            CitationStyle::Bluebook => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::required("volume").with_pattern("numeric"),
+                CitationValidationRule::required("reporter"),
+                CitationValidationRule::required("page"),
+                CitationValidationRule::optional("court"),
+                CitationValidationRule::required("year").with_pattern("year"),
+            ],
+            CitationStyle::OSCOLA => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::required("year").with_pattern("year"),
+                CitationValidationRule::required("reporter"),
+                CitationValidationRule::optional("page"),
+            ],
+            CitationStyle::AGLC => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::required("year").with_pattern("year"),
+                CitationValidationRule::required("reporter"),
+                CitationValidationRule::optional("volume"),
+            ],
+            CitationStyle::McGill => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::required("year").with_pattern("year"),
+                CitationValidationRule::optional("reporter"),
+            ],
+            CitationStyle::Japanese => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::optional("year"),
+            ],
+            CitationStyle::Indian => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::required("year").with_pattern("year"),
+                CitationValidationRule::optional("reporter"),
+                CitationValidationRule::optional("court"),
+            ],
+            _ => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::optional("year"),
+            ],
+        }
+    }
+
+    /// Gets validation rules for statute citations based on style.
+    fn get_statute_rules(&self) -> Vec<CitationValidationRule> {
+        match &self.style {
+            CitationStyle::Bluebook => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::optional("page"), // Section number
+            ],
+            CitationStyle::OSCOLA => vec![
+                CitationValidationRule::required("title"),
+                CitationValidationRule::optional("year").with_pattern("year"),
+            ],
+            _ => vec![CitationValidationRule::required("title")],
+        }
+    }
+}
+
+/// Citation normalizer for converting between citation styles.
+#[derive(Debug, Clone)]
+pub struct CitationNormalizer {
+    formatter: CitationFormatter,
+}
+
+impl CitationNormalizer {
+    /// Creates a new citation normalizer.
+    pub fn new() -> Self {
+        Self {
+            formatter: CitationFormatter::new(CitationStyle::Bluebook, Locale::new("en")),
+        }
+    }
+
+    /// Converts a citation from one style to another.
+    pub fn convert_case(
+        &self,
+        components: &CitationComponents,
+        from_style: CitationStyle,
+        to_style: CitationStyle,
+    ) -> Result<String, CitationError> {
+        // Validate source citation
+        let validator = CitationValidator::new(from_style.clone());
+        if let Err(errors) = validator.validate_case(components) {
+            return Err(CitationError::StyleViolation {
+                style: format!("{}", from_style),
+                reason: format!("{} validation errors", errors.len()),
+            });
+        }
+
+        // Format in target style
+        let mut formatter = CitationFormatter::new(to_style, Locale::new("en"));
+        Ok(formatter.format_case(components))
+    }
+
+    /// Converts a statute citation from one style to another.
+    pub fn convert_statute(
+        &self,
+        components: &CitationComponents,
+        from_style: CitationStyle,
+        to_style: CitationStyle,
+    ) -> Result<String, CitationError> {
+        // Validate source citation
+        let validator = CitationValidator::new(from_style.clone());
+        if let Err(errors) = validator.validate_statute(components) {
+            return Err(CitationError::StyleViolation {
+                style: format!("{}", from_style),
+                reason: format!("{} validation errors", errors.len()),
+            });
+        }
+
+        // Format in target style
+        let mut formatter = CitationFormatter::new(to_style, Locale::new("en"));
+        Ok(formatter.format_statute(components))
+    }
+
+    /// Parses and converts a citation string.
+    pub fn parse_and_convert_case(
+        &self,
+        citation: &str,
+        from_style: CitationStyle,
+        to_style: CitationStyle,
+    ) -> Result<String, CitationError> {
+        let parser = CitationParser::new(from_style.clone());
+        let components = parser.parse_case(citation)?;
+        self.convert_case(&components, from_style, to_style)
+    }
+
+    /// Parses and converts a statute citation string.
+    pub fn parse_and_convert_statute(
+        &self,
+        citation: &str,
+        from_style: CitationStyle,
+        to_style: CitationStyle,
+    ) -> Result<String, CitationError> {
+        let parser = CitationParser::new(from_style.clone());
+        let components = parser.parse_statute(citation)?;
+        self.convert_statute(&components, from_style, to_style)
+    }
+}
+
+impl Default for CitationNormalizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Citation completeness checker.
+#[derive(Debug, Clone)]
+pub struct CitationCompletenessChecker {
+    style: CitationStyle,
+}
+
+impl CitationCompletenessChecker {
+    /// Creates a new completeness checker.
+    pub fn new(style: CitationStyle) -> Self {
+        Self { style }
+    }
+
+    /// Checks completeness of a case citation.
+    pub fn check_case(&self, components: &CitationComponents) -> CompletenessReport {
+        let validator = CitationValidator::new(self.style.clone());
+        let rules = validator.get_case_rules();
+        self.check_against_rules(components, &rules, CitationType::Case)
+    }
+
+    /// Checks completeness of a statute citation.
+    pub fn check_statute(&self, components: &CitationComponents) -> CompletenessReport {
+        let validator = CitationValidator::new(self.style.clone());
+        let rules = validator.get_statute_rules();
+        self.check_against_rules(components, &rules, CitationType::Statute)
+    }
+
+    fn check_against_rules(
+        &self,
+        components: &CitationComponents,
+        rules: &[CitationValidationRule],
+        citation_type: CitationType,
+    ) -> CompletenessReport {
+        let mut missing_required = Vec::new();
+        let mut missing_optional = Vec::new();
+        let mut present = Vec::new();
+
+        for rule in rules {
+            let value = match rule.field.as_str() {
+                "title" => Some(&components.title),
+                "volume" => components.volume.as_ref(),
+                "reporter" => components.reporter.as_ref(),
+                "page" => components.page.as_ref(),
+                "court" => components.court.as_ref(),
+                "year" => components.year.as_ref().map(|_| &components.title), // Dummy ref
+                "jurisdiction" => components.jurisdiction.as_ref(),
+                _ => None,
+            };
+
+            if value.is_none() {
+                if rule.required {
+                    missing_required.push(rule.field.clone());
+                } else {
+                    missing_optional.push(rule.field.clone());
+                }
+            } else {
+                present.push(rule.field.clone());
+            }
+        }
+
+        let total_fields = rules.len();
+        let present_count = present.len();
+        let completeness_score = if total_fields > 0 {
+            (present_count as f64 / total_fields as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        CompletenessReport {
+            citation_type,
+            style: self.style.clone(),
+            completeness_score,
+            missing_required,
+            missing_optional,
+            present,
+        }
+    }
+}
+
+/// Report on citation completeness.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletenessReport {
+    /// Type of citation
+    pub citation_type: CitationType,
+    /// Citation style
+    pub style: CitationStyle,
+    /// Completeness score (0-100%)
+    pub completeness_score: f64,
+    /// Missing required fields
+    pub missing_required: Vec<String>,
+    /// Missing optional fields
+    pub missing_optional: Vec<String>,
+    /// Present fields
+    pub present: Vec<String>,
+}
+
+impl CompletenessReport {
+    /// Checks if citation is complete (all required fields present).
+    pub fn is_complete(&self) -> bool {
+        self.missing_required.is_empty()
+    }
+
+    /// Gets a summary message.
+    pub fn summary(&self) -> String {
+        if self.is_complete() {
+            format!(
+                "Citation is complete ({:.1}% of fields present)",
+                self.completeness_score
+            )
+        } else {
+            format!(
+                "Citation is incomplete: missing {} required field(s): {}",
+                self.missing_required.len(),
+                self.missing_required.join(", ")
+            )
+        }
+    }
+}
+
+/// Citation format suggester.
+#[derive(Debug, Clone)]
+pub struct CitationSuggester {
+    style: CitationStyle,
+}
+
+impl CitationSuggester {
+    /// Creates a new citation suggester.
+    pub fn new(style: CitationStyle) -> Self {
+        Self { style }
+    }
+
+    /// Suggests improvements for a case citation.
+    pub fn suggest_case(&self, components: &CitationComponents) -> Vec<String> {
+        let mut suggestions = Vec::new();
+
+        // Check completeness
+        let checker = CitationCompletenessChecker::new(self.style.clone());
+        let report = checker.check_case(components);
+
+        if !report.is_complete() {
+            for field in &report.missing_required {
+                suggestions.push(format!("Add required field: {}", field));
+            }
+        }
+
+        for field in &report.missing_optional {
+            suggestions.push(format!("Consider adding optional field: {}", field));
+        }
+
+        // Style-specific suggestions
+        match &self.style {
+            CitationStyle::Bluebook => {
+                if components.volume.is_some()
+                    && components.reporter.is_some()
+                    && components.page.is_none()
+                {
+                    suggestions.push("Add page number for Bluebook format".to_string());
+                }
+                if components.year.is_none() {
+                    suggestions.push("Add year in parentheses (Court Year)".to_string());
+                }
+            }
+            CitationStyle::OSCOLA => {
+                if components.year.is_none() {
+                    suggestions.push("Add year in square brackets [Year]".to_string());
+                }
+                if let Some(title) = &components.title.chars().next() {
+                    if title.is_lowercase() {
+                        suggestions.push("Case name should start with capital letter".to_string());
+                    }
+                }
+            }
+            CitationStyle::Japanese => {
+                if components.reporter.is_none() {
+                    suggestions.push(
+                        "Consider adding reporter name (e.g., 最高裁判所民事判例集)".to_string(),
+                    );
+                }
+            }
+            _ => {}
+        }
+
+        // General formatting suggestions
+        if components.title.is_empty() {
+            suggestions.push("Title cannot be empty".to_string());
+        }
+
+        if components.title.len() > 200 {
+            suggestions.push("Title seems unusually long - verify it's correct".to_string());
+        }
+
+        suggestions
+    }
+
+    /// Suggests improvements for a statute citation.
+    pub fn suggest_statute(&self, components: &CitationComponents) -> Vec<String> {
+        let mut suggestions = Vec::new();
+
+        // Check completeness
+        let checker = CitationCompletenessChecker::new(self.style.clone());
+        let report = checker.check_statute(components);
+
+        if !report.is_complete() {
+            for field in &report.missing_required {
+                suggestions.push(format!("Add required field: {}", field));
+            }
+        }
+
+        // Style-specific suggestions
+        match &self.style {
+            CitationStyle::Bluebook => {
+                if components.page.is_none() {
+                    suggestions.push("Consider adding section number (§)".to_string());
+                }
+            }
+            CitationStyle::OSCOLA => {
+                if components.year.is_none() {
+                    suggestions.push("Add year for UK statutes".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        suggestions
+    }
+
+    /// Suggests the best citation style for a jurisdiction.
+    pub fn suggest_style_for_jurisdiction(jurisdiction: &str) -> CitationStyle {
+        CitationFormatter::style_for_jurisdiction(jurisdiction)
+    }
+
+    /// Validates and suggests improvements in one call.
+    pub fn validate_and_suggest_case(&self, components: &CitationComponents) -> ValidationReport {
+        let validator = CitationValidator::new(self.style.clone());
+        let errors = validator
+            .validate_case(components)
+            .err()
+            .unwrap_or_default();
+        let suggestions = self.suggest_case(components);
+        let checker = CitationCompletenessChecker::new(self.style.clone());
+        let completeness = checker.check_case(components);
+
+        ValidationReport {
+            is_valid: errors.is_empty(),
+            errors,
+            suggestions,
+            completeness,
+        }
+    }
+
+    /// Validates and suggests improvements for statute.
+    pub fn validate_and_suggest_statute(
+        &self,
+        components: &CitationComponents,
+    ) -> ValidationReport {
+        let validator = CitationValidator::new(self.style.clone());
+        let errors = validator
+            .validate_statute(components)
+            .err()
+            .unwrap_or_default();
+        let suggestions = self.suggest_statute(components);
+        let checker = CitationCompletenessChecker::new(self.style.clone());
+        let completeness = checker.check_statute(components);
+
+        ValidationReport {
+            is_valid: errors.is_empty(),
+            errors,
+            suggestions,
+            completeness,
+        }
+    }
+}
+
+/// Comprehensive validation report.
+#[derive(Debug, Clone)]
+pub struct ValidationReport {
+    /// Whether citation is valid
+    pub is_valid: bool,
+    /// Validation errors
+    pub errors: Vec<CitationError>,
+    /// Suggestions for improvement
+    pub suggestions: Vec<String>,
+    /// Completeness report
+    pub completeness: CompletenessReport,
+}
+
+impl ValidationReport {
+    /// Gets a human-readable summary.
+    pub fn summary(&self) -> String {
+        let mut lines = Vec::new();
+
+        if self.is_valid {
+            lines.push("✓ Citation is valid".to_string());
+        } else {
+            lines.push(format!("✗ Citation has {} error(s):", self.errors.len()));
+            for error in &self.errors {
+                lines.push(format!("  - {}", error));
+            }
+        }
+
+        lines.push(format!("\n{}", self.completeness.summary()));
+
+        if !self.suggestions.is_empty() {
+            lines.push(format!("\nSuggestions ({}):", self.suggestions.len()));
+            for suggestion in &self.suggestions {
+                lines.push(format!("  • {}", suggestion));
+            }
+        }
+
+        lines.join("\n")
     }
 }
 
@@ -4733,7 +5632,12 @@ impl CalendarConverter {
         // Gregorian to Hijri conversion
         let jd = self.gregorian_to_julian_day(year, month as i32, day as i32);
         let (h_year, h_month, h_day) = self.julian_day_to_islamic(jd);
-        CalendarDate::new(CalendarSystem::Islamic, h_year, h_month as u32, h_day as u32)
+        CalendarDate::new(
+            CalendarSystem::Islamic,
+            h_year,
+            h_month as u32,
+            h_day as u32,
+        )
     }
 
     fn to_hebrew_calendar(&self, year: i32, month: u32, day: u32) -> CalendarDate {
@@ -4776,7 +5680,12 @@ impl CalendarConverter {
     }
 
     /// Converts from Islamic calendar to Gregorian
-    pub fn to_gregorian_from_islamic(&self, h_year: i32, h_month: u32, h_day: u32) -> (i32, u32, u32) {
+    pub fn to_gregorian_from_islamic(
+        &self,
+        h_year: i32,
+        h_month: u32,
+        h_day: u32,
+    ) -> (i32, u32, u32) {
         // Convert Islamic to Julian Day Number
         let jd = self.islamic_to_julian_day(h_year, h_month as i32, h_day as i32);
         // Convert Julian Day to Gregorian
@@ -4820,16 +5729,30 @@ impl CalendarConverter {
             CalendarSystem::Islamic => {
                 // Islamic calendar month names (Arabic)
                 let month_names = [
-                    "Muharram", "Safar", "Rabi' al-awwal", "Rabi' al-thani",
-                    "Jumada al-awwal", "Jumada al-thani", "Rajab", "Sha'ban",
-                    "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"
+                    "Muharram",
+                    "Safar",
+                    "Rabi' al-awwal",
+                    "Rabi' al-thani",
+                    "Jumada al-awwal",
+                    "Jumada al-thani",
+                    "Rajab",
+                    "Sha'ban",
+                    "Ramadan",
+                    "Shawwal",
+                    "Dhu al-Qi'dah",
+                    "Dhu al-Hijjah",
                 ];
                 let month_name = month_names.get((date.month - 1) as usize).unwrap_or(&"");
                 format!("{} {} {} AH", date.day, month_name, date.year)
             }
             CalendarSystem::Hebrew => {
                 // Hebrew year format
-                format!("{} {}, {}", date.day, self.get_hebrew_month_name(date.month), date.year)
+                format!(
+                    "{} {}, {}",
+                    date.day,
+                    self.get_hebrew_month_name(date.month),
+                    date.year
+                )
             }
             CalendarSystem::Persian => {
                 // Persian/Solar Hijri calendar
@@ -4889,12 +5812,12 @@ impl FiscalYearConfig {
     /// Returns common fiscal year configurations for various jurisdictions.
     pub fn for_jurisdiction(jurisdiction: &str) -> Self {
         match jurisdiction {
-            "US" => Self::new("US", 10, 1), // October 1
+            "US" => Self::new("US", 10, 1),       // October 1
             "GB" | "UK" => Self::new("GB", 4, 6), // April 6
-            "JP" => Self::new("JP", 4, 1), // April 1
-            "AU" => Self::new("AU", 7, 1), // July 1
-            "CA" => Self::new("CA", 4, 1), // April 1
-            "IN" => Self::new("IN", 4, 1), // April 1
+            "JP" => Self::new("JP", 4, 1),        // April 1
+            "AU" => Self::new("AU", 7, 1),        // July 1
+            "CA" => Self::new("CA", 4, 1),        // April 1
+            "IN" => Self::new("IN", 4, 1),        // April 1
             "DE" | "FR" | "IT" | "ES" | "NL" | "PT" | "PL" => Self::new(jurisdiction, 1, 1), // January 1
             _ => Self::new(jurisdiction, 1, 1), // Default: calendar year
         }
@@ -4943,7 +5866,11 @@ impl FiscalYearConfig {
         } else {
             // Need to go to previous month
             let prev_month = if next_month > 1 { next_month - 1 } else { 12 };
-            let prev_year = if next_month > 1 { next_year } else { next_year - 1 };
+            let prev_year = if next_month > 1 {
+                next_year
+            } else {
+                next_year - 1
+            };
             let days_in_prev_month = self.days_in_month(prev_year, prev_month);
             (prev_year, prev_month, days_in_prev_month)
         }
@@ -5976,6 +6903,312 @@ impl TranslationMemory {
         }
     }
 
+    /// Calculates Levenshtein distance between two strings.
+    fn levenshtein_distance(&self, text1: &str, text2: &str) -> usize {
+        let len1 = text1.chars().count();
+        let len2 = text2.chars().count();
+
+        if len1 == 0 {
+            return len2;
+        }
+        if len2 == 0 {
+            return len1;
+        }
+
+        let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
+
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..=len1 {
+            matrix[i][0] = i;
+        }
+        for j in 0..=len2 {
+            matrix[0][j] = j;
+        }
+
+        let chars1: Vec<char> = text1.chars().collect();
+        let chars2: Vec<char> = text2.chars().collect();
+
+        for (i, c1) in chars1.iter().enumerate() {
+            for (j, c2) in chars2.iter().enumerate() {
+                let cost = if c1 == c2 { 0 } else { 1 };
+                matrix[i + 1][j + 1] = std::cmp::min(
+                    std::cmp::min(matrix[i][j + 1] + 1, matrix[i + 1][j] + 1),
+                    matrix[i][j] + cost,
+                );
+            }
+        }
+
+        matrix[len1][len2]
+    }
+
+    /// Calculates normalized similarity score using Levenshtein distance (0.0 to 1.0).
+    fn levenshtein_similarity(&self, text1: &str, text2: &str) -> f32 {
+        let distance = self.levenshtein_distance(text1, text2);
+        let max_len = std::cmp::max(text1.chars().count(), text2.chars().count());
+        if max_len == 0 {
+            1.0
+        } else {
+            1.0 - (distance as f32 / max_len as f32)
+        }
+    }
+
+    /// Finds fuzzy matches using enhanced Levenshtein distance scoring.
+    pub fn find_fuzzy_levenshtein(
+        &self,
+        source_text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+        min_similarity: f32,
+    ) -> Vec<(&TranslationMemoryEntry, f32)> {
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.source_locale.tag() == source_locale.tag()
+                    && e.target_locale.tag() == target_locale.tag()
+            })
+            .filter_map(|e| {
+                let similarity = self.levenshtein_similarity(source_text, &e.source_text);
+                if similarity >= min_similarity {
+                    Some((e, similarity))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Finds context-aware translation suggestions.
+    /// Context can be domain-specific (e.g., "contract_law", "criminal_law").
+    pub fn find_with_context(
+        &self,
+        source_text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+        context: Option<&str>,
+        min_similarity: f32,
+    ) -> Vec<(&TranslationMemoryEntry, f32)> {
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.source_locale.tag() == source_locale.tag()
+                    && e.target_locale.tag() == target_locale.tag()
+            })
+            .filter(|e| {
+                if let Some(ctx) = context {
+                    e.metadata.get("context").is_some_and(|c| c == ctx)
+                } else {
+                    true
+                }
+            })
+            .filter_map(|e| {
+                let text_similarity = self.levenshtein_similarity(source_text, &e.source_text);
+                let context_bonus = if context.is_some()
+                    && e.metadata.get("context") == context.map(|s| s.to_string()).as_ref()
+                {
+                    0.1
+                } else {
+                    0.0
+                };
+                let total_similarity = (text_similarity + context_bonus).min(1.0);
+
+                if total_similarity >= min_similarity {
+                    Some((e, total_similarity))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Saves translation memory to a JSON file.
+    pub fn save_to_file(&self, path: &std::path::Path) -> I18nResult<()> {
+        let json =
+            serde_json::to_string_pretty(&self.entries).map_err(|e| I18nError::CacheError {
+                reason: format!("Failed to serialize translation memory: {}", e),
+            })?;
+
+        std::fs::write(path, json).map_err(|e| I18nError::CacheError {
+            reason: format!("Failed to write translation memory file: {}", e),
+        })?;
+
+        Ok(())
+    }
+
+    /// Loads translation memory from a JSON file.
+    pub fn load_from_file(&mut self, path: &std::path::Path) -> I18nResult<()> {
+        let json = std::fs::read_to_string(path).map_err(|e| I18nError::CacheError {
+            reason: format!("Failed to read translation memory file: {}", e),
+        })?;
+
+        let entries: Vec<TranslationMemoryEntry> =
+            serde_json::from_str(&json).map_err(|e| I18nError::CacheError {
+                reason: format!("Failed to deserialize translation memory: {}", e),
+            })?;
+
+        self.clear();
+        for entry in entries {
+            self.add_entry(entry);
+        }
+
+        Ok(())
+    }
+
+    /// Exports translation memory to TMX (Translation Memory eXchange) format.
+    /// TMX is an XML-based industry standard for translation memory interchange.
+    pub fn export_to_tmx(&self, path: &std::path::Path) -> I18nResult<()> {
+        let mut tmx = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        tmx.push_str("<!DOCTYPE tmx SYSTEM \"tmx14.dtd\">\n");
+        tmx.push_str("<tmx version=\"1.4\">\n");
+        tmx.push_str("  <header\n");
+        tmx.push_str("    creationtool=\"legalis-i18n\"\n");
+        tmx.push_str("    creationtoolversion=\"0.1.7\"\n");
+        tmx.push_str("    datatype=\"plaintext\"\n");
+        tmx.push_str("    segtype=\"sentence\"\n");
+        tmx.push_str("    adminlang=\"en\"\n");
+        tmx.push_str("    srclang=\"*all*\"\n");
+        tmx.push_str("    o-tmf=\"legalis\"\n");
+        tmx.push_str("  />\n");
+        tmx.push_str("  <body>\n");
+
+        for entry in &self.entries {
+            tmx.push_str("    <tu>\n");
+
+            // Add metadata as properties
+            if !entry.metadata.is_empty() {
+                for (key, value) in &entry.metadata {
+                    tmx.push_str(&format!(
+                        "      <prop type=\"{}\">{}</prop>\n",
+                        Self::escape_xml(key),
+                        Self::escape_xml(value)
+                    ));
+                }
+            }
+
+            // Add source segment
+            tmx.push_str(&format!(
+                "      <tuv xml:lang=\"{}\">\n",
+                entry.source_locale.tag()
+            ));
+            tmx.push_str(&format!(
+                "        <seg>{}</seg>\n",
+                Self::escape_xml(&entry.source_text)
+            ));
+            tmx.push_str("      </tuv>\n");
+
+            // Add target segment
+            tmx.push_str(&format!(
+                "      <tuv xml:lang=\"{}\">\n",
+                entry.target_locale.tag()
+            ));
+            tmx.push_str(&format!(
+                "        <seg>{}</seg>\n",
+                Self::escape_xml(&entry.target_text)
+            ));
+            tmx.push_str("      </tuv>\n");
+
+            tmx.push_str("    </tu>\n");
+        }
+
+        tmx.push_str("  </body>\n");
+        tmx.push_str("</tmx>\n");
+
+        std::fs::write(path, tmx).map_err(|e| I18nError::CacheError {
+            reason: format!("Failed to write TMX file: {}", e),
+        })?;
+
+        Ok(())
+    }
+
+    /// Imports translation memory from TMX format (simplified parser).
+    /// Note: This is a basic TMX parser that handles simple cases.
+    pub fn import_from_tmx(&mut self, path: &std::path::Path) -> I18nResult<()> {
+        let tmx_content = std::fs::read_to_string(path).map_err(|e| I18nError::CacheError {
+            reason: format!("Failed to read TMX file: {}", e),
+        })?;
+
+        // Simple string-based XML parsing
+        let mut pos = 0;
+        while let Some(tu_start) = tmx_content[pos..].find("<tu>") {
+            let tu_start_abs = pos + tu_start;
+            if let Some(tu_end) = tmx_content[tu_start_abs..].find("</tu>") {
+                let tu_end_abs = tu_start_abs + tu_end + 5;
+                let tu_content = &tmx_content[tu_start_abs..tu_end_abs];
+
+                // Extract all <tuv> elements
+                let mut tuvs = Vec::new();
+                let mut tuv_pos = 0;
+                while let Some(tuv_start) = tu_content[tuv_pos..].find("<tuv") {
+                    let tuv_start_abs = tuv_pos + tuv_start;
+                    if let Some(lang_start) = tu_content[tuv_start_abs..].find("xml:lang=\"") {
+                        let lang_start_abs = tuv_start_abs + lang_start + 10;
+                        if let Some(lang_end) = tu_content[lang_start_abs..].find('"') {
+                            let lang = &tu_content[lang_start_abs..lang_start_abs + lang_end];
+
+                            if let Some(seg_start) = tu_content[lang_start_abs..].find("<seg>") {
+                                let seg_start_abs = lang_start_abs + seg_start + 5;
+                                if let Some(seg_end) = tu_content[seg_start_abs..].find("</seg>") {
+                                    let text = &tu_content[seg_start_abs..seg_start_abs + seg_end];
+                                    tuvs.push((lang.to_string(), Self::unescape_xml(text)));
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(tuv_end) = tu_content[tuv_start_abs..].find("</tuv>") {
+                        tuv_pos = tuv_start_abs + tuv_end + 6;
+                    } else {
+                        break;
+                    }
+                }
+
+                // If we have at least 2 tuvs, create a translation entry
+                if tuvs.len() >= 2 {
+                    if let (Ok(source_locale), Ok(target_locale)) =
+                        (Locale::parse(&tuvs[0].0), Locale::parse(&tuvs[1].0))
+                    {
+                        self.add_translation(
+                            tuvs[0].1.clone(),
+                            source_locale,
+                            tuvs[1].1.clone(),
+                            target_locale,
+                        );
+                    }
+                }
+
+                pos = tu_end_abs;
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Merges another translation memory into this one.
+    pub fn merge(&mut self, other: &TranslationMemory) {
+        for entry in &other.entries {
+            self.add_entry(entry.clone());
+        }
+    }
+
+    /// XML escape helper.
+    fn escape_xml(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&apos;")
+    }
+
+    /// XML unescape helper.
+    fn unescape_xml(text: &str) -> String {
+        text.replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
+    }
+
     /// Gets all entries in the memory.
     pub fn entries(&self) -> &[TranslationMemoryEntry] {
         &self.entries
@@ -5995,6 +7228,527 @@ impl TranslationMemory {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.index.clear();
+    }
+}
+
+/// Screen reader friendly formatter for accessibility.
+/// Generates ARIA labels, semantic markup, and screen reader optimized text.
+#[derive(Debug)]
+pub struct ScreenReaderFormatter {
+    #[allow(dead_code)]
+    locale: Locale,
+}
+
+impl ScreenReaderFormatter {
+    /// Creates a new screen reader formatter.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Generates ARIA label for a legal document section.
+    pub fn aria_label(&self, section_type: &str, title: &str) -> String {
+        match section_type {
+            "article" => format!("Article: {}", title),
+            "section" => format!("Section: {}", title),
+            "chapter" => format!("Chapter: {}", title),
+            "clause" => format!("Clause: {}", title),
+            "paragraph" => format!("Paragraph: {}", title),
+            _ => format!("{}: {}", section_type, title),
+        }
+    }
+
+    /// Formats legal citation for screen readers.
+    pub fn format_citation(&self, citation: &str) -> String {
+        // Expand abbreviations for better screen reader pronunciation
+        let expanded = citation
+            .replace("v.", "versus")
+            .replace("No.", "Number")
+            .replace("§", "Section")
+            .replace("¶", "Paragraph")
+            .replace("U.S.", "United States")
+            .replace("F.2d", "Federal Reporter Second Series")
+            .replace("F.3d", "Federal Reporter Third Series")
+            .replace("S.Ct.", "Supreme Court Reporter");
+
+        format!("Citation: {}", expanded)
+    }
+
+    /// Generates semantic navigation structure.
+    pub fn navigation_structure(&self, sections: &[(&str, &str)]) -> String {
+        let mut nav = String::from("<nav aria-label=\"Document Navigation\">\n");
+        nav.push_str("  <ul>\n");
+
+        for (section_type, title) in sections {
+            nav.push_str(&format!(
+                "    <li><a href=\"#{}\" aria-label=\"{}\">{}</a></li>\n",
+                title.to_lowercase().replace(' ', "-"),
+                self.aria_label(section_type, title),
+                title
+            ));
+        }
+
+        nav.push_str("  </ul>\n");
+        nav.push_str("</nav>\n");
+        nav
+    }
+
+    /// Formats table data for screen readers.
+    pub fn format_table(&self, caption: &str, headers: &[&str], rows: &[Vec<&str>]) -> String {
+        let mut table = format!("<table aria-label=\"{}\">\n", caption);
+        table.push_str(&format!("  <caption>{}</caption>\n", caption));
+        table.push_str("  <thead>\n    <tr>\n");
+
+        for header in headers {
+            table.push_str(&format!("      <th scope=\"col\">{}</th>\n", header));
+        }
+
+        table.push_str("    </tr>\n  </thead>\n  <tbody>\n");
+
+        for row in rows {
+            table.push_str("    <tr>\n");
+            for (i, cell) in row.iter().enumerate() {
+                if i == 0 {
+                    table.push_str(&format!("      <th scope=\"row\">{}</th>\n", cell));
+                } else {
+                    table.push_str(&format!("      <td>{}</td>\n", cell));
+                }
+            }
+            table.push_str("    </tr>\n");
+        }
+
+        table.push_str("  </tbody>\n</table>\n");
+        table
+    }
+}
+
+/// Plain language converter for legal terminology.
+/// Converts complex legal jargon to accessible plain language.
+#[derive(Debug)]
+pub struct PlainLanguageConverter {
+    #[allow(dead_code)]
+    locale: Locale,
+    conversions: HashMap<String, String>,
+}
+
+impl PlainLanguageConverter {
+    /// Creates a new plain language converter.
+    pub fn new(locale: Locale) -> Self {
+        let mut conversions = HashMap::new();
+
+        // English plain language conversions
+        if locale.language == "en" {
+            conversions.insert(
+                "aforementioned".to_string(),
+                "mentioned earlier".to_string(),
+            );
+            conversions.insert("hereinafter".to_string(), "from now on".to_string());
+            conversions.insert("heretofore".to_string(), "until now".to_string());
+            conversions.insert("hereby".to_string(), "by this document".to_string());
+            conversions.insert("whereas".to_string(), "because".to_string());
+            conversions.insert("wherefore".to_string(), "therefore".to_string());
+            conversions.insert("notwithstanding".to_string(), "despite".to_string());
+            conversions.insert("pursuant to".to_string(), "under".to_string());
+            conversions.insert("subsequent to".to_string(), "after".to_string());
+            conversions.insert("prior to".to_string(), "before".to_string());
+            conversions.insert("in the event that".to_string(), "if".to_string());
+            conversions.insert("null and void".to_string(), "invalid".to_string());
+            conversions.insert("force and effect".to_string(), "effect".to_string());
+            conversions.insert("cease and desist".to_string(), "stop".to_string());
+            conversions.insert(
+                "indemnify and hold harmless".to_string(),
+                "protect from liability".to_string(),
+            );
+            conversions.insert("jurisdiction".to_string(), "legal authority".to_string());
+            conversions.insert("litigation".to_string(), "lawsuit".to_string());
+            conversions.insert(
+                "plaintiff".to_string(),
+                "person who filed the lawsuit".to_string(),
+            );
+            conversions.insert("defendant".to_string(), "person being sued".to_string());
+            conversions.insert("tort".to_string(), "civil wrong".to_string());
+        }
+
+        Self {
+            locale,
+            conversions,
+        }
+    }
+
+    /// Converts legal text to plain language.
+    pub fn convert(&self, text: &str) -> String {
+        let mut result = text.to_string();
+
+        // Simple word-by-word replacement (case-insensitive)
+        for (legal_term, plain_term) in &self.conversions {
+            // Split text into words and replace matching terms
+            let words: Vec<&str> = result.split_whitespace().collect();
+            let replaced: Vec<String> = words
+                .iter()
+                .map(|word| {
+                    let clean_word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != ' ');
+                    if clean_word.eq_ignore_ascii_case(legal_term) {
+                        plain_term.clone()
+                    } else {
+                        word.to_string()
+                    }
+                })
+                .collect();
+            result = replaced.join(" ");
+        }
+
+        result
+    }
+
+    /// Adds a custom conversion.
+    pub fn add_conversion(&mut self, legal_term: impl Into<String>, plain_term: impl Into<String>) {
+        self.conversions
+            .insert(legal_term.into(), plain_term.into());
+    }
+
+    /// Gets the plain language alternative for a term.
+    pub fn get_plain_alternative(&self, legal_term: &str) -> Option<&String> {
+        self.conversions.get(legal_term)
+    }
+}
+
+/// Reading level assessor for legal documents.
+/// Calculates readability metrics like Flesch-Kincaid grade level.
+#[derive(Debug)]
+pub struct ReadingLevelAssessor;
+
+impl ReadingLevelAssessor {
+    /// Creates a new reading level assessor.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Calculates Flesch Reading Ease score (0-100).
+    /// Higher scores indicate easier readability.
+    /// 90-100: Very Easy (5th grade)
+    /// 80-90: Easy (6th grade)
+    /// 70-80: Fairly Easy (7th grade)
+    /// 60-70: Standard (8th-9th grade)
+    /// 50-60: Fairly Difficult (10th-12th grade)
+    /// 30-50: Difficult (College)
+    /// 0-30: Very Difficult (College graduate)
+    pub fn flesch_reading_ease(&self, text: &str) -> f32 {
+        let sentences = self.count_sentences(text);
+        let words = self.count_words(text);
+        let syllables = self.count_syllables(text);
+
+        if sentences == 0 || words == 0 {
+            return 0.0;
+        }
+
+        let avg_sentence_length = words as f32 / sentences as f32;
+        let avg_syllables_per_word = syllables as f32 / words as f32;
+
+        206.835 - (1.015 * avg_sentence_length) - (84.6 * avg_syllables_per_word)
+    }
+
+    /// Calculates Flesch-Kincaid Grade Level.
+    /// Returns the U.S. grade level required to understand the text.
+    pub fn flesch_kincaid_grade(&self, text: &str) -> f32 {
+        let sentences = self.count_sentences(text);
+        let words = self.count_words(text);
+        let syllables = self.count_syllables(text);
+
+        if sentences == 0 || words == 0 {
+            return 0.0;
+        }
+
+        let avg_sentence_length = words as f32 / sentences as f32;
+        let avg_syllables_per_word = syllables as f32 / words as f32;
+
+        (0.39 * avg_sentence_length) + (11.8 * avg_syllables_per_word) - 15.59
+    }
+
+    /// Counts sentences in text.
+    fn count_sentences(&self, text: &str) -> usize {
+        text.split(['.', '!', '?'])
+            .filter(|s| !s.trim().is_empty())
+            .count()
+    }
+
+    /// Counts words in text.
+    fn count_words(&self, text: &str) -> usize {
+        text.split_whitespace().count()
+    }
+
+    /// Counts syllables in text (simplified heuristic).
+    fn count_syllables(&self, text: &str) -> usize {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        words
+            .iter()
+            .map(|word| self.count_syllables_in_word(word))
+            .sum()
+    }
+
+    /// Counts syllables in a single word (simplified algorithm).
+    fn count_syllables_in_word(&self, word: &str) -> usize {
+        let word = word.to_lowercase();
+        let word = word.trim_matches(|c: char| !c.is_alphabetic());
+
+        if word.is_empty() {
+            return 0;
+        }
+
+        let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+        let mut count = 0;
+        let mut prev_was_vowel = false;
+
+        for ch in word.chars() {
+            let is_vowel = vowels.contains(&ch);
+            if is_vowel && !prev_was_vowel {
+                count += 1;
+            }
+            prev_was_vowel = is_vowel;
+        }
+
+        // Adjust for silent 'e' at end
+        if word.ends_with('e') && count > 1 {
+            count -= 1;
+        }
+
+        // Ensure at least 1 syllable
+        count.max(1)
+    }
+
+    /// Provides a readability assessment.
+    pub fn assess(&self, text: &str) -> ReadabilityReport {
+        let ease = self.flesch_reading_ease(text);
+        let grade = self.flesch_kincaid_grade(text);
+
+        let difficulty = if ease >= 90.0 {
+            "Very Easy"
+        } else if ease >= 80.0 {
+            "Easy"
+        } else if ease >= 70.0 {
+            "Fairly Easy"
+        } else if ease >= 60.0 {
+            "Standard"
+        } else if ease >= 50.0 {
+            "Fairly Difficult"
+        } else if ease >= 30.0 {
+            "Difficult"
+        } else {
+            "Very Difficult"
+        };
+
+        ReadabilityReport {
+            flesch_reading_ease: ease,
+            flesch_kincaid_grade: grade,
+            difficulty: difficulty.to_string(),
+            word_count: self.count_words(text),
+            sentence_count: self.count_sentences(text),
+            syllable_count: self.count_syllables(text),
+        }
+    }
+}
+
+impl Default for ReadingLevelAssessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Readability assessment report.
+#[derive(Debug, Clone)]
+pub struct ReadabilityReport {
+    /// Flesch Reading Ease score (0-100)
+    pub flesch_reading_ease: f32,
+    /// Flesch-Kincaid Grade Level
+    pub flesch_kincaid_grade: f32,
+    /// Difficulty description
+    pub difficulty: String,
+    /// Total word count
+    pub word_count: usize,
+    /// Total sentence count
+    pub sentence_count: usize,
+    /// Total syllable count
+    pub syllable_count: usize,
+}
+
+/// Braille formatter for visual accessibility.
+/// Supports Grade 1 (uncontracted) and Grade 2 (contracted) Braille.
+#[derive(Debug)]
+pub struct BrailleFormatter {
+    #[allow(dead_code)]
+    grade: BrailleGrade,
+}
+
+/// Braille grade (complexity level).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrailleGrade {
+    /// Grade 1: Uncontracted Braille (letter-for-letter)
+    Grade1,
+    /// Grade 2: Contracted Braille (with abbreviations)
+    Grade2,
+}
+
+impl BrailleFormatter {
+    /// Creates a new Braille formatter.
+    pub fn new(grade: BrailleGrade) -> Self {
+        Self { grade }
+    }
+
+    /// Converts text to Braille Unicode representation.
+    pub fn to_braille(&self, text: &str) -> String {
+        let text = text.to_lowercase();
+        let mut result = String::new();
+
+        for ch in text.chars() {
+            if let Some(braille) = self.char_to_braille(ch) {
+                result.push(braille);
+            } else {
+                result.push(ch); // Keep non-alphabetic as-is
+            }
+        }
+
+        result
+    }
+
+    /// Converts a single character to Braille.
+    fn char_to_braille(&self, ch: char) -> Option<char> {
+        // Unicode Braille Patterns start at U+2800
+        // This is a simplified mapping for Grade 1 Braille
+        let braille_code = match ch {
+            'a' => 0x2801, // ⠁
+            'b' => 0x2803, // ⠃
+            'c' => 0x2809, // ⠉
+            'd' => 0x2819, // ⠙
+            'e' => 0x2811, // ⠑
+            'f' => 0x280B, // ⠋
+            'g' => 0x281B, // ⠛
+            'h' => 0x2813, // ⠓
+            'i' => 0x280A, // ⠊
+            'j' => 0x281A, // ⠚
+            'k' => 0x2805, // ⠅
+            'l' => 0x2807, // ⠇
+            'm' => 0x280D, // ⠍
+            'n' => 0x281D, // ⠝
+            'o' => 0x2815, // ⠕
+            'p' => 0x280F, // ⠏
+            'q' => 0x281F, // ⠟
+            'r' => 0x2817, // ⠗
+            's' => 0x280E, // ⠎
+            't' => 0x281E, // ⠞
+            'u' => 0x2825, // ⠥
+            'v' => 0x2827, // ⠧
+            'w' => 0x283A, // ⠺
+            'x' => 0x282D, // ⠭
+            'y' => 0x283D, // ⠽
+            'z' => 0x2835, // ⠵
+            ' ' => 0x2800, // ⠀ (blank Braille cell)
+            _ => return None,
+        };
+
+        char::from_u32(braille_code)
+    }
+
+    /// Formats legal document section numbers in Braille.
+    pub fn format_section_number(&self, section: &str) -> String {
+        format!("§ {}", self.to_braille(section))
+    }
+}
+
+/// Audio description generator for legal documents.
+/// Generates descriptive text for charts, diagrams, and complex structures.
+#[derive(Debug)]
+pub struct AudioDescriptionGenerator {
+    #[allow(dead_code)]
+    locale: Locale,
+}
+
+impl AudioDescriptionGenerator {
+    /// Creates a new audio description generator.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Generates alt text for a legal diagram.
+    pub fn describe_diagram(&self, diagram_type: &str, elements: &[&str]) -> String {
+        match diagram_type {
+            "flowchart" => {
+                format!(
+                    "Flowchart showing legal process with {} steps: {}",
+                    elements.len(),
+                    elements.join(", then ")
+                )
+            }
+            "hierarchy" => {
+                format!(
+                    "Organizational hierarchy showing {} levels: {}",
+                    elements.len(),
+                    elements.join(", reporting to ")
+                )
+            }
+            "timeline" => {
+                format!(
+                    "Timeline of events with {} milestones: {}",
+                    elements.len(),
+                    elements.join(", followed by ")
+                )
+            }
+            _ => {
+                format!(
+                    "Diagram of type {} with {} elements: {}",
+                    diagram_type,
+                    elements.len(),
+                    elements.join(", ")
+                )
+            }
+        }
+    }
+
+    /// Generates description for a statistical chart.
+    pub fn describe_chart(&self, chart_type: &str, data_points: &[(String, f32)]) -> String {
+        match chart_type {
+            "bar" | "column" => {
+                let mut desc = format!("Bar chart showing {} data points. ", data_points.len());
+                for (label, value) in data_points {
+                    desc.push_str(&format!("{}: {:.1}. ", label, value));
+                }
+                desc
+            }
+            "pie" => {
+                let total: f32 = data_points.iter().map(|(_, v)| v).sum();
+                let mut desc = format!("Pie chart with {} segments. ", data_points.len());
+                for (label, value) in data_points {
+                    let percentage = (value / total) * 100.0;
+                    desc.push_str(&format!("{}: {:.1}%. ", label, percentage));
+                }
+                desc
+            }
+            "line" => {
+                let mut desc = format!(
+                    "Line chart with {} data points showing trend over time. ",
+                    data_points.len()
+                );
+                if data_points.len() >= 2 {
+                    let first = data_points.first().unwrap();
+                    let last = data_points.last().unwrap();
+                    desc.push_str(&format!(
+                        "Starting at {} ({:.1}), ending at {} ({:.1}).",
+                        first.0, first.1, last.0, last.1
+                    ));
+                }
+                desc
+            }
+            _ => format!(
+                "Chart of type {} with {} data points",
+                chart_type,
+                data_points.len()
+            ),
+        }
+    }
+
+    /// Generates description for a table.
+    pub fn describe_table(&self, caption: &str, rows: usize, cols: usize) -> String {
+        format!(
+            "Table titled '{}' with {} rows and {} columns. Use table navigation commands to explore the data.",
+            caption, rows, cols
+        )
     }
 }
 
@@ -6722,7 +8476,13 @@ impl TableOfContents {
     }
 
     /// Adds an entry to the table of contents.
-    pub fn add_entry(&mut self, title: String, page: usize, level: usize, section_number: Option<String>) {
+    pub fn add_entry(
+        &mut self,
+        title: String,
+        page: usize,
+        level: usize,
+        section_number: Option<String>,
+    ) {
         self.entries.push(TocEntry {
             title,
             page,
@@ -6758,9 +8518,15 @@ impl TableOfContents {
             let dots = ".".repeat(50 - entry.title.len() - section.len());
 
             if section.is_empty() {
-                result.push_str(&format!("{}{} {} {}\n", indent, entry.title, dots, entry.page));
+                result.push_str(&format!(
+                    "{}{} {} {}\n",
+                    indent, entry.title, dots, entry.page
+                ));
             } else {
-                result.push_str(&format!("{}{} {} {} {}\n", indent, section, entry.title, dots, entry.page));
+                result.push_str(&format!(
+                    "{}{} {} {} {}\n",
+                    indent, section, entry.title, dots, entry.page
+                ));
             }
         }
 
@@ -6863,7 +8629,9 @@ impl IndexGenerator {
     #[allow(clippy::only_used_in_recursion)]
     fn format_entry(&self, result: &mut String, entry: &IndexEntry, level: usize) {
         let indent = "  ".repeat(level);
-        let pages = entry.pages.iter()
+        let pages = entry
+            .pages
+            .iter()
             .map(|p| p.to_string())
             .collect::<Vec<_>>()
             .join(", ");
@@ -7033,7 +8801,10 @@ impl LegalDomain {
                 dict.add_translation("pollution", "pollution");
                 dict.add_translation("emissions", "emissions");
                 dict.add_translation("sustainability", "sustainability");
-                dict.add_translation("environmental_assessment", "environmental impact assessment");
+                dict.add_translation(
+                    "environmental_assessment",
+                    "environmental impact assessment",
+                );
                 dict.add_translation("climate_change", "climate change");
                 dict.add_translation("carbon_footprint", "carbon footprint");
                 dict.add_translation("renewable_energy", "renewable energy");
@@ -7163,6 +8934,1927 @@ impl LegalDomain {
             }
             _ => {}
         }
+    }
+}
+
+// ============================================================================
+// Regional Variations v0.1.9: State/Province Level and Advanced Features
+// ============================================================================
+
+/// Sub-regional variation (state/province level) information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubRegionalVariation {
+    /// The base locale (country level)
+    pub base_locale: Locale,
+    /// Sub-region code (e.g., "CA" for California, "ON" for Ontario)
+    pub region_code: String,
+    /// Full name of the sub-region
+    pub region_name: String,
+    /// Description of the sub-regional variation
+    pub description: String,
+    /// Key legal differences from federal/national level
+    pub legal_differences: Vec<String>,
+}
+
+impl SubRegionalVariation {
+    /// Creates a new sub-regional variation.
+    pub fn new(
+        base_locale: Locale,
+        region_code: impl Into<String>,
+        region_name: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            base_locale,
+            region_code: region_code.into(),
+            region_name: region_name.into(),
+            description: description.into(),
+            legal_differences: vec![],
+        }
+    }
+
+    /// Adds a legal difference description.
+    pub fn add_legal_difference(mut self, difference: impl Into<String>) -> Self {
+        self.legal_differences.push(difference.into());
+        self
+    }
+}
+
+/// Registry of sub-regional variations (states, provinces, etc.).
+#[derive(Debug, Default)]
+pub struct SubRegionalVariationRegistry {
+    variations: Vec<SubRegionalVariation>,
+}
+
+impl SubRegionalVariationRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default sub-regional variations.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // US States (selected major jurisdictions)
+        let us_locale = Locale::new("en").with_country("US");
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                us_locale.clone(),
+                "CA",
+                "California",
+                "California state law",
+            )
+            .add_legal_difference("Community property state")
+            .add_legal_difference("Strong consumer protection laws (CCPA, CPRA)")
+            .add_legal_difference("California Civil Code and California Penal Code")
+            .add_legal_difference("Proposition 65 environmental regulations"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "NY", "New York", "New York state law")
+                .add_legal_difference("Martin Act for securities regulation")
+                .add_legal_difference("Strong tenant protection laws")
+                .add_legal_difference("New York General Business Law")
+                .add_legal_difference("Unique corporate law provisions"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "TX", "Texas", "Texas state law")
+                .add_legal_difference("Community property state")
+                .add_legal_difference("Texas Business Organizations Code")
+                .add_legal_difference("No state income tax")
+                .add_legal_difference("Homestead protection laws"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "FL", "Florida", "Florida state law")
+                .add_legal_difference("Strong homestead exemption")
+                .add_legal_difference("No state income tax")
+                .add_legal_difference("Unique foreclosure laws")
+                .add_legal_difference("Florida Statutes comprehensive code"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "IL", "Illinois", "Illinois state law")
+                .add_legal_difference("Illinois Compiled Statutes")
+                .add_legal_difference("Unique business entity structures")
+                .add_legal_difference("Cook County court system"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "DE", "Delaware", "Delaware state law")
+                .add_legal_difference("Premier corporate law jurisdiction (DGCL)")
+                .add_legal_difference("Court of Chancery for business disputes")
+                .add_legal_difference("Majority of Fortune 500 incorporated here"),
+        );
+
+        // Canadian Provinces
+        let ca_locale = Locale::new("en").with_country("CA");
+
+        registry.add_variation(
+            SubRegionalVariation::new(ca_locale.clone(), "ON", "Ontario", "Ontario provincial law")
+                .add_legal_difference("Common law province")
+                .add_legal_difference("Business Corporations Act (Ontario)")
+                .add_legal_difference("Ontario Superior Court of Justice")
+                .add_legal_difference("Bilingual legal services in some areas"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                Locale::new("fr").with_country("CA"),
+                "QC",
+                "Québec",
+                "Québec provincial law",
+            )
+            .add_legal_difference("Civil law jurisdiction (only in North America)")
+            .add_legal_difference("Code civil du Québec (Civil Code of Québec)")
+            .add_legal_difference("French language legal system")
+            .add_legal_difference("Notarial system for real estate transactions"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                ca_locale.clone(),
+                "BC",
+                "British Columbia",
+                "British Columbia provincial law",
+            )
+            .add_legal_difference("Common law province")
+            .add_legal_difference("Business Corporations Act (BC)")
+            .add_legal_difference("Land Title and Survey Authority system")
+            .add_legal_difference("Strong indigenous law considerations"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(ca_locale.clone(), "AB", "Alberta", "Alberta provincial law")
+                .add_legal_difference("Common law province")
+                .add_legal_difference("Strong energy law sector")
+                .add_legal_difference("Business Corporations Act (Alberta)")
+                .add_legal_difference("Alberta Court of Queen's Bench"),
+        );
+
+        // Additional US States
+        registry.add_variation(
+            SubRegionalVariation::new(
+                us_locale.clone(),
+                "WA",
+                "Washington",
+                "Washington state law",
+            )
+            .add_legal_difference("Community property state")
+            .add_legal_difference("Strong tech industry regulations")
+            .add_legal_difference("No state income tax"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                us_locale.clone(),
+                "MA",
+                "Massachusetts",
+                "Massachusetts state law",
+            )
+            .add_legal_difference("Strong healthcare regulations")
+            .add_legal_difference("Massachusetts General Laws")
+            .add_legal_difference("Pioneering insurance reform"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                us_locale.clone(),
+                "PA",
+                "Pennsylvania",
+                "Pennsylvania state law",
+            )
+            .add_legal_difference("Pennsylvania Consolidated Statutes")
+            .add_legal_difference("Mixed equitable separate property system")
+            .add_legal_difference("Unique trust law provisions"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "GA", "Georgia", "Georgia state law")
+                .add_legal_difference("Georgia Code")
+                .add_legal_difference("Business-friendly corporate law")
+                .add_legal_difference("Homestead exemption"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                us_locale.clone(),
+                "NC",
+                "North Carolina",
+                "North Carolina state law",
+            )
+            .add_legal_difference("North Carolina General Statutes")
+            .add_legal_difference("Unique business court system")
+            .add_legal_difference("Strong banking law tradition"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "AZ", "Arizona", "Arizona state law")
+                .add_legal_difference("Community property state")
+                .add_legal_difference("Arizona Revised Statutes")
+                .add_legal_difference("Water law specialization"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "NV", "Nevada", "Nevada state law")
+                .add_legal_difference("Community property state")
+                .add_legal_difference("No state income tax")
+                .add_legal_difference("Gaming and entertainment law"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "OH", "Ohio", "Ohio state law")
+                .add_legal_difference("Ohio Revised Code")
+                .add_legal_difference("Strong manufacturing law")
+                .add_legal_difference("Unique probate court system"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "MI", "Michigan", "Michigan state law")
+                .add_legal_difference("Michigan Compiled Laws")
+                .add_legal_difference("No-fault auto insurance")
+                .add_legal_difference("Strong labor law tradition"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(us_locale.clone(), "CO", "Colorado", "Colorado state law")
+                .add_legal_difference("Colorado Revised Statutes")
+                .add_legal_difference("Cannabis law regulations")
+                .add_legal_difference("Water rights priority system"),
+        );
+
+        // Canadian Territories
+        registry.add_variation(
+            SubRegionalVariation::new(ca_locale.clone(), "YT", "Yukon", "Yukon territorial law")
+                .add_legal_difference("Common law territory")
+                .add_legal_difference("Indigenous self-government agreements")
+                .add_legal_difference("Mining law specialization"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                ca_locale.clone(),
+                "NT",
+                "Northwest Territories",
+                "NWT territorial law",
+            )
+            .add_legal_difference("Common law territory")
+            .add_legal_difference("Unique indigenous land claims")
+            .add_legal_difference("Resource extraction regulations"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                ca_locale.clone(),
+                "NU",
+                "Nunavut",
+                "Nunavut territorial law",
+            )
+            .add_legal_difference("Common law territory")
+            .add_legal_difference("Inuit Qaujimajatuqangit integration")
+            .add_legal_difference("Bilingual Inuktitut-English system"),
+        );
+
+        // Asian Countries
+        let in_locale = Locale::new("en").with_country("IN");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                in_locale.clone(),
+                "MH",
+                "Maharashtra",
+                "Maharashtra state law",
+            )
+            .add_legal_difference("Bombay High Court jurisdiction")
+            .add_legal_difference("Strong commercial law center")
+            .add_legal_difference("Maharashtra-specific acts"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                in_locale.clone(),
+                "DL",
+                "Delhi",
+                "Delhi union territory law",
+            )
+            .add_legal_difference("Delhi High Court")
+            .add_legal_difference("National Capital Territory status")
+            .add_legal_difference("Mixed central and state jurisdiction"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(in_locale.clone(), "KA", "Karnataka", "Karnataka state law")
+                .add_legal_difference("Karnataka High Court")
+                .add_legal_difference("Tech industry legal framework")
+                .add_legal_difference("IT Act specialization"),
+        );
+
+        let sg_locale = Locale::new("en").with_country("SG");
+        registry.add_variation(
+            SubRegionalVariation::new(sg_locale.clone(), "SG", "Singapore", "Singapore law")
+                .add_legal_difference("Common law system based on English law")
+                .add_legal_difference("Strong arbitration center")
+                .add_legal_difference("Business-friendly corporate law"),
+        );
+
+        let my_locale = Locale::new("ms").with_country("MY");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                my_locale.clone(),
+                "WP",
+                "Kuala Lumpur",
+                "Federal Territory law",
+            )
+            .add_legal_difference("Federal Court jurisdiction")
+            .add_legal_difference("Mixed common law and Islamic law")
+            .add_legal_difference("Financial services center"),
+        );
+
+        let th_locale = Locale::new("th").with_country("TH");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                th_locale.clone(),
+                "BKK",
+                "Bangkok",
+                "Bangkok metropolitan law",
+            )
+            .add_legal_difference("Central Administrative Court")
+            .add_legal_difference("Civil law system")
+            .add_legal_difference("Foreign Business Act regulations"),
+        );
+
+        let vn_locale = Locale::new("vi").with_country("VN");
+        registry.add_variation(
+            SubRegionalVariation::new(vn_locale.clone(), "HN", "Hanoi", "Hanoi municipal law")
+                .add_legal_difference("Socialist legal system")
+                .add_legal_difference("People's Court jurisdiction")
+                .add_legal_difference("Investment law specialization"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                vn_locale.clone(),
+                "SG",
+                "Ho Chi Minh City",
+                "HCMC municipal law",
+            )
+            .add_legal_difference("Economic hub regulations")
+            .add_legal_difference("Foreign investment zone")
+            .add_legal_difference("Commercial arbitration center"),
+        );
+
+        let id_locale = Locale::new("id").with_country("ID");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                id_locale.clone(),
+                "JK",
+                "Jakarta",
+                "Jakarta special capital region",
+            )
+            .add_legal_difference("Civil law system (Dutch-influenced)")
+            .add_legal_difference("Supreme Court jurisdiction")
+            .add_legal_difference("Investment Coordinating Board center"),
+        );
+
+        // Middle Eastern Countries
+        let ae_locale = Locale::new("ar").with_country("AE");
+        registry.add_variation(
+            SubRegionalVariation::new(ae_locale.clone(), "DU", "Dubai", "Dubai emirate law")
+                .add_legal_difference("DIFC (Dubai International Financial Centre) courts")
+                .add_legal_difference("Free zone regulations")
+                .add_legal_difference("Mixed civil and Sharia law"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                ae_locale.clone(),
+                "AZ",
+                "Abu Dhabi",
+                "Abu Dhabi emirate law",
+            )
+            .add_legal_difference("ADGM (Abu Dhabi Global Market) courts")
+            .add_legal_difference("Strong energy law sector")
+            .add_legal_difference("Commercial arbitration center"),
+        );
+
+        let sa_locale = Locale::new("ar").with_country("SA");
+        registry.add_variation(
+            SubRegionalVariation::new(sa_locale.clone(), "RI", "Riyadh", "Riyadh province law")
+                .add_legal_difference("Sharia law system")
+                .add_legal_difference("Board of Grievances jurisdiction")
+                .add_legal_difference("Capital Markets Authority regulations"),
+        );
+
+        let il_locale = Locale::new("he").with_country("IL");
+        registry.add_variation(
+            SubRegionalVariation::new(il_locale.clone(), "TA", "Tel Aviv", "Tel Aviv district")
+                .add_legal_difference("Mixed common law and civil law")
+                .add_legal_difference("Tel Aviv District Court")
+                .add_legal_difference("Tech startup legal framework"),
+        );
+
+        // Latin American Countries
+        let br_locale = Locale::new("pt").with_country("BR");
+        registry.add_variation(
+            SubRegionalVariation::new(br_locale.clone(), "SP", "São Paulo", "São Paulo state law")
+                .add_legal_difference("Civil law system")
+                .add_legal_difference("Tribunal de Justiça de São Paulo")
+                .add_legal_difference("Strong commercial law"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                br_locale.clone(),
+                "RJ",
+                "Rio de Janeiro",
+                "Rio de Janeiro state law",
+            )
+            .add_legal_difference("Oil and gas law specialization")
+            .add_legal_difference("TJRJ jurisdiction")
+            .add_legal_difference("Environmental law regulations"),
+        );
+
+        let ar_locale = Locale::new("es").with_country("AR");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                ar_locale.clone(),
+                "BA",
+                "Buenos Aires",
+                "Buenos Aires province law",
+            )
+            .add_legal_difference("Civil law system")
+            .add_legal_difference("Código Civil y Comercial")
+            .add_legal_difference("Strong agricultural law"),
+        );
+
+        let mx_locale = Locale::new("es").with_country("MX");
+        registry.add_variation(
+            SubRegionalVariation::new(mx_locale.clone(), "CMX", "Mexico City", "Mexico City law")
+                .add_legal_difference("Federal District jurisdiction")
+                .add_legal_difference("Civil law system")
+                .add_legal_difference("Amparo judicial review"),
+        );
+
+        let cl_locale = Locale::new("es").with_country("CL");
+        registry.add_variation(
+            SubRegionalVariation::new(
+                cl_locale.clone(),
+                "RM",
+                "Santiago",
+                "Santiago metropolitan region",
+            )
+            .add_legal_difference("Civil law system")
+            .add_legal_difference("Corte Suprema jurisdiction")
+            .add_legal_difference("Mining law specialization"),
+        );
+
+        let co_locale = Locale::new("es").with_country("CO");
+        registry.add_variation(
+            SubRegionalVariation::new(co_locale.clone(), "DC", "Bogotá", "Bogotá capital district")
+                .add_legal_difference("Civil law system")
+                .add_legal_difference("Corte Constitucional")
+                .add_legal_difference("Acción de tutela constitutional protection"),
+        );
+
+        // African Countries
+        let za_locale = Locale::new("en").with_country("ZA");
+        registry.add_variation(
+            SubRegionalVariation::new(za_locale.clone(), "GP", "Gauteng", "Gauteng province law")
+                .add_legal_difference("Mixed Roman-Dutch and English law")
+                .add_legal_difference("Constitutional Court seat")
+                .add_legal_difference("Mining and resources law"),
+        );
+
+        registry.add_variation(
+            SubRegionalVariation::new(
+                za_locale.clone(),
+                "WC",
+                "Western Cape",
+                "Western Cape province law",
+            )
+            .add_legal_difference("Cape High Court jurisdiction")
+            .add_legal_difference("Wine industry regulations")
+            .add_legal_difference("Tourism law specialization"),
+        );
+
+        let ng_locale = Locale::new("en").with_country("NG");
+        registry.add_variation(
+            SubRegionalVariation::new(ng_locale.clone(), "LA", "Lagos", "Lagos state law")
+                .add_legal_difference("Common law system")
+                .add_legal_difference("Commercial law center")
+                .add_legal_difference("Lagos State High Court"),
+        );
+
+        let eg_locale = Locale::new("ar").with_country("EG");
+        registry.add_variation(
+            SubRegionalVariation::new(eg_locale.clone(), "C", "Cairo", "Cairo governorate law")
+                .add_legal_difference("Civil law system (French-influenced)")
+                .add_legal_difference("Mixed Sharia and civil law")
+                .add_legal_difference("Court of Cassation jurisdiction"),
+        );
+
+        let ke_locale = Locale::new("en").with_country("KE");
+        registry.add_variation(
+            SubRegionalVariation::new(ke_locale.clone(), "NBO", "Nairobi", "Nairobi county law")
+                .add_legal_difference("Common law system")
+                .add_legal_difference("Commercial and Admiralty Division")
+                .add_legal_difference("East African Court of Justice"),
+        );
+
+        registry
+    }
+
+    /// Adds a sub-regional variation to the registry.
+    pub fn add_variation(&mut self, variation: SubRegionalVariation) {
+        self.variations.push(variation);
+    }
+
+    /// Gets all sub-regional variations for a country.
+    pub fn get_variations_for_country(&self, country_code: &str) -> Vec<&SubRegionalVariation> {
+        self.variations
+            .iter()
+            .filter(|v| {
+                v.base_locale
+                    .country
+                    .as_ref()
+                    .map(|c| c == country_code)
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    /// Finds a specific sub-regional variation.
+    pub fn find_variation(
+        &self,
+        country_code: &str,
+        region_code: &str,
+    ) -> Option<&SubRegionalVariation> {
+        self.variations.iter().find(|v| {
+            v.base_locale
+                .country
+                .as_ref()
+                .map(|c| c == country_code)
+                .unwrap_or(false)
+                && v.region_code == region_code
+        })
+    }
+}
+
+/// EU member state variation information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EUMemberStateVariation {
+    /// Member state locale
+    pub member_state_locale: Locale,
+    /// Country name
+    pub country_name: String,
+    /// EU accession date (year)
+    pub accession_year: u32,
+    /// Legal system type
+    pub legal_system: String,
+    /// Key EU law adaptations
+    pub eu_adaptations: Vec<String>,
+    /// National legal specialties
+    pub specialties: Vec<String>,
+}
+
+impl EUMemberStateVariation {
+    /// Creates a new EU member state variation.
+    pub fn new(
+        member_state_locale: Locale,
+        country_name: impl Into<String>,
+        accession_year: u32,
+        legal_system: impl Into<String>,
+    ) -> Self {
+        Self {
+            member_state_locale,
+            country_name: country_name.into(),
+            accession_year,
+            legal_system: legal_system.into(),
+            eu_adaptations: vec![],
+            specialties: vec![],
+        }
+    }
+
+    /// Adds an EU law adaptation description.
+    pub fn add_eu_adaptation(mut self, adaptation: impl Into<String>) -> Self {
+        self.eu_adaptations.push(adaptation.into());
+        self
+    }
+
+    /// Adds a national legal specialty.
+    pub fn add_specialty(mut self, specialty: impl Into<String>) -> Self {
+        self.specialties.push(specialty.into());
+        self
+    }
+}
+
+/// Registry of EU member state variations.
+#[derive(Debug, Default)]
+pub struct EUMemberStateRegistry {
+    variations: Vec<EUMemberStateVariation>,
+}
+
+impl EUMemberStateRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default EU member state variations.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Germany
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("de").with_country("DE"),
+                "Germany",
+                1958,
+                "Civil law (German legal tradition)",
+            )
+            .add_eu_adaptation("GDPR implementation with national data protection law (BDSG)")
+            .add_eu_adaptation("EU Directives transposed into German law")
+            .add_specialty("Strong corporate governance (Mitbestimmung)")
+            .add_specialty("Federal Constitutional Court (Bundesverfassungsgericht)"),
+        );
+
+        // France
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("fr").with_country("FR"),
+                "France",
+                1958,
+                "Civil law (French legal tradition - Napoleonic Code)",
+            )
+            .add_eu_adaptation("GDPR through French Data Protection Act")
+            .add_eu_adaptation("EU competition law integrated into Code de commerce")
+            .add_specialty("Administrative law (droit administratif)")
+            .add_specialty("Conseil d'État for administrative disputes"),
+        );
+
+        // Spain
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("es").with_country("ES"),
+                "Spain",
+                1986,
+                "Civil law (Spanish legal tradition)",
+            )
+            .add_eu_adaptation("GDPR through Organic Law 3/2018")
+            .add_eu_adaptation("Regional autonomy laws (Catalonia, Basque Country)")
+            .add_specialty("Constitutional Court (Tribunal Constitucional)")
+            .add_specialty("Regional legal variations"),
+        );
+
+        // Italy
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("it").with_country("IT"),
+                "Italy",
+                1958,
+                "Civil law (Italian legal tradition)",
+            )
+            .add_eu_adaptation("GDPR implemented through Legislative Decree 101/2018")
+            .add_eu_adaptation("EU directives via legislative decrees")
+            .add_specialty("Constitutional Court (Corte Costituzionale)")
+            .add_specialty("Strong labor law protections"),
+        );
+
+        // Netherlands
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("nl").with_country("NL"),
+                "Netherlands",
+                1958,
+                "Civil law (Dutch legal tradition)",
+            )
+            .add_eu_adaptation("GDPR through Dutch Implementation Act (UAVG)")
+            .add_eu_adaptation("EU law direct effect recognized")
+            .add_specialty("International arbitration hub (The Hague)")
+            .add_specialty("Strong commercial law tradition"),
+        );
+
+        // Poland
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("pl").with_country("PL"),
+                "Poland",
+                2004,
+                "Civil law (Polish legal tradition)",
+            )
+            .add_eu_adaptation("GDPR through Personal Data Protection Act")
+            .add_eu_adaptation("EU structural funds legal framework")
+            .add_specialty("Constitutional Tribunal (Trybunał Konstytucyjny)")
+            .add_specialty("Post-communist legal reforms"),
+        );
+
+        // Sweden
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("sv").with_country("SE"),
+                "Sweden",
+                1995,
+                "Civil law (Nordic legal tradition)",
+            )
+            .add_eu_adaptation("GDPR through Swedish Data Protection Act")
+            .add_eu_adaptation("Maintained non-Euro currency (SEK)")
+            .add_specialty("Strong transparency laws (Offentlighetsprincipen)")
+            .add_specialty("Ombudsman system"),
+        );
+
+        // Ireland
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("en").with_country("IE"),
+                "Ireland",
+                1973,
+                "Common law (Irish legal tradition)",
+            )
+            .add_eu_adaptation("GDPR enforced by Data Protection Commission")
+            .add_eu_adaptation("EU tech hub with regulatory enforcement")
+            .add_specialty("Common law in EU context")
+            .add_specialty("Strong tech regulation enforcement"),
+        );
+
+        // Belgium
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("fr").with_country("BE"),
+                "Belgium",
+                1958,
+                "Civil law (Belgian legal tradition)",
+            )
+            .add_eu_adaptation("GDPR through Belgian Data Protection Authority")
+            .add_eu_adaptation("EU institutions headquarters")
+            .add_specialty("Multilingual legal system (French, Dutch, German)")
+            .add_specialty("Federal and regional court systems"),
+        );
+
+        // Austria
+        registry.add_variation(
+            EUMemberStateVariation::new(
+                Locale::new("de").with_country("AT"),
+                "Austria",
+                1995,
+                "Civil law (Austrian legal tradition - ABGB)",
+            )
+            .add_eu_adaptation("GDPR through Austrian Data Protection Act (DSG)")
+            .add_eu_adaptation("EU neutrality adaptations")
+            .add_specialty("Austrian Civil Code (ABGB) from 1811")
+            .add_specialty("Strong constitutional court"),
+        );
+
+        registry
+    }
+
+    /// Adds a member state variation to the registry.
+    pub fn add_variation(&mut self, variation: EUMemberStateVariation) {
+        self.variations.push(variation);
+    }
+
+    /// Gets all member state variations.
+    pub fn get_all_variations(&self) -> &[EUMemberStateVariation] {
+        &self.variations
+    }
+
+    /// Finds a specific member state variation.
+    pub fn find_variation(&self, country_code: &str) -> Option<&EUMemberStateVariation> {
+        self.variations.iter().find(|v| {
+            v.member_state_locale
+                .country
+                .as_ref()
+                .map(|c| c == country_code)
+                .unwrap_or(false)
+        })
+    }
+}
+
+/// Dialect-aware terminology for regional language variations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DialectTerminology {
+    /// Base locale
+    pub base_locale: Locale,
+    /// Dialect name
+    pub dialect_name: String,
+    /// Terminology mappings (standard term -> dialect term)
+    pub terminology: IndexMap<String, String>,
+}
+
+impl DialectTerminology {
+    /// Creates a new dialect terminology.
+    pub fn new(base_locale: Locale, dialect_name: impl Into<String>) -> Self {
+        Self {
+            base_locale,
+            dialect_name: dialect_name.into(),
+            terminology: IndexMap::new(),
+        }
+    }
+
+    /// Adds a term mapping.
+    pub fn add_term(&mut self, standard_term: impl Into<String>, dialect_term: impl Into<String>) {
+        self.terminology
+            .insert(standard_term.into(), dialect_term.into());
+    }
+
+    /// Translates a standard term to dialect.
+    pub fn to_dialect(&self, standard_term: &str) -> Option<&str> {
+        self.terminology.get(standard_term).map(|s| s.as_str())
+    }
+
+    /// Translates from dialect to standard term.
+    pub fn from_dialect(&self, dialect_term: &str) -> Option<&str> {
+        self.terminology
+            .iter()
+            .find(|(_, v)| v.as_str() == dialect_term)
+            .map(|(k, _)| k.as_str())
+    }
+}
+
+/// Registry of dialect terminologies.
+#[derive(Debug, Default)]
+pub struct DialectTerminologyRegistry {
+    dialects: Vec<DialectTerminology>,
+}
+
+impl DialectTerminologyRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default dialect terminologies.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Scottish legal terminology (en-GB-scotland dialect)
+        let mut scottish =
+            DialectTerminology::new(Locale::new("en").with_country("GB"), "Scottish Legal");
+        scottish.add_term("lawyer", "advocate");
+        scottish.add_term("notary_public", "notary public and conveyancer");
+        scottish.add_term("real_estate", "heritable property");
+        scottish.add_term("personal_property", "moveable property");
+        scottish.add_term("mortgage", "standard security");
+        scottish.add_term("will", "testament");
+        scottish.add_term("plaintiff", "pursuer");
+        scottish.add_term("defendant", "defender");
+        registry.add_dialect(scottish);
+
+        // Louisiana legal terminology (en-US-LA dialect - civil law influence)
+        let mut louisiana =
+            DialectTerminology::new(Locale::new("en").with_country("US"), "Louisiana Legal");
+        louisiana.add_term("county", "parish");
+        louisiana.add_term("real_estate", "immovable property");
+        louisiana.add_term("personal_property", "movable property");
+        louisiana.add_term("common_law", "civil law");
+        louisiana.add_term("deed", "act of sale");
+        louisiana.add_term("will", "testament");
+        registry.add_dialect(louisiana);
+
+        // Quebec legal terminology (fr-CA-QC dialect)
+        let mut quebec =
+            DialectTerminology::new(Locale::new("fr").with_country("CA"), "Québec Legal");
+        quebec.add_term("avocat", "avocat(e)");
+        quebec.add_term("notaire", "notaire");
+        quebec.add_term("jurisprudence", "jurisprudence québécoise");
+        quebec.add_term("code_civil", "Code civil du Québec");
+        registry.add_dialect(quebec);
+
+        // Hong Kong legal terminology (en-HK dialect - common law with Chinese influence)
+        let mut hong_kong =
+            DialectTerminology::new(Locale::new("en").with_country("HK"), "Hong Kong Legal");
+        hong_kong.add_term("lawyer", "solicitor or barrister");
+        hong_kong.add_term("attorney", "solicitor");
+        hong_kong.add_term("court", "Court of Final Appeal / High Court");
+        hong_kong.add_term("basic_law", "Basic Law");
+        registry.add_dialect(hong_kong);
+
+        // Australian legal terminology variations
+        let mut australian =
+            DialectTerminology::new(Locale::new("en").with_country("AU"), "Australian Legal");
+        australian.add_term("lawyer", "solicitor or barrister");
+        australian.add_term("attorney", "solicitor");
+        australian.add_term("corporation", "company (Pty Ltd)");
+        australian.add_term(
+            "supreme_court",
+            "High Court of Australia (federal) / State Supreme Courts",
+        );
+        registry.add_dialect(australian);
+
+        registry
+    }
+
+    /// Adds a dialect to the registry.
+    pub fn add_dialect(&mut self, dialect: DialectTerminology) {
+        self.dialects.push(dialect);
+    }
+
+    /// Finds a dialect by name and locale.
+    pub fn find_dialect(&self, locale: &Locale, dialect_name: &str) -> Option<&DialectTerminology> {
+        self.dialects.iter().find(|d| {
+            d.base_locale.language == locale.language
+                && d.base_locale.country == locale.country
+                && d.dialect_name == dialect_name
+        })
+    }
+
+    /// Gets all dialects for a locale.
+    pub fn get_dialects_for_locale(&self, locale: &Locale) -> Vec<&DialectTerminology> {
+        self.dialects
+            .iter()
+            .filter(|d| {
+                d.base_locale.language == locale.language && d.base_locale.country == locale.country
+            })
+            .collect()
+    }
+}
+
+/// Regional legal concept mapper for cross-jurisdictional equivalence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionalConceptMapping {
+    /// Source concept
+    pub source_concept: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target concept
+    pub target_concept: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Similarity score (0.0 to 1.0)
+    pub similarity: f64,
+    /// Notes on differences
+    pub notes: Vec<String>,
+}
+
+impl RegionalConceptMapping {
+    /// Creates a new regional concept mapping.
+    pub fn new(
+        source_concept: impl Into<String>,
+        source_jurisdiction: impl Into<String>,
+        target_concept: impl Into<String>,
+        target_jurisdiction: impl Into<String>,
+        similarity: f64,
+    ) -> Self {
+        Self {
+            source_concept: source_concept.into(),
+            source_jurisdiction: source_jurisdiction.into(),
+            target_concept: target_concept.into(),
+            target_jurisdiction: target_jurisdiction.into(),
+            similarity: similarity.clamp(0.0, 1.0),
+            notes: vec![],
+        }
+    }
+
+    /// Adds a note about differences.
+    pub fn add_note(mut self, note: impl Into<String>) -> Self {
+        self.notes.push(note.into());
+        self
+    }
+}
+
+/// Registry of regional legal concept mappings.
+#[derive(Debug, Default)]
+pub struct RegionalConceptMapper {
+    mappings: Vec<RegionalConceptMapping>,
+}
+
+impl RegionalConceptMapper {
+    /// Creates a new mapper.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a mapper with default concept mappings.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_defaults() -> Self {
+        let mut mapper = Self::new();
+
+        // Common law vs. Civil law concept mappings
+        mapper.add_mapping(
+            RegionalConceptMapping::new("trust", "GB", "fiducie", "FR", 0.7)
+                .add_note("Trust is equity concept; fiducie is civil law approximation")
+                .add_note("French law adopted trust-like concept in 2007"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("equity", "GB", "fairness principles", "DE", 0.5)
+                .add_note("Equity is distinct common law system; German law integrates fairness")
+                .add_note("No separate equity courts in German civil law"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("consideration", "US", "cause", "FR", 0.8)
+                .add_note("Both are contract formation requirements")
+                .add_note("Consideration focuses on exchange; cause on purpose"),
+        );
+
+        // Corporate law concepts
+        mapper.add_mapping(
+            RegionalConceptMapping::new("LLC", "US", "GmbH", "DE", 0.9)
+                .add_note("Both are limited liability companies")
+                .add_note("Similar structure and liability protection"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("corporation", "US", "kabushiki kaisha", "JP", 0.85)
+                .add_note("Both are stock corporations with shareholders")
+                .add_note("Different governance structures (board vs. statutory auditors)"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("partnership", "GB", "société en nom collectif", "FR", 0.9)
+                .add_note("Both are general partnerships with unlimited liability")
+                .add_note("Similar legal structure across jurisdictions"),
+        );
+
+        // Property law concepts
+        mapper.add_mapping(
+            RegionalConceptMapping::new("fee_simple", "US", "propriété", "FR", 0.8)
+                .add_note("Both represent full ownership")
+                .add_note("Fee simple is common law; propriété is civil law"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("easement", "GB", "servitude", "FR", 0.95)
+                .add_note("Nearly identical concepts across common law and civil law")
+                .add_note("Right to use another's property for specific purpose"),
+        );
+
+        // Criminal law concepts
+        mapper.add_mapping(
+            RegionalConceptMapping::new("felony", "US", "crime", "FR", 0.7)
+                .add_note("Felony is serious crime in US; crime is general category in France")
+                .add_note("France uses crime/délit/contravention classification"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("misdemeanor", "US", "délit", "FR", 0.75)
+                .add_note("Both are mid-level criminal offenses")
+                .add_note("Different sentencing ranges"),
+        );
+
+        // Procedural concepts
+        mapper.add_mapping(
+            RegionalConceptMapping::new("discovery", "US", "disclosure", "GB", 0.95)
+                .add_note("Nearly identical pre-trial evidence exchange")
+                .add_note("US discovery is broader than UK disclosure"),
+        );
+
+        mapper.add_mapping(
+            RegionalConceptMapping::new("summary_judgment", "US", "référé", "FR", 0.6)
+                .add_note("Both are expedited procedures")
+                .add_note("Different standards and procedures"),
+        );
+
+        mapper
+    }
+
+    /// Adds a concept mapping to the registry.
+    pub fn add_mapping(&mut self, mapping: RegionalConceptMapping) {
+        self.mappings.push(mapping);
+    }
+
+    /// Finds concept mappings from source to target jurisdiction.
+    pub fn find_mappings(
+        &self,
+        source_concept: &str,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+    ) -> Vec<&RegionalConceptMapping> {
+        self.mappings
+            .iter()
+            .filter(|m| {
+                m.source_concept == source_concept
+                    && m.source_jurisdiction == source_jurisdiction
+                    && m.target_jurisdiction == target_jurisdiction
+            })
+            .collect()
+    }
+
+    /// Finds all mappings for a concept across all jurisdictions.
+    pub fn find_all_mappings_for_concept(&self, concept: &str) -> Vec<&RegionalConceptMapping> {
+        self.mappings
+            .iter()
+            .filter(|m| m.source_concept == concept || m.target_concept == concept)
+            .collect()
+    }
+}
+
+/// Cross-regional term equivalence for legal terminology.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TermEquivalence {
+    /// Base term
+    pub base_term: String,
+    /// Base jurisdiction
+    pub base_jurisdiction: String,
+    /// Equivalent terms in other jurisdictions
+    pub equivalents: IndexMap<String, EquivalentTerm>,
+}
+
+/// Equivalent term in another jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquivalentTerm {
+    /// Equivalent term text
+    pub term: String,
+    /// Equivalence level (exact, approximate, loose)
+    pub equivalence_level: EquivalenceLevel,
+    /// Usage notes
+    pub notes: Vec<String>,
+}
+
+/// Level of equivalence between terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EquivalenceLevel {
+    /// Exact equivalence (same legal meaning)
+    Exact,
+    /// Approximate equivalence (similar but with differences)
+    Approximate,
+    /// Loose equivalence (related concept)
+    Loose,
+    /// No direct equivalent (concept doesn't exist)
+    NoEquivalent,
+}
+
+impl TermEquivalence {
+    /// Creates a new term equivalence.
+    pub fn new(base_term: impl Into<String>, base_jurisdiction: impl Into<String>) -> Self {
+        Self {
+            base_term: base_term.into(),
+            base_jurisdiction: base_jurisdiction.into(),
+            equivalents: IndexMap::new(),
+        }
+    }
+
+    /// Adds an equivalent term.
+    pub fn add_equivalent(
+        mut self,
+        jurisdiction: impl Into<String>,
+        term: impl Into<String>,
+        level: EquivalenceLevel,
+    ) -> Self {
+        self.equivalents.insert(
+            jurisdiction.into(),
+            EquivalentTerm {
+                term: term.into(),
+                equivalence_level: level,
+                notes: vec![],
+            },
+        );
+        self
+    }
+
+    /// Adds a note to an equivalent term.
+    pub fn add_note_to_equivalent(mut self, jurisdiction: &str, note: impl Into<String>) -> Self {
+        if let Some(equiv) = self.equivalents.get_mut(jurisdiction) {
+            equiv.notes.push(note.into());
+        }
+        self
+    }
+
+    /// Gets equivalent term for a jurisdiction.
+    pub fn get_equivalent(&self, jurisdiction: &str) -> Option<&EquivalentTerm> {
+        self.equivalents.get(jurisdiction)
+    }
+}
+
+/// Registry of cross-regional term equivalences.
+#[derive(Debug, Default)]
+pub struct CrossRegionalTermEquivalenceRegistry {
+    equivalences: Vec<TermEquivalence>,
+}
+
+impl CrossRegionalTermEquivalenceRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default term equivalences.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Attorney/Lawyer equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("attorney", "US")
+                .add_equivalent("GB", "solicitor", EquivalenceLevel::Approximate)
+                .add_equivalent("FR", "avocat", EquivalenceLevel::Exact)
+                .add_equivalent("DE", "Rechtsanwalt", EquivalenceLevel::Exact)
+                .add_equivalent("JP", "bengoshi", EquivalenceLevel::Exact)
+                .add_note_to_equivalent("GB", "UK distinguishes solicitors and barristers"),
+        );
+
+        // Corporation equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("corporation", "US")
+                .add_equivalent("GB", "limited company", EquivalenceLevel::Approximate)
+                .add_equivalent("FR", "société anonyme", EquivalenceLevel::Approximate)
+                .add_equivalent("DE", "Aktiengesellschaft", EquivalenceLevel::Exact)
+                .add_equivalent("JP", "kabushiki kaisha", EquivalenceLevel::Exact)
+                .add_note_to_equivalent("FR", "SA is public company; SARL is private")
+                .add_note_to_equivalent("DE", "AG is stock corporation"),
+        );
+
+        // Contract equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("contract", "US")
+                .add_equivalent("GB", "contract", EquivalenceLevel::Exact)
+                .add_equivalent("FR", "contrat", EquivalenceLevel::Exact)
+                .add_equivalent("DE", "Vertrag", EquivalenceLevel::Exact)
+                .add_equivalent("JP", "keiyaku", EquivalenceLevel::Exact),
+        );
+
+        // Tort equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("tort", "US")
+                .add_equivalent("GB", "tort", EquivalenceLevel::Exact)
+                .add_equivalent(
+                    "FR",
+                    "responsabilité civile délictuelle",
+                    EquivalenceLevel::Approximate,
+                )
+                .add_equivalent("DE", "unerlaubte Handlung", EquivalenceLevel::Approximate)
+                .add_equivalent("JP", "fuhōkōi", EquivalenceLevel::Approximate)
+                .add_note_to_equivalent("FR", "Civil law tort concept differs from common law")
+                .add_note_to_equivalent("DE", "Part of BGB obligations law"),
+        );
+
+        // Trust equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("trust", "GB")
+                .add_equivalent("US", "trust", EquivalenceLevel::Exact)
+                .add_equivalent("FR", "fiducie", EquivalenceLevel::Approximate)
+                .add_equivalent("DE", "Treuhand", EquivalenceLevel::Loose)
+                .add_equivalent("JP", "shintaku", EquivalenceLevel::Approximate)
+                .add_note_to_equivalent("FR", "Introduced in 2007, not traditional civil law")
+                .add_note_to_equivalent("DE", "Not a true trust, more like agency")
+                .add_note_to_equivalent("JP", "Modern adoption of trust concept"),
+        );
+
+        // Due process equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("due_process", "US")
+                .add_equivalent("GB", "natural justice", EquivalenceLevel::Approximate)
+                .add_equivalent("FR", "droits de la défense", EquivalenceLevel::Approximate)
+                .add_equivalent("DE", "rechtliches Gehör", EquivalenceLevel::Approximate)
+                .add_equivalent("JP", "tekisei tetsuzuki", EquivalenceLevel::Exact)
+                .add_note_to_equivalent("GB", "Natural justice is broader concept")
+                .add_note_to_equivalent("FR", "Rights of defense in French law")
+                .add_note_to_equivalent("DE", "Right to be heard in German law"),
+        );
+
+        // Plaintiff/Claimant equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("plaintiff", "US")
+                .add_equivalent("GB", "claimant", EquivalenceLevel::Exact)
+                .add_equivalent("FR", "demandeur", EquivalenceLevel::Exact)
+                .add_equivalent("DE", "Kläger", EquivalenceLevel::Exact)
+                .add_equivalent("JP", "genkoku", EquivalenceLevel::Exact),
+        );
+
+        // Statute of limitations equivalents
+        registry.add_equivalence(
+            TermEquivalence::new("statute_of_limitations", "US")
+                .add_equivalent("GB", "limitation period", EquivalenceLevel::Exact)
+                .add_equivalent("FR", "prescription", EquivalenceLevel::Exact)
+                .add_equivalent("DE", "Verjährung", EquivalenceLevel::Exact)
+                .add_equivalent("JP", "shōmetsu jikō", EquivalenceLevel::Exact),
+        );
+
+        registry
+    }
+
+    /// Adds a term equivalence to the registry.
+    pub fn add_equivalence(&mut self, equivalence: TermEquivalence) {
+        self.equivalences.push(equivalence);
+    }
+
+    /// Finds term equivalence.
+    pub fn find_equivalence(
+        &self,
+        term: &str,
+        base_jurisdiction: &str,
+    ) -> Option<&TermEquivalence> {
+        self.equivalences
+            .iter()
+            .find(|e| e.base_term == term && e.base_jurisdiction == base_jurisdiction)
+    }
+
+    /// Gets equivalent term in target jurisdiction.
+    pub fn get_equivalent_term(
+        &self,
+        term: &str,
+        base_jurisdiction: &str,
+        target_jurisdiction: &str,
+    ) -> Option<&EquivalentTerm> {
+        self.find_equivalence(term, base_jurisdiction)
+            .and_then(|e| e.get_equivalent(target_jurisdiction))
+    }
+}
+
+// ============================================================================
+// Legal Document Templates v0.2.0: Document Generation System
+// ============================================================================
+
+/// Type of template variable for validation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VariableType {
+    /// Text string
+    Text,
+    /// Date value
+    Date,
+    /// Numeric value
+    Number,
+    /// Currency amount
+    Currency,
+    /// Boolean value
+    Boolean,
+    /// Email address
+    Email,
+    /// Address
+    Address,
+    /// Person name
+    PersonName,
+    /// List of values
+    List,
+}
+
+/// Template variable with type validation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateVariable {
+    /// Variable name (e.g., "party_name", "effective_date")
+    pub name: String,
+    /// Variable type for validation
+    pub var_type: VariableType,
+    /// Whether this variable is required
+    pub required: bool,
+    /// Description of the variable
+    pub description: String,
+    /// Default value (if any)
+    pub default_value: Option<String>,
+}
+
+impl TemplateVariable {
+    /// Creates a new template variable.
+    pub fn new(
+        name: impl Into<String>,
+        var_type: VariableType,
+        required: bool,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            var_type,
+            required,
+            description: description.into(),
+            default_value: None,
+        }
+    }
+
+    /// Sets a default value for the variable.
+    pub fn with_default(mut self, default: impl Into<String>) -> Self {
+        self.default_value = Some(default.into());
+        self
+    }
+
+    /// Validates a value against this variable's type.
+    pub fn validate(&self, value: &str) -> bool {
+        if value.is_empty() {
+            return !self.required;
+        }
+
+        match self.var_type {
+            VariableType::Text | VariableType::Address | VariableType::PersonName => true,
+            VariableType::Number => value.parse::<f64>().is_ok(),
+            VariableType::Currency => value.parse::<f64>().is_ok(),
+            VariableType::Boolean => {
+                matches!(
+                    value.to_lowercase().as_str(),
+                    "true" | "false" | "yes" | "no"
+                )
+            }
+            VariableType::Email => value.contains('@'),
+            VariableType::Date => {
+                // Simple date validation (accepts various formats)
+                value.contains('-') || value.contains('/')
+            }
+            VariableType::List => true, // Lists are comma-separated
+        }
+    }
+}
+
+/// Template section that can be conditionally included.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateSection {
+    /// Section name
+    pub name: String,
+    /// Section content with placeholders
+    pub content: String,
+    /// Condition for including this section (e.g., "jurisdiction == US")
+    pub condition: Option<String>,
+}
+
+impl TemplateSection {
+    /// Creates a new template section.
+    pub fn new(name: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            content: content.into(),
+            condition: None,
+        }
+    }
+
+    /// Adds a condition for including this section.
+    pub fn with_condition(mut self, condition: impl Into<String>) -> Self {
+        self.condition = Some(condition.into());
+        self
+    }
+
+    /// Checks if the condition is met given the context.
+    pub fn should_include(&self, context: &HashMap<String, String>) -> bool {
+        if let Some(ref condition) = self.condition {
+            // Simple condition evaluation: "key == value" or "key != value"
+            if let Some((key, rest)) = condition.split_once("==") {
+                let key = key.trim();
+                let value = rest.trim();
+                return context.get(key).map(|v| v == value).unwrap_or(false);
+            } else if let Some((key, rest)) = condition.split_once("!=") {
+                let key = key.trim();
+                let value = rest.trim();
+                return context.get(key).map(|v| v != value).unwrap_or(true);
+            }
+        }
+        true // No condition means always include
+    }
+}
+
+/// Type of legal document template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentTemplateType {
+    /// Contract documents
+    Contract,
+    /// Court filing documents
+    CourtFiling,
+    /// Corporate documents
+    Corporate,
+    /// Compliance documents
+    Compliance,
+    /// General legal documents
+    General,
+}
+
+/// Legal document template with placeholders and localization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentTemplate {
+    /// Template identifier
+    pub id: String,
+    /// Template name
+    pub name: String,
+    /// Template type
+    pub template_type: DocumentTemplateType,
+    /// Locale for this template
+    pub locale: Locale,
+    /// Jurisdiction code (e.g., "US", "GB", "FR")
+    pub jurisdiction: String,
+    /// Template sections
+    pub sections: Vec<TemplateSection>,
+    /// Required variables
+    pub variables: Vec<TemplateVariable>,
+    /// Template metadata
+    pub metadata: HashMap<String, String>,
+}
+
+impl DocumentTemplate {
+    /// Creates a new document template.
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        template_type: DocumentTemplateType,
+        locale: Locale,
+        jurisdiction: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            template_type,
+            locale,
+            jurisdiction: jurisdiction.into(),
+            sections: vec![],
+            variables: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Adds a section to the template.
+    pub fn add_section(mut self, section: TemplateSection) -> Self {
+        self.sections.push(section);
+        self
+    }
+
+    /// Adds a variable to the template.
+    pub fn add_variable(mut self, variable: TemplateVariable) -> Self {
+        self.variables.push(variable);
+        self
+    }
+
+    /// Adds metadata to the template.
+    pub fn add_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+
+    /// Validates that all required variables are provided.
+    pub fn validate_variables(&self, values: &HashMap<String, String>) -> Vec<String> {
+        let mut missing = vec![];
+
+        for var in &self.variables {
+            if var.required {
+                if let Some(value) = values.get(&var.name) {
+                    if !var.validate(value) {
+                        missing.push(format!(
+                            "Invalid value for '{}': expected {:?}",
+                            var.name, var.var_type
+                        ));
+                    }
+                } else if var.default_value.is_none() {
+                    missing.push(format!("Missing required variable: '{}'", var.name));
+                }
+            }
+        }
+
+        missing
+    }
+
+    /// Generates the document by filling in the template with provided values.
+    pub fn generate(&self, values: &HashMap<String, String>) -> Result<String, Vec<String>> {
+        // Validate variables
+        let errors = self.validate_variables(values);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        // Build the document
+        let mut document = String::new();
+
+        for section in &self.sections {
+            // Check if section should be included
+            if !section.should_include(values) {
+                continue;
+            }
+
+            // Replace placeholders in section content
+            let mut content = section.content.clone();
+            for var in &self.variables {
+                let placeholder = format!("{{{{{}}}}}", var.name);
+                let value = values
+                    .get(&var.name)
+                    .or(var.default_value.as_ref())
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                content = content.replace(&placeholder, value);
+            }
+
+            document.push_str(&content);
+            document.push('\n');
+        }
+
+        Ok(document)
+    }
+}
+
+/// Registry of legal document templates.
+#[derive(Debug, Default)]
+pub struct DocumentTemplateRegistry {
+    templates: HashMap<String, DocumentTemplate>,
+}
+
+impl DocumentTemplateRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default templates.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // NDA Template (US)
+        let nda_us = DocumentTemplate::new(
+            "nda_mutual_us",
+            "Mutual Non-Disclosure Agreement",
+            DocumentTemplateType::Contract,
+            Locale::new("en").with_country("US"),
+            "US",
+        )
+        .add_variable(
+            TemplateVariable::new(
+                "party1_name",
+                VariableType::Text,
+                true,
+                "Name of first party",
+            ),
+        )
+        .add_variable(
+            TemplateVariable::new(
+                "party2_name",
+                VariableType::Text,
+                true,
+                "Name of second party",
+            ),
+        )
+        .add_variable(
+            TemplateVariable::new(
+                "effective_date",
+                VariableType::Date,
+                true,
+                "Effective date of the agreement",
+            ),
+        )
+        .add_variable(
+            TemplateVariable::new(
+                "state",
+                VariableType::Text,
+                true,
+                "Governing state law",
+            ),
+        )
+        .add_section(TemplateSection::new(
+            "title",
+            "MUTUAL NON-DISCLOSURE AGREEMENT\n",
+        ))
+        .add_section(TemplateSection::new(
+            "parties",
+            "This Mutual Non-Disclosure Agreement (\"Agreement\") is entered into as of {{effective_date}}, by and between {{party1_name}} (\"First Party\") and {{party2_name}} (\"Second Party\").\n",
+        ))
+        .add_section(TemplateSection::new(
+            "recitals",
+            "WHEREAS, the parties wish to explore a business opportunity of mutual interest and in connection with this opportunity, each party may disclose to the other certain confidential technical and business information that the disclosing party desires the receiving party to treat as confidential.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "confidential_info",
+            "1. CONFIDENTIAL INFORMATION\n\n\"Confidential Information\" means any information disclosed by either party to the other party, either directly or indirectly, in writing, orally or by inspection of tangible objects.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "obligations",
+            "2. OBLIGATIONS\n\nEach party agrees to: (a) hold the Confidential Information in strict confidence; (b) not disclose the Confidential Information to third parties; and (c) not use the Confidential Information except for the purpose of evaluating the potential business relationship.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "term",
+            "3. TERM\n\nThis Agreement shall remain in effect for a period of three (3) years from the effective date.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "governing_law",
+            "4. GOVERNING LAW\n\nThis Agreement shall be governed by the laws of the State of {{state}}, without regard to its conflict of laws provisions.\n",
+        ))
+        .add_metadata("author", "Legalis Document Template System")
+        .add_metadata("version", "1.0");
+
+        registry.add_template(nda_us);
+
+        // Employment Agreement Template (US)
+        let employment_us = DocumentTemplate::new(
+            "employment_agreement_us",
+            "Employment Agreement",
+            DocumentTemplateType::Contract,
+            Locale::new("en").with_country("US"),
+            "US",
+        )
+        .add_variable(TemplateVariable::new(
+            "company_name",
+            VariableType::Text,
+            true,
+            "Name of the company",
+        ))
+        .add_variable(TemplateVariable::new(
+            "employee_name",
+            VariableType::PersonName,
+            true,
+            "Name of the employee",
+        ))
+        .add_variable(TemplateVariable::new(
+            "position",
+            VariableType::Text,
+            true,
+            "Job title/position",
+        ))
+        .add_variable(TemplateVariable::new(
+            "start_date",
+            VariableType::Date,
+            true,
+            "Employment start date",
+        ))
+        .add_variable(TemplateVariable::new(
+            "salary",
+            VariableType::Currency,
+            true,
+            "Annual salary",
+        ))
+        .add_variable(TemplateVariable::new(
+            "state",
+            VariableType::Text,
+            true,
+            "State law governing the agreement",
+        ))
+        .add_section(TemplateSection::new(
+            "title",
+            "EMPLOYMENT AGREEMENT\n",
+        ))
+        .add_section(TemplateSection::new(
+            "parties",
+            "This Employment Agreement (\"Agreement\") is entered into as of {{start_date}}, by and between {{company_name}} (\"Company\") and {{employee_name}} (\"Employee\").\n",
+        ))
+        .add_section(TemplateSection::new(
+            "position_duties",
+            "1. POSITION AND DUTIES\n\nCompany hereby employs Employee in the position of {{position}}. Employee accepts such employment and agrees to devote their full business time and attention to the performance of such duties.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "compensation",
+            "2. COMPENSATION\n\nCompany shall pay Employee an annual salary of ${{salary}}, payable in accordance with Company's standard payroll practices.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "at_will",
+            "3. AT-WILL EMPLOYMENT\n\nEmployee's employment with Company is at-will, meaning that either Employee or Company may terminate the employment relationship at any time, with or without cause or notice.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "governing_law",
+            "4. GOVERNING LAW\n\nThis Agreement shall be governed by the laws of the State of {{state}}.\n",
+        ));
+
+        registry.add_template(employment_us);
+
+        // Court Complaint Template (US)
+        let complaint_us = DocumentTemplate::new(
+            "complaint_us",
+            "Civil Complaint",
+            DocumentTemplateType::CourtFiling,
+            Locale::new("en").with_country("US"),
+            "US",
+        )
+        .add_variable(TemplateVariable::new(
+            "court_name",
+            VariableType::Text,
+            true,
+            "Name of the court",
+        ))
+        .add_variable(TemplateVariable::new(
+            "plaintiff_name",
+            VariableType::PersonName,
+            true,
+            "Name of plaintiff",
+        ))
+        .add_variable(TemplateVariable::new(
+            "defendant_name",
+            VariableType::PersonName,
+            true,
+            "Name of defendant",
+        ))
+        .add_variable(TemplateVariable::new(
+            "case_number",
+            VariableType::Text,
+            false,
+            "Case number (if assigned)",
+        ))
+        .add_variable(TemplateVariable::new(
+            "jurisdiction_facts",
+            VariableType::Text,
+            true,
+            "Facts establishing jurisdiction",
+        ))
+        .add_variable(TemplateVariable::new(
+            "claim_facts",
+            VariableType::Text,
+            true,
+            "Facts supporting the claim",
+        ))
+        .add_variable(TemplateVariable::new(
+            "relief_requested",
+            VariableType::Text,
+            true,
+            "Relief requested from the court",
+        ))
+        .add_section(TemplateSection::new(
+            "caption",
+            "{{court_name}}\n\n{{plaintiff_name}},\n    Plaintiff,\nv.\n{{defendant_name}},\n    Defendant.\n\nCase No. {{case_number}}\n\nCOMPLAINT\n",
+        ))
+        .add_section(TemplateSection::new(
+            "introduction",
+            "Plaintiff {{plaintiff_name}} files this Complaint against Defendant {{defendant_name}} and alleges as follows:\n",
+        ))
+        .add_section(TemplateSection::new(
+            "jurisdiction",
+            "JURISDICTION AND VENUE\n\n1. {{jurisdiction_facts}}\n",
+        ))
+        .add_section(TemplateSection::new(
+            "facts",
+            "FACTUAL ALLEGATIONS\n\n2. {{claim_facts}}\n",
+        ))
+        .add_section(TemplateSection::new(
+            "prayer",
+            "PRAYER FOR RELIEF\n\nWHEREFORE, Plaintiff respectfully requests that the Court:\n\n{{relief_requested}}\n",
+        ));
+
+        registry.add_template(complaint_us);
+
+        // Articles of Incorporation Template (US - Delaware)
+        let articles_de = DocumentTemplate::new(
+            "articles_incorporation_de",
+            "Certificate of Incorporation",
+            DocumentTemplateType::Corporate,
+            Locale::new("en").with_country("US"),
+            "US-DE",
+        )
+        .add_variable(TemplateVariable::new(
+            "corporation_name",
+            VariableType::Text,
+            true,
+            "Name of the corporation",
+        ))
+        .add_variable(TemplateVariable::new(
+            "registered_agent_name",
+            VariableType::Text,
+            true,
+            "Name of registered agent",
+        ))
+        .add_variable(TemplateVariable::new(
+            "registered_agent_address",
+            VariableType::Address,
+            true,
+            "Address of registered agent",
+        ))
+        .add_variable(TemplateVariable::new(
+            "shares_authorized",
+            VariableType::Number,
+            true,
+            "Number of authorized shares",
+        ))
+        .add_variable(TemplateVariable::new(
+            "incorporator_name",
+            VariableType::PersonName,
+            true,
+            "Name of incorporator",
+        ))
+        .add_section(TemplateSection::new(
+            "title",
+            "CERTIFICATE OF INCORPORATION\nOF\n{{corporation_name}}\n",
+        ))
+        .add_section(TemplateSection::new(
+            "article1",
+            "ARTICLE I - NAME\n\nThe name of the corporation is {{corporation_name}}.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "article2",
+            "ARTICLE II - REGISTERED OFFICE AND AGENT\n\nThe address of the corporation's registered office in the State of Delaware is {{registered_agent_address}}, and the name of its registered agent at such address is {{registered_agent_name}}.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "article3",
+            "ARTICLE III - PURPOSE\n\nThe purpose of the corporation is to engage in any lawful act or activity for which corporations may be organized under the General Corporation Law of Delaware.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "article4",
+            "ARTICLE IV - CAPITAL STOCK\n\nThe total number of shares of stock which the corporation shall have authority to issue is {{shares_authorized}} shares of Common Stock, par value $0.001 per share.\n",
+        ))
+        .add_section(TemplateSection::new(
+            "signature",
+            "IN WITNESS WHEREOF, the undersigned incorporator has executed this Certificate of Incorporation this _____ day of __________, 20__.\n\n_________________________\n{{incorporator_name}}\nIncorporator\n",
+        ));
+
+        registry.add_template(articles_de);
+
+        registry
+    }
+
+    /// Adds a template to the registry.
+    pub fn add_template(&mut self, template: DocumentTemplate) {
+        self.templates.insert(template.id.clone(), template);
+    }
+
+    /// Gets a template by ID.
+    pub fn get_template(&self, id: &str) -> Option<&DocumentTemplate> {
+        self.templates.get(id)
+    }
+
+    /// Finds templates by type.
+    pub fn find_by_type(&self, template_type: DocumentTemplateType) -> Vec<&DocumentTemplate> {
+        self.templates
+            .values()
+            .filter(|t| t.template_type == template_type)
+            .collect()
+    }
+
+    /// Finds templates by jurisdiction.
+    pub fn find_by_jurisdiction(&self, jurisdiction: &str) -> Vec<&DocumentTemplate> {
+        self.templates
+            .values()
+            .filter(|t| t.jurisdiction == jurisdiction)
+            .collect()
+    }
+
+    /// Lists all available template IDs.
+    pub fn list_templates(&self) -> Vec<&str> {
+        self.templates.keys().map(|s| s.as_str()).collect()
     }
 }
 
@@ -7941,6 +11633,146 @@ mod tests {
     }
 
     #[test]
+    fn test_translation_memory_levenshtein_similarity() {
+        let mut memory = TranslationMemory::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory.add_translation("contract", en.clone(), "契約", ja.clone());
+        memory.add_translation("contractor", en.clone(), "請負業者", ja.clone());
+
+        // Test Levenshtein-based fuzzy matching
+        let matches = memory.find_fuzzy_levenshtein("contracts", &en, &ja, 0.7);
+
+        assert!(!matches.is_empty());
+        assert!(matches[0].1 >= 0.7);
+    }
+
+    #[test]
+    fn test_translation_memory_context_aware() {
+        let mut memory = TranslationMemory::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        // Add entries with different contexts
+        let mut entry1 = TranslationMemoryEntry::new("right", en.clone(), "権利", ja.clone());
+        entry1
+            .metadata
+            .insert("context".to_string(), "contract_law".to_string());
+        memory.add_entry(entry1);
+
+        let mut entry2 = TranslationMemoryEntry::new("right", en.clone(), "右", ja.clone());
+        entry2
+            .metadata
+            .insert("context".to_string(), "directions".to_string());
+        memory.add_entry(entry2);
+
+        // Find with context
+        let contract_matches =
+            memory.find_with_context("right", &en, &ja, Some("contract_law"), 0.9);
+        assert_eq!(contract_matches.len(), 1);
+        assert_eq!(contract_matches[0].0.target_text, "権利");
+
+        let direction_matches =
+            memory.find_with_context("right", &en, &ja, Some("directions"), 0.9);
+        assert_eq!(direction_matches.len(), 1);
+        assert_eq!(direction_matches[0].0.target_text, "右");
+    }
+
+    #[test]
+    fn test_translation_memory_save_load() {
+        let mut memory = TranslationMemory::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory.add_translation("contract", en.clone(), "契約", ja.clone());
+        memory.add_translation("statute", en.clone(), "法令", ja.clone());
+
+        // Save to file
+        let temp_path = std::path::PathBuf::from("/tmp/test_translation_memory.json");
+        memory.save_to_file(&temp_path).unwrap();
+
+        // Load into new memory
+        let mut loaded_memory = TranslationMemory::new();
+        loaded_memory.load_from_file(&temp_path).unwrap();
+
+        assert_eq!(loaded_memory.len(), 2);
+        let matches = loaded_memory.find_exact("contract", &en, &ja);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].target_text, "契約");
+
+        // Clean up
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[test]
+    fn test_translation_memory_tmx_export_import() {
+        let mut memory = TranslationMemory::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory.add_translation("contract", en.clone(), "契約", ja.clone());
+        memory.add_translation("employment", en.clone(), "雇用", ja.clone());
+
+        // Export to TMX
+        let temp_path = std::path::PathBuf::from("/tmp/test_translation_memory.tmx");
+        memory.export_to_tmx(&temp_path).unwrap();
+
+        // Import from TMX
+        let mut imported_memory = TranslationMemory::new();
+        imported_memory.import_from_tmx(&temp_path).unwrap();
+
+        assert_eq!(imported_memory.len(), 2);
+        let matches = imported_memory.find_exact("contract", &en, &ja);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].target_text, "契約");
+
+        // Clean up
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[test]
+    fn test_translation_memory_merge() {
+        let mut memory1 = TranslationMemory::new();
+        let mut memory2 = TranslationMemory::new();
+
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        memory1.add_translation("contract", en.clone(), "契約", ja.clone());
+        memory2.add_translation("statute", en.clone(), "法令", ja.clone());
+
+        memory1.merge(&memory2);
+
+        assert_eq!(memory1.len(), 2);
+        assert!(memory1.find_exact("contract", &en, &ja).len() == 1);
+        assert!(memory1.find_exact("statute", &en, &ja).len() == 1);
+    }
+
+    #[test]
+    fn test_translation_memory_xml_escape() {
+        let mut memory = TranslationMemory::new();
+        let en = Locale::new("en");
+        let ja = Locale::new("ja");
+
+        // Add text with XML special characters
+        memory.add_translation("A & B < C > \"D\"", en.clone(), "A と B", ja.clone());
+
+        let temp_path = std::path::PathBuf::from("/tmp/test_xml_escape.tmx");
+        memory.export_to_tmx(&temp_path).unwrap();
+
+        // Read the TMX file and check escaping
+        let tmx_content = std::fs::read_to_string(&temp_path).unwrap();
+        assert!(tmx_content.contains("&amp;"));
+        assert!(tmx_content.contains("&lt;"));
+        assert!(tmx_content.contains("&gt;"));
+        assert!(tmx_content.contains("&quot;"));
+
+        // Clean up
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[test]
     fn test_translation_service_batch() {
         let service = MockTranslationService::new();
         let en = Locale::new("en");
@@ -7953,6 +11785,195 @@ mod tests {
         assert_eq!(results[0], "[ja] contract");
         assert_eq!(results[1], "[ja] statute");
         assert_eq!(results[2], "[ja] employment");
+    }
+
+    #[test]
+    fn test_screen_reader_aria_label() {
+        let formatter = ScreenReaderFormatter::new(Locale::new("en"));
+
+        assert_eq!(
+            formatter.aria_label("article", "Contract Formation"),
+            "Article: Contract Formation"
+        );
+        assert_eq!(
+            formatter.aria_label("section", "Definitions"),
+            "Section: Definitions"
+        );
+    }
+
+    #[test]
+    fn test_screen_reader_citation_formatting() {
+        let formatter = ScreenReaderFormatter::new(Locale::new("en"));
+
+        let citation = "Brown v. Board of Education, 347 U.S. 483 (1954)";
+        let formatted = formatter.format_citation(citation);
+
+        assert!(formatted.contains("versus"));
+        assert!(formatted.contains("United States"));
+        assert!(!formatted.contains("v."));
+        assert!(!formatted.contains("U.S."));
+    }
+
+    #[test]
+    fn test_screen_reader_navigation() {
+        let formatter = ScreenReaderFormatter::new(Locale::new("en"));
+
+        let sections = vec![
+            ("article", "Introduction"),
+            ("section", "Definitions"),
+            ("chapter", "Enforcement"),
+        ];
+
+        let nav = formatter.navigation_structure(&sections);
+
+        assert!(nav.contains("<nav"));
+        assert!(nav.contains("aria-label"));
+        assert!(nav.contains("Introduction"));
+        assert!(nav.contains("Definitions"));
+        assert!(nav.contains("Enforcement"));
+    }
+
+    #[test]
+    fn test_screen_reader_table_formatting() {
+        let formatter = ScreenReaderFormatter::new(Locale::new("en"));
+
+        let headers = vec!["Name", "Role", "Jurisdiction"];
+        let rows = vec![
+            vec!["John Doe", "Judge", "Federal"],
+            vec!["Jane Smith", "Attorney", "State"],
+        ];
+
+        let table = formatter.format_table("Legal Personnel", &headers, &rows);
+
+        assert!(table.contains("<table"));
+        assert!(table.contains("aria-label"));
+        assert!(table.contains("<caption>Legal Personnel</caption>"));
+        assert!(table.contains("scope=\"col\""));
+        assert!(table.contains("scope=\"row\""));
+    }
+
+    #[test]
+    fn test_plain_language_converter() {
+        let converter = PlainLanguageConverter::new(Locale::new("en"));
+
+        let legal_text = "The plaintiff hereby files this complaint pursuant to federal law.";
+        let plain = converter.convert(legal_text);
+
+        assert!(plain.contains("person who filed the lawsuit") || plain.contains("plaintiff"));
+        assert!(plain.contains("by this document") || plain.contains("hereby"));
+    }
+
+    #[test]
+    fn test_plain_language_custom_conversion() {
+        let mut converter = PlainLanguageConverter::new(Locale::new("en"));
+        converter.add_conversion("escheat", "revert to the state");
+
+        assert_eq!(
+            converter.get_plain_alternative("escheat"),
+            Some(&"revert to the state".to_string())
+        );
+    }
+
+    #[test]
+    fn test_reading_level_flesch_reading_ease() {
+        let assessor = ReadingLevelAssessor::new();
+
+        let simple_text = "The cat sat on the mat. It was a nice day.";
+        let ease = assessor.flesch_reading_ease(simple_text);
+        assert!(ease > 60.0); // Should be fairly easy
+
+        let complex_text = "Notwithstanding the aforementioned jurisdictional complications, the defendant's constitutional rights remain inviolate pursuant to established jurisprudence.";
+        let ease_complex = assessor.flesch_reading_ease(complex_text);
+        assert!(ease_complex < ease); // Complex should be harder
+    }
+
+    #[test]
+    fn test_reading_level_flesch_kincaid_grade() {
+        let assessor = ReadingLevelAssessor::new();
+
+        let text = "The law requires clear documentation. All parties must sign the agreement.";
+        let grade = assessor.flesch_kincaid_grade(text);
+        assert!(grade >= 0.0);
+        assert!(grade < 20.0); // Reasonable range
+    }
+
+    #[test]
+    fn test_reading_level_assessment_report() {
+        let assessor = ReadingLevelAssessor::new();
+
+        let text = "Contract law governs agreements. Each party has rights and duties.";
+        let report = assessor.assess(text);
+
+        assert!(report.word_count > 0);
+        assert!(report.sentence_count > 0);
+        assert!(report.syllable_count > 0);
+        assert!(!report.difficulty.is_empty());
+        assert!(report.flesch_reading_ease >= 0.0 && report.flesch_reading_ease <= 206.835);
+    }
+
+    #[test]
+    fn test_braille_formatter_basic() {
+        let formatter = BrailleFormatter::new(BrailleGrade::Grade1);
+
+        let braille = formatter.to_braille("law");
+        assert!(braille.len() > 0);
+        assert!(
+            braille
+                .chars()
+                .all(|c| c >= '\u{2800}' && c <= '\u{28FF}' || c == ' ')
+        );
+    }
+
+    #[test]
+    fn test_braille_section_number() {
+        let formatter = BrailleFormatter::new(BrailleGrade::Grade1);
+
+        let section = formatter.format_section_number("abc");
+        assert!(section.starts_with('§'));
+        assert!(section.contains(char::from_u32(0x2801).unwrap())); // Braille 'a'
+    }
+
+    #[test]
+    fn test_audio_description_flowchart() {
+        let generator = AudioDescriptionGenerator::new(Locale::new("en"));
+
+        let elements = vec!["File complaint", "Serve defendant", "Discovery", "Trial"];
+        let description = generator.describe_diagram("flowchart", &elements);
+
+        assert!(description.contains("Flowchart"));
+        assert!(description.contains("4 steps"));
+        assert!(description.contains("File complaint"));
+        assert!(description.contains("then"));
+    }
+
+    #[test]
+    fn test_audio_description_chart() {
+        let generator = AudioDescriptionGenerator::new(Locale::new("en"));
+
+        let data = vec![
+            ("Criminal".to_string(), 45.0),
+            ("Civil".to_string(), 35.0),
+            ("Family".to_string(), 20.0),
+        ];
+
+        let bar_chart = generator.describe_chart("bar", &data);
+        assert!(bar_chart.contains("Bar chart"));
+        assert!(bar_chart.contains("3 data points"));
+
+        let pie_chart = generator.describe_chart("pie", &data);
+        assert!(pie_chart.contains("Pie chart"));
+        assert!(pie_chart.contains("%"));
+    }
+
+    #[test]
+    fn test_audio_description_table() {
+        let generator = AudioDescriptionGenerator::new(Locale::new("en"));
+
+        let description = generator.describe_table("Case Statistics", 10, 5);
+        assert!(description.contains("Table"));
+        assert!(description.contains("Case Statistics"));
+        assert!(description.contains("10 rows"));
+        assert!(description.contains("5 columns"));
     }
 
     #[test]
@@ -8272,7 +12293,7 @@ mod tests {
         let calculator = DeadlineCalculator::new(us_config);
 
         // Add 3 business days with time
-        let (y, m, d, h, min) = calculator.calculate_deadline_with_time(2024, 1, 1, 9, 30, 3);
+        let (_y, _m, _d, h, min) = calculator.calculate_deadline_with_time(2024, 1, 1, 9, 30, 3);
         assert_eq!(h, 9);
         assert_eq!(min, 30);
     }
@@ -8688,5 +12709,1733 @@ mod tests {
         let single_line = formatter.format_single_line(&address);
         assert!(!single_line.contains('\n'));
         assert!(single_line.contains(", "));
+    }
+
+    // ========================================================================
+    // Regional Variations v0.1.9 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_sub_regional_variation_us_states() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test California
+        let ca_variation = registry.find_variation("US", "CA");
+        assert!(ca_variation.is_some());
+        let ca = ca_variation.unwrap();
+        assert_eq!(ca.region_name, "California");
+        assert_eq!(ca.region_code, "CA");
+        assert!(
+            ca.legal_differences
+                .iter()
+                .any(|d| d.contains("Community property state"))
+        );
+        assert!(ca.legal_differences.iter().any(|d| d.contains("CCPA")));
+
+        // Test New York
+        let ny_variation = registry.find_variation("US", "NY");
+        assert!(ny_variation.is_some());
+        let ny = ny_variation.unwrap();
+        assert_eq!(ny.region_name, "New York");
+        assert!(
+            ny.legal_differences
+                .iter()
+                .any(|d| d.contains("Martin Act"))
+        );
+
+        // Test Delaware
+        let de_variation = registry.find_variation("US", "DE");
+        assert!(de_variation.is_some());
+        let de = de_variation.unwrap();
+        assert_eq!(de.region_name, "Delaware");
+        assert!(de.legal_differences.iter().any(|d| d.contains("DGCL")));
+        assert!(
+            de.legal_differences
+                .iter()
+                .any(|d| d.contains("Court of Chancery"))
+        );
+    }
+
+    #[test]
+    fn test_sub_regional_variation_canadian_provinces() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test Ontario
+        let on_variation = registry.find_variation("CA", "ON");
+        assert!(on_variation.is_some());
+        let on = on_variation.unwrap();
+        assert_eq!(on.region_name, "Ontario");
+        assert!(
+            on.legal_differences
+                .iter()
+                .any(|d| d.contains("Common law province"))
+        );
+
+        // Test Québec
+        let qc_variation = registry.find_variation("CA", "QC");
+        assert!(qc_variation.is_some());
+        let qc = qc_variation.unwrap();
+        assert_eq!(qc.region_name, "Québec");
+        assert!(
+            qc.legal_differences
+                .iter()
+                .any(|d| d.contains("Civil law jurisdiction"))
+        );
+        assert!(
+            qc.legal_differences
+                .iter()
+                .any(|d| d.contains("Code civil du Québec"))
+        );
+
+        // Test British Columbia
+        let bc_variation = registry.find_variation("CA", "BC");
+        assert!(bc_variation.is_some());
+        let bc = bc_variation.unwrap();
+        assert_eq!(bc.region_name, "British Columbia");
+    }
+
+    #[test]
+    fn test_sub_regional_variation_get_all_for_country() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        let us_variations = registry.get_variations_for_country("US");
+        assert!(us_variations.len() >= 6); // CA, NY, TX, FL, IL, DE
+
+        let ca_variations = registry.get_variations_for_country("CA");
+        assert!(ca_variations.len() >= 4); // ON, QC, BC, AB
+    }
+
+    #[test]
+    fn test_eu_member_state_variations() {
+        let registry = EUMemberStateRegistry::with_defaults();
+
+        // Test Germany
+        let de = registry.find_variation("DE");
+        assert!(de.is_some());
+        let germany = de.unwrap();
+        assert_eq!(germany.country_name, "Germany");
+        assert_eq!(germany.accession_year, 1958);
+        assert!(germany.legal_system.contains("Civil law"));
+        assert!(germany.eu_adaptations.iter().any(|a| a.contains("GDPR")));
+        assert!(
+            germany
+                .specialties
+                .iter()
+                .any(|s| s.contains("Mitbestimmung"))
+        );
+
+        // Test France
+        let fr = registry.find_variation("FR");
+        assert!(fr.is_some());
+        let france = fr.unwrap();
+        assert_eq!(france.country_name, "France");
+        assert!(france.legal_system.contains("Napoleonic Code"));
+        assert!(
+            france
+                .specialties
+                .iter()
+                .any(|s| s.contains("Conseil d'État"))
+        );
+
+        // Test Ireland (common law in EU)
+        let ie = registry.find_variation("IE");
+        assert!(ie.is_some());
+        let ireland = ie.unwrap();
+        assert_eq!(ireland.country_name, "Ireland");
+        assert!(ireland.legal_system.contains("Common law"));
+        assert!(
+            ireland
+                .specialties
+                .iter()
+                .any(|s| s.contains("Common law in EU context"))
+        );
+    }
+
+    #[test]
+    fn test_eu_member_state_all_variations() {
+        let registry = EUMemberStateRegistry::with_defaults();
+        let all = registry.get_all_variations();
+        assert!(all.len() >= 10); // DE, FR, ES, IT, NL, PL, SE, IE, BE, AT
+    }
+
+    #[test]
+    fn test_dialect_terminology_scottish() {
+        let registry = DialectTerminologyRegistry::with_defaults();
+        let locale = Locale::new("en").with_country("GB");
+
+        let scottish = registry.find_dialect(&locale, "Scottish Legal");
+        assert!(scottish.is_some());
+        let dialect = scottish.unwrap();
+
+        assert_eq!(dialect.to_dialect("lawyer"), Some("advocate"));
+        assert_eq!(
+            dialect.to_dialect("real_estate"),
+            Some("heritable property")
+        );
+        assert_eq!(dialect.to_dialect("mortgage"), Some("standard security"));
+        assert_eq!(dialect.to_dialect("plaintiff"), Some("pursuer"));
+        assert_eq!(dialect.to_dialect("defendant"), Some("defender"));
+
+        // Test reverse translation
+        assert_eq!(dialect.from_dialect("advocate"), Some("lawyer"));
+        assert_eq!(dialect.from_dialect("pursuer"), Some("plaintiff"));
+    }
+
+    #[test]
+    fn test_dialect_terminology_louisiana() {
+        let registry = DialectTerminologyRegistry::with_defaults();
+        let locale = Locale::new("en").with_country("US");
+
+        let louisiana = registry.find_dialect(&locale, "Louisiana Legal");
+        assert!(louisiana.is_some());
+        let dialect = louisiana.unwrap();
+
+        assert_eq!(dialect.to_dialect("county"), Some("parish"));
+        assert_eq!(
+            dialect.to_dialect("real_estate"),
+            Some("immovable property")
+        );
+        assert_eq!(dialect.to_dialect("common_law"), Some("civil law"));
+        assert_eq!(dialect.to_dialect("deed"), Some("act of sale"));
+    }
+
+    #[test]
+    fn test_dialect_terminology_quebec() {
+        let registry = DialectTerminologyRegistry::with_defaults();
+        let locale = Locale::new("fr").with_country("CA");
+
+        let quebec = registry.find_dialect(&locale, "Québec Legal");
+        assert!(quebec.is_some());
+        let dialect = quebec.unwrap();
+
+        assert_eq!(
+            dialect.to_dialect("code_civil"),
+            Some("Code civil du Québec")
+        );
+        assert_eq!(
+            dialect.to_dialect("jurisprudence"),
+            Some("jurisprudence québécoise")
+        );
+    }
+
+    #[test]
+    fn test_dialect_terminology_get_all_for_locale() {
+        let registry = DialectTerminologyRegistry::with_defaults();
+
+        let us_locale = Locale::new("en").with_country("US");
+        let us_dialects = registry.get_dialects_for_locale(&us_locale);
+        assert!(us_dialects.len() >= 1); // Louisiana
+
+        let gb_locale = Locale::new("en").with_country("GB");
+        let gb_dialects = registry.get_dialects_for_locale(&gb_locale);
+        assert!(gb_dialects.len() >= 1); // Scottish
+    }
+
+    #[test]
+    fn test_regional_concept_mapping_trust() {
+        let mapper = RegionalConceptMapper::with_defaults();
+
+        let mappings = mapper.find_mappings("trust", "GB", "FR");
+        assert!(!mappings.is_empty());
+
+        let mapping = mappings[0];
+        assert_eq!(mapping.source_concept, "trust");
+        assert_eq!(mapping.target_concept, "fiducie");
+        assert_eq!(mapping.similarity, 0.7);
+        assert!(!mapping.notes.is_empty());
+        assert!(mapping.notes.iter().any(|n| n.contains("equity concept")));
+    }
+
+    #[test]
+    fn test_regional_concept_mapping_llc() {
+        let mapper = RegionalConceptMapper::with_defaults();
+
+        let mappings = mapper.find_mappings("LLC", "US", "DE");
+        assert!(!mappings.is_empty());
+
+        let mapping = mappings[0];
+        assert_eq!(mapping.source_concept, "LLC");
+        assert_eq!(mapping.target_concept, "GmbH");
+        assert_eq!(mapping.similarity, 0.9);
+        assert!(
+            mapping
+                .notes
+                .iter()
+                .any(|n| n.contains("limited liability"))
+        );
+    }
+
+    #[test]
+    fn test_regional_concept_mapping_corporation() {
+        let mapper = RegionalConceptMapper::with_defaults();
+
+        let mappings = mapper.find_mappings("corporation", "US", "JP");
+        assert!(!mappings.is_empty());
+
+        let mapping = mappings[0];
+        assert_eq!(mapping.target_concept, "kabushiki kaisha");
+        assert_eq!(mapping.similarity, 0.85);
+    }
+
+    #[test]
+    fn test_regional_concept_mapping_find_all_for_concept() {
+        let mapper = RegionalConceptMapper::with_defaults();
+
+        let all_trust_mappings = mapper.find_all_mappings_for_concept("trust");
+        assert!(!all_trust_mappings.is_empty());
+
+        let all_corporation_mappings = mapper.find_all_mappings_for_concept("corporation");
+        assert!(!all_corporation_mappings.is_empty());
+    }
+
+    #[test]
+    fn test_cross_regional_term_equivalence_attorney() {
+        let registry = CrossRegionalTermEquivalenceRegistry::with_defaults();
+
+        let equiv = registry.find_equivalence("attorney", "US");
+        assert!(equiv.is_some());
+
+        let attorney_equiv = equiv.unwrap();
+        assert_eq!(attorney_equiv.base_term, "attorney");
+        assert_eq!(attorney_equiv.base_jurisdiction, "US");
+
+        // Test GB equivalent
+        let gb_term = attorney_equiv.get_equivalent("GB");
+        assert!(gb_term.is_some());
+        assert_eq!(gb_term.unwrap().term, "solicitor");
+        assert_eq!(
+            gb_term.unwrap().equivalence_level,
+            EquivalenceLevel::Approximate
+        );
+
+        // Test FR equivalent
+        let fr_term = attorney_equiv.get_equivalent("FR");
+        assert!(fr_term.is_some());
+        assert_eq!(fr_term.unwrap().term, "avocat");
+        assert_eq!(fr_term.unwrap().equivalence_level, EquivalenceLevel::Exact);
+
+        // Test DE equivalent
+        let de_term = attorney_equiv.get_equivalent("DE");
+        assert!(de_term.is_some());
+        assert_eq!(de_term.unwrap().term, "Rechtsanwalt");
+    }
+
+    #[test]
+    fn test_cross_regional_term_equivalence_corporation() {
+        let registry = CrossRegionalTermEquivalenceRegistry::with_defaults();
+
+        let corp_term = registry.get_equivalent_term("corporation", "US", "JP");
+        assert!(corp_term.is_some());
+        assert_eq!(corp_term.unwrap().term, "kabushiki kaisha");
+        assert_eq!(
+            corp_term.unwrap().equivalence_level,
+            EquivalenceLevel::Exact
+        );
+
+        let de_term = registry.get_equivalent_term("corporation", "US", "DE");
+        assert!(de_term.is_some());
+        assert_eq!(de_term.unwrap().term, "Aktiengesellschaft");
+    }
+
+    #[test]
+    fn test_cross_regional_term_equivalence_contract() {
+        let registry = CrossRegionalTermEquivalenceRegistry::with_defaults();
+
+        let equiv = registry.find_equivalence("contract", "US");
+        assert!(equiv.is_some());
+
+        let contract_equiv = equiv.unwrap();
+
+        // All contract equivalents should be exact
+        let gb = contract_equiv.get_equivalent("GB");
+        assert_eq!(gb.unwrap().equivalence_level, EquivalenceLevel::Exact);
+
+        let fr = contract_equiv.get_equivalent("FR");
+        assert_eq!(fr.unwrap().equivalence_level, EquivalenceLevel::Exact);
+        assert_eq!(fr.unwrap().term, "contrat");
+
+        let de = contract_equiv.get_equivalent("DE");
+        assert_eq!(de.unwrap().equivalence_level, EquivalenceLevel::Exact);
+        assert_eq!(de.unwrap().term, "Vertrag");
+    }
+
+    #[test]
+    fn test_cross_regional_term_equivalence_trust() {
+        let registry = CrossRegionalTermEquivalenceRegistry::with_defaults();
+
+        let equiv = registry.find_equivalence("trust", "GB");
+        assert!(equiv.is_some());
+
+        let trust_equiv = equiv.unwrap();
+
+        // FR should be approximate
+        let fr = trust_equiv.get_equivalent("FR");
+        assert!(fr.is_some());
+        assert_eq!(fr.unwrap().term, "fiducie");
+        assert_eq!(fr.unwrap().equivalence_level, EquivalenceLevel::Approximate);
+        assert!(!fr.unwrap().notes.is_empty());
+
+        // DE should be loose
+        let de = trust_equiv.get_equivalent("DE");
+        assert!(de.is_some());
+        assert_eq!(de.unwrap().term, "Treuhand");
+        assert_eq!(de.unwrap().equivalence_level, EquivalenceLevel::Loose);
+    }
+
+    #[test]
+    fn test_cross_regional_term_equivalence_plaintiff() {
+        let registry = CrossRegionalTermEquivalenceRegistry::with_defaults();
+
+        let plaintiff_fr = registry.get_equivalent_term("plaintiff", "US", "FR");
+        assert!(plaintiff_fr.is_some());
+        assert_eq!(plaintiff_fr.unwrap().term, "demandeur");
+
+        let plaintiff_de = registry.get_equivalent_term("plaintiff", "US", "DE");
+        assert!(plaintiff_de.is_some());
+        assert_eq!(plaintiff_de.unwrap().term, "Kläger");
+
+        let plaintiff_gb = registry.get_equivalent_term("plaintiff", "US", "GB");
+        assert!(plaintiff_gb.is_some());
+        assert_eq!(plaintiff_gb.unwrap().term, "claimant");
+    }
+
+    #[test]
+    fn test_equivalence_level_enum() {
+        // Test that all equivalence levels can be created
+        let exact = EquivalenceLevel::Exact;
+        let approximate = EquivalenceLevel::Approximate;
+        let loose = EquivalenceLevel::Loose;
+        let no_equiv = EquivalenceLevel::NoEquivalent;
+
+        assert_eq!(exact, EquivalenceLevel::Exact);
+        assert_eq!(approximate, EquivalenceLevel::Approximate);
+        assert_eq!(loose, EquivalenceLevel::Loose);
+        assert_eq!(no_equiv, EquivalenceLevel::NoEquivalent);
+
+        // Test inequality
+        assert_ne!(exact, approximate);
+        assert_ne!(approximate, loose);
+        assert_ne!(loose, no_equiv);
+    }
+
+    #[test]
+    fn test_sub_regional_variation_custom() {
+        let mut registry = SubRegionalVariationRegistry::new();
+
+        let custom = SubRegionalVariation::new(
+            Locale::new("en").with_country("AU"),
+            "NSW",
+            "New South Wales",
+            "NSW state law",
+        )
+        .add_legal_difference("Separate state supreme court")
+        .add_legal_difference("NSW-specific legislation");
+
+        registry.add_variation(custom);
+
+        let found = registry.find_variation("AU", "NSW");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().region_name, "New South Wales");
+    }
+
+    #[test]
+    fn test_asian_regional_variations() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test Indian states
+        let maharashtra = registry.find_variation("IN", "MH");
+        assert!(maharashtra.is_some());
+        assert_eq!(maharashtra.unwrap().region_name, "Maharashtra");
+        assert!(
+            maharashtra
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Bombay High Court"))
+        );
+
+        let delhi = registry.find_variation("IN", "DL");
+        assert!(delhi.is_some());
+        assert_eq!(delhi.unwrap().region_name, "Delhi");
+
+        let karnataka = registry.find_variation("IN", "KA");
+        assert!(karnataka.is_some());
+        assert!(
+            karnataka
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Tech industry"))
+        );
+
+        // Test Singapore
+        let singapore = registry.find_variation("SG", "SG");
+        assert!(singapore.is_some());
+        assert!(
+            singapore
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Common law"))
+        );
+
+        // Test Malaysia
+        let kl = registry.find_variation("MY", "WP");
+        assert!(kl.is_some());
+        assert!(
+            kl.unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Islamic law"))
+        );
+
+        // Test Thailand
+        let bangkok = registry.find_variation("TH", "BKK");
+        assert!(bangkok.is_some());
+        assert!(
+            bangkok
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Civil law"))
+        );
+
+        // Test Vietnam
+        let hanoi = registry.find_variation("VN", "HN");
+        assert!(hanoi.is_some());
+        assert_eq!(hanoi.unwrap().region_name, "Hanoi");
+
+        let hcmc = registry.find_variation("VN", "SG");
+        assert!(hcmc.is_some());
+        assert_eq!(hcmc.unwrap().region_name, "Ho Chi Minh City");
+
+        // Test Indonesia
+        let jakarta = registry.find_variation("ID", "JK");
+        assert!(jakarta.is_some());
+        assert!(
+            jakarta
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Dutch-influenced"))
+        );
+    }
+
+    #[test]
+    fn test_middle_eastern_regional_variations() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test UAE
+        let dubai = registry.find_variation("AE", "DU");
+        assert!(dubai.is_some());
+        assert_eq!(dubai.unwrap().region_name, "Dubai");
+        assert!(
+            dubai
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("DIFC"))
+        );
+
+        let abu_dhabi = registry.find_variation("AE", "AZ");
+        assert!(abu_dhabi.is_some());
+        assert!(
+            abu_dhabi
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("ADGM"))
+        );
+
+        // Test Saudi Arabia
+        let riyadh = registry.find_variation("SA", "RI");
+        assert!(riyadh.is_some());
+        assert!(
+            riyadh
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Sharia law"))
+        );
+
+        // Test Israel
+        let tel_aviv = registry.find_variation("IL", "TA");
+        assert!(tel_aviv.is_some());
+        assert!(
+            tel_aviv
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Tech startup"))
+        );
+    }
+
+    #[test]
+    fn test_latin_american_regional_variations() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test Brazil
+        let sao_paulo = registry.find_variation("BR", "SP");
+        assert!(sao_paulo.is_some());
+        assert_eq!(sao_paulo.unwrap().region_name, "São Paulo");
+        assert!(
+            sao_paulo
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Civil law"))
+        );
+
+        let rio = registry.find_variation("BR", "RJ");
+        assert!(rio.is_some());
+        assert!(
+            rio.unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Oil and gas"))
+        );
+
+        // Test Argentina
+        let buenos_aires = registry.find_variation("AR", "BA");
+        assert!(buenos_aires.is_some());
+        assert!(
+            buenos_aires
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Código Civil"))
+        );
+
+        // Test Mexico
+        let mexico_city = registry.find_variation("MX", "CMX");
+        assert!(mexico_city.is_some());
+        assert!(
+            mexico_city
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Amparo"))
+        );
+
+        // Test Chile
+        let santiago = registry.find_variation("CL", "RM");
+        assert!(santiago.is_some());
+        assert!(
+            santiago
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Mining law"))
+        );
+
+        // Test Colombia
+        let bogota = registry.find_variation("CO", "DC");
+        assert!(bogota.is_some());
+        assert!(
+            bogota
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("tutela"))
+        );
+    }
+
+    #[test]
+    fn test_african_regional_variations() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Test South Africa
+        let gauteng = registry.find_variation("ZA", "GP");
+        assert!(gauteng.is_some());
+        assert!(
+            gauteng
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Roman-Dutch"))
+        );
+
+        let western_cape = registry.find_variation("ZA", "WC");
+        assert!(western_cape.is_some());
+        assert!(
+            western_cape
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Wine industry"))
+        );
+
+        // Test Nigeria
+        let lagos = registry.find_variation("NG", "LA");
+        assert!(lagos.is_some());
+        assert!(
+            lagos
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Common law"))
+        );
+
+        // Test Egypt
+        let cairo = registry.find_variation("EG", "C");
+        assert!(cairo.is_some());
+        assert!(
+            cairo
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("French-influenced"))
+        );
+
+        // Test Kenya
+        let nairobi = registry.find_variation("KE", "NBO");
+        assert!(nairobi.is_some());
+        assert!(
+            nairobi
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("East African Court"))
+        );
+    }
+
+    #[test]
+    fn test_additional_us_states() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        let washington = registry.find_variation("US", "WA");
+        assert!(washington.is_some());
+        assert!(
+            washington
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("tech industry"))
+        );
+
+        let massachusetts = registry.find_variation("US", "MA");
+        assert!(massachusetts.is_some());
+        assert!(
+            massachusetts
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("healthcare"))
+        );
+
+        let colorado = registry.find_variation("US", "CO");
+        assert!(colorado.is_some());
+        assert!(
+            colorado
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Cannabis"))
+        );
+
+        let nevada = registry.find_variation("US", "NV");
+        assert!(nevada.is_some());
+        assert!(
+            nevada
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Gaming"))
+        );
+
+        // Count total US states
+        let us_states = registry.get_variations_for_country("US");
+        assert!(us_states.len() >= 16); // 6 original + 10 new
+    }
+
+    #[test]
+    fn test_canadian_territories() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        let yukon = registry.find_variation("CA", "YT");
+        assert!(yukon.is_some());
+        assert_eq!(yukon.unwrap().region_name, "Yukon");
+        assert!(
+            yukon
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Indigenous"))
+        );
+
+        let nwt = registry.find_variation("CA", "NT");
+        assert!(nwt.is_some());
+        assert_eq!(nwt.unwrap().region_name, "Northwest Territories");
+
+        let nunavut = registry.find_variation("CA", "NU");
+        assert!(nunavut.is_some());
+        assert!(
+            nunavut
+                .unwrap()
+                .legal_differences
+                .iter()
+                .any(|d| d.contains("Inuit"))
+        );
+
+        // Count total Canadian provinces/territories
+        let ca_regions = registry.get_variations_for_country("CA");
+        assert!(ca_regions.len() >= 7); // 4 original + 3 new territories
+    }
+
+    #[test]
+    fn test_regional_coverage_count() {
+        let registry = SubRegionalVariationRegistry::with_defaults();
+
+        // Count by country
+        assert!(registry.get_variations_for_country("US").len() >= 16);
+        assert!(registry.get_variations_for_country("CA").len() >= 7);
+        assert!(registry.get_variations_for_country("IN").len() >= 3);
+        assert!(registry.get_variations_for_country("AE").len() >= 2);
+        assert!(registry.get_variations_for_country("BR").len() >= 2);
+        assert!(registry.get_variations_for_country("ZA").len() >= 2);
+        assert!(registry.get_variations_for_country("VN").len() >= 2);
+
+        // Verify Singapore, Malaysia, Thailand, Indonesia, Saudi Arabia, Israel, Argentina,
+        // Mexico, Chile, Colombia, Nigeria, Egypt, Kenya
+        assert!(registry.find_variation("SG", "SG").is_some());
+        assert!(registry.find_variation("MY", "WP").is_some());
+        assert!(registry.find_variation("TH", "BKK").is_some());
+        assert!(registry.find_variation("ID", "JK").is_some());
+        assert!(registry.find_variation("SA", "RI").is_some());
+        assert!(registry.find_variation("IL", "TA").is_some());
+        assert!(registry.find_variation("AR", "BA").is_some());
+        assert!(registry.find_variation("MX", "CMX").is_some());
+        assert!(registry.find_variation("CL", "RM").is_some());
+        assert!(registry.find_variation("CO", "DC").is_some());
+        assert!(registry.find_variation("NG", "LA").is_some());
+        assert!(registry.find_variation("EG", "C").is_some());
+        assert!(registry.find_variation("KE", "NBO").is_some());
+    }
+
+    #[test]
+    fn test_eu_member_state_custom() {
+        let mut registry = EUMemberStateRegistry::new();
+
+        let custom = EUMemberStateVariation::new(
+            Locale::new("fi").with_country("FI"),
+            "Finland",
+            1995,
+            "Civil law (Nordic tradition)",
+        )
+        .add_eu_adaptation("GDPR through Finnish law")
+        .add_specialty("Nordic legal tradition");
+
+        registry.add_variation(custom);
+
+        let found = registry.find_variation("FI");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().country_name, "Finland");
+    }
+
+    #[test]
+    fn test_dialect_terminology_custom() {
+        let mut registry = DialectTerminologyRegistry::new();
+
+        let mut custom =
+            DialectTerminology::new(Locale::new("en").with_country("IN"), "Indian Legal");
+        custom.add_term("lawyer", "advocate");
+        custom.add_term("judge", "honourable justice");
+
+        registry.add_dialect(custom);
+
+        let found = registry.find_dialect(&Locale::new("en").with_country("IN"), "Indian Legal");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().to_dialect("lawyer"), Some("advocate"));
+    }
+
+    #[test]
+    fn test_regional_concept_mapper_custom() {
+        let mut mapper = RegionalConceptMapper::new();
+
+        let custom = RegionalConceptMapping::new(
+            "limited_partnership",
+            "US",
+            "kommanditgesellschaft",
+            "DE",
+            0.85,
+        )
+        .add_note("Both have limited and general partners");
+
+        mapper.add_mapping(custom);
+
+        let found = mapper.find_mappings("limited_partnership", "US", "DE");
+        assert!(!found.is_empty());
+        assert_eq!(found[0].target_concept, "kommanditgesellschaft");
+    }
+
+    #[test]
+    fn test_term_equivalence_custom() {
+        let mut registry = CrossRegionalTermEquivalenceRegistry::new();
+
+        let custom = TermEquivalence::new("arbitration", "US")
+            .add_equivalent("FR", "arbitrage", EquivalenceLevel::Exact)
+            .add_equivalent("DE", "Schiedsverfahren", EquivalenceLevel::Exact)
+            .add_note_to_equivalent("FR", "International arbitration hub");
+
+        registry.add_equivalence(custom);
+
+        let found = registry.get_equivalent_term("arbitration", "US", "FR");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().term, "arbitrage");
+    }
+
+    // ========================================================================
+    // Document Templates v0.2.0 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_template_variable_validation() {
+        let text_var = TemplateVariable::new("name", VariableType::Text, true, "Person name");
+        assert!(text_var.validate("John Doe"));
+        assert!(!text_var.validate("")); // Required but empty
+
+        let number_var = TemplateVariable::new("amount", VariableType::Number, true, "Amount");
+        assert!(number_var.validate("123.45"));
+        assert!(!number_var.validate("not a number"));
+
+        let email_var = TemplateVariable::new("email", VariableType::Email, true, "Email");
+        assert!(email_var.validate("user@example.com"));
+        assert!(!email_var.validate("not-an-email"));
+
+        let bool_var = TemplateVariable::new("active", VariableType::Boolean, true, "Active");
+        assert!(bool_var.validate("true"));
+        assert!(bool_var.validate("false"));
+        assert!(bool_var.validate("yes"));
+        assert!(bool_var.validate("no"));
+        assert!(!bool_var.validate("maybe"));
+
+        let date_var = TemplateVariable::new("date", VariableType::Date, true, "Date");
+        assert!(date_var.validate("2024-01-15"));
+        assert!(date_var.validate("01/15/2024"));
+        assert!(!date_var.validate("invalid"));
+    }
+
+    #[test]
+    fn test_template_variable_with_default() {
+        let var = TemplateVariable::new("state", VariableType::Text, false, "State")
+            .with_default("California");
+
+        assert_eq!(var.default_value, Some("California".to_string()));
+    }
+
+    #[test]
+    fn test_template_section_conditional() {
+        let mut context = HashMap::new();
+        context.insert("jurisdiction".to_string(), "US".to_string());
+
+        let section_with_condition = TemplateSection::new("us_only", "US specific content")
+            .with_condition("jurisdiction == US");
+
+        assert!(section_with_condition.should_include(&context));
+
+        context.insert("jurisdiction".to_string(), "GB".to_string());
+        assert!(!section_with_condition.should_include(&context));
+
+        // Test != condition
+        let section_not_us =
+            TemplateSection::new("non_us", "Non-US content").with_condition("jurisdiction != US");
+
+        assert!(section_not_us.should_include(&context));
+
+        context.insert("jurisdiction".to_string(), "US".to_string());
+        assert!(!section_not_us.should_include(&context));
+    }
+
+    #[test]
+    fn test_template_section_no_condition() {
+        let context = HashMap::new();
+        let section = TemplateSection::new("always", "Always included");
+
+        assert!(section.should_include(&context));
+    }
+
+    #[test]
+    fn test_document_template_nda_generation() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("nda_mutual_us").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert("party1_name".to_string(), "Acme Corp".to_string());
+        values.insert("party2_name".to_string(), "Beta LLC".to_string());
+        values.insert("effective_date".to_string(), "2024-01-01".to_string());
+        values.insert("state".to_string(), "Delaware".to_string());
+
+        let document = template.generate(&values);
+        assert!(document.is_ok());
+
+        let doc_text = document.unwrap();
+        assert!(doc_text.contains("MUTUAL NON-DISCLOSURE AGREEMENT"));
+        assert!(doc_text.contains("Acme Corp"));
+        assert!(doc_text.contains("Beta LLC"));
+        assert!(doc_text.contains("2024-01-01"));
+        assert!(doc_text.contains("Delaware"));
+        assert!(doc_text.contains("CONFIDENTIAL INFORMATION"));
+        assert!(doc_text.contains("OBLIGATIONS"));
+    }
+
+    #[test]
+    fn test_document_template_employment_generation() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("employment_agreement_us").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert(
+            "company_name".to_string(),
+            "Tech Innovations Inc".to_string(),
+        );
+        values.insert("employee_name".to_string(), "Jane Smith".to_string());
+        values.insert("position".to_string(), "Software Engineer".to_string());
+        values.insert("start_date".to_string(), "2024-03-15".to_string());
+        values.insert("salary".to_string(), "120000".to_string());
+        values.insert("state".to_string(), "California".to_string());
+
+        let document = template.generate(&values);
+        assert!(document.is_ok());
+
+        let doc_text = document.unwrap();
+        assert!(doc_text.contains("EMPLOYMENT AGREEMENT"));
+        assert!(doc_text.contains("Tech Innovations Inc"));
+        assert!(doc_text.contains("Jane Smith"));
+        assert!(doc_text.contains("Software Engineer"));
+        assert!(doc_text.contains("$120000"));
+        assert!(doc_text.contains("AT-WILL EMPLOYMENT"));
+    }
+
+    #[test]
+    fn test_document_template_complaint_generation() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("complaint_us").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert(
+            "court_name".to_string(),
+            "UNITED STATES DISTRICT COURT\nSOUTHERN DISTRICT OF NEW YORK".to_string(),
+        );
+        values.insert("plaintiff_name".to_string(), "Alice Johnson".to_string());
+        values.insert("defendant_name".to_string(), "Bob Williams".to_string());
+        values.insert("case_number".to_string(), "1:24-cv-12345".to_string());
+        values.insert(
+            "jurisdiction_facts".to_string(),
+            "This Court has jurisdiction pursuant to 28 U.S.C. § 1331.".to_string(),
+        );
+        values.insert(
+            "claim_facts".to_string(),
+            "On or about December 1, 2023, Defendant breached the contract.".to_string(),
+        );
+        values.insert(
+            "relief_requested".to_string(),
+            "Award Plaintiff damages in the amount of $50,000 plus costs and attorney's fees."
+                .to_string(),
+        );
+
+        let document = template.generate(&values);
+        assert!(document.is_ok());
+
+        let doc_text = document.unwrap();
+        assert!(doc_text.contains("COMPLAINT"));
+        assert!(doc_text.contains("Alice Johnson"));
+        assert!(doc_text.contains("Bob Williams"));
+        assert!(doc_text.contains("1:24-cv-12345"));
+        assert!(doc_text.contains("JURISDICTION AND VENUE"));
+        assert!(doc_text.contains("PRAYER FOR RELIEF"));
+    }
+
+    #[test]
+    fn test_document_template_articles_generation() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("articles_incorporation_de").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert(
+            "corporation_name".to_string(),
+            "NewCo Technologies, Inc.".to_string(),
+        );
+        values.insert(
+            "registered_agent_name".to_string(),
+            "Corporation Service Company".to_string(),
+        );
+        values.insert(
+            "registered_agent_address".to_string(),
+            "251 Little Falls Drive, Wilmington, DE 19808".to_string(),
+        );
+        values.insert("shares_authorized".to_string(), "10000000".to_string());
+        values.insert("incorporator_name".to_string(), "John Founder".to_string());
+
+        let document = template.generate(&values);
+        assert!(document.is_ok());
+
+        let doc_text = document.unwrap();
+        assert!(doc_text.contains("CERTIFICATE OF INCORPORATION"));
+        assert!(doc_text.contains("NewCo Technologies, Inc."));
+        assert!(doc_text.contains("Corporation Service Company"));
+        assert!(doc_text.contains("10000000"));
+        assert!(doc_text.contains("John Founder"));
+        assert!(doc_text.contains("ARTICLE I - NAME"));
+        assert!(doc_text.contains("ARTICLE IV - CAPITAL STOCK"));
+    }
+
+    #[test]
+    fn test_document_template_missing_required_variable() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("nda_mutual_us").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert("party1_name".to_string(), "Acme Corp".to_string());
+        // Missing party2_name, effective_date, and state
+
+        let document = template.generate(&values);
+        assert!(document.is_err());
+
+        let errors = document.unwrap_err();
+        assert!(errors.len() >= 3); // At least 3 missing variables
+        assert!(errors.iter().any(|e| e.contains("party2_name")
+            || e.contains("effective_date")
+            || e.contains("state")));
+    }
+
+    #[test]
+    fn test_document_template_invalid_variable_type() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+        let template = registry.get_template("employment_agreement_us").unwrap();
+
+        let mut values = HashMap::new();
+        values.insert("company_name".to_string(), "Tech Corp".to_string());
+        values.insert("employee_name".to_string(), "Jane Doe".to_string());
+        values.insert("position".to_string(), "Engineer".to_string());
+        values.insert("start_date".to_string(), "2024-01-01".to_string());
+        values.insert("salary".to_string(), "not-a-number".to_string()); // Invalid
+        values.insert("state".to_string(), "CA".to_string());
+
+        let document = template.generate(&values);
+        assert!(document.is_err());
+
+        let errors = document.unwrap_err();
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| e.contains("salary")));
+    }
+
+    #[test]
+    fn test_document_template_registry_find_by_type() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+
+        let contracts = registry.find_by_type(DocumentTemplateType::Contract);
+        assert!(contracts.len() >= 2); // NDA and Employment
+
+        let court_docs = registry.find_by_type(DocumentTemplateType::CourtFiling);
+        assert!(court_docs.len() >= 1); // Complaint
+
+        let corporate_docs = registry.find_by_type(DocumentTemplateType::Corporate);
+        assert!(corporate_docs.len() >= 1); // Articles of Incorporation
+    }
+
+    #[test]
+    fn test_document_template_registry_find_by_jurisdiction() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+
+        let us_templates = registry.find_by_jurisdiction("US");
+        assert!(us_templates.len() >= 3); // NDA, Employment, Complaint
+
+        let de_templates = registry.find_by_jurisdiction("US-DE");
+        assert!(de_templates.len() >= 1); // Articles of Incorporation
+    }
+
+    #[test]
+    fn test_document_template_registry_list_templates() {
+        let registry = DocumentTemplateRegistry::with_defaults();
+
+        let template_ids = registry.list_templates();
+        assert!(template_ids.contains(&"nda_mutual_us"));
+        assert!(template_ids.contains(&"employment_agreement_us"));
+        assert!(template_ids.contains(&"complaint_us"));
+        assert!(template_ids.contains(&"articles_incorporation_de"));
+    }
+
+    #[test]
+    fn test_document_template_custom() {
+        let mut registry = DocumentTemplateRegistry::new();
+
+        let custom_template = DocumentTemplate::new(
+            "custom_nda_gb",
+            "UK Non-Disclosure Agreement",
+            DocumentTemplateType::Contract,
+            Locale::new("en").with_country("GB"),
+            "GB",
+        )
+        .add_variable(TemplateVariable::new(
+            "party1",
+            VariableType::Text,
+            true,
+            "First Party",
+        ))
+        .add_variable(TemplateVariable::new(
+            "party2",
+            VariableType::Text,
+            true,
+            "Second Party",
+        ))
+        .add_section(TemplateSection::new("title", "CONFIDENTIALITY AGREEMENT\n"))
+        .add_section(TemplateSection::new(
+            "parties",
+            "This Agreement is made between {{party1}} and {{party2}}.\n",
+        ))
+        .add_metadata("jurisdiction", "England and Wales");
+
+        registry.add_template(custom_template);
+
+        let retrieved = registry.get_template("custom_nda_gb");
+        assert!(retrieved.is_some());
+
+        let template = retrieved.unwrap();
+        assert_eq!(template.name, "UK Non-Disclosure Agreement");
+        assert_eq!(template.jurisdiction, "GB");
+        assert_eq!(
+            template.metadata.get("jurisdiction"),
+            Some(&"England and Wales".to_string())
+        );
+    }
+
+    #[test]
+    fn test_variable_type_enum() {
+        // Test that all variable types can be created
+        let types = vec![
+            VariableType::Text,
+            VariableType::Date,
+            VariableType::Number,
+            VariableType::Currency,
+            VariableType::Boolean,
+            VariableType::Email,
+            VariableType::Address,
+            VariableType::PersonName,
+            VariableType::List,
+        ];
+
+        assert_eq!(types.len(), 9);
+        assert_eq!(types[0], VariableType::Text);
+        assert_eq!(types[1], VariableType::Date);
+    }
+
+    #[test]
+    fn test_document_template_type_enum() {
+        // Test that all template types can be created
+        let types = vec![
+            DocumentTemplateType::Contract,
+            DocumentTemplateType::CourtFiling,
+            DocumentTemplateType::Corporate,
+            DocumentTemplateType::Compliance,
+            DocumentTemplateType::General,
+        ];
+
+        assert_eq!(types.len(), 5);
+        assert_eq!(types[0], DocumentTemplateType::Contract);
+        assert_ne!(types[0], types[1]);
+    }
+
+    // ========================================================================
+    // Citation Validation Tests (v0.2.1)
+    // ========================================================================
+
+    #[test]
+    fn test_citation_parser_bluebook_case() {
+        let parser = CitationParser::new(CitationStyle::Bluebook);
+        let citation = "Brown v. Board of Education, 347 U.S. 483 (1954)";
+        let result = parser.parse_case(citation);
+
+        assert!(result.is_ok());
+        let components = result.unwrap();
+        assert_eq!(components.title, "Brown v. Board of Education");
+        assert_eq!(components.volume, Some("347".to_string()));
+        assert_eq!(components.reporter, Some("U.S.".to_string()));
+        assert_eq!(components.page, Some("483".to_string()));
+        assert_eq!(components.year, Some(1954));
+    }
+
+    #[test]
+    fn test_citation_parser_oscola_case() {
+        let parser = CitationParser::new(CitationStyle::OSCOLA);
+        let citation = "R v Smith [2020] EWCA Crim 123";
+        let result = parser.parse_case(citation);
+
+        assert!(result.is_ok());
+        let components = result.unwrap();
+        assert_eq!(components.title, "R v Smith");
+        assert_eq!(components.year, Some(2020));
+        assert_eq!(components.reporter, Some("EWCA".to_string()));
+        assert_eq!(components.page, Some("Crim".to_string()));
+    }
+
+    #[test]
+    fn test_citation_parser_bluebook_statute() {
+        let parser = CitationParser::new(CitationStyle::Bluebook);
+        let citation = "42 U.S.C. § 1983";
+        let result = parser.parse_statute(citation);
+
+        assert!(result.is_ok());
+        let components = result.unwrap();
+        assert_eq!(components.title, "42 U.S.C. § 1983");
+        assert_eq!(components.reporter, Some("42 U.S.C.".to_string()));
+        assert_eq!(components.page, Some("1983".to_string()));
+    }
+
+    #[test]
+    fn test_citation_parser_oscola_statute() {
+        let parser = CitationParser::new(CitationStyle::OSCOLA);
+        let citation = "Human Rights Act 1998, s 3";
+        let result = parser.parse_statute(citation);
+
+        assert!(result.is_ok());
+        let components = result.unwrap();
+        assert_eq!(components.title, "Human Rights Act 1998, s 3");
+        assert_eq!(components.year, Some(1998));
+    }
+
+    #[test]
+    fn test_citation_validator_bluebook_case_valid() {
+        let validator = CitationValidator::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Brown v. Board of Education".to_string(),
+            volume: Some("347".to_string()),
+            reporter: Some("U.S.".to_string()),
+            page: Some("483".to_string()),
+            court: Some("Supreme Court".to_string()),
+            year: Some(1954),
+            jurisdiction: None,
+        };
+
+        let result = validator.validate_case(&components);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_citation_validator_bluebook_case_missing_year() {
+        let validator = CitationValidator::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Brown v. Board of Education".to_string(),
+            volume: Some("347".to_string()),
+            reporter: Some("U.S.".to_string()),
+            page: Some("483".to_string()),
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let result = validator.validate_case(&components);
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(!errors.is_empty());
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, CitationError::MissingField { field } if field == "year"))
+        );
+    }
+
+    #[test]
+    fn test_citation_validator_oscola_case_valid() {
+        let validator = CitationValidator::new(CitationStyle::OSCOLA);
+        let components = CitationComponents {
+            title: "R v Smith".to_string(),
+            volume: None,
+            reporter: Some("EWCA".to_string()),
+            page: Some("Crim 123".to_string()),
+            court: None,
+            year: Some(2020),
+            jurisdiction: None,
+        };
+
+        let result = validator.validate_case(&components);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_citation_validator_bluebook_statute_valid() {
+        let validator = CitationValidator::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "42 U.S.C.".to_string(),
+            volume: None,
+            reporter: None,
+            page: Some("1983".to_string()),
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let result = validator.validate_statute(&components);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_citation_normalizer_bluebook_to_oscola() {
+        let normalizer = CitationNormalizer::new();
+        let components = CitationComponents {
+            title: "Brown v. Board of Education".to_string(),
+            volume: Some("347".to_string()),
+            reporter: Some("U.S.".to_string()),
+            page: Some("483".to_string()),
+            court: None,
+            year: Some(1954),
+            jurisdiction: None,
+        };
+
+        let result =
+            normalizer.convert_case(&components, CitationStyle::Bluebook, CitationStyle::OSCOLA);
+
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert!(converted.contains("[1954]"));
+        assert!(converted.contains("Brown v. Board of Education"));
+    }
+
+    #[test]
+    fn test_citation_normalizer_parse_and_convert() {
+        let normalizer = CitationNormalizer::new();
+        let citation = "Brown v. Board of Education, 347 U.S. 483 (1954)";
+
+        let result = normalizer.parse_and_convert_case(
+            citation,
+            CitationStyle::Bluebook,
+            CitationStyle::OSCOLA,
+        );
+
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert!(converted.contains("[1954]"));
+    }
+
+    #[test]
+    fn test_citation_completeness_checker_complete() {
+        let checker = CitationCompletenessChecker::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Brown v. Board of Education".to_string(),
+            volume: Some("347".to_string()),
+            reporter: Some("U.S.".to_string()),
+            page: Some("483".to_string()),
+            court: Some("Supreme Court".to_string()),
+            year: Some(1954),
+            jurisdiction: None,
+        };
+
+        let report = checker.check_case(&components);
+        assert!(report.is_complete());
+        assert!(report.completeness_score > 80.0);
+        assert!(report.missing_required.is_empty());
+    }
+
+    #[test]
+    fn test_citation_completeness_checker_incomplete() {
+        let checker = CitationCompletenessChecker::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Case Name".to_string(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let report = checker.check_case(&components);
+        assert!(!report.is_complete());
+        assert!(report.completeness_score < 50.0);
+        assert!(!report.missing_required.is_empty());
+        assert!(report.missing_required.contains(&"volume".to_string()));
+        assert!(report.missing_required.contains(&"year".to_string()));
+    }
+
+    #[test]
+    fn test_citation_completeness_report_summary() {
+        let checker = CitationCompletenessChecker::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Case Name".to_string(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let report = checker.check_case(&components);
+        let summary = report.summary();
+        assert!(summary.contains("incomplete"));
+        assert!(summary.contains("missing"));
+    }
+
+    #[test]
+    fn test_citation_suggester_bluebook_case() {
+        let suggester = CitationSuggester::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Case Name".to_string(),
+            volume: Some("123".to_string()),
+            reporter: Some("F.3d".to_string()),
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let suggestions = suggester.suggest_case(&components);
+        assert!(!suggestions.is_empty());
+        assert!(suggestions.iter().any(|s| s.contains("page")));
+        assert!(suggestions.iter().any(|s| s.contains("year")));
+    }
+
+    #[test]
+    fn test_citation_suggester_oscola_case() {
+        let suggester = CitationSuggester::new(CitationStyle::OSCOLA);
+        let components = CitationComponents {
+            title: "case name".to_string(),
+            volume: None,
+            reporter: Some("UKSC".to_string()),
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let suggestions = suggester.suggest_case(&components);
+        assert!(!suggestions.is_empty());
+        assert!(suggestions.iter().any(|s| s.contains("year")));
+        assert!(suggestions.iter().any(|s| s.contains("capital")));
+    }
+
+    #[test]
+    fn test_citation_suggester_statute() {
+        let suggester = CitationSuggester::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "42 U.S.C.".to_string(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let suggestions = suggester.suggest_statute(&components);
+        assert!(suggestions.iter().any(|s| s.contains("section")));
+    }
+
+    #[test]
+    fn test_citation_suggester_validate_and_suggest_case() {
+        let suggester = CitationSuggester::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Brown v. Board of Education".to_string(),
+            volume: Some("347".to_string()),
+            reporter: Some("U.S.".to_string()),
+            page: Some("483".to_string()),
+            court: None,
+            year: Some(1954),
+            jurisdiction: None,
+        };
+
+        let report = suggester.validate_and_suggest_case(&components);
+        assert!(report.is_valid);
+        assert!(report.errors.is_empty());
+        assert!(report.completeness.is_complete());
+    }
+
+    #[test]
+    fn test_citation_suggester_validate_and_suggest_invalid() {
+        let suggester = CitationSuggester::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Case".to_string(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let report = suggester.validate_and_suggest_case(&components);
+        assert!(!report.is_valid);
+        assert!(!report.errors.is_empty());
+        assert!(!report.completeness.is_complete());
+        assert!(!report.suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_citation_suggester_style_for_jurisdiction() {
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("US"),
+            CitationStyle::Bluebook
+        );
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("GB"),
+            CitationStyle::OSCOLA
+        );
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("AU"),
+            CitationStyle::AGLC
+        );
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("CA"),
+            CitationStyle::McGill
+        );
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("JP"),
+            CitationStyle::Japanese
+        );
+        assert_eq!(
+            CitationSuggester::suggest_style_for_jurisdiction("IN"),
+            CitationStyle::Indian
+        );
+    }
+
+    #[test]
+    fn test_validation_report_summary() {
+        let suggester = CitationSuggester::new(CitationStyle::Bluebook);
+        let components = CitationComponents {
+            title: "Test".to_string(),
+            volume: None,
+            reporter: None,
+            page: None,
+            court: None,
+            year: None,
+            jurisdiction: None,
+        };
+
+        let report = suggester.validate_and_suggest_case(&components);
+        let summary = report.summary();
+        assert!(summary.contains("error"));
+        assert!(summary.contains("incomplete"));
+        assert!(summary.contains("Suggestions"));
+    }
+
+    #[test]
+    fn test_citation_validation_rule_required() {
+        let rule = CitationValidationRule::required("title");
+        assert!(rule.required);
+        assert_eq!(rule.field, "title");
+
+        let result = rule.validate(None);
+        assert!(result.is_err());
+
+        let result = rule.validate(Some(&"Test".to_string()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_citation_validation_rule_optional() {
+        let rule = CitationValidationRule::optional("court");
+        assert!(!rule.required);
+
+        let result = rule.validate(None);
+        assert!(result.is_ok());
+
+        let result = rule.validate(Some(&"Supreme Court".to_string()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_citation_validation_rule_pattern_numeric() {
+        let rule = CitationValidationRule::required("volume").with_pattern("numeric");
+
+        let result = rule.validate(Some(&"123".to_string()));
+        assert!(result.is_ok());
+
+        let result = rule.validate(Some(&"abc".to_string()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_citation_validation_rule_pattern_year() {
+        let rule = CitationValidationRule::required("year").with_pattern("year");
+
+        let result = rule.validate(Some(&"2020".to_string()));
+        assert!(result.is_ok());
+
+        let result = rule.validate(Some(&"999".to_string()));
+        assert!(result.is_err());
+
+        let result = rule.validate(Some(&"10000".to_string()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_citation_error_display() {
+        let error = CitationError::MissingField {
+            field: "year".to_string(),
+        };
+        assert!(error.to_string().contains("Missing required field"));
+        assert!(error.to_string().contains("year"));
+
+        let error = CitationError::InvalidFormat {
+            field: "volume".to_string(),
+            reason: "Not numeric".to_string(),
+        };
+        assert!(error.to_string().contains("Invalid format"));
+        assert!(error.to_string().contains("volume"));
+
+        let error = CitationError::ParseError {
+            reason: "Empty citation".to_string(),
+        };
+        assert!(error.to_string().contains("Failed to parse"));
+    }
+
+    #[test]
+    fn test_citation_type_enum() {
+        let types = vec![
+            CitationType::Case,
+            CitationType::Statute,
+            CitationType::Article,
+            CitationType::Book,
+        ];
+
+        assert_eq!(types.len(), 4);
+        assert_eq!(types[0], CitationType::Case);
+        assert_ne!(types[0], types[1]);
+    }
+
+    #[test]
+    fn test_citation_parser_empty_citation() {
+        let parser = CitationParser::new(CitationStyle::Bluebook);
+        let result = parser.parse_case("");
+
+        assert!(result.is_err());
+        if let Err(CitationError::ParseError { reason }) = result {
+            assert!(reason.contains("Empty"));
+        } else {
+            panic!("Expected ParseError");
+        }
+    }
+
+    #[test]
+    fn test_citation_normalizer_default() {
+        let normalizer = CitationNormalizer::default();
+        let components = CitationComponents::new("Test");
+
+        let _ =
+            normalizer.convert_case(&components, CitationStyle::Bluebook, CitationStyle::OSCOLA);
+    }
+
+    #[test]
+    fn test_completeness_report_is_complete() {
+        let report = CompletenessReport {
+            citation_type: CitationType::Case,
+            style: CitationStyle::Bluebook,
+            completeness_score: 100.0,
+            missing_required: vec![],
+            missing_optional: vec!["court".to_string()],
+            present: vec!["title".to_string(), "year".to_string()],
+        };
+
+        assert!(report.is_complete());
+
+        let report = CompletenessReport {
+            citation_type: CitationType::Case,
+            style: CitationStyle::Bluebook,
+            completeness_score: 50.0,
+            missing_required: vec!["year".to_string()],
+            missing_optional: vec![],
+            present: vec!["title".to_string()],
+        };
+
+        assert!(!report.is_complete());
     }
 }

@@ -3,11 +3,11 @@
 //! This module provides async batching capabilities to improve write performance
 //! by accumulating audit records and writing them in batches.
 
-use crate::{AuditError, AuditRecord, AuditResult};
 use crate::storage::AuditStorage;
+use crate::{AuditError, AuditRecord, AuditResult};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::time::interval;
 
 /// Configuration for batch writing.
@@ -63,7 +63,10 @@ pub struct BatchWriter {
 }
 
 enum BatchCommand {
-    Write(AuditRecord, tokio::sync::oneshot::Sender<AuditResult<()>>),
+    Write(
+        Box<AuditRecord>,
+        tokio::sync::oneshot::Sender<AuditResult<()>>,
+    ),
     Flush(tokio::sync::oneshot::Sender<AuditResult<()>>),
     Shutdown,
 }
@@ -75,7 +78,9 @@ impl BatchWriter {
 
         let worker_config = config.clone();
         tokio::spawn(async move {
-            BatchWorker::new(storage, receiver, worker_config).run().await;
+            BatchWorker::new(storage, receiver, worker_config)
+                .run()
+                .await;
         });
 
         Self { sender, config }
@@ -85,7 +90,7 @@ impl BatchWriter {
     pub async fn write(&self, record: AuditRecord) -> AuditResult<()> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
-            .send(BatchCommand::Write(record, tx))
+            .send(BatchCommand::Write(Box::new(record), tx))
             .await
             .map_err(|_| AuditError::StorageError("Batch writer channel closed".to_string()))?;
         rx.await
@@ -123,7 +128,10 @@ struct BatchWorker {
     storage: Arc<Mutex<Box<dyn AuditStorage>>>,
     receiver: mpsc::Receiver<BatchCommand>,
     config: BatchConfig,
-    pending_batch: Vec<(AuditRecord, tokio::sync::oneshot::Sender<AuditResult<()>>)>,
+    pending_batch: Vec<(
+        Box<AuditRecord>,
+        tokio::sync::oneshot::Sender<AuditResult<()>>,
+    )>,
 }
 
 impl BatchWorker {
@@ -197,7 +205,7 @@ impl BatchWorker {
         let mut storage = self.storage.lock().await;
 
         for (record, response_tx) in batch {
-            let result = storage.store(record);
+            let result = storage.store(*record);
             let _ = response_tx.send(result);
         }
 

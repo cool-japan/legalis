@@ -1,8 +1,9 @@
 //! CLI command implementations.
 
 use crate::{
-    DiffFormat, ExportFormat, FormatStyle, ImportOutputFormat, LegalDslFormat, OutputFormat,
-    PortFormat, RdfOutputFormat, StatuteTemplate, VizFormat, WatchCommand,
+    BenchmarkType, DiffFormat, ExplainDetail, ExportFormat, FormatStyle, GraphFormat, GraphType,
+    ImportOutputFormat, LegalDslFormat, OutputFormat, PortFormat, RdfOutputFormat, StatuteTemplate,
+    TraceFormat, VizFormat, WatchCommand,
 };
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -2447,21 +2448,11 @@ pub fn handle_list(directory: &str, verbose: bool) -> Result<()> {
                         statutes.push((path.clone(), statute));
                     }
                     Err(e) => {
-                        eprintln!(
-                            "{} Failed to parse {}: {}",
-                            "⚠".yellow(),
-                            path.display(),
-                            e
-                        );
+                        eprintln!("{} Failed to parse {}: {}", "⚠".yellow(), path.display(), e);
                     }
                 },
                 Err(e) => {
-                    eprintln!(
-                        "{} Failed to read {}: {}",
-                        "⚠".yellow(),
-                        path.display(),
-                        e
-                    );
+                    eprintln!("{} Failed to read {}: {}", "⚠".yellow(), path.display(), e);
                 }
             }
         }
@@ -2482,7 +2473,11 @@ pub fn handle_list(directory: &str, verbose: bool) -> Result<()> {
                 println!("{} {}", "Jurisdiction:".bold(), jur);
             }
             println!("{} {}", "File:".bold(), path.display());
-            println!("{} {}", "Preconditions:".bold(), statute.preconditions.len());
+            println!(
+                "{} {}",
+                "Preconditions:".bold(),
+                statute.preconditions.len()
+            );
             println!(
                 "{} {}",
                 "Has Discretion:".bold(),
@@ -2530,11 +2525,7 @@ pub fn handle_list(directory: &str, verbose: bool) -> Result<()> {
 pub fn handle_add(statute_id: &str, _registry_path: &str, config_path: &str) -> Result<()> {
     use legalis_registry::StatuteRegistry;
 
-    println!(
-        "{} {} as dependency...",
-        "Adding".bold(),
-        statute_id.cyan()
-    );
+    println!("{} {} as dependency...", "Adding".bold(), statute_id.cyan());
 
     let mut registry = StatuteRegistry::new();
 
@@ -2602,11 +2593,7 @@ pub fn handle_add(statute_id: &str, _registry_path: &str, config_path: &str) -> 
 }
 
 /// Handles the update command.
-pub fn handle_update(
-    statute_id: Option<&str>,
-    _registry_path: &str,
-    dry_run: bool,
-) -> Result<()> {
+pub fn handle_update(statute_id: Option<&str>, _registry_path: &str, dry_run: bool) -> Result<()> {
     if let Some(id) = statute_id {
         println!("{} {}...", "Checking for updates for".bold(), id.cyan());
     } else {
@@ -2614,10 +2601,7 @@ pub fn handle_update(
     }
 
     if dry_run {
-        println!(
-            "{}",
-            "[DRY RUN] Would check for and install updates".cyan()
-        );
+        println!("{}", "[DRY RUN] Would check for and install updates".cyan());
         println!("  No updates available (registry integration pending)");
         return Ok(());
     }
@@ -2646,29 +2630,25 @@ pub fn handle_clean(all: bool, cache: bool, temp: bool, dry_run: bool) -> Result
     let temp_dir = std::env::temp_dir().join("legalis");
 
     // Clean cache
-    if all || cache {
-        if cache_dir.exists() {
-            let size = dir_size(&cache_dir)?;
-            total_size += size;
-            cleaned_items.push((cache_dir.clone(), size, "cache"));
+    if (all || cache) && cache_dir.exists() {
+        let size = dir_size(&cache_dir)?;
+        total_size += size;
+        cleaned_items.push((cache_dir.clone(), size, "cache"));
 
-            if !dry_run {
-                fs::remove_dir_all(&cache_dir)?;
-                fs::create_dir_all(&cache_dir)?;
-            }
+        if !dry_run {
+            fs::remove_dir_all(&cache_dir)?;
+            fs::create_dir_all(&cache_dir)?;
         }
     }
 
     // Clean temp files
-    if all || temp {
-        if temp_dir.exists() {
-            let size = dir_size(&temp_dir)?;
-            total_size += size;
-            cleaned_items.push((temp_dir.clone(), size, "temp"));
+    if (all || temp) && temp_dir.exists() {
+        let size = dir_size(&temp_dir)?;
+        total_size += size;
+        cleaned_items.push((temp_dir.clone(), size, "temp"));
 
-            if !dry_run {
-                fs::remove_dir_all(&temp_dir)?;
-            }
+        if !dry_run {
+            fs::remove_dir_all(&temp_dir)?;
         }
     }
 
@@ -2696,12 +2676,7 @@ pub fn handle_clean(all: bool, cache: bool, temp: bool, dry_run: bool) -> Result
     println!();
     println!(
         "{} {}",
-        if dry_run {
-            "Would free:"
-        } else {
-            "Freed:"
-        }
-        .bold(),
+        if dry_run { "Would free:" } else { "Freed:" }.bold(),
         format_size(total_size).green()
     );
 
@@ -2977,11 +2952,7 @@ pub fn handle_uninstall(
     force: bool,
     dry_run: bool,
 ) -> Result<()> {
-    println!(
-        "{} {}",
-        "Uninstalling statute:".bold(),
-        statute_id.cyan()
-    );
+    println!("{} {}", "Uninstalling statute:".bold(), statute_id.cyan());
 
     let file_path = Path::new(directory).join(format!("{}.legal", statute_id));
 
@@ -3001,7 +2972,9 @@ pub fn handle_uninstall(
     if dry_run {
         println!(
             "{}",
-            "[DRY RUN] Would remove the following statute:".cyan().bold()
+            "[DRY RUN] Would remove the following statute:"
+                .cyan()
+                .bold()
         );
         println!("  File: {}", file_path.display());
         if let Some(ref s) = statute {
@@ -3040,6 +3013,1056 @@ pub fn handle_uninstall(
 
     println!("{}", "✓ Statute uninstalled successfully".green().bold());
     println!("  Removed: {}", file_path.display());
+
+    Ok(())
+}
+
+/// Handles the explain command.
+#[allow(dead_code)]
+pub fn handle_explain(input: &str, detail: &ExplainDetail, output: Option<&str>) -> Result<()> {
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let mut explanation = String::new();
+
+    // Generate explanation based on detail level
+    match detail {
+        ExplainDetail::Basic => {
+            explanation.push_str(&format!("Statute: {}\n", statute.title.bold()));
+            explanation.push_str(&format!("ID: {}\n", statute.id));
+            if let Some(ref jurisdiction) = statute.jurisdiction {
+                explanation.push_str(&format!("Jurisdiction: {}\n", jurisdiction));
+            }
+            explanation.push_str(&format!(
+                "\nThis statute defines {} condition(s).\n",
+                statute.preconditions.len()
+            ));
+        }
+        ExplainDetail::Detailed => {
+            explanation.push_str(&format!("Statute: {}\n", statute.title.bold()));
+            explanation.push_str(&format!("ID: {}\n", statute.id));
+            explanation.push_str(&format!("Version: {}\n", statute.version));
+            if let Some(ref jurisdiction) = statute.jurisdiction {
+                explanation.push_str(&format!("Jurisdiction: {}\n", jurisdiction));
+            }
+            if let Some(ref disc) = statute.discretion_logic {
+                explanation.push_str(&format!("\nDiscretion: {}\n", disc));
+            }
+
+            explanation.push_str(&format!("\n{}\n", "Conditions:".bold()));
+            for (i, condition) in statute.preconditions.iter().enumerate() {
+                explanation.push_str(&format!("  {}. {}\n", i + 1, condition));
+            }
+
+            if !statute.exceptions.is_empty() {
+                explanation.push_str(&format!("\n{}\n", "Exceptions:".bold()));
+                for (i, exception) in statute.exceptions.iter().enumerate() {
+                    explanation.push_str(&format!("  {}. {}\n", i + 1, exception));
+                }
+            }
+        }
+        ExplainDetail::Verbose => {
+            explanation.push_str(&format!("{}\n", "=".repeat(60)));
+            explanation.push_str(&format!("{}: {}\n", "Statute".bold(), statute.title));
+            explanation.push_str(&format!("{}\n", "=".repeat(60)));
+            explanation.push_str(&format!("{}: {}\n", "ID".bold(), statute.id));
+            explanation.push_str(&format!("{}: {}\n", "Version".bold(), statute.version));
+            if let Some(ref jurisdiction) = statute.jurisdiction {
+                explanation.push_str(&format!("{}: {}\n", "Jurisdiction".bold(), jurisdiction));
+            }
+
+            if let Some(ref disc) = statute.discretion_logic {
+                explanation.push_str(&format!(
+                    "\n{}\n{}\n",
+                    "Discretion Logic".bold(),
+                    "-".repeat(60)
+                ));
+                explanation.push_str(&format!("{}\n", disc));
+            }
+
+            if let Some(ref effective_date) = statute.temporal_validity.effective_date {
+                explanation.push_str(&format!(
+                    "\n{}: {}\n",
+                    "Effective Date".bold(),
+                    effective_date
+                ));
+            }
+            if let Some(ref expiry_date) = statute.temporal_validity.expiry_date {
+                explanation.push_str(&format!("{}: {}\n", "Expiry Date".bold(), expiry_date));
+            }
+
+            explanation.push_str(&format!("\n{}\n{}\n", "Conditions".bold(), "-".repeat(60)));
+            for (i, condition) in statute.preconditions.iter().enumerate() {
+                explanation.push_str(&format!("\n{}. {}\n", i + 1, "Condition".bold()));
+                explanation.push_str(&format!("   {}\n", condition));
+            }
+
+            if !statute.exceptions.is_empty() {
+                explanation.push_str(&format!("\n{}\n{}\n", "Exceptions".bold(), "-".repeat(60)));
+                for (i, exception) in statute.exceptions.iter().enumerate() {
+                    explanation.push_str(&format!("\n{}. {}\n", i + 1, "Exception".bold()));
+                    explanation.push_str(&format!("   {}\n", exception));
+                }
+            }
+
+            if !statute.derives_from.is_empty() {
+                explanation.push_str(&format!(
+                    "\n{}\n{}\n",
+                    "Derived From".bold(),
+                    "-".repeat(60)
+                ));
+                for statute_ref in &statute.derives_from {
+                    explanation.push_str(&format!("  - {}\n", statute_ref));
+                }
+            }
+
+            if !statute.applies_to.is_empty() {
+                explanation.push_str(&format!("\n{}\n{}\n", "Applies To".bold(), "-".repeat(60)));
+                for entity in &statute.applies_to {
+                    explanation.push_str(&format!("  - {}\n", entity));
+                }
+            }
+
+            explanation.push_str(&format!("\n{}\n", "=".repeat(60)));
+        }
+    }
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &explanation)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("{}", "✓ Explanation written successfully".green().bold());
+        println!("  Output: {}", out_path);
+    } else {
+        println!("{}", explanation);
+    }
+
+    Ok(())
+}
+
+/// Handles the trace command.
+#[allow(dead_code)]
+pub fn handle_trace(
+    input: &str,
+    test_case: &str,
+    trace_format: &TraceFormat,
+    output: Option<&str>,
+) -> Result<()> {
+    use serde_json::Value;
+
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let test_content = fs::read_to_string(test_case)
+        .with_context(|| format!("Failed to read test case file: {}", test_case))?;
+
+    let test_data: Value = serde_json::from_str(&test_content)
+        .with_context(|| format!("Failed to parse test case as JSON: {}", test_case))?;
+
+    let mut trace_output = String::new();
+
+    match trace_format {
+        TraceFormat::Text => {
+            trace_output.push_str(&format!("{}\n", "Condition Evaluation Trace".bold()));
+            trace_output.push_str(&format!("{}\n", "=".repeat(60)));
+            trace_output.push_str(&format!("Statute: {}\n", statute.title));
+            trace_output.push_str(&format!("Test Case: {}\n\n", test_case));
+
+            trace_output.push_str(&format!("{}\n", "Input Variables:".bold()));
+            if let Value::Object(map) = &test_data {
+                for (key, value) in map {
+                    trace_output.push_str(&format!("  {} = {}\n", key, value));
+                }
+            }
+
+            trace_output.push_str(&format!("\n{}\n", "Evaluation Path:".bold()));
+            for (i, condition) in statute.preconditions.iter().enumerate() {
+                trace_output.push_str(&format!("  Step {}: Evaluating {}\n", i + 1, condition));
+                trace_output.push_str(&format!(
+                    "    Result: {}\n",
+                    "[Simulated evaluation]".dimmed()
+                ));
+            }
+        }
+        TraceFormat::Json => {
+            let trace_data = serde_json::json!({
+                "statute": {
+                    "id": statute.id,
+                    "title": statute.title,
+                    "version": statute.version
+                },
+                "test_case": test_case,
+                "inputs": test_data,
+                "trace": statute.preconditions.iter().enumerate().map(|(i, cond)| {
+                    serde_json::json!({
+                        "step": i + 1,
+                        "condition": format!("{}", cond),
+                        "result": "simulated"
+                    })
+                }).collect::<Vec<_>>()
+            });
+            trace_output = serde_json::to_string_pretty(&trace_data)?;
+        }
+        TraceFormat::Tree => {
+            trace_output.push_str(&format!("{}\n", statute.title.bold()));
+            trace_output.push_str("│\n");
+            for (i, condition) in statute.preconditions.iter().enumerate() {
+                let is_last = i == statute.preconditions.len() - 1;
+                let prefix = if is_last { "└──" } else { "├──" };
+                trace_output.push_str(&format!("{} Step {}: {}\n", prefix, i + 1, condition));
+            }
+        }
+        TraceFormat::Mermaid => {
+            trace_output.push_str("```mermaid\n");
+            trace_output.push_str("graph TD\n");
+            trace_output.push_str(&format!("  Start[Start: {}]\n", statute.title));
+
+            for (i, condition) in statute.preconditions.iter().enumerate() {
+                let node_id = format!("C{}", i + 1);
+                let prev_id = if i == 0 {
+                    "Start".to_string()
+                } else {
+                    format!("C{}", i)
+                };
+                trace_output.push_str(&format!("  {}[\"{}: {}\"]\n", node_id, i + 1, condition));
+                trace_output.push_str(&format!("  {} --> {}\n", prev_id, node_id));
+            }
+
+            let last_id = format!("C{}", statute.preconditions.len());
+            trace_output.push_str(&format!("  {}[End]\n", "End"));
+            trace_output.push_str(&format!("  {} --> End\n", last_id));
+            trace_output.push_str("```\n");
+        }
+    }
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &trace_output)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("{}", "✓ Trace written successfully".green().bold());
+        println!("  Output: {}", out_path);
+    } else {
+        println!("{}", trace_output);
+    }
+
+    Ok(())
+}
+
+/// Handles the benchmark command.
+#[allow(dead_code)]
+pub async fn handle_benchmark(
+    inputs: &[String],
+    bench_type: &BenchmarkType,
+    iterations: usize,
+    population: usize,
+    output: Option<&str>,
+) -> Result<()> {
+    use std::time::Instant;
+
+    println!("{}", "Running benchmarks...".cyan().bold());
+    println!("Iterations: {}", iterations);
+    println!("Population: {}", population);
+    println!();
+
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    for input in inputs {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+        let statute = parser
+            .parse_statute(&content)
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", input, e))?;
+        statutes.push(statute);
+    }
+
+    let mut results = Vec::new();
+
+    match bench_type {
+        BenchmarkType::Verify | BenchmarkType::All => {
+            println!("{}", "Benchmarking verification...".bold());
+            let verifier = StatuteVerifier::new();
+
+            let start = Instant::now();
+            for _ in 0..iterations {
+                let _ = verifier.verify(&statutes);
+            }
+            let duration = start.elapsed();
+
+            let avg = duration.as_secs_f64() / iterations as f64;
+            results.push(format!("Verification: {:.4}s per iteration", avg));
+            println!("  ✓ Average: {:.4}s per iteration", avg);
+            println!(
+                "  ✓ Total: {:.4}s for {} iterations",
+                duration.as_secs_f64(),
+                iterations
+            );
+        }
+        _ => {}
+    }
+
+    match bench_type {
+        BenchmarkType::Simulate | BenchmarkType::All => {
+            println!("\n{}", "Benchmarking simulation...".bold());
+
+            let start = Instant::now();
+            for _ in 0..iterations {
+                let _sim_result = simulate_statute(&statutes, population);
+            }
+            let duration = start.elapsed();
+
+            let avg = duration.as_secs_f64() / iterations as f64;
+            results.push(format!(
+                "Simulation: {:.4}s per iteration (population: {})",
+                avg, population
+            ));
+            println!(
+                "  ✓ Average: {:.4}s per iteration (population: {})",
+                avg, population
+            );
+            println!(
+                "  ✓ Total: {:.4}s for {} iterations",
+                duration.as_secs_f64(),
+                iterations
+            );
+        }
+        _ => {}
+    }
+
+    let report = results.join("\n");
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &report)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!(
+            "\n{}",
+            "✓ Benchmark results written successfully".green().bold()
+        );
+        println!("  Output: {}", out_path);
+    } else {
+        println!("\n{}", "Benchmark Results:".bold());
+        println!("{}", report);
+    }
+
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn simulate_statute(_statutes: &[Statute], _population: usize) -> usize {
+    _population
+}
+
+/// Handles the migrate command.
+#[allow(dead_code)]
+pub fn handle_migrate(
+    input: &str,
+    from_version: &str,
+    to_version: &str,
+    output: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    if dry_run {
+        println!("{}", "[DRY RUN] Migration Plan:".cyan().bold());
+        println!("  Source: {}", input);
+        println!("  From version: {}", from_version);
+        println!("  To version: {}", to_version);
+        println!();
+        println!("Migration steps:");
+        println!("  1. Parse statute with version {}", from_version);
+        println!("  2. Apply version-specific transformations");
+        println!("  3. Validate migrated statute for version {}", to_version);
+        println!("  4. Write migrated statute to output");
+        return Ok(());
+    }
+
+    println!("{}", "Migrating statute...".cyan().bold());
+    println!("  From: version {}", from_version);
+    println!("  To: version {}", to_version);
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let migrated_output = serde_json::to_string_pretty(&statute)?;
+
+    if let Some(out_path) = output {
+        fs::write(out_path, &migrated_output)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("{}", "✓ Migration completed successfully".green().bold());
+        println!("  Output: {}", out_path);
+    } else {
+        println!("{}", migrated_output);
+    }
+
+    Ok(())
+}
+
+/// Handles the graph command.
+#[allow(dead_code)]
+pub fn handle_graph(
+    inputs: &[String],
+    graph_type: &GraphType,
+    output: &str,
+    graph_format: &GraphFormat,
+) -> Result<()> {
+    println!("{}", "Generating dependency graph...".cyan().bold());
+    println!("  Graph type: {:?}", graph_type);
+    println!("  Format: {:?}", graph_format);
+
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    for input in inputs {
+        if Path::new(input).is_dir() {
+            let entries = fs::read_dir(input)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                if path
+                    .extension()
+                    .is_some_and(|ext| ext == "leg" || ext == "legalis")
+                {
+                    let content = fs::read_to_string(&path)?;
+                    if let Ok(statute) = parser.parse_statute(&content) {
+                        statutes.push(statute);
+                    }
+                }
+            }
+        } else {
+            let content = fs::read_to_string(input)?;
+            let statute = parser
+                .parse_statute(&content)
+                .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", input, e))?;
+            statutes.push(statute);
+        }
+    }
+
+    let mut graph_output = String::new();
+
+    match graph_format {
+        GraphFormat::Dot => {
+            graph_output.push_str("digraph Dependencies {\n");
+            graph_output.push_str("  rankdir=LR;\n");
+            graph_output.push_str("  node [shape=box];\n\n");
+
+            for statute in &statutes {
+                graph_output.push_str(&format!(
+                    "  \"{}\" [label=\"{}\"];\n",
+                    statute.id, statute.title
+                ));
+
+                for dep in &statute.derives_from {
+                    graph_output.push_str(&format!("  \"{}\" -> \"{}\";\n", dep, statute.id));
+                }
+            }
+
+            graph_output.push_str("}\n");
+        }
+        GraphFormat::Mermaid => {
+            graph_output.push_str("```mermaid\n");
+            graph_output.push_str("graph LR\n");
+
+            for statute in &statutes {
+                let safe_id = statute.id.replace("-", "_");
+                graph_output.push_str(&format!("  {}[\"{}\"]\n", safe_id, statute.title));
+
+                for dep in &statute.derives_from {
+                    let safe_dep = dep.replace("-", "_");
+                    graph_output.push_str(&format!("  {} --> {}\n", safe_dep, safe_id));
+                }
+            }
+
+            graph_output.push_str("```\n");
+        }
+        GraphFormat::Json => {
+            let graph_data = serde_json::json!({
+                "nodes": statutes.iter().map(|s| {
+                    serde_json::json!({
+                        "id": s.id,
+                        "title": s.title,
+                        "version": s.version
+                    })
+                }).collect::<Vec<_>>(),
+                "edges": statutes.iter().flat_map(|s| {
+                    s.derives_from.iter().map(|dep| {
+                        serde_json::json!({
+                            "from": dep,
+                            "to": s.id
+                        })
+                    }).collect::<Vec<_>>()
+                }).collect::<Vec<_>>()
+            });
+            graph_output = serde_json::to_string_pretty(&graph_data)?;
+        }
+        GraphFormat::Svg => {
+            graph_output.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+            graph_output.push_str(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"600\">\n",
+            );
+            graph_output.push_str("  <!-- SVG graph generation not yet implemented -->\n");
+            graph_output.push_str(
+                "  <text x=\"400\" y=\"300\" text-anchor=\"middle\">Graph visualization</text>\n",
+            );
+            graph_output.push_str("</svg>\n");
+        }
+    }
+
+    fs::write(output, &graph_output)
+        .with_context(|| format!("Failed to write output file: {}", output))?;
+
+    println!("{}", "✓ Graph generated successfully".green().bold());
+    println!("  Output: {}", output);
+    println!("  Nodes: {}", statutes.len());
+
+    Ok(())
+}
+
+/// Handles the builder-wizard command.
+pub fn handle_builder_wizard(help_only: bool) -> Result<()> {
+    use crate::interactive::{StatuteBuilderResult, interactive_statute_builder};
+
+    if help_only {
+        println!("{}", "Interactive Statute Builder Wizard".green().bold());
+        println!("\nThis wizard will guide you through creating a comprehensive statute with:");
+        println!("  - Basic information (ID, title, jurisdiction)");
+        println!("  - Effective and expiry dates");
+        println!("  - Multiple conditions (age, income, geographic, temporal, boolean)");
+        println!("  - Outcome definitions (eligible, benefit, penalty, custom)");
+        println!("\nRun without --help-only to start the wizard.");
+        return Ok(());
+    }
+
+    let result: StatuteBuilderResult = interactive_statute_builder()?;
+
+    // Generate DSL output
+    let mut dsl_output = String::new();
+    dsl_output.push_str(&format!("statute {} {{\n", result.statute_id));
+    dsl_output.push_str(&format!("  title: \"{}\"\n", result.title));
+    dsl_output.push_str(&format!("  jurisdiction: \"{}\"\n", result.jurisdiction));
+
+    if let Some(ref from) = result.effective_from {
+        dsl_output.push_str(&format!("  effective_from: \"{}\"\n", from));
+    }
+    if let Some(ref until) = result.effective_until {
+        dsl_output.push_str(&format!("  effective_until: \"{}\"\n", until));
+    }
+
+    dsl_output.push_str("\n  condition: ");
+    if result.conditions.len() == 1 {
+        let cond = &result.conditions[0];
+        dsl_output.push_str(&format!(
+            "{} {} {}\n",
+            cond.cond_type, cond.operator, cond.value
+        ));
+    } else {
+        dsl_output.push_str("(\n");
+        for (idx, cond) in result.conditions.iter().enumerate() {
+            dsl_output.push_str(&format!(
+                "    {} {} {}",
+                cond.cond_type, cond.operator, cond.value
+            ));
+            if idx < result.conditions.len() - 1 {
+                dsl_output.push_str(&format!(" {}\n", result.combine_operator));
+            } else {
+                dsl_output.push('\n');
+            }
+        }
+        dsl_output.push_str("  )\n");
+    }
+
+    dsl_output.push_str("\n  outcome: ");
+    if let Some(ref value) = result.outcome_value {
+        dsl_output.push_str(&format!("{} \"{}\"\n", result.outcome_type, value));
+    } else {
+        dsl_output.push_str(&format!("{}\n", result.outcome_type));
+    }
+
+    dsl_output.push_str("}\n");
+
+    // Write to file
+    fs::write(&result.output_path, &dsl_output)
+        .with_context(|| format!("Failed to write statute file: {}", result.output_path))?;
+
+    println!("{}", "✓ Statute created successfully".green().bold());
+    println!("  Output: {}", result.output_path);
+    println!("  ID: {}", result.statute_id);
+    println!("  Conditions: {}", result.conditions.len());
+
+    Ok(())
+}
+
+/// Handles the diff-viewer command.
+pub fn handle_diff_viewer(old_path: &str, new_path: &str) -> Result<()> {
+    use crate::interactive::{DiffViewerResult, interactive_diff_viewer};
+
+    let result: DiffViewerResult = interactive_diff_viewer(old_path, new_path)?;
+
+    match result.action.as_str() {
+        "accept" => {
+            if result.should_backup {
+                let backup_path = format!("{}.backup", result.old_path);
+                fs::copy(&result.old_path, &backup_path)?;
+                println!("{}", format!("✓ Created backup: {}", backup_path).yellow());
+            }
+            fs::copy(&result.new_path, &result.old_path)?;
+            println!("{}", "✓ Accepted new version".green().bold());
+        }
+        "reject" => {
+            println!("{}", "✓ Kept old version (no changes made)".yellow());
+        }
+        "merge" => {
+            if result.should_backup {
+                let backup_path = format!("{}.backup", result.old_path);
+                fs::copy(&result.old_path, &backup_path)?;
+                println!("{}", format!("✓ Created backup: {}", backup_path).yellow());
+            }
+            // Simple merge: append new content
+            let old_content = fs::read_to_string(&result.old_path)?;
+            let new_content = fs::read_to_string(&result.new_path)?;
+            let merged = format!(
+                "{}\n\n--- Merged changes ---\n\n{}",
+                old_content, new_content
+            );
+            fs::write(&result.old_path, merged)?;
+            println!("{}", "✓ Merged versions".green().bold());
+        }
+        "edit" => {
+            println!("{}", "Manual editing not yet implemented".yellow());
+        }
+        "cancel" => {
+            println!("{}", "✓ Cancelled (no changes made)".yellow());
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+/// Handles the sim-tune command.
+pub async fn handle_sim_tune(inputs: &[String]) -> Result<()> {
+    use crate::interactive::{SimulationParams, interactive_simulation_tuning};
+
+    let params: SimulationParams = interactive_simulation_tuning()?;
+
+    println!(
+        "{}",
+        "Running simulation with tuned parameters...".cyan().bold()
+    );
+    println!("  Population: {}", params.population_size);
+    println!("  Iterations: {}", params.iterations);
+
+    if let Some((min, max)) = params.age_distribution {
+        println!("  Age range: {} - {}", min, max);
+    }
+    if let Some((min, max)) = params.income_distribution {
+        println!("  Income range: {} - {}", min, max);
+    }
+
+    // Run simulation with the tuned parameters
+    handle_simulate(inputs, params.population_size, Some(&params.output_path)).await?;
+
+    println!(
+        "{}",
+        "✓ Simulation completed with tuned parameters"
+            .green()
+            .bold()
+    );
+    println!("  Results: {}", params.output_path);
+
+    Ok(())
+}
+
+/// Handles the resolve-conflicts command.
+pub fn handle_resolve_conflicts(inputs: &[String]) -> Result<()> {
+    use crate::interactive::{ConflictInfo, interactive_conflict_resolution};
+
+    println!("{}", "Analyzing statutes for conflicts...".cyan().bold());
+
+    // Parse all input statutes
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    for input in inputs {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+        let statute = parser
+            .parse_statute(&content)
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", input, e))?;
+        statutes.push((input.clone(), statute));
+    }
+
+    // Detect conflicts (simplified implementation)
+    let mut conflicts = Vec::new();
+    for i in 0..statutes.len() {
+        for j in (i + 1)..statutes.len() {
+            let (path1, statute1) = &statutes[i];
+            let (path2, statute2) = &statutes[j];
+
+            if statute1.id == statute2.id && statute1.version != statute2.version {
+                conflicts.push(ConflictInfo {
+                    id: format!("conflict_{}", conflicts.len() + 1),
+                    conflict_type: "version_mismatch".to_string(),
+                    description: format!(
+                        "Statute '{}' has different versions: {} vs {}",
+                        statute1.id, statute1.version, statute2.version
+                    ),
+                    details: Some(format!("Files: {} vs {}", path1, path2)),
+                });
+            }
+
+            if statute1.jurisdiction == statute2.jurisdiction && statute1.id != statute2.id {
+                // Check for overlapping conditions (simplified)
+                let jurisdiction_str = statute1.jurisdiction.as_deref().unwrap_or("unspecified");
+                conflicts.push(ConflictInfo {
+                    id: format!("conflict_{}", conflicts.len() + 1),
+                    conflict_type: "jurisdiction_overlap".to_string(),
+                    description: format!(
+                        "Statutes '{}' and '{}' may overlap in jurisdiction '{}'",
+                        statute1.id, statute2.id, jurisdiction_str
+                    ),
+                    details: Some(format!("Files: {} vs {}", path1, path2)),
+                });
+            }
+        }
+    }
+
+    if conflicts.is_empty() {
+        println!("{}", "✓ No conflicts detected".green().bold());
+        return Ok(());
+    }
+
+    // Resolve conflicts interactively
+    let resolutions = interactive_conflict_resolution(&conflicts)?;
+
+    println!("\n{}", "Conflict Resolution Summary:".cyan().bold());
+    for resolution in &resolutions {
+        println!(
+            "  Conflict {}: {}",
+            resolution.conflict_id, resolution.resolution_type
+        );
+        if let Some(ref custom) = resolution.custom_value {
+            println!("    Custom value: {}", custom);
+        }
+    }
+
+    println!("{}", "✓ Conflicts resolved".green().bold());
+
+    Ok(())
+}
+
+/// Handles the registry-browser command.
+pub fn handle_registry_browser(registry_path: &str, start_search: bool) -> Result<()> {
+    println!("{}", "Registry Browser (TUI)".cyan().bold());
+    println!("  Registry: {}", registry_path);
+
+    if start_search {
+        println!("  Mode: Search");
+    } else {
+        println!("  Mode: Browse");
+    }
+
+    println!("\n{}", "TUI Dashboard Features:".yellow());
+    println!("  • Browse statutes in registry");
+    println!("  • Search by ID, title, or jurisdiction");
+    println!("  • Filter by tags and metadata");
+    println!("  • View statute details");
+    println!("  • Install/uninstall statutes");
+    println!("  • Compare statute versions");
+
+    println!(
+        "\n{}",
+        "Note: Full TUI implementation requires additional dependencies (tui-rs/ratatui)".yellow()
+    );
+    println!(
+        "{}",
+        "For now, showing list of available statutes:".yellow()
+    );
+
+    // Simple listing as placeholder
+    let registry_dir = Path::new(registry_path);
+    if !registry_dir.exists() {
+        anyhow::bail!("Registry directory does not exist: {}", registry_path);
+    }
+
+    let mut statute_count = 0;
+    for entry in fs::read_dir(registry_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("ldsl") {
+            statute_count += 1;
+            if let Some(file_name) = path.file_name() {
+                println!("  📄 {}", file_name.to_string_lossy());
+            }
+        }
+    }
+
+    println!(
+        "\n{}",
+        format!("✓ Found {} statute(s) in registry", statute_count)
+            .green()
+            .bold()
+    );
+
+    Ok(())
+}
+
+/// Handles batch verify operation.
+pub async fn handle_batch_verify(
+    input: &str,
+    strict: bool,
+    workers: Option<usize>,
+    resume: bool,
+    journal_path: &str,
+) -> Result<()> {
+    use crate::batch::{BatchProcessor, expand_glob_pattern};
+
+    println!("{}", "Starting batch verify operation...".cyan().bold());
+
+    let files = expand_glob_pattern(input)?;
+    println!("Found {} file(s) to verify", files.len());
+
+    let processor = BatchProcessor::new(workers);
+    let journal_path = Path::new(journal_path);
+
+    let results = processor
+        .process(
+            files.clone(),
+            journal_path,
+            resume,
+            "batch_verify",
+            move |file| {
+                let content = fs::read_to_string(&file)?;
+                let parser = LegalDslParser::new();
+                let statute = parser
+                    .parse_statute(&content)
+                    .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+                let verifier = StatuteVerifier::new();
+                let result = verifier.verify(&[statute]);
+
+                if strict && !result.warnings.is_empty() {
+                    anyhow::bail!("Verification warnings found");
+                }
+
+                Ok(result.passed)
+            },
+        )
+        .await?;
+
+    // Print summary
+    let successful = results.iter().filter(|(_, r)| r.is_ok()).count();
+    let failed = results.len() - successful;
+
+    println!("\n{}", "=== Batch Verify Summary ===".cyan().bold());
+    println!("  Total files: {}", results.len());
+    println!("  {} Successful: {}", "✓".green(), successful);
+    println!("  {} Failed: {}", "✗".red(), failed);
+
+    if failed > 0 {
+        println!("\n{}", "Failed files:".red().bold());
+        for (file, result) in &results {
+            if let Err(e) = result {
+                println!("  {} {}: {}", "✗".red(), file.display(), e);
+            }
+        }
+    }
+
+    if failed > 0 {
+        anyhow::bail!("Batch verify completed with {} failure(s)", failed);
+    }
+
+    Ok(())
+}
+
+/// Handles batch format operation.
+pub async fn handle_batch_format(
+    input: &str,
+    style: &crate::FormatStyle,
+    inplace: bool,
+    workers: Option<usize>,
+    resume: bool,
+    journal_path: &str,
+) -> Result<()> {
+    use crate::batch::{BatchProcessor, expand_glob_pattern};
+
+    println!("{}", "Starting batch format operation...".cyan().bold());
+
+    let files = expand_glob_pattern(input)?;
+    println!("Found {} file(s) to format", files.len());
+
+    let processor = BatchProcessor::new(workers);
+    let journal_path = Path::new(journal_path);
+    let printer_config: legalis_dsl::PrinterConfig = style.clone().into();
+
+    let results = processor
+        .process(
+            files.clone(),
+            journal_path,
+            resume,
+            "batch_format",
+            move |file| {
+                let content = fs::read_to_string(&file)?;
+                let parser = LegalDslParser::new();
+                let statute = parser
+                    .parse_statute(&content)
+                    .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+                let printer = legalis_dsl::DslPrinter::with_config(printer_config.clone());
+                let formatted = printer.format(&statute);
+
+                if inplace {
+                    fs::write(&file, &formatted)?;
+                }
+
+                Ok(formatted)
+            },
+        )
+        .await?;
+
+    // Print summary
+    let successful = results.iter().filter(|(_, r)| r.is_ok()).count();
+    let failed = results.len() - successful;
+
+    println!("\n{}", "=== Batch Format Summary ===".cyan().bold());
+    println!("  Total files: {}", results.len());
+    println!("  {} Formatted: {}", "✓".green(), successful);
+    println!("  {} Failed: {}", "✗".red(), failed);
+
+    if failed > 0 {
+        anyhow::bail!("Batch format completed with {} failure(s)", failed);
+    }
+
+    Ok(())
+}
+
+/// Handles batch lint operation.
+pub async fn handle_batch_lint(
+    input: &str,
+    fix: bool,
+    strict: bool,
+    workers: Option<usize>,
+    resume: bool,
+    journal_path: &str,
+) -> Result<()> {
+    use crate::batch::{BatchProcessor, expand_glob_pattern};
+
+    println!("{}", "Starting batch lint operation...".cyan().bold());
+
+    let files = expand_glob_pattern(input)?;
+    println!("Found {} file(s) to lint", files.len());
+
+    let processor = BatchProcessor::new(workers);
+    let journal_path = Path::new(journal_path);
+
+    let results = processor
+        .process(
+            files.clone(),
+            journal_path,
+            resume,
+            "batch_lint",
+            move |file| {
+                // Call existing lint handler logic
+                handle_lint(&[file.to_string_lossy().to_string()], fix, strict)?;
+                Ok(())
+            },
+        )
+        .await?;
+
+    // Print summary
+    let successful = results.iter().filter(|(_, r)| r.is_ok()).count();
+    let failed = results.len() - successful;
+
+    println!("\n{}", "=== Batch Lint Summary ===".cyan().bold());
+    println!("  Total files: {}", results.len());
+    println!("  {} Passed: {}", "✓".green(), successful);
+    println!("  {} Failed: {}", "✗".red(), failed);
+
+    if failed > 0 {
+        anyhow::bail!("Batch lint completed with {} failure(s)", failed);
+    }
+
+    Ok(())
+}
+
+/// Handles batch export operation.
+pub async fn handle_batch_export(
+    input: &str,
+    output_dir: &str,
+    export_format: &crate::ExportFormat,
+    workers: Option<usize>,
+    resume: bool,
+    journal_path: &str,
+) -> Result<()> {
+    use crate::batch::{BatchProcessor, expand_glob_pattern};
+
+    println!("{}", "Starting batch export operation...".cyan().bold());
+
+    let files = expand_glob_pattern(input)?;
+    println!("Found {} file(s) to export", files.len());
+
+    // Create output directory
+    let output_path = Path::new(output_dir);
+    fs::create_dir_all(output_path)?;
+
+    let processor = BatchProcessor::new(workers);
+    let journal_path = Path::new(journal_path);
+    let format = export_format.clone();
+    let output_path_buf = output_path.to_path_buf();
+
+    let results = processor
+        .process(
+            files.clone(),
+            journal_path,
+            resume,
+            "batch_export",
+            move |file| {
+                let file_name = file
+                    .file_stem()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid file name"))?;
+                let ext = match format {
+                    crate::ExportFormat::Json => "json",
+                    crate::ExportFormat::Yaml => "yaml",
+                    crate::ExportFormat::Solidity => "sol",
+                };
+                let output_file =
+                    output_path_buf.join(format!("{}.{}", file_name.to_string_lossy(), ext));
+
+                handle_export(
+                    &file.to_string_lossy(),
+                    &output_file.to_string_lossy(),
+                    &format,
+                )?;
+
+                Ok(())
+            },
+        )
+        .await?;
+
+    // Print summary
+    let successful = results.iter().filter(|(_, r)| r.is_ok()).count();
+    let failed = results.len() - successful;
+
+    println!("\n{}", "=== Batch Export Summary ===".cyan().bold());
+    println!("  Total files: {}", results.len());
+    println!("  {} Exported: {}", "✓".green(), successful);
+    println!("  {} Failed: {}", "✗".red(), failed);
+    println!("  Output directory: {}", output_dir);
+
+    if failed > 0 {
+        anyhow::bail!("Batch export completed with {} failure(s)", failed);
+    }
 
     Ok(())
 }

@@ -2,10 +2,8 @@
 //!
 //! Run with: cargo bench
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use legalis_audit::{
-    Actor, AuditRecord, AuditTrail, DecisionContext, DecisionResult, EventType,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use legalis_audit::{Actor, AuditRecord, AuditTrail, DecisionContext, DecisionResult, EventType};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -221,7 +219,8 @@ fn bench_export_csv(c: &mut Criterion) {
 
             b.iter(|| {
                 let mut output = Vec::new();
-                black_box(trail.export_csv(&mut output).unwrap());
+                trail.export_csv(&mut output).unwrap();
+                black_box(());
             });
         });
     }

@@ -38,11 +38,7 @@ pub struct QLearningAgent {
 
 impl QLearningAgent {
     /// Create a new Q-learning agent
-    pub fn new(
-        learning_rate: f64,
-        discount_factor: f64,
-        exploration_rate: f64,
-    ) -> Self {
+    pub fn new(learning_rate: f64, discount_factor: f64, exploration_rate: f64) -> Self {
         Self {
             id: Uuid::new_v4(),
             q_table: HashMap::new(),
@@ -82,7 +78,8 @@ impl QLearningAgent {
             .fold(f64::NEG_INFINITY, f64::max);
 
         // Q-learning update: Q(s,a) = Q(s,a) + alpha * (reward + gamma * max(Q(s',a')) - Q(s,a))
-        let new_q = current_q + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q);
+        let new_q = current_q
+            + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q);
 
         self.q_table
             .entry(state.to_string())
@@ -119,8 +116,8 @@ impl QLearningAgent {
 
     /// Decay exploration rate
     pub fn decay_exploration(&mut self) {
-        self.exploration_rate = (self.exploration_rate * self.exploration_decay)
-            .max(self.min_exploration_rate);
+        self.exploration_rate =
+            (self.exploration_rate * self.exploration_decay).max(self.min_exploration_rate);
         self.episodes += 1;
     }
 }
@@ -161,20 +158,23 @@ impl SarsaAgent {
         next_state: &str,
         next_action: &str,
     ) {
-        let current_q = self.q_table
+        let current_q = self
+            .q_table
             .get(state)
             .and_then(|actions| actions.get(action))
             .copied()
             .unwrap_or(0.0);
 
-        let next_q = self.q_table
+        let next_q = self
+            .q_table
             .get(next_state)
             .and_then(|actions| actions.get(next_action))
             .copied()
             .unwrap_or(0.0);
 
         // SARSA update: Q(s,a) = Q(s,a) + alpha * (reward + gamma * Q(s',a') - Q(s,a))
-        let new_q = current_q + self.learning_rate * (reward + self.discount_factor * next_q - current_q);
+        let new_q =
+            current_q + self.learning_rate * (reward + self.discount_factor * next_q - current_q);
 
         self.q_table
             .entry(state.to_string())
@@ -214,7 +214,8 @@ impl PayoffMatrix {
 
     /// Get payoff for action pair
     pub fn get_payoff(&self, p1_action_idx: usize, p2_action_idx: usize) -> Option<(f64, f64)> {
-        self.payoffs.get(p1_action_idx)
+        self.payoffs
+            .get(p1_action_idx)
             .and_then(|row| row.get(p2_action_idx))
             .copied()
     }
@@ -404,7 +405,10 @@ impl BoundedRationalityAgent {
     }
 
     /// Heuristic-based decision with weighted factors
-    pub fn heuristic_decision(&self, options: &HashMap<String, HashMap<String, f64>>) -> Option<String> {
+    pub fn heuristic_decision(
+        &self,
+        options: &HashMap<String, HashMap<String, f64>>,
+    ) -> Option<String> {
         let mut best_option = None;
         let mut best_score = f64::NEG_INFINITY;
 
@@ -527,7 +531,8 @@ impl BdiAgent {
     /// Deliberate: form intentions from desires
     pub fn deliberate(&mut self) {
         // Select high-priority desires that exceed threshold
-        let mut eligible_desires: Vec<_> = self.desires
+        let mut eligible_desires: Vec<_> = self
+            .desires
             .iter()
             .filter(|d| d.priority >= self.deliberation_threshold)
             .collect();
@@ -646,7 +651,8 @@ impl AgentMemory {
 
     /// Retrieve similar experiences
     pub fn recall_similar(&self, state: &HashMap<String, String>, k: usize) -> Vec<Experience> {
-        let mut experiences: Vec<_> = self.episodic_memory
+        let mut experiences: Vec<_> = self
+            .episodic_memory
             .iter()
             .map(|exp| {
                 let similarity = self.compute_similarity(state, &exp.state);
@@ -655,11 +661,19 @@ impl AgentMemory {
             .collect();
 
         experiences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        experiences.into_iter().take(k).map(|(exp, _)| exp).collect()
+        experiences
+            .into_iter()
+            .take(k)
+            .map(|(exp, _)| exp)
+            .collect()
     }
 
     /// Compute similarity between states (simple Jaccard similarity)
-    fn compute_similarity(&self, state1: &HashMap<String, String>, state2: &HashMap<String, String>) -> f64 {
+    fn compute_similarity(
+        &self,
+        state1: &HashMap<String, String>,
+        state2: &HashMap<String, String>,
+    ) -> f64 {
         let mut common = 0;
         let mut total = 0;
 
@@ -685,10 +699,15 @@ impl AgentMemory {
 
     /// Learn pattern from experiences
     pub fn learn_pattern(&mut self, pattern_name: &str, value: f64) {
-        let current = self.semantic_memory.get(pattern_name).copied().unwrap_or(0.0);
+        let current = self
+            .semantic_memory
+            .get(pattern_name)
+            .copied()
+            .unwrap_or(0.0);
         // Exponential moving average
         let new_value = 0.9 * current + 0.1 * value;
-        self.semantic_memory.insert(pattern_name.to_string(), new_value);
+        self.semantic_memory
+            .insert(pattern_name.to_string(), new_value);
     }
 
     /// Apply memory decay
@@ -700,7 +719,10 @@ impl AgentMemory {
 
     /// Get pattern strength
     pub fn get_pattern_strength(&self, pattern_name: &str) -> f64 {
-        self.semantic_memory.get(pattern_name).copied().unwrap_or(0.0)
+        self.semantic_memory
+            .get(pattern_name)
+            .copied()
+            .unwrap_or(0.0)
     }
 }
 
@@ -731,8 +753,10 @@ mod tests {
         let actions = vec!["left".to_string(), "right".to_string()];
 
         // Set higher Q-value for "right"
-        agent.q_table.insert("s1".to_string(),
-            [("right".to_string(), 10.0)].iter().cloned().collect());
+        agent.q_table.insert(
+            "s1".to_string(),
+            [("right".to_string(), 10.0)].iter().cloned().collect(),
+        );
 
         let action = agent.choose_action("s1", &actions);
         assert_eq!(action, Some("right".to_string()));

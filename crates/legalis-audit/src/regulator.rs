@@ -124,7 +124,9 @@ impl RegulatoryExporter {
 
         match config.format {
             RegulatoryFormat::StandardCsv => Self::export_standard_csv(&filtered_records, config),
-            RegulatoryFormat::DetailedJson => Self::export_detailed_json(&filtered_records, config, report),
+            RegulatoryFormat::DetailedJson => {
+                Self::export_detailed_json(&filtered_records, config, report)
+            }
             RegulatoryFormat::Xml => Self::export_xml(&filtered_records, config, report),
             RegulatoryFormat::GdprCompliant => Self::export_gdpr(&filtered_records, config),
             RegulatoryFormat::SoxCompliant => Self::export_sox(&filtered_records, config, report),
@@ -140,8 +142,16 @@ impl RegulatoryExporter {
         writeln!(
             output,
             "record_id,timestamp,event_type,actor_type,actor_id,statute_id,subject_id,decision_outcome,{}{}",
-            if config.include_context { "context," } else { "" },
-            if config.include_integrity_data { "record_hash,previous_hash" } else { "" }
+            if config.include_context {
+                "context,"
+            } else {
+                ""
+            },
+            if config.include_integrity_data {
+                "record_hash,previous_hash"
+            } else {
+                ""
+            }
         )?;
 
         // Write records
@@ -221,17 +231,38 @@ impl RegulatoryExporter {
 
         // Metadata
         output.push_str("  <export_metadata>\n");
-        output.push_str(&format!("    <timestamp>{}</timestamp>\n", Utc::now().to_rfc3339()));
-        output.push_str(&format!("    <record_count>{}</record_count>\n", records.len()));
+        output.push_str(&format!(
+            "    <timestamp>{}</timestamp>\n",
+            Utc::now().to_rfc3339()
+        ));
+        output.push_str(&format!(
+            "    <record_count>{}</record_count>\n",
+            records.len()
+        ));
         output.push_str("  </export_metadata>\n");
 
         // Compliance summary
         output.push_str("  <compliance_summary>\n");
-        output.push_str(&format!("    <total_decisions>{}</total_decisions>\n", report.total_decisions));
-        output.push_str(&format!("    <automatic_decisions>{}</automatic_decisions>\n", report.automatic_decisions));
-        output.push_str(&format!("    <discretionary_decisions>{}</discretionary_decisions>\n", report.discretionary_decisions));
-        output.push_str(&format!("    <human_overrides>{}</human_overrides>\n", report.human_overrides));
-        output.push_str(&format!("    <integrity_verified>{}</integrity_verified>\n", report.integrity_verified));
+        output.push_str(&format!(
+            "    <total_decisions>{}</total_decisions>\n",
+            report.total_decisions
+        ));
+        output.push_str(&format!(
+            "    <automatic_decisions>{}</automatic_decisions>\n",
+            report.automatic_decisions
+        ));
+        output.push_str(&format!(
+            "    <discretionary_decisions>{}</discretionary_decisions>\n",
+            report.discretionary_decisions
+        ));
+        output.push_str(&format!(
+            "    <human_overrides>{}</human_overrides>\n",
+            report.human_overrides
+        ));
+        output.push_str(&format!(
+            "    <integrity_verified>{}</integrity_verified>\n",
+            report.integrity_verified
+        ));
         output.push_str("  </compliance_summary>\n");
 
         // Records
@@ -239,10 +270,22 @@ impl RegulatoryExporter {
         for record in records {
             output.push_str("    <record>\n");
             output.push_str(&format!("      <id>{}</id>\n", record.id));
-            output.push_str(&format!("      <timestamp>{}</timestamp>\n", record.timestamp.to_rfc3339()));
-            output.push_str(&format!("      <event_type>{}</event_type>\n", Self::format_event_type(&record.event_type)));
-            output.push_str(&format!("      <statute_id>{}</statute_id>\n", xml_escape(&record.statute_id)));
-            output.push_str(&format!("      <subject_id>{}</subject_id>\n", record.subject_id));
+            output.push_str(&format!(
+                "      <timestamp>{}</timestamp>\n",
+                record.timestamp.to_rfc3339()
+            ));
+            output.push_str(&format!(
+                "      <event_type>{}</event_type>\n",
+                Self::format_event_type(&record.event_type)
+            ));
+            output.push_str(&format!(
+                "      <statute_id>{}</statute_id>\n",
+                xml_escape(&record.statute_id)
+            ));
+            output.push_str(&format!(
+                "      <subject_id>{}</subject_id>\n",
+                record.subject_id
+            ));
 
             let actor_info = Self::format_actor(&record.actor);
             output.push_str("      <actor>\n");
@@ -252,9 +295,15 @@ impl RegulatoryExporter {
 
             if config.include_integrity_data {
                 output.push_str("      <integrity>\n");
-                output.push_str(&format!("        <record_hash>{}</record_hash>\n", record.record_hash));
+                output.push_str(&format!(
+                    "        <record_hash>{}</record_hash>\n",
+                    record.record_hash
+                ));
                 if let Some(ref prev) = record.previous_hash {
-                    output.push_str(&format!("        <previous_hash>{}</previous_hash>\n", prev));
+                    output.push_str(&format!(
+                        "        <previous_hash>{}</previous_hash>\n",
+                        prev
+                    ));
                 }
                 output.push_str("      </integrity>\n");
             }
@@ -453,8 +502,10 @@ impl RegulatoryExporter {
         let export = HipaaExport {
             security_rule_compliance: SecurityRuleInfo {
                 audit_controls: "45 CFR 164.312(b) - Implemented".to_string(),
-                integrity_controls: "45 CFR 164.312(c)(1) - Implemented with hash chain".to_string(),
-                transmission_security: "45 CFR 164.312(e)(1) - Encryption at rest available".to_string(),
+                integrity_controls: "45 CFR 164.312(c)(1) - Implemented with hash chain"
+                    .to_string(),
+                transmission_security: "45 CFR 164.312(e)(1) - Encryption at rest available"
+                    .to_string(),
             },
             access_log,
         };
@@ -597,8 +648,10 @@ mod tests {
     fn test_time_range_filter() {
         let records = create_test_records();
         let now = Utc::now();
-        let config = ExportConfig::new(RegulatoryFormat::StandardCsv)
-            .with_time_range(now - chrono::Duration::hours(1), now + chrono::Duration::hours(1));
+        let config = ExportConfig::new(RegulatoryFormat::StandardCsv).with_time_range(
+            now - chrono::Duration::hours(1),
+            now + chrono::Duration::hours(1),
+        );
 
         let filtered = config.filter_records(&records);
         assert!(!filtered.is_empty());

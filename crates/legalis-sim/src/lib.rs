@@ -43,6 +43,12 @@
 //! - Checkpoint and restore functionality
 //! - Simulation replay for debugging
 //!
+//! ## Persistence & Recovery
+//! - File-based checkpoint persistence (save/load to disk)
+//! - Resume from failure detection and recovery
+//! - Automatic periodic checkpointing
+//! - Checkpoint validation and integrity checking
+//!
 //! ## Testing & Validation
 //! - Stress testing for memory limits
 //! - Simulation verification tests
@@ -62,14 +68,18 @@
 //! - Forecasting (linear trends, moving average, exponential smoothing)
 //! - Agent Intelligence (reinforcement learning, game theory, BDI, bounded rationality)
 //! - Demographic Modeling (census data, mortality/fertility rates, migration, households, income mobility)
+//! - Policy Analysis (multi-objective optimization, sensitivity analysis, stakeholder impacts, distributional analysis)
+//! - Validation Framework (empirical validation, cross-validation, confidence intervals, uncertainty quantification)
+//! - Domain-Specific Models (tax systems, benefit eligibility, regulatory compliance, court case prediction, legislative forecasting)
 
 mod agent_intelligence;
 mod analysis;
-mod demographic_modeling;
 mod behavior;
 mod builder;
 mod calibration;
 mod comparison;
+mod demographic_modeling;
+mod domain_models;
 mod economic;
 mod engine;
 mod error;
@@ -82,6 +92,8 @@ mod monte_carlo;
 mod network_effects;
 mod optimization;
 mod performance;
+mod persistence;
+mod policy_analysis;
 mod population;
 mod portfolio;
 mod relationships;
@@ -90,15 +102,17 @@ mod scenarios;
 mod stress_tests;
 mod temporal;
 mod utils;
+mod validation;
 mod visualization;
 
 pub use agent_intelligence::*;
 pub use analysis::*;
 pub use behavior::*;
-pub use demographic_modeling::*;
 pub use builder::*;
 pub use calibration::*;
 pub use comparison::*;
+pub use demographic_modeling::*;
+pub use domain_models::*;
 pub use economic::*;
 pub use engine::*;
 pub use error::*;
@@ -111,6 +125,8 @@ pub use monte_carlo::*;
 pub use network_effects::*;
 pub use optimization::*;
 pub use performance::*;
+pub use persistence::*;
+pub use policy_analysis::*;
 pub use population::*;
 pub use portfolio::*;
 pub use relationships::*;
@@ -118,4 +134,5 @@ pub use risk::*;
 pub use scenarios::*;
 pub use temporal::*;
 pub use utils::*;
+pub use validation::*;
 pub use visualization::*;

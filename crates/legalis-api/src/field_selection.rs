@@ -75,10 +75,7 @@ pub fn apply_field_selection<T: Serialize>(
 }
 
 /// Filters a JSON value to include only specified fields.
-fn filter_json_fields(
-    value: &serde_json::Value,
-    fields: &HashSet<String>,
-) -> serde_json::Value {
+fn filter_json_fields(value: &serde_json::Value, fields: &HashSet<String>) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
             let mut filtered = serde_json::Map::new();

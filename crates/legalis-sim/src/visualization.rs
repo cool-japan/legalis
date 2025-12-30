@@ -268,6 +268,389 @@ pub fn create_dashboard_data(
     }
 }
 
+/// Real-time dashboard update for streaming visualizations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardUpdate {
+    /// Timestamp of the update
+    pub timestamp: u64,
+    /// Update type
+    pub update_type: UpdateType,
+    /// Changed metrics
+    pub metrics: HashMap<String, f64>,
+    /// Optional message
+    pub message: Option<String>,
+}
+
+/// Type of dashboard update
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UpdateType {
+    /// Incremental update (add to existing data)
+    Incremental,
+    /// Full refresh (replace all data)
+    FullRefresh,
+    /// Status update (no data changes)
+    Status,
+    /// Error notification
+    Error,
+}
+
+impl DashboardUpdate {
+    /// Creates a new dashboard update
+    pub fn new(timestamp: u64, update_type: UpdateType) -> Self {
+        Self {
+            timestamp,
+            update_type,
+            metrics: HashMap::new(),
+            message: None,
+        }
+    }
+
+    /// Adds a metric to the update
+    pub fn with_metric(mut self, key: String, value: f64) -> Self {
+        self.metrics.insert(key, value);
+        self
+    }
+
+    /// Adds a message to the update
+    pub fn with_message(mut self, message: String) -> Self {
+        self.message = Some(message);
+        self
+    }
+}
+
+/// Real-time dashboard stream handler
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealTimeDashboard {
+    /// Stream of updates
+    pub updates: Vec<DashboardUpdate>,
+    /// Current state
+    pub current_state: DashboardData,
+    /// Update interval (in milliseconds)
+    pub update_interval_ms: u64,
+}
+
+impl RealTimeDashboard {
+    /// Creates a new real-time dashboard
+    pub fn new(initial_state: DashboardData, update_interval_ms: u64) -> Self {
+        Self {
+            updates: Vec::new(),
+            current_state: initial_state,
+            update_interval_ms,
+        }
+    }
+
+    /// Adds an update to the stream
+    pub fn push_update(&mut self, update: DashboardUpdate) {
+        // Apply update to current state
+        for (key, value) in &update.metrics {
+            self.current_state.summary.insert(key.clone(), *value);
+        }
+        self.updates.push(update);
+    }
+
+    /// Gets all updates since a given timestamp
+    pub fn get_updates_since(&self, timestamp: u64) -> Vec<&DashboardUpdate> {
+        self.updates
+            .iter()
+            .filter(|u| u.timestamp > timestamp)
+            .collect()
+    }
+
+    /// Clears old updates (keeping only recent ones)
+    pub fn prune_updates(&mut self, keep_count: usize) {
+        if self.updates.len() > keep_count {
+            self.updates.drain(0..self.updates.len() - keep_count);
+        }
+    }
+}
+
+/// Animated time-lapse frame for temporal simulations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeLapseFrame {
+    /// Frame number / time step
+    pub frame: usize,
+    /// Timestamp or time label
+    pub time_label: String,
+    /// Snapshot of metrics at this time
+    pub metrics: HashMap<String, f64>,
+    /// Snapshot of entity states
+    pub entity_states: Vec<EntitySnapshot>,
+    /// Events that occurred in this frame
+    pub events: Vec<String>,
+}
+
+/// Snapshot of entity state at a point in time
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntitySnapshot {
+    /// Entity ID
+    pub id: String,
+    /// Entity attributes at this time
+    pub attributes: HashMap<String, serde_json::Value>,
+    /// Geographic position (if applicable)
+    pub position: Option<(f64, f64)>,
+}
+
+/// Animated time-lapse visualization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeLapseVisualization {
+    /// All frames in the animation
+    pub frames: Vec<TimeLapseFrame>,
+    /// Frame rate (frames per second for playback)
+    pub frame_rate: f64,
+    /// Total duration (in simulation time units)
+    pub duration: f64,
+    /// Metadata about the simulation
+    pub metadata: HashMap<String, String>,
+}
+
+impl TimeLapseVisualization {
+    /// Creates a new time-lapse visualization
+    pub fn new(frame_rate: f64) -> Self {
+        Self {
+            frames: Vec::new(),
+            frame_rate,
+            duration: 0.0,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Adds a frame to the time-lapse
+    pub fn add_frame(&mut self, frame: TimeLapseFrame) {
+        self.duration = frame.frame as f64;
+        self.frames.push(frame);
+    }
+
+    /// Gets frame at a specific index
+    pub fn get_frame(&self, index: usize) -> Option<&TimeLapseFrame> {
+        self.frames.get(index)
+    }
+
+    /// Gets frame count
+    pub fn frame_count(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Adds metadata
+    pub fn with_metadata(mut self, key: String, value: String) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+}
+
+/// Interactive parameter configuration for tuning UI
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParameterConfig {
+    /// Parameter name
+    pub name: String,
+    /// Parameter type
+    pub param_type: ParameterType,
+    /// Current value
+    pub current_value: f64,
+    /// Minimum value
+    pub min_value: f64,
+    /// Maximum value
+    pub max_value: f64,
+    /// Step size for adjustments
+    pub step_size: f64,
+    /// Description
+    pub description: String,
+    /// Category (for grouping in UI)
+    pub category: String,
+}
+
+/// Type of parameter
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ParameterType {
+    /// Continuous numeric value
+    Continuous,
+    /// Discrete integer value
+    Discrete,
+    /// Boolean toggle
+    Boolean,
+    /// Percentage (0.0 to 1.0)
+    Percentage,
+}
+
+impl ParameterConfig {
+    /// Creates a new parameter configuration
+    pub fn new(
+        name: String,
+        param_type: ParameterType,
+        current_value: f64,
+        min_value: f64,
+        max_value: f64,
+        step_size: f64,
+    ) -> Self {
+        Self {
+            name,
+            param_type,
+            current_value,
+            min_value,
+            max_value,
+            step_size,
+            description: String::new(),
+            category: "General".to_string(),
+        }
+    }
+
+    /// Sets description
+    pub fn with_description(mut self, description: String) -> Self {
+        self.description = description;
+        self
+    }
+
+    /// Sets category
+    pub fn with_category(mut self, category: String) -> Self {
+        self.category = category;
+        self
+    }
+
+    /// Validates and adjusts a value to be within bounds
+    pub fn validate_value(&self, value: f64) -> f64 {
+        let clamped = value.clamp(self.min_value, self.max_value);
+        match self.param_type {
+            ParameterType::Discrete => clamped.round(),
+            ParameterType::Boolean => {
+                if clamped >= 0.5 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            _ => clamped,
+        }
+    }
+}
+
+/// Interactive parameter tuning UI data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParameterTuningUI {
+    /// All configurable parameters
+    pub parameters: Vec<ParameterConfig>,
+    /// Current simulation state
+    pub current_state: Option<DashboardData>,
+    /// Comparison with baseline (if available)
+    pub baseline_comparison: Option<HashMap<String, f64>>,
+}
+
+impl ParameterTuningUI {
+    /// Creates a new parameter tuning UI
+    pub fn new() -> Self {
+        Self {
+            parameters: Vec::new(),
+            current_state: None,
+            baseline_comparison: None,
+        }
+    }
+
+    /// Adds a parameter
+    pub fn add_parameter(&mut self, param: ParameterConfig) {
+        self.parameters.push(param);
+    }
+
+    /// Updates a parameter value
+    pub fn update_parameter(&mut self, name: &str, value: f64) -> Option<f64> {
+        if let Some(param) = self.parameters.iter_mut().find(|p| p.name == name) {
+            let validated_value = param.validate_value(value);
+            param.current_value = validated_value;
+            Some(validated_value)
+        } else {
+            None
+        }
+    }
+
+    /// Gets parameter by name
+    pub fn get_parameter(&self, name: &str) -> Option<&ParameterConfig> {
+        self.parameters.iter().find(|p| p.name == name)
+    }
+
+    /// Gets all parameters in a category
+    pub fn get_parameters_by_category(&self, category: &str) -> Vec<&ParameterConfig> {
+        self.parameters
+            .iter()
+            .filter(|p| p.category == category)
+            .collect()
+    }
+
+    /// Updates current state
+    pub fn update_state(&mut self, state: DashboardData) {
+        self.current_state = Some(state);
+    }
+
+    /// Sets baseline for comparison
+    pub fn set_baseline(&mut self, baseline: HashMap<String, f64>) {
+        self.baseline_comparison = Some(baseline);
+    }
+}
+
+impl Default for ParameterTuningUI {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Heatmap data for visualization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeatmapData {
+    /// X-axis labels
+    pub x_labels: Vec<String>,
+    /// Y-axis labels
+    pub y_labels: Vec<String>,
+    /// Values (row-major order: y then x)
+    pub values: Vec<Vec<f64>>,
+    /// Minimum value (for color scaling)
+    pub min_value: f64,
+    /// Maximum value (for color scaling)
+    pub max_value: f64,
+    /// Title
+    pub title: String,
+}
+
+impl HeatmapData {
+    /// Creates a new heatmap
+    pub fn new(x_labels: Vec<String>, y_labels: Vec<String>, values: Vec<Vec<f64>>) -> Self {
+        let min_value = values
+            .iter()
+            .flat_map(|row| row.iter())
+            .cloned()
+            .fold(f64::INFINITY, f64::min);
+        let max_value = values
+            .iter()
+            .flat_map(|row| row.iter())
+            .cloned()
+            .fold(f64::NEG_INFINITY, f64::max);
+
+        Self {
+            x_labels,
+            y_labels,
+            values,
+            min_value,
+            max_value,
+            title: String::new(),
+        }
+    }
+
+    /// Sets title
+    pub fn with_title(mut self, title: String) -> Self {
+        self.title = title;
+        self
+    }
+
+    /// Gets value at position
+    pub fn get_value(&self, x: usize, y: usize) -> Option<f64> {
+        self.values.get(y).and_then(|row| row.get(x)).copied()
+    }
+}
+
+/// Creates a heatmap from correlation matrix
+pub fn create_correlation_heatmap(
+    variable_names: Vec<String>,
+    correlation_matrix: Vec<Vec<f64>>,
+) -> HeatmapData {
+    HeatmapData::new(variable_names.clone(), variable_names, correlation_matrix)
+        .with_title("Correlation Matrix".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +748,374 @@ mod tests {
         assert_eq!(dashboard.summary.get("total_applications").unwrap(), &100.0);
         assert_eq!(dashboard.summary.get("deterministic").unwrap(), &60.0);
         assert_eq!(dashboard.network.nodes.len(), 1);
+    }
+
+    // Real-time Dashboard Tests
+
+    #[test]
+    fn test_dashboard_update_creation() {
+        let update = DashboardUpdate::new(1000, UpdateType::Incremental)
+            .with_metric("test_metric".to_string(), 42.0)
+            .with_message("Test update".to_string());
+
+        assert_eq!(update.timestamp, 1000);
+        assert_eq!(update.update_type, UpdateType::Incremental);
+        assert_eq!(update.metrics.get("test_metric").unwrap(), &42.0);
+        assert_eq!(update.message.as_ref().unwrap(), "Test update");
+    }
+
+    #[test]
+    fn test_realtime_dashboard() {
+        let initial_state = DashboardData {
+            summary: HashMap::new(),
+            timeseries: Vec::new(),
+            geographic: Vec::new(),
+            network: D3Graph {
+                nodes: Vec::new(),
+                links: Vec::new(),
+            },
+        };
+
+        let mut dashboard = RealTimeDashboard::new(initial_state, 1000);
+
+        let update1 = DashboardUpdate::new(1000, UpdateType::Incremental)
+            .with_metric("count".to_string(), 10.0);
+        dashboard.push_update(update1);
+
+        let update2 = DashboardUpdate::new(2000, UpdateType::Incremental)
+            .with_metric("count".to_string(), 20.0);
+        dashboard.push_update(update2);
+
+        assert_eq!(dashboard.updates.len(), 2);
+        assert_eq!(dashboard.current_state.summary.get("count").unwrap(), &20.0);
+    }
+
+    #[test]
+    fn test_realtime_dashboard_get_updates_since() {
+        let initial_state = DashboardData {
+            summary: HashMap::new(),
+            timeseries: Vec::new(),
+            geographic: Vec::new(),
+            network: D3Graph {
+                nodes: Vec::new(),
+                links: Vec::new(),
+            },
+        };
+
+        let mut dashboard = RealTimeDashboard::new(initial_state, 1000);
+
+        dashboard.push_update(DashboardUpdate::new(1000, UpdateType::Incremental));
+        dashboard.push_update(DashboardUpdate::new(2000, UpdateType::Incremental));
+        dashboard.push_update(DashboardUpdate::new(3000, UpdateType::Incremental));
+
+        let recent_updates = dashboard.get_updates_since(1500);
+        assert_eq!(recent_updates.len(), 2);
+        assert_eq!(recent_updates[0].timestamp, 2000);
+        assert_eq!(recent_updates[1].timestamp, 3000);
+    }
+
+    #[test]
+    fn test_realtime_dashboard_prune() {
+        let initial_state = DashboardData {
+            summary: HashMap::new(),
+            timeseries: Vec::new(),
+            geographic: Vec::new(),
+            network: D3Graph {
+                nodes: Vec::new(),
+                links: Vec::new(),
+            },
+        };
+
+        let mut dashboard = RealTimeDashboard::new(initial_state, 1000);
+
+        for i in 0..10 {
+            dashboard.push_update(DashboardUpdate::new(i * 1000, UpdateType::Incremental));
+        }
+
+        assert_eq!(dashboard.updates.len(), 10);
+
+        dashboard.prune_updates(5);
+        assert_eq!(dashboard.updates.len(), 5);
+        assert_eq!(dashboard.updates[0].timestamp, 5000);
+    }
+
+    // Time-Lapse Visualization Tests
+
+    #[test]
+    fn test_timelapse_creation() {
+        let mut timelapse = TimeLapseVisualization::new(30.0);
+        assert_eq!(timelapse.frame_rate, 30.0);
+        assert_eq!(timelapse.frame_count(), 0);
+    }
+
+    #[test]
+    fn test_timelapse_add_frame() {
+        let mut timelapse = TimeLapseVisualization::new(30.0);
+
+        let frame = TimeLapseFrame {
+            frame: 0,
+            time_label: "t=0".to_string(),
+            metrics: HashMap::new(),
+            entity_states: Vec::new(),
+            events: vec!["Simulation started".to_string()],
+        };
+
+        timelapse.add_frame(frame);
+        assert_eq!(timelapse.frame_count(), 1);
+        assert_eq!(timelapse.get_frame(0).unwrap().time_label, "t=0");
+    }
+
+    #[test]
+    fn test_timelapse_with_metadata() {
+        let timelapse = TimeLapseVisualization::new(30.0)
+            .with_metadata("title".to_string(), "Test Simulation".to_string())
+            .with_metadata("author".to_string(), "Test User".to_string());
+
+        assert_eq!(timelapse.metadata.get("title").unwrap(), "Test Simulation");
+        assert_eq!(timelapse.metadata.get("author").unwrap(), "Test User");
+    }
+
+    #[test]
+    fn test_timelapse_multiple_frames() {
+        let mut timelapse = TimeLapseVisualization::new(60.0);
+
+        for i in 0..10 {
+            let mut metrics = HashMap::new();
+            metrics.insert("count".to_string(), i as f64 * 10.0);
+
+            let frame = TimeLapseFrame {
+                frame: i,
+                time_label: format!("t={}", i),
+                metrics,
+                entity_states: Vec::new(),
+                events: Vec::new(),
+            };
+
+            timelapse.add_frame(frame);
+        }
+
+        assert_eq!(timelapse.frame_count(), 10);
+        assert_eq!(timelapse.duration, 9.0);
+        assert_eq!(
+            timelapse
+                .get_frame(5)
+                .unwrap()
+                .metrics
+                .get("count")
+                .unwrap(),
+            &50.0
+        );
+    }
+
+    // Parameter Tuning UI Tests
+
+    #[test]
+    fn test_parameter_config_creation() {
+        let param = ParameterConfig::new(
+            "test_param".to_string(),
+            ParameterType::Continuous,
+            5.0,
+            0.0,
+            10.0,
+            0.1,
+        )
+        .with_description("Test parameter".to_string())
+        .with_category("Testing".to_string());
+
+        assert_eq!(param.name, "test_param");
+        assert_eq!(param.current_value, 5.0);
+        assert_eq!(param.description, "Test parameter");
+        assert_eq!(param.category, "Testing");
+    }
+
+    #[test]
+    fn test_parameter_validate_continuous() {
+        let param = ParameterConfig::new(
+            "test".to_string(),
+            ParameterType::Continuous,
+            5.0,
+            0.0,
+            10.0,
+            0.1,
+        );
+
+        assert_eq!(param.validate_value(5.5), 5.5);
+        assert_eq!(param.validate_value(-1.0), 0.0); // Clamped to min
+        assert_eq!(param.validate_value(15.0), 10.0); // Clamped to max
+    }
+
+    #[test]
+    fn test_parameter_validate_discrete() {
+        let param = ParameterConfig::new(
+            "test".to_string(),
+            ParameterType::Discrete,
+            5.0,
+            0.0,
+            10.0,
+            1.0,
+        );
+
+        assert_eq!(param.validate_value(5.7), 6.0); // Rounded
+        assert_eq!(param.validate_value(5.3), 5.0); // Rounded
+    }
+
+    #[test]
+    fn test_parameter_validate_boolean() {
+        let param = ParameterConfig::new(
+            "test".to_string(),
+            ParameterType::Boolean,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+        );
+
+        assert_eq!(param.validate_value(0.6), 1.0); // >= 0.5 -> 1.0
+        assert_eq!(param.validate_value(0.4), 0.0); // < 0.5 -> 0.0
+    }
+
+    #[test]
+    fn test_parameter_tuning_ui() {
+        let mut ui = ParameterTuningUI::new();
+
+        let param1 = ParameterConfig::new(
+            "param1".to_string(),
+            ParameterType::Continuous,
+            1.0,
+            0.0,
+            10.0,
+            0.1,
+        )
+        .with_category("Category A".to_string());
+
+        let param2 = ParameterConfig::new(
+            "param2".to_string(),
+            ParameterType::Discrete,
+            5.0,
+            0.0,
+            10.0,
+            1.0,
+        )
+        .with_category("Category B".to_string());
+
+        ui.add_parameter(param1);
+        ui.add_parameter(param2);
+
+        assert_eq!(ui.parameters.len(), 2);
+        assert!(ui.get_parameter("param1").is_some());
+        assert!(ui.get_parameter("param3").is_none());
+    }
+
+    #[test]
+    fn test_parameter_tuning_ui_update() {
+        let mut ui = ParameterTuningUI::new();
+
+        let param = ParameterConfig::new(
+            "test".to_string(),
+            ParameterType::Continuous,
+            5.0,
+            0.0,
+            10.0,
+            0.1,
+        );
+
+        ui.add_parameter(param);
+
+        let updated_value = ui.update_parameter("test", 7.5);
+        assert_eq!(updated_value, Some(7.5));
+        assert_eq!(ui.get_parameter("test").unwrap().current_value, 7.5);
+    }
+
+    #[test]
+    fn test_parameter_tuning_ui_by_category() {
+        let mut ui = ParameterTuningUI::new();
+
+        ui.add_parameter(
+            ParameterConfig::new(
+                "param1".to_string(),
+                ParameterType::Continuous,
+                1.0,
+                0.0,
+                10.0,
+                0.1,
+            )
+            .with_category("Category A".to_string()),
+        );
+
+        ui.add_parameter(
+            ParameterConfig::new(
+                "param2".to_string(),
+                ParameterType::Continuous,
+                2.0,
+                0.0,
+                10.0,
+                0.1,
+            )
+            .with_category("Category A".to_string()),
+        );
+
+        ui.add_parameter(
+            ParameterConfig::new(
+                "param3".to_string(),
+                ParameterType::Continuous,
+                3.0,
+                0.0,
+                10.0,
+                0.1,
+            )
+            .with_category("Category B".to_string()),
+        );
+
+        let cat_a_params = ui.get_parameters_by_category("Category A");
+        assert_eq!(cat_a_params.len(), 2);
+    }
+
+    // Heatmap Tests
+
+    #[test]
+    fn test_heatmap_creation() {
+        let x_labels = vec!["A".to_string(), "B".to_string(), "C".to_string()];
+        let y_labels = vec!["1".to_string(), "2".to_string()];
+        let values = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+
+        let heatmap = HeatmapData::new(x_labels.clone(), y_labels.clone(), values.clone());
+
+        assert_eq!(heatmap.x_labels.len(), 3);
+        assert_eq!(heatmap.y_labels.len(), 2);
+        assert_eq!(heatmap.min_value, 1.0);
+        assert_eq!(heatmap.max_value, 6.0);
+    }
+
+    #[test]
+    fn test_heatmap_get_value() {
+        let x_labels = vec!["A".to_string(), "B".to_string()];
+        let y_labels = vec!["1".to_string(), "2".to_string()];
+        let values = vec![vec![10.0, 20.0], vec![30.0, 40.0]];
+
+        let heatmap = HeatmapData::new(x_labels, y_labels, values);
+
+        assert_eq!(heatmap.get_value(0, 0), Some(10.0));
+        assert_eq!(heatmap.get_value(1, 0), Some(20.0));
+        assert_eq!(heatmap.get_value(0, 1), Some(30.0));
+        assert_eq!(heatmap.get_value(1, 1), Some(40.0));
+        assert_eq!(heatmap.get_value(2, 0), None);
+    }
+
+    #[test]
+    fn test_correlation_heatmap() {
+        let variables = vec!["var1".to_string(), "var2".to_string(), "var3".to_string()];
+        let correlation = vec![
+            vec![1.0, 0.8, 0.3],
+            vec![0.8, 1.0, 0.5],
+            vec![0.3, 0.5, 1.0],
+        ];
+
+        let heatmap = create_correlation_heatmap(variables, correlation);
+
+        assert_eq!(heatmap.title, "Correlation Matrix");
+        assert_eq!(heatmap.x_labels.len(), 3);
+        assert_eq!(heatmap.y_labels.len(), 3);
+        assert_eq!(heatmap.get_value(0, 0), Some(1.0));
+        assert_eq!(heatmap.get_value(1, 0), Some(0.8));
     }
 }

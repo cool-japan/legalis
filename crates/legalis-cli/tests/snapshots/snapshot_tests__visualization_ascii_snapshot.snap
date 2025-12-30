@@ -1,0 +1,11 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: ascii
+---
+📜 Snapshot Test Act (snapshot-test)
+└─[→]─┐
+        └── ❓ Age ≥ 18
+            ├─[Yes]─┐
+                    ├── ✓ Test right
+            └─[No]─┐
+                    └── ✓ Condition 1 not met

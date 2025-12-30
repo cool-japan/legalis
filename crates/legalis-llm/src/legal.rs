@@ -459,8 +459,8 @@ mod tests {
         }"#;
 
         let provider = MockProvider::new().with_response("Analyze", mock_response);
-        let summarizer = LegalDocumentSummarizer::new(provider)
-            .with_jurisdiction(Jurisdiction::UsFederal);
+        let summarizer =
+            LegalDocumentSummarizer::new(provider).with_jurisdiction(Jurisdiction::UsFederal);
 
         let summary = summarizer
             .summarize("Test case text", LegalDocumentType::CaseLaw)

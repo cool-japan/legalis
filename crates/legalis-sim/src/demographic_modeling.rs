@@ -65,8 +65,16 @@ impl CensusData {
 
     /// Get gender ratio (males per female)
     pub fn get_gender_ratio(&self) -> f64 {
-        let males = self.gender_distribution.get(&Gender::Male).copied().unwrap_or(0);
-        let females = self.gender_distribution.get(&Gender::Female).copied().unwrap_or(0);
+        let males = self
+            .gender_distribution
+            .get(&Gender::Male)
+            .copied()
+            .unwrap_or(0);
+        let females = self
+            .gender_distribution
+            .get(&Gender::Female)
+            .copied()
+            .unwrap_or(0);
         if females == 0 {
             0.0
         } else {
@@ -76,10 +84,26 @@ impl CensusData {
 
     /// Get dependency ratio (young + elderly / working age)
     pub fn get_dependency_ratio(&self) -> f64 {
-        let young = self.age_distribution.get(&AgeGroup::Children).copied().unwrap_or(0)
-            + self.age_distribution.get(&AgeGroup::Youth).copied().unwrap_or(0);
-        let elderly = self.age_distribution.get(&AgeGroup::Elderly).copied().unwrap_or(0);
-        let working = self.age_distribution.get(&AgeGroup::WorkingAge).copied().unwrap_or(0);
+        let young = self
+            .age_distribution
+            .get(&AgeGroup::Children)
+            .copied()
+            .unwrap_or(0)
+            + self
+                .age_distribution
+                .get(&AgeGroup::Youth)
+                .copied()
+                .unwrap_or(0);
+        let elderly = self
+            .age_distribution
+            .get(&AgeGroup::Elderly)
+            .copied()
+            .unwrap_or(0);
+        let working = self
+            .age_distribution
+            .get(&AgeGroup::WorkingAge)
+            .copied()
+            .unwrap_or(0);
 
         if working == 0 {
             0.0
@@ -160,13 +184,13 @@ impl MortalityModel {
 
     /// Get mortality rate for age and gender
     pub fn get_mortality_rate(&self, age: u32, gender: Gender) -> f64 {
-        let base_rate = self.age_specific_rates.get(&age)
+        let base_rate = self
+            .age_specific_rates
+            .get(&age)
             .copied()
             .unwrap_or(self.baseline_rate);
 
-        let gender_adjustment = self.gender_adjustments.get(&gender)
-            .copied()
-            .unwrap_or(1.0);
+        let gender_adjustment = self.gender_adjustments.get(&gender).copied().unwrap_or(1.0);
 
         base_rate * gender_adjustment
     }
@@ -404,7 +428,12 @@ impl HouseholdFormationModel {
     }
 
     /// Set formation probability
-    pub fn set_formation_probability(&mut self, age: u32, household_type: HouseholdType, probability: f64) {
+    pub fn set_formation_probability(
+        &mut self,
+        age: u32,
+        household_type: HouseholdType,
+        probability: f64,
+    ) {
         self.formation_probabilities
             .entry(age)
             .or_default()
@@ -420,7 +449,9 @@ impl HouseholdFormationModel {
         model.avg_sizes.insert(HouseholdType::Single, 1.0);
         model.avg_sizes.insert(HouseholdType::Couple, 2.0);
         model.avg_sizes.insert(HouseholdType::Family, 3.5);
-        model.avg_sizes.insert(HouseholdType::MultiGenerational, 5.0);
+        model
+            .avg_sizes
+            .insert(HouseholdType::MultiGenerational, 5.0);
         model.avg_sizes.insert(HouseholdType::NonFamily, 2.5);
 
         // Young adults tend to be single

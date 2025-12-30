@@ -676,7 +676,8 @@ fn compute_relaxation_metrics(changes: &[Change]) -> RelaxationMetrics {
                         index: *index,
                         relaxation_score: -0.5, // Adding conditions tightens
                         estimated_population_change: -10.0, // Rough estimate
-                        description: "New condition added, reducing eligible population".to_string(),
+                        description: "New condition added, reducing eligible population"
+                            .to_string(),
                     }
                 }
                 ChangeType::Removed => {
@@ -846,18 +847,18 @@ fn classify_breaking_changes(
 
     // Check for effect type changes
     for change in &diff.changes {
-        if matches!(change.target, ChangeTarget::Effect) {
-            if change.change_type == ChangeType::Modified {
-                if let (Some(old), Some(new)) = (&change.old_value, &change.new_value) {
-                    if old.contains("Grant") != new.contains("Grant")
-                        || old.contains("Revoke") != new.contains("Revoke")
-                    {
-                        breaking_types.push(BreakingType::EffectTypeChange);
-                        severity_score += 1.0;
-                    } else {
-                        breaking_types.push(BreakingType::OutcomeChange);
-                        severity_score += 0.6;
-                    }
+        if matches!(change.target, ChangeTarget::Effect)
+            && change.change_type == ChangeType::Modified
+        {
+            if let (Some(old), Some(new)) = (&change.old_value, &change.new_value) {
+                if old.contains("Grant") != new.contains("Grant")
+                    || old.contains("Revoke") != new.contains("Revoke")
+                {
+                    breaking_types.push(BreakingType::EffectTypeChange);
+                    severity_score += 1.0;
+                } else {
+                    breaking_types.push(BreakingType::OutcomeChange);
+                    severity_score += 0.6;
                 }
             }
         }

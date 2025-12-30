@@ -571,8 +571,10 @@ mod tests {
     #[test]
     fn test_edge_provider_truncate() {
         let provider = MockProvider::default();
-        let mut config = EdgeConfig::default();
-        config.max_prompt_length = 10;
+        let config = EdgeConfig {
+            max_prompt_length: 10,
+            ..Default::default()
+        };
         let edge_provider = EdgeProvider::new(provider, config);
 
         let long_prompt = "This is a very long prompt that should be truncated";
@@ -616,10 +618,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_edge_stats() {
-        let mut stats = EdgeStats::default();
-        stats.total_requests = 10;
-        stats.cache_hits = 7;
-        stats.total_latency_ms = 1000;
+        let stats = EdgeStats {
+            total_requests: 10,
+            cache_hits: 7,
+            total_latency_ms: 1000,
+            ..Default::default()
+        };
 
         assert_eq!(stats.cache_hit_rate(), 0.7);
         assert_eq!(stats.avg_latency_ms(), 100.0);

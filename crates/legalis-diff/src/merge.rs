@@ -505,11 +505,7 @@ pub fn auto_merge(
 /// let preview = preview_merge(&base, &ours, &theirs).unwrap();
 /// assert!(!preview.safe_to_merge || !preview.predicted_conflicts.is_empty());
 /// ```
-pub fn preview_merge(
-    base: &Statute,
-    ours: &Statute,
-    theirs: &Statute,
-) -> DiffResult<MergePreview> {
+pub fn preview_merge(base: &Statute, ours: &Statute, theirs: &Statute) -> DiffResult<MergePreview> {
     // Perform a trial merge with Strict strategy to detect all conflicts
     let trial_result = three_way_merge(base, ours, theirs, MergeStrategy::Strict)?;
 
@@ -665,11 +661,7 @@ fn generate_resolution_suggestions(conflict: &MergeConflict) -> Vec<ResolutionSu
 /// let result = semantic_merge(&base, &ours, &theirs).unwrap();
 /// // Semantic merge may detect that both changes are just improvements
 /// ```
-pub fn semantic_merge(
-    base: &Statute,
-    ours: &Statute,
-    theirs: &Statute,
-) -> DiffResult<MergeResult> {
+pub fn semantic_merge(base: &Statute, ours: &Statute, theirs: &Statute) -> DiffResult<MergeResult> {
     // First, analyze the semantic differences
     let our_diff = crate::diff(base, ours)?;
     let their_diff = crate::diff(base, theirs)?;

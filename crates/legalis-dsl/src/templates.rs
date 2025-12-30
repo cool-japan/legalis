@@ -157,12 +157,18 @@ impl TemplateLibrary {
         // Age-based eligibility template
         let age_eligibility = StatuteTemplate::new(
             "age_eligibility",
-            vec!["statute_id".to_string(), "title".to_string(), "min_age".to_string(), "benefit".to_string()],
+            vec![
+                "statute_id".to_string(),
+                "title".to_string(),
+                "min_age".to_string(),
+                "benefit".to_string(),
+            ],
             r#"STATUTE {{statute_id}}: "{{title}}" {
     WHEN AGE >= {{min_age}}
     THEN GRANT "{{benefit}}"
 }"#,
-        ).with_description("Basic age-based eligibility statute");
+        )
+        .with_description("Basic age-based eligibility statute");
         let _ = self.add(age_eligibility);
 
         // Income-based benefit template
@@ -178,7 +184,8 @@ impl TemplateLibrary {
     WHEN INCOME <= {{max_income}}
     THEN GRANT "{{benefit}}"
 }"#,
-        ).with_description("Income-based benefit eligibility");
+        )
+        .with_description("Income-based benefit eligibility");
 
         let _ = self.add(income_benefit);
 
@@ -196,7 +203,8 @@ impl TemplateLibrary {
     WHEN AGE >= {{min_age}} AND INCOME <= {{max_income}}
     THEN GRANT "{{benefit}}"
 }"#,
-        ).with_description("Combined age and income eligibility");
+        )
+        .with_description("Combined age and income eligibility");
 
         let _ = self.add(age_income_combined);
 
@@ -217,7 +225,8 @@ impl TemplateLibrary {
     WHEN {{condition}}
     THEN {{effect}}
 }"#,
-        ).with_description("Statute with temporal validity");
+        )
+        .with_description("Statute with temporal validity");
 
         let _ = self.add(temporal);
 
@@ -238,7 +247,8 @@ impl TemplateLibrary {
     WHEN {{condition}}
     THEN {{effect}}
 }"#,
-        ).with_description("Jurisdiction-specific statute with versioning");
+        )
+        .with_description("Jurisdiction-specific statute with versioning");
 
         let _ = self.add(jurisdictional);
 
@@ -258,7 +268,8 @@ impl TemplateLibrary {
     THEN {{effect}}
     EXCEPTION WHEN {{exception_condition}} "{{exception_desc}}"
 }"#,
-        ).with_description("Statute with exception clause");
+        )
+        .with_description("Statute with exception clause");
 
         let _ = self.add(with_exception);
 
@@ -275,7 +286,8 @@ impl TemplateLibrary {
     WHEN HAS {{attribute}}
     THEN GRANT "{{benefit}}"
 }"#,
-        ).with_description("Simple attribute-based eligibility");
+        )
+        .with_description("Simple attribute-based eligibility");
 
         let _ = self.add(attribute_check);
     }
@@ -378,7 +390,12 @@ mod tests {
 
         let result = template.instantiate(&values);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing required parameter: age"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Missing required parameter: age")
+        );
     }
 
     #[test]
@@ -402,7 +419,12 @@ mod tests {
 
         let result = template.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("declared but not used"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("declared but not used")
+        );
     }
 
     #[test]
@@ -415,7 +437,12 @@ mod tests {
 
         let result = template.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("undefined parameter: age"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("undefined parameter: age")
+        );
     }
 
     #[test]
@@ -471,7 +498,10 @@ mod tests {
 
         let mut values = HashMap::new();
         values.insert("statute_id".to_string(), "low-income-housing".to_string());
-        values.insert("title".to_string(), "Low Income Housing Assistance".to_string());
+        values.insert(
+            "title".to_string(),
+            "Low Income Housing Assistance".to_string(),
+        );
         values.insert("min_age".to_string(), "18".to_string());
         values.insert("max_income".to_string(), "30000".to_string());
         values.insert("benefit".to_string(), "Housing subsidy".to_string());

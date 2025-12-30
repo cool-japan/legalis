@@ -311,13 +311,17 @@ impl DataMinimization {
     fn redact_fields(&self, context: &mut DecisionContext) {
         for field in &self.attribute_fields {
             if context.attributes.contains_key(field) {
-                context.attributes.insert(field.clone(), "***REDACTED***".to_string());
+                context
+                    .attributes
+                    .insert(field.clone(), "***REDACTED***".to_string());
             }
         }
 
         for field in &self.metadata_fields {
             if context.metadata.contains_key(field) {
-                context.metadata.insert(field.clone(), "***REDACTED***".to_string());
+                context
+                    .metadata
+                    .insert(field.clone(), "***REDACTED***".to_string());
             }
         }
     }
@@ -515,22 +519,37 @@ mod tests {
     #[test]
     fn test_data_minimization_redact() {
         let mut record = create_test_record("statute-1", Uuid::new_v4(), 5);
-        record.context.attributes.insert("name".to_string(), "John Doe".to_string());
-        record.context.attributes.insert("email".to_string(), "john@example.com".to_string());
+        record
+            .context
+            .attributes
+            .insert("name".to_string(), "John Doe".to_string());
+        record
+            .context
+            .attributes
+            .insert("email".to_string(), "john@example.com".to_string());
 
         let minimization = DataMinimization::new(MinimizationStrategy::Redact)
             .with_attribute_fields(vec!["name".to_string(), "email".to_string()]);
 
         minimization.apply(&mut record);
 
-        assert_eq!(record.context.attributes.get("name").unwrap(), "***REDACTED***");
-        assert_eq!(record.context.attributes.get("email").unwrap(), "***REDACTED***");
+        assert_eq!(
+            record.context.attributes.get("name").unwrap(),
+            "***REDACTED***"
+        );
+        assert_eq!(
+            record.context.attributes.get("email").unwrap(),
+            "***REDACTED***"
+        );
     }
 
     #[test]
     fn test_data_minimization_pseudonymize() {
         let mut record = create_test_record("statute-1", Uuid::new_v4(), 5);
-        record.context.attributes.insert("ssn".to_string(), "123-45-6789".to_string());
+        record
+            .context
+            .attributes
+            .insert("ssn".to_string(), "123-45-6789".to_string());
 
         let minimization = DataMinimization::new(MinimizationStrategy::Pseudonymize)
             .with_attribute_fields(vec!["ssn".to_string()]);
@@ -545,8 +564,14 @@ mod tests {
     #[test]
     fn test_data_minimization_remove() {
         let mut record = create_test_record("statute-1", Uuid::new_v4(), 5);
-        record.context.attributes.insert("sensitive".to_string(), "data".to_string());
-        record.context.attributes.insert("public".to_string(), "info".to_string());
+        record
+            .context
+            .attributes
+            .insert("sensitive".to_string(), "data".to_string());
+        record
+            .context
+            .attributes
+            .insert("public".to_string(), "info".to_string());
 
         let minimization = DataMinimization::new(MinimizationStrategy::Remove)
             .with_attribute_fields(vec!["sensitive".to_string()]);
@@ -565,7 +590,10 @@ mod tests {
         ];
 
         for record in &mut records {
-            record.context.attributes.insert("name".to_string(), "Test".to_string());
+            record
+                .context
+                .attributes
+                .insert("name".to_string(), "Test".to_string());
         }
 
         let minimization = DataMinimization::new(MinimizationStrategy::Redact)
@@ -576,7 +604,10 @@ mod tests {
 
         assert_eq!(count, 1); // Only the 50-day-old record should be minimized
         assert_eq!(records[0].context.attributes.get("name").unwrap(), "Test");
-        assert_eq!(records[1].context.attributes.get("name").unwrap(), "***REDACTED***");
+        assert_eq!(
+            records[1].context.attributes.get("name").unwrap(),
+            "***REDACTED***"
+        );
     }
 
     #[test]
@@ -587,7 +618,10 @@ mod tests {
         ];
 
         for record in &mut records {
-            record.context.attributes.insert("data".to_string(), "sensitive".to_string());
+            record
+                .context
+                .attributes
+                .insert("data".to_string(), "sensitive".to_string());
         }
 
         let minimization = DataMinimization::new(MinimizationStrategy::Redact)
@@ -599,7 +633,13 @@ mod tests {
         let count = policy.apply(&mut records);
 
         assert_eq!(count, 1); // Only the non-exempt record
-        assert_eq!(records[0].context.attributes.get("data").unwrap(), "***REDACTED***");
-        assert_eq!(records[1].context.attributes.get("data").unwrap(), "sensitive");
+        assert_eq!(
+            records[0].context.attributes.get("data").unwrap(),
+            "***REDACTED***"
+        );
+        assert_eq!(
+            records[1].context.attributes.get("data").unwrap(),
+            "sensitive"
+        );
     }
 }

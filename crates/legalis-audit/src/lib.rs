@@ -86,19 +86,36 @@
 //! println!("Total decisions: {}", report.total_decisions);
 //! ```
 
+pub mod aggregate;
 pub mod analysis;
 pub mod archival;
 pub mod batch;
+pub mod bias;
+pub mod bloom;
+pub mod clustering;
+pub mod comparison;
+pub mod compliance;
 pub mod compression;
+pub mod custody;
+pub mod elasticsearch;
 pub mod encryption;
+pub mod evidence;
 pub mod export;
+pub mod forensic;
 pub mod integrity;
 pub mod integrity_checker;
+pub mod join;
 pub mod query;
+pub mod query_plan;
 pub mod regulator;
 pub mod replay;
 pub mod retention;
+pub mod search;
+pub mod siem;
 pub mod storage;
+pub mod telemetry;
+pub mod timeline;
+pub mod timeseries;
 pub mod webhook;
 
 use chrono::{DateTime, Utc};
@@ -332,6 +349,26 @@ impl AuditTrail {
         })
     }
 
+    /// Creates a new audit trail with append-only log storage.
+    pub fn with_append_only<P: AsRef<std::path::Path>>(path: P) -> AuditResult<Self> {
+        Ok(Self {
+            storage: Box::new(storage::append_only::AppendOnlyStorage::new(path)?),
+        })
+    }
+
+    /// Creates a new audit trail with append-only log storage and rotation.
+    pub fn with_append_only_rotation<P: AsRef<std::path::Path>>(
+        path: P,
+        max_size_bytes: u64,
+    ) -> AuditResult<Self> {
+        Ok(Self {
+            storage: Box::new(storage::append_only::AppendOnlyStorage::with_rotation(
+                path,
+                max_size_bytes,
+            )?),
+        })
+    }
+
     /// Creates a new audit trail with encrypted in-memory storage.
     pub fn with_encrypted_memory(key: encryption::EncryptionKey) -> Self {
         Self {
@@ -422,6 +459,22 @@ impl AuditTrail {
         }
 
         Ok(true)
+    }
+
+    /// Verifies integrity using parallel verification for better performance.
+    pub fn verify_integrity_parallel(&self) -> AuditResult<bool> {
+        let records = self.storage.get_all()?;
+        let verifier = integrity::parallel::ParallelVerifier::new();
+        verifier.verify(&records)
+    }
+
+    /// Verifies integrity using sampling for quick checks on large datasets.
+    ///
+    /// `sample_rate` should be between 0.0 and 1.0, where 1.0 means verify all records.
+    pub fn verify_integrity_sampled(&self, sample_rate: f64) -> AuditResult<bool> {
+        let records = self.storage.get_all()?;
+        let verifier = integrity::parallel::SamplingVerifier::new(sample_rate);
+        verifier.verify_sample(&records)
     }
 
     /// Returns the total number of records.
@@ -626,13 +679,105 @@ impl AuditTrail {
     }
 
     /// Exports audit trail for regulatory compliance.
-    pub fn export_regulatory(
-        &self,
-        config: &regulator::ExportConfig,
-    ) -> AuditResult<String> {
+    pub fn export_regulatory(&self, config: &regulator::ExportConfig) -> AuditResult<String> {
         let records = self.storage.get_all()?;
         let report = self.generate_report()?;
         regulator::RegulatoryExporter::export(&records, config, &report)
+    }
+
+    /// Exports all records to SIEM format.
+    pub fn export_siem(&self, format: siem::SiemFormat) -> AuditResult<Vec<String>> {
+        let records = self.storage.get_all()?;
+        let exporter = siem::SiemExporter::with_format(format);
+        exporter.export_records(&records)
+    }
+
+    /// Exports a single record to SIEM format.
+    pub fn export_record_siem(
+        &self,
+        record_id: Uuid,
+        format: siem::SiemFormat,
+    ) -> AuditResult<String> {
+        let record = self.get(record_id)?;
+        let exporter = siem::SiemExporter::with_format(format);
+        exporter.export_record(&record)
+    }
+
+    /// Exports all records to Elasticsearch bulk API format.
+    pub fn export_elasticsearch_bulk(
+        &self,
+        config: elasticsearch::ElasticsearchConfig,
+    ) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let exporter = elasticsearch::ElasticsearchExporter::new(config);
+        exporter.export_bulk(&records)
+    }
+
+    /// Exports all records to Elasticsearch NDJSON format.
+    pub fn export_elasticsearch_ndjson(
+        &self,
+        config: elasticsearch::ElasticsearchConfig,
+    ) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let exporter = elasticsearch::ElasticsearchExporter::new(config);
+        exporter.export_ndjson(&records)
+    }
+
+    /// Executes an aggregate query on the audit trail.
+    pub fn aggregate(
+        &self,
+        query: &aggregate::AggregateQuery,
+    ) -> AuditResult<aggregate::AggregationResult> {
+        let records = self.storage.get_all()?;
+        query.execute(&records)
+    }
+
+    /// Generates a month-over-month comparison report.
+    pub fn month_over_month_report(
+        &self,
+        reference_date: DateTime<Utc>,
+    ) -> AuditResult<comparison::ComparisonReport> {
+        let records = self.storage.get_all()?;
+        comparison::ComparisonGenerator::month_over_month(&records, reference_date)
+    }
+
+    /// Generates a year-over-year comparison report.
+    pub fn year_over_year_report(
+        &self,
+        reference_date: DateTime<Utc>,
+    ) -> AuditResult<comparison::ComparisonReport> {
+        let records = self.storage.get_all()?;
+        comparison::ComparisonGenerator::year_over_year(&records, reference_date)
+    }
+
+    /// Executes a time-series query on the audit trail.
+    pub fn timeseries(
+        &self,
+        query: &timeseries::TimeSeriesQuery,
+    ) -> AuditResult<timeseries::TimeSeries> {
+        let records = self.storage.get_all()?;
+        query.execute(&records)
+    }
+
+    /// Searches audit records using full-text search.
+    pub fn search(&self, query: &search::SearchQuery) -> AuditResult<Vec<search::SearchResult>> {
+        let records = self.storage.get_all()?;
+        query.execute(&records)
+    }
+
+    /// Reconstructs a chronological timeline from audit records.
+    pub fn reconstruct_timeline(&self, title: String) -> AuditResult<timeline::Timeline> {
+        let records = self.storage.get_all()?;
+        timeline::TimelineReconstructor::reconstruct_chronological(&records, title)
+    }
+
+    /// Reconstructs a timeline for a specific subject.
+    pub fn reconstruct_subject_timeline(
+        &self,
+        subject_id: Uuid,
+    ) -> AuditResult<timeline::Timeline> {
+        let records = self.storage.get_all()?;
+        timeline::TimelineReconstructor::reconstruct_subject(&records, subject_id)
     }
 }
 

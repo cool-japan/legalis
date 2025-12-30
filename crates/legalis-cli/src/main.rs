@@ -2,18 +2,28 @@
 
 use anyhow::Result;
 use clap::Parser;
-use legalis_cli::{Cli, Commands, commands, generate_completions};
+use legalis_cli::{
+    Cli, Commands, commands, generate_all_man_pages, generate_completions, generate_man_page,
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    // Load configuration early to support alias expansion
+    let config = legalis_cli::config::Config::load();
 
-    // Load configuration
+    // Expand aliases in arguments
+    let args: Vec<String> = std::env::args().collect();
+    let expanded_args = config.expand_aliases(args);
+
+    // Parse CLI with potentially expanded arguments
+    let cli = Cli::parse_from(expanded_args);
+
+    // Reload configuration with potentially specified config file
     let _config = if let Some(config_path) = &cli.config {
         legalis_cli::config::Config::from_file(std::path::Path::new(config_path))?
     } else {
-        legalis_cli::config::Config::load()
+        config
     };
 
     // Initialize logging based on verbosity
@@ -32,6 +42,47 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .with(tracing_subscriber::EnvFilter::new(log_level))
         .init();
+
+    // Handle interactive mode for supported commands
+    if cli.interactive {
+        match &cli.command {
+            Commands::New { .. } => {
+                let (name, template_str, output) =
+                    legalis_cli::interactive::interactive_new_statute()?;
+                let template = match template_str.as_str() {
+                    "basic" => legalis_cli::StatuteTemplate::Basic,
+                    "income" => legalis_cli::StatuteTemplate::Income,
+                    "geographic" => legalis_cli::StatuteTemplate::Geographic,
+                    "temporal" => legalis_cli::StatuteTemplate::Temporal,
+                    "complex" => legalis_cli::StatuteTemplate::Complex,
+                    _ => anyhow::bail!("Unknown template: {}", template_str),
+                };
+                commands::handle_new(&name, &template, output.as_deref())?;
+                return Ok(());
+            }
+            Commands::Verify { .. } => {
+                let (files, strict) = legalis_cli::interactive::interactive_verify()?;
+                commands::handle_verify(&files, strict, &cli.format)?;
+                return Ok(());
+            }
+            Commands::Export { .. } => {
+                let (input, output, format_str) = legalis_cli::interactive::interactive_export()?;
+                let export_format = match format_str.as_str() {
+                    "json" => legalis_cli::ExportFormat::Json,
+                    "yaml" => legalis_cli::ExportFormat::Yaml,
+                    "solidity" => legalis_cli::ExportFormat::Solidity,
+                    _ => anyhow::bail!("Unknown format: {}", format_str),
+                };
+                commands::handle_export(&input, &output, &export_format)?;
+                return Ok(());
+            }
+            _ => {
+                eprintln!(
+                    "Warning: Interactive mode not supported for this command. Using normal mode."
+                );
+            }
+        }
+    }
 
     match &cli.command {
         Commands::Parse { input, output } => {
@@ -115,6 +166,14 @@ async fn main() -> Result<()> {
         }
         Commands::Completions { shell } => {
             generate_completions(*shell);
+        }
+        Commands::ManPage { output } => {
+            if let Some(output_dir) = output {
+                generate_all_man_pages(std::path::Path::new(output_dir))?;
+                println!("Man pages generated in: {}", output_dir);
+            } else {
+                generate_man_page()?;
+            }
         }
         Commands::Lod {
             input,
@@ -230,6 +289,130 @@ async fn main() -> Result<()> {
             dry_run,
         } => {
             commands::handle_uninstall(statute_id, directory, *force, *dry_run)?;
+        }
+        Commands::Tutorial { topic } => {
+            let tutorial_topic = topic.as_ref().map(|t| t.clone().into());
+            legalis_cli::tutorial::run_tutorial(tutorial_topic)?;
+        }
+        Commands::Explain {
+            input,
+            detail,
+            output,
+        } => {
+            commands::handle_explain(input, detail, output.as_deref())?;
+        }
+        Commands::Trace {
+            input,
+            test_case,
+            trace_format,
+            output,
+        } => {
+            commands::handle_trace(input, test_case, trace_format, output.as_deref())?;
+        }
+        Commands::Benchmark {
+            input,
+            bench_type,
+            iterations,
+            population,
+            output,
+        } => {
+            commands::handle_benchmark(
+                input,
+                bench_type,
+                *iterations,
+                *population,
+                output.as_deref(),
+            )
+            .await?;
+        }
+        Commands::Migrate {
+            input,
+            from_version,
+            to_version,
+            output,
+            dry_run,
+        } => {
+            commands::handle_migrate(input, from_version, to_version, output.as_deref(), *dry_run)?;
+        }
+        Commands::Graph {
+            input,
+            graph_type,
+            output,
+            graph_format,
+        } => {
+            commands::handle_graph(input, graph_type, output, graph_format)?;
+        }
+        Commands::BuilderWizard { help_only } => {
+            commands::handle_builder_wizard(*help_only)?;
+        }
+        Commands::DiffViewer { old, new } => {
+            commands::handle_diff_viewer(old, new)?;
+        }
+        Commands::SimTune { input } => {
+            commands::handle_sim_tune(input).await?;
+        }
+        Commands::ResolveConflicts { input } => {
+            commands::handle_resolve_conflicts(input)?;
+        }
+        Commands::RegistryBrowser { registry, search } => {
+            commands::handle_registry_browser(registry, *search)?;
+        }
+        Commands::Batch { operation } => {
+            use legalis_cli::BatchOperation;
+            match operation {
+                BatchOperation::Verify {
+                    input,
+                    strict,
+                    workers,
+                    resume,
+                    journal,
+                } => {
+                    commands::handle_batch_verify(input, *strict, *workers, *resume, journal)
+                        .await?;
+                }
+                BatchOperation::Format {
+                    input,
+                    style,
+                    inplace,
+                    workers,
+                    resume,
+                    journal,
+                } => {
+                    commands::handle_batch_format(
+                        input, style, *inplace, *workers, *resume, journal,
+                    )
+                    .await?;
+                }
+                BatchOperation::Lint {
+                    input,
+                    fix,
+                    strict,
+                    workers,
+                    resume,
+                    journal,
+                } => {
+                    commands::handle_batch_lint(input, *fix, *strict, *workers, *resume, journal)
+                        .await?;
+                }
+                BatchOperation::Export {
+                    input,
+                    output,
+                    export_format,
+                    workers,
+                    resume,
+                    journal,
+                } => {
+                    commands::handle_batch_export(
+                        input,
+                        output,
+                        export_format,
+                        *workers,
+                        *resume,
+                        journal,
+                    )
+                    .await?;
+                }
+            }
         }
     }
 

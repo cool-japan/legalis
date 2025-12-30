@@ -16,11 +16,15 @@ regex-lite = "0.1"
 quick-xml = { version = "0.37", features = ["serialize"] }
 rayon = { version = "1.10", optional = true }
 tokio = { version = "1.42", features = ["rt", "fs"], optional = true }
+walkdir = { version = "2.5", optional = true }
+notify = { version = "6.1", optional = true }
+serde_yaml = { version = "0.9", optional = true }
 
 [features]
 default = []
 parallel = ["rayon"]
 async = ["tokio"]
+batch = ["walkdir", "notify", "serde_yaml", "rayon"]
 
 [dev-dependencies]
 criterion = "0.5"

@@ -173,7 +173,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Risk Score: {:.1}%", risk.risk_score * 100.0);
         println!("  Risks Identified: {}", risk.risks.len());
         for r in &risk.risks {
-            println!("    • [{:?}] {}: {}", r.severity, r.category, r.description);
+            println!(
+                "    • [{:?}] {:?}: {}",
+                r.severity, r.category, r.description
+            );
         }
         println!();
     }

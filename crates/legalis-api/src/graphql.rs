@@ -4,6 +4,7 @@
 //! running verifications, and managing the statute registry.
 
 use async_graphql::{Context, FieldResult, Object, Schema, SimpleObject, Subscription};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use futures::{Stream, StreamExt};
 use legalis_core::{Effect, EffectType, Statute};
 use legalis_dsl::LegalDslParser;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::auth::{AuthUser, Permission};
 use crate::websocket::{WsBroadcaster, WsNotification};
 
 /// GraphQL schema type.
@@ -44,6 +46,17 @@ impl Default for GraphQLState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Helper function to check permissions in GraphQL resolvers.
+/// Returns an error if the user doesn't have the required permission.
+fn check_permission(ctx: &Context<'_>, permission: Permission) -> FieldResult<()> {
+    if let Ok(auth_user) = ctx.data::<AuthUser>() {
+        if auth_user.has_permission(permission) {
+            return Ok(());
+        }
+    }
+    Err("Insufficient permissions".into())
 }
 
 /// GraphQL representation of a Statute.
@@ -95,12 +108,46 @@ pub struct VerificationResult {
     pub suggestions: Vec<String>,
 }
 
+/// Relay-style connection for paginated results.
+#[derive(SimpleObject)]
+pub struct StatuteConnection {
+    /// Edges containing nodes and cursors
+    pub edges: Vec<StatuteEdge>,
+    /// Page information
+    pub page_info: PageInfo,
+    /// Total count of items
+    pub total_count: i32,
+}
+
+/// Edge in a relay-style connection.
+#[derive(SimpleObject)]
+pub struct StatuteEdge {
+    /// The node (statute)
+    pub node: StatuteObject,
+    /// Cursor for this node
+    pub cursor: String,
+}
+
+/// Page information for cursor-based pagination.
+#[derive(SimpleObject)]
+pub struct PageInfo {
+    /// Whether there is a next page
+    pub has_next_page: bool,
+    /// Whether there is a previous page
+    pub has_previous_page: bool,
+    /// Cursor of the first item
+    pub start_cursor: Option<String>,
+    /// Cursor of the last item
+    pub end_cursor: Option<String>,
+}
+
 /// Query root.
 pub struct QueryRoot;
 
 #[Object]
 impl QueryRoot {
     /// Get all statutes.
+    #[graphql(complexity = 10)]
     async fn statutes(&self, ctx: &Context<'_>) -> FieldResult<Vec<StatuteObject>> {
         let state = ctx.data::<GraphQLState>()?;
         let statutes = state.statutes.read().await;
@@ -118,6 +165,7 @@ impl QueryRoot {
     }
 
     /// Search statutes by title.
+    #[graphql(complexity = 15)]
     async fn search_statutes(
         &self,
         ctx: &Context<'_>,
@@ -186,6 +234,80 @@ impl QueryRoot {
         let statutes = state.statutes.read().await;
         Ok(statutes.len() as i32)
     }
+
+    /// Get statutes with relay-style cursor pagination.
+    #[graphql(complexity = 10)]
+    async fn statutes_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>,
+    ) -> FieldResult<StatuteConnection> {
+        let state = ctx.data::<GraphQLState>()?;
+        let statutes = state.statutes.read().await;
+
+        // Convert statutes to a vec for easier processing
+        let all_statutes: Vec<_> = statutes.iter().collect();
+        let total_count = all_statutes.len() as i32;
+
+        // Decode cursors (cursors are base64-encoded indices)
+        let after_idx = after
+            .as_ref()
+            .and_then(|c| BASE64.decode(c).ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<usize>().ok());
+
+        let before_idx = before
+            .as_ref()
+            .and_then(|c| BASE64.decode(c).ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<usize>().ok());
+
+        // Determine the slice of items to return
+        let mut start = after_idx.map(|i| i + 1).unwrap_or(0);
+        let mut end = before_idx.unwrap_or(all_statutes.len());
+
+        // Apply first/last limits
+        if let Some(first_count) = first {
+            end = std::cmp::min(end, start + first_count as usize);
+        }
+        if let Some(last_count) = last {
+            start = std::cmp::max(start, end.saturating_sub(last_count as usize));
+        }
+
+        // Build edges
+        let edges: Vec<StatuteEdge> = all_statutes[start..end]
+            .iter()
+            .enumerate()
+            .map(|(offset, statute)| {
+                let idx = start + offset;
+                let cursor = BASE64.encode(idx.to_string());
+                StatuteEdge {
+                    node: StatuteObject::from(*statute),
+                    cursor,
+                }
+            })
+            .collect();
+
+        // Build page info
+        let has_previous_page = start > 0;
+        let has_next_page = end < all_statutes.len();
+        let start_cursor = edges.first().map(|e| e.cursor.clone());
+        let end_cursor = edges.last().map(|e| e.cursor.clone());
+
+        Ok(StatuteConnection {
+            edges,
+            page_info: PageInfo {
+                has_next_page,
+                has_previous_page,
+                start_cursor,
+                end_cursor,
+            },
+            total_count,
+        })
+    }
 }
 
 /// Input type for creating a statute.
@@ -224,11 +346,15 @@ pub struct MutationRoot;
 #[Object]
 impl MutationRoot {
     /// Create a new statute.
+    /// Requires CreateStatutes permission.
     async fn create_statute(
         &self,
         ctx: &Context<'_>,
         input: CreateStatuteInput,
     ) -> FieldResult<StatuteObject> {
+        // Check permissions
+        check_permission(ctx, Permission::CreateStatutes)?;
+
         let state = ctx.data::<GraphQLState>()?;
         let mut statutes = state.statutes.write().await;
 
@@ -264,17 +390,37 @@ impl MutationRoot {
         }
 
         let statute_obj = StatuteObject::from(&statute);
+        let statute_id = statute.id.clone();
+        let statute_title = statute.title.clone();
         statutes.push(statute);
+        drop(statutes);
+
+        // Broadcast WebSocket notification
+        let user_id = ctx
+            .data::<AuthUser>()
+            .map(|u| u.username.clone())
+            .unwrap_or_else(|_| "system".to_string());
+        state
+            .ws_broadcaster
+            .broadcast(WsNotification::StatuteCreated {
+                statute_id,
+                title: statute_title,
+                created_by: user_id,
+            });
 
         Ok(statute_obj)
     }
 
     /// Update an existing statute.
+    /// Requires UpdateStatutes permission.
     async fn update_statute(
         &self,
         ctx: &Context<'_>,
         input: UpdateStatuteInput,
     ) -> FieldResult<StatuteObject> {
+        // Check permissions
+        check_permission(ctx, Permission::UpdateStatutes)?;
+
         let state = ctx.data::<GraphQLState>()?;
         let mut statutes = state.statutes.write().await;
 
@@ -297,18 +443,56 @@ impl MutationRoot {
             statute.version = version as u32;
         }
 
-        Ok(StatuteObject::from(&*statute))
+        let statute_obj = StatuteObject::from(&*statute);
+        let statute_id = statute.id.clone();
+        let statute_title = statute.title.clone();
+        drop(statutes);
+
+        // Broadcast WebSocket notification
+        let user_id = ctx
+            .data::<AuthUser>()
+            .map(|u| u.username.clone())
+            .unwrap_or_else(|_| "system".to_string());
+        state
+            .ws_broadcaster
+            .broadcast(WsNotification::StatuteUpdated {
+                statute_id,
+                title: statute_title,
+                updated_by: user_id,
+            });
+
+        Ok(statute_obj)
     }
 
     /// Delete a statute.
+    /// Requires DeleteStatutes permission.
     async fn delete_statute(&self, ctx: &Context<'_>, id: String) -> FieldResult<bool> {
+        // Check permissions
+        check_permission(ctx, Permission::DeleteStatutes)?;
+
         let state = ctx.data::<GraphQLState>()?;
         let mut statutes = state.statutes.write().await;
 
         let initial_len = statutes.len();
         statutes.retain(|s| s.id != id);
+        let deleted = statutes.len() < initial_len;
+        drop(statutes);
 
-        Ok(statutes.len() < initial_len)
+        // Broadcast WebSocket notification if deleted
+        if deleted {
+            let user_id = ctx
+                .data::<AuthUser>()
+                .map(|u| u.username.clone())
+                .unwrap_or_else(|_| "system".to_string());
+            state
+                .ws_broadcaster
+                .broadcast(WsNotification::StatuteDeleted {
+                    statute_id: id,
+                    deleted_by: user_id,
+                });
+        }
+
+        Ok(deleted)
     }
 
     /// Parse and create a statute from DSL.
@@ -420,7 +604,11 @@ impl From<WsNotification> for NotificationEvent {
                 event_type: "simulation_completed".to_string(),
                 message: format!(
                     "Simulation {} completed: {} entities (det: {:.1}%, disc: {:.1}%, void: {:.1}%)",
-                    simulation_id, total_entities, deterministic_rate, discretionary_rate, void_rate
+                    simulation_id,
+                    total_entities,
+                    deterministic_rate,
+                    discretionary_rate,
+                    void_rate
                 ),
                 statute_id: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -429,6 +617,43 @@ impl From<WsNotification> for NotificationEvent {
                 event_type: "system_status".to_string(),
                 message: format!("System status [{}]: {}", status, message),
                 statute_id: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::EditOperation {
+                document_id,
+                operation: _,
+                version,
+                session_id,
+            } => Self {
+                event_type: "edit_operation".to_string(),
+                message: format!(
+                    "Edit operation on document {} (v{}) by session {}",
+                    document_id, version, session_id
+                ),
+                statute_id: Some(document_id),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::EditConflict {
+                document_id,
+                conflict,
+            } => Self {
+                event_type: "edit_conflict".to_string(),
+                message: format!(
+                    "Edit conflict detected on document {}: {}",
+                    document_id, conflict.description
+                ),
+                statute_id: Some(document_id),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            },
+            WsNotification::PresenceUpdate {
+                resource_id,
+                user_id: _,
+                username,
+                activity,
+            } => Self {
+                event_type: "presence_update".to_string(),
+                message: format!("{} is {} {}", username, activity, resource_id),
+                statute_id: Some(resource_id),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             },
         }
@@ -445,9 +670,8 @@ impl SubscriptionRoot {
         let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
         let rx = state.ws_broadcaster.subscribe();
 
-        BroadcastStream::new(rx).filter_map(|result| async move {
-            result.ok().map(NotificationEvent::from)
-        })
+        BroadcastStream::new(rx)
+            .filter_map(|result| async move { result.ok().map(NotificationEvent::from) })
     }
 
     /// Subscribe to statute events (created, updated, deleted).
@@ -456,28 +680,29 @@ impl SubscriptionRoot {
         let rx = state.ws_broadcaster.subscribe();
 
         BroadcastStream::new(rx).filter_map(|result| async move {
-            result.ok().and_then(|notif| {
-                match &notif {
-                    WsNotification::StatuteCreated { .. }
-                    | WsNotification::StatuteUpdated { .. }
-                    | WsNotification::StatuteDeleted { .. } => Some(NotificationEvent::from(notif)),
-                    _ => None,
-                }
+            result.ok().and_then(|notif| match &notif {
+                WsNotification::StatuteCreated { .. }
+                | WsNotification::StatuteUpdated { .. }
+                | WsNotification::StatuteDeleted { .. } => Some(NotificationEvent::from(notif)),
+                _ => None,
             })
         })
     }
 
     /// Subscribe to verification events.
-    async fn verification_events(&self, ctx: &Context<'_>) -> impl Stream<Item = NotificationEvent> {
+    async fn verification_events(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Stream<Item = NotificationEvent> {
         let state = ctx.data::<GraphQLState>().expect("GraphQL state not found");
         let rx = state.ws_broadcaster.subscribe();
 
         BroadcastStream::new(rx).filter_map(|result| async move {
-            result.ok().and_then(|notif| {
-                match &notif {
-                    WsNotification::VerificationCompleted { .. } => Some(NotificationEvent::from(notif)),
-                    _ => None,
+            result.ok().and_then(|notif| match &notif {
+                WsNotification::VerificationCompleted { .. } => {
+                    Some(NotificationEvent::from(notif))
                 }
+                _ => None,
             })
         })
     }
@@ -488,21 +713,22 @@ impl SubscriptionRoot {
         let rx = state.ws_broadcaster.subscribe();
 
         BroadcastStream::new(rx).filter_map(|result| async move {
-            result.ok().and_then(|notif| {
-                match &notif {
-                    WsNotification::SimulationCompleted { .. } => Some(NotificationEvent::from(notif)),
-                    _ => None,
-                }
+            result.ok().and_then(|notif| match &notif {
+                WsNotification::SimulationCompleted { .. } => Some(NotificationEvent::from(notif)),
+                _ => None,
             })
         })
     }
 }
 
-/// Creates a new GraphQL schema with subscription support.
+/// Creates a new GraphQL schema with subscription support, query complexity limiting,
+/// and depth limiting for security.
 /// TODO: Add DataLoader support for N+1 optimization
 pub fn create_schema(state: GraphQLState) -> LegalisSchema {
     Schema::build(QueryRoot, MutationRoot, SubscriptionRoot)
         .data(state)
+        .limit_complexity(1000) // Maximum query complexity score
+        .limit_depth(15) // Maximum query depth
         .finish()
 }
 
@@ -514,6 +740,16 @@ mod tests {
     async fn test_create_statute() {
         let state = GraphQLState::new();
         let schema = create_schema(state.clone());
+
+        // Create an admin user for testing
+        use crate::auth::{AuthMethod, AuthUser, Role};
+        use uuid::Uuid;
+        let admin_user = AuthUser::new(
+            Uuid::new_v4(),
+            "admin".to_string(),
+            Role::Admin,
+            AuthMethod::Jwt,
+        );
 
         let query = r#"
             mutation {
@@ -532,7 +768,8 @@ mod tests {
             }
         "#;
 
-        let result = schema.execute(query).await;
+        let request = async_graphql::Request::new(query).data(admin_user);
+        let result = schema.execute(request).await;
         assert!(result.errors.is_empty());
     }
 

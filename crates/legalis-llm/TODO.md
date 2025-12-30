@@ -187,7 +187,7 @@
 - [x] Model quantization support (GGUF, AWQ)
 - [x] GPU scheduling and batching
 - [x] Edge deployment support
-- [ ] Kubernetes operator for auto-scaling
+- [x] Kubernetes operator for auto-scaling
 - [x] Hot model swapping without downtime
 
 ## Roadmap for 0.1.0 Series
@@ -214,11 +214,11 @@
 - [x] Add statutory interpretation prompts
 
 ### Fine-Tuning Support (v0.1.4)
-- [ ] Add LoRA adapter support
-- [ ] Add fine-tuning dataset preparation
-- [ ] Add training metrics tracking
-- [ ] Add model evaluation benchmarks
-- [ ] Add A/B testing for fine-tuned models
+- [x] Add LoRA adapter support
+- [x] Add fine-tuning dataset preparation
+- [x] Add training metrics tracking
+- [x] Add model evaluation benchmarks
+- [x] Add A/B testing for fine-tuned models
 
 ### Structured Output (v0.1.5)
 - [x] Add statute schema generation
@@ -249,8 +249,46 @@
 - [x] Add audit logging for all completions
 
 ### Integration (v0.1.9)
-- [ ] Add LangChain integration
-- [ ] Add LlamaIndex integration
-- [ ] Add Haystack integration
-- [ ] Add Semantic Kernel integration
-- [ ] Add Vercel AI SDK compatibility
+- [x] Add LangChain integration
+- [x] Add LlamaIndex integration
+- [x] Add Haystack integration
+- [x] Add Semantic Kernel integration
+- [x] Add Vercel AI SDK compatibility
+
+## Recent Enhancements (2025-12-29)
+
+### Performance & Caching (v0.2.0)
+- [x] AsyncCache - Tokio-based async-aware cache for better async performance
+- [x] CacheWarmer - Utility for pre-warming caches with common prompts
+- [x] Automatic cache expiry and eviction
+- [x] Cache warming with legal templates
+
+### Prompt Engineering (v0.2.0)
+- [x] PromptOptimizer - Analyzes and optimizes prompts for better results
+- [x] Prompt quality scoring (0-100 scale)
+- [x] Complexity estimation (Low/Medium/High)
+- [x] Token estimation
+- [x] Prompt compression with sentence boundary preservation
+- [x] Optimization suggestions and best practices
+
+## Advanced Features (2025-12-29)
+
+### Cost Analytics & Optimization (v0.2.1)
+- [x] Comprehensive cost tracking with CostRecord
+- [x] Real-time cost analytics (by provider, model, tenant, category)
+- [x] Cost optimization recommendations with potential savings
+- [x] Cost forecasting and prediction
+- [x] Anomaly detection for unusual spending
+- [x] Model pricing database with comparison tools
+- [x] Multi-tenant cost attribution
+- [x] Success rate and latency tracking
+
+### Advanced Prompt Chaining (v0.2.1)
+- [x] DAG-based prompt chain execution
+- [x] Dependency resolution with topological sort
+- [x] Conditional execution based on variables
+- [x] Result processing (JSON extraction, regex, transformations)
+- [x] Variable substitution system
+- [x] Circular dependency detection
+- [x] Legal analysis chain builder
+- [x] Chain execution result aggregation

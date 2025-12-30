@@ -131,7 +131,7 @@ fn test_concurrent_integrity_verification() {
 #[test]
 fn test_concurrent_queries() {
     let trail = Arc::new(Mutex::new(AuditTrail::new()));
-    let statute_ids = vec!["statute-1", "statute-2", "statute-3"];
+    let statute_ids = ["statute-1", "statute-2", "statute-3"];
 
     // Populate with records
     for i in 0..300 {

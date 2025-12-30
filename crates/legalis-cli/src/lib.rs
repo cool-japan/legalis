@@ -6,11 +6,20 @@
 //! - Generating visualizations
 //! - Exporting to various formats
 
+pub mod batch;
+pub mod cache;
 pub mod commands;
 pub mod config;
+pub mod error_suggestions;
+pub mod interactive;
+pub mod parallel;
+pub mod plugin;
+pub mod progress;
+pub mod tutorial;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
+use clap_mangen::Man;
 
 /// Legalis-RS Command Line Interface
 #[derive(Parser)]
@@ -32,6 +41,10 @@ pub struct Cli {
     /// Quiet mode (suppress non-error output)
     #[arg(short, long)]
     pub quiet: bool,
+
+    /// Interactive mode (guided input)
+    #[arg(short, long)]
+    pub interactive: bool,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -245,6 +258,13 @@ pub enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: Shell,
+    },
+
+    /// Generate man pages
+    ManPage {
+        /// Output directory for man pages (generates all if specified, otherwise outputs to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
     },
 
     /// Export statute to Linked Open Data format (RDF/TTL/JSON-LD)
@@ -532,6 +552,306 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Interactive tutorials for learning Legalis
+    Tutorial {
+        /// Specific tutorial topic (if not specified, shows selection menu)
+        #[arg(short, long)]
+        topic: Option<TutorialTopicArg>,
+    },
+
+    /// Explain a statute in natural language
+    Explain {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Detail level (basic, detailed, verbose)
+        #[arg(long, default_value = "detailed")]
+        detail: ExplainDetail,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Trace condition evaluation path
+    Trace {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Test case file with input variables
+        #[arg(short, long)]
+        test_case: String,
+
+        /// Output format
+        #[arg(long, default_value = "text")]
+        trace_format: TraceFormat,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Benchmark verification or simulation performance
+    Benchmark {
+        /// Input statute file(s)
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Benchmark type (verify, simulate, all)
+        #[arg(long, default_value = "all")]
+        bench_type: BenchmarkType,
+
+        /// Number of iterations
+        #[arg(long, default_value = "100")]
+        iterations: usize,
+
+        /// Population size for simulation benchmarks
+        #[arg(short, long, default_value = "1000")]
+        population: usize,
+
+        /// Output file for results (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Migrate statutes between versions
+    Migrate {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Source DSL version
+        #[arg(long)]
+        from_version: String,
+
+        /// Target DSL version
+        #[arg(long)]
+        to_version: String,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Dry run (show migration plan without executing)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Generate dependency graphs
+    Graph {
+        /// Input statute file(s) or directory
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Graph type (dependency, reference, call)
+        #[arg(long, default_value = "dependency")]
+        graph_type: GraphType,
+
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+
+        /// Graph format (dot, mermaid, json)
+        #[arg(long, default_value = "dot")]
+        graph_format: GraphFormat,
+    },
+
+    /// Launch interactive statute builder wizard
+    BuilderWizard {
+        /// Skip the wizard and show help
+        #[arg(long)]
+        help_only: bool,
+    },
+
+    /// Launch interactive diff viewer with accept/reject
+    DiffViewer {
+        /// First file to compare
+        #[arg(short, long)]
+        old: String,
+
+        /// Second file to compare
+        #[arg(short, long)]
+        new: String,
+    },
+
+    /// Launch interactive simulation parameter tuning
+    SimTune {
+        /// Input statute file(s)
+        #[arg(short, long)]
+        input: Vec<String>,
+    },
+
+    /// Resolve statute conflicts interactively
+    ResolveConflicts {
+        /// Statute files with conflicts
+        #[arg(short, long)]
+        input: Vec<String>,
+    },
+
+    /// Browse registry with TUI dashboard
+    RegistryBrowser {
+        /// Registry directory path (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        registry: String,
+
+        /// Start in search mode
+        #[arg(long)]
+        search: bool,
+    },
+
+    /// Execute batch operations on multiple statutes
+    Batch {
+        /// Batch operation to perform
+        #[command(subcommand)]
+        operation: BatchOperation,
+    },
+}
+
+/// Batch operation types.
+#[derive(Subcommand)]
+pub enum BatchOperation {
+    /// Verify multiple statute files in parallel
+    Verify {
+        /// Input directory or file pattern (e.g., "statutes/*.ldsl")
+        #[arg(short, long)]
+        input: String,
+
+        /// Fail on warnings
+        #[arg(long)]
+        strict: bool,
+
+        /// Number of parallel workers (defaults to CPU count)
+        #[arg(short, long)]
+        workers: Option<usize>,
+
+        /// Resume from previous run (uses journal file)
+        #[arg(long)]
+        resume: bool,
+
+        /// Journal file for tracking progress
+        #[arg(long, default_value = ".batch_journal.json")]
+        journal: String,
+    },
+
+    /// Format multiple statute files in parallel
+    Format {
+        /// Input directory or file pattern
+        #[arg(short, long)]
+        input: String,
+
+        /// Format style
+        #[arg(long, default_value = "default")]
+        style: FormatStyle,
+
+        /// Modify files in place
+        #[arg(long)]
+        inplace: bool,
+
+        /// Number of parallel workers
+        #[arg(short, long)]
+        workers: Option<usize>,
+
+        /// Resume from previous run
+        #[arg(long)]
+        resume: bool,
+
+        /// Journal file for tracking progress
+        #[arg(long, default_value = ".batch_journal.json")]
+        journal: String,
+    },
+
+    /// Lint multiple statute files in parallel
+    Lint {
+        /// Input directory or file pattern
+        #[arg(short, long)]
+        input: String,
+
+        /// Fix auto-fixable issues
+        #[arg(long)]
+        fix: bool,
+
+        /// Fail on warnings
+        #[arg(long)]
+        strict: bool,
+
+        /// Number of parallel workers
+        #[arg(short, long)]
+        workers: Option<usize>,
+
+        /// Resume from previous run
+        #[arg(long)]
+        resume: bool,
+
+        /// Journal file for tracking progress
+        #[arg(long, default_value = ".batch_journal.json")]
+        journal: String,
+    },
+
+    /// Export multiple statutes to a different format
+    Export {
+        /// Input directory or file pattern
+        #[arg(short, long)]
+        input: String,
+
+        /// Output directory
+        #[arg(short, long)]
+        output: String,
+
+        /// Export format
+        #[arg(long)]
+        export_format: ExportFormat,
+
+        /// Number of parallel workers
+        #[arg(short, long)]
+        workers: Option<usize>,
+
+        /// Resume from previous run
+        #[arg(long)]
+        resume: bool,
+
+        /// Journal file for tracking progress
+        #[arg(long, default_value = ".batch_journal.json")]
+        journal: String,
+    },
+}
+
+/// Tutorial topic argument for CLI.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum TutorialTopicArg {
+    /// Introduction to Legalis
+    Introduction,
+    /// Parsing & validating DSL files
+    Parsing,
+    /// Creating statutes from templates
+    Creating,
+    /// Verification & testing
+    Verification,
+    /// Visualization techniques
+    Visualization,
+    /// Export formats & interoperability
+    Exporting,
+    /// Using the statute registry
+    Registry,
+    /// Advanced features
+    Advanced,
+}
+
+impl From<TutorialTopicArg> for tutorial::TutorialTopic {
+    fn from(arg: TutorialTopicArg) -> Self {
+        match arg {
+            TutorialTopicArg::Introduction => tutorial::TutorialTopic::Introduction,
+            TutorialTopicArg::Parsing => tutorial::TutorialTopic::ParsingBasics,
+            TutorialTopicArg::Creating => tutorial::TutorialTopic::CreatingStatutes,
+            TutorialTopicArg::Verification => tutorial::TutorialTopic::Verification,
+            TutorialTopicArg::Visualization => tutorial::TutorialTopic::Visualization,
+            TutorialTopicArg::Exporting => tutorial::TutorialTopic::Exporting,
+            TutorialTopicArg::Registry => tutorial::TutorialTopic::RegistryUsage,
+            TutorialTopicArg::Advanced => tutorial::TutorialTopic::Advanced,
+        }
+    }
 }
 
 /// Statute template options.
@@ -699,8 +1019,110 @@ impl From<FormatStyle> for legalis_dsl::PrinterConfig {
     }
 }
 
+/// Explain detail level options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ExplainDetail {
+    /// Basic explanation (brief overview)
+    Basic,
+    /// Detailed explanation (default, includes conditions and outcomes)
+    #[default]
+    Detailed,
+    /// Verbose explanation (full detail with examples)
+    Verbose,
+}
+
+/// Trace output format options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum TraceFormat {
+    /// Human-readable text format
+    #[default]
+    Text,
+    /// JSON format with full trace data
+    Json,
+    /// Tree diagram format (ASCII)
+    Tree,
+    /// Mermaid flowchart format
+    Mermaid,
+}
+
+/// Benchmark type options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum BenchmarkType {
+    /// Benchmark verification only
+    Verify,
+    /// Benchmark simulation only
+    Simulate,
+    /// Benchmark both verification and simulation
+    #[default]
+    All,
+}
+
+/// Graph type options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum GraphType {
+    /// Dependency graph (statute dependencies)
+    #[default]
+    Dependency,
+    /// Reference graph (cross-references between statutes)
+    Reference,
+    /// Call graph (condition evaluation flow)
+    Call,
+}
+
+/// Graph output format options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum GraphFormat {
+    /// GraphViz DOT format
+    #[default]
+    Dot,
+    /// Mermaid diagram format
+    Mermaid,
+    /// JSON format with graph data
+    Json,
+    /// SVG image format
+    Svg,
+}
+
 /// Generates shell completions and writes them to stdout.
 pub fn generate_completions(shell: Shell) {
     let mut cmd = Cli::command();
     generate(shell, &mut cmd, "legalis", &mut std::io::stdout());
+}
+
+/// Generates man page and writes it to stdout.
+pub fn generate_man_page() -> std::io::Result<()> {
+    let cmd = Cli::command();
+    let man = Man::new(cmd);
+    let mut buffer = Vec::new();
+    man.render(&mut buffer)?;
+    std::io::Write::write_all(&mut std::io::stdout(), &buffer)?;
+    Ok(())
+}
+
+/// Generates man pages for all subcommands to a directory.
+pub fn generate_all_man_pages(output_dir: &std::path::Path) -> std::io::Result<()> {
+    let cmd = Cli::command();
+
+    // Create output directory if it doesn't exist
+    std::fs::create_dir_all(output_dir)?;
+
+    // Generate main man page
+    let man = Man::new(cmd.clone());
+    let mut buffer = Vec::new();
+    man.render(&mut buffer)?;
+    let man_path = output_dir.join("legalis.1");
+    std::fs::write(man_path, buffer)?;
+
+    // Generate man pages for subcommands
+    for subcmd in cmd.get_subcommands() {
+        let name = subcmd.get_name();
+        let subcmd_name = format!("legalis-{}", name);
+        let man = Man::new(subcmd.clone()).title(&subcmd_name);
+        let mut buffer = Vec::new();
+        man.render(&mut buffer)?;
+        let man_path = output_dir.join(format!("{}.1", subcmd_name));
+        std::fs::write(man_path, buffer)?;
+    }
+
+    Ok(())
 }

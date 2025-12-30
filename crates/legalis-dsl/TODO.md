@@ -218,18 +218,18 @@
 - [ ] Add string interpolation in effect descriptions `${variable}`
 
 ### Advanced Parsing (v0.1.2)
-- [ ] Add Unicode identifier support (Japanese, Chinese legal terms)
+- [x] Add Unicode identifier support (Japanese, Chinese legal terms)
 - [ ] Add heredoc syntax for multi-line strings
 - [ ] Add escape sequences in string literals
 - [ ] Add scientific notation for numeric literals
 - [ ] Add binary/hex/octal numeric literals for technical codes
 
 ### Type System (v0.1.3)
-- [ ] Add type annotations for condition values `age: Integer`
-- [ ] Add type inference for unannotated conditions
-- [ ] Add type checking for comparison operators
-- [ ] Add enum types for constrained values `status: Active | Inactive`
-- [ ] Add type aliases `type Currency = Decimal`
+- [x] Add type annotations for condition values `age: Integer` (Type enum extended)
+- [x] Add type inference for unannotated conditions (already supported)
+- [x] Add type checking for comparison operators (already supported)
+- [x] Add enum types for constrained values `status: Active | Inactive`
+- [x] Add type aliases `type Currency = Decimal`
 
 ### Module System (v0.1.4)
 - [ ] Add namespace support `namespace tax.income.2024`

@@ -19,6 +19,23 @@ pub struct Config {
     pub max_body_size: usize,
     /// Request timeout in seconds
     pub request_timeout_secs: u64,
+    /// Cache backend type (memory, redis)
+    pub cache_backend: CacheBackend,
+    /// Redis URL for cache (when using redis backend)
+    pub redis_url: Option<String>,
+    /// Default cache TTL in seconds
+    pub cache_default_ttl: u64,
+    /// Enable cache compression
+    pub cache_compression: bool,
+}
+
+/// Cache backend type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CacheBackend {
+    /// In-memory cache (default)
+    Memory,
+    /// Redis cache (requires redis-cache feature)
+    Redis,
 }
 
 impl Default for Config {
@@ -31,6 +48,10 @@ impl Default for Config {
             cors_origins: None,
             max_body_size: 10 * 1024 * 1024, // 10 MB
             request_timeout_secs: 30,
+            cache_backend: CacheBackend::Memory,
+            redis_url: None,
+            cache_default_ttl: 300, // 5 minutes
+            cache_compression: false,
         }
     }
 }
@@ -72,6 +93,32 @@ impl Config {
             if let Ok(t) = timeout.parse::<u64>() {
                 config.request_timeout_secs = t;
             }
+        }
+
+        // Cache configuration
+        if let Ok(backend) = env::var("LEGALIS_API_CACHE_BACKEND") {
+            config.cache_backend = match backend.to_lowercase().as_str() {
+                "redis" => CacheBackend::Redis,
+                "memory" => CacheBackend::Memory,
+                _ => CacheBackend::Memory,
+            };
+        }
+
+        if let Ok(url) = env::var("LEGALIS_API_REDIS_URL") {
+            config.redis_url = Some(url);
+        } else if let Ok(url) = env::var("REDIS_URL") {
+            // Also check standard REDIS_URL env var
+            config.redis_url = Some(url);
+        }
+
+        if let Ok(ttl) = env::var("LEGALIS_API_CACHE_TTL") {
+            if let Ok(t) = ttl.parse::<u64>() {
+                config.cache_default_ttl = t;
+            }
+        }
+
+        if let Ok(compression) = env::var("LEGALIS_API_CACHE_COMPRESSION") {
+            config.cache_compression = compression.to_lowercase() == "true" || compression == "1";
         }
 
         config
