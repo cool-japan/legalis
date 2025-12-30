@@ -18,8 +18,8 @@ toml = ["dep:toml", "serde"]
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
-toml = { version = "0.8", optional = true }
-schemars = { version = "0.8", features = ["uuid1", "chrono"], optional = true }
+toml = { version = "0.9", optional = true }
+schemars = { version = "1.2", features = ["uuid1", "chrono"], optional = true }
 rayon = { version = "1.10", optional = true }
 uuid.workspace = true
 thiserror.workspace = true
