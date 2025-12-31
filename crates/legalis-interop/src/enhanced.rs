@@ -167,9 +167,13 @@ impl EnhancedConverter {
             | LegalFormat::LegalCite
             | LegalFormat::MetaLex
             | LegalFormat::Mpeg21Rel
-            | LegalFormat::CreativeCommons => false,
-            // Native format
-            LegalFormat::Legalis => false,
+            | LegalFormat::CreativeCommons
+            | LegalFormat::Bpmn
+            | LegalFormat::Dmn
+            | LegalFormat::Cmmn
+            | LegalFormat::RuleML => false,
+            // Native and business vocabulary formats
+            LegalFormat::Legalis | LegalFormat::Sbvr => false,
         }
     }
 

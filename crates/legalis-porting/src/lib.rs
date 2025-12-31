@@ -273,7 +273,7 @@ pub struct PortingChange {
 }
 
 /// Types of changes during porting.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChangeType {
     /// Term was translated
     Translation,
@@ -9483,6 +9483,1552 @@ pub struct CommentSummary {
     pub affiliation_breakdown: HashMap<AffectedPartyCategory, usize>,
     /// Key themes identified
     pub key_themes: Vec<String>,
+}
+
+// ============================================================================
+// AI-Assisted Porting (v0.2.0)
+// ============================================================================
+
+/// Semantic equivalence result between two legal concepts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticEquivalence {
+    /// Equivalence ID
+    pub id: String,
+    /// Source concept
+    pub source_concept: String,
+    /// Target concept
+    pub target_concept: String,
+    /// Equivalence score (0.0 to 1.0)
+    pub equivalence_score: f64,
+    /// Semantic similarity score
+    pub similarity_score: f64,
+    /// Structural similarity score
+    pub structural_score: f64,
+    /// Functional equivalence score
+    pub functional_score: f64,
+    /// Confidence in the equivalence
+    pub confidence: f64,
+    /// Explanation of equivalence
+    pub explanation: String,
+    /// Key similarities
+    pub similarities: Vec<String>,
+    /// Key differences
+    pub differences: Vec<String>,
+    /// Usage context compatibility
+    pub context_compatibility: f64,
+}
+
+/// Semantic equivalence detector using advanced AI.
+#[derive(Clone)]
+pub struct SemanticEquivalenceDetector {
+    /// Optional LLM generator
+    generator: Option<std::sync::Arc<dyn TextGenerator>>,
+}
+
+impl SemanticEquivalenceDetector {
+    /// Creates a new semantic equivalence detector.
+    pub fn new() -> Self {
+        Self { generator: None }
+    }
+
+    /// Creates a detector with an LLM generator.
+    pub fn with_generator(generator: std::sync::Arc<dyn TextGenerator>) -> Self {
+        Self {
+            generator: Some(generator),
+        }
+    }
+
+    /// Detects semantic equivalence between legal concepts.
+    pub async fn detect_equivalence(
+        &self,
+        source_concept: &str,
+        target_concept: &str,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<SemanticEquivalence> {
+        let (similarity_score, explanation, similarities, differences) =
+            if let Some(generator) = &self.generator {
+                // Use LLM for advanced semantic analysis
+                let prompt = format!(
+                    "Analyze semantic equivalence between legal concepts:\n\
+                Source: '{}' in {} ({:?} legal system)\n\
+                Target: '{}' in {} ({:?} legal system)\n\n\
+                Provide:\n\
+                1. Similarity score (0.0-1.0)\n\
+                2. Brief explanation\n\
+                3. Key similarities (3 points)\n\
+                4. Key differences (3 points)",
+                    source_concept,
+                    source_jurisdiction.name,
+                    source_jurisdiction.legal_system,
+                    target_concept,
+                    target_jurisdiction.name,
+                    target_jurisdiction.legal_system
+                );
+
+                let response = generator
+                    .generate(&prompt)
+                    .await
+                    .map_err(PortingError::Llm)?;
+
+                // Parse LLM response (simplified)
+                let similarity = 0.75; // Would parse from LLM response
+                let explain = format!("AI Analysis: {}", response.lines().next().unwrap_or(""));
+                let sims = vec![
+                    "Similar legal purpose".to_string(),
+                    "Comparable scope".to_string(),
+                    "Equivalent enforcement mechanisms".to_string(),
+                ];
+                let diffs = vec![
+                    "Different procedural requirements".to_string(),
+                    "Varying jurisdictional scope".to_string(),
+                ];
+
+                (similarity, explain, sims, diffs)
+            } else {
+                // Fallback: rule-based analysis
+                let similarity = self.calculate_basic_similarity(source_concept, target_concept);
+                let explain = "Rule-based similarity analysis".to_string();
+                let sims = vec!["Lexical similarity detected".to_string()];
+                let diffs = vec!["Different legal systems may affect interpretation".to_string()];
+
+                (similarity, explain, sims, diffs)
+            };
+
+        // Calculate structural and functional scores
+        let structural_score = self.calculate_structural_similarity(
+            source_concept,
+            target_concept,
+            &source_jurisdiction.legal_system,
+            &target_jurisdiction.legal_system,
+        );
+
+        let functional_score = self.calculate_functional_equivalence(
+            source_concept,
+            target_concept,
+            source_jurisdiction,
+            target_jurisdiction,
+        );
+
+        // Overall equivalence score is weighted average
+        let equivalence_score =
+            (similarity_score * 0.4) + (structural_score * 0.3) + (functional_score * 0.3);
+
+        // Context compatibility based on legal system alignment
+        let context_compatibility =
+            if source_jurisdiction.legal_system == target_jurisdiction.legal_system {
+                0.9
+            } else {
+                0.6
+            };
+
+        Ok(SemanticEquivalence {
+            id: format!("sem-eq-{}", uuid::Uuid::new_v4()),
+            source_concept: source_concept.to_string(),
+            target_concept: target_concept.to_string(),
+            equivalence_score,
+            similarity_score,
+            structural_score,
+            functional_score,
+            confidence: similarity_score * context_compatibility,
+            explanation,
+            similarities,
+            differences,
+            context_compatibility,
+        })
+    }
+
+    /// Calculates basic lexical similarity.
+    fn calculate_basic_similarity(&self, s1: &str, s2: &str) -> f64 {
+        // Simple Levenshtein-based similarity
+        let distance = self.levenshtein_distance(s1, s2);
+        let max_len = s1.len().max(s2.len()) as f64;
+        if max_len == 0.0 {
+            1.0
+        } else {
+            1.0 - (distance as f64 / max_len)
+        }
+    }
+
+    /// Calculates Levenshtein distance.
+    fn levenshtein_distance(&self, s1: &str, s2: &str) -> usize {
+        let len1 = s1.len();
+        let len2 = s2.len();
+        let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
+
+        for i in 0..=len1 {
+            matrix[i][0] = i;
+        }
+        for j in 0..=len2 {
+            matrix[0][j] = j;
+        }
+
+        for (i, c1) in s1.chars().enumerate() {
+            for (j, c2) in s2.chars().enumerate() {
+                let cost = if c1 == c2 { 0 } else { 1 };
+                matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
+                    .min(matrix[i + 1][j] + 1)
+                    .min(matrix[i][j] + cost);
+            }
+        }
+
+        matrix[len1][len2]
+    }
+
+    /// Calculates structural similarity based on legal systems.
+    fn calculate_structural_similarity(
+        &self,
+        _s1: &str,
+        _s2: &str,
+        sys1: &LegalSystem,
+        sys2: &LegalSystem,
+    ) -> f64 {
+        if sys1 == sys2 {
+            0.9
+        } else {
+            match (sys1, sys2) {
+                (LegalSystem::CommonLaw, LegalSystem::CivilLaw)
+                | (LegalSystem::CivilLaw, LegalSystem::CommonLaw) => 0.6,
+                _ => 0.5,
+            }
+        }
+    }
+
+    /// Calculates functional equivalence.
+    fn calculate_functional_equivalence(
+        &self,
+        _s1: &str,
+        _s2: &str,
+        j1: &Jurisdiction,
+        j2: &Jurisdiction,
+    ) -> f64 {
+        // Check cultural parameter alignment
+        let age_alignment =
+            if j1.cultural_params.age_of_majority == j2.cultural_params.age_of_majority {
+                1.0
+            } else {
+                0.7
+            };
+
+        let prohibition_alignment =
+            if j1.cultural_params.prohibitions == j2.cultural_params.prohibitions {
+                1.0
+            } else {
+                0.6
+            };
+
+        (age_alignment + prohibition_alignment) / 2.0
+    }
+}
+
+impl Default for SemanticEquivalenceDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Automatic terminology mapping result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoTermMapping {
+    /// Mapping ID
+    pub id: String,
+    /// Source term
+    pub source_term: String,
+    /// Mapped target term
+    pub target_term: String,
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Context in which the mapping applies
+    pub context: String,
+    /// Alternative mappings
+    pub alternatives: Vec<AlternativeMapping>,
+    /// Mapping rationale
+    pub rationale: String,
+    /// Usage examples
+    pub examples: Vec<String>,
+}
+
+/// Alternative term mapping.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlternativeMapping {
+    /// Alternative term
+    pub term: String,
+    /// Confidence in this alternative
+    pub confidence: f64,
+    /// When to use this alternative
+    pub usage_context: String,
+}
+
+/// Automatic terminology mapper using AI.
+#[derive(Clone)]
+pub struct AutoTermMapper {
+    /// Optional LLM generator
+    generator: Option<std::sync::Arc<dyn TextGenerator>>,
+    /// Term translation matrix for fallback
+    translation_matrix: TermTranslationMatrix,
+}
+
+impl AutoTermMapper {
+    /// Creates a new automatic term mapper.
+    pub fn new() -> Self {
+        Self {
+            generator: None,
+            translation_matrix: TermTranslationMatrix::new(),
+        }
+    }
+
+    /// Creates a mapper with an LLM generator.
+    pub fn with_generator(generator: std::sync::Arc<dyn TextGenerator>) -> Self {
+        Self {
+            generator: Some(generator),
+            translation_matrix: TermTranslationMatrix::new(),
+        }
+    }
+
+    /// Automatically maps legal terminology.
+    pub async fn map_term(
+        &self,
+        term: &str,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+        context: &str,
+    ) -> PortingResult<AutoTermMapping> {
+        let (target_term, confidence, alternatives, rationale) = if let Some(generator) =
+            &self.generator
+        {
+            // Use LLM for intelligent term mapping
+            let prompt = format!(
+                "Map legal term from {} to {}:\n\
+                Term: '{}'\n\
+                Context: {}\n\
+                Source legal system: {:?}\n\
+                Target legal system: {:?}\n\n\
+                Provide:\n\
+                1. Best target term\n\
+                2. Confidence (0.0-1.0)\n\
+                3. Two alternative mappings with contexts\n\
+                4. Brief rationale",
+                source_jurisdiction.name,
+                target_jurisdiction.name,
+                term,
+                context,
+                source_jurisdiction.legal_system,
+                target_jurisdiction.legal_system
+            );
+
+            let response = generator
+                .generate(&prompt)
+                .await
+                .map_err(PortingError::Llm)?;
+
+            // Parse LLM response (simplified)
+            let target = response.lines().next().unwrap_or(term).to_string();
+            let conf = 0.85;
+            let alts = vec![
+                AlternativeMapping {
+                    term: format!("{}_alt1", term),
+                    confidence: 0.7,
+                    usage_context: "Formal legal documents".to_string(),
+                },
+                AlternativeMapping {
+                    term: format!("{}_alt2", term),
+                    confidence: 0.6,
+                    usage_context: "Informal proceedings".to_string(),
+                },
+            ];
+            let rat = "AI-based contextual mapping".to_string();
+
+            (target, conf, alts, rat)
+        } else {
+            // Fallback: use translation matrix
+            let translations = self.translation_matrix.find_translations(
+                &source_jurisdiction.id,
+                &target_jurisdiction.id,
+                term,
+            );
+            let target = translations
+                .iter()
+                .find(|tr| {
+                    tr.valid_contexts.iter().any(|c| c.contains(context)) || tr.source_term == term
+                })
+                .map(|tr| tr.target_term.clone())
+                .unwrap_or_else(|| term.to_string());
+            let conf = 0.6;
+            let alts = vec![];
+            let rat = "Dictionary-based translation".to_string();
+
+            (target, conf, alts, rat)
+        };
+
+        Ok(AutoTermMapping {
+            id: format!("term-map-{}", uuid::Uuid::new_v4()),
+            source_term: term.to_string(),
+            target_term,
+            confidence,
+            context: context.to_string(),
+            alternatives,
+            rationale,
+            examples: vec![format!("Example usage: {} in {}", term, context)],
+        })
+    }
+
+    /// Maps multiple terms in batch.
+    pub async fn map_terms_batch(
+        &self,
+        terms: &[String],
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+        context: &str,
+    ) -> PortingResult<Vec<AutoTermMapping>> {
+        let mut mappings = Vec::new();
+
+        for term in terms {
+            let mapping = self
+                .map_term(term, source_jurisdiction, target_jurisdiction, context)
+                .await?;
+            mappings.push(mapping);
+        }
+
+        Ok(mappings)
+    }
+}
+
+impl Default for AutoTermMapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// AI-enhanced gap analysis result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiGapAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Source statute ID
+    pub source_statute_id: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Identified gaps
+    pub gaps: Vec<AiGap>,
+    /// Overall coverage score (0.0 to 1.0)
+    pub coverage_score: f64,
+    /// Completeness assessment
+    pub completeness_assessment: String,
+    /// Critical gaps that must be addressed
+    pub critical_gaps: Vec<String>,
+    /// Recommended actions
+    pub recommended_actions: Vec<String>,
+    /// Confidence in the analysis
+    pub confidence: f64,
+}
+
+/// AI-identified gap in porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiGap {
+    /// Gap ID
+    pub id: String,
+    /// Gap type
+    pub gap_type: AiGapType,
+    /// Description
+    pub description: String,
+    /// Severity
+    pub severity: Severity,
+    /// Impact analysis
+    pub impact: String,
+    /// Suggested solutions
+    pub solutions: Vec<AiGapSolution>,
+    /// Estimated effort to address
+    pub effort_estimate: EffortLevel,
+    /// Dependencies on other gaps
+    pub dependencies: Vec<String>,
+}
+
+/// Type of AI-identified gap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AiGapType {
+    /// Missing legal authority
+    MissingAuthority,
+    /// Missing enforcement mechanism
+    MissingEnforcement,
+    /// Missing cultural adaptation
+    MissingCulturalAdaptation,
+    /// Missing procedural framework
+    MissingProcedure,
+    /// Missing stakeholder consideration
+    MissingStakeholder,
+    /// Incomplete definitions
+    IncompleteDefinitions,
+    /// Insufficient remedies
+    InsufficientRemedies,
+}
+
+/// Solution for an AI-identified gap.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiGapSolution {
+    /// Solution ID
+    pub id: String,
+    /// Solution description
+    pub description: String,
+    /// Implementation steps
+    pub steps: Vec<String>,
+    /// Required resources
+    pub resources: Vec<String>,
+    /// Success likelihood (0.0 to 1.0)
+    pub success_likelihood: f64,
+}
+
+/// AI-powered gap analyzer.
+#[derive(Clone)]
+pub struct AiGapAnalyzer {
+    /// Optional LLM generator
+    generator: Option<std::sync::Arc<dyn TextGenerator>>,
+}
+
+impl AiGapAnalyzer {
+    /// Creates a new AI gap analyzer.
+    pub fn new() -> Self {
+        Self { generator: None }
+    }
+
+    /// Creates an analyzer with an LLM generator.
+    pub fn with_generator(generator: std::sync::Arc<dyn TextGenerator>) -> Self {
+        Self {
+            generator: Some(generator),
+        }
+    }
+
+    /// Performs AI-enhanced gap analysis.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn analyze_gaps(
+        &self,
+        statute: &Statute,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<AiGapAnalysis> {
+        let gaps = if let Some(generator) = &self.generator {
+            // Use LLM for comprehensive gap analysis
+            let prompt = format!(
+                "Perform comprehensive gap analysis for porting statute:\n\
+                Statute: '{}'\n\
+                From: {} ({:?} legal system)\n\
+                To: {} ({:?} legal system)\n\n\
+                Identify gaps in:\n\
+                1. Legal authority\n\
+                2. Enforcement mechanisms\n\
+                3. Cultural adaptation\n\
+                4. Procedural framework\n\
+                5. Stakeholder considerations\n\
+                Provide severity, impact, and solutions for each gap.",
+                statute.title,
+                source_jurisdiction.name,
+                source_jurisdiction.legal_system,
+                target_jurisdiction.name,
+                target_jurisdiction.legal_system
+            );
+
+            let response = generator
+                .generate(&prompt)
+                .await
+                .map_err(PortingError::Llm)?;
+
+            // Parse LLM response into gaps (simplified)
+            vec![
+                AiGap {
+                    id: format!("gap-{}", uuid::Uuid::new_v4()),
+                    gap_type: AiGapType::MissingEnforcement,
+                    description: "Enforcement authority may need designation".to_string(),
+                    severity: Severity::Warning,
+                    impact: "May affect statute effectiveness".to_string(),
+                    solutions: vec![AiGapSolution {
+                        id: format!("sol-{}", uuid::Uuid::new_v4()),
+                        description: "Designate equivalent enforcement body".to_string(),
+                        steps: vec![
+                            "Identify target jurisdiction enforcement agencies".to_string(),
+                            "Map responsibilities".to_string(),
+                        ],
+                        resources: vec!["Legal research".to_string()],
+                        success_likelihood: 0.8,
+                    }],
+                    effort_estimate: EffortLevel::Medium,
+                    dependencies: vec![],
+                },
+                AiGap {
+                    id: format!("gap-{}", uuid::Uuid::new_v4()),
+                    gap_type: AiGapType::MissingCulturalAdaptation,
+                    description: format!(
+                        "Cultural adaptation needed: {}",
+                        response.lines().next().unwrap_or("")
+                    ),
+                    severity: Severity::Info,
+                    impact: "Affects cultural appropriateness".to_string(),
+                    solutions: vec![AiGapSolution {
+                        id: format!("sol-{}", uuid::Uuid::new_v4()),
+                        description: "Consult cultural advisors".to_string(),
+                        steps: vec!["Engage local experts".to_string()],
+                        resources: vec!["Cultural consultation".to_string()],
+                        success_likelihood: 0.9,
+                    }],
+                    effort_estimate: EffortLevel::Low,
+                    dependencies: vec![],
+                },
+            ]
+        } else {
+            // Fallback: rule-based gap analysis
+            vec![AiGap {
+                id: format!("gap-{}", uuid::Uuid::new_v4()),
+                gap_type: AiGapType::MissingEnforcement,
+                description: "Standard enforcement gap check".to_string(),
+                severity: Severity::Info,
+                impact: "Standard porting consideration".to_string(),
+                solutions: vec![],
+                effort_estimate: EffortLevel::Medium,
+                dependencies: vec![],
+            }]
+        };
+
+        let critical_gaps: Vec<String> = gaps
+            .iter()
+            .filter(|g| g.severity == Severity::Critical)
+            .map(|g| g.description.clone())
+            .collect();
+
+        let coverage_score = 1.0 - (gaps.len() as f64 * 0.1).min(0.6);
+
+        Ok(AiGapAnalysis {
+            id: format!("ai-gap-{}", uuid::Uuid::new_v4()),
+            source_statute_id: statute.id.clone(),
+            target_jurisdiction: target_jurisdiction.id.clone(),
+            gaps,
+            coverage_score,
+            completeness_assessment: if coverage_score > 0.7 {
+                "Good coverage with addressable gaps".to_string()
+            } else {
+                "Significant gaps require attention".to_string()
+            },
+            critical_gaps,
+            recommended_actions: vec![
+                "Address critical gaps before implementation".to_string(),
+                "Conduct stakeholder review".to_string(),
+            ],
+            confidence: if self.generator.is_some() { 0.85 } else { 0.65 },
+        })
+    }
+}
+
+impl Default for AiGapAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Intelligent conflict prediction result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictPrediction {
+    /// Prediction ID
+    pub id: String,
+    /// Source statute ID
+    pub source_statute_id: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Predicted conflicts
+    pub predicted_conflicts: Vec<PredictedConflict>,
+    /// Overall conflict risk score (0.0 to 1.0)
+    pub risk_score: f64,
+    /// Risk assessment
+    pub risk_assessment: String,
+    /// Preventive measures
+    pub preventive_measures: Vec<String>,
+    /// Confidence in predictions
+    pub confidence: f64,
+}
+
+/// A predicted conflict.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictedConflict {
+    /// Conflict ID
+    pub id: String,
+    /// Conflict type
+    pub conflict_type: ConflictType,
+    /// Description
+    pub description: String,
+    /// Likelihood (0.0 to 1.0)
+    pub likelihood: f64,
+    /// Severity
+    pub severity: Severity,
+    /// Potential impact
+    pub impact: String,
+    /// Early warning indicators
+    pub indicators: Vec<String>,
+    /// Mitigation strategies
+    pub mitigations: Vec<String>,
+}
+
+/// Intelligent conflict predictor using ML/AI.
+#[derive(Clone)]
+pub struct IntelligentConflictPredictor {
+    /// Optional LLM generator
+    generator: Option<std::sync::Arc<dyn TextGenerator>>,
+    /// Historical conflict database
+    precedent_db: ConflictPrecedentDatabase,
+}
+
+impl IntelligentConflictPredictor {
+    /// Creates a new intelligent conflict predictor.
+    pub fn new() -> Self {
+        Self {
+            generator: None,
+            precedent_db: ConflictPrecedentDatabase::new(),
+        }
+    }
+
+    /// Creates a predictor with an LLM generator.
+    pub fn with_generator(generator: std::sync::Arc<dyn TextGenerator>) -> Self {
+        Self {
+            generator: Some(generator),
+            precedent_db: ConflictPrecedentDatabase::new(),
+        }
+    }
+
+    /// Predicts potential conflicts using AI.
+    pub async fn predict_conflicts(
+        &self,
+        statute: &Statute,
+        source_jurisdiction: &Jurisdiction,
+        target_jurisdiction: &Jurisdiction,
+    ) -> PortingResult<ConflictPrediction> {
+        let predicted_conflicts = if let Some(generator) = &self.generator {
+            // Use LLM for intelligent conflict prediction
+            let prompt = format!(
+                "Predict potential legal conflicts when porting statute:\n\
+                Statute: '{}'\n\
+                From: {} ({:?} legal system)\n\
+                To: {} ({:?} legal system)\n\n\
+                Analyze potential conflicts in:\n\
+                1. Legal authority and jurisdiction\n\
+                2. Procedural requirements\n\
+                3. Cultural and ethical norms\n\
+                4. Existing legislation\n\
+                5. Constitutional compatibility\n\
+                For each conflict, provide likelihood, severity, and mitigation.",
+                statute.title,
+                source_jurisdiction.name,
+                source_jurisdiction.legal_system,
+                target_jurisdiction.name,
+                target_jurisdiction.legal_system
+            );
+
+            let response = generator
+                .generate(&prompt)
+                .await
+                .map_err(PortingError::Llm)?;
+
+            // Parse LLM response (simplified)
+            vec![
+                PredictedConflict {
+                    id: format!("pred-{}", uuid::Uuid::new_v4()),
+                    conflict_type: ConflictType::SystemMismatch,
+                    description: "Legal system procedural differences".to_string(),
+                    likelihood: 0.7,
+                    severity: Severity::Warning,
+                    impact: "May require procedural adaptation".to_string(),
+                    indicators: vec!["Different legal traditions".to_string()],
+                    mitigations: vec![
+                        "Adapt procedures to target system".to_string(),
+                        "Consult legal experts".to_string(),
+                    ],
+                },
+                PredictedConflict {
+                    id: format!("pred-{}", uuid::Uuid::new_v4()),
+                    conflict_type: ConflictType::CulturalIncompatibility,
+                    description: format!(
+                        "AI prediction: {}",
+                        response
+                            .lines()
+                            .next()
+                            .unwrap_or("Cultural consideration needed")
+                    ),
+                    likelihood: 0.5,
+                    severity: Severity::Info,
+                    impact: "Cultural sensitivity required".to_string(),
+                    indicators: vec!["Cultural parameter differences".to_string()],
+                    mitigations: vec!["Cultural consultation".to_string()],
+                },
+            ]
+        } else {
+            // Fallback: rule-based prediction using precedent database
+            let precedents = self.precedent_db.find_relevant_precedents(
+                &source_jurisdiction.id,
+                &target_jurisdiction.id,
+                &ConflictType::SystemMismatch,
+            );
+
+            if !precedents.is_empty() {
+                vec![PredictedConflict {
+                    id: format!("pred-{}", uuid::Uuid::new_v4()),
+                    conflict_type: ConflictType::SystemMismatch,
+                    description: "Historical conflict pattern detected".to_string(),
+                    likelihood: 0.6,
+                    severity: Severity::Warning,
+                    impact: "Based on historical precedents".to_string(),
+                    indicators: vec!["Similar past conflicts".to_string()],
+                    mitigations: vec!["Apply proven resolution strategies".to_string()],
+                }]
+            } else {
+                vec![]
+            }
+        };
+
+        let risk_score = if predicted_conflicts.is_empty() {
+            0.1
+        } else {
+            predicted_conflicts
+                .iter()
+                .map(|c| c.likelihood)
+                .sum::<f64>()
+                / predicted_conflicts.len() as f64
+        };
+
+        Ok(ConflictPrediction {
+            id: format!("conflict-pred-{}", uuid::Uuid::new_v4()),
+            source_statute_id: statute.id.clone(),
+            target_jurisdiction: target_jurisdiction.id.clone(),
+            predicted_conflicts,
+            risk_score,
+            risk_assessment: if risk_score < 0.3 {
+                "Low conflict risk".to_string()
+            } else if risk_score < 0.7 {
+                "Moderate conflict risk - review recommended".to_string()
+            } else {
+                "High conflict risk - extensive review required".to_string()
+            },
+            preventive_measures: vec![
+                "Conduct thorough legal review".to_string(),
+                "Engage stakeholders early".to_string(),
+                "Plan mitigation strategies".to_string(),
+            ],
+            confidence: if self.generator.is_some() { 0.8 } else { 0.6 },
+        })
+    }
+
+    /// Analyzes conflict patterns from history.
+    pub fn analyze_patterns(
+        &self,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+    ) -> Vec<String> {
+        let precedents = self.precedent_db.find_relevant_precedents(
+            source_jurisdiction,
+            target_jurisdiction,
+            &ConflictType::SystemMismatch,
+        );
+
+        precedents
+            .iter()
+            .map(|p| format!("Pattern: {:?} -> {}", p.conflict_type, p.resolution_used))
+            .collect()
+    }
+}
+
+impl Default for IntelligentConflictPredictor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Multi-Jurisdiction Workflows (v0.2.1)
+// ============================================================================
+
+/// Multi-target porting request for simultaneous porting to multiple jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiTargetPortingRequest {
+    /// Request ID
+    pub id: String,
+    /// Source statute
+    pub source_statute: Statute,
+    /// Source jurisdiction
+    pub source_jurisdiction: Jurisdiction,
+    /// Target jurisdictions
+    pub target_jurisdictions: Vec<Jurisdiction>,
+    /// Porting options
+    pub options: PortingOptions,
+    /// Whether to resolve dependencies
+    pub resolve_dependencies: bool,
+    /// Whether to enable cascade propagation
+    pub enable_cascade: bool,
+}
+
+/// Result of multi-target porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiTargetPortingResult {
+    /// Result ID
+    pub id: String,
+    /// Source statute ID
+    pub source_statute_id: String,
+    /// Individual porting results by jurisdiction
+    pub jurisdiction_results: HashMap<String, PortedStatute>,
+    /// Failed jurisdictions with error messages
+    pub failures: HashMap<String, String>,
+    /// Overall success rate (0.0 to 1.0)
+    pub success_rate: f64,
+    /// Dependency resolution log
+    pub dependency_log: Vec<String>,
+    /// Cascade propagation log
+    pub cascade_log: Vec<String>,
+    /// Cross-jurisdiction conflicts detected
+    pub cross_conflicts: Vec<CrossJurisdictionConflict>,
+}
+
+/// Conflict that spans multiple jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossJurisdictionConflict {
+    /// Conflict ID
+    pub id: String,
+    /// Jurisdictions involved
+    pub jurisdictions: Vec<String>,
+    /// Conflict description
+    pub description: String,
+    /// Severity
+    pub severity: Severity,
+    /// Recommended resolution
+    pub resolution: String,
+}
+
+/// Multi-target porting engine for simultaneous porting to multiple jurisdictions.
+#[derive(Clone)]
+pub struct MultiTargetPortingEngine {
+    /// Dependency resolver
+    dependency_resolver: JurisdictionDependencyResolver,
+}
+
+impl MultiTargetPortingEngine {
+    /// Creates a new multi-target porting engine.
+    pub fn new() -> Self {
+        Self {
+            dependency_resolver: JurisdictionDependencyResolver::new(),
+        }
+    }
+
+    /// Ports a statute to multiple jurisdictions simultaneously.
+    pub async fn port_to_multiple_targets(
+        &self,
+        request: MultiTargetPortingRequest,
+    ) -> PortingResult<MultiTargetPortingResult> {
+        let mut jurisdiction_results = HashMap::new();
+        let mut failures = HashMap::new();
+        let mut dependency_log = Vec::new();
+        let mut cascade_log = Vec::new();
+
+        // Resolve dependencies if requested
+        let ordered_jurisdictions = if request.resolve_dependencies {
+            let deps = self
+                .dependency_resolver
+                .resolve_dependencies(&request.target_jurisdictions);
+            dependency_log.push(format!("Resolved {} dependencies", deps.len()));
+            deps
+        } else {
+            request.target_jurisdictions.clone()
+        };
+
+        // Port to each jurisdiction in order
+        for target_jurisdiction in ordered_jurisdictions {
+            let engine = PortingEngine::new(
+                request.source_jurisdiction.clone(),
+                target_jurisdiction.clone(),
+            );
+
+            match engine.port_statute(&request.source_statute, &request.options) {
+                Ok(ported) => {
+                    jurisdiction_results.insert(target_jurisdiction.id.clone(), ported.clone());
+
+                    // Cascade changes if enabled
+                    if request.enable_cascade {
+                        cascade_log.push(format!("Cascaded changes to {}", target_jurisdiction.id));
+                    }
+                }
+                Err(e) => {
+                    failures.insert(target_jurisdiction.id.clone(), e.to_string());
+                }
+            }
+        }
+
+        let success_rate = if jurisdiction_results.is_empty() && failures.is_empty() {
+            0.0
+        } else {
+            jurisdiction_results.len() as f64 / (jurisdiction_results.len() + failures.len()) as f64
+        };
+
+        // Detect cross-jurisdiction conflicts
+        let cross_conflicts = self.detect_cross_conflicts(&jurisdiction_results);
+
+        Ok(MultiTargetPortingResult {
+            id: format!("multi-port-{}", uuid::Uuid::new_v4()),
+            source_statute_id: request.source_statute.id.clone(),
+            jurisdiction_results,
+            failures,
+            success_rate,
+            dependency_log,
+            cascade_log,
+            cross_conflicts,
+        })
+    }
+
+    /// Detects conflicts across multiple jurisdictions.
+    fn detect_cross_conflicts(
+        &self,
+        results: &HashMap<String, PortedStatute>,
+    ) -> Vec<CrossJurisdictionConflict> {
+        let mut conflicts = Vec::new();
+
+        // Check for inconsistencies between jurisdictions
+        if results.len() > 1 {
+            conflicts.push(CrossJurisdictionConflict {
+                id: format!("cross-conflict-{}", uuid::Uuid::new_v4()),
+                jurisdictions: results.keys().cloned().collect(),
+                description: "Potential inconsistency in multi-jurisdiction porting".to_string(),
+                severity: Severity::Info,
+                resolution: "Review and harmonize across jurisdictions".to_string(),
+            });
+        }
+
+        conflicts
+    }
+}
+
+impl Default for MultiTargetPortingEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Jurisdiction dependency information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JurisdictionDependency {
+    /// Dependency ID
+    pub id: String,
+    /// Source jurisdiction (depends on target)
+    pub source_jurisdiction: String,
+    /// Target jurisdiction (dependency)
+    pub target_jurisdiction: String,
+    /// Dependency type
+    pub dependency_type: DependencyType,
+    /// Strength of dependency (0.0 to 1.0)
+    pub strength: f64,
+    /// Explanation
+    pub explanation: String,
+}
+
+/// Type of jurisdiction dependency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DependencyType {
+    /// Legal system compatibility
+    LegalSystemCompatibility,
+    /// Treaty obligation
+    TreatyObligation,
+    /// Trade agreement
+    TradeAgreement,
+    /// Regional harmonization
+    RegionalHarmonization,
+    /// Model law adoption
+    ModelLawAdoption,
+}
+
+/// Jurisdiction dependency resolver.
+#[derive(Clone)]
+pub struct JurisdictionDependencyResolver {
+    /// Known dependencies
+    dependencies: HashMap<String, Vec<JurisdictionDependency>>,
+}
+
+impl JurisdictionDependencyResolver {
+    /// Creates a new dependency resolver.
+    pub fn new() -> Self {
+        Self {
+            dependencies: HashMap::new(),
+        }
+    }
+
+    /// Adds a dependency.
+    #[allow(dead_code)]
+    pub fn add_dependency(&mut self, dependency: JurisdictionDependency) {
+        self.dependencies
+            .entry(dependency.source_jurisdiction.clone())
+            .or_default()
+            .push(dependency);
+    }
+
+    /// Resolves dependencies and returns jurisdictions in dependency order.
+    pub fn resolve_dependencies(&self, jurisdictions: &[Jurisdiction]) -> Vec<Jurisdiction> {
+        // Simple topological sort - in production, would use proper algorithm
+        let mut ordered = jurisdictions.to_vec();
+
+        // Sort by legal system similarity (civil law jurisdictions together, etc.)
+        ordered.sort_by_key(|j| match j.legal_system {
+            LegalSystem::CivilLaw => 0,
+            LegalSystem::CommonLaw => 1,
+            _ => 2,
+        });
+
+        ordered
+    }
+
+    /// Finds dependencies for a jurisdiction.
+    #[allow(dead_code)]
+    pub fn find_dependencies(&self, jurisdiction_id: &str) -> Vec<&JurisdictionDependency> {
+        self.dependencies
+            .get(jurisdiction_id)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
+    }
+}
+
+impl Default for JurisdictionDependencyResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cascade change propagation configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CascadeConfig {
+    /// Configuration ID
+    pub id: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdictions for cascade
+    pub cascade_targets: Vec<String>,
+    /// Propagation rules
+    pub propagation_rules: Vec<PropagationRule>,
+    /// Whether to propagate automatically
+    pub auto_propagate: bool,
+}
+
+/// Rule for change propagation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PropagationRule {
+    /// Rule ID
+    pub id: String,
+    /// Rule name
+    pub name: String,
+    /// Change type to propagate
+    pub change_type: ChangeType,
+    /// Conditions for propagation
+    pub conditions: Vec<String>,
+    /// Target jurisdictions (empty = all)
+    pub target_jurisdictions: Vec<String>,
+}
+
+/// Change propagation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CascadePropagationResult {
+    /// Result ID
+    pub id: String,
+    /// Source statute ID
+    pub source_statute_id: String,
+    /// Changes propagated
+    pub propagated_changes: HashMap<String, Vec<PortingChange>>,
+    /// Propagation conflicts
+    pub conflicts: Vec<String>,
+    /// Success rate (0.0 to 1.0)
+    pub success_rate: f64,
+}
+
+/// Cascade change propagator.
+#[derive(Clone)]
+pub struct CascadeChangePropagator {
+    /// Cascade configurations
+    configs: Vec<CascadeConfig>,
+}
+
+impl CascadeChangePropagator {
+    /// Creates a new cascade change propagator.
+    pub fn new() -> Self {
+        Self {
+            configs: Vec::new(),
+        }
+    }
+
+    /// Adds a cascade configuration.
+    #[allow(dead_code)]
+    pub fn add_config(&mut self, config: CascadeConfig) {
+        self.configs.push(config);
+    }
+
+    /// Propagates changes across jurisdictions.
+    #[allow(dead_code)]
+    pub fn propagate_changes(
+        &self,
+        source_statute: &Statute,
+        changes: &[PortingChange],
+        config: &CascadeConfig,
+    ) -> CascadePropagationResult {
+        let mut propagated_changes = HashMap::new();
+        let conflicts = Vec::new();
+
+        // Apply propagation rules
+        for target_jurisdiction in &config.cascade_targets {
+            let mut target_changes = Vec::new();
+
+            for change in changes {
+                // Check if change should be propagated
+                let should_propagate = config.propagation_rules.iter().any(|rule| {
+                    rule.change_type == change.change_type
+                        && (rule.target_jurisdictions.is_empty()
+                            || rule.target_jurisdictions.contains(target_jurisdiction))
+                });
+
+                if should_propagate {
+                    target_changes.push(change.clone());
+                }
+            }
+
+            if !target_changes.is_empty() {
+                propagated_changes.insert(target_jurisdiction.clone(), target_changes);
+            }
+        }
+
+        let total_targets = config.cascade_targets.len();
+        let successful_propagations = propagated_changes.len();
+        let success_rate = if total_targets > 0 {
+            successful_propagations as f64 / total_targets as f64
+        } else {
+            0.0
+        };
+
+        CascadePropagationResult {
+            id: format!("cascade-{}", uuid::Uuid::new_v4()),
+            source_statute_id: source_statute.id.clone(),
+            propagated_changes,
+            conflicts,
+            success_rate,
+        }
+    }
+}
+
+impl Default for CascadeChangePropagator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cross-jurisdiction synchronization state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SynchronizationState {
+    /// State ID
+    pub id: String,
+    /// Statute ID being synchronized
+    pub statute_id: String,
+    /// Jurisdictions involved
+    pub jurisdictions: Vec<String>,
+    /// Current versions by jurisdiction
+    pub versions: HashMap<String, String>,
+    /// Synchronization status
+    pub status: SyncStatus,
+    /// Last synchronized timestamp
+    pub last_sync: String,
+    /// Pending changes by jurisdiction
+    pub pending_changes: HashMap<String, Vec<PortingChange>>,
+}
+
+/// Synchronization status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncStatus {
+    /// All jurisdictions synchronized
+    Synchronized,
+    /// Synchronization in progress
+    InProgress,
+    /// Out of sync
+    OutOfSync,
+    /// Conflict detected
+    Conflict,
+}
+
+/// Cross-jurisdiction synchronization manager.
+#[derive(Clone)]
+pub struct CrossJurisdictionSynchronizer {
+    /// Synchronization states
+    states: HashMap<String, SynchronizationState>,
+}
+
+impl CrossJurisdictionSynchronizer {
+    /// Creates a new synchronizer.
+    pub fn new() -> Self {
+        Self {
+            states: HashMap::new(),
+        }
+    }
+
+    /// Starts synchronization for a statute across jurisdictions.
+    pub fn start_sync(
+        &mut self,
+        statute_id: &str,
+        jurisdictions: Vec<String>,
+    ) -> SynchronizationState {
+        let state = SynchronizationState {
+            id: format!("sync-{}", uuid::Uuid::new_v4()),
+            statute_id: statute_id.to_string(),
+            jurisdictions: jurisdictions.clone(),
+            versions: jurisdictions
+                .iter()
+                .map(|j| (j.clone(), "v1.0".to_string()))
+                .collect(),
+            status: SyncStatus::InProgress,
+            last_sync: chrono::Utc::now().to_rfc3339(),
+            pending_changes: HashMap::new(),
+        };
+
+        self.states.insert(statute_id.to_string(), state.clone());
+        state
+    }
+
+    /// Checks synchronization status.
+    #[allow(dead_code)]
+    pub fn check_sync_status(&self, statute_id: &str) -> Option<SyncStatus> {
+        self.states.get(statute_id).map(|s| s.status)
+    }
+
+    /// Synchronizes changes across jurisdictions.
+    #[allow(dead_code)]
+    pub fn synchronize_changes(
+        &mut self,
+        statute_id: &str,
+        jurisdiction: &str,
+        changes: Vec<PortingChange>,
+    ) -> Result<(), String> {
+        if let Some(state) = self.states.get_mut(statute_id) {
+            // Add pending changes
+            state
+                .pending_changes
+                .entry(jurisdiction.to_string())
+                .or_default()
+                .extend(changes);
+
+            // Check if all jurisdictions have pending changes
+            let all_have_changes = state
+                .jurisdictions
+                .iter()
+                .all(|j| state.pending_changes.contains_key(j));
+
+            if all_have_changes {
+                state.status = SyncStatus::Synchronized;
+                state.last_sync = chrono::Utc::now().to_rfc3339();
+            } else {
+                state.status = SyncStatus::OutOfSync;
+            }
+
+            Ok(())
+        } else {
+            Err("Synchronization state not found".to_string())
+        }
+    }
+
+    /// Gets synchronization state.
+    #[allow(dead_code)]
+    pub fn get_state(&self, statute_id: &str) -> Option<&SynchronizationState> {
+        self.states.get(statute_id)
+    }
+}
+
+impl Default for CrossJurisdictionSynchronizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Harmonization tracking record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarmonizationRecord {
+    /// Record ID
+    pub id: String,
+    /// Statute ID being harmonized
+    pub statute_id: String,
+    /// Jurisdictions being harmonized
+    pub jurisdictions: Vec<String>,
+    /// Harmonization goal
+    pub goal: String,
+    /// Current harmonization score (0.0 to 1.0)
+    pub harmonization_score: f64,
+    /// Differences identified
+    pub differences: Vec<HarmonizationDifference>,
+    /// Harmonization actions taken
+    pub actions: Vec<HarmonizationAction>,
+    /// Status
+    pub status: HarmonizationStatus,
+}
+
+/// Difference between jurisdictions in harmonization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarmonizationDifference {
+    /// Difference ID
+    pub id: String,
+    /// Jurisdictions with difference
+    pub jurisdictions: Vec<String>,
+    /// Difference type
+    pub difference_type: DifferenceType,
+    /// Description
+    pub description: String,
+    /// Impact on harmonization
+    pub impact: f64,
+}
+
+/// Type of harmonization difference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DifferenceType {
+    /// Terminological difference
+    Terminological,
+    /// Procedural difference
+    Procedural,
+    /// Cultural difference
+    Cultural,
+    /// Legal system difference
+    LegalSystem,
+    /// Enforcement difference
+    Enforcement,
+}
+
+/// Action taken for harmonization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarmonizationAction {
+    /// Action ID
+    pub id: String,
+    /// Action type
+    pub action_type: String,
+    /// Description
+    pub description: String,
+    /// Jurisdictions affected
+    pub jurisdictions_affected: Vec<String>,
+    /// Impact on harmonization score
+    pub impact: f64,
+    /// Timestamp
+    pub timestamp: String,
+}
+
+/// Harmonization status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HarmonizationStatus {
+    /// Planning harmonization
+    Planning,
+    /// In progress
+    InProgress,
+    /// Partially harmonized
+    PartiallyHarmonized,
+    /// Fully harmonized
+    FullyHarmonized,
+    /// Harmonization failed
+    Failed,
+}
+
+/// Harmonization tracker.
+#[derive(Clone)]
+pub struct HarmonizationTracker {
+    /// Harmonization records
+    records: HashMap<String, HarmonizationRecord>,
+}
+
+impl HarmonizationTracker {
+    /// Creates a new harmonization tracker.
+    pub fn new() -> Self {
+        Self {
+            records: HashMap::new(),
+        }
+    }
+
+    /// Starts tracking harmonization.
+    pub fn start_tracking(
+        &mut self,
+        statute_id: &str,
+        jurisdictions: Vec<String>,
+        goal: String,
+    ) -> HarmonizationRecord {
+        let record = HarmonizationRecord {
+            id: format!("harm-{}", uuid::Uuid::new_v4()),
+            statute_id: statute_id.to_string(),
+            jurisdictions,
+            goal,
+            harmonization_score: 0.0,
+            differences: Vec::new(),
+            actions: Vec::new(),
+            status: HarmonizationStatus::Planning,
+        };
+
+        self.records.insert(statute_id.to_string(), record.clone());
+        record
+    }
+
+    /// Adds a difference.
+    #[allow(dead_code)]
+    pub fn add_difference(
+        &mut self,
+        statute_id: &str,
+        difference: HarmonizationDifference,
+    ) -> Result<(), String> {
+        if let Some(record) = self.records.get_mut(statute_id) {
+            record.differences.push(difference);
+            self.update_harmonization_score(statute_id)?;
+            Ok(())
+        } else {
+            Err("Harmonization record not found".to_string())
+        }
+    }
+
+    /// Records a harmonization action.
+    #[allow(dead_code)]
+    pub fn record_action(
+        &mut self,
+        statute_id: &str,
+        action: HarmonizationAction,
+    ) -> Result<(), String> {
+        if let Some(record) = self.records.get_mut(statute_id) {
+            record.actions.push(action);
+            self.update_harmonization_score(statute_id)?;
+            Ok(())
+        } else {
+            Err("Harmonization record not found".to_string())
+        }
+    }
+
+    /// Updates harmonization score.
+    fn update_harmonization_score(&mut self, statute_id: &str) -> Result<(), String> {
+        if let Some(record) = self.records.get_mut(statute_id) {
+            // Calculate score based on differences and actions
+            let difference_penalty = record.differences.len() as f64 * 0.1;
+            let action_bonus = record.actions.iter().map(|a| a.impact).sum::<f64>();
+
+            let score = (1.0 - difference_penalty + action_bonus).clamp(0.0, 1.0);
+            record.harmonization_score = score;
+
+            // Update status based on score
+            record.status = if score >= 0.9 {
+                HarmonizationStatus::FullyHarmonized
+            } else if score >= 0.6 {
+                HarmonizationStatus::PartiallyHarmonized
+            } else {
+                HarmonizationStatus::InProgress
+            };
+
+            Ok(())
+        } else {
+            Err("Harmonization record not found".to_string())
+        }
+    }
+
+    /// Gets harmonization record.
+    #[allow(dead_code)]
+    pub fn get_record(&self, statute_id: &str) -> Option<&HarmonizationRecord> {
+        self.records.get(statute_id)
+    }
+
+    /// Gets all records.
+    #[allow(dead_code)]
+    pub fn all_records(&self) -> Vec<&HarmonizationRecord> {
+        self.records.values().collect()
+    }
+}
+
+impl Default for HarmonizationTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

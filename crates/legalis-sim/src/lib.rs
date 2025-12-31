@@ -71,9 +71,24 @@
 //! - Policy Analysis (multi-objective optimization, sensitivity analysis, stakeholder impacts, distributional analysis)
 //! - Validation Framework (empirical validation, cross-validation, confidence intervals, uncertainty quantification)
 //! - Domain-Specific Models (tax systems, benefit eligibility, regulatory compliance, court case prediction, legislative forecasting)
+//!
+//! ## Integration & API (2025-Q4)
+//! - Simulation-as-a-Service API with job queuing
+//! - Persistent result storage with file-based backend
+//! - Comparison API for analyzing multiple simulations
+//! - Webhook notifications for job completion
+//! - Priority-based job scheduling
+//!
+//! ## Orchestration & Advanced Job Management (2025-Q4)
+//! - Job retry logic with exponential/linear backoff
+//! - Job timeout handling with configurable actions
+//! - Batch job execution with dependency graphs
+//! - Parameter sweep orchestration for sensitivity analysis
+//! - Execution history tracking and statistics
 
 mod agent_intelligence;
 mod analysis;
+mod api;
 mod behavior;
 mod builder;
 mod calibration;
@@ -91,6 +106,7 @@ mod metrics;
 mod monte_carlo;
 mod network_effects;
 mod optimization;
+mod orchestration;
 mod performance;
 mod persistence;
 mod policy_analysis;
@@ -107,6 +123,7 @@ mod visualization;
 
 pub use agent_intelligence::*;
 pub use analysis::*;
+pub use api::*;
 pub use behavior::*;
 pub use builder::*;
 pub use calibration::*;
@@ -124,6 +141,7 @@ pub use metrics::*;
 pub use monte_carlo::*;
 pub use network_effects::*;
 pub use optimization::*;
+pub use orchestration::*;
 pub use performance::*;
 pub use persistence::*;
 pub use policy_analysis::*;

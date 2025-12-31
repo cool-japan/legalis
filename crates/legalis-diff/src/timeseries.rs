@@ -443,6 +443,405 @@ pub fn detect_compliance_drift(
     }
 }
 
+/// Comprehensive trend report combining all time-series analyses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrendReport {
+    /// Time-series statistics
+    pub stats: TimeSeriesStats,
+    /// Change velocity metrics
+    pub velocity: ChangeVelocity,
+    /// Compliance drift (if baseline provided)
+    pub drift: Option<ComplianceDrift>,
+    /// Report generation timestamp
+    pub generated_at: DateTime<Utc>,
+    /// Time period covered
+    pub period_start: DateTime<Utc>,
+    /// Time period end
+    pub period_end: DateTime<Utc>,
+    /// Key insights and recommendations
+    pub insights: Vec<String>,
+    /// Warning flags
+    pub warnings: Vec<String>,
+}
+
+impl TrendReport {
+    /// Generates insights based on the trend data.
+    fn generate_insights(&self) -> Vec<String> {
+        let mut insights = Vec::new();
+
+        // Velocity insights
+        if self.velocity.is_accelerating {
+            insights.push(format!(
+                "Change velocity is accelerating ({:.2} changes/day acceleration)",
+                self.velocity.acceleration
+            ));
+        } else {
+            insights.push(format!(
+                "Change velocity is decelerating ({:.2} changes/day deceleration)",
+                self.velocity.acceleration.abs()
+            ));
+        }
+
+        // Trend insights
+        if self.stats.trend_slope > 0.0 {
+            insights.push(format!(
+                "Positive change trend detected ({:.2} changes/day slope)",
+                self.stats.trend_slope
+            ));
+        } else if self.stats.trend_slope < 0.0 {
+            insights.push(format!(
+                "Negative change trend detected ({:.2} changes/day slope)",
+                self.stats.trend_slope.abs()
+            ));
+        }
+
+        // Peak period insight
+        if let Some((period, count)) = &self.stats.peak_period {
+            insights.push(format!(
+                "Peak change period: {} with {} changes",
+                period, count
+            ));
+        }
+
+        // Compliance drift insights
+        if let Some(drift) = &self.drift {
+            match drift.risk_level {
+                RiskLevel::Critical => {
+                    insights.push(format!(
+                        "CRITICAL: Severe compliance drift detected (score: {:.2})",
+                        drift.drift_score
+                    ));
+                }
+                RiskLevel::High => {
+                    insights.push(format!(
+                        "HIGH: Significant compliance drift detected (score: {:.2})",
+                        drift.drift_score
+                    ));
+                }
+                RiskLevel::Moderate => {
+                    insights.push(format!(
+                        "MODERATE: Some compliance drift detected (score: {:.2})",
+                        drift.drift_score
+                    ));
+                }
+                RiskLevel::Low => {
+                    insights.push("LOW: Minimal compliance drift".to_string());
+                }
+            }
+
+            if drift.is_accelerating {
+                insights.push("Compliance drift is accelerating".to_string());
+            }
+        }
+
+        insights
+    }
+
+    /// Generates warnings based on the trend data.
+    fn generate_warnings(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // High velocity warning
+        if self.velocity.changes_per_day > 10.0 {
+            warnings.push(format!(
+                "High change velocity detected: {:.2} changes/day",
+                self.velocity.changes_per_day
+            ));
+        }
+
+        // Acceleration warning
+        if self.velocity.is_accelerating && self.velocity.acceleration > 5.0 {
+            warnings.push(format!(
+                "Rapid acceleration in changes: {:.2} changes/day increase",
+                self.velocity.acceleration
+            ));
+        }
+
+        // Drift warnings
+        if let Some(drift) = &self.drift {
+            if drift.breaking_changes > 5 {
+                warnings.push(format!(
+                    "High number of breaking changes: {}",
+                    drift.breaking_changes
+                ));
+            }
+
+            if matches!(drift.risk_level, RiskLevel::High | RiskLevel::Critical) {
+                warnings.push("Immediate attention required for compliance drift".to_string());
+            }
+
+            if drift.drift_velocity > 5.0 {
+                warnings.push(format!(
+                    "High drift velocity: {:.2} drift units/day",
+                    drift.drift_velocity
+                ));
+            }
+        }
+
+        warnings
+    }
+
+    /// Exports the trend report to JSON format.
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Exports the trend report to Markdown format.
+    #[must_use]
+    pub fn to_markdown(&self) -> String {
+        let mut md = String::new();
+
+        md.push_str("# Statute Change Trend Report\n\n");
+        md.push_str(&format!(
+            "**Generated:** {}\n\n",
+            self.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
+        md.push_str(&format!(
+            "**Period:** {} to {}\n\n",
+            self.period_start.format("%Y-%m-%d"),
+            self.period_end.format("%Y-%m-%d")
+        ));
+
+        // Summary Statistics
+        md.push_str("## Summary Statistics\n\n");
+        md.push_str(&format!(
+            "- **Total Changes:** {}\n",
+            self.stats.total_changes
+        ));
+        md.push_str(&format!(
+            "- **Time Span:** {} days\n",
+            self.stats.time_span_days
+        ));
+        md.push_str(&format!(
+            "- **Average Changes per Period:** {:.2}\n",
+            self.stats.avg_changes_per_period
+        ));
+        md.push_str(&format!(
+            "- **Trend Slope:** {:.2} changes/day\n",
+            self.stats.trend_slope
+        ));
+        md.push_str(&format!(
+            "- **Velocity:** {:.2} changes/day\n\n",
+            self.stats.velocity
+        ));
+
+        // Velocity Metrics
+        md.push_str("## Change Velocity\n\n");
+        md.push_str(&format!(
+            "- **Changes per Day:** {:.2}\n",
+            self.velocity.changes_per_day
+        ));
+        md.push_str(&format!(
+            "- **Changes per Week:** {:.2}\n",
+            self.velocity.changes_per_week
+        ));
+        md.push_str(&format!(
+            "- **Changes per Month:** {:.2}\n",
+            self.velocity.changes_per_month
+        ));
+        md.push_str(&format!(
+            "- **Acceleration:** {:.2} changes/day²\n",
+            self.velocity.acceleration
+        ));
+        md.push_str(&format!(
+            "- **Status:** {}\n\n",
+            if self.velocity.is_accelerating {
+                "Accelerating"
+            } else {
+                "Decelerating"
+            }
+        ));
+
+        // Compliance Drift
+        if let Some(drift) = &self.drift {
+            md.push_str("## Compliance Drift\n\n");
+            md.push_str(&format!(
+                "- **Baseline:** {}\n",
+                drift.baseline_timestamp.format("%Y-%m-%d")
+            ));
+            md.push_str(&format!("- **Drift Score:** {:.2}\n", drift.drift_score));
+            md.push_str(&format!(
+                "- **Breaking Changes:** {}\n",
+                drift.breaking_changes
+            ));
+            md.push_str(&format!(
+                "- **Non-Breaking Changes:** {}\n",
+                drift.non_breaking_changes
+            ));
+            md.push_str(&format!(
+                "- **Drift Velocity:** {:.2} units/day\n",
+                drift.drift_velocity
+            ));
+            md.push_str(&format!("- **Risk Level:** {:?}\n", drift.risk_level));
+            md.push_str(&format!(
+                "- **Status:** {}\n\n",
+                if drift.is_accelerating {
+                    "Accelerating"
+                } else {
+                    "Stable"
+                }
+            ));
+        }
+
+        // Severity Distribution
+        if !self.stats.severity_distribution.is_empty() {
+            md.push_str("## Severity Distribution\n\n");
+            for (severity, count) in &self.stats.severity_distribution {
+                md.push_str(&format!("- **{:?}:** {}\n", severity, count));
+            }
+            md.push_str("\n");
+        }
+
+        // Insights
+        if !self.insights.is_empty() {
+            md.push_str("## Key Insights\n\n");
+            for insight in &self.insights {
+                md.push_str(&format!("- {}\n", insight));
+            }
+            md.push_str("\n");
+        }
+
+        // Warnings
+        if !self.warnings.is_empty() {
+            md.push_str("## Warnings\n\n");
+            for warning in &self.warnings {
+                md.push_str(&format!("- ⚠️ {}\n", warning));
+            }
+            md.push_str("\n");
+        }
+
+        md
+    }
+
+    /// Exports the trend report to CSV format.
+    #[must_use]
+    pub fn to_csv(&self) -> String {
+        let mut csv = String::new();
+
+        // Header
+        csv.push_str("Metric,Value\n");
+
+        // Basic stats
+        csv.push_str(&format!(
+            "Generated At,{}\n",
+            self.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
+        csv.push_str(&format!(
+            "Period Start,{}\n",
+            self.period_start.format("%Y-%m-%d")
+        ));
+        csv.push_str(&format!(
+            "Period End,{}\n",
+            self.period_end.format("%Y-%m-%d")
+        ));
+        csv.push_str(&format!("Total Changes,{}\n", self.stats.total_changes));
+        csv.push_str(&format!("Time Span Days,{}\n", self.stats.time_span_days));
+        csv.push_str(&format!(
+            "Avg Changes Per Period,{:.2}\n",
+            self.stats.avg_changes_per_period
+        ));
+        csv.push_str(&format!("Trend Slope,{:.2}\n", self.stats.trend_slope));
+        csv.push_str(&format!("Velocity,{:.2}\n", self.stats.velocity));
+
+        // Velocity metrics
+        csv.push_str(&format!(
+            "Changes Per Day,{:.2}\n",
+            self.velocity.changes_per_day
+        ));
+        csv.push_str(&format!(
+            "Changes Per Week,{:.2}\n",
+            self.velocity.changes_per_week
+        ));
+        csv.push_str(&format!(
+            "Changes Per Month,{:.2}\n",
+            self.velocity.changes_per_month
+        ));
+        csv.push_str(&format!("Acceleration,{:.2}\n", self.velocity.acceleration));
+        csv.push_str(&format!(
+            "Is Accelerating,{}\n",
+            self.velocity.is_accelerating
+        ));
+
+        // Drift metrics
+        if let Some(drift) = &self.drift {
+            csv.push_str(&format!("Drift Score,{:.2}\n", drift.drift_score));
+            csv.push_str(&format!("Breaking Changes,{}\n", drift.breaking_changes));
+            csv.push_str(&format!(
+                "Non-Breaking Changes,{}\n",
+                drift.non_breaking_changes
+            ));
+            csv.push_str(&format!("Drift Velocity,{:.2}\n", drift.drift_velocity));
+            csv.push_str(&format!("Drift Accelerating,{}\n", drift.is_accelerating));
+            csv.push_str(&format!("Risk Level,{:?}\n", drift.risk_level));
+        }
+
+        csv
+    }
+}
+
+/// Generates a comprehensive trend report from timestamped diffs.
+///
+/// # Examples
+///
+/// ```
+/// use legalis_core::{Statute, Effect, EffectType};
+/// use legalis_diff::{diff, timeseries::{TimestampedDiff, generate_trend_report}};
+/// use chrono::{Utc, Duration};
+///
+/// let old = Statute::new("law", "Old", Effect::new(EffectType::Grant, "Benefit"));
+/// let new = Statute::new("law", "New", Effect::new(EffectType::Grant, "Different"));
+///
+/// let diff_result = diff(&old, &new).unwrap();
+/// let now = Utc::now();
+/// let diffs = vec![
+///     TimestampedDiff::with_timestamp(diff_result.clone(), now - Duration::days(30)),
+///     TimestampedDiff::with_timestamp(diff_result, now),
+/// ];
+///
+/// let baseline = now - Duration::days(60);
+/// let report = generate_trend_report(&diffs, Some(baseline));
+///
+/// assert!(!report.insights.is_empty());
+/// ```
+#[must_use]
+pub fn generate_trend_report(
+    diffs: &[TimestampedDiff],
+    baseline_timestamp: Option<DateTime<Utc>>,
+) -> TrendReport {
+    let stats = analyze_time_series(diffs);
+    let velocity = calculate_velocity(diffs);
+    let drift = baseline_timestamp.map(|baseline| detect_compliance_drift(diffs, baseline));
+
+    let generated_at = Utc::now();
+    let period_start = diffs
+        .iter()
+        .map(|d| d.timestamp)
+        .min()
+        .unwrap_or(generated_at);
+    let period_end = diffs
+        .iter()
+        .map(|d| d.timestamp)
+        .max()
+        .unwrap_or(generated_at);
+
+    let mut report = TrendReport {
+        stats,
+        velocity,
+        drift,
+        generated_at,
+        period_start,
+        period_end,
+        insights: Vec::new(),
+        warnings: Vec::new(),
+    };
+
+    report.insights = report.generate_insights();
+    report.warnings = report.generate_warnings();
+
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,5 +926,99 @@ mod tests {
             drift.risk_level,
             RiskLevel::Low | RiskLevel::Moderate
         ));
+    }
+
+    #[test]
+    fn test_generate_trend_report() {
+        let statute1 = Statute::new("test", "Title", Effect::new(EffectType::Grant, "Test"));
+        let statute2 = Statute::new("test", "New", Effect::new(EffectType::Grant, "Different"));
+        let diff_result = diff(&statute1, &statute2).unwrap();
+
+        let now = Utc::now();
+        let diffs = vec![
+            TimestampedDiff::with_timestamp(diff_result.clone(), now - Duration::days(30)),
+            TimestampedDiff::with_timestamp(diff_result, now),
+        ];
+
+        let baseline = now - Duration::days(60);
+        let report = generate_trend_report(&diffs, Some(baseline));
+
+        assert!(!report.insights.is_empty());
+        assert!(report.stats.total_changes > 0);
+        assert!(report.drift.is_some());
+    }
+
+    #[test]
+    fn test_trend_report_to_json() {
+        let statute1 = Statute::new("test", "Title", Effect::new(EffectType::Grant, "Test"));
+        let statute2 = Statute::new("test", "New", Effect::new(EffectType::Grant, "Different"));
+        let diff_result = diff(&statute1, &statute2).unwrap();
+
+        let now = Utc::now();
+        let diffs = vec![TimestampedDiff::with_timestamp(diff_result, now)];
+
+        let report = generate_trend_report(&diffs, None);
+        let json = report.to_json();
+
+        assert!(json.contains("stats"));
+        assert!(json.contains("velocity"));
+    }
+
+    #[test]
+    fn test_trend_report_to_markdown() {
+        let statute1 = Statute::new("test", "Title", Effect::new(EffectType::Grant, "Test"));
+        let statute2 = Statute::new("test", "New", Effect::new(EffectType::Grant, "Different"));
+        let diff_result = diff(&statute1, &statute2).unwrap();
+
+        let now = Utc::now();
+        let diffs = vec![TimestampedDiff::with_timestamp(diff_result, now)];
+
+        let report = generate_trend_report(&diffs, None);
+        let md = report.to_markdown();
+
+        assert!(md.contains("# Statute Change Trend Report"));
+        assert!(md.contains("## Summary Statistics"));
+        assert!(md.contains("## Change Velocity"));
+        assert!(md.contains("## Key Insights"));
+    }
+
+    #[test]
+    fn test_trend_report_to_csv() {
+        let statute1 = Statute::new("test", "Title", Effect::new(EffectType::Grant, "Test"));
+        let statute2 = Statute::new("test", "New", Effect::new(EffectType::Grant, "Different"));
+        let diff_result = diff(&statute1, &statute2).unwrap();
+
+        let now = Utc::now();
+        let diffs = vec![TimestampedDiff::with_timestamp(diff_result, now)];
+
+        let report = generate_trend_report(&diffs, None);
+        let csv = report.to_csv();
+
+        assert!(csv.contains("Metric,Value"));
+        assert!(csv.contains("Total Changes"));
+        assert!(csv.contains("Changes Per Day"));
+    }
+
+    #[test]
+    fn test_trend_report_warnings() {
+        let statute1 = Statute::new("test", "Title", Effect::new(EffectType::Grant, "Test"));
+        let statute2 = Statute::new("test", "New", Effect::new(EffectType::Revoke, "Revoke"));
+        let diff_result = diff(&statute1, &statute2).unwrap();
+
+        let now = Utc::now();
+        // Create many diffs to trigger warnings
+        let mut diffs = Vec::new();
+        for i in 0..20 {
+            diffs.push(TimestampedDiff::with_timestamp(
+                diff_result.clone(),
+                now - Duration::days(20 - i),
+            ));
+        }
+
+        let baseline = now - Duration::days(30);
+        let report = generate_trend_report(&diffs, Some(baseline));
+
+        // Should have warnings about high change velocity
+        assert!(!report.warnings.is_empty());
     }
 }

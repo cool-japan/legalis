@@ -157,3 +157,75 @@
 - [x] Add connected components detection
 - [x] Add most connected entities ranking
 - [x] Add most referenced entities ranking
+
+## Roadmap for 0.3.0 Series (Next-Gen Features)
+
+### Semantic Web 3.0 (v0.3.0)
+- [x] Add RDF-star (reification) support
+- [x] Implement SPARQL-star queries
+- [x] Add graph embedding generation
+- [x] Create semantic similarity indexing
+- [x] Add neural-symbolic reasoning integration
+
+### Legal Knowledge Fusion (v0.3.1)
+- [x] Add cross-ontology mapping
+- [x] Implement entity resolution across sources
+- [x] Add knowledge graph merging
+- [x] Create conflict detection and resolution
+- [x] Add provenance tracking for fused data
+
+### Decentralized Legal Data (v0.3.2)
+- [ ] Add IPLD (InterPlanetary Linked Data) support
+- [ ] Implement content-addressed RDF storage
+- [ ] Add decentralized identifier (DID) integration
+- [ ] Create verifiable credentials for legal data
+- [ ] Add blockchain-anchored provenance
+
+### Real-Time Legal Intelligence (v0.3.3)
+- [ ] Add streaming SPARQL processing
+- [ ] Implement continuous query evaluation
+- [ ] Add real-time graph updates
+- [ ] Create incremental materialization
+- [ ] Add pub/sub for knowledge changes
+
+### AI-Enhanced Knowledge Graphs (v0.3.4)
+- [ ] Add automatic relation extraction
+- [ ] Implement knowledge graph completion
+- [ ] Add entity linking with LLMs
+- [ ] Create ontology learning from text
+- [ ] Add embedding-based link prediction
+
+### Multi-Modal Legal Knowledge (v0.3.5)
+- [ ] Add image-to-RDF extraction
+- [ ] Implement audio/video annotation
+- [ ] Add document layout to knowledge graph
+- [ ] Create multi-modal entity alignment
+- [ ] Add cross-modal reasoning
+
+### Geospatial Legal Data (v0.3.6)
+- [ ] Add GeoSPARQL 1.1 support
+- [ ] Implement jurisdiction geometry queries
+- [ ] Add spatial reasoning for legal zones
+- [ ] Create map-based knowledge exploration
+- [ ] Add coordinate reference system support
+
+### Temporal Knowledge Management (v0.3.7)
+- [ ] Add temporal RDF (RDF-star temporal)
+- [ ] Implement time-aware queries
+- [ ] Add version history traversal
+- [ ] Create temporal consistency checking
+- [ ] Add bitemporal knowledge modeling
+
+### Legal Ontology Engineering (v0.3.8)
+- [ ] Add ontology versioning with change tracking
+- [ ] Implement ontology alignment tools
+- [ ] Add competency question testing
+- [ ] Create ontology metrics and quality assessment
+- [ ] Add crowdsourced ontology evolution
+
+### Enterprise Knowledge Infrastructure (v0.3.9)
+- [ ] Add enterprise knowledge graph deployment
+- [ ] Implement role-based access for RDF data
+- [ ] Add audit logging for knowledge access
+- [ ] Create knowledge governance workflows
+- [ ] Add compliance reporting from knowledge graphs

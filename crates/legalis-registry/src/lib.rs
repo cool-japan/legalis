@@ -13160,6 +13160,2004 @@ pub mod advanced_search {
     }
 }
 
+/// Version control features for Git-like statute management.
+pub mod version_control {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    use std::fmt;
+
+    /// Branch in the version control system.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Branch {
+        /// Branch name
+        pub name: String,
+        /// Branch ID
+        pub branch_id: Uuid,
+        /// Parent branch (None for main branch)
+        pub parent_branch: Option<String>,
+        /// Current head commit
+        pub head_commit: Option<Uuid>,
+        /// When the branch was created
+        pub created_at: DateTime<Utc>,
+        /// Who created the branch
+        pub created_by: String,
+        /// Branch description
+        pub description: Option<String>,
+        /// Whether the branch is protected (cannot be deleted)
+        pub protected: bool,
+    }
+
+    impl Branch {
+        /// Creates a new branch.
+        pub fn new(name: impl Into<String>, created_by: impl Into<String>) -> Self {
+            Self {
+                name: name.into(),
+                branch_id: Uuid::new_v4(),
+                parent_branch: None,
+                head_commit: None,
+                created_at: Utc::now(),
+                created_by: created_by.into(),
+                description: None,
+                protected: false,
+            }
+        }
+
+        /// Creates a branch from a parent.
+        pub fn from_parent(
+            name: impl Into<String>,
+            parent: impl Into<String>,
+            created_by: impl Into<String>,
+        ) -> Self {
+            Self {
+                name: name.into(),
+                branch_id: Uuid::new_v4(),
+                parent_branch: Some(parent.into()),
+                head_commit: None,
+                created_at: Utc::now(),
+                created_by: created_by.into(),
+                description: None,
+                protected: false,
+            }
+        }
+
+        /// Sets the branch description.
+        pub fn with_description(mut self, description: impl Into<String>) -> Self {
+            self.description = Some(description.into());
+            self
+        }
+
+        /// Marks the branch as protected.
+        pub fn with_protected(mut self, protected: bool) -> Self {
+            self.protected = protected;
+            self
+        }
+    }
+
+    /// Commit in the version control system.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Commit {
+        /// Commit ID
+        pub commit_id: Uuid,
+        /// Branch name
+        pub branch_name: String,
+        /// Parent commit IDs
+        pub parent_commits: Vec<Uuid>,
+        /// Statute ID being committed
+        pub statute_id: String,
+        /// Statute snapshot at this commit
+        pub statute_entry: StatuteEntry,
+        /// Commit message
+        pub message: String,
+        /// Who made the commit
+        pub author: String,
+        /// When the commit was made
+        pub timestamp: DateTime<Utc>,
+        /// Commit signature (for verification)
+        pub signature: Option<String>,
+        /// Commit hash (SHA-256 of content)
+        pub commit_hash: String,
+    }
+
+    impl Commit {
+        /// Creates a new commit.
+        pub fn new(
+            branch_name: impl Into<String>,
+            statute_id: impl Into<String>,
+            statute_entry: StatuteEntry,
+            message: impl Into<String>,
+            author: impl Into<String>,
+        ) -> Self {
+            let branch_name = branch_name.into();
+            let statute_id = statute_id.into();
+            let message = message.into();
+            let author = author.into();
+            let timestamp = Utc::now();
+
+            // Calculate commit hash
+            let mut hasher = Sha256::new();
+            hasher.update(branch_name.as_bytes());
+            hasher.update(statute_id.as_bytes());
+            hasher.update(message.as_bytes());
+            hasher.update(author.as_bytes());
+            hasher.update(timestamp.to_rfc3339().as_bytes());
+            let commit_hash = format!("{:x}", hasher.finalize());
+
+            Self {
+                commit_id: Uuid::new_v4(),
+                branch_name,
+                parent_commits: Vec::new(),
+                statute_id,
+                statute_entry,
+                message,
+                author,
+                timestamp,
+                signature: None,
+                commit_hash,
+            }
+        }
+
+        /// Adds a parent commit.
+        pub fn with_parent(mut self, parent_id: Uuid) -> Self {
+            self.parent_commits.push(parent_id);
+            self
+        }
+
+        /// Signs the commit with a signature.
+        pub fn with_signature(mut self, signature: impl Into<String>) -> Self {
+            self.signature = Some(signature.into());
+            self
+        }
+
+        /// Verifies the commit signature.
+        pub fn verify_signature(&self, public_key: &str) -> bool {
+            if let Some(signature) = &self.signature {
+                // Placeholder: In production, use proper cryptographic verification
+                // e.g., ed25519_dalek, RSA, ECDSA
+                signature.starts_with("SIG:") && signature.contains(public_key)
+            } else {
+                false
+            }
+        }
+
+        /// Gets a short commit hash (first 8 characters).
+        pub fn short_hash(&self) -> String {
+            self.commit_hash.chars().take(8).collect()
+        }
+    }
+
+    /// Merge conflict during branch merging.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct BranchMergeConflict {
+        /// Field name with conflict
+        pub field_name: String,
+        /// Value from source branch
+        pub source_value: String,
+        /// Value from target branch
+        pub target_value: String,
+        /// Value from common ancestor (if any)
+        pub base_value: Option<String>,
+    }
+
+    impl fmt::Display for BranchMergeConflict {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
+                "Conflict in '{}': source='{}' vs target='{}'",
+                self.field_name, self.source_value, self.target_value
+            )
+        }
+    }
+
+    /// Result of a branch merge operation.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct MergeBranchResult {
+        /// Merge commit ID
+        pub merge_commit_id: Option<Uuid>,
+        /// Conflicts encountered
+        pub conflicts: Vec<BranchMergeConflict>,
+        /// Whether the merge was successful
+        pub success: bool,
+        /// Merge message
+        pub message: String,
+    }
+
+    impl MergeBranchResult {
+        /// Checks if there are conflicts.
+        pub fn has_conflicts(&self) -> bool {
+            !self.conflicts.is_empty()
+        }
+
+        /// Gets conflict count.
+        pub fn conflict_count(&self) -> usize {
+            self.conflicts.len()
+        }
+    }
+
+    /// Pull request status.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum PullRequestStatus {
+        /// Open and awaiting review
+        Open,
+        /// Under review
+        InReview,
+        /// Approved and ready to merge
+        Approved,
+        /// Changes requested
+        ChangesRequested,
+        /// Merged
+        Merged,
+        /// Closed without merging
+        Closed,
+    }
+
+    /// Review decision on a pull request.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum ReviewDecision {
+        /// Approve the changes
+        Approve,
+        /// Request changes
+        RequestChanges,
+        /// Comment only (no approval/rejection)
+        Comment,
+    }
+
+    /// Review on a pull request.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PullRequestReview {
+        /// Review ID
+        pub review_id: Uuid,
+        /// Pull request ID
+        pub pull_request_id: Uuid,
+        /// Reviewer name
+        pub reviewer: String,
+        /// Review decision
+        pub decision: ReviewDecision,
+        /// Review comments
+        pub comment: String,
+        /// When the review was submitted
+        pub submitted_at: DateTime<Utc>,
+    }
+
+    impl PullRequestReview {
+        /// Creates a new review.
+        pub fn new(
+            pull_request_id: Uuid,
+            reviewer: impl Into<String>,
+            decision: ReviewDecision,
+            comment: impl Into<String>,
+        ) -> Self {
+            Self {
+                review_id: Uuid::new_v4(),
+                pull_request_id,
+                reviewer: reviewer.into(),
+                decision,
+                comment: comment.into(),
+                submitted_at: Utc::now(),
+            }
+        }
+    }
+
+    /// Pull request for merging branches.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PullRequest {
+        /// Pull request ID
+        pub pr_id: Uuid,
+        /// Pull request number (incremental)
+        pub pr_number: u32,
+        /// Title
+        pub title: String,
+        /// Description
+        pub description: String,
+        /// Source branch
+        pub source_branch: String,
+        /// Target branch
+        pub target_branch: String,
+        /// Who created the PR
+        pub author: String,
+        /// Current status
+        pub status: PullRequestStatus,
+        /// Reviews
+        pub reviews: Vec<PullRequestReview>,
+        /// Commits included
+        pub commits: Vec<Uuid>,
+        /// When created
+        pub created_at: DateTime<Utc>,
+        /// When merged (if merged)
+        pub merged_at: Option<DateTime<Utc>>,
+        /// Who merged (if merged)
+        pub merged_by: Option<String>,
+    }
+
+    impl PullRequest {
+        /// Creates a new pull request.
+        pub fn new(
+            pr_number: u32,
+            title: impl Into<String>,
+            description: impl Into<String>,
+            source_branch: impl Into<String>,
+            target_branch: impl Into<String>,
+            author: impl Into<String>,
+        ) -> Self {
+            Self {
+                pr_id: Uuid::new_v4(),
+                pr_number,
+                title: title.into(),
+                description: description.into(),
+                source_branch: source_branch.into(),
+                target_branch: target_branch.into(),
+                author: author.into(),
+                status: PullRequestStatus::Open,
+                reviews: Vec::new(),
+                commits: Vec::new(),
+                created_at: Utc::now(),
+                merged_at: None,
+                merged_by: None,
+            }
+        }
+
+        /// Adds a review to the pull request.
+        pub fn add_review(&mut self, review: PullRequestReview) {
+            self.reviews.push(review);
+            // Update status based on reviews
+            self.update_status();
+        }
+
+        /// Updates the status based on reviews.
+        fn update_status(&mut self) {
+            if self.status == PullRequestStatus::Merged || self.status == PullRequestStatus::Closed
+            {
+                return;
+            }
+
+            let approvals = self
+                .reviews
+                .iter()
+                .filter(|r| r.decision == ReviewDecision::Approve)
+                .count();
+            let changes_requested = self
+                .reviews
+                .iter()
+                .filter(|r| r.decision == ReviewDecision::RequestChanges)
+                .count();
+
+            if changes_requested > 0 {
+                self.status = PullRequestStatus::ChangesRequested;
+            } else if approvals > 0 {
+                self.status = PullRequestStatus::Approved;
+            } else if !self.reviews.is_empty() {
+                self.status = PullRequestStatus::InReview;
+            }
+        }
+
+        /// Checks if the PR is approved.
+        pub fn is_approved(&self) -> bool {
+            self.status == PullRequestStatus::Approved
+        }
+
+        /// Marks the PR as merged.
+        pub fn mark_merged(&mut self, merged_by: impl Into<String>) {
+            self.status = PullRequestStatus::Merged;
+            self.merged_at = Some(Utc::now());
+            self.merged_by = Some(merged_by.into());
+        }
+
+        /// Closes the PR without merging.
+        pub fn close(&mut self) {
+            self.status = PullRequestStatus::Closed;
+        }
+    }
+
+    /// Field-level change tracking for blame.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FieldHistory {
+        /// Field name
+        pub field_name: String,
+        /// Old value (serialized)
+        pub old_value: Option<String>,
+        /// New value (serialized)
+        pub new_value: String,
+        /// Commit that made the change
+        pub commit_id: Uuid,
+        /// Who made the change
+        pub author: String,
+        /// When the change was made
+        pub timestamp: DateTime<Utc>,
+        /// Commit message
+        pub message: String,
+    }
+
+    impl FieldHistory {
+        /// Creates a new field history entry.
+        pub fn new(
+            field_name: impl Into<String>,
+            old_value: Option<String>,
+            new_value: impl Into<String>,
+            commit_id: Uuid,
+            author: impl Into<String>,
+            message: impl Into<String>,
+        ) -> Self {
+            Self {
+                field_name: field_name.into(),
+                old_value,
+                new_value: new_value.into(),
+                commit_id,
+                author: author.into(),
+                timestamp: Utc::now(),
+                message: message.into(),
+            }
+        }
+    }
+
+    /// Blame information for a specific field.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FieldBlame {
+        /// Field name
+        pub field_name: String,
+        /// Current value
+        pub current_value: String,
+        /// Who last modified this field
+        pub last_author: String,
+        /// When last modified
+        pub last_modified: DateTime<Utc>,
+        /// Commit that last modified this field
+        pub last_commit_id: Uuid,
+        /// Complete history of this field
+        pub history: Vec<FieldHistory>,
+    }
+
+    impl FieldBlame {
+        /// Creates a new field blame.
+        pub fn new(field_name: impl Into<String>, current_value: impl Into<String>) -> Self {
+            Self {
+                field_name: field_name.into(),
+                current_value: current_value.into(),
+                last_author: String::new(),
+                last_modified: Utc::now(),
+                last_commit_id: Uuid::nil(),
+                history: Vec::new(),
+            }
+        }
+
+        /// Adds a history entry.
+        pub fn add_history(&mut self, history: FieldHistory) {
+            self.last_author = history.author.clone();
+            self.last_modified = history.timestamp;
+            self.last_commit_id = history.commit_id;
+            self.history.push(history);
+        }
+
+        /// Gets the number of times this field was modified.
+        pub fn modification_count(&self) -> usize {
+            self.history.len()
+        }
+
+        /// Gets all authors who modified this field.
+        pub fn all_authors(&self) -> HashSet<String> {
+            self.history.iter().map(|h| h.author.clone()).collect()
+        }
+    }
+
+    /// Version control manager.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VersionControlManager {
+        /// All branches
+        branches: HashMap<String, Branch>,
+        /// All commits
+        commits: HashMap<Uuid, Commit>,
+        /// All pull requests
+        pull_requests: HashMap<Uuid, PullRequest>,
+        /// Next PR number
+        next_pr_number: u32,
+        /// Field-level blame tracking
+        field_blame: HashMap<String, HashMap<String, FieldBlame>>, // statute_id -> field_name -> blame
+    }
+
+    impl VersionControlManager {
+        /// Creates a new version control manager.
+        pub fn new() -> Self {
+            let mut manager = Self {
+                branches: HashMap::new(),
+                commits: HashMap::new(),
+                pull_requests: HashMap::new(),
+                next_pr_number: 1,
+                field_blame: HashMap::new(),
+            };
+
+            // Create the main branch
+            let main_branch = Branch::new("main", "system").with_protected(true);
+            manager.branches.insert("main".to_string(), main_branch);
+
+            manager
+        }
+
+        /// Creates a new branch.
+        pub fn create_branch(
+            &mut self,
+            name: impl Into<String>,
+            parent: Option<String>,
+            created_by: impl Into<String>,
+        ) -> Result<&Branch, String> {
+            let name = name.into();
+            if self.branches.contains_key(&name) {
+                return Err(format!("Branch '{}' already exists", name));
+            }
+
+            let branch = if let Some(parent_name) = parent {
+                if !self.branches.contains_key(&parent_name) {
+                    return Err(format!("Parent branch '{}' does not exist", parent_name));
+                }
+                Branch::from_parent(name.clone(), parent_name, created_by)
+            } else {
+                Branch::new(name.clone(), created_by)
+            };
+
+            self.branches.insert(name.clone(), branch);
+            Ok(self.branches.get(&name).unwrap())
+        }
+
+        /// Deletes a branch.
+        pub fn delete_branch(&mut self, name: &str) -> Result<(), String> {
+            if name == "main" {
+                return Err("Cannot delete main branch".to_string());
+            }
+
+            if let Some(branch) = self.branches.get(name) {
+                if branch.protected {
+                    return Err(format!("Branch '{}' is protected", name));
+                }
+            } else {
+                return Err(format!("Branch '{}' does not exist", name));
+            }
+
+            self.branches.remove(name);
+            Ok(())
+        }
+
+        /// Gets a branch.
+        pub fn get_branch(&self, name: &str) -> Option<&Branch> {
+            self.branches.get(name)
+        }
+
+        /// Gets a mutable reference to a branch.
+        pub fn get_branch_mut(&mut self, name: &str) -> Option<&mut Branch> {
+            self.branches.get_mut(name)
+        }
+
+        /// Lists all branches.
+        pub fn list_branches(&self) -> Vec<&Branch> {
+            self.branches.values().collect()
+        }
+
+        /// Creates a commit.
+        pub fn commit(
+            &mut self,
+            branch_name: impl Into<String>,
+            statute_id: impl Into<String>,
+            statute_entry: StatuteEntry,
+            message: impl Into<String>,
+            author: impl Into<String>,
+        ) -> Result<Uuid, String> {
+            let branch_name = branch_name.into();
+            if !self.branches.contains_key(&branch_name) {
+                return Err(format!("Branch '{}' does not exist", branch_name));
+            }
+
+            let statute_id = statute_id.into();
+            let mut commit = Commit::new(
+                branch_name.clone(),
+                statute_id.clone(),
+                statute_entry,
+                message,
+                author,
+            );
+
+            // Set parent to current head
+            if let Some(branch) = self.branches.get(&branch_name) {
+                if let Some(head) = branch.head_commit {
+                    commit = commit.with_parent(head);
+                }
+            }
+
+            let commit_id = commit.commit_id;
+            self.commits.insert(commit_id, commit);
+
+            // Update branch head
+            if let Some(branch) = self.branches.get_mut(&branch_name) {
+                branch.head_commit = Some(commit_id);
+            }
+
+            // Track field-level changes for blame
+            self.track_field_changes(commit_id);
+
+            Ok(commit_id)
+        }
+
+        /// Signs a commit.
+        pub fn sign_commit(
+            &mut self,
+            commit_id: Uuid,
+            signature: impl Into<String>,
+        ) -> Result<(), String> {
+            if let Some(commit) = self.commits.get_mut(&commit_id) {
+                commit.signature = Some(signature.into());
+                Ok(())
+            } else {
+                Err("Commit not found".to_string())
+            }
+        }
+
+        /// Gets a commit.
+        pub fn get_commit(&self, commit_id: Uuid) -> Option<&Commit> {
+            self.commits.get(&commit_id)
+        }
+
+        /// Gets commits for a branch.
+        pub fn get_branch_commits(&self, branch_name: &str) -> Vec<&Commit> {
+            self.commits
+                .values()
+                .filter(|c| c.branch_name == branch_name)
+                .collect()
+        }
+
+        /// Gets commit history for a branch (following parent chain).
+        /// Returns commits in chronological order (oldest first).
+        pub fn get_commit_history(&self, branch_name: &str) -> Vec<&Commit> {
+            let mut history = Vec::new();
+            if let Some(branch) = self.branches.get(branch_name) {
+                if let Some(head) = branch.head_commit {
+                    self.collect_commit_history(head, &mut history);
+                }
+            }
+            // History is collected in reverse order (newest first from recursion),
+            // but we want chronological order (oldest first)
+            history
+        }
+
+        fn collect_commit_history<'a>(&'a self, commit_id: Uuid, history: &mut Vec<&'a Commit>) {
+            if let Some(commit) = self.commits.get(&commit_id) {
+                for parent_id in &commit.parent_commits {
+                    self.collect_commit_history(*parent_id, history);
+                }
+                history.push(commit);
+            }
+        }
+
+        /// Merges a source branch into a target branch.
+        pub fn merge_branch(
+            &mut self,
+            source_branch: &str,
+            target_branch: &str,
+            author: impl Into<String>,
+        ) -> MergeBranchResult {
+            // Check if branches exist
+            if !self.branches.contains_key(source_branch) {
+                return MergeBranchResult {
+                    merge_commit_id: None,
+                    conflicts: Vec::new(),
+                    success: false,
+                    message: format!("Source branch '{}' does not exist", source_branch),
+                };
+            }
+            if !self.branches.contains_key(target_branch) {
+                return MergeBranchResult {
+                    merge_commit_id: None,
+                    conflicts: Vec::new(),
+                    success: false,
+                    message: format!("Target branch '{}' does not exist", target_branch),
+                };
+            }
+
+            // Get head commits
+            let source_head = self.branches.get(source_branch).and_then(|b| b.head_commit);
+            let target_head = self.branches.get(target_branch).and_then(|b| b.head_commit);
+
+            if source_head.is_none() {
+                return MergeBranchResult {
+                    merge_commit_id: None,
+                    conflicts: Vec::new(),
+                    success: false,
+                    message: "Source branch has no commits".to_string(),
+                };
+            }
+
+            // Get commits
+            let source_commit = self.commits.get(&source_head.unwrap()).unwrap();
+            let target_commit = target_head.and_then(|id| self.commits.get(&id));
+
+            // Detect conflicts
+            let conflicts = if let Some(target_commit) = target_commit {
+                self.detect_conflicts(&source_commit.statute_entry, &target_commit.statute_entry)
+            } else {
+                Vec::new()
+            };
+
+            if !conflicts.is_empty() {
+                return MergeBranchResult {
+                    merge_commit_id: None,
+                    conflicts,
+                    success: false,
+                    message: "Merge conflicts detected".to_string(),
+                };
+            }
+
+            // Create merge commit
+            let message = format!("Merge branch '{}' into '{}'", source_branch, target_branch);
+            let statute_id = source_commit.statute_id.clone();
+            let statute_entry = source_commit.statute_entry.clone();
+
+            match self.commit(target_branch, statute_id, statute_entry, message, author) {
+                Ok(merge_commit_id) => {
+                    // Add source branch head as second parent to the merge commit
+                    // (First parent is already set by commit() to the target branch head)
+                    if let Some(commit) = self.commits.get_mut(&merge_commit_id) {
+                        commit.parent_commits.push(source_head.unwrap());
+                    }
+
+                    MergeBranchResult {
+                        merge_commit_id: Some(merge_commit_id),
+                        conflicts: Vec::new(),
+                        success: true,
+                        message: "Merge successful".to_string(),
+                    }
+                }
+                Err(e) => MergeBranchResult {
+                    merge_commit_id: None,
+                    conflicts: Vec::new(),
+                    success: false,
+                    message: format!("Failed to create merge commit: {}", e),
+                },
+            }
+        }
+
+        fn detect_conflicts(
+            &self,
+            source_entry: &StatuteEntry,
+            target_entry: &StatuteEntry,
+        ) -> Vec<BranchMergeConflict> {
+            let mut conflicts = Vec::new();
+
+            // Check title
+            if source_entry.statute.title != target_entry.statute.title {
+                conflicts.push(BranchMergeConflict {
+                    field_name: "title".to_string(),
+                    source_value: source_entry.statute.title.clone(),
+                    target_value: target_entry.statute.title.clone(),
+                    base_value: None,
+                });
+            }
+
+            // Check status
+            if source_entry.status != target_entry.status {
+                conflicts.push(BranchMergeConflict {
+                    field_name: "status".to_string(),
+                    source_value: format!("{:?}", source_entry.status),
+                    target_value: format!("{:?}", target_entry.status),
+                    base_value: None,
+                });
+            }
+
+            // Check jurisdiction
+            if source_entry.jurisdiction != target_entry.jurisdiction {
+                conflicts.push(BranchMergeConflict {
+                    field_name: "jurisdiction".to_string(),
+                    source_value: source_entry.jurisdiction.clone(),
+                    target_value: target_entry.jurisdiction.clone(),
+                    base_value: None,
+                });
+            }
+
+            conflicts
+        }
+
+        /// Creates a pull request.
+        pub fn create_pull_request(
+            &mut self,
+            title: impl Into<String>,
+            description: impl Into<String>,
+            source_branch: impl Into<String>,
+            target_branch: impl Into<String>,
+            author: impl Into<String>,
+        ) -> Result<Uuid, String> {
+            let source_branch = source_branch.into();
+            let target_branch = target_branch.into();
+
+            if !self.branches.contains_key(&source_branch) {
+                return Err(format!("Source branch '{}' does not exist", source_branch));
+            }
+            if !self.branches.contains_key(&target_branch) {
+                return Err(format!("Target branch '{}' does not exist", target_branch));
+            }
+
+            let pr = PullRequest::new(
+                self.next_pr_number,
+                title,
+                description,
+                source_branch,
+                target_branch,
+                author,
+            );
+            let pr_id = pr.pr_id;
+            self.next_pr_number += 1;
+
+            self.pull_requests.insert(pr_id, pr);
+            Ok(pr_id)
+        }
+
+        /// Adds a review to a pull request.
+        pub fn add_review(
+            &mut self,
+            pr_id: Uuid,
+            reviewer: impl Into<String>,
+            decision: ReviewDecision,
+            comment: impl Into<String>,
+        ) -> Result<(), String> {
+            if let Some(pr) = self.pull_requests.get_mut(&pr_id) {
+                let review = PullRequestReview::new(pr_id, reviewer, decision, comment);
+                pr.add_review(review);
+                Ok(())
+            } else {
+                Err("Pull request not found".to_string())
+            }
+        }
+
+        /// Merges a pull request.
+        pub fn merge_pull_request(
+            &mut self,
+            pr_id: Uuid,
+            merged_by: impl Into<String>,
+        ) -> Result<MergeBranchResult, String> {
+            let (source_branch, target_branch, is_approved) = {
+                let pr = self
+                    .pull_requests
+                    .get(&pr_id)
+                    .ok_or("Pull request not found")?;
+
+                if !pr.is_approved() {
+                    return Err("Pull request is not approved".to_string());
+                }
+
+                (
+                    pr.source_branch.clone(),
+                    pr.target_branch.clone(),
+                    pr.is_approved(),
+                )
+            };
+
+            if !is_approved {
+                return Err("Pull request is not approved".to_string());
+            }
+
+            let merged_by_str = merged_by.into();
+            let result = self.merge_branch(&source_branch, &target_branch, merged_by_str.clone());
+
+            if result.success {
+                if let Some(pr) = self.pull_requests.get_mut(&pr_id) {
+                    pr.mark_merged(merged_by_str);
+                }
+            }
+
+            Ok(result)
+        }
+
+        /// Gets a pull request.
+        pub fn get_pull_request(&self, pr_id: Uuid) -> Option<&PullRequest> {
+            self.pull_requests.get(&pr_id)
+        }
+
+        /// Lists all pull requests.
+        pub fn list_pull_requests(&self) -> Vec<&PullRequest> {
+            self.pull_requests.values().collect()
+        }
+
+        /// Lists open pull requests.
+        pub fn list_open_pull_requests(&self) -> Vec<&PullRequest> {
+            self.pull_requests
+                .values()
+                .filter(|pr| {
+                    pr.status == PullRequestStatus::Open
+                        || pr.status == PullRequestStatus::InReview
+                        || pr.status == PullRequestStatus::Approved
+                })
+                .collect()
+        }
+
+        /// Closes a pull request without merging.
+        pub fn close_pull_request(&mut self, pr_id: Uuid) -> Result<(), String> {
+            if let Some(pr) = self.pull_requests.get_mut(&pr_id) {
+                pr.close();
+                Ok(())
+            } else {
+                Err("Pull request not found".to_string())
+            }
+        }
+
+        /// Tracks field-level changes for blame.
+        fn track_field_changes(&mut self, commit_id: Uuid) {
+            if let Some(commit) = self.commits.get(&commit_id).cloned() {
+                let statute_id = commit.statute_id.clone();
+
+                // Track title changes
+                self.track_field(
+                    &statute_id,
+                    "title",
+                    &commit.statute_entry.statute.title,
+                    commit_id,
+                    &commit.author,
+                    &commit.message,
+                );
+
+                // Track jurisdiction changes
+                self.track_field(
+                    &statute_id,
+                    "jurisdiction",
+                    &commit.statute_entry.jurisdiction,
+                    commit_id,
+                    &commit.author,
+                    &commit.message,
+                );
+
+                // Track status changes
+                self.track_field(
+                    &statute_id,
+                    "status",
+                    &format!("{:?}", commit.statute_entry.status),
+                    commit_id,
+                    &commit.author,
+                    &commit.message,
+                );
+            }
+        }
+
+        fn track_field(
+            &mut self,
+            statute_id: &str,
+            field_name: &str,
+            new_value: &str,
+            commit_id: Uuid,
+            author: &str,
+            message: &str,
+        ) {
+            let statute_blame = self.field_blame.entry(statute_id.to_string()).or_default();
+
+            let old_value = statute_blame
+                .get(field_name)
+                .map(|blame| blame.current_value.clone());
+
+            let history = FieldHistory::new(
+                field_name,
+                old_value.clone(),
+                new_value,
+                commit_id,
+                author,
+                message,
+            );
+
+            let blame = statute_blame
+                .entry(field_name.to_string())
+                .or_insert_with(|| FieldBlame::new(field_name, new_value));
+
+            blame.add_history(history);
+            blame.current_value = new_value.to_string();
+        }
+
+        /// Gets blame information for a field.
+        pub fn get_field_blame(&self, statute_id: &str, field_name: &str) -> Option<&FieldBlame> {
+            self.field_blame
+                .get(statute_id)
+                .and_then(|fields| fields.get(field_name))
+        }
+
+        /// Gets all blame information for a statute.
+        pub fn get_statute_blame(&self, statute_id: &str) -> Option<&HashMap<String, FieldBlame>> {
+            self.field_blame.get(statute_id)
+        }
+    }
+
+    impl Default for VersionControlManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// API Extensions for high-performance and real-time features.
+pub mod api_extensions {
+    use super::*;
+
+    /// GraphQL subscription events for real-time updates.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub enum SubscriptionEvent {
+        /// Statute was registered
+        StatuteRegistered {
+            statute_id: String,
+            timestamp: DateTime<Utc>,
+        },
+        /// Statute was updated
+        StatuteUpdated {
+            statute_id: String,
+            version: u32,
+            timestamp: DateTime<Utc>,
+        },
+        /// Statute was deleted
+        StatuteDeleted {
+            statute_id: String,
+            timestamp: DateTime<Utc>,
+        },
+        /// Statute status changed
+        StatusChanged {
+            statute_id: String,
+            old_status: StatuteStatus,
+            new_status: StatuteStatus,
+            timestamp: DateTime<Utc>,
+        },
+    }
+
+    /// Subscription manager for GraphQL subscriptions.
+    #[derive(Debug, Clone)]
+    pub struct SubscriptionManager {
+        /// Active subscriptions
+        subscriptions: Arc<Mutex<HashMap<Uuid, SubscriptionFilter>>>,
+        /// Published events (stored for testing/replay)
+        published_events: Arc<Mutex<Vec<SubscriptionEvent>>>,
+    }
+
+    /// Filter for subscriptions.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SubscriptionFilter {
+        /// Filter by statute IDs
+        pub statute_ids: Option<Vec<String>>,
+        /// Filter by jurisdictions
+        pub jurisdictions: Option<Vec<String>>,
+        /// Filter by tags
+        pub tags: Option<Vec<String>>,
+        /// Filter by event types
+        pub event_types: Option<Vec<String>>,
+    }
+
+    impl SubscriptionManager {
+        /// Creates a new subscription manager.
+        pub fn new() -> Self {
+            Self {
+                subscriptions: Arc::new(Mutex::new(HashMap::new())),
+                published_events: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// Subscribes with a filter.
+        pub fn subscribe(&self, filter: SubscriptionFilter) -> Uuid {
+            let subscription_id = Uuid::new_v4();
+            self.subscriptions
+                .lock()
+                .unwrap()
+                .insert(subscription_id, filter);
+            subscription_id
+        }
+
+        /// Unsubscribes.
+        pub fn unsubscribe(&self, subscription_id: Uuid) -> bool {
+            self.subscriptions
+                .lock()
+                .unwrap()
+                .remove(&subscription_id)
+                .is_some()
+        }
+
+        /// Publishes an event to all subscribers.
+        /// In production with the async feature, this would use tokio::sync::broadcast.
+        pub fn publish(&self, event: SubscriptionEvent) {
+            self.published_events.lock().unwrap().push(event);
+        }
+
+        /// Gets active subscription count.
+        pub fn subscription_count(&self) -> usize {
+            self.subscriptions.lock().unwrap().len()
+        }
+
+        /// Gets published events (for testing).
+        pub fn get_published_events(&self) -> Vec<SubscriptionEvent> {
+            self.published_events.lock().unwrap().clone()
+        }
+
+        /// Clears published events.
+        pub fn clear_events(&self) {
+            self.published_events.lock().unwrap().clear();
+        }
+    }
+
+    impl Default for SubscriptionManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// gRPC service definition (placeholder for protobuf generation).
+    pub mod grpc {
+        use super::*;
+
+        /// gRPC request for getting a statute.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct GetStatuteRequest {
+            pub statute_id: String,
+        }
+
+        /// gRPC response for getting a statute.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct GetStatuteResponse {
+            pub statute: Option<StatuteEntry>,
+            pub found: bool,
+        }
+
+        /// gRPC request for listing statutes.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct ListStatutesRequest {
+            pub page: u32,
+            pub page_size: u32,
+            pub jurisdiction: Option<String>,
+            pub tags: Vec<String>,
+        }
+
+        /// gRPC response for listing statutes.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct ListStatutesResponse {
+            pub statutes: Vec<StatuteEntry>,
+            pub total_count: usize,
+            pub has_more: bool,
+        }
+
+        /// gRPC request for registering a statute.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct RegisterStatuteRequest {
+            pub statute: StatuteEntry,
+        }
+
+        /// gRPC response for registering a statute.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct RegisterStatuteResponse {
+            pub success: bool,
+            pub statute_id: String,
+            pub error: Option<String>,
+        }
+
+        /// gRPC service implementation.
+        pub struct GrpcStatuteService {
+            registry: Arc<Mutex<StatuteRegistry>>,
+        }
+
+        impl GrpcStatuteService {
+            /// Creates a new gRPC service.
+            pub fn new(registry: Arc<Mutex<StatuteRegistry>>) -> Self {
+                Self { registry }
+            }
+
+            /// Gets a statute.
+            pub fn get_statute(&self, request: GetStatuteRequest) -> GetStatuteResponse {
+                let mut registry = self.registry.lock().unwrap();
+                match registry.get(&request.statute_id) {
+                    Some(statute) => GetStatuteResponse {
+                        statute: Some(statute),
+                        found: true,
+                    },
+                    None => GetStatuteResponse {
+                        statute: None,
+                        found: false,
+                    },
+                }
+            }
+
+            /// Lists statutes.
+            pub fn list_statutes(&self, request: ListStatutesRequest) -> ListStatutesResponse {
+                let registry = self.registry.lock().unwrap();
+                let mut statutes: Vec<_> = registry.list().into_iter().cloned().collect();
+
+                // Apply jurisdiction filter
+                if let Some(ref jurisdiction) = request.jurisdiction {
+                    statutes.retain(|s| &s.jurisdiction == jurisdiction);
+                }
+
+                // Apply tag filter
+                if !request.tags.is_empty() {
+                    statutes.retain(|s| request.tags.iter().any(|tag| s.tags.contains(tag)));
+                }
+
+                let total_count = statutes.len();
+                let start = (request.page * request.page_size) as usize;
+                let end = std::cmp::min(start + request.page_size as usize, total_count);
+
+                let page_statutes = if start < total_count {
+                    statutes[start..end].to_vec()
+                } else {
+                    Vec::new()
+                };
+
+                ListStatutesResponse {
+                    statutes: page_statutes,
+                    total_count,
+                    has_more: end < total_count,
+                }
+            }
+
+            /// Registers a statute.
+            pub fn register_statute(
+                &self,
+                request: RegisterStatuteRequest,
+            ) -> RegisterStatuteResponse {
+                let mut registry = self.registry.lock().unwrap();
+                match registry.register(request.statute) {
+                    Ok(statute_id) => RegisterStatuteResponse {
+                        success: true,
+                        statute_id: statute_id.to_string(),
+                        error: None,
+                    },
+                    Err(e) => RegisterStatuteResponse {
+                        success: false,
+                        statute_id: String::new(),
+                        error: Some(e.to_string()),
+                    },
+                }
+            }
+        }
+    }
+
+    /// Event streaming infrastructure.
+    pub mod streaming {
+        use super::*;
+
+        /// Stream destination type.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum StreamDestination {
+            /// Apache Kafka
+            Kafka,
+            /// NATS messaging
+            Nats,
+            /// Amazon Kinesis
+            Kinesis,
+            /// Custom webhook
+            Webhook,
+        }
+
+        /// Stream configuration.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct StreamConfig {
+            /// Stream name
+            pub name: String,
+            /// Destination type
+            pub destination: StreamDestination,
+            /// Connection string (URL, broker address, etc.)
+            pub connection: String,
+            /// Topic/subject name
+            pub topic: String,
+            /// Optional authentication
+            pub auth: Option<HashMap<String, String>>,
+            /// Buffer size
+            pub buffer_size: usize,
+            /// Enable/disable flag
+            pub enabled: bool,
+        }
+
+        impl StreamConfig {
+            /// Creates a new stream configuration.
+            pub fn new(
+                name: impl Into<String>,
+                destination: StreamDestination,
+                connection: impl Into<String>,
+                topic: impl Into<String>,
+            ) -> Self {
+                Self {
+                    name: name.into(),
+                    destination,
+                    connection: connection.into(),
+                    topic: topic.into(),
+                    auth: None,
+                    buffer_size: 1000,
+                    enabled: true,
+                }
+            }
+
+            /// Adds authentication.
+            pub fn with_auth(mut self, auth: HashMap<String, String>) -> Self {
+                self.auth = Some(auth);
+                self
+            }
+
+            /// Sets buffer size.
+            pub fn with_buffer_size(mut self, size: usize) -> Self {
+                self.buffer_size = size;
+                self
+            }
+
+            /// Sets enabled flag.
+            pub fn with_enabled(mut self, enabled: bool) -> Self {
+                self.enabled = enabled;
+                self
+            }
+        }
+
+        /// Event stream message.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct StreamMessage {
+            /// Message ID
+            pub message_id: Uuid,
+            /// Event type
+            pub event_type: String,
+            /// Statute ID
+            pub statute_id: String,
+            /// Event payload (JSON)
+            pub payload: String,
+            /// Timestamp
+            pub timestamp: DateTime<Utc>,
+            /// Metadata
+            pub metadata: HashMap<String, String>,
+        }
+
+        impl StreamMessage {
+            /// Creates a new stream message.
+            pub fn new(
+                event_type: impl Into<String>,
+                statute_id: impl Into<String>,
+                payload: impl Into<String>,
+            ) -> Self {
+                Self {
+                    message_id: Uuid::new_v4(),
+                    event_type: event_type.into(),
+                    statute_id: statute_id.into(),
+                    payload: payload.into(),
+                    timestamp: Utc::now(),
+                    metadata: HashMap::new(),
+                }
+            }
+
+            /// Adds metadata.
+            pub fn with_metadata(
+                mut self,
+                key: impl Into<String>,
+                value: impl Into<String>,
+            ) -> Self {
+                self.metadata.insert(key.into(), value.into());
+                self
+            }
+        }
+
+        /// Event stream manager.
+        #[derive(Debug, Clone)]
+        pub struct EventStreamManager {
+            /// Stream configurations
+            configs: HashMap<String, StreamConfig>,
+            /// Published message count by stream
+            message_count: HashMap<String, usize>,
+        }
+
+        impl EventStreamManager {
+            /// Creates a new event stream manager.
+            pub fn new() -> Self {
+                Self {
+                    configs: HashMap::new(),
+                    message_count: HashMap::new(),
+                }
+            }
+
+            /// Adds a stream configuration.
+            pub fn add_stream(&mut self, config: StreamConfig) {
+                let name = config.name.clone();
+                self.configs.insert(name.clone(), config);
+                self.message_count.insert(name, 0);
+            }
+
+            /// Removes a stream configuration.
+            pub fn remove_stream(&mut self, name: &str) -> bool {
+                self.message_count.remove(name);
+                self.configs.remove(name).is_some()
+            }
+
+            /// Gets a stream configuration.
+            pub fn get_stream(&self, name: &str) -> Option<&StreamConfig> {
+                self.configs.get(name)
+            }
+
+            /// Lists all streams.
+            pub fn list_streams(&self) -> Vec<&StreamConfig> {
+                self.configs.values().collect()
+            }
+
+            /// Publishes a message to a stream.
+            /// In production, this would actually publish to Kafka/NATS/etc.
+            pub fn publish(
+                &mut self,
+                stream_name: &str,
+                _message: StreamMessage,
+            ) -> Result<(), String> {
+                let config = self
+                    .configs
+                    .get(stream_name)
+                    .ok_or_else(|| format!("Stream '{}' not found", stream_name))?;
+
+                if !config.enabled {
+                    return Err(format!("Stream '{}' is disabled", stream_name));
+                }
+
+                // Placeholder: In production, actually publish to the stream
+                // match config.destination {
+                //     StreamDestination::Kafka => { /* kafka publish */ },
+                //     StreamDestination::Nats => { /* nats publish */ },
+                //     ...
+                // }
+
+                // Increment message count
+                *self.message_count.get_mut(stream_name).unwrap() += 1;
+                Ok(())
+            }
+
+            /// Gets message count for a stream.
+            pub fn get_message_count(&self, stream_name: &str) -> usize {
+                self.message_count.get(stream_name).copied().unwrap_or(0)
+            }
+
+            /// Resets message count for a stream.
+            pub fn reset_count(&mut self, stream_name: &str) {
+                if let Some(count) = self.message_count.get_mut(stream_name) {
+                    *count = 0;
+                }
+            }
+        }
+
+        impl Default for EventStreamManager {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    }
+
+    /// Enhanced bulk operations.
+    pub mod bulk {
+        use super::*;
+
+        /// Bulk operation type.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum BulkOperationType {
+            /// Register multiple statutes
+            Register,
+            /// Update multiple statutes
+            Update,
+            /// Delete multiple statutes
+            Delete,
+            /// Archive multiple statutes
+            Archive,
+            /// Change status for multiple statutes
+            ChangeStatus,
+        }
+
+        /// Bulk operation request.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct BulkOperationRequest {
+            /// Operation type
+            pub operation_type: BulkOperationType,
+            /// Statute IDs (for update/delete/archive/status change)
+            pub statute_ids: Vec<String>,
+            /// Statute entries (for register)
+            pub statute_entries: Vec<StatuteEntry>,
+            /// New status (for status change)
+            pub new_status: Option<StatuteStatus>,
+            /// Continue on error flag
+            pub continue_on_error: bool,
+        }
+
+        /// Bulk operation response.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct BulkOperationResponse {
+            /// Operation type
+            pub operation_type: BulkOperationType,
+            /// Total items processed
+            pub total_processed: usize,
+            /// Successful operations
+            pub successful: usize,
+            /// Failed operations
+            pub failed: usize,
+            /// Error details
+            pub errors: Vec<BulkOperationError>,
+            /// Duration in milliseconds
+            pub duration_ms: u64,
+        }
+
+        /// Bulk operation error.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct BulkOperationError {
+            /// Statute ID
+            pub statute_id: String,
+            /// Error message
+            pub error: String,
+        }
+
+        impl BulkOperationResponse {
+            /// Creates a new bulk operation response.
+            pub fn new(operation_type: BulkOperationType) -> Self {
+                Self {
+                    operation_type,
+                    total_processed: 0,
+                    successful: 0,
+                    failed: 0,
+                    errors: Vec::new(),
+                    duration_ms: 0,
+                }
+            }
+
+            /// Calculates success rate (0.0 to 1.0).
+            pub fn success_rate(&self) -> f64 {
+                if self.total_processed == 0 {
+                    0.0
+                } else {
+                    self.successful as f64 / self.total_processed as f64
+                }
+            }
+
+            /// Checks if all operations succeeded.
+            pub fn is_complete_success(&self) -> bool {
+                self.failed == 0 && self.total_processed > 0
+            }
+        }
+
+        /// Bulk operation executor.
+        pub struct BulkOperationExecutor {
+            registry: Arc<Mutex<StatuteRegistry>>,
+        }
+
+        impl BulkOperationExecutor {
+            /// Creates a new bulk operation executor.
+            pub fn new(registry: Arc<Mutex<StatuteRegistry>>) -> Self {
+                Self { registry }
+            }
+
+            /// Executes a bulk operation.
+            pub fn execute(&self, request: BulkOperationRequest) -> BulkOperationResponse {
+                let start = std::time::Instant::now();
+                let mut response = BulkOperationResponse::new(request.operation_type);
+
+                match request.operation_type {
+                    BulkOperationType::Register => {
+                        for entry in request.statute_entries {
+                            response.total_processed += 1;
+                            let statute_id = entry.statute.id.clone();
+                            let mut registry = self.registry.lock().unwrap();
+                            match registry.register(entry) {
+                                Ok(_) => response.successful += 1,
+                                Err(e) => {
+                                    response.failed += 1;
+                                    response.errors.push(BulkOperationError {
+                                        statute_id: statute_id.clone(),
+                                        error: e.to_string(),
+                                    });
+                                    if !request.continue_on_error {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    BulkOperationType::Delete => {
+                        for statute_id in &request.statute_ids {
+                            response.total_processed += 1;
+                            let mut registry = self.registry.lock().unwrap();
+                            match registry.delete(statute_id) {
+                                Ok(_) => response.successful += 1,
+                                Err(e) => {
+                                    response.failed += 1;
+                                    response.errors.push(BulkOperationError {
+                                        statute_id: statute_id.clone(),
+                                        error: e.to_string(),
+                                    });
+                                    if !request.continue_on_error {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    BulkOperationType::Archive => {
+                        for statute_id in &request.statute_ids {
+                            response.total_processed += 1;
+                            let mut registry = self.registry.lock().unwrap();
+                            match registry.archive_statute(statute_id, "Bulk archive".to_string()) {
+                                Ok(_) => response.successful += 1,
+                                Err(e) => {
+                                    response.failed += 1;
+                                    response.errors.push(BulkOperationError {
+                                        statute_id: statute_id.clone(),
+                                        error: e.to_string(),
+                                    });
+                                    if !request.continue_on_error {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    BulkOperationType::ChangeStatus => {
+                        if let Some(new_status) = request.new_status {
+                            for statute_id in &request.statute_ids {
+                                response.total_processed += 1;
+                                let mut registry = self.registry.lock().unwrap();
+                                match registry.set_status(statute_id, new_status) {
+                                    Ok(_) => response.successful += 1,
+                                    Err(e) => {
+                                        response.failed += 1;
+                                        response.errors.push(BulkOperationError {
+                                            statute_id: statute_id.clone(),
+                                            error: e.to_string(),
+                                        });
+                                        if !request.continue_on_error {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    BulkOperationType::Update => {
+                        // Update operations would need statute entries
+                        for entry in request.statute_entries {
+                            response.total_processed += 1;
+                            let statute_id = entry.statute.id.clone();
+                            let mut registry = self.registry.lock().unwrap();
+                            match registry.update(&statute_id, entry.statute.clone()) {
+                                Ok(_) => response.successful += 1,
+                                Err(e) => {
+                                    response.failed += 1;
+                                    response.errors.push(BulkOperationError {
+                                        statute_id,
+                                        error: e.to_string(),
+                                    });
+                                    if !request.continue_on_error {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                response.duration_ms = start.elapsed().as_millis() as u64;
+                response
+            }
+        }
+    }
+
+    /// SDK generation templates.
+    pub mod sdk_gen {
+        use super::*;
+
+        /// Supported SDK languages.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum SdkLanguage {
+            Python,
+            JavaScript,
+            TypeScript,
+            Rust,
+            Go,
+            Java,
+            CSharp,
+            Ruby,
+        }
+
+        /// SDK generation configuration.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        pub struct SdkConfig {
+            /// Target language
+            pub language: SdkLanguage,
+            /// Package name
+            pub package_name: String,
+            /// API base URL
+            pub api_base_url: String,
+            /// Include async support
+            pub async_support: bool,
+            /// Include type definitions
+            pub type_definitions: bool,
+            /// Include documentation
+            pub include_docs: bool,
+        }
+
+        /// SDK code generator.
+        pub struct SdkGenerator;
+
+        impl SdkGenerator {
+            /// Generates SDK code for the specified language.
+            pub fn generate(config: &SdkConfig) -> Result<String, String> {
+                match config.language {
+                    SdkLanguage::Python => Self::generate_python(config),
+                    SdkLanguage::JavaScript => Self::generate_javascript(config),
+                    SdkLanguage::TypeScript => Self::generate_typescript(config),
+                    SdkLanguage::Rust => Self::generate_rust(config),
+                    SdkLanguage::Go => Self::generate_go(config),
+                    SdkLanguage::Java => Self::generate_java(config),
+                    SdkLanguage::CSharp => Self::generate_csharp(config),
+                    SdkLanguage::Ruby => Self::generate_ruby(config),
+                }
+            }
+
+            fn generate_python(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"# {} Python SDK
+import requests
+from typing import Optional, List, Dict, Any
+
+class StatuteRegistryClient:
+    """Client for the Statute Registry API."""
+
+    def __init__(self, base_url: str = "{}"):
+        self.base_url = base_url
+
+    def get_statute(self, statute_id: str) -> Optional[Dict[str, Any]]:
+        """Gets a statute by ID."""
+        response = requests.get(f"{{self.base_url}}/statutes/{{statute_id}}")
+        if response.status_code == 200:
+            return response.json()
+        return None
+
+    def list_statutes(self, page: int = 0, per_page: int = 50) -> List[Dict[str, Any]]:
+        """Lists statutes with pagination."""
+        params = {{"page": page, "per_page": per_page}}
+        response = requests.get(f"{{self.base_url}}/statutes", params=params)
+        return response.json() if response.status_code == 200 else []
+"#,
+                    config.package_name, config.api_base_url
+                ))
+            }
+
+            fn generate_javascript(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} JavaScript SDK
+class StatuteRegistryClient {{
+    constructor(baseUrl = "{}") {{
+        this.baseUrl = baseUrl;
+    }}
+
+    async getStatute(statuteId) {{
+        const response = await fetch(`${{this.baseUrl}}/statutes/${{statuteId}}`);
+        if (response.ok) {{
+            return await response.json();
+        }}
+        return null;
+    }}
+
+    async listStatutes(page = 0, perPage = 50) {{
+        const params = new URLSearchParams({{ page, per_page: perPage }});
+        const response = await fetch(`${{this.baseUrl}}/statutes?${{params}}`);
+        return response.ok ? await response.json() : [];
+    }}
+}}
+
+module.exports = {{ StatuteRegistryClient }};
+"#,
+                    config.package_name, config.api_base_url
+                ))
+            }
+
+            fn generate_typescript(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} TypeScript SDK
+export interface Statute {{
+    id: string;
+    title: string;
+    version: number;
+    status: string;
+    jurisdiction: string;
+}}
+
+export class StatuteRegistryClient {{
+    private baseUrl: string;
+
+    constructor(baseUrl: string = "{}") {{
+        this.baseUrl = baseUrl;
+    }}
+
+    async getStatute(statuteId: string): Promise<Statute | null> {{
+        const response = await fetch(`${{this.baseUrl}}/statutes/${{statuteId}}`);
+        if (response.ok) {{
+            return await response.json();
+        }}
+        return null;
+    }}
+
+    async listStatutes(page: number = 0, perPage: number = 50): Promise<Statute[]> {{
+        const params = new URLSearchParams({{ page: page.toString(), per_page: perPage.toString() }});
+        const response = await fetch(`${{this.baseUrl}}/statutes?${{params}}`);
+        return response.ok ? await response.json() : [];
+    }}
+}}
+"#,
+                    config.package_name, config.api_base_url
+                ))
+            }
+
+            fn generate_rust(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} Rust SDK
+use serde::{{Deserialize, Serialize}};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Statute {{
+    pub id: String,
+    pub title: String,
+    pub version: u32,
+    pub status: String,
+    pub jurisdiction: String,
+}}
+
+pub struct StatuteRegistryClient {{
+    base_url: String,
+    client: reqwest::Client,
+}}
+
+impl StatuteRegistryClient {{
+    pub fn new(base_url: impl Into<String>) -> Self {{
+        Self {{
+            base_url: base_url.into(),
+            client: reqwest::Client::new(),
+        }}
+    }}
+
+    pub async fn get_statute(&self, statute_id: &str) -> Result<Option<Statute>, reqwest::Error> {{
+        let url = format!("{{}}/statutes/{{}}", self.base_url, statute_id);
+        let response = self.client.get(&url).send().await?;
+        if response.status().is_success() {{
+            Ok(Some(response.json().await?))
+        }} else {{
+            Ok(None)
+        }}
+    }}
+
+    pub async fn list_statutes(&self, page: u32, per_page: u32) -> Result<Vec<Statute>, reqwest::Error> {{
+        let url = format!("{{}}/statutes?page={{}}&per_page={{}}", self.base_url, page, per_page);
+        let response = self.client.get(&url).send().await?;
+        if response.status().is_success() {{
+            Ok(response.json().await?)
+        }} else {{
+            Ok(Vec::new())
+        }}
+    }}
+}}
+"#,
+                    config.package_name
+                ))
+            }
+
+            fn generate_go(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} Go SDK
+package {}
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type Statute struct {{
+    ID           string `json:"id"`
+    Title        string `json:"title"`
+    Version      int    `json:"version"`
+    Status       string `json:"status"`
+    Jurisdiction string `json:"jurisdiction"`
+}}
+
+type Client struct {{
+    BaseURL    string
+    HTTPClient *http.Client
+}}
+
+func NewClient(baseURL string) *Client {{
+    return &Client{{
+        BaseURL:    baseURL,
+        HTTPClient: &http.Client{{}},
+    }}
+}}
+
+func (c *Client) GetStatute(statuteID string) (*Statute, error) {{
+    url := fmt.Sprintf("%s/statutes/%s", c.BaseURL, statuteID)
+    resp, err := c.HTTPClient.Get(url)
+    if err != nil {{
+        return nil, err
+    }}
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {{
+        return nil, nil
+    }}
+
+    var statute Statute
+    if err := json.NewDecoder(resp.Body).Decode(&statute); err != nil {{
+        return nil, err
+    }}
+    return &statute, nil
+}}
+"#,
+                    config.package_name,
+                    config.package_name.to_lowercase()
+                ))
+            }
+
+            fn generate_java(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} Java SDK
+package {};
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class StatuteRegistryClient {{
+    private final String baseUrl;
+    private final HttpClient client;
+
+    public StatuteRegistryClient(String baseUrl) {{
+        this.baseUrl = baseUrl;
+        this.client = HttpClient.newHttpClient();
+    }}
+
+    public String getStatute(String statuteId) throws IOException, InterruptedException {{
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/statutes/" + statuteId))
+            .GET()
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {{
+            return response.body();
+        }}
+        return null;
+    }}
+}}
+"#,
+                    config.package_name,
+                    config.package_name.to_lowercase()
+                ))
+            }
+
+            fn generate_csharp(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    r#"// {} C# SDK
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace {}
+{{
+    public class StatuteRegistryClient
+    {{
+        private readonly string baseUrl;
+        private readonly HttpClient client;
+
+        public StatuteRegistryClient(string baseUrl)
+        {{
+            this.baseUrl = baseUrl;
+            this.client = new HttpClient();
+        }}
+
+        public async Task<string> GetStatuteAsync(string statuteId)
+        {{
+            var response = await client.GetAsync($"{{baseUrl}}/statutes/{{statuteId}}");
+            if (response.IsSuccessStatusCode)
+            {{
+                return await response.Content.ReadAsStringAsync();
+            }}
+            return null;
+        }}
+    }}
+}}
+"#,
+                    config.package_name, config.package_name
+                ))
+            }
+
+            fn generate_ruby(config: &SdkConfig) -> Result<String, String> {
+                Ok(format!(
+                    "# {} Ruby SDK\nrequire 'net/http'\nrequire 'json'\n\nmodule {}\n  class StatuteRegistryClient\n    attr_reader :base_url\n\n    def initialize(base_url = \"{}\")\n      @base_url = base_url\n    end\n\n    def get_statute(statute_id)\n      uri = URI(\"#{{@base_url}}/statutes/#{{statute_id}}\")\n      response = Net::HTTP.get_response(uri)\n      JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)\n    end\n\n    def list_statutes(page = 0, per_page = 50)\n      uri = URI(\"#{{@base_url}}/statutes?page=#{{page}}&per_page=#{{per_page}}\")\n      response = Net::HTTP.get_response(uri)\n      response.is_a?(Net::HTTPSuccess) ? JSON.parse(response.body) : []\n    end\n  end\nend\n",
+                    config.package_name, config.package_name, config.api_base_url
+                ))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -21222,5 +23220,1065 @@ mod tests {
         assert_eq!(analytics.average_result_count(), 0.0);
         assert!(analytics.top_queries(5).is_empty());
         assert!(analytics.zero_result_queries().is_empty());
+    }
+
+    // ========== Version Control Tests ==========
+
+    #[test]
+    fn test_version_control_branch_creation() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        // Main branch should exist
+        assert!(vc.get_branch("main").is_some());
+        assert_eq!(vc.list_branches().len(), 1);
+
+        // Create a new branch
+        let result = vc.create_branch("feature-1", Some("main".to_string()), "alice");
+        assert!(result.is_ok());
+
+        let branch = result.unwrap();
+        assert_eq!(branch.name, "feature-1");
+        assert_eq!(branch.parent_branch, Some("main".to_string()));
+        assert_eq!(branch.created_by, "alice");
+        assert!(!branch.protected);
+
+        assert_eq!(vc.list_branches().len(), 2);
+    }
+
+    #[test]
+    fn test_version_control_branch_deletion() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        // Cannot delete main branch
+        let result = vc.delete_branch("main");
+        assert!(result.is_err());
+
+        // Create and delete a branch
+        vc.create_branch("feature-1", None, "alice").unwrap();
+        assert_eq!(vc.list_branches().len(), 2);
+
+        let result = vc.delete_branch("feature-1");
+        assert!(result.is_ok());
+        assert_eq!(vc.list_branches().len(), 1);
+
+        // Cannot delete non-existent branch
+        let result = vc.delete_branch("feature-1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_version_control_protected_branch() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        // Create a protected branch by creating it and then modifying it
+        vc.create_branch("protected-feature", Some("main".to_string()), "alice")
+            .unwrap();
+
+        // Manually protect the branch for testing
+        // In production, this would be done through an administrative API
+        if let Some(branch) = vc.get_branch_mut("protected-feature") {
+            branch.protected = true;
+        }
+
+        // Cannot delete protected branch
+        let result = vc.delete_branch("protected-feature");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("protected"));
+    }
+
+    #[test]
+    fn test_version_control_commit() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        // Create a commit
+        let result = vc.commit("main", "S1", entry.clone(), "Initial commit", "alice");
+        assert!(result.is_ok());
+
+        let commit_id = result.unwrap();
+
+        // Check commit exists
+        let commit = vc.get_commit(commit_id);
+        assert!(commit.is_some());
+
+        let commit = commit.unwrap();
+        assert_eq!(commit.branch_name, "main");
+        assert_eq!(commit.statute_id, "S1");
+        assert_eq!(commit.message, "Initial commit");
+        assert_eq!(commit.author, "alice");
+        assert_eq!(commit.parent_commits.len(), 0); // First commit has no parents
+
+        // Check branch head updated
+        let branch = vc.get_branch("main").unwrap();
+        assert_eq!(branch.head_commit, Some(commit_id));
+
+        // Verify commit hash
+        assert!(!commit.commit_hash.is_empty());
+        assert_eq!(commit.short_hash().len(), 8);
+    }
+
+    #[test]
+    fn test_version_control_commit_chain() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        // First commit
+        let commit1 = vc
+            .commit("main", "S1", entry.clone(), "First commit", "alice")
+            .unwrap();
+
+        // Second commit
+        let commit2 = vc
+            .commit("main", "S1", entry.clone(), "Second commit", "bob")
+            .unwrap();
+
+        // Check parent relationship
+        let commit2_obj = vc.get_commit(commit2).unwrap();
+        assert_eq!(commit2_obj.parent_commits.len(), 1);
+        assert_eq!(commit2_obj.parent_commits[0], commit1);
+
+        // Check commit history
+        let history = vc.get_commit_history("main");
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].commit_id, commit1);
+        assert_eq!(history[1].commit_id, commit2);
+    }
+
+    #[test]
+    fn test_version_control_commit_signing() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        let commit_id = vc
+            .commit("main", "S1", entry, "Signed commit", "alice")
+            .unwrap();
+
+        // Sign the commit
+        let result = vc.sign_commit(commit_id, "SIG:alice:abcdef1234567890");
+        assert!(result.is_ok());
+
+        let commit = vc.get_commit(commit_id).unwrap();
+        assert!(commit.signature.is_some());
+
+        // Verify signature
+        assert!(commit.verify_signature("alice"));
+        assert!(!commit.verify_signature("bob"));
+    }
+
+    #[test]
+    fn test_version_control_branch_merge_success() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        // Make an initial commit on main
+        vc.commit("main", "S1", entry.clone(), "Initial commit", "alice")
+            .unwrap();
+
+        // Create a feature branch
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+
+        // Make a commit on feature branch
+        let mut entry2 = StatuteEntry::new(test_statute("S1"), "JP");
+        entry2.tags.push("feature".to_string());
+        vc.commit("feature", "S1", entry2, "Feature work", "alice")
+            .unwrap();
+
+        // Merge feature into main
+        let result = vc.merge_branch("feature", "main", "alice");
+        assert!(result.success);
+        assert!(!result.has_conflicts());
+        assert!(result.merge_commit_id.is_some());
+
+        // Check merge commit exists
+        let merge_commit = vc.get_commit(result.merge_commit_id.unwrap()).unwrap();
+        assert!(merge_commit.message.contains("Merge branch"));
+        assert_eq!(merge_commit.parent_commits.len(), 2); // Merge commits have 2 parents
+    }
+
+    #[test]
+    fn test_version_control_branch_merge_conflict() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        // Create conflicting commits on different branches
+        let mut entry1 = StatuteEntry::new(test_statute("S1"), "JP");
+        vc.commit("main", "S1", entry1.clone(), "Main commit", "alice")
+            .unwrap();
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+
+        // Different jurisdiction on feature branch
+        entry1.jurisdiction = "US".to_string();
+        vc.commit("feature", "S1", entry1, "Feature commit", "bob")
+            .unwrap();
+
+        // Merge should detect conflict
+        let result = vc.merge_branch("feature", "main", "alice");
+        assert!(!result.success);
+        assert!(result.has_conflicts());
+        assert_eq!(result.conflict_count(), 1);
+        assert_eq!(result.conflicts[0].field_name, "jurisdiction");
+    }
+
+    #[test]
+    fn test_version_control_pull_request_creation() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+
+        let result = vc.create_pull_request(
+            "Add new feature",
+            "This PR adds a new feature",
+            "feature",
+            "main",
+            "alice",
+        );
+
+        assert!(result.is_ok());
+
+        let pr_id = result.unwrap();
+        let pr = vc.get_pull_request(pr_id).unwrap();
+
+        assert_eq!(pr.pr_number, 1);
+        assert_eq!(pr.title, "Add new feature");
+        assert_eq!(pr.source_branch, "feature");
+        assert_eq!(pr.target_branch, "main");
+        assert_eq!(pr.author, "alice");
+        assert_eq!(pr.status, PullRequestStatus::Open);
+        assert_eq!(pr.reviews.len(), 0);
+    }
+
+    #[test]
+    fn test_version_control_pull_request_review() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+        let pr_id = vc
+            .create_pull_request("Add feature", "Description", "feature", "main", "alice")
+            .unwrap();
+
+        // Add approval review
+        let result = vc.add_review(pr_id, "bob", ReviewDecision::Approve, "Looks good!");
+        assert!(result.is_ok());
+
+        let pr = vc.get_pull_request(pr_id).unwrap();
+        assert_eq!(pr.reviews.len(), 1);
+        assert_eq!(pr.status, PullRequestStatus::Approved);
+        assert!(pr.is_approved());
+    }
+
+    #[test]
+    fn test_version_control_pull_request_changes_requested() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+        let pr_id = vc
+            .create_pull_request("Add feature", "Description", "feature", "main", "alice")
+            .unwrap();
+
+        // Request changes
+        vc.add_review(
+            pr_id,
+            "bob",
+            ReviewDecision::RequestChanges,
+            "Please fix this",
+        )
+        .unwrap();
+
+        let pr = vc.get_pull_request(pr_id).unwrap();
+        assert_eq!(pr.status, PullRequestStatus::ChangesRequested);
+        assert!(!pr.is_approved());
+    }
+
+    #[test]
+    fn test_version_control_pull_request_merge() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+        vc.commit("feature", "S1", entry, "Feature commit", "alice")
+            .unwrap();
+
+        let pr_id = vc
+            .create_pull_request("Add feature", "Description", "feature", "main", "alice")
+            .unwrap();
+
+        // Cannot merge without approval
+        let result = vc.merge_pull_request(pr_id, "bob");
+        assert!(result.is_err());
+
+        // Add approval
+        vc.add_review(pr_id, "bob", ReviewDecision::Approve, "LGTM")
+            .unwrap();
+
+        // Now merge should work
+        let result = vc.merge_pull_request(pr_id, "bob");
+        assert!(result.is_ok());
+
+        let merge_result = result.unwrap();
+        assert!(merge_result.success);
+
+        // Check PR status
+        let pr = vc.get_pull_request(pr_id).unwrap();
+        assert_eq!(pr.status, PullRequestStatus::Merged);
+        assert!(pr.merged_at.is_some());
+        assert_eq!(pr.merged_by, Some("bob".to_string()));
+    }
+
+    #[test]
+    fn test_version_control_field_blame() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        // First commit
+        vc.commit("main", "S1", entry.clone(), "Initial commit", "alice")
+            .unwrap();
+
+        // Check field blame
+        let blame = vc.get_field_blame("S1", "title");
+        assert!(blame.is_some());
+
+        let blame = blame.unwrap();
+        assert_eq!(blame.field_name, "title");
+        assert_eq!(blame.last_author, "alice");
+        assert_eq!(blame.modification_count(), 1);
+
+        let authors = blame.all_authors();
+        assert_eq!(authors.len(), 1);
+        assert!(authors.contains("alice"));
+    }
+
+    #[test]
+    fn test_version_control_field_blame_history() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        // Multiple commits changing the same statute
+        let entry1 = StatuteEntry::new(test_statute("S1"), "JP");
+        vc.commit("main", "S1", entry1, "First commit", "alice")
+            .unwrap();
+
+        let entry2 = StatuteEntry::new(test_statute("S1"), "US");
+        vc.commit("main", "S1", entry2, "Second commit", "bob")
+            .unwrap();
+
+        let entry3 = StatuteEntry::new(test_statute("S1"), "UK");
+        vc.commit("main", "S1", entry3, "Third commit", "charlie")
+            .unwrap();
+
+        // Check jurisdiction field blame
+        let blame = vc.get_field_blame("S1", "jurisdiction").unwrap();
+        assert_eq!(blame.current_value, "UK");
+        assert_eq!(blame.last_author, "charlie");
+        assert_eq!(blame.modification_count(), 3);
+
+        // Check all authors
+        let authors = blame.all_authors();
+        assert_eq!(authors.len(), 3);
+        assert!(authors.contains("alice"));
+        assert!(authors.contains("bob"));
+        assert!(authors.contains("charlie"));
+
+        // Check history
+        assert_eq!(blame.history.len(), 3);
+        assert_eq!(blame.history[0].new_value, "JP");
+        assert_eq!(blame.history[1].new_value, "US");
+        assert_eq!(blame.history[2].new_value, "UK");
+    }
+
+    #[test]
+    fn test_version_control_statute_blame() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        vc.commit("main", "S1", entry, "Initial commit", "alice")
+            .unwrap();
+
+        // Get all field blames for the statute
+        let statute_blame = vc.get_statute_blame("S1");
+        assert!(statute_blame.is_some());
+
+        let statute_blame = statute_blame.unwrap();
+        assert!(statute_blame.contains_key("title"));
+        assert!(statute_blame.contains_key("jurisdiction"));
+        assert!(statute_blame.contains_key("status"));
+    }
+
+    #[test]
+    fn test_version_control_list_pull_requests() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        vc.create_branch("feature1", Some("main".to_string()), "alice")
+            .unwrap();
+        vc.create_branch("feature2", Some("main".to_string()), "bob")
+            .unwrap();
+
+        vc.create_pull_request("PR 1", "Desc 1", "feature1", "main", "alice")
+            .unwrap();
+        vc.create_pull_request("PR 2", "Desc 2", "feature2", "main", "bob")
+            .unwrap();
+
+        let all_prs = vc.list_pull_requests();
+        assert_eq!(all_prs.len(), 2);
+
+        let open_prs = vc.list_open_pull_requests();
+        assert_eq!(open_prs.len(), 2);
+    }
+
+    #[test]
+    fn test_version_control_pr_close() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+
+        vc.create_branch("feature", Some("main".to_string()), "alice")
+            .unwrap();
+        let pr_id = vc
+            .create_pull_request("Add feature", "Description", "feature", "main", "alice")
+            .unwrap();
+
+        // Close the PR
+        vc.close_pull_request(pr_id).unwrap();
+
+        let pr = vc.get_pull_request(pr_id).unwrap();
+        assert_eq!(pr.status, PullRequestStatus::Closed);
+
+        // Closed PR should not appear in open PRs
+        let open_prs = vc.list_open_pull_requests();
+        assert_eq!(open_prs.len(), 0);
+    }
+
+    #[test]
+    fn test_version_control_branch_merge_conflict_display() {
+        use version_control::*;
+
+        let conflict = BranchMergeConflict {
+            field_name: "title".to_string(),
+            source_value: "Source Title".to_string(),
+            target_value: "Target Title".to_string(),
+            base_value: Some("Base Title".to_string()),
+        };
+
+        let display = format!("{}", conflict);
+        assert!(display.contains("title"));
+        assert!(display.contains("Source Title"));
+        assert!(display.contains("Target Title"));
+    }
+
+    #[test]
+    fn test_version_control_merge_branch_result() {
+        use version_control::*;
+
+        let result = MergeBranchResult {
+            merge_commit_id: None,
+            conflicts: vec![BranchMergeConflict {
+                field_name: "title".to_string(),
+                source_value: "A".to_string(),
+                target_value: "B".to_string(),
+                base_value: None,
+            }],
+            success: false,
+            message: "Conflicts detected".to_string(),
+        };
+
+        assert!(result.has_conflicts());
+        assert_eq!(result.conflict_count(), 1);
+    }
+
+    #[test]
+    fn test_version_control_commit_on_nonexistent_branch() {
+        use version_control::*;
+
+        let mut vc = VersionControlManager::new();
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+
+        let result = vc.commit("nonexistent", "S1", entry, "Commit", "alice");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_version_control_pr_status_variants() {
+        use version_control::*;
+
+        let _open = PullRequestStatus::Open;
+        let _in_review = PullRequestStatus::InReview;
+        let _approved = PullRequestStatus::Approved;
+        let _changes_requested = PullRequestStatus::ChangesRequested;
+        let _merged = PullRequestStatus::Merged;
+        let _closed = PullRequestStatus::Closed;
+    }
+
+    #[test]
+    fn test_version_control_review_decision_variants() {
+        use version_control::*;
+
+        let _approve = ReviewDecision::Approve;
+        let _request_changes = ReviewDecision::RequestChanges;
+        let _comment = ReviewDecision::Comment;
+    }
+
+    #[test]
+    fn test_version_control_branch_with_description() {
+        use version_control::*;
+
+        let branch = Branch::new("feature", "alice")
+            .with_description("This is a feature branch")
+            .with_protected(true);
+
+        assert_eq!(
+            branch.description,
+            Some("This is a feature branch".to_string())
+        );
+        assert!(branch.protected);
+    }
+
+    // ========== API Extensions Tests ==========
+
+    #[test]
+    fn test_subscription_manager_subscribe() {
+        use api_extensions::*;
+
+        let manager = SubscriptionManager::new();
+        let filter = SubscriptionFilter {
+            statute_ids: Some(vec!["S1".to_string()]),
+            jurisdictions: None,
+            tags: None,
+            event_types: None,
+        };
+
+        let subscription_id = manager.subscribe(filter);
+        assert_eq!(manager.subscription_count(), 1);
+
+        let success = manager.unsubscribe(subscription_id);
+        assert!(success);
+        assert_eq!(manager.subscription_count(), 0);
+    }
+
+    #[test]
+    fn test_subscription_manager_publish() {
+        use api_extensions::*;
+
+        let manager = SubscriptionManager::new();
+        let event = SubscriptionEvent::StatuteRegistered {
+            statute_id: "S1".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        manager.publish(event.clone());
+        let events = manager.get_published_events();
+        assert_eq!(events.len(), 1);
+
+        manager.clear_events();
+        assert_eq!(manager.get_published_events().len(), 0);
+    }
+
+    #[test]
+    fn test_subscription_event_variants() {
+        use api_extensions::*;
+
+        let _registered = SubscriptionEvent::StatuteRegistered {
+            statute_id: "S1".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        let _updated = SubscriptionEvent::StatuteUpdated {
+            statute_id: "S1".to_string(),
+            version: 2,
+            timestamp: Utc::now(),
+        };
+
+        let _deleted = SubscriptionEvent::StatuteDeleted {
+            statute_id: "S1".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        let _status_changed = SubscriptionEvent::StatusChanged {
+            statute_id: "S1".to_string(),
+            old_status: StatuteStatus::Draft,
+            new_status: StatuteStatus::Active,
+            timestamp: Utc::now(),
+        };
+    }
+
+    #[test]
+    fn test_grpc_service_get_statute() {
+        use api_extensions::grpc::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        let service = GrpcStatuteService::new(registry.clone());
+
+        // Add a statute
+        {
+            let mut reg = registry.lock().unwrap();
+            let entry = StatuteEntry::new(test_statute("S1"), "JP");
+            reg.register(entry).unwrap();
+        }
+
+        // Get it via gRPC
+        let request = GetStatuteRequest {
+            statute_id: "S1".to_string(),
+        };
+        let response = service.get_statute(request);
+        assert!(response.found);
+        assert!(response.statute.is_some());
+    }
+
+    #[test]
+    fn test_grpc_service_list_statutes() {
+        use api_extensions::grpc::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        let service = GrpcStatuteService::new(registry.clone());
+
+        // Add statutes
+        {
+            let mut reg = registry.lock().unwrap();
+            for i in 1..=10 {
+                let entry = StatuteEntry::new(test_statute(&format!("S{}", i)), "JP");
+                reg.register(entry).unwrap();
+            }
+        }
+
+        // List with pagination
+        let request = ListStatutesRequest {
+            page: 0,
+            page_size: 5,
+            jurisdiction: None,
+            tags: vec![],
+        };
+        let response = service.list_statutes(request);
+        assert_eq!(response.statutes.len(), 5);
+        assert_eq!(response.total_count, 10);
+        assert!(response.has_more);
+    }
+
+    #[test]
+    fn test_grpc_service_register_statute() {
+        use api_extensions::grpc::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        let service = GrpcStatuteService::new(registry);
+
+        let entry = StatuteEntry::new(test_statute("S1"), "JP");
+        let request = RegisterStatuteRequest { statute: entry };
+        let response = service.register_statute(request);
+
+        assert!(response.success);
+        assert_eq!(response.error, None);
+        assert!(!response.statute_id.is_empty());
+    }
+
+    #[test]
+    fn test_stream_config() {
+        use api_extensions::streaming::*;
+
+        let mut auth = HashMap::new();
+        auth.insert("token".to_string(), "secret".to_string());
+
+        let config = StreamConfig::new(
+            "kafka-stream",
+            StreamDestination::Kafka,
+            "localhost:9092",
+            "statutes",
+        )
+        .with_auth(auth.clone())
+        .with_buffer_size(500)
+        .with_enabled(true);
+
+        assert_eq!(config.name, "kafka-stream");
+        assert_eq!(config.destination, StreamDestination::Kafka);
+        assert_eq!(config.connection, "localhost:9092");
+        assert_eq!(config.topic, "statutes");
+        assert_eq!(config.buffer_size, 500);
+        assert!(config.enabled);
+        assert_eq!(config.auth, Some(auth));
+    }
+
+    #[test]
+    fn test_stream_destination_variants() {
+        use api_extensions::streaming::*;
+
+        let _kafka = StreamDestination::Kafka;
+        let _nats = StreamDestination::Nats;
+        let _kinesis = StreamDestination::Kinesis;
+        let _webhook = StreamDestination::Webhook;
+    }
+
+    #[test]
+    fn test_stream_message() {
+        use api_extensions::streaming::*;
+
+        let message = StreamMessage::new("statute.registered", "S1", "{\"id\": \"S1\"}")
+            .with_metadata("source", "api")
+            .with_metadata("version", "1.0");
+
+        assert_eq!(message.event_type, "statute.registered");
+        assert_eq!(message.statute_id, "S1");
+        assert_eq!(message.payload, "{\"id\": \"S1\"}");
+        assert_eq!(message.metadata.get("source"), Some(&"api".to_string()));
+        assert_eq!(message.metadata.get("version"), Some(&"1.0".to_string()));
+    }
+
+    #[test]
+    fn test_event_stream_manager() {
+        use api_extensions::streaming::*;
+
+        let mut manager = EventStreamManager::new();
+
+        let config = StreamConfig::new(
+            "test-stream",
+            StreamDestination::Kafka,
+            "localhost:9092",
+            "test",
+        );
+        manager.add_stream(config);
+
+        assert!(manager.get_stream("test-stream").is_some());
+        assert_eq!(manager.list_streams().len(), 1);
+        assert_eq!(manager.get_message_count("test-stream"), 0);
+
+        let message = StreamMessage::new("test", "S1", "payload");
+        manager.publish("test-stream", message).unwrap();
+        assert_eq!(manager.get_message_count("test-stream"), 1);
+
+        manager.reset_count("test-stream");
+        assert_eq!(manager.get_message_count("test-stream"), 0);
+
+        let removed = manager.remove_stream("test-stream");
+        assert!(removed);
+        assert_eq!(manager.list_streams().len(), 0);
+    }
+
+    #[test]
+    fn test_event_stream_publish_disabled() {
+        use api_extensions::streaming::*;
+
+        let mut manager = EventStreamManager::new();
+        let config = StreamConfig::new(
+            "test-stream",
+            StreamDestination::Nats,
+            "localhost:4222",
+            "test",
+        )
+        .with_enabled(false);
+        manager.add_stream(config);
+
+        let message = StreamMessage::new("test", "S1", "payload");
+        let result = manager.publish("test-stream", message);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("disabled"));
+    }
+
+    #[test]
+    fn test_bulk_operation_register() {
+        use api_extensions::bulk::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        let executor = BulkOperationExecutor::new(registry);
+
+        let entries = vec![
+            StatuteEntry::new(test_statute("S1"), "JP"),
+            StatuteEntry::new(test_statute("S2"), "JP"),
+            StatuteEntry::new(test_statute("S3"), "JP"),
+        ];
+
+        let request = BulkOperationRequest {
+            operation_type: BulkOperationType::Register,
+            statute_ids: vec![],
+            statute_entries: entries,
+            new_status: None,
+            continue_on_error: true,
+        };
+
+        let response = executor.execute(request);
+        assert_eq!(response.total_processed, 3);
+        assert_eq!(response.successful, 3);
+        assert_eq!(response.failed, 0);
+        assert!(response.is_complete_success());
+        assert!((response.success_rate() - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_bulk_operation_delete() {
+        use api_extensions::bulk::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        {
+            let mut reg = registry.lock().unwrap();
+            reg.register(StatuteEntry::new(test_statute("S1"), "JP"))
+                .unwrap();
+            reg.register(StatuteEntry::new(test_statute("S2"), "JP"))
+                .unwrap();
+        }
+
+        let executor = BulkOperationExecutor::new(registry);
+
+        let request = BulkOperationRequest {
+            operation_type: BulkOperationType::Delete,
+            statute_ids: vec!["S1".to_string(), "S2".to_string()],
+            statute_entries: vec![],
+            new_status: None,
+            continue_on_error: true,
+        };
+
+        let response = executor.execute(request);
+        assert_eq!(response.total_processed, 2);
+        assert_eq!(response.successful, 2);
+        assert_eq!(response.failed, 0);
+    }
+
+    #[test]
+    fn test_bulk_operation_change_status() {
+        use api_extensions::bulk::*;
+
+        let registry = Arc::new(Mutex::new(StatuteRegistry::new()));
+        {
+            let mut reg = registry.lock().unwrap();
+            reg.register(StatuteEntry::new(test_statute("S1"), "JP"))
+                .unwrap();
+            reg.register(StatuteEntry::new(test_statute("S2"), "JP"))
+                .unwrap();
+        }
+
+        let executor = BulkOperationExecutor::new(registry);
+
+        let request = BulkOperationRequest {
+            operation_type: BulkOperationType::ChangeStatus,
+            statute_ids: vec!["S1".to_string(), "S2".to_string()],
+            statute_entries: vec![],
+            new_status: Some(StatuteStatus::Repealed),
+            continue_on_error: true,
+        };
+
+        let response = executor.execute(request);
+        assert_eq!(response.successful, 2);
+        assert_eq!(response.failed, 0);
+    }
+
+    #[test]
+    fn test_bulk_operation_type_variants() {
+        use api_extensions::bulk::*;
+
+        let _register = BulkOperationType::Register;
+        let _update = BulkOperationType::Update;
+        let _delete = BulkOperationType::Delete;
+        let _archive = BulkOperationType::Archive;
+        let _change_status = BulkOperationType::ChangeStatus;
+    }
+
+    #[test]
+    fn test_bulk_operation_response_metrics() {
+        use api_extensions::bulk::*;
+
+        let mut response = BulkOperationResponse::new(BulkOperationType::Register);
+        response.total_processed = 10;
+        response.successful = 7;
+        response.failed = 3;
+
+        assert_eq!(response.success_rate(), 0.7);
+        assert!(!response.is_complete_success());
+    }
+
+    #[test]
+    fn test_sdk_generation_python() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::Python,
+            package_name: "legalis_sdk".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: true,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("legalis_sdk Python SDK"));
+        assert!(code.contains("class StatuteRegistryClient"));
+        assert!(code.contains("def get_statute"));
+    }
+
+    #[test]
+    fn test_sdk_generation_javascript() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::JavaScript,
+            package_name: "legalis-sdk".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: true,
+            type_definitions: false,
+            include_docs: false,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("legalis-sdk JavaScript SDK"));
+        assert!(code.contains("class StatuteRegistryClient"));
+        assert!(code.contains("async getStatute"));
+    }
+
+    #[test]
+    fn test_sdk_generation_typescript() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::TypeScript,
+            package_name: "legalis-sdk".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: true,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("legalis-sdk TypeScript SDK"));
+        assert!(code.contains("export interface Statute"));
+        assert!(code.contains("export class StatuteRegistryClient"));
+    }
+
+    #[test]
+    fn test_sdk_generation_rust() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::Rust,
+            package_name: "legalis-sdk".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: true,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("legalis-sdk Rust SDK"));
+        assert!(code.contains("pub struct Statute"));
+        assert!(code.contains("pub struct StatuteRegistryClient"));
+        assert!(code.contains("pub async fn get_statute"));
+    }
+
+    #[test]
+    fn test_sdk_generation_go() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::Go,
+            package_name: "legalis-sdk".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: false,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("legalis-sdk Go SDK"));
+        assert!(code.contains("type Statute struct"));
+        assert!(code.contains("type Client struct"));
+    }
+
+    #[test]
+    fn test_sdk_generation_java() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::Java,
+            package_name: "LegalisSDK".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: false,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("LegalisSDK Java SDK"));
+        assert!(code.contains("public class StatuteRegistryClient"));
+    }
+
+    #[test]
+    fn test_sdk_generation_csharp() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::CSharp,
+            package_name: "LegalisSDK".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: true,
+            type_definitions: true,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("LegalisSDK C# SDK"));
+        assert!(code.contains("namespace LegalisSDK"));
+        assert!(code.contains("public class StatuteRegistryClient"));
+    }
+
+    #[test]
+    fn test_sdk_generation_ruby() {
+        use api_extensions::sdk_gen::*;
+
+        let config = SdkConfig {
+            language: SdkLanguage::Ruby,
+            package_name: "LegalisSDK".to_string(),
+            api_base_url: "https://api.example.com".to_string(),
+            async_support: false,
+            type_definitions: false,
+            include_docs: true,
+        };
+
+        let code = SdkGenerator::generate(&config).unwrap();
+        assert!(code.contains("LegalisSDK Ruby SDK"));
+        assert!(code.contains("module LegalisSDK"));
+        assert!(code.contains("class StatuteRegistryClient"));
+    }
+
+    #[test]
+    fn test_sdk_language_variants() {
+        use api_extensions::sdk_gen::*;
+
+        let _python = SdkLanguage::Python;
+        let _javascript = SdkLanguage::JavaScript;
+        let _typescript = SdkLanguage::TypeScript;
+        let _rust = SdkLanguage::Rust;
+        let _go = SdkLanguage::Go;
+        let _java = SdkLanguage::Java;
+        let _csharp = SdkLanguage::CSharp;
+        let _ruby = SdkLanguage::Ruby;
     }
 }

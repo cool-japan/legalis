@@ -291,6 +291,16 @@ pub mod typed_attributes;
 pub mod typed_effects;
 pub mod workflows;
 
+// Performance & Memory (v0.1.9)
+pub mod arena;
+pub mod compact;
+pub mod interning;
+pub mod lazy;
+pub mod parallel_eval;
+
+// Distributed Legal Reasoning (v0.2.0)
+pub mod distributed;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;

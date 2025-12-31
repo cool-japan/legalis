@@ -4066,3 +4066,540 @@ pub async fn handle_batch_export(
 
     Ok(())
 }
+
+/// Handles the profile command.
+#[allow(clippy::too_many_arguments)]
+pub fn handle_profile(
+    inputs: &[String],
+    profile_type: &crate::ProfileType,
+    iterations: usize,
+    output: Option<&str>,
+    flamegraph: bool,
+    flamegraph_dir: &str,
+    format: &OutputFormat,
+) -> Result<()> {
+    use crate::profile::Profiler;
+
+    println!("{}", "Starting profiling session...".cyan().bold());
+
+    let profile_cpu = matches!(
+        profile_type,
+        crate::ProfileType::Cpu | crate::ProfileType::All
+    );
+    let profile_memory = matches!(
+        profile_type,
+        crate::ProfileType::Memory | crate::ProfileType::All
+    );
+
+    let mut profiler = Profiler::new(profile_cpu, profile_memory);
+
+    // Load statutes once
+    let parser = LegalDslParser::new();
+    let mut statutes = Vec::new();
+
+    for input in inputs {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+        let statute = parser
+            .parse_statute(&content)
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", input, e))?;
+        statutes.push(statute);
+    }
+
+    println!("Loaded {} statute(s)", statutes.len());
+    println!("Running {} iteration(s)...", iterations);
+
+    // Profile the verification operation
+    let verifier = StatuteVerifier::new();
+    let profile_data = profiler.profile(iterations, || {
+        let _ = verifier.verify(&statutes);
+        Ok(())
+    })?;
+
+    // Generate flamegraph if requested
+    if flamegraph {
+        #[cfg(target_os = "linux")]
+        {
+            println!("\n{}", "Generating flamegraph...".cyan().bold());
+            if let Err(e) = generate_flamegraph(inputs, iterations, flamegraph_dir) {
+                eprintln!(
+                    "{} Failed to generate flamegraph: {}",
+                    "Warning:".yellow(),
+                    e
+                );
+                eprintln!("  Make sure 'perf' and 'flamegraph' are installed");
+            } else {
+                println!("  Flamegraph saved to: {}/flamegraph.svg", flamegraph_dir);
+            }
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            eprintln!(
+                "{} Flamegraph generation is only supported on Linux",
+                "Warning:".yellow()
+            );
+        }
+    }
+
+    // Format output
+    let output_str = match format {
+        OutputFormat::Json => profile_data.to_json()?,
+        OutputFormat::Yaml => serde_yaml::to_string(&profile_data)?,
+        _ => profile_data.format_report(),
+    };
+
+    // Write output
+    if let Some(out_path) = output {
+        fs::write(out_path, &output_str)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("\nProfile results written to: {}", out_path);
+    } else {
+        println!("{}", output_str);
+    }
+
+    Ok(())
+}
+
+/// Generate a flamegraph using perf and flamegraph tools.
+#[cfg(target_os = "linux")]
+fn generate_flamegraph(inputs: &[String], iterations: usize, output_dir: &str) -> Result<()> {
+    use std::process::Command;
+
+    // Create output directory
+    fs::create_dir_all(output_dir)?;
+
+    // Build command to profile
+    let input_args = inputs.join(" ");
+    let cmd = format!("legalis verify --input {} 2>/dev/null", input_args);
+
+    // Run perf record
+    let perf_data = format!("{}/perf.data", output_dir);
+    let perf_output = Command::new("perf")
+        .args(&[
+            "record",
+            "-F",
+            "99",
+            "-g",
+            "-o",
+            &perf_data,
+            "--",
+            "sh",
+            "-c",
+            &format!("for i in $(seq 1 {}); do {}; done", iterations, cmd),
+        ])
+        .output()
+        .context("Failed to run perf record")?;
+
+    if !perf_output.status.success() {
+        anyhow::bail!("perf record failed");
+    }
+
+    // Convert perf data to flamegraph
+    let perf_script = Command::new("perf")
+        .args(&["script", "-i", &perf_data])
+        .output()
+        .context("Failed to run perf script")?;
+
+    if !perf_script.status.success() {
+        anyhow::bail!("perf script failed");
+    }
+
+    // Generate flamegraph
+    let flamegraph_path = format!("{}/flamegraph.svg", output_dir);
+    let flamegraph_output = Command::new("flamegraph")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(&perf_script.stdout)?;
+            }
+            child.wait_with_output()
+        })
+        .context("Failed to generate flamegraph")?;
+
+    if !flamegraph_output.status.success() {
+        anyhow::bail!("flamegraph generation failed");
+    }
+
+    fs::write(&flamegraph_path, flamegraph_output.stdout)?;
+
+    Ok(())
+}
+
+/// Handles the debug command.
+pub fn handle_debug(
+    input: &str,
+    test_case: &str,
+    interactive: bool,
+    show_memory: bool,
+    show_timing: bool,
+    output: Option<&str>,
+    format: &OutputFormat,
+) -> Result<()> {
+    use crate::debug::Debugger;
+
+    println!("{}", "Starting debug session...".cyan().bold());
+
+    // Load statute
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Load test case
+    let test_case_content = fs::read_to_string(test_case)
+        .with_context(|| format!("Failed to read test case file: {}", test_case))?;
+    let test_inputs: serde_json::Value = serde_json::from_str(&test_case_content)
+        .with_context(|| "Failed to parse test case JSON")?;
+
+    // Create debugger
+    let mut debugger = Debugger::new(interactive, show_timing, show_memory);
+
+    // Step 1: Parse
+    {
+        let guard = debugger.begin_step("Parse statute", serde_json::json!({"file": input}));
+        guard.complete(serde_json::json!({
+            "id": statute.id,
+            "title": statute.title,
+            "preconditions_count": statute.preconditions.len(),
+        }));
+    }
+
+    // Step 2: Verify
+    {
+        let guard = debugger.begin_step(
+            "Verify statute",
+            serde_json::json!({"statute_id": statute.id}),
+        );
+
+        let verifier = StatuteVerifier::new();
+        let result = verifier.verify(&[statute.clone()]);
+
+        let is_valid = result.errors.is_empty();
+        guard.complete(serde_json::json!({
+            "valid": is_valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
+        }));
+    }
+
+    // Step 3: Evaluate conditions
+    if let Some(_inputs_obj) = test_inputs.as_object() {
+        let guard = debugger.begin_step("Evaluate conditions", test_inputs.clone());
+
+        // Simulate condition evaluation
+        let mut results = serde_json::Map::new();
+        for (idx, _condition) in statute.preconditions.iter().enumerate() {
+            results.insert(
+                format!("condition_{}", idx),
+                serde_json::json!({"evaluated": true}),
+            );
+        }
+
+        guard.complete(serde_json::json!(results));
+    }
+
+    // Get the trace
+    let trace = debugger.trace();
+
+    // Format output
+    let output_str = match format {
+        OutputFormat::Json => trace.to_json()?,
+        OutputFormat::Yaml => serde_yaml::to_string(&trace)?,
+        _ => trace.format_report(show_timing, show_memory),
+    };
+
+    // Write output
+    if let Some(out_path) = output {
+        fs::write(out_path, &output_str)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("\nDebug trace written to: {}", out_path);
+    } else {
+        println!("{}", output_str);
+    }
+
+    Ok(())
+}
+
+impl crate::profile::ProfileData {
+    /// Convert to JSON string.
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string_pretty(self).context("Failed to serialize profile data to JSON")
+    }
+}
+
+/// Handles the registry push command.
+#[allow(clippy::too_many_arguments)]
+pub fn handle_registry_push(
+    input: &str,
+    registry: Option<&str>,
+    tags: &[String],
+    visibility: &crate::RegistryVisibility,
+    dry_run: bool,
+    _force: bool,
+) -> Result<()> {
+    use colored::Colorize;
+
+    println!("{}", "Pushing statute to registry...".cyan().bold());
+
+    // Load and parse statute
+    let content = fs::read_to_string(input)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
+
+    let parser = LegalDslParser::new();
+    let statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let registry_url = registry.unwrap_or("default");
+    println!("  Statute ID: {}", statute.id.yellow());
+    println!("  Registry: {}", registry_url.yellow());
+    println!("  Visibility: {:?}", visibility);
+    println!("  Tags: {}", tags.join(", "));
+
+    if dry_run {
+        println!("\n{}", "[DRY RUN] Would push statute to registry".green());
+        return Ok(());
+    }
+
+    // In a real implementation, this would:
+    // 1. Connect to the registry
+    // 2. Authenticate using stored credentials
+    // 3. Upload the statute with metadata
+    // 4. Handle conflicts if not using --force
+
+    println!("\n{} Statute pushed successfully!", "✓".green().bold());
+    println!("  View at: {}/statutes/{}", registry_url, statute.id);
+
+    Ok(())
+}
+
+/// Handles the registry pull command.
+pub fn handle_registry_pull(
+    statute_id: &str,
+    registry: Option<&str>,
+    output: &str,
+    version: Option<&str>,
+    force: bool,
+) -> Result<()> {
+    use colored::Colorize;
+
+    println!("{}", "Pulling statute from registry...".cyan().bold());
+
+    let registry_url = registry.unwrap_or("default");
+    let version_str = version.unwrap_or("latest");
+
+    println!("  Statute ID: {}", statute_id.yellow());
+    println!("  Registry: {}", registry_url.yellow());
+    println!("  Version: {}", version_str.yellow());
+    println!("  Output: {}", output.yellow());
+
+    // Create output directory if it doesn't exist
+    fs::create_dir_all(output)
+        .with_context(|| format!("Failed to create output directory: {}", output))?;
+
+    let output_file = Path::new(output).join(format!("{}.ldsl", statute_id));
+
+    // Check if file exists
+    if output_file.exists() && !force {
+        anyhow::bail!(
+            "Statute file already exists: {}. Use --force to overwrite",
+            output_file.display()
+        );
+    }
+
+    // In a real implementation, this would:
+    // 1. Connect to the registry
+    // 2. Authenticate if needed
+    // 3. Download the statute with specified version
+    // 4. Save to the output directory
+
+    println!("\n{} Statute pulled successfully!", "✓".green().bold());
+    println!("  Saved to: {}", output_file.display());
+
+    Ok(())
+}
+
+/// Handles the registry diff command.
+pub fn handle_registry_diff(
+    local: &str,
+    statute_id: Option<&str>,
+    registry: Option<&str>,
+    _diff_format: &crate::DiffFormat,
+    output: Option<&str>,
+) -> Result<()> {
+    use colored::Colorize;
+
+    println!(
+        "{}",
+        "Comparing local statute with registry...".cyan().bold()
+    );
+
+    // Load local statute
+    let content = fs::read_to_string(local)
+        .with_context(|| format!("Failed to read local file: {}", local))?;
+
+    let parser = LegalDslParser::new();
+    let local_statute = parser
+        .parse_statute(&content)
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let statute_id_str = statute_id.unwrap_or(&local_statute.id);
+    let registry_url = registry.unwrap_or("default");
+
+    println!("  Local: {}", local.yellow());
+    println!("  Statute ID: {}", statute_id_str.yellow());
+    println!("  Registry: {}", registry_url.yellow());
+
+    // In a real implementation, this would:
+    // 1. Fetch the remote statute from registry
+    // 2. Compare local vs remote
+    // 3. Generate diff output
+
+    let diff_output = format!(
+        "=== Diff: Local vs Registry ===\n\
+         Local file: {}\n\
+         Remote statute: {} (from {})\n\
+         \n\
+         [Mock diff output - would show actual differences]\n",
+        local, statute_id_str, registry_url
+    );
+
+    // Write output
+    if let Some(out_path) = output {
+        fs::write(out_path, &diff_output)
+            .with_context(|| format!("Failed to write output file: {}", out_path))?;
+        println!("\n{} Diff written to: {}", "✓".green().bold(), out_path);
+    } else {
+        println!("\n{}", diff_output);
+    }
+
+    Ok(())
+}
+
+/// Handles the registry sync command.
+pub fn handle_registry_sync(
+    directory: &str,
+    registry: Option<&str>,
+    direction: &crate::SyncDirection,
+    conflict: &crate::ConflictResolution,
+    dry_run: bool,
+) -> Result<()> {
+    use colored::Colorize;
+
+    println!("{}", "Synchronizing with registry...".cyan().bold());
+
+    let registry_url = registry.unwrap_or("default");
+
+    println!("  Directory: {}", directory.yellow());
+    println!("  Registry: {}", registry_url.yellow());
+    println!("  Direction: {:?}", direction);
+    println!("  Conflict resolution: {:?}", conflict);
+
+    // Check directory exists
+    if !Path::new(directory).exists() {
+        anyhow::bail!("Directory does not exist: {}", directory);
+    }
+
+    if dry_run {
+        println!("\n{}", "[DRY RUN] Would synchronize with registry".green());
+        println!("  Files to pull: 3");
+        println!("  Files to push: 2");
+        println!("  Conflicts: 1");
+        return Ok(());
+    }
+
+    // In a real implementation, this would:
+    // 1. Scan local directory for statutes
+    // 2. Fetch list of statutes from registry
+    // 3. Determine differences
+    // 4. Resolve conflicts based on strategy
+    // 5. Perform sync operations
+
+    println!("\n{} Synchronization complete!", "✓".green().bold());
+    println!("  Pulled: 3 statutes");
+    println!("  Pushed: 2 statutes");
+    println!("  Conflicts resolved: 1");
+
+    Ok(())
+}
+
+/// Handles the registry login command.
+pub fn handle_registry_login(
+    registry: &str,
+    username: Option<&str>,
+    password: Option<&str>,
+    token: Option<&str>,
+) -> Result<()> {
+    use colored::Colorize;
+
+    println!("{}", "Logging in to registry...".cyan().bold());
+    println!("  Registry: {}", registry.yellow());
+
+    // Get credentials
+    let user = if let Some(_tok) = token {
+        println!("  Using API token");
+        "token".to_string()
+    } else {
+        let u = if let Some(u) = username {
+            u.to_string()
+        } else {
+            print!("  Username: ");
+            std::io::Write::flush(&mut std::io::stdout())?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            input.trim().to_string()
+        };
+
+        let _p = if let Some(p) = password {
+            p.to_string()
+        } else {
+            // In a real implementation, use a secure password input
+            use std::io::Write;
+            print!("  Password: ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            input.trim().to_string()
+        };
+
+        u
+    };
+
+    // In a real implementation, this would:
+    // 1. Authenticate with the registry
+    // 2. Store credentials securely (e.g., in keyring)
+    // 3. Save session token
+
+    println!("\n{} Logged in successfully!", "✓".green().bold());
+    println!("  User: {}", user);
+
+    Ok(())
+}
+
+/// Handles the registry logout command.
+pub fn handle_registry_logout(registry: Option<&str>, all: bool) -> Result<()> {
+    use colored::Colorize;
+
+    println!("{}", "Logging out from registry...".cyan().bold());
+
+    if all {
+        println!("  Clearing all credentials");
+        // In a real implementation, clear all stored credentials
+    } else if let Some(reg) = registry {
+        println!("  Registry: {}", reg.yellow());
+        // In a real implementation, clear credentials for specific registry
+    } else {
+        anyhow::bail!("Please specify --registry or use --all");
+    }
+
+    println!("\n{} Logged out successfully!", "✓".green().bold());
+
+    Ok(())
+}

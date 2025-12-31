@@ -1,7 +1,7 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use legalis_i18n::{
-    CurrencyFormatter, DateTimeFormatter, LegalDictionary, Locale, NumberFormatter,
-    TranslationManager, TranslationMemory,
+    BatchTranslator, CurrencyFormatter, DateTimeFormatter, LazyDictionary, LegalDictionary, Locale,
+    NumberFormatter, TermIndex, TranslationManager, TranslationMemory,
 };
 
 fn locale_parsing_benchmark(c: &mut Criterion) {
@@ -139,6 +139,112 @@ fn number_formatting_benchmark(c: &mut Criterion) {
     });
 }
 
+// Performance optimization benchmarks (v0.2.3)
+fn lru_cache_benchmark(c: &mut Criterion) {
+    let mut manager = TranslationManager::new();
+    let ja_dict = LegalDictionary::japanese();
+    manager.add_dictionary(ja_dict);
+
+    let locale = Locale::new("ja").with_country("JP");
+
+    c.bench_function("LRU cache - first lookup (miss)", |b| {
+        b.iter(|| manager.translate(black_box("contract"), black_box(&locale)))
+    });
+
+    // Warm up cache
+    let _ = manager.translate("contract", &locale);
+
+    c.bench_function("LRU cache - cached lookup (hit)", |b| {
+        b.iter(|| manager.translate(black_box("contract"), black_box(&locale)))
+    });
+}
+
+fn term_index_benchmark(c: &mut Criterion) {
+    let dict = LegalDictionary::english_us();
+    let index = dict.build_term_index();
+
+    c.bench_function("term index - prefix lookup (2 chars)", |b| {
+        b.iter(|| index.find_by_prefix(black_box("co")))
+    });
+
+    c.bench_function("term index - prefix lookup (4 chars)", |b| {
+        b.iter(|| index.find_by_prefix(black_box("cont")))
+    });
+
+    c.bench_function("term index - build index", |b| {
+        b.iter(|| black_box(&dict).build_term_index())
+    });
+}
+
+fn lazy_loading_benchmark(c: &mut Criterion) {
+    let locale = Locale::new("en").with_country("US");
+
+    c.bench_function("lazy dictionary - first access", |b| {
+        b.iter(|| {
+            let lazy_dict = LazyDictionary::new(locale.clone(), || LegalDictionary::english_us());
+            black_box(lazy_dict.get())
+        })
+    });
+
+    let lazy_dict = LazyDictionary::new(locale.clone(), || LegalDictionary::english_us());
+    let _ = lazy_dict.get(); // Load it
+
+    c.bench_function("lazy dictionary - already loaded", |b| {
+        b.iter(|| black_box(lazy_dict.get()))
+    });
+}
+
+fn batch_translation_benchmark(c: &mut Criterion) {
+    let mut manager = TranslationManager::new();
+
+    let mut ja_dict = LegalDictionary::new(Locale::new("ja").with_country("JP"));
+    ja_dict.add_translation("contract", "契約");
+    ja_dict.add_translation("law", "法律");
+    ja_dict.add_translation("court", "裁判所");
+    ja_dict.add_translation("statute", "法令");
+    ja_dict.add_translation("plaintiff", "原告");
+    manager.add_dictionary(ja_dict);
+
+    let batch = BatchTranslator::new(manager);
+    let ja_locale = Locale::new("ja").with_country("JP");
+
+    let keys = vec!["contract", "law", "court", "statute", "plaintiff"];
+
+    c.bench_function("batch translation - 5 terms (parallel)", |b| {
+        b.iter(|| batch.translate_batch(black_box(&keys), black_box(&ja_locale)))
+    });
+
+    let keys_20: Vec<&str> = (0..20).map(|_| "contract").collect();
+
+    c.bench_function("batch translation - 20 terms (parallel)", |b| {
+        b.iter(|| batch.translate_batch(black_box(&keys_20), black_box(&ja_locale)))
+    });
+}
+
+fn term_index_scaling_benchmark(c: &mut Criterion) {
+    let mut index = TermIndex::new();
+
+    // Index 100 terms
+    for i in 0..100 {
+        index.index_term(format!("term_{}", i));
+    }
+
+    c.bench_function("term index - 100 terms - lookup", |b| {
+        b.iter(|| index.find_by_prefix(black_box("term_5")))
+    });
+
+    let mut large_index = TermIndex::new();
+
+    // Index 1000 terms
+    for i in 0..1000 {
+        large_index.index_term(format!("legal_term_{}", i));
+    }
+
+    c.bench_function("term index - 1000 terms - lookup", |b| {
+        b.iter(|| large_index.find_by_prefix(black_box("legal_term_5")))
+    });
+}
+
 criterion_group!(
     benches,
     locale_parsing_benchmark,
@@ -149,5 +255,10 @@ criterion_group!(
     date_formatting_benchmark,
     currency_formatting_benchmark,
     number_formatting_benchmark,
+    lru_cache_benchmark,
+    term_index_benchmark,
+    lazy_loading_benchmark,
+    batch_translation_benchmark,
+    term_index_scaling_benchmark,
 );
 criterion_main!(benches);

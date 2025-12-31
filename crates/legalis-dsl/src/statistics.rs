@@ -400,6 +400,10 @@ mod tests {
             supersedes: vec![],
             defaults: vec![],
             requires: vec!["citizenship-law".to_string()],
+            delegates: vec![],
+            scope: None,
+            constraints: vec![],
+            priority: None,
         }
     }
 

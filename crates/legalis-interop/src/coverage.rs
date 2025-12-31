@@ -58,6 +58,11 @@ impl FormatCoverage {
             LegalFormat::CreativeCommons => Self::analyze_creativecommons(),
             LegalFormat::Spdx => Self::analyze_spdx(),
             LegalFormat::Legalis => Self::analyze_legalis(),
+            LegalFormat::Bpmn => Self::analyze_bpmn(),
+            LegalFormat::Dmn => Self::analyze_dmn(),
+            LegalFormat::Cmmn => Self::analyze_cmmn(),
+            LegalFormat::RuleML => Self::analyze_ruleml(),
+            LegalFormat::Sbvr => Self::analyze_sbvr(),
         }
     }
 
@@ -308,6 +313,71 @@ impl FormatCoverage {
         let unsupported = vec![];
         let partial = HashMap::new();
 
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_bpmn() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Process models".to_string(),
+            "Tasks and activities".to_string(),
+            "Basic control flow".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex gateways".to_string(),
+            "Event sub-processes".to_string(),
+            "Data objects".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_dmn() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Decision tables".to_string(),
+            "Input/output mapping".to_string(),
+            "Basic decision logic".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex expressions".to_string(),
+            "Decision services".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_cmmn() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Case models".to_string(),
+            "Milestones".to_string(),
+            "Basic tasks".to_string(),
+        ];
+        let unsupported = vec!["Sentries".to_string(), "Discretionary items".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_ruleml() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Rules".to_string(),
+            "Facts".to_string(),
+            "Basic logic".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex queries".to_string(),
+            "Negation as failure".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_sbvr() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Business vocabulary".to_string(),
+            "Business rules".to_string(),
+            "Concepts and terms".to_string(),
+        ];
+        let unsupported = vec!["Complex semantics".to_string(), "Fact models".to_string()];
+        let partial = HashMap::new();
         (supported, unsupported, partial)
     }
 }

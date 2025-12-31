@@ -115,10 +115,7 @@ impl NumericParser {
         }
 
         // Check for scientific notation or decimal point
-        if cleaned.contains('e')
-            || cleaned.contains('E')
-            || cleaned.contains('.')
-        {
+        if cleaned.contains('e') || cleaned.contains('E') || cleaned.contains('.') {
             return Self::parse_float(&cleaned);
         }
 
@@ -129,7 +126,9 @@ impl NumericParser {
     /// Parses a binary literal (without the 0b prefix)
     fn parse_binary(input: &str) -> Result<NumericValue, NumericError> {
         if input.is_empty() {
-            return Err(NumericError::InvalidBinary("empty binary literal".to_string()));
+            return Err(NumericError::InvalidBinary(
+                "empty binary literal".to_string(),
+            ));
         }
 
         i64::from_str_radix(input, 2)
@@ -151,7 +150,9 @@ impl NumericParser {
     /// Parses an octal literal (without the 0o prefix)
     fn parse_octal(input: &str) -> Result<NumericValue, NumericError> {
         if input.is_empty() {
-            return Err(NumericError::InvalidOctal("empty octal literal".to_string()));
+            return Err(NumericError::InvalidOctal(
+                "empty octal literal".to_string(),
+            ));
         }
 
         i64::from_str_radix(input, 8)
@@ -300,7 +301,10 @@ mod tests {
     fn test_parse_invalid_binary() {
         let result = parse_numeric("0b1012");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), NumericError::InvalidBinary(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            NumericError::InvalidBinary(_)
+        ));
     }
 
     #[test]

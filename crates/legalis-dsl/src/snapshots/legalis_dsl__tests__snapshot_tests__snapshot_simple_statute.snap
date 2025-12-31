@@ -40,7 +40,11 @@ expression: doc
       "amendments": [],
       "supersedes": [],
       "defaults": [],
-      "requires": []
+      "requires": [],
+      "delegates": [],
+      "scope": null,
+      "constraints": [],
+      "priority": null
     }
   ]
 }

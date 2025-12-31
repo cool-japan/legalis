@@ -218,7 +218,12 @@ impl TaintAnalyzer {
 
         // Check constraint conditions
         for constraint in &statute.constraints {
-            self.collect_tainted_fields(&constraint.condition, &mut taints, &mut seen_fields, &statute.id);
+            self.collect_tainted_fields(
+                &constraint.condition,
+                &mut taints,
+                &mut seen_fields,
+                &statute.id,
+            );
         }
 
         taints
@@ -317,7 +322,9 @@ impl TaintAnalyzer {
                     let existing = self.taint_map.entry(statute.id.clone()).or_default();
                     for new_taint in new_taints {
                         // Check if we already have this field
-                        if let Some(existing_taint) = existing.iter_mut().find(|t| t.field == new_taint.field) {
+                        if let Some(existing_taint) =
+                            existing.iter_mut().find(|t| t.field == new_taint.field)
+                        {
                             // Merge categories and sources
                             let old_len = existing_taint.sources.len();
                             existing_taint.categories.extend(new_taint.categories);
@@ -343,7 +350,9 @@ impl TaintAnalyzer {
 
     /// Checks if a statute has any tainted fields
     pub fn is_tainted(&self, statute_id: &str) -> bool {
-        self.taint_map.get(statute_id).is_some_and(|t| !t.is_empty())
+        self.taint_map
+            .get(statute_id)
+            .is_some_and(|t| !t.is_empty())
     }
 
     /// Gets all statutes that use a specific tainted field
@@ -456,7 +465,11 @@ mod tests {
         let taints = analyzer.get_taint("statute1").unwrap();
         assert_eq!(taints.len(), 1);
         assert_eq!(taints[0].field, "ssn");
-        assert!(taints[0].categories.contains(&TaintCategory::PersonalIdentity));
+        assert!(
+            taints[0]
+                .categories
+                .contains(&TaintCategory::PersonalIdentity)
+        );
     }
 
     #[test]
@@ -540,8 +553,16 @@ mod tests {
         let report = analyzer.generate_report();
         assert_eq!(report.total_tainted_statutes, 2);
         assert_eq!(report.total_taints, 2);
-        assert!(report.categories_count.contains_key(&TaintCategory::PersonalIdentity));
-        assert!(report.categories_count.contains_key(&TaintCategory::Medical));
+        assert!(
+            report
+                .categories_count
+                .contains_key(&TaintCategory::PersonalIdentity)
+        );
+        assert!(
+            report
+                .categories_count
+                .contains_key(&TaintCategory::Medical)
+        );
     }
 
     #[test]

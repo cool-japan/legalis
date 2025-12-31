@@ -40,6 +40,10 @@ pub enum Token {
     Exception,
     Amendment,
     Supersedes,
+    Delegate,
+    Priority,
+    Scope,
+    Constraint,
 
     // Metadata keywords
     EffectiveDate,
@@ -128,6 +132,39 @@ pub struct AmendmentNode {
     pub description: String,
 }
 
+/// AST node for a delegate clause.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DelegateNode {
+    /// ID of the statute to delegate to
+    pub target_id: String,
+    /// Conditions under which delegation applies
+    pub conditions: Vec<ConditionNode>,
+    /// Description of the delegation
+    pub description: String,
+}
+
+/// AST node for a scope clause.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScopeNode {
+    /// Entity types this statute applies to
+    pub entity_types: Vec<String>,
+    /// Conditions that define the scope
+    pub conditions: Vec<ConditionNode>,
+    /// Description of the scope
+    pub description: Option<String>,
+}
+
+/// AST node for a constraint clause.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConstraintNode {
+    /// Name of the constraint
+    pub name: String,
+    /// The invariant condition that must hold
+    pub condition: ConditionNode,
+    /// Description of the constraint
+    pub description: Option<String>,
+}
+
 /// AST node for a statute definition.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct StatuteNode {
@@ -141,6 +178,10 @@ pub struct StatuteNode {
     pub supersedes: Vec<String>,
     pub defaults: Vec<DefaultNode>,
     pub requires: Vec<String>,
+    pub delegates: Vec<DelegateNode>,
+    pub scope: Option<ScopeNode>,
+    pub constraints: Vec<ConstraintNode>,
+    pub priority: Option<u32>,
 }
 
 /// AST node for conditions.
@@ -380,6 +421,10 @@ mod tests {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             }],
         };
 
@@ -411,6 +456,10 @@ mod tests {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 },
                 StatuteNode {
                     id: "s2".to_string(),
@@ -425,6 +474,10 @@ mod tests {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 },
             ],
         };
@@ -836,6 +889,10 @@ pub mod transform {
             supersedes: statute.supersedes.clone(),
             defaults: statute.defaults.clone(),
             requires: statute.requires.clone(),
+            delegates: statute.delegates.clone(),
+            scope: statute.scope.clone(),
+            constraints: statute.constraints.clone(),
+            priority: statute.priority,
         }
     }
 
@@ -1004,6 +1061,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let errors = validate_statute(&statute);
@@ -1023,6 +1084,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let errors = validate_statute(&statute);
@@ -1150,6 +1215,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let optimized = optimize_statute(&statute);
@@ -1177,6 +1246,10 @@ pub mod transform {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 }],
             };
 
@@ -1205,6 +1278,10 @@ pub mod transform {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 }],
             };
 
@@ -1248,6 +1325,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let new_statute = StatuteNode {
@@ -1261,6 +1342,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let diff = diff_statutes(&old_statute, &new_statute);
@@ -1290,6 +1375,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let new_statute = StatuteNode {
@@ -1305,6 +1394,10 @@ pub mod transform {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let diff = diff_statutes(&old_statute, &new_statute);

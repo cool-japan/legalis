@@ -779,6 +779,864 @@ impl GeneratedAudio {
     }
 }
 
+/// Legal document analysis module for multi-modal inputs.
+pub mod legal_document_analysis {
+    use serde::{Deserialize, Serialize};
+
+    /// Types of legal documents that can be analyzed.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum LegalDocumentType {
+        /// Contract or agreement.
+        Contract,
+        /// Court filing or pleading.
+        CourtFiling,
+        /// Legal brief or memorandum.
+        Brief,
+        /// Certificate or official document.
+        Certificate,
+        /// Historical legal document.
+        Historical,
+        /// Evidence document.
+        Evidence,
+        /// Signature page.
+        Signature,
+        /// General legal document.
+        General,
+    }
+
+    /// Configuration for legal document analysis.
+    #[derive(Debug, Clone)]
+    pub struct LegalDocAnalysisConfig {
+        /// Type of legal document being analyzed.
+        pub document_type: LegalDocumentType,
+        /// Whether to extract signatures.
+        pub extract_signatures: bool,
+        /// Whether to extract seals/stamps.
+        pub extract_seals: bool,
+        /// Whether to perform OCR on handwriting.
+        pub ocr_handwriting: bool,
+        /// Whether to analyze document layout.
+        pub analyze_layout: bool,
+        /// Whether to extract metadata (dates, parties, etc.).
+        pub extract_metadata: bool,
+    }
+
+    impl Default for LegalDocAnalysisConfig {
+        fn default() -> Self {
+            Self {
+                document_type: LegalDocumentType::General,
+                extract_signatures: true,
+                extract_seals: true,
+                ocr_handwriting: false,
+                analyze_layout: true,
+                extract_metadata: true,
+            }
+        }
+    }
+
+    impl LegalDocAnalysisConfig {
+        /// Creates a new config with default values.
+        pub fn new(document_type: LegalDocumentType) -> Self {
+            Self {
+                document_type,
+                ..Default::default()
+            }
+        }
+
+        /// Enables signature extraction.
+        pub fn with_signature_extraction(mut self, enable: bool) -> Self {
+            self.extract_signatures = enable;
+            self
+        }
+
+        /// Enables seal/stamp extraction.
+        pub fn with_seal_extraction(mut self, enable: bool) -> Self {
+            self.extract_seals = enable;
+            self
+        }
+
+        /// Enables handwriting OCR.
+        pub fn with_handwriting_ocr(mut self, enable: bool) -> Self {
+            self.ocr_handwriting = enable;
+            self
+        }
+
+        /// Enables layout analysis.
+        pub fn with_layout_analysis(mut self, enable: bool) -> Self {
+            self.analyze_layout = enable;
+            self
+        }
+
+        /// Enables metadata extraction.
+        pub fn with_metadata_extraction(mut self, enable: bool) -> Self {
+            self.extract_metadata = enable;
+            self
+        }
+    }
+
+    /// Result of legal document analysis.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct LegalDocAnalysisResult {
+        /// Extracted text content.
+        pub text: String,
+        /// Detected signatures.
+        pub signatures: Vec<SignatureInfo>,
+        /// Detected seals/stamps.
+        pub seals: Vec<SealInfo>,
+        /// Handwritten text (if OCR was performed).
+        pub handwritten_text: Vec<HandwritingInfo>,
+        /// Document layout information.
+        pub layout: Option<DocumentLayout>,
+        /// Extracted metadata.
+        pub metadata: LegalDocMetadata,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// Information about a detected signature.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SignatureInfo {
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// Type of signature (handwritten, digital, stamp).
+        pub signature_type: SignatureType,
+        /// Extracted signer name (if available).
+        pub signer_name: Option<String>,
+        /// Date of signature (if available).
+        pub date: Option<String>,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// Type of signature.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SignatureType {
+        /// Handwritten signature.
+        Handwritten,
+        /// Digital signature.
+        Digital,
+        /// Signature stamp.
+        Stamp,
+        /// Unknown type.
+        Unknown,
+    }
+
+    /// Information about a detected seal/stamp.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SealInfo {
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// Type of seal (notary, corporate, government).
+        pub seal_type: SealType,
+        /// Extracted text from the seal.
+        pub text: Option<String>,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// Type of seal/stamp.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SealType {
+        /// Notary seal.
+        Notary,
+        /// Corporate seal.
+        Corporate,
+        /// Government seal.
+        Government,
+        /// Court seal.
+        Court,
+        /// Unknown type.
+        Unknown,
+    }
+
+    /// Information about handwritten text.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct HandwritingInfo {
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// Transcribed text.
+        pub text: String,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// Document layout information.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct DocumentLayout {
+        /// Number of pages.
+        pub page_count: usize,
+        /// Sections detected in the document.
+        pub sections: Vec<LayoutSection>,
+        /// Headers detected.
+        pub headers: Vec<String>,
+        /// Footers detected.
+        pub footers: Vec<String>,
+        /// Table of contents (if detected).
+        pub toc: Vec<TocEntry>,
+    }
+
+    /// A section in the document layout.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct LayoutSection {
+        /// Section title.
+        pub title: String,
+        /// Page number where section starts.
+        pub page: usize,
+        /// Section type (heading, paragraph, list, table).
+        pub section_type: SectionType,
+        /// Nested subsections.
+        pub subsections: Vec<LayoutSection>,
+    }
+
+    /// Type of layout section.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SectionType {
+        /// Heading.
+        Heading,
+        /// Paragraph.
+        Paragraph,
+        /// List (bulleted or numbered).
+        List,
+        /// Table.
+        Table,
+        /// Block quote.
+        BlockQuote,
+        /// Code block.
+        CodeBlock,
+    }
+
+    /// Table of contents entry.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TocEntry {
+        /// Entry title.
+        pub title: String,
+        /// Page number.
+        pub page: usize,
+        /// Level (1 for top-level, 2 for sub-level, etc.).
+        pub level: usize,
+    }
+
+    /// Metadata extracted from a legal document.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct LegalDocMetadata {
+        /// Document title.
+        pub title: Option<String>,
+        /// Document date.
+        pub date: Option<String>,
+        /// Parties involved.
+        pub parties: Vec<String>,
+        /// Jurisdiction.
+        pub jurisdiction: Option<String>,
+        /// Court (if applicable).
+        pub court: Option<String>,
+        /// Case number (if applicable).
+        pub case_number: Option<String>,
+        /// Document type description.
+        pub doc_type: Option<String>,
+        /// Language.
+        pub language: Option<String>,
+    }
+
+    impl LegalDocAnalysisResult {
+        /// Creates a new empty analysis result.
+        pub fn new(text: impl Into<String>) -> Self {
+            Self {
+                text: text.into(),
+                signatures: Vec::new(),
+                seals: Vec::new(),
+                handwritten_text: Vec::new(),
+                layout: None,
+                metadata: LegalDocMetadata::default(),
+                confidence: 0.0,
+            }
+        }
+
+        /// Returns true if signatures were detected.
+        pub fn has_signatures(&self) -> bool {
+            !self.signatures.is_empty()
+        }
+
+        /// Returns true if seals were detected.
+        pub fn has_seals(&self) -> bool {
+            !self.seals.is_empty()
+        }
+
+        /// Returns true if handwritten text was detected.
+        pub fn has_handwriting(&self) -> bool {
+            !self.handwritten_text.is_empty()
+        }
+
+        /// Returns the number of pages in the document.
+        pub fn page_count(&self) -> usize {
+            self.layout.as_ref().map_or(1, |l| l.page_count)
+        }
+    }
+
+    impl Default for LegalDocMetadata {
+        fn default() -> Self {
+            Self {
+                title: None,
+                date: None,
+                parties: Vec::new(),
+                jurisdiction: None,
+                court: None,
+                case_number: None,
+                doc_type: None,
+                language: None,
+            }
+        }
+    }
+
+    impl LegalDocMetadata {
+        /// Creates a new empty metadata object.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Adds a party to the metadata.
+        pub fn add_party(mut self, party: impl Into<String>) -> Self {
+            self.parties.push(party.into());
+            self
+        }
+
+        /// Sets the document title.
+        pub fn with_title(mut self, title: impl Into<String>) -> Self {
+            self.title = Some(title.into());
+            self
+        }
+
+        /// Sets the document date.
+        pub fn with_date(mut self, date: impl Into<String>) -> Self {
+            self.date = Some(date.into());
+            self
+        }
+
+        /// Sets the jurisdiction.
+        pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+            self.jurisdiction = Some(jurisdiction.into());
+            self
+        }
+    }
+}
+
+/// PDF parsing utilities for legal documents.
+pub mod pdf_parsing {
+    use super::legal_document_analysis::*;
+    use super::*;
+
+    /// Configuration for PDF parsing.
+    #[derive(Debug, Clone)]
+    pub struct PdfParseConfig {
+        /// Whether to extract text.
+        pub extract_text: bool,
+        /// Whether to extract images.
+        pub extract_images: bool,
+        /// Whether to preserve layout.
+        pub preserve_layout: bool,
+        /// Whether to extract tables.
+        pub extract_tables: bool,
+        /// Whether to perform OCR on images.
+        pub ocr_images: bool,
+        /// Analysis configuration for legal documents.
+        pub legal_analysis: Option<LegalDocAnalysisConfig>,
+    }
+
+    impl Default for PdfParseConfig {
+        fn default() -> Self {
+            Self {
+                extract_text: true,
+                extract_images: false,
+                preserve_layout: true,
+                extract_tables: false,
+                ocr_images: false,
+                legal_analysis: None,
+            }
+        }
+    }
+
+    impl PdfParseConfig {
+        /// Creates a new PDF parse config with default values.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Enables text extraction.
+        pub fn with_text_extraction(mut self, enable: bool) -> Self {
+            self.extract_text = enable;
+            self
+        }
+
+        /// Enables image extraction.
+        pub fn with_image_extraction(mut self, enable: bool) -> Self {
+            self.extract_images = enable;
+            self
+        }
+
+        /// Enables layout preservation.
+        pub fn with_layout_preservation(mut self, enable: bool) -> Self {
+            self.preserve_layout = enable;
+            self
+        }
+
+        /// Enables table extraction.
+        pub fn with_table_extraction(mut self, enable: bool) -> Self {
+            self.extract_tables = enable;
+            self
+        }
+
+        /// Enables OCR on images.
+        pub fn with_ocr(mut self, enable: bool) -> Self {
+            self.ocr_images = enable;
+            self
+        }
+
+        /// Sets legal document analysis configuration.
+        pub fn with_legal_analysis(mut self, config: LegalDocAnalysisConfig) -> Self {
+            self.legal_analysis = Some(config);
+            self
+        }
+    }
+
+    /// Result of PDF parsing.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PdfParseResult {
+        /// Extracted text content.
+        pub text: String,
+        /// Extracted images.
+        pub images: Vec<ExtractedImage>,
+        /// Extracted tables.
+        pub tables: Vec<ExtractedTable>,
+        /// Page information.
+        pub pages: Vec<PageInfo>,
+        /// Legal document analysis result (if requested).
+        pub legal_analysis: Option<LegalDocAnalysisResult>,
+    }
+
+    /// Information about an extracted image from a PDF.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ExtractedImage {
+        /// Page number where the image was found.
+        pub page: usize,
+        /// Image data as base64.
+        pub data: String,
+        /// MIME type.
+        pub mime_type: String,
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// OCR text from the image (if OCR was performed).
+        pub ocr_text: Option<String>,
+    }
+
+    /// Information about an extracted table from a PDF.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ExtractedTable {
+        /// Page number where the table was found.
+        pub page: usize,
+        /// Table caption (if available).
+        pub caption: Option<String>,
+        /// Table headers.
+        pub headers: Vec<String>,
+        /// Table rows.
+        pub rows: Vec<Vec<String>>,
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+    }
+
+    /// Information about a PDF page.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PageInfo {
+        /// Page number (1-indexed).
+        pub page_number: usize,
+        /// Page width in points.
+        pub width: f32,
+        /// Page height in points.
+        pub height: f32,
+        /// Text content on this page.
+        pub text: String,
+        /// Number of images on this page.
+        pub image_count: usize,
+        /// Number of tables on this page.
+        pub table_count: usize,
+    }
+
+    impl PdfParseResult {
+        /// Creates a new empty PDF parse result.
+        pub fn new() -> Self {
+            Self {
+                text: String::new(),
+                images: Vec::new(),
+                tables: Vec::new(),
+                pages: Vec::new(),
+                legal_analysis: None,
+            }
+        }
+
+        /// Returns the number of pages in the PDF.
+        pub fn page_count(&self) -> usize {
+            self.pages.len()
+        }
+
+        /// Returns true if the PDF contains images.
+        pub fn has_images(&self) -> bool {
+            !self.images.is_empty()
+        }
+
+        /// Returns true if the PDF contains tables.
+        pub fn has_tables(&self) -> bool {
+            !self.tables.is_empty()
+        }
+
+        /// Gets text from a specific page.
+        pub fn page_text(&self, page: usize) -> Option<&str> {
+            self.pages
+                .iter()
+                .find(|p| p.page_number == page)
+                .map(|p| p.text.as_str())
+        }
+    }
+
+    impl Default for PdfParseResult {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Audio transcription utilities for court recordings and legal audio.
+pub mod audio_transcription {
+    use super::*;
+
+    /// Configuration for audio transcription.
+    #[derive(Debug, Clone)]
+    pub struct TranscriptionConfig {
+        /// Language code (e.g., "en", "es", "fr").
+        pub language: Option<String>,
+        /// Whether to include timestamps.
+        pub timestamps: bool,
+        /// Whether to identify speakers (diarization).
+        pub speaker_diarization: bool,
+        /// Whether to add punctuation.
+        pub add_punctuation: bool,
+        /// Acoustic model to use (if applicable).
+        pub acoustic_model: Option<String>,
+        /// Whether to filter profanity.
+        pub filter_profanity: bool,
+    }
+
+    impl Default for TranscriptionConfig {
+        fn default() -> Self {
+            Self {
+                language: None,
+                timestamps: true,
+                speaker_diarization: false,
+                add_punctuation: true,
+                acoustic_model: None,
+                filter_profanity: false,
+            }
+        }
+    }
+
+    impl TranscriptionConfig {
+        /// Creates a new transcription config with default values.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Sets the language code.
+        pub fn with_language(mut self, language: impl Into<String>) -> Self {
+            self.language = Some(language.into());
+            self
+        }
+
+        /// Enables or disables timestamps.
+        pub fn with_timestamps(mut self, enable: bool) -> Self {
+            self.timestamps = enable;
+            self
+        }
+
+        /// Enables or disables speaker diarization.
+        pub fn with_speaker_diarization(mut self, enable: bool) -> Self {
+            self.speaker_diarization = enable;
+            self
+        }
+
+        /// Enables or disables punctuation.
+        pub fn with_punctuation(mut self, enable: bool) -> Self {
+            self.add_punctuation = enable;
+            self
+        }
+    }
+
+    /// Result of audio transcription.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TranscriptionResult {
+        /// Full transcript text.
+        pub text: String,
+        /// Segments with timestamps.
+        pub segments: Vec<TranscriptSegment>,
+        /// Identified speakers (if diarization was performed).
+        pub speakers: Vec<SpeakerInfo>,
+        /// Language detected (if not specified).
+        pub detected_language: Option<String>,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// A segment of transcribed audio with timing information.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TranscriptSegment {
+        /// Start time in seconds.
+        pub start: f32,
+        /// End time in seconds.
+        pub end: f32,
+        /// Transcribed text for this segment.
+        pub text: String,
+        /// Speaker ID (if diarization was performed).
+        pub speaker: Option<usize>,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+    }
+
+    /// Information about an identified speaker.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SpeakerInfo {
+        /// Speaker ID.
+        pub id: usize,
+        /// Speaker label (if known).
+        pub label: Option<String>,
+        /// Total speaking time in seconds.
+        pub total_time: f32,
+        /// Number of segments spoken.
+        pub segment_count: usize,
+    }
+
+    impl TranscriptionResult {
+        /// Creates a new transcription result.
+        pub fn new(text: impl Into<String>) -> Self {
+            Self {
+                text: text.into(),
+                segments: Vec::new(),
+                speakers: Vec::new(),
+                detected_language: None,
+                confidence: 0.0,
+            }
+        }
+
+        /// Returns the total duration of the transcription in seconds.
+        pub fn duration(&self) -> f32 {
+            self.segments.last().map_or(0.0, |s| s.end)
+        }
+
+        /// Returns the number of speakers identified.
+        pub fn speaker_count(&self) -> usize {
+            self.speakers.len()
+        }
+
+        /// Gets all text spoken by a specific speaker.
+        pub fn text_by_speaker(&self, speaker_id: usize) -> String {
+            self.segments
+                .iter()
+                .filter(|s| s.speaker == Some(speaker_id))
+                .map(|s| s.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+        }
+    }
+}
+
+/// Video analysis utilities for evidence review.
+pub mod video_analysis {
+    use super::*;
+
+    /// Configuration for video analysis.
+    #[derive(Debug, Clone)]
+    pub struct VideoAnalysisConfig {
+        /// Whether to extract frames at intervals.
+        pub extract_frames: bool,
+        /// Frame extraction interval in seconds (if extract_frames is true).
+        pub frame_interval: f32,
+        /// Whether to perform object detection.
+        pub object_detection: bool,
+        /// Whether to perform face detection.
+        pub face_detection: bool,
+        /// Whether to extract audio and transcribe.
+        pub transcribe_audio: bool,
+        /// Whether to perform scene detection.
+        pub scene_detection: bool,
+    }
+
+    impl Default for VideoAnalysisConfig {
+        fn default() -> Self {
+            Self {
+                extract_frames: true,
+                frame_interval: 1.0,
+                object_detection: false,
+                face_detection: false,
+                transcribe_audio: false,
+                scene_detection: false,
+            }
+        }
+    }
+
+    impl VideoAnalysisConfig {
+        /// Creates a new video analysis config with default values.
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Sets frame extraction settings.
+        pub fn with_frame_extraction(mut self, enable: bool, interval: f32) -> Self {
+            self.extract_frames = enable;
+            self.frame_interval = interval;
+            self
+        }
+
+        /// Enables object detection.
+        pub fn with_object_detection(mut self, enable: bool) -> Self {
+            self.object_detection = enable;
+            self
+        }
+
+        /// Enables face detection.
+        pub fn with_face_detection(mut self, enable: bool) -> Self {
+            self.face_detection = enable;
+            self
+        }
+
+        /// Enables audio transcription.
+        pub fn with_audio_transcription(mut self, enable: bool) -> Self {
+            self.transcribe_audio = enable;
+            self
+        }
+    }
+
+    /// Result of video analysis.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VideoAnalysisResult {
+        /// Video metadata.
+        pub metadata: VideoMetadata,
+        /// Extracted frames.
+        pub frames: Vec<VideoFrame>,
+        /// Detected objects (if object detection was performed).
+        pub objects: Vec<DetectedObject>,
+        /// Detected faces (if face detection was performed).
+        pub faces: Vec<DetectedFace>,
+        /// Audio transcription (if performed).
+        pub transcription: Option<super::audio_transcription::TranscriptionResult>,
+        /// Detected scenes.
+        pub scenes: Vec<SceneInfo>,
+    }
+
+    /// Video metadata.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VideoMetadata {
+        /// Duration in seconds.
+        pub duration: f32,
+        /// Frame rate (FPS).
+        pub fps: f32,
+        /// Width in pixels.
+        pub width: usize,
+        /// Height in pixels.
+        pub height: usize,
+        /// Video codec.
+        pub codec: Option<String>,
+        /// Audio codec.
+        pub audio_codec: Option<String>,
+    }
+
+    /// A frame extracted from a video.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VideoFrame {
+        /// Timestamp in seconds.
+        pub timestamp: f32,
+        /// Frame number.
+        pub frame_number: usize,
+        /// Image data as base64.
+        pub data: String,
+        /// MIME type (usually "image/jpeg" or "image/png").
+        pub mime_type: String,
+        /// Optional description/caption.
+        pub description: Option<String>,
+    }
+
+    /// Information about a detected object in a video.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct DetectedObject {
+        /// Object class/label.
+        pub label: String,
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// Frame number where the object was detected.
+        pub frame: usize,
+        /// Timestamp in seconds.
+        pub timestamp: f32,
+    }
+
+    /// Information about a detected face in a video.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct DetectedFace {
+        /// Confidence score (0.0-1.0).
+        pub confidence: f32,
+        /// Bounding box (x, y, width, height) in normalized coordinates.
+        pub bbox: (f32, f32, f32, f32),
+        /// Frame number where the face was detected.
+        pub frame: usize,
+        /// Timestamp in seconds.
+        pub timestamp: f32,
+        /// Optional face ID (for tracking across frames).
+        pub face_id: Option<usize>,
+    }
+
+    /// Information about a detected scene in a video.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SceneInfo {
+        /// Start time in seconds.
+        pub start: f32,
+        /// End time in seconds.
+        pub end: f32,
+        /// Scene description/summary.
+        pub description: Option<String>,
+        /// Key frame from this scene.
+        pub key_frame: Option<usize>,
+    }
+
+    impl VideoAnalysisResult {
+        /// Creates a new empty video analysis result.
+        pub fn new(metadata: VideoMetadata) -> Self {
+            Self {
+                metadata,
+                frames: Vec::new(),
+                objects: Vec::new(),
+                faces: Vec::new(),
+                transcription: None,
+                scenes: Vec::new(),
+            }
+        }
+
+        /// Returns the video duration in seconds.
+        pub fn duration(&self) -> f32 {
+            self.metadata.duration
+        }
+
+        /// Returns the number of extracted frames.
+        pub fn frame_count(&self) -> usize {
+            self.frames.len()
+        }
+
+        /// Returns true if objects were detected.
+        pub fn has_objects(&self) -> bool {
+            !self.objects.is_empty()
+        }
+
+        /// Returns true if faces were detected.
+        pub fn has_faces(&self) -> bool {
+            !self.faces.is_empty()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

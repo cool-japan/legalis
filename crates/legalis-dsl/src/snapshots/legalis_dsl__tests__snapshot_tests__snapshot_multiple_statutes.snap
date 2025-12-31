@@ -31,7 +31,11 @@ expression: doc
       "amendments": [],
       "supersedes": [],
       "defaults": [],
-      "requires": []
+      "requires": [],
+      "delegates": [],
+      "scope": null,
+      "constraints": [],
+      "priority": null
     },
     {
       "id": "statute2",
@@ -51,7 +55,11 @@ expression: doc
       "defaults": [],
       "requires": [
         "statute1"
-      ]
+      ],
+      "delegates": [],
+      "scope": null,
+      "constraints": [],
+      "priority": null
     }
   ]
 }

@@ -6133,6 +6133,1447 @@ fn check_sequence(
 }
 
 // =============================================================================
+// CTL* (Computation Tree Logic Star) Model Checking
+// =============================================================================
+
+/// CTL* formula combining LTL and CTL path quantifiers.
+/// CTL* is a superset of both LTL and CTL, allowing arbitrary mixing of
+/// path quantifiers (E, A) with linear temporal operators (X, F, G, U, R).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CtlStarFormula {
+    /// Atomic proposition
+    Atom(String),
+    /// Negation
+    Not(Box<CtlStarFormula>),
+    /// Conjunction
+    And(Box<CtlStarFormula>, Box<CtlStarFormula>),
+    /// Disjunction
+    Or(Box<CtlStarFormula>, Box<CtlStarFormula>),
+    /// Implication
+    Implies(Box<CtlStarFormula>, Box<CtlStarFormula>),
+    /// Path quantifier: Exists (there exists a path)
+    Exists(Box<CtlStarPathFormula>),
+    /// Path quantifier: All (for all paths)
+    All(Box<CtlStarPathFormula>),
+}
+
+/// CTL* path formula (used after path quantifiers).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CtlStarPathFormula {
+    /// State formula
+    State(Box<CtlStarFormula>),
+    /// Negation of path formula
+    Not(Box<CtlStarPathFormula>),
+    /// Conjunction of path formulas
+    And(Box<CtlStarPathFormula>, Box<CtlStarPathFormula>),
+    /// Disjunction of path formulas
+    Or(Box<CtlStarPathFormula>, Box<CtlStarPathFormula>),
+    /// Next operator (holds in next state)
+    Next(Box<CtlStarPathFormula>),
+    /// Eventually operator (holds at some future state)
+    Eventually(Box<CtlStarPathFormula>),
+    /// Always operator (holds in all future states)
+    Always(Box<CtlStarPathFormula>),
+    /// Until operator
+    Until(Box<CtlStarPathFormula>, Box<CtlStarPathFormula>),
+    /// Release operator
+    Release(Box<CtlStarPathFormula>, Box<CtlStarPathFormula>),
+}
+
+impl CtlStarFormula {
+    /// Creates an atomic proposition.
+    pub fn atom(name: impl Into<String>) -> Self {
+        Self::Atom(name.into())
+    }
+
+    /// Creates a negation.
+    #[allow(clippy::should_implement_trait)]
+    pub fn not(formula: CtlStarFormula) -> Self {
+        Self::Not(Box::new(formula))
+    }
+
+    /// Creates a conjunction.
+    pub fn and(left: CtlStarFormula, right: CtlStarFormula) -> Self {
+        Self::And(Box::new(left), Box::new(right))
+    }
+
+    /// Creates a disjunction.
+    pub fn or(left: CtlStarFormula, right: CtlStarFormula) -> Self {
+        Self::Or(Box::new(left), Box::new(right))
+    }
+
+    /// Creates an implication.
+    pub fn implies(antecedent: CtlStarFormula, consequent: CtlStarFormula) -> Self {
+        Self::Implies(Box::new(antecedent), Box::new(consequent))
+    }
+
+    /// Creates an exists quantifier.
+    pub fn exists(path_formula: CtlStarPathFormula) -> Self {
+        Self::Exists(Box::new(path_formula))
+    }
+
+    /// Creates an all quantifier.
+    pub fn all(path_formula: CtlStarPathFormula) -> Self {
+        Self::All(Box::new(path_formula))
+    }
+}
+
+impl CtlStarPathFormula {
+    /// Creates a path formula from a state formula.
+    pub fn state(formula: CtlStarFormula) -> Self {
+        Self::State(Box::new(formula))
+    }
+
+    /// Creates a next operator.
+    pub fn next(formula: CtlStarPathFormula) -> Self {
+        Self::Next(Box::new(formula))
+    }
+
+    /// Creates an eventually operator.
+    pub fn eventually(formula: CtlStarPathFormula) -> Self {
+        Self::Eventually(Box::new(formula))
+    }
+
+    /// Creates an always operator.
+    pub fn always(formula: CtlStarPathFormula) -> Self {
+        Self::Always(Box::new(formula))
+    }
+
+    /// Creates an until operator.
+    pub fn until(left: CtlStarPathFormula, right: CtlStarPathFormula) -> Self {
+        Self::Until(Box::new(left), Box::new(right))
+    }
+
+    /// Creates a release operator.
+    pub fn release(left: CtlStarPathFormula, right: CtlStarPathFormula) -> Self {
+        Self::Release(Box::new(left), Box::new(right))
+    }
+}
+
+impl std::fmt::Display for CtlStarFormula {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Atom(name) => write!(f, "{}", name),
+            Self::Not(formula) => write!(f, "¬({})", formula),
+            Self::And(left, right) => write!(f, "({} ∧ {})", left, right),
+            Self::Or(left, right) => write!(f, "({} ∨ {})", left, right),
+            Self::Implies(left, right) => write!(f, "({} → {})", left, right),
+            Self::Exists(path) => write!(f, "E({})", path),
+            Self::All(path) => write!(f, "A({})", path),
+        }
+    }
+}
+
+impl std::fmt::Display for CtlStarPathFormula {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::State(formula) => write!(f, "{}", formula),
+            Self::Not(formula) => write!(f, "¬({})", formula),
+            Self::And(left, right) => write!(f, "({} ∧ {})", left, right),
+            Self::Or(left, right) => write!(f, "({} ∨ {})", left, right),
+            Self::Next(formula) => write!(f, "X({})", formula),
+            Self::Eventually(formula) => write!(f, "F({})", formula),
+            Self::Always(formula) => write!(f, "G({})", formula),
+            Self::Until(left, right) => write!(f, "({} U {})", left, right),
+            Self::Release(left, right) => write!(f, "({} R {})", left, right),
+        }
+    }
+}
+
+/// Verifies a CTL* formula on a transition system.
+///
+/// CTL* combines the expressiveness of both CTL and LTL, allowing
+/// arbitrary nesting of path quantifiers and temporal operators.
+pub fn verify_ctl_star(system: &TransitionSystem, formula: &CtlStarFormula) -> bool {
+    for initial_id in &system.initial_states {
+        if let Some(initial_state) = system.states.get(initial_id) {
+            if !check_ctl_star_state(system, initial_state, formula, &mut HashSet::new()) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+#[allow(dead_code)]
+fn check_ctl_star_state(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    formula: &CtlStarFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    match formula {
+        CtlStarFormula::Atom(prop) => state.satisfies(prop),
+        CtlStarFormula::Not(f) => !check_ctl_star_state(system, state, f, visited),
+        CtlStarFormula::And(left, right) => {
+            check_ctl_star_state(system, state, left, visited)
+                && check_ctl_star_state(system, state, right, visited)
+        }
+        CtlStarFormula::Or(left, right) => {
+            check_ctl_star_state(system, state, left, visited)
+                || check_ctl_star_state(system, state, right, visited)
+        }
+        CtlStarFormula::Implies(left, right) => {
+            !check_ctl_star_state(system, state, left, visited)
+                || check_ctl_star_state(system, state, right, visited)
+        }
+        CtlStarFormula::Exists(path) => {
+            // There exists a path from this state where path formula holds
+            check_ctl_star_exists_path(system, state, path, visited)
+        }
+        CtlStarFormula::All(path) => {
+            // For all paths from this state, path formula holds
+            check_ctl_star_all_paths(system, state, path, visited)
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn check_ctl_star_exists_path(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    path: &CtlStarPathFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    check_ctl_star_path(system, state, path, visited, &mut HashSet::new())
+}
+
+#[allow(dead_code)]
+fn check_ctl_star_all_paths(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    path: &CtlStarPathFormula,
+    visited: &mut HashSet<String>,
+) -> bool {
+    check_ctl_star_path_universal(system, state, path, visited, &mut HashSet::new())
+}
+
+#[allow(dead_code)]
+fn check_ctl_star_path(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    path: &CtlStarPathFormula,
+    visited: &mut HashSet<String>,
+    path_visited: &mut HashSet<String>,
+) -> bool {
+    match path {
+        CtlStarPathFormula::State(formula) => check_ctl_star_state(system, state, formula, visited),
+        CtlStarPathFormula::Not(p) => !check_ctl_star_path(system, state, p, visited, path_visited),
+        CtlStarPathFormula::And(left, right) => {
+            check_ctl_star_path(system, state, left, visited, path_visited)
+                && check_ctl_star_path(system, state, right, visited, path_visited)
+        }
+        CtlStarPathFormula::Or(left, right) => {
+            check_ctl_star_path(system, state, left, visited, path_visited)
+                || check_ctl_star_path(system, state, right, visited, path_visited)
+        }
+        CtlStarPathFormula::Next(p) => {
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return false;
+            }
+            successors
+                .iter()
+                .any(|s| check_ctl_star_path(system, s, p, visited, path_visited))
+        }
+        CtlStarPathFormula::Eventually(p) => {
+            if path_visited.contains(&state.id) {
+                return false;
+            }
+            let mut new_path_visited = path_visited.clone();
+            new_path_visited.insert(state.id.clone());
+
+            if check_ctl_star_path(system, state, p, visited, &mut new_path_visited) {
+                return true;
+            }
+
+            let successors = system.successors(&state.id);
+            successors.iter().any(|s| {
+                check_ctl_star_path(
+                    system,
+                    s,
+                    &CtlStarPathFormula::Eventually(p.clone()),
+                    visited,
+                    &mut new_path_visited,
+                )
+            })
+        }
+        CtlStarPathFormula::Always(p) => {
+            if !check_ctl_star_path(system, state, p, visited, path_visited) {
+                return false;
+            }
+
+            if path_visited.contains(&state.id) {
+                return true; // Cycle where formula always held
+            }
+
+            let mut new_path_visited = path_visited.clone();
+            new_path_visited.insert(state.id.clone());
+
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return true;
+            }
+
+            successors.iter().any(|s| {
+                check_ctl_star_path(
+                    system,
+                    s,
+                    &CtlStarPathFormula::Always(p.clone()),
+                    visited,
+                    &mut new_path_visited,
+                )
+            })
+        }
+        CtlStarPathFormula::Until(left, right) => {
+            if path_visited.contains(&state.id) {
+                return false;
+            }
+            let mut new_path_visited = path_visited.clone();
+            new_path_visited.insert(state.id.clone());
+
+            if check_ctl_star_path(system, state, right, visited, &mut new_path_visited.clone()) {
+                return true;
+            }
+
+            if !check_ctl_star_path(system, state, left, visited, &mut new_path_visited.clone()) {
+                return false;
+            }
+
+            let successors = system.successors(&state.id);
+            successors.iter().any(|s| {
+                check_ctl_star_path(
+                    system,
+                    s,
+                    &CtlStarPathFormula::Until(left.clone(), right.clone()),
+                    visited,
+                    &mut new_path_visited,
+                )
+            })
+        }
+        CtlStarPathFormula::Release(left, right) => {
+            // p R q = ¬(¬p U ¬q)
+            let not_left = CtlStarPathFormula::Not(left.clone());
+            let not_right = CtlStarPathFormula::Not(right.clone());
+            !check_ctl_star_path(
+                system,
+                state,
+                &CtlStarPathFormula::Until(Box::new(not_left), Box::new(not_right)),
+                visited,
+                path_visited,
+            )
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn check_ctl_star_path_universal(
+    system: &TransitionSystem,
+    state: &TemporalState,
+    path: &CtlStarPathFormula,
+    visited: &mut HashSet<String>,
+    path_visited: &mut HashSet<String>,
+) -> bool {
+    match path {
+        CtlStarPathFormula::State(formula) => check_ctl_star_state(system, state, formula, visited),
+        CtlStarPathFormula::Next(p) => {
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return true;
+            }
+            successors
+                .iter()
+                .all(|s| check_ctl_star_path_universal(system, s, p, visited, path_visited))
+        }
+        CtlStarPathFormula::Always(p) => {
+            if !check_ctl_star_path_universal(system, state, p, visited, path_visited) {
+                return false;
+            }
+
+            if path_visited.contains(&state.id) {
+                return true;
+            }
+
+            let mut new_path_visited = path_visited.clone();
+            new_path_visited.insert(state.id.clone());
+
+            let successors = system.successors(&state.id);
+            if successors.is_empty() {
+                return true;
+            }
+
+            successors.iter().all(|s| {
+                check_ctl_star_path_universal(
+                    system,
+                    s,
+                    &CtlStarPathFormula::Always(p.clone()),
+                    visited,
+                    &mut new_path_visited,
+                )
+            })
+        }
+        _ => {
+            // For other operators, use existential checking
+            check_ctl_star_path(system, state, path, visited, path_visited)
+        }
+    }
+}
+
+// =============================================================================
+// Timed Automata Verification
+// =============================================================================
+
+/// A clock variable used in timed automata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Clock {
+    /// Clock name
+    pub name: String,
+}
+
+impl Clock {
+    /// Creates a new clock.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+/// Clock constraint in timed automata.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ClockConstraint {
+    /// clock < value
+    Less(Clock, u64),
+    /// clock <= value
+    LessOrEqual(Clock, u64),
+    /// clock > value
+    Greater(Clock, u64),
+    /// clock >= value
+    GreaterOrEqual(Clock, u64),
+    /// clock == value
+    Equal(Clock, u64),
+    /// Conjunction of constraints
+    And(Box<ClockConstraint>, Box<ClockConstraint>),
+}
+
+impl ClockConstraint {
+    /// Checks if the constraint is satisfied given clock valuations.
+    pub fn satisfied(&self, valuations: &HashMap<String, u64>) -> bool {
+        match self {
+            Self::Less(clock, value) => valuations.get(&clock.name).is_some_and(|v| v < value),
+            Self::LessOrEqual(clock, value) => {
+                valuations.get(&clock.name).is_some_and(|v| v <= value)
+            }
+            Self::Greater(clock, value) => valuations.get(&clock.name).is_some_and(|v| v > value),
+            Self::GreaterOrEqual(clock, value) => {
+                valuations.get(&clock.name).is_some_and(|v| v >= value)
+            }
+            Self::Equal(clock, value) => valuations.get(&clock.name) == Some(value),
+            Self::And(left, right) => left.satisfied(valuations) && right.satisfied(valuations),
+        }
+    }
+}
+
+/// A location (state) in a timed automaton.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TimedLocation {
+    /// Location identifier
+    pub id: String,
+    /// Invariant that must hold while in this location
+    pub invariant: Option<ClockConstraint>,
+    /// Whether this is an accepting/final location
+    pub accepting: bool,
+}
+
+impl TimedLocation {
+    /// Creates a new timed location.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            invariant: None,
+            accepting: false,
+        }
+    }
+
+    /// Sets the invariant.
+    pub fn with_invariant(mut self, constraint: ClockConstraint) -> Self {
+        self.invariant = Some(constraint);
+        self
+    }
+
+    /// Marks this location as accepting.
+    pub fn accepting(mut self) -> Self {
+        self.accepting = true;
+        self
+    }
+}
+
+/// A transition in a timed automaton.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TimedTransition {
+    /// Source location
+    pub from: String,
+    /// Target location
+    pub to: String,
+    /// Guard (condition) for the transition
+    pub guard: Option<ClockConstraint>,
+    /// Clocks to reset on this transition
+    pub resets: Vec<Clock>,
+    /// Action/label for the transition
+    pub action: String,
+}
+
+impl TimedTransition {
+    /// Creates a new timed transition.
+    pub fn new(from: impl Into<String>, to: impl Into<String>, action: impl Into<String>) -> Self {
+        Self {
+            from: from.into(),
+            to: to.into(),
+            guard: None,
+            resets: Vec::new(),
+            action: action.into(),
+        }
+    }
+
+    /// Sets the guard.
+    pub fn with_guard(mut self, constraint: ClockConstraint) -> Self {
+        self.guard = Some(constraint);
+        self
+    }
+
+    /// Adds a clock to reset.
+    pub fn with_reset(mut self, clock: Clock) -> Self {
+        self.resets.push(clock);
+        self
+    }
+}
+
+/// A timed automaton.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TimedAutomaton {
+    /// All locations in the automaton
+    pub locations: HashMap<String, TimedLocation>,
+    /// All transitions
+    pub transitions: Vec<TimedTransition>,
+    /// Initial location
+    pub initial: String,
+    /// All clock variables
+    pub clocks: Vec<Clock>,
+}
+
+impl TimedAutomaton {
+    /// Creates a new timed automaton.
+    pub fn new(initial: impl Into<String>) -> Self {
+        Self {
+            locations: HashMap::new(),
+            transitions: Vec::new(),
+            initial: initial.into(),
+            clocks: Vec::new(),
+        }
+    }
+
+    /// Adds a location.
+    pub fn add_location(&mut self, location: TimedLocation) {
+        self.locations.insert(location.id.clone(), location);
+    }
+
+    /// Adds a transition.
+    pub fn add_transition(&mut self, transition: TimedTransition) {
+        self.transitions.push(transition);
+    }
+
+    /// Adds a clock.
+    pub fn add_clock(&mut self, clock: Clock) {
+        self.clocks.push(clock);
+    }
+}
+
+/// Configuration of a timed automaton (location + clock valuations).
+#[derive(Debug, Clone)]
+struct TimedConfiguration {
+    location: String,
+    valuations: HashMap<String, u64>,
+}
+
+impl TimedConfiguration {
+    fn new(location: String) -> Self {
+        Self {
+            location,
+            valuations: HashMap::new(),
+        }
+    }
+}
+
+/// Verifies reachability in a timed automaton.
+///
+/// Returns true if an accepting location is reachable from the initial location
+/// within the given time bound.
+pub fn verify_timed_reachability(automaton: &TimedAutomaton, time_bound: u64) -> bool {
+    let mut queue = std::collections::VecDeque::new();
+    let mut visited = HashSet::new();
+
+    // Initialize all clocks to 0
+    let mut initial_config = TimedConfiguration::new(automaton.initial.clone());
+    for clock in &automaton.clocks {
+        initial_config.valuations.insert(clock.name.clone(), 0);
+    }
+
+    queue.push_back((initial_config, 0u64));
+
+    while let Some((config, time)) = queue.pop_front() {
+        if time > time_bound {
+            continue;
+        }
+
+        let state_key = format!("{:?}", (&config.location, &config.valuations));
+        if visited.contains(&state_key) {
+            continue;
+        }
+        visited.insert(state_key);
+
+        // Check if we reached an accepting location
+        if let Some(location) = automaton.locations.get(&config.location) {
+            if location.accepting {
+                return true;
+            }
+
+            // Check invariant
+            if let Some(ref invariant) = location.invariant {
+                if !invariant.satisfied(&config.valuations) {
+                    continue;
+                }
+            }
+        }
+
+        // Try all transitions from current location
+        for transition in &automaton.transitions {
+            if transition.from != config.location {
+                continue;
+            }
+
+            // Check guard
+            if let Some(ref guard) = transition.guard {
+                if !guard.satisfied(&config.valuations) {
+                    continue;
+                }
+            }
+
+            // Apply transition
+            let mut new_valuations = config.valuations.clone();
+
+            // Reset specified clocks
+            for clock in &transition.resets {
+                new_valuations.insert(clock.name.clone(), 0);
+            }
+
+            // Advance time (simplified: advance by 1 time unit)
+            for (_, val) in new_valuations.iter_mut() {
+                *val += 1;
+            }
+
+            let new_config = TimedConfiguration {
+                location: transition.to.clone(),
+                valuations: new_valuations,
+            };
+
+            queue.push_back((new_config, time + 1));
+        }
+    }
+
+    false
+}
+
+// =============================================================================
+// Temporal Property Synthesis
+// =============================================================================
+
+/// Synthesizes a temporal property from positive and negative examples.
+///
+/// Given traces that should satisfy a property (positive examples) and
+/// traces that should not (negative examples), this function attempts to
+/// synthesize an LTL formula that separates them.
+///
+/// Returns the synthesized LTL formula if successful.
+pub fn synthesize_ltl_property(
+    positive_traces: &[Vec<HashSet<String>>],
+    negative_traces: &[Vec<HashSet<String>>],
+) -> Option<LtlFormula> {
+    // Extract all atomic propositions from traces
+    let mut all_props = HashSet::new();
+    for trace in positive_traces.iter().chain(negative_traces.iter()) {
+        for state_props in trace {
+            all_props.extend(state_props.clone());
+        }
+    }
+
+    if all_props.is_empty() {
+        return None;
+    }
+
+    // Try simple patterns first
+    // Pattern 1: Always(p) - some proposition must always hold
+    for prop in &all_props {
+        let formula = LtlFormula::always(LtlFormula::atom(prop));
+        if check_formula_on_traces(&formula, positive_traces, true)
+            && check_formula_on_traces(&formula, negative_traces, false)
+        {
+            return Some(formula);
+        }
+    }
+
+    // Pattern 2: Eventually(p) - some proposition must eventually hold
+    for prop in &all_props {
+        let formula = LtlFormula::eventually(LtlFormula::atom(prop));
+        if check_formula_on_traces(&formula, positive_traces, true)
+            && check_formula_on_traces(&formula, negative_traces, false)
+        {
+            return Some(formula);
+        }
+    }
+
+    // Pattern 3: Always(p → Eventually(q)) - response pattern
+    for p in &all_props {
+        for q in &all_props {
+            if p == q {
+                continue;
+            }
+            let formula = LtlFormula::always(LtlFormula::implies(
+                LtlFormula::atom(p),
+                LtlFormula::eventually(LtlFormula::atom(q)),
+            ));
+            if check_formula_on_traces(&formula, positive_traces, true)
+                && check_formula_on_traces(&formula, negative_traces, false)
+            {
+                return Some(formula);
+            }
+        }
+    }
+
+    // Pattern 4: Always(p) ∧ Eventually(q) - invariant with liveness
+    for p in &all_props {
+        for q in &all_props {
+            let formula = LtlFormula::and(
+                LtlFormula::always(LtlFormula::atom(p)),
+                LtlFormula::eventually(LtlFormula::atom(q)),
+            );
+            if check_formula_on_traces(&formula, positive_traces, true)
+                && check_formula_on_traces(&formula, negative_traces, false)
+            {
+                return Some(formula);
+            }
+        }
+    }
+
+    // If no simple pattern works, return None
+    // In a production system, this would try more complex patterns or use
+    // machine learning techniques
+    None
+}
+
+/// Checks if a formula holds on all traces with expected result.
+fn check_formula_on_traces(
+    formula: &LtlFormula,
+    traces: &[Vec<HashSet<String>>],
+    expected: bool,
+) -> bool {
+    for trace in traces {
+        let holds = check_formula_on_trace(formula, trace);
+        if holds != expected {
+            return false;
+        }
+    }
+    true
+}
+
+/// Checks if an LTL formula holds on a single trace.
+fn check_formula_on_trace(formula: &LtlFormula, trace: &[HashSet<String>]) -> bool {
+    if trace.is_empty() {
+        return false;
+    }
+    check_ltl_at_position(formula, trace, 0)
+}
+
+/// Checks if an LTL formula holds starting at a specific position in a trace.
+fn check_ltl_at_position(formula: &LtlFormula, trace: &[HashSet<String>], pos: usize) -> bool {
+    if pos >= trace.len() {
+        return false;
+    }
+
+    match formula {
+        LtlFormula::Atom(prop) => trace[pos].contains(prop),
+        LtlFormula::Not(f) => !check_ltl_at_position(f, trace, pos),
+        LtlFormula::And(left, right) => {
+            check_ltl_at_position(left, trace, pos) && check_ltl_at_position(right, trace, pos)
+        }
+        LtlFormula::Or(left, right) => {
+            check_ltl_at_position(left, trace, pos) || check_ltl_at_position(right, trace, pos)
+        }
+        LtlFormula::Implies(left, right) => {
+            !check_ltl_at_position(left, trace, pos) || check_ltl_at_position(right, trace, pos)
+        }
+        LtlFormula::Next(f) => {
+            if pos + 1 < trace.len() {
+                check_ltl_at_position(f, trace, pos + 1)
+            } else {
+                false
+            }
+        }
+        LtlFormula::Eventually(f) => (pos..trace.len()).any(|i| check_ltl_at_position(f, trace, i)),
+        LtlFormula::Always(f) => (pos..trace.len()).all(|i| check_ltl_at_position(f, trace, i)),
+        LtlFormula::Until(left, right) => {
+            for i in pos..trace.len() {
+                if check_ltl_at_position(right, trace, i) {
+                    return (pos..i).all(|j| check_ltl_at_position(left, trace, j));
+                }
+            }
+            false
+        }
+        LtlFormula::Release(left, right) => {
+            // p R q = ¬(¬p U ¬q)
+            let not_left = LtlFormula::not(*left.clone());
+            let not_right = LtlFormula::not(*right.clone());
+            !check_ltl_at_position(&LtlFormula::until(not_left, not_right), trace, pos)
+        }
+    }
+}
+
+/// Synthesizes a CTL property from a transition system and examples.
+///
+/// This is a simplified synthesis that generates basic CTL patterns
+/// based on the structure of the transition system and desired properties.
+pub fn synthesize_ctl_property(
+    system: &TransitionSystem,
+    desired_properties: &[String],
+) -> Option<CtlFormula> {
+    if desired_properties.is_empty() {
+        return None;
+    }
+
+    // Pattern 1: EF(p) - there exists a path to a state where p holds
+    for prop in desired_properties {
+        let formula = CtlFormula::exists_eventually(CtlFormula::atom(prop));
+        if verify_ctl(system, &formula) {
+            return Some(formula);
+        }
+    }
+
+    // Pattern 2: AF(p) - all paths eventually reach a state where p holds
+    for prop in desired_properties {
+        let formula = CtlFormula::all_eventually(CtlFormula::atom(prop));
+        if verify_ctl(system, &formula) {
+            return Some(formula);
+        }
+    }
+
+    // Pattern 3: AG(p) - p holds in all reachable states
+    for prop in desired_properties {
+        let formula = CtlFormula::all_always(CtlFormula::atom(prop));
+        if verify_ctl(system, &formula) {
+            return Some(formula);
+        }
+    }
+
+    None
+}
+
+// =============================================================================
+// CI/CD Integration
+// =============================================================================
+
+/// CI/CD platform type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CiPlatform {
+    /// GitHub Actions
+    GitHubActions,
+    /// GitLab CI/CD
+    GitLabCI,
+    /// Jenkins
+    Jenkins,
+    /// CircleCI
+    CircleCI,
+    /// Travis CI
+    TravisCI,
+}
+
+impl std::fmt::Display for CiPlatform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::GitHubActions => write!(f, "GitHub Actions"),
+            Self::GitLabCI => write!(f, "GitLab CI"),
+            Self::Jenkins => write!(f, "Jenkins"),
+            Self::CircleCI => write!(f, "CircleCI"),
+            Self::TravisCI => write!(f, "Travis CI"),
+        }
+    }
+}
+
+/// CI/CD configuration generator.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CiConfig {
+    /// Platform type
+    pub platform: CiPlatform,
+    /// Verification command
+    pub verify_command: String,
+    /// Fail on warnings
+    pub fail_on_warnings: bool,
+    /// Upload reports as artifacts
+    pub upload_reports: bool,
+    /// Report output directory
+    pub report_dir: String,
+}
+
+impl CiConfig {
+    /// Creates a new CI configuration.
+    pub fn new(platform: CiPlatform) -> Self {
+        Self {
+            platform,
+            verify_command: "cargo run --bin legalis-verify".to_string(),
+            fail_on_warnings: true,
+            upload_reports: true,
+            report_dir: "verification-reports".to_string(),
+        }
+    }
+
+    /// Sets the verification command.
+    pub fn with_command(mut self, command: impl Into<String>) -> Self {
+        self.verify_command = command.into();
+        self
+    }
+
+    /// Sets whether to fail on warnings.
+    pub fn fail_on_warnings(mut self, fail: bool) -> Self {
+        self.fail_on_warnings = fail;
+        self
+    }
+
+    /// Sets whether to upload reports.
+    pub fn upload_reports(mut self, upload: bool) -> Self {
+        self.upload_reports = upload;
+        self
+    }
+
+    /// Sets the report directory.
+    pub fn with_report_dir(mut self, dir: impl Into<String>) -> Self {
+        self.report_dir = dir.into();
+        self
+    }
+
+    /// Generates the CI configuration file content.
+    pub fn generate(&self) -> String {
+        match self.platform {
+            CiPlatform::GitHubActions => self.generate_github_actions(),
+            CiPlatform::GitLabCI => self.generate_gitlab_ci(),
+            CiPlatform::Jenkins => self.generate_jenkins(),
+            CiPlatform::CircleCI => self.generate_circleci(),
+            CiPlatform::TravisCI => self.generate_travis(),
+        }
+    }
+
+    fn generate_github_actions(&self) -> String {
+        format!(
+            r#"name: Statute Verification
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Run Statute Verification
+      run: {}
+      continue-on-error: {}
+
+    - name: Upload Verification Reports
+      if: {}
+      uses: actions/upload-artifact@v3
+      with:
+        name: verification-reports
+        path: {}
+        retention-days: 30
+"#,
+            self.verify_command,
+            if self.fail_on_warnings {
+                "false"
+            } else {
+                "true"
+            },
+            if self.upload_reports {
+                "always()"
+            } else {
+                "false"
+            },
+            self.report_dir
+        )
+    }
+
+    fn generate_gitlab_ci(&self) -> String {
+        format!(
+            r#"verify:
+  stage: test
+  image: rust:latest
+  script:
+    - {}
+  artifacts:
+    when: {}
+    paths:
+      - {}
+    expire_in: 30 days
+  allow_failure: {}
+"#,
+            self.verify_command,
+            if self.upload_reports {
+                "always"
+            } else {
+                "on_success"
+            },
+            self.report_dir,
+            !self.fail_on_warnings
+        )
+    }
+
+    fn generate_jenkins(&self) -> String {
+        format!(
+            r#"pipeline {{
+    agent any
+
+    stages {{
+        stage('Verify Statutes') {{
+            steps {{
+                sh '{}'
+            }}
+        }}
+    }}
+
+    post {{
+        always {{
+            archiveArtifacts artifacts: '{}/**', allowEmptyArchive: true
+        }}
+    }}
+}}
+"#,
+            self.verify_command, self.report_dir
+        )
+    }
+
+    fn generate_circleci(&self) -> String {
+        format!(
+            r#"version: 2.1
+
+jobs:
+  verify:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Run Verification
+          command: {}
+      - store_artifacts:
+          path: {}
+          destination: verification-reports
+
+workflows:
+  verify-statutes:
+    jobs:
+      - verify
+"#,
+            self.verify_command, self.report_dir
+        )
+    }
+
+    fn generate_travis(&self) -> String {
+        format!(
+            r#"language: rust
+rust:
+  - stable
+
+script:
+  - {}
+
+after_script:
+  - tar -czf verification-reports.tar.gz {}
+
+deploy:
+  provider: releases
+  file: verification-reports.tar.gz
+  skip_cleanup: true
+  on:
+    tags: true
+"#,
+            self.verify_command, self.report_dir
+        )
+    }
+}
+
+// =============================================================================
+// Git Pre-commit Hooks
+// =============================================================================
+
+/// Git pre-commit hook configuration.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PreCommitHook {
+    /// Verification command to run
+    pub verify_command: String,
+    /// Fail commit on verification errors
+    pub fail_on_errors: bool,
+    /// Fail commit on warnings
+    pub fail_on_warnings: bool,
+    /// Show verbose output
+    pub verbose: bool,
+}
+
+impl PreCommitHook {
+    /// Creates a new pre-commit hook configuration.
+    pub fn new() -> Self {
+        Self {
+            verify_command: "cargo run --bin legalis-verify".to_string(),
+            fail_on_errors: true,
+            fail_on_warnings: false,
+            verbose: true,
+        }
+    }
+
+    /// Sets the verification command.
+    pub fn with_command(mut self, command: impl Into<String>) -> Self {
+        self.verify_command = command.into();
+        self
+    }
+
+    /// Sets whether to fail on errors.
+    pub fn fail_on_errors(mut self, fail: bool) -> Self {
+        self.fail_on_errors = fail;
+        self
+    }
+
+    /// Sets whether to fail on warnings.
+    pub fn fail_on_warnings(mut self, fail: bool) -> Self {
+        self.fail_on_warnings = fail;
+        self
+    }
+
+    /// Sets verbose mode.
+    pub fn verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
+    }
+
+    /// Generates the pre-commit hook script.
+    pub fn generate(&self) -> String {
+        format!(
+            r#"#!/bin/bash
+# Legalis Statute Verification Pre-commit Hook
+
+echo "Running statute verification..."
+
+# Run verification
+{}
+
+VERIFICATION_EXIT_CODE=$?
+
+if [ $VERIFICATION_EXIT_CODE -ne 0 ]; then
+    if [ "{}" = "true" ]; then
+        echo "ERROR: Statute verification failed!"
+        echo "Commit aborted. Please fix verification errors before committing."
+        exit 1
+    else
+        echo "WARNING: Statute verification found issues."
+    fi
+fi
+
+if [ "{}" = "true" ]; then
+    echo "Verification details:"
+    cat verification-report.txt 2>/dev/null || echo "No detailed report available"
+fi
+
+echo "Verification complete."
+exit 0
+"#,
+            self.verify_command,
+            if self.fail_on_errors { "true" } else { "false" },
+            if self.verbose { "true" } else { "false" }
+        )
+    }
+
+    /// Installs the pre-commit hook to a git repository.
+    pub fn install(&self, repo_path: &str) -> std::io::Result<()> {
+        use std::fs;
+        use std::io::Write;
+        use std::path::Path;
+
+        let hook_path = Path::new(repo_path).join(".git/hooks/pre-commit");
+        let hook_content = self.generate();
+
+        let mut file = fs::File::create(&hook_path)?;
+        file.write_all(hook_content.as_bytes())?;
+
+        // Make executable on Unix systems
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&hook_path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&hook_path, perms)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Default for PreCommitHook {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// Verification API Service
+// =============================================================================
+
+/// API request for statute verification.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerificationRequest {
+    /// Statutes to verify
+    pub statutes: Vec<Statute>,
+    /// Constitutional principles to check
+    pub principles: Vec<PrincipleCheck>,
+    /// Request ID for tracking
+    pub request_id: Option<String>,
+    /// Client identifier
+    pub client_id: Option<String>,
+}
+
+impl VerificationRequest {
+    /// Creates a new verification request.
+    pub fn new(statutes: Vec<Statute>) -> Self {
+        Self {
+            statutes,
+            principles: Vec::new(),
+            request_id: None,
+            client_id: None,
+        }
+    }
+
+    /// Sets the principles to check.
+    pub fn with_principles(mut self, principles: Vec<PrincipleCheck>) -> Self {
+        self.principles = principles;
+        self
+    }
+
+    /// Sets the request ID.
+    pub fn with_request_id(mut self, id: impl Into<String>) -> Self {
+        self.request_id = Some(id.into());
+        self
+    }
+
+    /// Sets the client ID.
+    pub fn with_client_id(mut self, id: impl Into<String>) -> Self {
+        self.client_id = Some(id.into());
+        self
+    }
+}
+
+/// API response for statute verification.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerificationResponse {
+    /// Request ID (echoed from request)
+    pub request_id: Option<String>,
+    /// Verification results for each statute
+    pub results: Vec<VerificationResult>,
+    /// Overall success status
+    pub success: bool,
+    /// Error count
+    pub error_count: usize,
+    /// Warning count
+    pub warning_count: usize,
+    /// Processing time in milliseconds
+    pub processing_time_ms: u64,
+}
+
+impl VerificationResponse {
+    /// Creates a new verification response.
+    pub fn new(request_id: Option<String>, results: Vec<VerificationResult>) -> Self {
+        let error_count: usize = results.iter().map(|r| r.errors.len()).sum();
+        let warning_count: usize = results.iter().map(|r| r.warnings.len()).sum();
+        let success = results.iter().all(|r| r.passed);
+
+        Self {
+            request_id,
+            results,
+            success,
+            error_count,
+            warning_count,
+            processing_time_ms: 0,
+        }
+    }
+
+    /// Sets the processing time.
+    pub fn with_processing_time(mut self, time_ms: u64) -> Self {
+        self.processing_time_ms = time_ms;
+        self
+    }
+}
+
+// =============================================================================
+// Notification System
+// =============================================================================
+
+/// Notification type.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum NotificationType {
+    /// Verification completed successfully
+    Success,
+    /// Verification completed with warnings
+    Warning,
+    /// Verification failed with errors
+    Error,
+    /// Verification encountered a critical issue
+    Critical,
+}
+
+/// Notification channel.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum NotificationChannel {
+    /// Webhook URL
+    Webhook {
+        url: String,
+        headers: HashMap<String, String>,
+    },
+    /// Email notification
+    Email { to: Vec<String>, subject: String },
+    /// Callback function (not serializable, use name reference)
+    Callback { name: String },
+}
+
+/// Notification configuration.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NotificationConfig {
+    /// Channels to notify
+    pub channels: Vec<NotificationChannel>,
+    /// Notification types to trigger on
+    pub trigger_on: Vec<NotificationType>,
+    /// Include detailed results in notification
+    pub include_details: bool,
+}
+
+impl NotificationConfig {
+    /// Creates a new notification configuration.
+    pub fn new() -> Self {
+        Self {
+            channels: Vec::new(),
+            trigger_on: vec![NotificationType::Error, NotificationType::Critical],
+            include_details: true,
+        }
+    }
+
+    /// Adds a webhook channel.
+    pub fn with_webhook(mut self, url: impl Into<String>) -> Self {
+        self.channels.push(NotificationChannel::Webhook {
+            url: url.into(),
+            headers: HashMap::new(),
+        });
+        self
+    }
+
+    /// Adds an email channel.
+    pub fn with_email(mut self, to: Vec<String>, subject: impl Into<String>) -> Self {
+        self.channels.push(NotificationChannel::Email {
+            to,
+            subject: subject.into(),
+        });
+        self
+    }
+
+    /// Sets the trigger types.
+    pub fn trigger_on(mut self, types: Vec<NotificationType>) -> Self {
+        self.trigger_on = types;
+        self
+    }
+
+    /// Sets whether to include details.
+    pub fn include_details(mut self, include: bool) -> Self {
+        self.include_details = include;
+        self
+    }
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Notification message.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NotificationMessage {
+    /// Notification type
+    pub notification_type: NotificationType,
+    /// Title/subject
+    pub title: String,
+    /// Message body
+    pub message: String,
+    /// Timestamp (RFC 3339 format)
+    pub timestamp: String,
+    /// Verification results (if include_details is true)
+    pub results: Option<Vec<VerificationResult>>,
+}
+
+impl NotificationMessage {
+    /// Creates a new notification message.
+    pub fn new(
+        notification_type: NotificationType,
+        title: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            notification_type,
+            title: title.into(),
+            message: message.into(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            results: None,
+        }
+    }
+
+    /// Adds verification results.
+    pub fn with_results(mut self, results: Vec<VerificationResult>) -> Self {
+        self.results = Some(results);
+        self
+    }
+
+    /// Converts to JSON for webhook delivery.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+/// Sends a notification based on configuration.
+///
+/// This is a mock implementation. In production, this would actually send
+/// webhooks, emails, or invoke callbacks.
+pub fn send_notification(config: &NotificationConfig, message: &NotificationMessage) -> bool {
+    if !config.trigger_on.contains(&message.notification_type) {
+        return false;
+    }
+
+    // In a real implementation, this would:
+    // 1. Send HTTP POST to webhook URLs
+    // 2. Send emails via SMTP
+    // 3. Invoke callback functions
+    // For now, we just return success
+    !config.channels.is_empty()
+}
+
+// =============================================================================
 // Principle Definition DSL
 // =============================================================================
 
@@ -16738,5 +18179,747 @@ mod tests {
 
         assert!(report.contains("# Custom Section Title"));
         assert!(report.contains("This is custom content for testing."));
+    }
+
+    // =============================================================================
+    // CTL* Model Checking Tests
+    // =============================================================================
+
+    #[test]
+    fn test_ctl_star_basic_formula() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1").with_proposition("q");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_transition("s0", "s1");
+        system.add_initial_state("s0");
+
+        // E F(q) - there exists a path where q eventually holds
+        let formula = CtlStarFormula::exists(CtlStarPathFormula::eventually(
+            CtlStarPathFormula::state(CtlStarFormula::atom("q")),
+        ));
+
+        assert!(verify_ctl_star(&system, &formula));
+    }
+
+    #[test]
+    fn test_ctl_star_all_paths() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1").with_proposition("p");
+        let s2 = TemporalState::new("s2").with_proposition("p");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s0", "s1");
+        system.add_transition("s0", "s2");
+        system.add_initial_state("s0");
+
+        // A X(p) - on all paths, p holds in the next state
+        let formula = CtlStarFormula::all(CtlStarPathFormula::next(CtlStarPathFormula::state(
+            CtlStarFormula::atom("p"),
+        )));
+
+        assert!(verify_ctl_star(&system, &formula));
+    }
+
+    #[test]
+    fn test_ctl_star_display() {
+        let formula = CtlStarFormula::exists(CtlStarPathFormula::eventually(
+            CtlStarPathFormula::state(CtlStarFormula::atom("p")),
+        ));
+
+        let display = format!("{}", formula);
+        assert!(display.contains("E"));
+        assert!(display.contains("F"));
+        assert!(display.contains("p"));
+    }
+
+    #[test]
+    fn test_ctl_star_path_formula_display() {
+        let path = CtlStarPathFormula::until(
+            CtlStarPathFormula::state(CtlStarFormula::atom("p")),
+            CtlStarPathFormula::state(CtlStarFormula::atom("q")),
+        );
+
+        let display = format!("{}", path);
+        assert!(display.contains("U"));
+        assert!(display.contains("p"));
+        assert!(display.contains("q"));
+    }
+
+    #[test]
+    fn test_ctl_star_complex_formula() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1")
+            .with_proposition("p")
+            .with_proposition("q");
+        let s2 = TemporalState::new("s2").with_proposition("q");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_state(s2);
+        system.add_transition("s0", "s1");
+        system.add_transition("s1", "s2");
+        system.add_initial_state("s0");
+
+        // E (p U q) - there exists a path where p holds until q becomes true
+        let formula = CtlStarFormula::exists(CtlStarPathFormula::until(
+            CtlStarPathFormula::state(CtlStarFormula::atom("p")),
+            CtlStarPathFormula::state(CtlStarFormula::atom("q")),
+        ));
+
+        assert!(verify_ctl_star(&system, &formula));
+    }
+
+    #[test]
+    fn test_ctl_star_always_path_formula() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1").with_proposition("p");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_transition("s0", "s1");
+        system.add_transition("s1", "s1"); // Self-loop
+        system.add_initial_state("s0");
+
+        // E G(p) - there exists a path where p always holds
+        let formula = CtlStarFormula::exists(CtlStarPathFormula::always(
+            CtlStarPathFormula::state(CtlStarFormula::atom("p")),
+        ));
+
+        assert!(verify_ctl_star(&system, &formula));
+    }
+
+    // =============================================================================
+    // Timed Automata Verification Tests
+    // =============================================================================
+
+    #[test]
+    fn test_clock_creation() {
+        let clock = Clock::new("x");
+        assert_eq!(clock.name, "x");
+    }
+
+    #[test]
+    fn test_clock_constraint_satisfied() {
+        let clock = Clock::new("x");
+        let mut valuations = HashMap::new();
+        valuations.insert("x".to_string(), 5);
+
+        let constraint = ClockConstraint::Less(clock.clone(), 10);
+        assert!(constraint.satisfied(&valuations));
+
+        let constraint2 = ClockConstraint::Greater(clock, 10);
+        assert!(!constraint2.satisfied(&valuations));
+    }
+
+    #[test]
+    fn test_clock_constraint_equal() {
+        let clock = Clock::new("x");
+        let mut valuations = HashMap::new();
+        valuations.insert("x".to_string(), 5);
+
+        let constraint = ClockConstraint::Equal(clock, 5);
+        assert!(constraint.satisfied(&valuations));
+    }
+
+    #[test]
+    fn test_clock_constraint_and() {
+        let clock1 = Clock::new("x");
+        let clock2 = Clock::new("y");
+        let mut valuations = HashMap::new();
+        valuations.insert("x".to_string(), 5);
+        valuations.insert("y".to_string(), 10);
+
+        let constraint = ClockConstraint::And(
+            Box::new(ClockConstraint::Greater(clock1, 3)),
+            Box::new(ClockConstraint::Less(clock2, 15)),
+        );
+
+        assert!(constraint.satisfied(&valuations));
+    }
+
+    #[test]
+    fn test_timed_location_creation() {
+        let location = TimedLocation::new("l0").accepting();
+
+        assert_eq!(location.id, "l0");
+        assert!(location.accepting);
+        assert!(location.invariant.is_none());
+    }
+
+    #[test]
+    fn test_timed_location_with_invariant() {
+        let clock = Clock::new("x");
+        let invariant = ClockConstraint::Less(clock, 10);
+        let location = TimedLocation::new("l0").with_invariant(invariant);
+
+        assert!(location.invariant.is_some());
+    }
+
+    #[test]
+    fn test_timed_transition_creation() {
+        let transition = TimedTransition::new("l0", "l1", "action");
+
+        assert_eq!(transition.from, "l0");
+        assert_eq!(transition.to, "l1");
+        assert_eq!(transition.action, "action");
+        assert!(transition.guard.is_none());
+        assert!(transition.resets.is_empty());
+    }
+
+    #[test]
+    fn test_timed_transition_with_guard_and_reset() {
+        let clock = Clock::new("x");
+        let guard = ClockConstraint::Greater(clock.clone(), 5);
+        let transition = TimedTransition::new("l0", "l1", "action")
+            .with_guard(guard)
+            .with_reset(clock);
+
+        assert!(transition.guard.is_some());
+        assert_eq!(transition.resets.len(), 1);
+    }
+
+    #[test]
+    fn test_timed_automaton_creation() {
+        let mut automaton = TimedAutomaton::new("l0");
+
+        let clock = Clock::new("x");
+        automaton.add_clock(clock);
+
+        let location = TimedLocation::new("l0");
+        automaton.add_location(location);
+
+        assert_eq!(automaton.initial, "l0");
+        assert_eq!(automaton.clocks.len(), 1);
+        assert_eq!(automaton.locations.len(), 1);
+    }
+
+    #[test]
+    fn test_timed_reachability_simple() {
+        let mut automaton = TimedAutomaton::new("l0");
+
+        let clock = Clock::new("x");
+        automaton.add_clock(clock.clone());
+
+        let l0 = TimedLocation::new("l0");
+        let l1 = TimedLocation::new("l1").accepting();
+
+        automaton.add_location(l0);
+        automaton.add_location(l1);
+
+        let transition = TimedTransition::new("l0", "l1", "action");
+        automaton.add_transition(transition);
+
+        assert!(verify_timed_reachability(&automaton, 100));
+    }
+
+    #[test]
+    fn test_timed_reachability_with_reset() {
+        let mut automaton = TimedAutomaton::new("l0");
+
+        let clock = Clock::new("x");
+        automaton.add_clock(clock.clone());
+
+        let l0 = TimedLocation::new("l0");
+        let l1 = TimedLocation::new("l1").accepting();
+
+        automaton.add_location(l0);
+        automaton.add_location(l1);
+
+        // Test transition with clock reset
+        let transition = TimedTransition::new("l0", "l1", "action").with_reset(clock);
+        automaton.add_transition(transition);
+
+        assert!(verify_timed_reachability(&automaton, 100));
+    }
+
+    #[test]
+    fn test_timed_reachability_unreachable() {
+        let mut automaton = TimedAutomaton::new("l0");
+
+        let clock = Clock::new("x");
+        automaton.add_clock(clock.clone());
+
+        let l0 = TimedLocation::new("l0");
+        let l1 = TimedLocation::new("l1").accepting();
+
+        automaton.add_location(l0);
+        automaton.add_location(l1);
+
+        // No transitions, so l1 is unreachable
+        assert!(!verify_timed_reachability(&automaton, 100));
+    }
+
+    // =============================================================================
+    // Temporal Property Synthesis Tests
+    // =============================================================================
+
+    #[test]
+    fn test_synthesize_ltl_always() {
+        // Positive traces: p always holds
+        let mut state1 = HashSet::new();
+        state1.insert("p".to_string());
+
+        let mut state2 = HashSet::new();
+        state2.insert("p".to_string());
+
+        let positive_traces = vec![vec![state1.clone(), state2.clone()]];
+
+        // Negative traces: p doesn't always hold
+        let mut state3 = HashSet::new();
+        state3.insert("q".to_string());
+
+        let negative_traces = vec![vec![state3]];
+
+        let formula = synthesize_ltl_property(&positive_traces, &negative_traces);
+        assert!(formula.is_some());
+
+        let formula = formula.unwrap();
+        assert!(matches!(formula, LtlFormula::Always(_)));
+    }
+
+    #[test]
+    fn test_synthesize_ltl_eventually() {
+        // Positive traces: q eventually holds
+        let mut state1 = HashSet::new();
+        state1.insert("p".to_string());
+
+        let mut state2 = HashSet::new();
+        state2.insert("q".to_string());
+
+        let positive_traces = vec![vec![state1.clone(), state2.clone()]];
+
+        // Negative traces: q never holds
+        let mut state3 = HashSet::new();
+        state3.insert("p".to_string());
+
+        let negative_traces = vec![vec![state3.clone(), state3]];
+
+        let formula = synthesize_ltl_property(&positive_traces, &negative_traces);
+        assert!(formula.is_some());
+    }
+
+    #[test]
+    fn test_synthesize_ltl_empty_traces() {
+        let positive_traces: Vec<Vec<HashSet<String>>> = vec![];
+        let negative_traces: Vec<Vec<HashSet<String>>> = vec![];
+
+        let formula = synthesize_ltl_property(&positive_traces, &negative_traces);
+        assert!(formula.is_none());
+    }
+
+    #[test]
+    fn test_synthesize_ltl_no_separation() {
+        // Both positive and negative have the same pattern
+        let mut state1 = HashSet::new();
+        state1.insert("p".to_string());
+
+        let positive_traces = vec![vec![state1.clone()]];
+        let negative_traces = vec![vec![state1]];
+
+        let formula = synthesize_ltl_property(&positive_traces, &negative_traces);
+        // Should return None as no pattern can separate them
+        assert!(formula.is_none());
+    }
+
+    #[test]
+    fn test_synthesize_ctl_exists_eventually() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1").with_proposition("q");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_transition("s0", "s1");
+        system.add_initial_state("s0");
+
+        let desired_properties = vec!["q".to_string()];
+        let formula = synthesize_ctl_property(&system, &desired_properties);
+
+        assert!(formula.is_some());
+        assert!(matches!(formula.unwrap(), CtlFormula::ExistsEventually(_)));
+    }
+
+    #[test]
+    fn test_synthesize_ctl_all_always() {
+        let mut system = TransitionSystem::new();
+
+        let s0 = TemporalState::new("s0").with_proposition("p");
+        let s1 = TemporalState::new("s1").with_proposition("p");
+
+        system.add_state(s0);
+        system.add_state(s1);
+        system.add_transition("s0", "s1");
+        system.add_transition("s1", "s1");
+        system.add_initial_state("s0");
+
+        let desired_properties = vec!["p".to_string()];
+        let formula = synthesize_ctl_property(&system, &desired_properties);
+
+        assert!(formula.is_some());
+    }
+
+    #[test]
+    fn test_synthesize_ctl_empty_properties() {
+        let system = TransitionSystem::new();
+        let desired_properties: Vec<String> = vec![];
+
+        let formula = synthesize_ctl_property(&system, &desired_properties);
+        assert!(formula.is_none());
+    }
+
+    #[test]
+    fn test_check_formula_on_trace() {
+        let mut state1 = HashSet::new();
+        state1.insert("p".to_string());
+
+        let mut state2 = HashSet::new();
+        state2.insert("q".to_string());
+
+        let trace = vec![state1, state2];
+
+        let formula = LtlFormula::eventually(LtlFormula::atom("q"));
+        assert!(check_formula_on_trace(&formula, &trace));
+
+        let formula2 = LtlFormula::always(LtlFormula::atom("p"));
+        assert!(!check_formula_on_trace(&formula2, &trace));
+    }
+
+    // =============================================================================
+    // CI/CD Integration Tests
+    // =============================================================================
+
+    #[test]
+    fn test_ci_platform_display() {
+        assert_eq!(CiPlatform::GitHubActions.to_string(), "GitHub Actions");
+        assert_eq!(CiPlatform::GitLabCI.to_string(), "GitLab CI");
+        assert_eq!(CiPlatform::Jenkins.to_string(), "Jenkins");
+        assert_eq!(CiPlatform::CircleCI.to_string(), "CircleCI");
+        assert_eq!(CiPlatform::TravisCI.to_string(), "Travis CI");
+    }
+
+    #[test]
+    fn test_ci_config_creation() {
+        let config = CiConfig::new(CiPlatform::GitHubActions);
+
+        assert_eq!(config.platform, CiPlatform::GitHubActions);
+        assert!(config.fail_on_warnings);
+        assert!(config.upload_reports);
+        assert_eq!(config.report_dir, "verification-reports");
+    }
+
+    #[test]
+    fn test_ci_config_builder() {
+        let config = CiConfig::new(CiPlatform::GitLabCI)
+            .with_command("custom-verify-cmd")
+            .fail_on_warnings(false)
+            .upload_reports(false)
+            .with_report_dir("custom-reports");
+
+        assert_eq!(config.verify_command, "custom-verify-cmd");
+        assert!(!config.fail_on_warnings);
+        assert!(!config.upload_reports);
+        assert_eq!(config.report_dir, "custom-reports");
+    }
+
+    #[test]
+    fn test_ci_config_github_actions() {
+        let config = CiConfig::new(CiPlatform::GitHubActions);
+        let output = config.generate();
+
+        assert!(output.contains("name: Statute Verification"));
+        assert!(output.contains("actions/checkout"));
+        assert!(output.contains("cargo run --bin legalis-verify"));
+        assert!(output.contains("upload-artifact"));
+    }
+
+    #[test]
+    fn test_ci_config_gitlab_ci() {
+        let config = CiConfig::new(CiPlatform::GitLabCI);
+        let output = config.generate();
+
+        assert!(output.contains("verify:"));
+        assert!(output.contains("stage: test"));
+        assert!(output.contains("artifacts:"));
+    }
+
+    #[test]
+    fn test_ci_config_jenkins() {
+        let config = CiConfig::new(CiPlatform::Jenkins);
+        let output = config.generate();
+
+        assert!(output.contains("pipeline"));
+        assert!(output.contains("stage('Verify Statutes')"));
+        assert!(output.contains("archiveArtifacts"));
+    }
+
+    #[test]
+    fn test_ci_config_circleci() {
+        let config = CiConfig::new(CiPlatform::CircleCI);
+        let output = config.generate();
+
+        assert!(output.contains("version: 2.1"));
+        assert!(output.contains("jobs:"));
+        assert!(output.contains("store_artifacts"));
+    }
+
+    #[test]
+    fn test_ci_config_travis() {
+        let config = CiConfig::new(CiPlatform::TravisCI);
+        let output = config.generate();
+
+        assert!(output.contains("language: rust"));
+        assert!(output.contains("script:"));
+    }
+
+    // =============================================================================
+    // Git Pre-commit Hook Tests
+    // =============================================================================
+
+    #[test]
+    fn test_precommit_hook_creation() {
+        let hook = PreCommitHook::new();
+
+        assert!(hook.fail_on_errors);
+        assert!(!hook.fail_on_warnings);
+        assert!(hook.verbose);
+    }
+
+    #[test]
+    fn test_precommit_hook_builder() {
+        let hook = PreCommitHook::new()
+            .with_command("custom-verify")
+            .fail_on_errors(false)
+            .fail_on_warnings(true)
+            .verbose(false);
+
+        assert_eq!(hook.verify_command, "custom-verify");
+        assert!(!hook.fail_on_errors);
+        assert!(hook.fail_on_warnings);
+        assert!(!hook.verbose);
+    }
+
+    #[test]
+    fn test_precommit_hook_generation() {
+        let hook = PreCommitHook::new();
+        let script = hook.generate();
+
+        assert!(script.contains("#!/bin/bash"));
+        assert!(script.contains("Running statute verification"));
+        assert!(script.contains("cargo run --bin legalis-verify"));
+        assert!(script.contains("VERIFICATION_EXIT_CODE"));
+    }
+
+    #[test]
+    fn test_precommit_hook_default() {
+        let hook = PreCommitHook::default();
+        assert!(hook.fail_on_errors);
+    }
+
+    // =============================================================================
+    // Verification API Service Tests
+    // =============================================================================
+
+    #[test]
+    fn test_verification_request_creation() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+        let request = VerificationRequest::new(statutes.clone());
+
+        assert_eq!(request.statutes.len(), 1);
+        assert!(request.principles.is_empty());
+        assert!(request.request_id.is_none());
+        assert!(request.client_id.is_none());
+    }
+
+    #[test]
+    fn test_verification_request_builder() {
+        let statutes = vec![Statute::new("law1", "Test Law", Effect::grant("benefit"))];
+        let principles = vec![PrincipleCheck::NoDiscrimination];
+
+        let request = VerificationRequest::new(statutes)
+            .with_principles(principles.clone())
+            .with_request_id("req-123")
+            .with_client_id("client-456");
+
+        assert_eq!(request.request_id, Some("req-123".to_string()));
+        assert_eq!(request.client_id, Some("client-456".to_string()));
+        assert_eq!(request.principles.len(), 1);
+    }
+
+    #[test]
+    fn test_verification_response_creation() {
+        let results = vec![VerificationResult::pass(), VerificationResult::pass()];
+        let response = VerificationResponse::new(Some("req-123".to_string()), results);
+
+        assert_eq!(response.request_id, Some("req-123".to_string()));
+        assert_eq!(response.results.len(), 2);
+        assert!(response.success);
+        assert_eq!(response.error_count, 0);
+        assert_eq!(response.warning_count, 0);
+    }
+
+    #[test]
+    fn test_verification_response_with_errors() {
+        let result = VerificationResult::fail(vec![VerificationError::DeadStatute {
+            statute_id: "dead_law".to_string(),
+        }]);
+
+        let results = vec![result];
+        let response = VerificationResponse::new(None, results);
+
+        assert!(!response.success);
+        assert_eq!(response.error_count, 1);
+    }
+
+    #[test]
+    fn test_verification_response_processing_time() {
+        let results = vec![VerificationResult::pass()];
+        let response = VerificationResponse::new(None, results).with_processing_time(150);
+
+        assert_eq!(response.processing_time_ms, 150);
+    }
+
+    // =============================================================================
+    // Notification System Tests
+    // =============================================================================
+
+    #[test]
+    fn test_notification_config_creation() {
+        let config = NotificationConfig::new();
+
+        assert!(config.channels.is_empty());
+        assert_eq!(config.trigger_on.len(), 2);
+        assert!(config.trigger_on.contains(&NotificationType::Error));
+        assert!(config.trigger_on.contains(&NotificationType::Critical));
+        assert!(config.include_details);
+    }
+
+    #[test]
+    fn test_notification_config_webhooks() {
+        let config = NotificationConfig::new().with_webhook("https://example.com/webhook");
+
+        assert_eq!(config.channels.len(), 1);
+        match &config.channels[0] {
+            NotificationChannel::Webhook { url, .. } => {
+                assert_eq!(url, "https://example.com/webhook");
+            }
+            _ => panic!("Expected webhook channel"),
+        }
+    }
+
+    #[test]
+    fn test_notification_config_email() {
+        let config = NotificationConfig::new()
+            .with_email(vec!["test@example.com".to_string()], "Verification Alert");
+
+        assert_eq!(config.channels.len(), 1);
+        match &config.channels[0] {
+            NotificationChannel::Email { to, subject } => {
+                assert_eq!(to.len(), 1);
+                assert_eq!(subject, "Verification Alert");
+            }
+            _ => panic!("Expected email channel"),
+        }
+    }
+
+    #[test]
+    fn test_notification_config_trigger() {
+        let config = NotificationConfig::new()
+            .trigger_on(vec![NotificationType::Success, NotificationType::Warning]);
+
+        assert_eq!(config.trigger_on.len(), 2);
+        assert!(config.trigger_on.contains(&NotificationType::Success));
+        assert!(config.trigger_on.contains(&NotificationType::Warning));
+    }
+
+    #[test]
+    fn test_notification_config_details() {
+        let config = NotificationConfig::new().include_details(false);
+
+        assert!(!config.include_details);
+    }
+
+    #[test]
+    fn test_notification_config_default() {
+        let config = NotificationConfig::default();
+        assert!(config.channels.is_empty());
+    }
+
+    #[test]
+    fn test_notification_message_creation() {
+        let message = NotificationMessage::new(
+            NotificationType::Success,
+            "Verification Passed",
+            "All statutes verified successfully",
+        );
+
+        assert_eq!(message.notification_type, NotificationType::Success);
+        assert_eq!(message.title, "Verification Passed");
+        assert_eq!(message.message, "All statutes verified successfully");
+        assert!(!message.timestamp.is_empty());
+        assert!(message.results.is_none());
+    }
+
+    #[test]
+    fn test_notification_message_with_results() {
+        let results = vec![VerificationResult::pass()];
+        let message = NotificationMessage::new(NotificationType::Success, "Test", "Test message")
+            .with_results(results);
+
+        assert!(message.results.is_some());
+        assert_eq!(message.results.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_notification_message_to_json() {
+        let message = NotificationMessage::new(
+            NotificationType::Error,
+            "Verification Failed",
+            "Errors found",
+        );
+
+        let json = message.to_json();
+        assert!(json.contains("\"notification_type\":"));
+        assert!(json.contains("\"title\":"));
+        assert!(json.contains("\"message\":"));
+    }
+
+    #[test]
+    fn test_send_notification_no_trigger() {
+        let config = NotificationConfig::new().with_webhook("https://example.com");
+        let message = NotificationMessage::new(NotificationType::Success, "Test", "Message");
+
+        // Success is not in default triggers (only Error and Critical)
+        assert!(!send_notification(&config, &message));
+    }
+
+    #[test]
+    fn test_send_notification_with_trigger() {
+        let config = NotificationConfig::new().with_webhook("https://example.com");
+        let message = NotificationMessage::new(NotificationType::Error, "Test", "Message");
+
+        // Error is in default triggers
+        assert!(send_notification(&config, &message));
+    }
+
+    #[test]
+    fn test_send_notification_no_channels() {
+        let config = NotificationConfig::new();
+        let message = NotificationMessage::new(NotificationType::Error, "Test", "Message");
+
+        // No channels configured
+        assert!(!send_notification(&config, &message));
     }
 }

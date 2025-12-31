@@ -354,6 +354,10 @@ mod tests {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec!["statute-b".to_string()],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 },
                 StatuteNode {
                     id: "statute-b".to_string(),
@@ -366,6 +370,10 @@ mod tests {
                     supersedes: vec!["statute-c".to_string()],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 },
                 StatuteNode {
                     id: "statute-c".to_string(),
@@ -378,6 +386,10 @@ mod tests {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 },
             ],
         }

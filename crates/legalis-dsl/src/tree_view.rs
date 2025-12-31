@@ -557,6 +557,10 @@ mod tests {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             }],
         };
 
@@ -584,6 +588,10 @@ mod tests {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             }],
         };
 

@@ -8797,6 +8797,1540 @@ class LegalisVizComponent extends HTMLElement {{
     }
 }
 
+// ============================================================================
+// v0.2.6: Mobile and Touch Support
+// ============================================================================
+
+/// Touch gesture types for mobile interaction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TouchGesture {
+    /// Pinch to zoom
+    Pinch,
+    /// Pan/drag to move
+    Pan,
+    /// Swipe to navigate
+    Swipe,
+    /// Tap to interact
+    Tap,
+    /// Double tap to zoom
+    DoubleTap,
+}
+
+/// Configuration for touch gesture support.
+#[derive(Debug, Clone)]
+pub struct TouchGestureConfig {
+    /// Enable pinch-to-zoom gesture
+    pub enable_pinch: bool,
+    /// Enable pan gesture
+    pub enable_pan: bool,
+    /// Enable swipe gestures
+    pub enable_swipe: bool,
+    /// Enable tap interactions
+    pub enable_tap: bool,
+    /// Enable double-tap to zoom
+    pub enable_double_tap: bool,
+    /// Minimum distance for swipe (pixels)
+    pub swipe_threshold: f32,
+    /// Minimum zoom scale
+    pub min_zoom: f32,
+    /// Maximum zoom scale
+    pub max_zoom: f32,
+}
+
+impl Default for TouchGestureConfig {
+    fn default() -> Self {
+        Self {
+            enable_pinch: true,
+            enable_pan: true,
+            enable_swipe: true,
+            enable_tap: true,
+            enable_double_tap: true,
+            swipe_threshold: 50.0,
+            min_zoom: 0.5,
+            max_zoom: 3.0,
+        }
+    }
+}
+
+impl TouchGestureConfig {
+    /// Creates a new touch gesture configuration with default settings.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Disables all touch gestures.
+    pub fn disabled() -> Self {
+        Self {
+            enable_pinch: false,
+            enable_pan: false,
+            enable_swipe: false,
+            enable_tap: false,
+            enable_double_tap: false,
+            swipe_threshold: 50.0,
+            min_zoom: 0.5,
+            max_zoom: 3.0,
+        }
+    }
+
+    /// Generates JavaScript code for touch gesture handling.
+    pub fn to_javascript(&self) -> String {
+        if !self.enable_pinch && !self.enable_pan && !self.enable_swipe {
+            return String::new();
+        }
+
+        format!(
+            r#"
+class TouchGestureHandler {{
+    constructor(element, options = {{}}) {{
+        this.element = element;
+        this.enablePinch = {};
+        this.enablePan = {};
+        this.enableSwipe = {};
+        this.enableTap = {};
+        this.enableDoubleTap = {};
+        this.swipeThreshold = {};
+        this.minZoom = {};
+        this.maxZoom = {};
+
+        this.touches = [];
+        this.scale = 1.0;
+        this.translateX = 0;
+        this.translateY = 0;
+        this.initialDistance = 0;
+        this.lastTap = 0;
+
+        this.initEventListeners();
+    }}
+
+    initEventListeners() {{
+        if (this.enablePinch || this.enablePan) {{
+            this.element.addEventListener('touchstart', this.onTouchStart.bind(this));
+            this.element.addEventListener('touchmove', this.onTouchMove.bind(this));
+            this.element.addEventListener('touchend', this.onTouchEnd.bind(this));
+        }}
+
+        if (this.enableTap || this.enableDoubleTap) {{
+            this.element.addEventListener('touchstart', this.onTap.bind(this));
+        }}
+    }}
+
+    onTouchStart(event) {{
+        this.touches = Array.from(event.touches);
+
+        if (this.enablePinch && this.touches.length === 2) {{
+            this.initialDistance = this.getDistance(this.touches[0], this.touches[1]);
+        }}
+    }}
+
+    onTouchMove(event) {{
+        event.preventDefault();
+        this.touches = Array.from(event.touches);
+
+        if (this.enablePinch && this.touches.length === 2) {{
+            const distance = this.getDistance(this.touches[0], this.touches[1]);
+            const scaleDelta = distance / this.initialDistance;
+            this.scale = Math.min(this.maxZoom, Math.max(this.minZoom, this.scale * scaleDelta));
+            this.initialDistance = distance;
+            this.applyTransform();
+        }} else if (this.enablePan && this.touches.length === 1) {{
+            const touch = this.touches[0];
+            if (this.lastTouch) {{
+                this.translateX += touch.clientX - this.lastTouch.clientX;
+                this.translateY += touch.clientY - this.lastTouch.clientY;
+                this.applyTransform();
+            }}
+            this.lastTouch = touch;
+        }}
+    }}
+
+    onTouchEnd(event) {{
+        const remainingTouches = Array.from(event.touches);
+
+        if (this.enableSwipe && this.touches.length === 1 && remainingTouches.length === 0) {{
+            const deltaX = this.touches[0].clientX - (this.lastTouch?.clientX || this.touches[0].clientX);
+            const deltaY = this.touches[0].clientY - (this.lastTouch?.clientY || this.touches[0].clientY);
+
+            if (Math.abs(deltaX) > this.swipeThreshold) {{
+                const direction = deltaX > 0 ? 'right' : 'left';
+                this.element.dispatchEvent(new CustomEvent('swipe', {{ detail: {{ direction }} }}));
+            }} else if (Math.abs(deltaY) > this.swipeThreshold) {{
+                const direction = deltaY > 0 ? 'down' : 'up';
+                this.element.dispatchEvent(new CustomEvent('swipe', {{ detail: {{ direction }} }}));
+            }}
+        }}
+
+        this.touches = remainingTouches;
+        this.lastTouch = null;
+    }}
+
+    onTap(event) {{
+        const now = Date.now();
+        const timeSinceLastTap = now - this.lastTap;
+
+        if (this.enableDoubleTap && timeSinceLastTap < 300) {{
+            // Double tap - zoom in/out
+            if (this.scale === 1.0) {{
+                this.scale = 2.0;
+            }} else {{
+                this.scale = 1.0;
+            }}
+            this.applyTransform();
+            event.preventDefault();
+        }} else if (this.enableTap) {{
+            this.element.dispatchEvent(new CustomEvent('tap', {{
+                detail: {{ x: event.touches[0].clientX, y: event.touches[0].clientY }}
+            }}));
+        }}
+
+        this.lastTap = now;
+    }}
+
+    getDistance(touch1, touch2) {{
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }}
+
+    applyTransform() {{
+        const transform = `translate(${{this.translateX}}px, ${{this.translateY}}px) scale(${{this.scale}})`;
+        this.element.style.transform = transform;
+    }}
+
+    reset() {{
+        this.scale = 1.0;
+        this.translateX = 0;
+        this.translateY = 0;
+        this.applyTransform();
+    }}
+}}
+"#,
+            self.enable_pinch,
+            self.enable_pan,
+            self.enable_swipe,
+            self.enable_tap,
+            self.enable_double_tap,
+            self.swipe_threshold,
+            self.min_zoom,
+            self.max_zoom,
+        )
+    }
+}
+
+/// Configuration for responsive visualization scaling.
+#[derive(Debug, Clone)]
+pub struct ResponsiveScalingConfig {
+    /// Enable responsive scaling
+    pub enabled: bool,
+    /// Breakpoints for different screen sizes (width in pixels)
+    pub breakpoints: Vec<(u32, String)>,
+    /// Scale factor for small screens
+    pub small_screen_scale: f32,
+    /// Scale factor for medium screens
+    pub medium_screen_scale: f32,
+    /// Scale factor for large screens
+    pub large_screen_scale: f32,
+    /// Automatically adjust font sizes
+    pub auto_adjust_fonts: bool,
+}
+
+impl Default for ResponsiveScalingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            breakpoints: vec![
+                (480, "small".to_string()),
+                (768, "medium".to_string()),
+                (1024, "large".to_string()),
+                (1440, "xlarge".to_string()),
+            ],
+            small_screen_scale: 0.7,
+            medium_screen_scale: 0.85,
+            large_screen_scale: 1.0,
+            auto_adjust_fonts: true,
+        }
+    }
+}
+
+impl ResponsiveScalingConfig {
+    /// Creates a new responsive scaling configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Disables responsive scaling.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::default()
+        }
+    }
+
+    /// Generates CSS for responsive scaling.
+    pub fn to_css(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        let mut css = String::new();
+        css.push_str("/* Responsive Scaling */\n");
+        css.push_str("@media (max-width: 480px) {\n");
+        css.push_str(&format!(
+            "  .viz-container {{ transform: scale({}); transform-origin: top left; }}\n",
+            self.small_screen_scale
+        ));
+        if self.auto_adjust_fonts {
+            css.push_str("  .viz-text { font-size: 12px; }\n");
+        }
+        css.push_str("}\n\n");
+
+        css.push_str("@media (min-width: 481px) and (max-width: 768px) {\n");
+        css.push_str(&format!(
+            "  .viz-container {{ transform: scale({}); transform-origin: top left; }}\n",
+            self.medium_screen_scale
+        ));
+        if self.auto_adjust_fonts {
+            css.push_str("  .viz-text { font-size: 14px; }\n");
+        }
+        css.push_str("}\n\n");
+
+        css.push_str("@media (min-width: 769px) {\n");
+        css.push_str(&format!(
+            "  .viz-container {{ transform: scale({}); transform-origin: top left; }}\n",
+            self.large_screen_scale
+        ));
+        if self.auto_adjust_fonts {
+            css.push_str("  .viz-text { font-size: 16px; }\n");
+        }
+        css.push_str("}\n");
+
+        css
+    }
+}
+
+/// Configuration for offline viewing capability.
+#[derive(Debug, Clone)]
+pub struct OfflineConfig {
+    /// Enable offline support
+    pub enabled: bool,
+    /// Cache name for offline assets
+    pub cache_name: String,
+    /// URLs to cache for offline use
+    pub cache_urls: Vec<String>,
+    /// Cache strategy: "cache-first" or "network-first"
+    pub cache_strategy: String,
+}
+
+impl Default for OfflineConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cache_name: "legalis-viz-cache-v1".to_string(),
+            cache_urls: vec![
+                "https://d3js.org/d3.v7.min.js".to_string(),
+                "https://cdn.jsdelivr.net/npm/chart.js".to_string(),
+            ],
+            cache_strategy: "cache-first".to_string(),
+        }
+    }
+}
+
+impl OfflineConfig {
+    /// Creates a new offline configuration.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Disables offline support.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::default()
+        }
+    }
+
+    /// Generates service worker JavaScript for offline support.
+    pub fn to_service_worker(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        let cache_urls = self
+            .cache_urls
+            .iter()
+            .map(|url| format!("'{}'", url))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!(
+            r#"
+// Service Worker for Offline Support
+const CACHE_NAME = '{}';
+const urlsToCache = [{}];
+
+self.addEventListener('install', (event) => {{
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then((cache) => cache.addAll(urlsToCache))
+    );
+}});
+
+self.addEventListener('fetch', (event) => {{
+    event.respondWith(
+        caches.match(event.request)
+            .then((response) => {{
+                if (response && '{}' === 'cache-first') {{
+                    return response;
+                }}
+
+                return fetch(event.request)
+                    .then((fetchResponse) => {{
+                        if (fetchResponse && fetchResponse.status === 200) {{
+                            const responseClone = fetchResponse.clone();
+                            caches.open(CACHE_NAME).then((cache) => {{
+                                cache.put(event.request, responseClone);
+                            }});
+                        }}
+                        return fetchResponse;
+                    }})
+                    .catch(() => response || new Response('Offline'));
+            }})
+    );
+}});
+
+self.addEventListener('activate', (event) => {{
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {{
+            return Promise.all(
+                cacheNames.filter((name) => name !== CACHE_NAME)
+                    .map((name) => caches.delete(name))
+            );
+        }})
+    );
+}});
+"#,
+            self.cache_name, cache_urls, self.cache_strategy
+        )
+    }
+}
+
+/// Configuration for Progressive Web App (PWA) support.
+#[derive(Debug, Clone)]
+pub struct PWAConfig {
+    /// Enable PWA features
+    pub enabled: bool,
+    /// App name
+    pub app_name: String,
+    /// App short name
+    pub app_short_name: String,
+    /// App description
+    pub app_description: String,
+    /// Theme color
+    pub theme_color: String,
+    /// Background color
+    pub background_color: String,
+    /// Display mode: "standalone", "fullscreen", "minimal-ui"
+    pub display_mode: String,
+    /// Icons for PWA
+    pub icons: Vec<(String, String, String)>, // (src, sizes, type)
+}
+
+impl Default for PWAConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            app_name: "Legalis Visualization".to_string(),
+            app_short_name: "Legalis Viz".to_string(),
+            app_description: "Legal statute visualization tool".to_string(),
+            theme_color: "#3498db".to_string(),
+            background_color: "#ffffff".to_string(),
+            display_mode: "standalone".to_string(),
+            icons: vec![],
+        }
+    }
+}
+
+impl PWAConfig {
+    /// Creates a new PWA configuration.
+    pub fn new(app_name: &str) -> Self {
+        Self {
+            app_name: app_name.to_string(),
+            app_short_name: app_name.to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// Sets the app description.
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.app_description = description.to_string();
+        self
+    }
+
+    /// Sets the theme color.
+    pub fn with_theme_color(mut self, color: &str) -> Self {
+        self.theme_color = color.to_string();
+        self
+    }
+
+    /// Adds an icon.
+    pub fn add_icon(mut self, src: &str, sizes: &str, icon_type: &str) -> Self {
+        self.icons
+            .push((src.to_string(), sizes.to_string(), icon_type.to_string()));
+        self
+    }
+
+    /// Generates PWA manifest JSON.
+    pub fn to_manifest_json(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        let icons_json = self
+            .icons
+            .iter()
+            .map(|(src, sizes, icon_type)| {
+                format!(
+                    r#"    {{ "src": "{}", "sizes": "{}", "type": "{}" }}"#,
+                    src, sizes, icon_type
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+
+        format!(
+            r#"{{
+  "name": "{}",
+  "short_name": "{}",
+  "description": "{}",
+  "start_url": "/",
+  "display": "{}",
+  "theme_color": "{}",
+  "background_color": "{}",
+  "icons": [
+{}
+  ]
+}}"#,
+            self.app_name,
+            self.app_short_name,
+            self.app_description,
+            self.display_mode,
+            self.theme_color,
+            self.background_color,
+            icons_json
+        )
+    }
+
+    /// Generates HTML meta tags for PWA.
+    pub fn to_html_meta_tags(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+
+        format!(
+            r#"<meta name="application-name" content="{}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{}">
+<meta name="description" content="{}">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="{}">
+<link rel="manifest" href="/manifest.json">"#,
+            self.app_name, self.app_short_name, self.app_description, self.theme_color
+        )
+    }
+}
+
+/// Mobile and touch support enhancer for visualizations.
+#[derive(Debug, Clone, Default)]
+pub struct MobileTouchEnhancer {
+    touch_config: TouchGestureConfig,
+    responsive_config: ResponsiveScalingConfig,
+    offline_config: OfflineConfig,
+    pwa_config: PWAConfig,
+}
+
+impl MobileTouchEnhancer {
+    /// Creates a new mobile and touch enhancer.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the touch gesture configuration.
+    pub fn with_touch_config(mut self, config: TouchGestureConfig) -> Self {
+        self.touch_config = config;
+        self
+    }
+
+    /// Sets the responsive scaling configuration.
+    pub fn with_responsive_config(mut self, config: ResponsiveScalingConfig) -> Self {
+        self.responsive_config = config;
+        self
+    }
+
+    /// Sets the offline configuration.
+    pub fn with_offline_config(mut self, config: OfflineConfig) -> Self {
+        self.offline_config = config;
+        self
+    }
+
+    /// Sets the PWA configuration.
+    pub fn with_pwa_config(mut self, config: PWAConfig) -> Self {
+        self.pwa_config = config;
+        self
+    }
+
+    /// Generates mobile-optimized HTML for a decision tree.
+    pub fn to_mobile_html(&self, tree: &DecisionTree) -> String {
+        let base_html = tree.to_svg();
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n");
+        html.push_str(&self.pwa_config.to_html_meta_tags());
+        html.push_str("    <title>Mobile Legal Visualization</title>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        * { box-sizing: border-box; margin: 0; padding: 0; }\n");
+        html.push_str("        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: hidden; }\n");
+        html.push_str("        .viz-container { width: 100%; height: 100vh; overflow: hidden; touch-action: none; }\n");
+        html.push_str("        .viz-content { width: 100%; height: 100%; }\n");
+        html.push_str(&self.responsive_config.to_css());
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"viz-container\">\n");
+        html.push_str("        <div class=\"viz-content\">\n");
+        html.push_str(&format!("            {}\n", base_html));
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&self.touch_config.to_javascript());
+        html.push_str(
+            r#"
+        const container = document.querySelector('.viz-content');
+        const gestureHandler = new TouchGestureHandler(container);
+
+        // Add swipe event listener for navigation
+        container.addEventListener('swipe', (e) => {
+            console.log('Swiped:', e.detail.direction);
+        });
+
+        // Add tap event listener for interaction
+        container.addEventListener('tap', (e) => {
+            console.log('Tapped at:', e.detail.x, e.detail.y);
+        });
+"#,
+        );
+        html.push_str("    </script>\n");
+
+        // Register service worker if offline support is enabled
+        if self.offline_config.enabled {
+            html.push_str("    <script>\n");
+            html.push_str(
+                r#"
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Service Worker registered:', reg))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            });
+        }
+"#,
+            );
+            html.push_str("    </script>\n");
+        }
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    /// Gets the service worker script content.
+    pub fn service_worker_script(&self) -> String {
+        self.offline_config.to_service_worker()
+    }
+
+    /// Gets the PWA manifest JSON content.
+    pub fn pwa_manifest(&self) -> String {
+        self.pwa_config.to_manifest_json()
+    }
+}
+
+// ============================================================================
+// v0.2.7: Analytics Dashboard Framework
+// ============================================================================
+
+/// Widget types for analytics dashboards.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WidgetType {
+    /// Chart widget (bar, line, pie, etc.)
+    Chart,
+    /// Metric widget (single value)
+    Metric,
+    /// Table widget (data grid)
+    Table,
+    /// Text widget (custom HTML/text)
+    Text,
+    /// Visualization widget (custom viz)
+    Visualization,
+}
+
+/// Dashboard widget configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardWidget {
+    /// Widget ID
+    pub id: String,
+    /// Widget title
+    pub title: String,
+    /// Widget type
+    pub widget_type: WidgetType,
+    /// Widget position (row, column)
+    pub position: (u32, u32),
+    /// Widget size (width, height in grid units)
+    pub size: (u32, u32),
+    /// Widget data source
+    pub data_source: String,
+    /// Widget filters
+    pub filters: Vec<DashboardFilter>,
+    /// Widget refresh interval (milliseconds)
+    pub refresh_interval_ms: Option<u32>,
+    /// Custom widget config (JSON)
+    pub config: String,
+}
+
+/// Dashboard filter for data filtering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardFilter {
+    /// Filter ID
+    pub id: String,
+    /// Filter field name
+    pub field: String,
+    /// Filter operator
+    pub operator: String,
+    /// Filter value
+    pub value: String,
+    /// Is filter shared across widgets
+    pub shared: bool,
+}
+
+/// Dashboard layout grid configuration.
+#[derive(Debug, Clone)]
+pub struct DashboardLayout {
+    /// Number of columns in the grid
+    pub columns: u32,
+    /// Number of rows in the grid
+    pub rows: u32,
+    /// Gap between widgets (pixels)
+    pub gap: u32,
+    /// Responsive breakpoints
+    pub breakpoints: Vec<(u32, u32)>, // (screen_width, columns)
+}
+
+impl Default for DashboardLayout {
+    fn default() -> Self {
+        Self {
+            columns: 12,
+            rows: 6,
+            gap: 16,
+            breakpoints: vec![(480, 4), (768, 8), (1024, 12)],
+        }
+    }
+}
+
+/// Saved dashboard configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardConfig {
+    /// Dashboard ID
+    pub id: String,
+    /// Dashboard name
+    pub name: String,
+    /// Dashboard description
+    pub description: String,
+    /// Dashboard layout
+    pub layout: (u32, u32), // (columns, rows)
+    /// Dashboard widgets
+    pub widgets: Vec<DashboardWidget>,
+    /// Shared filters
+    pub shared_filters: Vec<DashboardFilter>,
+    /// Auto-refresh interval (milliseconds)
+    pub auto_refresh_ms: Option<u32>,
+}
+
+impl DashboardConfig {
+    /// Creates a new dashboard configuration.
+    pub fn new(id: &str, name: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: String::new(),
+            layout: (12, 6),
+            widgets: Vec::new(),
+            shared_filters: Vec::new(),
+            auto_refresh_ms: None,
+        }
+    }
+
+    /// Adds a widget to the dashboard.
+    pub fn add_widget(&mut self, widget: DashboardWidget) {
+        self.widgets.push(widget);
+    }
+
+    /// Adds a shared filter.
+    pub fn add_shared_filter(&mut self, filter: DashboardFilter) {
+        self.shared_filters.push(filter);
+    }
+
+    /// Sets auto-refresh interval.
+    pub fn with_auto_refresh(mut self, interval_ms: u32) -> Self {
+        self.auto_refresh_ms = Some(interval_ms);
+        self
+    }
+
+    /// Serializes dashboard configuration to JSON.
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Deserializes dashboard configuration from JSON.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+}
+
+/// Analytics dashboard builder and renderer.
+#[derive(Debug, Clone)]
+pub struct AnalyticsDashboard {
+    config: DashboardConfig,
+    layout: DashboardLayout,
+    theme: Theme,
+}
+
+impl AnalyticsDashboard {
+    /// Creates a new analytics dashboard.
+    pub fn new(name: &str) -> Self {
+        Self {
+            config: DashboardConfig::new("dashboard-1", name),
+            layout: DashboardLayout::default(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Creates from a saved configuration.
+    pub fn from_config(config: DashboardConfig) -> Self {
+        Self {
+            layout: DashboardLayout {
+                columns: config.layout.0,
+                rows: config.layout.1,
+                ..DashboardLayout::default()
+            },
+            config,
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the dashboard theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the dashboard layout.
+    pub fn with_layout(mut self, layout: DashboardLayout) -> Self {
+        self.layout = layout;
+        self
+    }
+
+    /// Adds a chart widget.
+    pub fn add_chart_widget(
+        &mut self,
+        id: &str,
+        title: &str,
+        position: (u32, u32),
+        size: (u32, u32),
+        data_source: &str,
+    ) {
+        let widget = DashboardWidget {
+            id: id.to_string(),
+            title: title.to_string(),
+            widget_type: WidgetType::Chart,
+            position,
+            size,
+            data_source: data_source.to_string(),
+            filters: Vec::new(),
+            refresh_interval_ms: None,
+            config: "{}".to_string(),
+        };
+        self.config.add_widget(widget);
+    }
+
+    /// Adds a metric widget.
+    pub fn add_metric_widget(
+        &mut self,
+        id: &str,
+        title: &str,
+        position: (u32, u32),
+        size: (u32, u32),
+        data_source: &str,
+    ) {
+        let widget = DashboardWidget {
+            id: id.to_string(),
+            title: title.to_string(),
+            widget_type: WidgetType::Metric,
+            position,
+            size,
+            data_source: data_source.to_string(),
+            filters: Vec::new(),
+            refresh_interval_ms: None,
+            config: "{}".to_string(),
+        };
+        self.config.add_widget(widget);
+    }
+
+    /// Adds a table widget.
+    pub fn add_table_widget(
+        &mut self,
+        id: &str,
+        title: &str,
+        position: (u32, u32),
+        size: (u32, u32),
+        data_source: &str,
+    ) {
+        let widget = DashboardWidget {
+            id: id.to_string(),
+            title: title.to_string(),
+            widget_type: WidgetType::Table,
+            position,
+            size,
+            data_source: data_source.to_string(),
+            filters: Vec::new(),
+            refresh_interval_ms: None,
+            config: "{}".to_string(),
+        };
+        self.config.add_widget(widget);
+    }
+
+    /// Adds a shared filter that applies to all widgets.
+    pub fn add_shared_filter(&mut self, field: &str, operator: &str, value: &str) {
+        let filter = DashboardFilter {
+            id: format!("filter-{}", self.config.shared_filters.len() + 1),
+            field: field.to_string(),
+            operator: operator.to_string(),
+            value: value.to_string(),
+            shared: true,
+        };
+        self.config.add_shared_filter(filter);
+    }
+
+    /// Enables auto-refresh for the dashboard.
+    pub fn enable_auto_refresh(&mut self, interval_ms: u32) {
+        self.config.auto_refresh_ms = Some(interval_ms);
+    }
+
+    /// Saves the dashboard configuration to JSON.
+    pub fn save_config(&self) -> Result<String, serde_json::Error> {
+        self.config.to_json()
+    }
+
+    /// Generates HTML for the dashboard.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.config.name));
+        html.push_str("    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        * { box-sizing: border-box; margin: 0; padding: 0; }\n");
+        html.push_str(&format!("        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: {}; color: {}; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str(
+            "        .dashboard-header { padding: 20px; border-bottom: 1px solid #e0e0e0; }\n",
+        );
+        html.push_str("        .dashboard-title { font-size: 24px; font-weight: bold; }\n");
+        html.push_str("        .dashboard-filters { padding: 10px 20px; display: flex; gap: 10px; flex-wrap: wrap; background: #f5f5f5; }\n");
+        html.push_str("        .filter-item { padding: 5px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }\n");
+        html.push_str(&format!("        .dashboard-grid {{ display: grid; grid-template-columns: repeat({}, 1fr); grid-template-rows: repeat({}, 1fr); gap: {}px; padding: 20px; min-height: calc(100vh - 140px); }}\n",
+            self.layout.columns, self.layout.rows, self.layout.gap));
+        html.push_str("        .widget { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .widget-header { font-weight: bold; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }\n");
+        html.push_str("        .widget-content { flex: 1; overflow: auto; }\n");
+        html.push_str("        .metric-value { font-size: 48px; font-weight: bold; text-align: center; padding: 20px; }\n");
+        html.push_str(
+            "        .metric-label { font-size: 14px; text-align: center; color: #666; }\n",
+        );
+        html.push_str("        table { width: 100%; border-collapse: collapse; }\n");
+        html.push_str("        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0; }\n");
+        html.push_str("        th { background: #f5f5f5; font-weight: bold; }\n");
+
+        // Add responsive breakpoints
+        for (screen_width, cols) in &self.layout.breakpoints {
+            html.push_str(&format!("        @media (max-width: {}px) {{ .dashboard-grid {{ grid-template-columns: repeat({}, 1fr); }} }}\n",
+                screen_width, cols));
+        }
+
+        html.push_str("    </style>\n</head>\n<body>\n");
+
+        // Dashboard header
+        html.push_str("    <div class=\"dashboard-header\">\n");
+        html.push_str(&format!(
+            "        <div class=\"dashboard-title\">{}</div>\n",
+            self.config.name
+        ));
+        if !self.config.description.is_empty() {
+            html.push_str(&format!(
+                "        <div style=\"margin-top: 5px; color: #666; font-size: 14px;\">{}</div>\n",
+                self.config.description
+            ));
+        }
+        html.push_str("    </div>\n");
+
+        // Shared filters
+        if !self.config.shared_filters.is_empty() {
+            html.push_str("    <div class=\"dashboard-filters\">\n");
+            html.push_str("        <span style=\"font-weight: bold;\">Filters:</span>\n");
+            for filter in &self.config.shared_filters {
+                html.push_str(&format!(
+                    "        <div class=\"filter-item\">{} {} {}</div>\n",
+                    filter.field, filter.operator, filter.value
+                ));
+            }
+            html.push_str("    </div>\n");
+        }
+
+        // Dashboard grid
+        html.push_str("    <div class=\"dashboard-grid\">\n");
+
+        for widget in &self.config.widgets {
+            let (col, row) = widget.position;
+            let (width, height) = widget.size;
+
+            html.push_str(&format!(
+                "        <div class=\"widget\" style=\"grid-column: {} / span {}; grid-row: {} / span {};\">\n",
+                col + 1, width, row + 1, height
+            ));
+            html.push_str(&format!(
+                "            <div class=\"widget-header\">{}</div>\n",
+                widget.title
+            ));
+            html.push_str("            <div class=\"widget-content\">\n");
+
+            match widget.widget_type {
+                WidgetType::Chart => {
+                    html.push_str(&format!(
+                        "                <canvas id=\"chart-{}\"></canvas>\n",
+                        widget.id
+                    ));
+                }
+                WidgetType::Metric => {
+                    html.push_str("                <div class=\"metric-value\">1,234</div>\n");
+                    html.push_str(&format!(
+                        "                <div class=\"metric-label\">{}</div>\n",
+                        widget.title
+                    ));
+                }
+                WidgetType::Table => {
+                    html.push_str("                <table>\n");
+                    html.push_str("                    <thead><tr><th>Column 1</th><th>Column 2</th><th>Column 3</th></tr></thead>\n");
+                    html.push_str("                    <tbody>\n");
+                    html.push_str("                        <tr><td>Data 1</td><td>Data 2</td><td>Data 3</td></tr>\n");
+                    html.push_str("                        <tr><td>Data 4</td><td>Data 5</td><td>Data 6</td></tr>\n");
+                    html.push_str("                    </tbody>\n");
+                    html.push_str("                </table>\n");
+                }
+                WidgetType::Text => {
+                    html.push_str("                <p>Custom text content</p>\n");
+                }
+                WidgetType::Visualization => {
+                    html.push_str(&format!(
+                        "                <div id=\"viz-{}\">Visualization placeholder</div>\n",
+                        widget.id
+                    ));
+                }
+            }
+
+            html.push_str("            </div>\n");
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+
+        // JavaScript for charts and auto-refresh
+        html.push_str("    <script>\n");
+
+        // Initialize charts
+        for widget in &self.config.widgets {
+            if matches!(widget.widget_type, WidgetType::Chart) {
+                html.push_str(&format!(
+                    r#"
+        const ctx{} = document.getElementById('chart-{}').getContext('2d');
+        new Chart(ctx{}, {{
+            type: 'bar',
+            data: {{
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                datasets: [{{
+                    label: '{}',
+                    data: [12, 19, 3, 5, 2, 3],
+                    backgroundColor: '{}'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{ y: {{ beginAtZero: true }} }}
+            }}
+        }});
+"#,
+                    widget.id, widget.id, widget.id, widget.title, self.theme.condition_color
+                ));
+            }
+        }
+
+        // Auto-refresh
+        if let Some(interval_ms) = self.config.auto_refresh_ms {
+            html.push_str(&format!(
+                r#"
+        // Auto-refresh dashboard every {} milliseconds
+        setInterval(() => {{
+            console.log('Refreshing dashboard...');
+            // Fetch new data and update widgets
+            location.reload();
+        }}, {});
+"#,
+                interval_ms, interval_ms
+            ));
+        }
+
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+
+    /// Generates JavaScript for filter synchronization.
+    pub fn filter_sync_script(&self) -> String {
+        r#"
+class DashboardFilterSync {{
+    constructor() {{
+        this.filters = new Map();
+        this.widgets = new Map();
+        this.subscribers = [];
+    }}
+
+    addFilter(filterId, field, operator, value, shared = false) {{
+        this.filters.set(filterId, {{ field, operator, value, shared }});
+        if (shared) {{
+            this.notifySubscribers(filterId);
+        }}
+    }}
+
+    removeFilter(filterId) {{
+        this.filters.delete(filterId);
+        this.notifySubscribers(filterId);
+    }}
+
+    updateFilter(filterId, value) {{
+        const filter = this.filters.get(filterId);
+        if (filter) {{
+            filter.value = value;
+            this.notifySubscribers(filterId);
+        }}
+    }}
+
+    registerWidget(widgetId, onFilterChange) {{
+        this.subscribers.push({{ widgetId, onFilterChange }});
+    }}
+
+    notifySubscribers(filterId) {{
+        const filter = this.filters.get(filterId);
+        if (filter && filter.shared) {{
+            this.subscribers.forEach(sub => {{
+                sub.onFilterChange(filterId, filter);
+            }});
+        }}
+    }}
+
+    getActiveFilters() {{
+        const active = [];
+        this.filters.forEach((filter, id) => {{
+            if (filter.shared) {{
+                active.push({{ id, ...filter }});
+            }}
+        }});
+        return active;
+    }}
+}}
+
+const filterSync = new DashboardFilterSync();
+"#
+        .to_string()
+    }
+}
+
+// ============================================================================
+// v0.2.8: Geographic Visualization 2.0
+// ============================================================================
+
+/// Geographic coordinate (latitude, longitude).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct GeoCoordinate {
+    /// Latitude
+    pub lat: f64,
+    /// Longitude
+    pub lng: f64,
+}
+
+/// GeoJSON feature for boundary rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoJsonFeature {
+    /// Feature ID
+    pub id: String,
+    /// Feature type (usually "Feature")
+    #[serde(rename = "type")]
+    pub feature_type: String,
+    /// Geometry type and coordinates
+    pub geometry: GeoJsonGeometry,
+    /// Feature properties
+    pub properties: serde_json::Value,
+}
+
+/// GeoJSON geometry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoJsonGeometry {
+    /// Geometry type (Polygon, MultiPolygon, Point, etc.)
+    #[serde(rename = "type")]
+    pub geometry_type: String,
+    /// Coordinates (format depends on geometry type)
+    pub coordinates: serde_json::Value,
+}
+
+/// Choropleth map data point.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChoroplethData {
+    /// Geographic region ID (e.g., state code, county FIPS)
+    pub region_id: String,
+    /// Data value for the region
+    pub value: f64,
+    /// Region label/name
+    pub label: String,
+}
+
+/// Heat map data point for legal activity visualization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeatMapPoint {
+    /// Location
+    pub location: GeoCoordinate,
+    /// Intensity/weight of the activity
+    pub intensity: f64,
+    /// Activity type/label
+    pub label: String,
+}
+
+/// Point cluster for entity visualization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PointCluster {
+    /// Center coordinate of the cluster
+    pub center: GeoCoordinate,
+    /// Number of points in the cluster
+    pub count: usize,
+    /// Individual points (if cluster is expanded)
+    pub points: Vec<GeoPoint>,
+}
+
+/// Individual geographic point.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoPoint {
+    /// Point ID
+    pub id: String,
+    /// Point location
+    pub location: GeoCoordinate,
+    /// Point label
+    pub label: String,
+    /// Point data
+    pub data: serde_json::Value,
+}
+
+/// Map tile provider configuration.
+#[derive(Debug, Clone)]
+pub enum TileProvider {
+    /// OpenStreetMap tiles
+    OpenStreetMap,
+    /// Mapbox tiles (requires API key)
+    Mapbox(String),
+    /// Google Maps tiles (requires API key)
+    GoogleMaps(String),
+    /// Custom tile provider with URL template
+    Custom(String),
+}
+
+impl TileProvider {
+    /// Gets the tile URL template.
+    pub fn url_template(&self) -> String {
+        match self {
+            TileProvider::OpenStreetMap => {
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png".to_string()
+            }
+            TileProvider::Mapbox(api_key) => {
+                format!(
+                    "https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{{z}}/{{x}}/{{y}}?access_token={}",
+                    api_key
+                )
+            }
+            TileProvider::GoogleMaps(api_key) => {
+                format!(
+                    "https://maps.googleapis.com/maps/vt?pb=!1m5!1m4!1i{{z}}!2i{{x}}!3i{{y}}!4i256!2m3!1e0!2sm!3i{{s}}!3m9!2sen!3sUS!5e18!12m1!1e47!12m3!1e37!2m1!1ssmartmaps!4e0&key={}",
+                    api_key
+                )
+            }
+            TileProvider::Custom(template) => template.clone(),
+        }
+    }
+
+    /// Gets attribution text for the tile provider.
+    pub fn attribution(&self) -> &str {
+        match self {
+            TileProvider::OpenStreetMap => {
+                "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
+            }
+            TileProvider::Mapbox(_) => {
+                "&copy; <a href='https://www.mapbox.com/about/maps/'>Mapbox</a>"
+            }
+            TileProvider::GoogleMaps(_) => "&copy; Google Maps",
+            TileProvider::Custom(_) => "",
+        }
+    }
+}
+
+/// Geographic visualization renderer.
+#[derive(Debug, Clone)]
+pub struct GeoVisualization {
+    tile_provider: TileProvider,
+    center: GeoCoordinate,
+    zoom: u32,
+    theme: Theme,
+}
+
+impl GeoVisualization {
+    /// Creates a new geographic visualization.
+    pub fn new(center: GeoCoordinate, zoom: u32) -> Self {
+        Self {
+            tile_provider: TileProvider::OpenStreetMap,
+            center,
+            zoom,
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the tile provider.
+    pub fn with_tile_provider(mut self, provider: TileProvider) -> Self {
+        self.tile_provider = provider;
+        self
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for a choropleth map.
+    pub fn to_choropleth_html(
+        &self,
+        data: &[ChoroplethData],
+        geojson: &[GeoJsonFeature],
+    ) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("    <title>Choropleth Map</title>\n");
+        html.push_str("    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\" />\n");
+        html.push_str(
+            "    <script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>\n",
+        );
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; padding: 0; }\n");
+        html.push_str("        #map { width: 100vw; height: 100vh; }\n");
+        html.push_str(
+            "        .legend { background: white; padding: 10px; border-radius: 5px; }\n",
+        );
+        html.push_str("        .legend-item { margin: 5px 0; }\n");
+        html.push_str("        .legend-color { display: inline-block; width: 20px; height: 20px; margin-right: 5px; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div id=\"map\"></div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "const map = L.map('map').setView([{}, {}], {});\n",
+            self.center.lat, self.center.lng, self.zoom
+        ));
+        html.push_str(&format!(
+            "L.tileLayer('{}', {{\n",
+            self.tile_provider.url_template()
+        ));
+        html.push_str(&format!(
+            "    attribution: '{}'\n",
+            self.tile_provider.attribution()
+        ));
+        html.push_str("}).addTo(map);\n\n");
+
+        // Add choropleth data
+        html.push_str("const choroplethData = {\n");
+        for item in data {
+            html.push_str(&format!("    '{}': {},\n", item.region_id, item.value));
+        }
+        html.push_str("};\n\n");
+
+        // Add GeoJSON layer
+        if !geojson.is_empty() {
+            let geojson_str = serde_json::to_string(&geojson).unwrap_or_else(|_| "[]".to_string());
+            html.push_str(&format!("const geoJsonData = {};\n", geojson_str));
+            html.push_str(
+                r#"
+L.geoJSON(geoJsonData, {
+    style: function(feature) {
+        const value = choroplethData[feature.id] || 0;
+        return {
+            fillColor: getColor(value),
+            weight: 2,
+            opacity: 1,
+            color: 'white',
+            fillOpacity: 0.7
+        };
+    },
+    onEachFeature: function(feature, layer) {
+        const value = choroplethData[feature.id] || 0;
+        layer.bindPopup(`<b>${feature.properties.name || feature.id}</b><br>Value: ${value}`);
+    }
+}).addTo(map);
+
+function getColor(value) {
+    return value > 1000 ? '#800026' :
+           value > 500  ? '#BD0026' :
+           value > 200  ? '#E31A1C' :
+           value > 100  ? '#FC4E2A' :
+           value > 50   ? '#FD8D3C' :
+           value > 20   ? '#FEB24C' :
+           value > 10   ? '#FED976' :
+                          '#FFEDA0';
+}
+"#,
+            );
+        }
+
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+
+    /// Generates HTML for a heat map.
+    pub fn to_heatmap_html(&self, points: &[HeatMapPoint]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("    <title>Heat Map</title>\n");
+        html.push_str("    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\" />\n");
+        html.push_str(
+            "    <script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>\n",
+        );
+        html.push_str("    <script src=\"https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; padding: 0; }\n");
+        html.push_str("        #map { width: 100vw; height: 100vh; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div id=\"map\"></div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "const map = L.map('map').setView([{}, {}], {});\n",
+            self.center.lat, self.center.lng, self.zoom
+        ));
+        html.push_str(&format!(
+            "L.tileLayer('{}', {{\n",
+            self.tile_provider.url_template()
+        ));
+        html.push_str(&format!(
+            "    attribution: '{}'\n",
+            self.tile_provider.attribution()
+        ));
+        html.push_str("}).addTo(map);\n\n");
+
+        // Add heat map data
+        html.push_str("const heatData = [\n");
+        for point in points {
+            html.push_str(&format!(
+                "    [{}, {}, {}],\n",
+                point.location.lat, point.location.lng, point.intensity
+            ));
+        }
+        html.push_str("];\n\n");
+
+        html.push_str("L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+
+    /// Generates HTML for a clustered point map.
+    pub fn to_cluster_map_html(&self, points: &[GeoPoint]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("    <title>Clustered Point Map</title>\n");
+        html.push_str("    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\" />\n");
+        html.push_str("    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css\" />\n");
+        html.push_str("    <link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css\" />\n");
+        html.push_str(
+            "    <script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>\n",
+        );
+        html.push_str("    <script src=\"https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; padding: 0; }\n");
+        html.push_str("        #map { width: 100vw; height: 100vh; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div id=\"map\"></div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "const map = L.map('map').setView([{}, {}], {});\n",
+            self.center.lat, self.center.lng, self.zoom
+        ));
+        html.push_str(&format!(
+            "L.tileLayer('{}', {{\n",
+            self.tile_provider.url_template()
+        ));
+        html.push_str(&format!(
+            "    attribution: '{}'\n",
+            self.tile_provider.attribution()
+        ));
+        html.push_str("}).addTo(map);\n\n");
+
+        // Add marker cluster
+        html.push_str("const markers = L.markerClusterGroup();\n\n");
+
+        for point in points {
+            html.push_str(&format!(
+                "const marker{} = L.marker([{}, {}]).bindPopup('<b>{}</b>');\n",
+                point.id.replace('-', "_"),
+                point.location.lat,
+                point.location.lng,
+                point.label
+            ));
+            html.push_str(&format!(
+                "markers.addLayer(marker{});\n",
+                point.id.replace('-', "_")
+            ));
+        }
+
+        html.push_str("\nmap.addLayer(markers);\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

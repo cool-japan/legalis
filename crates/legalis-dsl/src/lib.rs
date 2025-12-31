@@ -71,20 +71,26 @@ mod ast;
 pub mod cache;
 pub mod codegen;
 pub mod compliance;
+pub mod consistency;
+pub mod dataflow;
 pub mod diff;
 pub mod docgen;
 pub mod grammar_doc;
 pub mod graph;
+pub mod heredoc;
 pub mod htmlgen;
 pub mod import_resolver;
 pub mod incremental;
+pub mod interpolation;
 pub mod lsp;
 pub mod metadata;
+pub mod numeric;
 mod parser;
 mod printer;
 pub mod profiler;
 pub mod query;
 pub mod statistics;
+pub mod taint;
 pub mod templates;
 pub mod transform;
 pub mod tree_view;
@@ -99,19 +105,27 @@ pub use ast::*;
 pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
 pub use codegen::{CodeGenerator, PythonGenerator, SqlGenerator};
 pub use compliance::{ComplianceMatrix, ComplianceStats};
+pub use consistency::{ConsistencyChecker, ConsistencyIssue};
+pub use dataflow::{DataFlowAnalyzer, DataFlowIssue, DataFlowState};
 pub use diff::{Change, DocumentDiff, StatuteDiff};
 pub use docgen::{DocGenerator, MarkdownGenerator};
 pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
 pub use graph::{
     DependencyGraph, GraphFormat, GraphOptions, generate_dot_graph, generate_mermaid_graph,
 };
+pub use heredoc::{HeredocError, HeredocParser, HeredocResult, HeredocType, parse_heredoc};
 pub use htmlgen::{HtmlGenerator, HtmlTheme};
 pub use import_resolver::{ImportResolver, detect_circular_imports, validate_import_paths};
 pub use incremental::{IncrementalParser, TextEdit};
+pub use interpolation::{
+    InterpolationError, InterpolationEvaluator, InterpolationParser, Token as InterpolationToken,
+    extract_variables, interpolate,
+};
 pub use metadata::{
     AmendmentAuditTrail, AuditEntry, EntityRelationships, JurisdictionHierarchy, VersionEntry,
     VersionHistory,
 };
+pub use numeric::{NumericError, NumericParser, NumericValue, parse_numeric};
 pub use parser::*;
 pub use printer::*;
 pub use profiler::{ParseProfiler, ProfileComparison, ProfileReport, Profiler};
@@ -119,6 +133,7 @@ pub use query::{ConditionSearch, StatuteQuery};
 pub use statistics::{
     ComplexityMetrics, DependencyAnalysis, DocumentStatistics, analyze_complexity,
 };
+pub use taint::{TaintAnalyzer, TaintCategory, TaintConfig, TaintInfo, TaintReport};
 pub use templates::{StatuteTemplate, TemplateBuilder, TemplateLibrary};
 pub use transform::{
     ConditionTransform, DeduplicateStatutes, DocumentTransform, NormalizeIds, RemoveEmptyStatutes,
@@ -969,6 +984,10 @@ impl LegalDslParser {
         let mut supersedes = Vec::new();
         let mut defaults = Vec::new();
         let mut requires = Vec::new();
+        let mut delegates = Vec::new();
+        let mut scope = None;
+        let mut constraints = Vec::new();
+        let mut priority = None;
 
         // Parse body
         while let Some(token) = iter.next() {
@@ -1027,6 +1046,24 @@ impl LegalDslParser {
                     let default = self.parse_default_node(&mut iter)?;
                     defaults.push(default);
                 }
+                Token::Priority => {
+                    // Parse priority number
+                    match iter.next() {
+                        Some(Token::Number(n)) => priority = Some(*n as u32),
+                        _ => return Err(DslError::parse_error("Expected number after PRIORITY")),
+                    }
+                }
+                Token::Delegate => {
+                    let delegate = self.parse_delegate_node(&mut iter)?;
+                    delegates.push(delegate);
+                }
+                Token::Scope => {
+                    scope = Some(self.parse_scope_node(&mut iter)?);
+                }
+                Token::Constraint => {
+                    let constraint = self.parse_constraint_node(&mut iter)?;
+                    constraints.push(constraint);
+                }
                 Token::RBrace => break,
                 _ => {}
             }
@@ -1043,6 +1080,10 @@ impl LegalDslParser {
             supersedes,
             defaults,
             requires,
+            delegates,
+            scope,
+            constraints,
+            priority,
         })
     }
 
@@ -1710,6 +1751,146 @@ impl LegalDslParser {
         Ok(ast::DefaultNode { field, value })
     }
 
+    /// Parses a delegate clause.
+    fn parse_delegate_node<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::DelegateNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Get target statute ID
+        let target_id = match iter.next() {
+            Some(Token::Ident(id)) => id.clone(),
+            Some(Token::StringLit(id)) => id.clone(),
+            _ => return Err(DslError::parse_error("Expected statute ID after DELEGATE")),
+        };
+
+        // Parse optional conditions
+        let mut conditions = Vec::new();
+        if matches!(iter.peek(), Some(Token::When)) {
+            iter.next(); // consume WHEN
+            if let Some(cond) = self.parse_condition_node(iter)? {
+                conditions.push(cond);
+            }
+        }
+
+        // Get description
+        let description = match iter.next() {
+            Some(Token::StringLit(s)) => s.clone(),
+            Some(Token::Ident(s)) => s.clone(),
+            _ => String::new(),
+        };
+
+        Ok(ast::DelegateNode {
+            target_id,
+            conditions,
+            description,
+        })
+    }
+
+    /// Parses a scope clause.
+    fn parse_scope_node<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::ScopeNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Parse entity types (comma-separated list)
+        let mut entity_types = Vec::new();
+        loop {
+            match iter.peek() {
+                Some(Token::Ident(id)) => {
+                    entity_types.push(id.clone());
+                    iter.next();
+                }
+                Some(Token::StringLit(s)) => {
+                    entity_types.push(s.clone());
+                    iter.next();
+                }
+                Some(Token::Comma) => {
+                    iter.next();
+                    continue;
+                }
+                _ => break,
+            }
+        }
+
+        // Parse optional conditions
+        let mut conditions = Vec::new();
+        if matches!(iter.peek(), Some(Token::When)) {
+            iter.next(); // consume WHEN
+            if let Some(cond) = self.parse_condition_node(iter)? {
+                conditions.push(cond);
+            }
+        }
+
+        // Get optional description
+        let description = match iter.peek() {
+            Some(Token::StringLit(s)) => {
+                let desc = s.clone();
+                iter.next();
+                Some(desc)
+            }
+            _ => None,
+        };
+
+        Ok(ast::ScopeNode {
+            entity_types,
+            conditions,
+            description,
+        })
+    }
+
+    /// Parses a constraint clause.
+    fn parse_constraint_node<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<ast::ConstraintNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Get constraint name
+        let name = match iter.next() {
+            Some(Token::Ident(n)) => n.clone(),
+            Some(Token::StringLit(n)) => n.clone(),
+            _ => {
+                return Err(DslError::parse_error(
+                    "Expected constraint name after CONSTRAINT",
+                ));
+            }
+        };
+
+        // Expect colon
+        if !matches!(iter.peek(), Some(Token::Colon)) {
+            return Err(DslError::parse_error("Expected ':' after constraint name"));
+        }
+        iter.next();
+
+        // Parse condition
+        let condition = match self.parse_condition_node(iter)? {
+            Some(cond) => cond,
+            None => return Err(DslError::parse_error("Expected condition for constraint")),
+        };
+
+        // Get optional description
+        let description = match iter.peek() {
+            Some(Token::StringLit(s)) => {
+                let desc = s.clone();
+                iter.next();
+                Some(desc)
+            }
+            _ => None,
+        };
+
+        Ok(ast::ConstraintNode {
+            name,
+            condition,
+            description,
+        })
+    }
+
     /// Parses an amendment clause.
     fn parse_amendment_node<'a, I>(
         &self,
@@ -2002,6 +2183,10 @@ impl LegalDslParser {
                         "EXCEPTION" | "EXCEPT" => Token::Exception,
                         "AMENDMENT" | "AMENDS" => Token::Amendment,
                         "SUPERSEDES" | "REPLACES" => Token::Supersedes,
+                        "DELEGATE" | "DELEGATES" => Token::Delegate,
+                        "PRIORITY" => Token::Priority,
+                        "SCOPE" => Token::Scope,
+                        "CONSTRAINT" | "CONSTRAINTS" | "INVARIANT" => Token::Constraint,
                         "AND" => Token::And,
                         "OR" => Token::Or,
                         "NOT" => Token::Not,

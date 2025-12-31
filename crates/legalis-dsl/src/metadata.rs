@@ -350,6 +350,10 @@ mod tests {
             supersedes,
             defaults: Vec::new(),
             requires,
+            delegates: vec![],
+            scope: None,
+            constraints: vec![],
+            priority: None,
         }
     }
 

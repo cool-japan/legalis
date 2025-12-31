@@ -47,17 +47,23 @@ use thiserror::Error;
 
 pub mod cache;
 pub mod dcat;
+pub mod embeddings;
 pub mod external;
+pub mod fusion;
 pub mod knowledge_graph;
 pub mod ldn;
 pub mod linked_data;
+pub mod neural_symbolic;
 pub mod ontology;
 pub mod quality;
 pub mod rdfa;
+pub mod rdfstar;
 pub mod reasoning;
 pub mod shacl;
 pub mod shex;
+pub mod similarity;
 pub mod sparql;
+pub mod sparqlstar;
 pub mod store;
 pub mod streaming;
 pub mod validation;
@@ -232,7 +238,7 @@ pub struct Triple {
 }
 
 /// RDF object value types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RdfValue {
     /// URI reference
     Uri(String),

@@ -1285,3 +1285,495 @@ mod tests {
         assert_eq!(metrics.passed_cases, 0);
     }
 }
+
+/// Legal domain fine-tuning utilities.
+pub mod legal_finetuning {
+    use super::*;
+
+    /// Legal task types for fine-tuning.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum LegalTaskType {
+        /// Statute interpretation.
+        StatuteInterpretation,
+        /// Contract analysis.
+        ContractAnalysis,
+        /// Case law summarization.
+        CaseLawSummarization,
+        /// Legal argument generation.
+        LegalArgumentGeneration,
+        /// Compliance checking.
+        ComplianceChecking,
+        /// Clause extraction.
+        ClauseExtraction,
+        /// Citation extraction and formatting.
+        CitationExtraction,
+        /// Legal question answering.
+        QuestionAnswering,
+    }
+
+    /// Legal fine-tuning pipeline configuration.
+    #[derive(Debug, Clone)]
+    pub struct LegalFineTuningConfig {
+        /// Task type for this pipeline.
+        pub task_type: LegalTaskType,
+        /// Jurisdiction (e.g., "US", "UK", "EU").
+        pub jurisdiction: Option<String>,
+        /// LoRA configuration for efficient training.
+        pub lora_config: Option<LoRAConfig>,
+        /// Whether to apply constitutional AI alignment.
+        pub constitutional_ai: bool,
+        /// Whether to generate synthetic training data.
+        pub synthetic_data: bool,
+        /// Number of synthetic examples to generate.
+        pub synthetic_count: usize,
+        /// Training hyperparameters.
+        pub hyperparameters: TrainingHyperparameters,
+    }
+
+    impl Default for LegalFineTuningConfig {
+        fn default() -> Self {
+            Self {
+                task_type: LegalTaskType::StatuteInterpretation,
+                jurisdiction: None,
+                lora_config: Some(LoRAConfig::default()),
+                constitutional_ai: true,
+                synthetic_data: false,
+                synthetic_count: 1000,
+                hyperparameters: TrainingHyperparameters::default(),
+            }
+        }
+    }
+
+    impl LegalFineTuningConfig {
+        /// Creates a new legal fine-tuning config.
+        pub fn new(task_type: LegalTaskType) -> Self {
+            Self {
+                task_type,
+                ..Default::default()
+            }
+        }
+
+        /// Sets the jurisdiction.
+        pub fn with_jurisdiction(mut self, jurisdiction: impl Into<String>) -> Self {
+            self.jurisdiction = Some(jurisdiction.into());
+            self
+        }
+
+        /// Sets the LoRA configuration.
+        pub fn with_lora(mut self, config: LoRAConfig) -> Self {
+            self.lora_config = Some(config);
+            self
+        }
+
+        /// Enables or disables constitutional AI alignment.
+        pub fn with_constitutional_ai(mut self, enable: bool) -> Self {
+            self.constitutional_ai = enable;
+            self
+        }
+
+        /// Enables synthetic data generation.
+        pub fn with_synthetic_data(mut self, count: usize) -> Self {
+            self.synthetic_data = true;
+            self.synthetic_count = count;
+            self
+        }
+    }
+
+    /// Training hyperparameters.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TrainingHyperparameters {
+        /// Learning rate.
+        pub learning_rate: f32,
+        /// Number of epochs.
+        pub epochs: usize,
+        /// Batch size.
+        pub batch_size: usize,
+        /// Warmup steps.
+        pub warmup_steps: usize,
+        /// Weight decay.
+        pub weight_decay: f32,
+        /// Gradient accumulation steps.
+        pub gradient_accumulation_steps: usize,
+        /// Maximum gradient norm for clipping.
+        pub max_grad_norm: f32,
+    }
+
+    impl Default for TrainingHyperparameters {
+        fn default() -> Self {
+            Self {
+                learning_rate: 5e-5,
+                epochs: 3,
+                batch_size: 8,
+                warmup_steps: 100,
+                weight_decay: 0.01,
+                gradient_accumulation_steps: 1,
+                max_grad_norm: 1.0,
+            }
+        }
+    }
+
+    /// Legal domain fine-tuning pipeline.
+    pub struct LegalFineTuningPipeline {
+        config: LegalFineTuningConfig,
+        base_dataset: Vec<FineTuningExample>,
+        synthetic_dataset: Vec<FineTuningExample>,
+    }
+
+    impl LegalFineTuningPipeline {
+        /// Creates a new legal fine-tuning pipeline.
+        pub fn new(config: LegalFineTuningConfig) -> Self {
+            Self {
+                config,
+                base_dataset: Vec::new(),
+                synthetic_dataset: Vec::new(),
+            }
+        }
+
+        /// Adds examples to the base dataset.
+        pub fn add_examples(&mut self, examples: Vec<FineTuningExample>) {
+            self.base_dataset.extend(examples);
+        }
+
+        /// Generates synthetic training data based on the task type.
+        pub fn generate_synthetic_data(&mut self) -> Result<()> {
+            if !self.config.synthetic_data {
+                return Ok(());
+            }
+
+            let generator = SyntheticDataGenerator::new(self.config.task_type);
+            self.synthetic_dataset = generator.generate(self.config.synthetic_count)?;
+
+            Ok(())
+        }
+
+        /// Applies constitutional AI alignment to the dataset.
+        pub fn apply_constitutional_alignment(&mut self) -> Result<()> {
+            if !self.config.constitutional_ai {
+                return Ok(());
+            }
+
+            let aligner = ConstitutionalAIAligner::new();
+
+            for example in self.base_dataset.iter_mut() {
+                aligner.align_example(example)?;
+            }
+
+            for example in self.synthetic_dataset.iter_mut() {
+                aligner.align_example(example)?;
+            }
+
+            Ok(())
+        }
+
+        /// Builds the complete training dataset.
+        pub fn build_dataset(self) -> Result<FineTuningDataset> {
+            let mut all_examples = self.base_dataset;
+            all_examples.extend(self.synthetic_dataset);
+
+            DatasetBuilder::new().add_examples(all_examples).build()
+        }
+
+        /// Returns the total number of examples (base + synthetic).
+        pub fn example_count(&self) -> usize {
+            self.base_dataset.len() + self.synthetic_dataset.len()
+        }
+    }
+
+    /// Synthetic data generator for legal tasks.
+    pub struct SyntheticDataGenerator {
+        task_type: LegalTaskType,
+    }
+
+    impl SyntheticDataGenerator {
+        /// Creates a new synthetic data generator.
+        pub fn new(task_type: LegalTaskType) -> Self {
+            Self { task_type }
+        }
+
+        /// Generates synthetic training examples.
+        pub fn generate(&self, count: usize) -> Result<Vec<FineTuningExample>> {
+            let mut examples = Vec::with_capacity(count);
+
+            for i in 0..count {
+                let example = match self.task_type {
+                    LegalTaskType::StatuteInterpretation => self.generate_statute_interpretation(i),
+                    LegalTaskType::ContractAnalysis => self.generate_contract_analysis(i),
+                    LegalTaskType::CaseLawSummarization => self.generate_case_law_summary(i),
+                    LegalTaskType::LegalArgumentGeneration => self.generate_legal_argument(i),
+                    LegalTaskType::ComplianceChecking => self.generate_compliance_check(i),
+                    LegalTaskType::ClauseExtraction => self.generate_clause_extraction(i),
+                    LegalTaskType::CitationExtraction => self.generate_citation_extraction(i),
+                    LegalTaskType::QuestionAnswering => self.generate_qa(i),
+                }?;
+
+                examples.push(example);
+            }
+
+            Ok(examples)
+        }
+
+        fn generate_statute_interpretation(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Interpret this statute: A person who operates a motor vehicle while intoxicated commits a misdemeanor.",
+                "This statute creates a criminal offense for driving under the influence (DUI). Key elements: (1) Operation of a motor vehicle, (2) While intoxicated. The offense is classified as a misdemeanor, indicating a lesser criminal penalty than a felony."
+            ).with_metadata("task", "statute_interpretation"))
+        }
+
+        fn generate_contract_analysis(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Analyze this contract clause: Either party may terminate this agreement upon 30 days written notice.",
+                "This is a termination clause granting mutual termination rights. Both parties have equal ability to end the agreement. Requirements: (1) 30 days advance notice, (2) Notice must be in writing. This provides flexibility but requires planning for transition."
+            ).with_metadata("task", "contract_analysis"))
+        }
+
+        fn generate_case_law_summary(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Summarize this case: In Smith v. Jones (2020), the court held that verbal agreements for real estate transactions are unenforceable under the statute of frauds.",
+                "Case: Smith v. Jones (2020)\nHolding: Verbal real estate agreements are unenforceable.\nReasoning: Statute of frauds requires real estate contracts to be in writing.\nImplication: Real estate transactions must be documented in writing to be legally binding."
+            ).with_metadata("task", "case_law_summarization"))
+        }
+
+        fn generate_legal_argument(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Generate an argument for: The defendant's Fourth Amendment rights were violated by the warrantless search.",
+                "The Fourth Amendment protects against unreasonable searches and seizures. A warrantless search is presumptively unreasonable unless it falls within a recognized exception. Here, no exception applies: (1) No exigent circumstances existed, (2) No consent was given, (3) The search exceeded the scope of any applicable exception. Therefore, the evidence obtained should be suppressed under the exclusionary rule as fruit of an unconstitutional search."
+            ).with_metadata("task", "legal_argument"))
+        }
+
+        fn generate_compliance_check(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Check compliance: Company stores customer data for 10 years. Regulation requires deletion after 5 years.",
+                "COMPLIANCE VIOLATION: Data retention period exceeds regulatory requirements.\nRequired: 5 years maximum retention\nActual: 10 years retention\nRecommendation: Implement automated data deletion after 5 years to ensure compliance. Update data retention policy and notify data protection officer."
+            ).with_metadata("task", "compliance_checking"))
+        }
+
+        fn generate_clause_extraction(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Extract confidentiality clauses from: ...The Parties agree to keep all proprietary information confidential for 3 years after termination. Each party may use the information only for purposes of this agreement...",
+                "Confidentiality Clause:\n- Obligation: Keep proprietary information confidential\n- Duration: 3 years after termination\n- Permitted Use: Only for purposes of this agreement\n- Scope: All proprietary information"
+            ).with_metadata("task", "clause_extraction"))
+        }
+
+        fn generate_citation_extraction(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Extract citations from: The court in Brown v. Board of Education, 347 U.S. 483 (1954) held that separate educational facilities are inherently unequal.",
+                "Citations:\n1. Brown v. Board of Education, 347 U.S. 483 (1954)\n   - Court: U.S. Supreme Court\n   - Year: 1954\n   - Citation: 347 U.S. 483\n   - Holding: Separate educational facilities are inherently unequal"
+            ).with_metadata("task", "citation_extraction"))
+        }
+
+        fn generate_qa(&self, _index: usize) -> Result<FineTuningExample> {
+            Ok(FineTuningExample::new(
+                "Question: What is the statute of limitations for breach of contract in most jurisdictions?\nContext: Contract law principles",
+                "Answer: The statute of limitations for breach of contract varies by jurisdiction but typically ranges from 3 to 6 years from the date of breach. Some jurisdictions distinguish between written contracts (longer period, often 6 years) and oral contracts (shorter period, often 3 years). It's essential to check the specific statute in the relevant jurisdiction as timely filing is crucial to preserve the right to sue."
+            ).with_metadata("task", "question_answering"))
+        }
+    }
+
+    /// Constitutional AI alignment for legal outputs.
+    pub struct ConstitutionalAIAligner {
+        principles: Vec<ConstitutionalPrinciple>,
+    }
+
+    impl ConstitutionalAIAligner {
+        /// Creates a new constitutional AI aligner with default legal principles.
+        pub fn new() -> Self {
+            Self {
+                principles: Self::default_legal_principles(),
+            }
+        }
+
+        /// Default constitutional principles for legal AI.
+        fn default_legal_principles() -> Vec<ConstitutionalPrinciple> {
+            vec![
+                ConstitutionalPrinciple {
+                    name: "Accuracy".to_string(),
+                    description: "Ensure legal information is accurate and up-to-date".to_string(),
+                    critique_prompt: "Is this legal information accurate? Does it cite reliable sources?".to_string(),
+                },
+                ConstitutionalPrinciple {
+                    name: "Jurisdiction Awareness".to_string(),
+                    description: "Clearly state which jurisdiction the advice applies to".to_string(),
+                    critique_prompt: "Does this specify the relevant jurisdiction? Is it clear where this law applies?".to_string(),
+                },
+                ConstitutionalPrinciple {
+                    name: "Disclaimer".to_string(),
+                    description: "Include appropriate disclaimers about legal advice".to_string(),
+                    critique_prompt: "Does this include a disclaimer that it's not legal advice and users should consult an attorney?".to_string(),
+                },
+                ConstitutionalPrinciple {
+                    name: "Impartiality".to_string(),
+                    description: "Present legal information objectively without bias".to_string(),
+                    critique_prompt: "Is this information presented objectively? Does it avoid bias or advocacy for a particular position?".to_string(),
+                },
+                ConstitutionalPrinciple {
+                    name: "Clarity".to_string(),
+                    description: "Explain legal concepts in clear, accessible language".to_string(),
+                    critique_prompt: "Is this explanation clear and understandable? Does it avoid unnecessary jargon?".to_string(),
+                },
+                ConstitutionalPrinciple {
+                    name: "Completeness".to_string(),
+                    description: "Provide comprehensive information including exceptions and limitations".to_string(),
+                    critique_prompt: "Does this cover important exceptions or limitations? Is any critical information missing?".to_string(),
+                },
+            ]
+        }
+
+        /// Aligns a fine-tuning example with constitutional principles.
+        pub fn align_example(&self, example: &mut FineTuningExample) -> Result<()> {
+            // Add disclaimer if not present
+            if !example.completion.contains("disclaimer")
+                && !example.completion.contains("not legal advice")
+            {
+                example.completion.push_str("\n\nNote: This is general legal information, not legal advice. Consult a qualified attorney for advice specific to your situation.");
+            }
+
+            // Add constitutional metadata
+            example
+                .metadata
+                .insert("constitutional_aligned".to_string(), "true".to_string());
+
+            Ok(())
+        }
+
+        /// Adds a custom principle.
+        pub fn add_principle(&mut self, principle: ConstitutionalPrinciple) {
+            self.principles.push(principle);
+        }
+
+        /// Returns all principles.
+        pub fn principles(&self) -> &[ConstitutionalPrinciple] {
+            &self.principles
+        }
+    }
+
+    impl Default for ConstitutionalAIAligner {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// A constitutional principle for AI alignment.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ConstitutionalPrinciple {
+        /// Principle name.
+        pub name: String,
+        /// Description of the principle.
+        pub description: String,
+        /// Critique prompt to evaluate adherence.
+        pub critique_prompt: String,
+    }
+
+    /// Legal task evaluation benchmark builder.
+    pub struct LegalBenchmarkBuilder {
+        task_type: LegalTaskType,
+        cases: Vec<EvaluationCase>,
+    }
+
+    impl LegalBenchmarkBuilder {
+        /// Creates a new legal benchmark builder.
+        pub fn new(task_type: LegalTaskType) -> Self {
+            Self {
+                task_type,
+                cases: Vec::new(),
+            }
+        }
+
+        /// Adds predefined legal test cases for the task type.
+        pub fn with_standard_cases(mut self) -> Self {
+            let standard_cases = match self.task_type {
+                LegalTaskType::StatuteInterpretation => self.statute_interpretation_cases(),
+                LegalTaskType::ContractAnalysis => self.contract_analysis_cases(),
+                LegalTaskType::CaseLawSummarization => self.case_law_cases(),
+                LegalTaskType::LegalArgumentGeneration => self.legal_argument_cases(),
+                LegalTaskType::ComplianceChecking => self.compliance_cases(),
+                LegalTaskType::ClauseExtraction => self.clause_extraction_cases(),
+                LegalTaskType::CitationExtraction => self.citation_cases(),
+                LegalTaskType::QuestionAnswering => self.qa_cases(),
+            };
+
+            self.cases.extend(standard_cases);
+            self
+        }
+
+        /// Builds the benchmark.
+        pub fn build(self) -> EvaluationBenchmark {
+            let name = format!("legal_{:?}_benchmark", self.task_type);
+            EvaluationBenchmark::new(name)
+                .add_cases(self.cases)
+                .with_metadata("task_type", format!("{:?}", self.task_type))
+                .with_metadata("domain", "legal")
+        }
+
+        fn statute_interpretation_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Interpret: No vehicle shall enter the park.",
+                    "This statute prohibits all vehicles from entering the park. 'Vehicle' likely includes cars, motorcycles, bicycles. 'Park' refers to the designated area. Questions may arise about wheelchairs, skateboards, or emergency vehicles."
+                ).with_category("statute_interpretation"),
+            ]
+        }
+
+        fn contract_analysis_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Analyze: This agreement shall be governed by the laws of California.",
+                    "Choice of law clause specifying California law governs the contract. This determines which state's laws apply to interpretation and disputes, regardless of where parties are located or where performance occurs."
+                ).with_category("contract_analysis"),
+            ]
+        }
+
+        fn case_law_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Summarize: Miranda v. Arizona established that suspects must be informed of their rights before custodial interrogation.",
+                    "Case: Miranda v. Arizona\nHolding: Suspects must receive Miranda warnings before custodial interrogation.\nRights: Right to remain silent, right to attorney.\nConsequence: Statements obtained without Miranda warnings are inadmissible."
+                ).with_category("case_law"),
+            ]
+        }
+
+        fn legal_argument_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Argue for dismissal based on lack of personal jurisdiction.",
+                    "The court lacks personal jurisdiction over defendant because: (1) Defendant has no minimum contacts with the forum state, (2) Defendant did not purposefully avail itself of forum benefits, (3) Exercise of jurisdiction would not comport with fair play and substantial justice per International Shoe. Therefore, the case should be dismissed."
+                ).with_category("legal_argument"),
+            ]
+        }
+
+        fn compliance_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Check GDPR compliance: Website collects email addresses without consent checkbox.",
+                    "VIOLATION: GDPR requires explicit consent for data collection. Missing: (1) Clear consent mechanism, (2) Opt-in checkbox, (3) Privacy policy link. Required action: Add consent checkbox and privacy policy before collecting emails."
+                ).with_category("compliance"),
+            ]
+        }
+
+        fn clause_extraction_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Extract indemnification clause: Contractor shall indemnify Client against all claims arising from Contractor's negligence.",
+                    "Indemnification Clause:\n- Indemnitor: Contractor\n- Indemnitee: Client\n- Scope: All claims arising from Contractor's negligence\n- Type: One-way indemnification"
+                ).with_category("clause_extraction"),
+            ]
+        }
+
+        fn citation_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "Extract: Marbury v. Madison, 5 U.S. 137 (1803)",
+                    "Citation: Marbury v. Madison, 5 U.S. 137 (1803)\nCourt: U.S. Supreme Court\nYear: 1803\nVolume: 5\nReporter: U.S.\nPage: 137"
+                ).with_category("citation"),
+            ]
+        }
+
+        fn qa_cases(&self) -> Vec<EvaluationCase> {
+            vec![
+                EvaluationCase::new(
+                    "What is consideration in contract law?",
+                    "Consideration is something of value exchanged between parties to a contract. It can be a promise, performance, or forbearance. Both parties must provide consideration for a contract to be enforceable (the bargained-for exchange). Without consideration, an agreement is generally not legally binding."
+                ).with_category("qa"),
+            ]
+        }
+    }
+}

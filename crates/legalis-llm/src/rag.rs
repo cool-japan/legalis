@@ -784,6 +784,541 @@ impl ContextCompressor {
     }
 }
 
+/// RAG 2.0 features for advanced retrieval.
+pub mod rag_v2 {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// Hybrid retrieval combining dense and sparse methods.
+    pub struct HybridRetriever {
+        /// Weight for dense (embedding) retrieval (0.0-1.0).
+        dense_weight: f32,
+        /// Weight for sparse (keyword) retrieval (0.0-1.0).
+        sparse_weight: f32,
+        /// Minimum keyword match threshold.
+        min_keyword_score: f32,
+    }
+
+    impl HybridRetriever {
+        /// Creates a new hybrid retriever with balanced weights.
+        pub fn new() -> Self {
+            Self {
+                dense_weight: 0.7,
+                sparse_weight: 0.3,
+                min_keyword_score: 0.1,
+            }
+        }
+
+        /// Sets the dense retrieval weight.
+        pub fn with_dense_weight(mut self, weight: f32) -> Self {
+            self.dense_weight = weight.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Sets the sparse retrieval weight.
+        pub fn with_sparse_weight(mut self, weight: f32) -> Self {
+            self.sparse_weight = weight.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Performs hybrid retrieval combining dense and sparse scores.
+        pub fn retrieve(
+            &self,
+            query: &str,
+            chunks: &[DocumentChunk],
+            query_embedding: &Embedding,
+        ) -> Vec<HybridRetrievalResult> {
+            let mut results = Vec::new();
+
+            for chunk in chunks {
+                let dense_score = if let Some(ref chunk_embedding) = chunk.embedding {
+                    query_embedding
+                        .cosine_similarity(chunk_embedding)
+                        .unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+
+                let sparse_score = self.keyword_score(query, &chunk.content);
+                let hybrid_score =
+                    (dense_score * self.dense_weight) + (sparse_score * self.sparse_weight);
+
+                results.push(HybridRetrievalResult {
+                    chunk: chunk.clone(),
+                    dense_score,
+                    sparse_score,
+                    hybrid_score,
+                });
+            }
+
+            // Sort by hybrid score descending
+            results.sort_by(|a, b| b.hybrid_score.partial_cmp(&a.hybrid_score).unwrap());
+            results
+        }
+
+        /// Computes keyword-based score (BM25-like).
+        fn keyword_score(&self, query: &str, content: &str) -> f32 {
+            let query_terms: Vec<&str> = query.split_whitespace().collect();
+            let content_lower = content.to_lowercase();
+
+            if query_terms.is_empty() {
+                return 0.0;
+            }
+
+            let mut matches = 0;
+            for term in query_terms.iter() {
+                if content_lower.contains(&term.to_lowercase()) {
+                    matches += 1;
+                }
+            }
+
+            let tf = matches as f32 / query_terms.len() as f32;
+
+            // Simple relevance score
+            if tf >= self.min_keyword_score {
+                tf
+            } else {
+                0.0
+            }
+        }
+    }
+
+    impl Default for HybridRetriever {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Result from hybrid retrieval.
+    #[derive(Debug, Clone)]
+    pub struct HybridRetrievalResult {
+        /// The retrieved chunk.
+        pub chunk: DocumentChunk,
+        /// Dense (embedding) similarity score.
+        pub dense_score: f32,
+        /// Sparse (keyword) matching score.
+        pub sparse_score: f32,
+        /// Combined hybrid score.
+        pub hybrid_score: f32,
+    }
+
+    /// Cross-encoder reranker for improved relevance scoring.
+    pub struct CrossEncoderReranker {
+        /// Minimum relevance threshold.
+        threshold: f32,
+    }
+
+    impl CrossEncoderReranker {
+        /// Creates a new cross-encoder reranker.
+        pub fn new() -> Self {
+            Self { threshold: 0.5 }
+        }
+
+        /// Sets the relevance threshold.
+        pub fn with_threshold(mut self, threshold: f32) -> Self {
+            self.threshold = threshold.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Reranks retrieved chunks using cross-encoder scoring.
+        pub fn rerank(&self, query: &str, chunks: Vec<RetrievedChunk>) -> Vec<RerankedChunk> {
+            let mut reranked = Vec::new();
+
+            for chunk in chunks {
+                let relevance_score = self.compute_relevance(query, &chunk.chunk.content);
+
+                if relevance_score >= self.threshold {
+                    reranked.push(RerankedChunk {
+                        chunk: chunk.chunk,
+                        original_score: chunk.score,
+                        relevance_score,
+                        final_score: (chunk.score + relevance_score) / 2.0,
+                    });
+                }
+            }
+
+            // Sort by final score descending
+            reranked.sort_by(|a, b| b.final_score.partial_cmp(&a.final_score).unwrap());
+            reranked
+        }
+
+        /// Computes relevance score between query and content.
+        fn compute_relevance(&self, query: &str, content: &str) -> f32 {
+            let query_words: Vec<&str> = query.split_whitespace().collect();
+            let content_lower = content.to_lowercase();
+
+            if query_words.is_empty() {
+                return 0.0;
+            }
+
+            let mut total_score = 0.0;
+            let mut matches = 0;
+
+            for word in query_words.iter() {
+                if content_lower.contains(&word.to_lowercase()) {
+                    matches += 1;
+                    // Boost score for exact matches at word boundaries
+                    let word_boundaries = format!(" {} ", word.to_lowercase());
+                    if content_lower.contains(&word_boundaries) {
+                        total_score += 1.5;
+                    } else {
+                        total_score += 1.0;
+                    }
+                }
+            }
+
+            if matches == 0 {
+                0.0
+            } else {
+                (total_score / query_words.len() as f32).min(1.0)
+            }
+        }
+    }
+
+    impl Default for CrossEncoderReranker {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Reranked chunk with multiple scores.
+    #[derive(Debug, Clone)]
+    pub struct RerankedChunk {
+        /// The chunk.
+        pub chunk: DocumentChunk,
+        /// Original retrieval score.
+        pub original_score: f32,
+        /// Cross-encoder relevance score.
+        pub relevance_score: f32,
+        /// Final combined score.
+        pub final_score: f32,
+    }
+
+    /// Multi-document reasoning for synthesizing information across sources.
+    pub struct MultiDocumentReasoner {
+        /// Maximum number of documents to reason over.
+        max_documents: usize,
+    }
+
+    impl MultiDocumentReasoner {
+        /// Creates a new multi-document reasoner.
+        pub fn new() -> Self {
+            Self { max_documents: 5 }
+        }
+
+        /// Sets the maximum number of documents.
+        pub fn with_max_documents(mut self, max: usize) -> Self {
+            self.max_documents = max;
+            self
+        }
+
+        /// Synthesizes information from multiple documents.
+        pub fn synthesize(&self, chunks: &[DocumentChunk]) -> MultiDocumentSynthesis {
+            let mut doc_map: HashMap<String, Vec<&DocumentChunk>> = HashMap::new();
+
+            // Group chunks by document
+            for chunk in chunks {
+                doc_map
+                    .entry(chunk.document_id.clone())
+                    .or_default()
+                    .push(chunk);
+            }
+
+            let documents: Vec<DocumentSummary> = doc_map
+                .iter()
+                .map(|(doc_id, chunks)| {
+                    let content = chunks
+                        .iter()
+                        .map(|c| c.content.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    DocumentSummary {
+                        document_id: doc_id.clone(),
+                        chunk_count: chunks.len(),
+                        total_length: content.len(),
+                        summary: self.summarize_document(&content),
+                    }
+                })
+                .take(self.max_documents)
+                .collect();
+
+            let common_themes = self.extract_common_themes(&documents);
+            let contradictions = self.find_contradictions(&documents);
+
+            MultiDocumentSynthesis {
+                documents,
+                common_themes,
+                contradictions,
+                total_chunks: chunks.len(),
+            }
+        }
+
+        /// Summarizes a document's content.
+        fn summarize_document(&self, content: &str) -> String {
+            // Simple summarization: take first 200 characters
+            if content.len() <= 200 {
+                content.to_string()
+            } else {
+                format!("{}...", &content[..200])
+            }
+        }
+
+        /// Extracts common themes across documents.
+        fn extract_common_themes(&self, documents: &[DocumentSummary]) -> Vec<String> {
+            let mut themes = Vec::new();
+
+            // Simple theme extraction based on common words
+            let mut word_freq: HashMap<String, usize> = HashMap::new();
+
+            for doc in documents {
+                for word in doc.summary.split_whitespace() {
+                    let word_lower = word.to_lowercase();
+                    if word_lower.len() > 4 {
+                        // Only count longer words
+                        *word_freq.entry(word_lower).or_insert(0) += 1;
+                    }
+                }
+            }
+
+            // Find words that appear in multiple documents
+            for (word, count) in word_freq.iter() {
+                if *count >= 2 && documents.len() >= 2 {
+                    themes.push(word.clone());
+                }
+            }
+
+            themes.sort();
+            themes.truncate(10); // Limit to top 10 themes
+            themes
+        }
+
+        /// Finds potential contradictions between documents.
+        fn find_contradictions(&self, _documents: &[DocumentSummary]) -> Vec<String> {
+            // Placeholder for contradiction detection
+            Vec::new()
+        }
+    }
+
+    impl Default for MultiDocumentReasoner {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Summary of a document in multi-document reasoning.
+    #[derive(Debug, Clone)]
+    pub struct DocumentSummary {
+        /// Document ID.
+        pub document_id: String,
+        /// Number of chunks from this document.
+        pub chunk_count: usize,
+        /// Total content length.
+        pub total_length: usize,
+        /// Document summary.
+        pub summary: String,
+    }
+
+    /// Result of multi-document synthesis.
+    #[derive(Debug, Clone)]
+    pub struct MultiDocumentSynthesis {
+        /// Summaries of individual documents.
+        pub documents: Vec<DocumentSummary>,
+        /// Common themes across documents.
+        pub common_themes: Vec<String>,
+        /// Potential contradictions found.
+        pub contradictions: Vec<String>,
+        /// Total number of chunks analyzed.
+        pub total_chunks: usize,
+    }
+
+    /// Citation-aware retrieval that tracks sources.
+    pub struct CitationAwareRetriever {
+        /// Whether to include full citation metadata.
+        include_full_metadata: bool,
+    }
+
+    impl CitationAwareRetriever {
+        /// Creates a new citation-aware retriever.
+        pub fn new() -> Self {
+            Self {
+                include_full_metadata: true,
+            }
+        }
+
+        /// Sets whether to include full metadata.
+        pub fn with_full_metadata(mut self, include: bool) -> Self {
+            self.include_full_metadata = include;
+            self
+        }
+
+        /// Retrieves chunks with citation information.
+        pub fn retrieve_with_citations(&self, chunks: &[RetrievedChunk]) -> Vec<CitedChunk> {
+            chunks
+                .iter()
+                .enumerate()
+                .map(|(index, chunk)| {
+                    let citation = self.generate_citation(&chunk.chunk, index + 1);
+                    CitedChunk {
+                        chunk: chunk.chunk.clone(),
+                        score: chunk.score,
+                        citation,
+                        citation_number: index + 1,
+                    }
+                })
+                .collect()
+        }
+
+        /// Generates a citation for a chunk.
+        fn generate_citation(&self, chunk: &DocumentChunk, citation_num: usize) -> String {
+            if self.include_full_metadata {
+                if let Some(ref metadata) = chunk.metadata {
+                    if let Some(title) = metadata.get("title").and_then(|v| v.as_str()) {
+                        return format!(
+                            "[{}] {}, chunk {}",
+                            citation_num, title, chunk.chunk_index
+                        );
+                    }
+                }
+            }
+            format!(
+                "[{}] Document {}, chunk {}",
+                citation_num, chunk.document_id, chunk.chunk_index
+            )
+        }
+    }
+
+    impl Default for CitationAwareRetriever {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Chunk with citation information.
+    #[derive(Debug, Clone)]
+    pub struct CitedChunk {
+        /// The chunk.
+        pub chunk: DocumentChunk,
+        /// Relevance score.
+        pub score: f32,
+        /// Citation string.
+        pub citation: String,
+        /// Citation number.
+        pub citation_number: usize,
+    }
+
+    /// Temporal retrieval for historical context.
+    pub struct TemporalRetriever {
+        /// Whether to prioritize recent documents.
+        recency_bias: bool,
+        /// Time decay factor (0.0-1.0).
+        decay_factor: f32,
+    }
+
+    impl TemporalRetriever {
+        /// Creates a new temporal retriever.
+        pub fn new() -> Self {
+            Self {
+                recency_bias: true,
+                decay_factor: 0.95,
+            }
+        }
+
+        /// Sets the recency bias.
+        pub fn with_recency_bias(mut self, enable: bool) -> Self {
+            self.recency_bias = enable;
+            self
+        }
+
+        /// Sets the time decay factor.
+        pub fn with_decay_factor(mut self, factor: f32) -> Self {
+            self.decay_factor = factor.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Retrieves chunks with temporal scoring.
+        pub fn retrieve_temporal(
+            &self,
+            chunks: &[RetrievedChunk],
+            reference_date: Option<chrono::DateTime<chrono::Utc>>,
+        ) -> Vec<TemporalRetrievalResult> {
+            let ref_date = reference_date.unwrap_or_else(chrono::Utc::now);
+
+            chunks
+                .iter()
+                .map(|chunk| {
+                    let temporal_score = self.compute_temporal_score(&chunk.chunk, ref_date);
+                    let adjusted_score = if self.recency_bias {
+                        chunk.score * temporal_score
+                    } else {
+                        chunk.score
+                    };
+
+                    TemporalRetrievalResult {
+                        chunk: chunk.chunk.clone(),
+                        base_score: chunk.score,
+                        temporal_score,
+                        adjusted_score,
+                        date: self.extract_date(&chunk.chunk),
+                    }
+                })
+                .collect()
+        }
+
+        /// Computes temporal relevance score.
+        fn compute_temporal_score(
+            &self,
+            chunk: &DocumentChunk,
+            reference_date: chrono::DateTime<chrono::Utc>,
+        ) -> f32 {
+            if let Some(chunk_date) = self.extract_date(chunk) {
+                let duration = reference_date.signed_duration_since(chunk_date);
+                let days_old = duration.num_days().max(0) as f32;
+
+                // Exponential decay based on age
+                self.decay_factor.powf(days_old / 365.0)
+            } else {
+                // No date information, use neutral score
+                0.5
+            }
+        }
+
+        /// Extracts date from chunk metadata.
+        fn extract_date(&self, chunk: &DocumentChunk) -> Option<chrono::DateTime<chrono::Utc>> {
+            chunk.metadata.as_ref().and_then(|metadata| {
+                metadata.get("date").and_then(|v| {
+                    v.as_str().and_then(|s| {
+                        chrono::DateTime::parse_from_rfc3339(s)
+                            .ok()
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                    })
+                })
+            })
+        }
+    }
+
+    impl Default for TemporalRetriever {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    /// Result from temporal retrieval.
+    #[derive(Debug, Clone)]
+    pub struct TemporalRetrievalResult {
+        /// The chunk.
+        pub chunk: DocumentChunk,
+        /// Base relevance score.
+        pub base_score: f32,
+        /// Temporal relevance score.
+        pub temporal_score: f32,
+        /// Adjusted score combining base and temporal.
+        pub adjusted_score: f32,
+        /// Extracted date if available.
+        pub date: Option<chrono::DateTime<chrono::Utc>>,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

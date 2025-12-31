@@ -834,7 +834,7 @@ fn test_in_operator_without_parens() {
 fn test_complex_conditions_with_new_operators() {
     let dsl = r#"
     STATUTE complex-new: "Complex with New Operators" {
-        DEFAULT priority 1
+        DEFAULT status 1
         WHEN AGE BETWEEN 18 AND 65 AND INCOME IN (30000, 40000, 50000)
         THEN GRANT "Targeted benefit"
         EXCEPTION WHEN AGE LIKE "6%" "Seniors exempt"
@@ -934,7 +934,7 @@ fn test_statute_yaml_serialization() {
 fn test_statute_json_serialization() {
     let dsl = r#"
     STATUTE benefits: "Benefits Eligibility" {
-        DEFAULT priority 1
+        DEFAULT level 1
         WHEN AGE IN (18, 21, 25) AND HAS citizen
         THEN GRANT "Benefits"
         EXCEPTION WHEN HAS emergency "Emergency bypass"
@@ -2353,7 +2353,7 @@ fn test_toml_roundtrip_complex() {
     STATUTE complex: "Complex Statute" {
         JURISDICTION "JP"
         VERSION 3
-        DEFAULT priority "high"
+        DEFAULT level "high"
         DEFAULT category "general"
         REQUIRES prerequisite1, prerequisite2
         WHEN (AGE BETWEEN 20 AND 60 OR HAS exemption) AND INCOME LIKE "salary%"
@@ -2600,6 +2600,10 @@ mod proptest_tests {
                 supersedes: vec![],
                 defaults: vec![],
                 requires: vec![],
+                delegates: vec![],
+                scope: None,
+                constraints: vec![],
+                priority: None,
             };
 
             let json = serde_json::to_string(&statute).unwrap();
@@ -2700,6 +2704,10 @@ mod proptest_tests {
                     supersedes: vec![],
                     defaults: vec![],
                     requires: vec![],
+                    delegates: vec![],
+                    scope: None,
+                    constraints: vec![],
+                    priority: None,
                 })
         }
 

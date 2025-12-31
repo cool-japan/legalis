@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn test_timelapse_creation() {
-        let mut timelapse = TimeLapseVisualization::new(30.0);
+        let timelapse = TimeLapseVisualization::new(30.0);
         assert_eq!(timelapse.frame_rate, 30.0);
         assert_eq!(timelapse.frame_count(), 0);
     }

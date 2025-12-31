@@ -159,11 +159,11 @@
 
 ### Advanced Semantic Analysis
 - [x] Type inference and checking for condition values
-- [ ] Data flow analysis for statute dependencies
-- [ ] Taint analysis for security-sensitive attributes
+- [x] Data flow analysis for statute dependencies
+- [x] Taint analysis for security-sensitive attributes
 - [x] Dead code detection (unreachable effects)
 - [x] Value range analysis for numeric conditions
-- [ ] Consistency checking across related statutes
+- [x] Consistency checking across related statutes
 
 ### Performance & Profiling (2025-12-27)
 - [x] Add detailed performance profiling utilities
@@ -211,18 +211,18 @@
 ## Roadmap for 0.1.0 Series
 
 ### Grammar Extensions (v0.1.1)
-- [ ] Add `DELEGATE` clause - delegation of authority to other statutes
-- [ ] Add `PRIORITY` clause - explicit priority ordering for conflicts
-- [ ] Add `SCOPE` clause - define applicable entity types
-- [ ] Add `CONSTRAINT` clause - invariant expressions that must hold
-- [ ] Add string interpolation in effect descriptions `${variable}`
+- [x] Add `DELEGATE` clause - delegation of authority to other statutes
+- [x] Add `PRIORITY` clause - explicit priority ordering for conflicts
+- [x] Add `SCOPE` clause - define applicable entity types
+- [x] Add `CONSTRAINT` clause - invariant expressions that must hold
+- [x] Add string interpolation in effect descriptions `${variable}`
 
 ### Advanced Parsing (v0.1.2)
 - [x] Add Unicode identifier support (Japanese, Chinese legal terms)
-- [ ] Add heredoc syntax for multi-line strings
-- [ ] Add escape sequences in string literals
-- [ ] Add scientific notation for numeric literals
-- [ ] Add binary/hex/octal numeric literals for technical codes
+- [x] Add heredoc syntax for multi-line strings
+- [x] Add escape sequences in string literals
+- [x] Add scientific notation for numeric literals
+- [x] Add binary/hex/octal numeric literals for technical codes
 
 ### Type System (v0.1.3)
 - [x] Add type annotations for condition values `age: Integer` (Type enum extended)
@@ -272,3 +272,112 @@
 - [ ] Add Rust generator (for embedding)
 - [ ] Add Java generator
 - [ ] Add C# generator
+
+## Roadmap for 0.2.0 Series
+
+### Language Server Protocol 2.0 (v0.2.0)
+- [ ] Add workspace symbol search across multiple files
+- [ ] Add call hierarchy for statute references
+- [ ] Add type hierarchy for condition inheritance
+- [ ] Add linked editing ranges for rename refactoring
+- [ ] Add selection range providers for smart selection
+
+### AI-Assisted Authoring (v0.2.1)
+- [ ] Add LLM-powered statute completion
+- [ ] Add natural language to DSL translation
+- [ ] Add semantic error explanation in plain language
+- [ ] Add auto-fix suggestions from AI analysis
+- [ ] Add DSL to natural language documentation generation
+
+### Multi-Language DSL (v0.2.2)
+- [ ] Add Japanese statute syntax variant (日本法令DSL)
+- [ ] Add German statute syntax variant (Deutsche Rechtssprache)
+- [ ] Add French statute syntax variant (Syntaxe juridique française)
+- [ ] Add Chinese statute syntax variant (中文法规语法)
+- [ ] Add Arabic statute syntax variant (with RTL support)
+
+### Visual DSL Editor (v0.2.3)
+- [ ] Add block-based visual programming interface
+- [ ] Add drag-and-drop condition builder
+- [ ] Add visual flow diagram for statute logic
+- [ ] Add real-time DSL text synchronization
+- [ ] Add export to SVG/PNG for documentation
+
+### Advanced Type Inference (v0.2.4)
+- [ ] Add Hindley-Milner type inference for conditions
+- [ ] Add algebraic data type support
+- [ ] Add polymorphic condition functions
+- [ ] Add type classes for condition behaviors
+- [ ] Add row polymorphism for effect parameters
+
+### Contract DSL Extension (v0.2.5)
+- [ ] Add contract-specific syntax extensions
+- [ ] Add clause templates for common provisions
+- [ ] Add obligation/right relationship modeling
+- [ ] Add party definition syntax
+- [ ] Add performance condition blocks
+
+### Regulatory DSL Extension (v0.2.6)
+- [ ] Add compliance requirement syntax
+- [ ] Add penalty structure definitions
+- [ ] Add reporting obligation blocks
+- [ ] Add inspection/audit requirement syntax
+- [ ] Add deadline and timeline specifications
+
+### Test DSL Extension (v0.2.7)
+- [ ] Add inline test case syntax `@test`
+- [ ] Add property-based test specifications
+- [ ] Add coverage requirement annotations
+- [ ] Add snapshot assertion syntax
+- [ ] Add mock entity definitions
+
+### IDE Integration Enhancements (v0.2.8)
+- [ ] Add JetBrains plugin (IntelliJ, CLion)
+- [ ] Add Neovim/Vim plugin with TreeSitter
+- [ ] Add Emacs major mode
+- [ ] Add Zed editor extension
+- [ ] Add web-based Monaco editor support
+
+### Formal Specification Export (v0.2.9)
+- [ ] Add Coq export for proof assistants
+- [ ] Add Lean 4 export for theorem proving
+- [ ] Add TLA+ export for model checking
+- [ ] Add Alloy export for constraint analysis
+- [ ] Add Z3 SMT-LIB direct export
+
+## Roadmap for 0.3.0 Series (Next-Gen Features)
+
+### Natural Language Understanding (v0.3.0)
+- [ ] Add NLU parser for legislative text
+- [ ] Add automatic DSL extraction from laws
+- [ ] Add entity recognition for legal concepts
+- [ ] Add coreference resolution for statute references
+- [ ] Add semantic role labeling for conditions
+
+### Collaborative Editing (v0.3.1)
+- [ ] Add real-time collaborative DSL editing
+- [ ] Add operational transformation for conflicts
+- [ ] Add presence awareness (cursor positions)
+- [ ] Add commenting and review system
+- [ ] Add version branching for draft statutes
+
+### Domain-Specific Language Variants (v0.3.2)
+- [ ] Add tax law specialized syntax
+- [ ] Add criminal law specialized syntax
+- [ ] Add environmental regulation syntax
+- [ ] Add financial services regulation syntax
+- [ ] Add healthcare compliance syntax
+
+### Automated Refactoring (v0.3.3)
+- [ ] Add extract condition refactoring
+- [ ] Add inline condition refactoring
+- [ ] Add merge similar statutes refactoring
+- [ ] Add split complex statute refactoring
+- [ ] Add normalize condition structure refactoring
+
+### Grammar Extension Framework (v0.3.4)
+- [ ] Add user-defined syntax extensions
+- [ ] Add domain-specific operator definitions
+- [ ] Add custom literal syntax
+- [ ] Add pluggable parser modules
+- [ ] Add syntax backward compatibility layers

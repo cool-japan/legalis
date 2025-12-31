@@ -263,8 +263,7 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_variables() {
-        let mut parser =
-            InterpolationParser::new("Grant ${amount} to ${recipient}".to_string());
+        let mut parser = InterpolationParser::new("Grant ${amount} to ${recipient}".to_string());
         let tokens = parser.parse().unwrap();
 
         assert_eq!(tokens.len(), 4);
@@ -417,16 +416,12 @@ mod tests {
         let tokens = parser.parse().unwrap();
 
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            Token::Literal("Line1\nTab\tQuote\"".to_string())
-        );
+        assert_eq!(tokens[0], Token::Literal("Line1\nTab\tQuote\"".to_string()));
     }
 
     #[test]
     fn test_escape_with_interpolation() {
-        let mut parser =
-            InterpolationParser::new("Path: C:\\\\Users\\\\${name}\\nEnd".to_string());
+        let mut parser = InterpolationParser::new("Path: C:\\\\Users\\\\${name}\\nEnd".to_string());
         let tokens = parser.parse().unwrap();
 
         assert_eq!(tokens.len(), 3);

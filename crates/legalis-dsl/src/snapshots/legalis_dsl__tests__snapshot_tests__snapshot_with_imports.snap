@@ -26,3 +26,7 @@ statutes:
     supersedes: []
     defaults: []
     requires: []
+    delegates: []
+    scope: ~
+    constraints: []
+    priority: ~

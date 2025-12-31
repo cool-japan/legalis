@@ -3,8 +3,6 @@
 //! This module generates compliance matrices that map requirements, controls,
 //! and regulations for auditing and compliance verification.
 
-#[cfg(test)]
-use crate::ast::EffectNode;
 use crate::ast::LegalDocument;
 use std::collections::{HashMap, HashSet};
 
@@ -270,6 +268,10 @@ mod tests {
             supersedes: vec![],
             defaults: vec![],
             requires: vec![],
+            delegates: vec![],
+            scope: None,
+            constraints: vec![],
+            priority: None,
         }
     }
 

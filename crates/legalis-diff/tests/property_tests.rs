@@ -262,6 +262,197 @@ proptest! {
             prop_assert_eq!(result.impact.severity, Severity::None, "No changes = None severity");
         }
     }
+
+    /// Property: Diff should handle extreme values gracefully
+    #[test]
+    fn prop_extreme_values_handled(
+        title_len in 0usize..1000,
+        precond_count in 0usize..100
+    ) {
+        let title = "A".repeat(title_len);
+        let effect = Effect::new(EffectType::Grant, "Test");
+
+        let mut statute1 = Statute::new("test", &title, effect.clone());
+        let statute2 = Statute::new("test", &title, effect);
+
+        // Add many preconditions
+        for i in 0..precond_count {
+            statute1.preconditions.push(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: i as u32,
+            });
+        }
+
+        let result = diff(&statute1, &statute2);
+        prop_assert!(result.is_ok(), "Should handle extreme values without panic");
+    }
+
+    /// Property: Diff should be commutative in terms of detecting changes
+    #[test]
+    fn prop_diff_detects_inverse_changes(old in statute_strategy(), new in statute_strategy()) {
+        if old.id != new.id {
+            return Ok(());
+        }
+
+        let forward = diff(&old, &new).expect("Forward diff should succeed");
+        let backward = diff(&new, &old).expect("Backward diff should succeed");
+
+        // Same number of changes in both directions
+        prop_assert_eq!(forward.changes.len(), backward.changes.len(),
+            "Forward and backward should have same change count");
+    }
+
+    /// Property: Multiple consecutive diffs should maintain consistency
+    #[test]
+    fn prop_consecutive_diffs_consistent(
+        s1 in statute_strategy(),
+        s2 in statute_strategy(),
+        s3 in statute_strategy()
+    ) {
+        if s1.id != s2.id || s2.id != s3.id {
+            return Ok(());
+        }
+
+        let diff12 = diff(&s1, &s2).expect("Diff 1->2 should succeed");
+        let diff23 = diff(&s2, &s3).expect("Diff 2->3 should succeed");
+        let diff13 = diff(&s1, &s3).expect("Diff 1->3 should succeed");
+
+        // If no changes between 1 and 2, and no changes between 2 and 3,
+        // there should be no changes between 1 and 3
+        if diff12.changes.is_empty() && diff23.changes.is_empty() {
+            prop_assert!(diff13.changes.is_empty(),
+                "Transitive no-change property should hold");
+        }
+    }
+
+    /// Property: Severity should never decrease when adding changes
+    #[test]
+    fn prop_severity_monotonic(statute in statute_strategy()) {
+        let base_diff = diff(&statute, &statute).expect("Self-diff should succeed");
+        prop_assert_eq!(base_diff.impact.severity, Severity::None);
+
+        // Make a change
+        let mut modified = statute.clone();
+        modified.title = format!("{}_modified", modified.title);
+
+        let modified_diff = diff(&statute, &modified).expect("Diff should succeed");
+        prop_assert!(modified_diff.impact.severity > Severity::None,
+            "Any change should increase severity");
+    }
+}
+
+#[cfg(test)]
+mod fuzz_style_tests {
+    use super::*;
+    use legalis_diff::{diff_effect_only, diff_preconditions_only};
+
+    proptest! {
+        /// Fuzz test: Random mutations should not panic
+        #[test]
+        fn fuzz_random_statute_mutations(statute in statute_strategy(), seed in any::<u64>()) {
+            use std::collections::hash_map::RandomState;
+            use std::hash::{BuildHasher, Hash, Hasher};
+
+            let mut modified = statute.clone();
+
+            // Apply random mutations based on seed
+            let mut hasher = RandomState::new().build_hasher();
+            seed.hash(&mut hasher);
+            let mutation_type = hasher.finish() % 5;
+
+            match mutation_type {
+                0 => modified.title.push_str("_mutated"),
+                1 => {
+                    if !modified.preconditions.is_empty() {
+                        modified.preconditions.clear();
+                    }
+                },
+                2 => modified.effect = Effect::new(EffectType::Revoke, "Mutated"),
+                3 => modified.discretion_logic = Some("Mutated logic".to_string()),
+                _ => modified.id.push_str("x"),
+            }
+
+            // Should not panic, even with ID mismatch
+            let _ = diff(&statute, &modified);
+        }
+
+        /// Fuzz test: Partial diff functions should not panic
+        #[test]
+        fn fuzz_partial_diffs(old in statute_strategy(), new in statute_strategy()) {
+            if old.id != new.id {
+                return Ok(());
+            }
+
+            // These should never panic
+            let _ = diff_preconditions_only(&old, &new);
+            let _ = diff_effect_only(&old, &new);
+        }
+
+        /// Fuzz test: Large statute sequences
+        #[test]
+        fn fuzz_large_sequences(count in 1usize..50) {
+            let effect = Effect::new(EffectType::Grant, "Test");
+            let statutes: Vec<_> = (0..count)
+                .map(|i| Statute::new("test", &format!("Title {}", i), effect.clone()))
+                .collect();
+
+            let result = legalis_diff::diff_sequence(&statutes);
+            prop_assert!(result.is_ok(), "Large sequences should not panic");
+        }
+
+        /// Fuzz test: Deeply nested condition combinations
+        #[test]
+        fn fuzz_complex_preconditions(cond_count in 0usize..50) {
+            let effect = Effect::new(EffectType::Grant, "Test");
+            let mut statute1 = Statute::new("test", "Title", effect.clone());
+            let mut statute2 = Statute::new("test", "Title", effect);
+
+            // Add many different types of conditions
+            for i in 0..cond_count {
+                let cond = match i % 4 {
+                    0 => Condition::Age {
+                        operator: ComparisonOp::GreaterOrEqual,
+                        value: i as u32,
+                    },
+                    1 => Condition::Income {
+                        operator: ComparisonOp::LessOrEqual,
+                        value: i as u64 * 1000,
+                    },
+                    2 => Condition::HasAttribute {
+                        key: format!("attr_{}", i),
+                    },
+                    _ => Condition::Geographic {
+                        region_type: RegionType::Country,
+                        region_id: "US".to_string(),
+                    },
+                };
+
+                if i % 2 == 0 {
+                    statute1.preconditions.push(cond);
+                } else {
+                    statute2.preconditions.push(cond);
+                }
+            }
+
+            let result = diff(&statute1, &statute2);
+            prop_assert!(result.is_ok(), "Complex preconditions should not panic");
+        }
+
+        /// Fuzz test: Unicode and special characters in strings
+        #[test]
+        fn fuzz_unicode_strings(
+            title in "\\PC{0,100}",
+            discretion in prop::option::of("\\PC{0,200}")
+        ) {
+            let effect = Effect::new(EffectType::Grant, "Test");
+            let statute1 = Statute::new("test", &title, effect.clone());
+            let mut statute2 = Statute::new("test", &title, effect);
+            statute2.discretion_logic = discretion;
+
+            let result = diff(&statute1, &statute2);
+            prop_assert!(result.is_ok(), "Unicode strings should not panic");
+        }
+    }
 }
 
 #[cfg(test)]

@@ -137,7 +137,9 @@ impl<'a> HeredocParser<'a> {
         if is_quoted {
             // Skip opening quote
             if self.peek_char() != Some('"') {
-                return Err(HeredocError::InvalidDelimiter("expected opening quote".to_string()));
+                return Err(HeredocError::InvalidDelimiter(
+                    "expected opening quote".to_string(),
+                ));
             }
             self.position += 1;
 
@@ -281,7 +283,10 @@ mod tests {
         let result = parse_heredoc(input);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), HeredocError::UnclosedHeredoc(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            HeredocError::UnclosedHeredoc(_)
+        ));
     }
 
     #[test]

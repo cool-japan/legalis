@@ -5,12 +5,11 @@
 
 use axum::{
     body::Body,
-    http::{HeaderMap, HeaderValue, Request, StatusCode, header},
+    http::{HeaderMap, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::Response,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 /// Security check result
 #[derive(Debug, Clone, Serialize, Deserialize)]

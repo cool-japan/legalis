@@ -326,6 +326,10 @@ mod tests {
             supersedes: Vec::new(),
             defaults: Vec::new(),
             requires: Vec::new(),
+            delegates: vec![],
+            scope: None,
+            constraints: vec![],
+            priority: None,
         }
     }
 

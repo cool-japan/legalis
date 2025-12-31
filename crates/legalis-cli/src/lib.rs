@@ -10,10 +10,12 @@ pub mod batch;
 pub mod cache;
 pub mod commands;
 pub mod config;
+pub mod debug;
 pub mod error_suggestions;
 pub mod interactive;
 pub mod parallel;
 pub mod plugin;
+pub mod profile;
 pub mod progress;
 pub mod tutorial;
 
@@ -708,6 +710,67 @@ pub enum Commands {
         #[command(subcommand)]
         operation: BatchOperation,
     },
+
+    /// Profile CPU and memory usage
+    Profile {
+        /// Input statute file(s)
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Profile type (cpu, memory, all)
+        #[arg(long, default_value = "all")]
+        profile_type: ProfileType,
+
+        /// Number of iterations for profiling
+        #[arg(long, default_value = "100")]
+        iterations: usize,
+
+        /// Output file for profile results (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Generate flamegraph (requires flamegraph to be installed)
+        #[arg(long)]
+        flamegraph: bool,
+
+        /// Output directory for flamegraph files
+        #[arg(long, default_value = "./profiles")]
+        flamegraph_dir: String,
+    },
+
+    /// Debug step-through evaluation
+    Debug {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Test case file with input variables
+        #[arg(short, long)]
+        test_case: String,
+
+        /// Enable interactive mode (step through evaluation)
+        #[arg(long)]
+        interactive: bool,
+
+        /// Show memory allocations
+        #[arg(long)]
+        show_memory: bool,
+
+        /// Show timing breakdown
+        #[arg(long)]
+        show_timing: bool,
+
+        /// Output file for debug trace (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Registry operations (push, pull, diff, sync, login, logout)
+    Registry {
+        /// Registry operation to perform
+        #[command(subcommand)]
+        operation: RegistryOperation,
+    },
 }
 
 /// Batch operation types.
@@ -815,6 +878,136 @@ pub enum BatchOperation {
         /// Journal file for tracking progress
         #[arg(long, default_value = ".batch_journal.json")]
         journal: String,
+    },
+}
+
+/// Registry operation types.
+#[derive(Subcommand)]
+pub enum RegistryOperation {
+    /// Push a statute to a remote registry
+    Push {
+        /// Input statute file
+        #[arg(short, long)]
+        input: String,
+
+        /// Registry URL (defaults to configured registry)
+        #[arg(short, long)]
+        registry: Option<String>,
+
+        /// Tags to associate with the statute
+        #[arg(short, long)]
+        tags: Vec<String>,
+
+        /// Visibility (public, private)
+        #[arg(long, default_value = "public")]
+        visibility: RegistryVisibility,
+
+        /// Dry run (show what would be pushed without actually pushing)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force push (overwrite existing statute)
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Pull a statute from a remote registry
+    Pull {
+        /// Statute ID to pull
+        #[arg(short, long)]
+        statute_id: String,
+
+        /// Registry URL (defaults to configured registry)
+        #[arg(short, long)]
+        registry: Option<String>,
+
+        /// Output directory for pulled statute
+        #[arg(short, long, default_value = "./statutes")]
+        output: String,
+
+        /// Specific version to pull (defaults to latest)
+        #[arg(short, long)]
+        version: Option<String>,
+
+        /// Force pull (overwrite existing local statute)
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Compare local statute with remote registry version
+    Diff {
+        /// Local statute file
+        #[arg(short, long)]
+        local: String,
+
+        /// Statute ID in registry (defaults to ID from local file)
+        #[arg(short, long)]
+        statute_id: Option<String>,
+
+        /// Registry URL (defaults to configured registry)
+        #[arg(short, long)]
+        registry: Option<String>,
+
+        /// Output format
+        #[arg(long, default_value = "text")]
+        diff_format: DiffFormat,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Synchronize local statutes with registry
+    Sync {
+        /// Directory containing local statutes
+        #[arg(short, long, default_value = "./statutes")]
+        directory: String,
+
+        /// Registry URL (defaults to configured registry)
+        #[arg(short, long)]
+        registry: Option<String>,
+
+        /// Sync direction (pull, push, both)
+        #[arg(long, default_value = "pull")]
+        direction: SyncDirection,
+
+        /// Conflict resolution strategy (local, remote, ask)
+        #[arg(long, default_value = "ask")]
+        conflict: ConflictResolution,
+
+        /// Dry run (show what would be synced without actually syncing)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Log in to a registry
+    Login {
+        /// Registry URL
+        #[arg(short, long)]
+        registry: String,
+
+        /// Username (will prompt if not provided)
+        #[arg(short, long)]
+        username: Option<String>,
+
+        /// Password (will prompt securely if not provided)
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// API token (alternative to username/password)
+        #[arg(short, long)]
+        token: Option<String>,
+    },
+
+    /// Log out from a registry
+    Logout {
+        /// Registry URL (logs out from all registries if not specified)
+        #[arg(short, long)]
+        registry: Option<String>,
+
+        /// Clear all stored credentials
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -1081,6 +1274,52 @@ pub enum GraphFormat {
     Json,
     /// SVG image format
     Svg,
+}
+
+/// Profile type options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ProfileType {
+    /// Profile CPU usage only
+    Cpu,
+    /// Profile memory usage only
+    Memory,
+    /// Profile both CPU and memory
+    #[default]
+    All,
+}
+
+/// Registry visibility options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum RegistryVisibility {
+    /// Public visibility (anyone can view)
+    #[default]
+    Public,
+    /// Private visibility (only authorized users)
+    Private,
+}
+
+/// Sync direction options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum SyncDirection {
+    /// Pull from registry to local
+    #[default]
+    Pull,
+    /// Push from local to registry
+    Push,
+    /// Synchronize both ways
+    Both,
+}
+
+/// Conflict resolution strategy.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ConflictResolution {
+    /// Keep local version
+    Local,
+    /// Use remote version
+    Remote,
+    /// Ask user for each conflict
+    #[default]
+    Ask,
 }
 
 /// Generates shell completions and writes them to stdout.

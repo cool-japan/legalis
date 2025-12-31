@@ -123,18 +123,18 @@
 - [x] Add batch operation journaling for recovery
 
 ### Profile & Debug (v0.1.4)
-- [ ] Add `profile` command - CPU/memory profiling
-- [ ] Add `debug` command - step-through evaluation
-- [ ] Add `flamegraph` output for performance analysis
-- [ ] Add memory usage reporting
-- [ ] Add timing breakdown for complex operations
+- [x] Add `profile` command - CPU/memory profiling
+- [x] Add `debug` command - step-through evaluation
+- [x] Add `flamegraph` output for performance analysis
+- [x] Add memory usage reporting
+- [x] Add timing breakdown for complex operations
 
 ### Registry Commands (v0.1.5)
-- [ ] Add `registry push` - push statute to registry
-- [ ] Add `registry pull` - pull statutes from registry
-- [ ] Add `registry diff` - diff local vs remote
-- [ ] Add `registry sync` - synchronize with registry
-- [ ] Add `registry login/logout` - authentication
+- [x] Add `registry push` - push statute to registry
+- [x] Add `registry pull` - pull statutes from registry
+- [x] Add `registry diff` - diff local vs remote
+- [x] Add `registry sync` - synchronize with registry
+- [x] Add `registry login/logout` - authentication
 
 ### Plugin System (v0.1.6)
 - [ ] Add plugin discovery and loading
@@ -163,3 +163,112 @@
 - [ ] Add built-in script library
 - [ ] Add script debugging support
 - [ ] Add script package manager
+
+## Roadmap for 0.2.0 Series
+
+### AI-Powered CLI (v0.2.0)
+- [ ] Add natural language command parsing
+- [ ] Implement AI-suggested commands
+- [ ] Add intelligent autocomplete
+- [ ] Create AI-powered help system
+- [ ] Add command intent recognition
+
+### Interactive TUI (v0.2.1)
+- [ ] Add full-featured TUI dashboard
+- [ ] Implement keyboard shortcuts customization
+- [ ] Add mouse support for navigation
+- [ ] Create split-pane views
+- [ ] Add resizable panels
+
+### Workflow Automation (v0.2.2)
+- [ ] Add workflow definition files
+- [ ] Implement task pipelines
+- [ ] Add conditional execution
+- [ ] Create parallel task execution
+- [ ] Add workflow templates library
+
+### Cloud Integration (v0.2.3)
+- [ ] Add AWS CLI integration
+- [ ] Implement Azure CLI integration
+- [ ] Add GCP CLI integration
+- [ ] Create multi-cloud management
+- [ ] Add cloud resource provisioning
+
+### Collaboration Features (v0.2.4)
+- [ ] Add team workspace support
+- [ ] Implement shared command history
+- [ ] Add collaborative sessions
+- [ ] Create team notification system
+- [ ] Add role-based command access
+
+### Performance Profiling (v0.2.5)
+- [ ] Add command execution profiling
+- [ ] Implement memory usage tracking
+- [ ] Add bottleneck detection
+- [ ] Create performance reports
+- [ ] Add optimization suggestions
+
+### Offline Capabilities (v0.2.6)
+- [ ] Add offline command queue
+- [ ] Implement local caching
+- [ ] Add sync when online
+- [ ] Create offline validation
+- [ ] Add conflict resolution for offline changes
+
+### Accessibility (v0.2.7)
+- [ ] Add screen reader support
+- [ ] Implement high contrast mode
+- [ ] Add keyboard-only navigation
+- [ ] Create voice command support
+- [ ] Add customizable output verbosity
+
+### Plugin Ecosystem (v0.2.8)
+- [ ] Add plugin marketplace
+- [ ] Implement plugin versioning
+- [ ] Add plugin dependency management
+- [ ] Create plugin development kit
+- [ ] Add plugin security scanning
+
+### Enterprise Features (v0.2.9)
+- [ ] Add SSO authentication
+- [ ] Implement audit logging
+- [ ] Add compliance mode
+- [ ] Create enterprise policy enforcement
+- [ ] Add centralized configuration management
+
+## Roadmap for 0.3.0 Series (Next-Gen Features)
+
+### Voice-First CLI (v0.3.0)
+- [ ] Add voice command input
+- [ ] Implement voice feedback output
+- [ ] Add multilingual voice support
+- [ ] Create hands-free operation mode
+- [ ] Add voice command training
+
+### Intelligent Assistant (v0.3.1)
+- [ ] Add contextual command suggestions
+- [ ] Implement learning from user patterns
+- [ ] Add proactive recommendations
+- [ ] Create predictive command execution
+- [ ] Add natural conversation mode
+
+### AR/VR Integration (v0.3.2)
+- [ ] Add AR command overlay
+- [ ] Implement VR workspace
+- [ ] Add spatial command organization
+- [ ] Create gesture-based commands
+- [ ] Add immersive documentation
+
+### Distributed CLI (v0.3.3)
+- [ ] Add multi-node command execution
+- [ ] Implement distributed workflows
+- [ ] Add cluster management
+- [ ] Create edge computing support
+- [ ] Add federated command routing
+
+### Self-Healing CLI (v0.3.4)
+- [ ] Add automatic error recovery
+- [ ] Implement self-diagnostic commands
+- [ ] Add automatic updates
+- [ ] Create configuration repair
+- [ ] Add crash recovery and resume

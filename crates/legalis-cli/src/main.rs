@@ -357,6 +357,125 @@ async fn main() -> Result<()> {
         Commands::RegistryBrowser { registry, search } => {
             commands::handle_registry_browser(registry, *search)?;
         }
+        Commands::Profile {
+            input,
+            profile_type,
+            iterations,
+            output,
+            flamegraph,
+            flamegraph_dir,
+        } => {
+            commands::handle_profile(
+                input,
+                profile_type,
+                *iterations,
+                output.as_deref(),
+                *flamegraph,
+                flamegraph_dir,
+                &cli.format,
+            )?;
+        }
+        Commands::Debug {
+            input,
+            test_case,
+            interactive,
+            show_memory,
+            show_timing,
+            output,
+        } => {
+            commands::handle_debug(
+                input,
+                test_case,
+                *interactive,
+                *show_memory,
+                *show_timing,
+                output.as_deref(),
+                &cli.format,
+            )?;
+        }
+        Commands::Registry { operation } => {
+            use legalis_cli::RegistryOperation;
+            match operation {
+                RegistryOperation::Push {
+                    input,
+                    registry,
+                    tags,
+                    visibility,
+                    dry_run,
+                    force,
+                } => {
+                    commands::handle_registry_push(
+                        input,
+                        registry.as_deref(),
+                        tags,
+                        visibility,
+                        *dry_run,
+                        *force,
+                    )?;
+                }
+                RegistryOperation::Pull {
+                    statute_id,
+                    registry,
+                    output,
+                    version,
+                    force,
+                } => {
+                    commands::handle_registry_pull(
+                        statute_id,
+                        registry.as_deref(),
+                        output,
+                        version.as_deref(),
+                        *force,
+                    )?;
+                }
+                RegistryOperation::Diff {
+                    local,
+                    statute_id,
+                    registry,
+                    diff_format,
+                    output,
+                } => {
+                    commands::handle_registry_diff(
+                        local,
+                        statute_id.as_deref(),
+                        registry.as_deref(),
+                        diff_format,
+                        output.as_deref(),
+                    )?;
+                }
+                RegistryOperation::Sync {
+                    directory,
+                    registry,
+                    direction,
+                    conflict,
+                    dry_run,
+                } => {
+                    commands::handle_registry_sync(
+                        directory,
+                        registry.as_deref(),
+                        direction,
+                        conflict,
+                        *dry_run,
+                    )?;
+                }
+                RegistryOperation::Login {
+                    registry,
+                    username,
+                    password,
+                    token,
+                } => {
+                    commands::handle_registry_login(
+                        registry,
+                        username.as_deref(),
+                        password.as_deref(),
+                        token.as_deref(),
+                    )?;
+                }
+                RegistryOperation::Logout { registry, all } => {
+                    commands::handle_registry_logout(registry.as_deref(), *all)?;
+                }
+            }
+        }
         Commands::Batch { operation } => {
             use legalis_cli::BatchOperation;
             match operation {

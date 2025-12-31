@@ -19,11 +19,16 @@ pub mod akoma_ntoso;
 pub mod async_converter;
 #[cfg(feature = "batch")]
 pub mod batch;
+pub mod bpmn;
 pub mod cache;
 pub mod catala;
+pub mod cli;
+pub mod cmmn;
 pub mod compatibility;
 pub mod coverage;
 pub mod creative_commons;
+pub mod dmn;
+pub mod dms;
 #[cfg(test)]
 mod edge_cases_tests;
 pub mod enhanced;
@@ -37,16 +42,21 @@ pub mod legaldocml;
 pub mod legalruleml;
 pub mod lkif;
 pub mod metalex;
+pub mod metrics;
 pub mod mpeg21_rel;
 pub mod optimizations;
 pub mod performance;
 pub mod quality;
+pub mod rest_api;
+pub mod ruleml;
+pub mod sbvr;
 pub mod schema;
 pub mod spdx;
 pub mod stipula;
 pub mod streaming;
 pub mod transformation;
 pub mod validation;
+pub mod webhooks;
 
 use legalis_core::Statute;
 use serde::{Deserialize, Serialize};
@@ -109,6 +119,16 @@ pub enum LegalFormat {
     Spdx,
     /// Native Legalis DSL format
     Legalis,
+    /// BPMN - Business Process Model and Notation (OMG)
+    Bpmn,
+    /// DMN - Decision Model and Notation (OMG)
+    Dmn,
+    /// CMMN - Case Management Model and Notation (OMG)
+    Cmmn,
+    /// RuleML - Rule Markup Language
+    RuleML,
+    /// SBVR - Semantics of Business Vocabulary and Business Rules
+    Sbvr,
 }
 
 impl LegalFormat {
@@ -128,6 +148,11 @@ impl LegalFormat {
             LegalFormat::CreativeCommons => "rdf",
             LegalFormat::Spdx => "spdx",
             LegalFormat::Legalis => "legal",
+            LegalFormat::Bpmn => "bpmn",
+            LegalFormat::Dmn => "dmn",
+            LegalFormat::Cmmn => "cmmn",
+            LegalFormat::RuleML => "ruleml",
+            LegalFormat::Sbvr => "sbvr",
         }
     }
 
@@ -141,6 +166,11 @@ impl LegalFormat {
             "rdf" => Some(LegalFormat::CreativeCommons),
             "spdx" => Some(LegalFormat::Spdx),
             "legal" => Some(LegalFormat::Legalis),
+            "bpmn" => Some(LegalFormat::Bpmn),
+            "dmn" => Some(LegalFormat::Dmn),
+            "cmmn" => Some(LegalFormat::Cmmn),
+            "ruleml" => Some(LegalFormat::RuleML),
+            "sbvr" => Some(LegalFormat::Sbvr),
             _ => None,
         }
     }
@@ -251,6 +281,11 @@ impl LegalConverter {
                 Box::new(mpeg21_rel::Mpeg21RelImporter::new()),
                 Box::new(creative_commons::CreativeCommonsImporter::new()),
                 Box::new(spdx::SpdxImporter::new()),
+                Box::new(bpmn::BpmnImporter::new()),
+                Box::new(dmn::DmnImporter::new()),
+                Box::new(cmmn::CmmnImporter::new()),
+                Box::new(ruleml::RuleMLImporter::new()),
+                Box::new(sbvr::SbvrImporter::new()),
             ],
             exporters: vec![
                 Box::new(catala::CatalaExporter::new()),
@@ -265,6 +300,11 @@ impl LegalConverter {
                 Box::new(mpeg21_rel::Mpeg21RelExporter::new()),
                 Box::new(creative_commons::CreativeCommonsExporter::new()),
                 Box::new(spdx::SpdxExporter::new()),
+                Box::new(bpmn::BpmnExporter::new()),
+                Box::new(dmn::DmnExporter::new()),
+                Box::new(cmmn::CmmnExporter::new()),
+                Box::new(ruleml::RuleMLExporter::new()),
+                Box::new(sbvr::SbvrExporter::new()),
             ],
             cache: None,
         }

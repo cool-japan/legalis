@@ -451,6 +451,10 @@ mod tests {
             supersedes: vec![],
             defaults: vec![],
             requires: vec!["prereq-1".to_string()],
+            delegates: vec![],
+            scope: None,
+            constraints: vec![],
+            priority: None,
         }
     }
 

@@ -29,6 +29,7 @@ batch = ["walkdir", "notify", "serde_yaml", "rayon"]
 [dev-dependencies]
 criterion = "0.5"
 tokio = { version = "1.42", features = ["macros", "rt"] }
+tempfile = "3.14"
 
 [[bench]]
 name = "conversion"
