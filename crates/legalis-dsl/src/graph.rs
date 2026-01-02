@@ -337,11 +337,14 @@ mod tests {
 
     fn sample_document() -> LegalDocument {
         LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute-a".to_string(),
                     title: "Statute A".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![EffectNode {
                         effect_type: "grant".to_string(),
@@ -362,6 +365,7 @@ mod tests {
                 StatuteNode {
                     id: "statute-b".to_string(),
                     title: "Statute B".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,
@@ -378,6 +382,7 @@ mod tests {
                 StatuteNode {
                     id: "statute-c".to_string(),
                     title: "Statute C".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,

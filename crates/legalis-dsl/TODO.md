@@ -1,5 +1,13 @@
 # legalis-dsl TODO
 
+## Status Summary
+
+Version: 0.2.0 | Status: Stable | Tests: Passing | Warnings: 0
+
+All v0.1.1-v0.1.3 features complete (Grammar Extensions, Advanced Parsing, Type System). Module system (v0.1.4+) and LSP enhancements planned for future releases.
+
+---
+
 ## Completed
 
 - [x] Add IMPORT statement for cross-statute references
@@ -181,11 +189,11 @@
 
 ### Documentation Generation (2025-12-27)
 - [x] Generate HTML documentation from AST
-- [ ] Create PDF export using LaTeX
+- [x] Create PDF export using LaTeX
 - [x] Add Markdown documentation generator
 - [x] Generate statute dependency diagrams
 - [x] Create cross-reference tables
-- [ ] Add search index generation
+- [x] Add search index generation
 
 ### Metadata & Extraction (2025-12-27)
 - [x] Extract jurisdiction hierarchy
@@ -202,8 +210,8 @@
 - [x] Create test case generators
 
 ### Integration & Tooling (2025-12-27)
-- [ ] Add GitHub Actions workflow support
-- [ ] Create pre-commit hooks for validation
+- [x] Add GitHub Actions workflow support
+- [x] Create pre-commit hooks for validation
 - [ ] Add VS Code extension improvements
 - [x] Implement watch mode for continuous validation
 - [x] Create diff tool for statute comparison
@@ -231,12 +239,23 @@
 - [x] Add enum types for constrained values `status: Active | Inactive`
 - [x] Add type aliases `type Currency = Decimal`
 
-### Module System (v0.1.4)
-- [ ] Add namespace support `namespace tax.income.2024`
-- [ ] Add wildcard imports `IMPORT tax.income.*`
-- [ ] Add selective imports `IMPORT { credit, deduction } FROM tax.income`
-- [ ] Add re-exports for public API curation
-- [ ] Add private/public visibility modifiers
+### Module System (v0.1.4) ✅ COMPLETE
+- [x] Add namespace support `namespace tax.income.2024` - AST structures added
+- [x] Add wildcard imports `IMPORT tax.income.*` - ImportKind enum added
+- [x] Add selective imports `IMPORT { credit, deduction} FROM tax.income` - ImportKind::Selective added
+- [x] Add re-exports for public API curation - ExportNode added
+- [x] Add private/public visibility modifiers - Visibility enum added
+- [x] Created module_system.rs with core types (ImportKind, Visibility, NamespaceNode, ExportNode)
+- [x] Updated Token enum with module keywords (NAMESPACE, FROM, PUBLIC, PRIVATE, EXPORT, Star)
+- [x] Updated tokenizer to recognize new keywords
+- [x] Updated AST structures (LegalDocument gains namespace/exports, StatuteNode gains visibility, ImportNode gains kind)
+- [x] Updated parser to create structures with new fields
+- [x] Parser implementation for namespace declarations (`parse_namespace`)
+- [x] Parser implementation for export declarations (`parse_export`) - supports wildcard, selective, and re-export
+- [x] Parser implementation for wildcard imports (`IMPORT path.*`)
+- [x] Parser implementation for selective imports (`IMPORT { items } FROM path`)
+- [x] Parser implementation for visibility modifiers (`PUBLIC STATUTE` / `PRIVATE STATUTE`)
+- [x] Core library builds successfully with all module system features
 
 ### Macro System (v0.1.5)
 - [ ] Add macro definition syntax `MACRO benefit_eligibility($age, $income)`

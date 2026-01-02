@@ -373,6 +373,7 @@ mod tests {
     fn sample_statute() -> StatuteNode {
         StatuteNode {
             id: "test-statute".to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Test Statute".to_string(),
             conditions: vec![
                 ConditionNode::Comparison {
@@ -441,6 +442,8 @@ mod tests {
     #[test]
     fn test_document_statistics() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -457,6 +460,8 @@ mod tests {
     #[test]
     fn test_dependency_analysis() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };

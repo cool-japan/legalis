@@ -259,10 +259,13 @@ mod tests {
     #[test]
     fn test_simple_dataflow() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "base".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Base".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "age".to_string(),
@@ -278,6 +281,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "derived".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Derived".to_string(),
                     conditions: vec![],
                     effects: vec![],
@@ -307,21 +311,26 @@ mod tests {
     #[test]
     fn test_transitive_dependencies() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "a".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "A".to_string(),
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "b".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "B".to_string(),
                     requires: vec!["a".to_string()],
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "c".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "C".to_string(),
                     requires: vec!["b".to_string()],
                     ..Default::default()
@@ -348,10 +357,13 @@ mod tests {
     #[test]
     fn test_find_readers_and_writers() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "reader".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Reader".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "income".to_string(),
@@ -362,6 +374,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "writer".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Writer".to_string(),
                     effects: vec![EffectNode {
                         effect_type: "grant".to_string(),

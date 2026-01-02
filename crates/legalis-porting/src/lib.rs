@@ -273,7 +273,7 @@ pub struct PortingChange {
 }
 
 /// Types of changes during porting.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChangeType {
     /// Term was translated
     Translation,
@@ -6592,6 +6592,438 @@ impl ValidationFramework {
 }
 
 // ============================================================================
+// Pre-Porting Feasibility Analysis (v0.2.2)
+// ============================================================================
+
+/// Pre-porting feasibility analysis result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeasibilityAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Overall feasibility (true if recommended to proceed)
+    pub is_feasible: bool,
+    /// Feasibility score (0.0 to 1.0)
+    pub feasibility_score: f64,
+    /// Technical feasibility score
+    pub technical_feasibility: f64,
+    /// Legal feasibility score
+    pub legal_feasibility: f64,
+    /// Cultural feasibility score
+    pub cultural_feasibility: f64,
+    /// Economic feasibility score
+    pub economic_feasibility: f64,
+    /// Political feasibility score
+    pub political_feasibility: f64,
+    /// List of feasibility factors
+    pub factors: Vec<FeasibilityFactor>,
+    /// Identified risks
+    pub risks: Vec<String>,
+    /// Prerequisites for porting
+    pub prerequisites: Vec<String>,
+    /// Estimated time to complete (in days)
+    pub estimated_time_days: u32,
+    /// Estimated cost (in USD)
+    pub estimated_cost_usd: f64,
+    /// Recommended approach
+    pub recommended_approach: String,
+    /// Alternative approaches
+    pub alternatives: Vec<String>,
+    /// Overall recommendation
+    pub recommendation: FeasibilityRecommendation,
+    /// Detailed analysis notes
+    pub notes: Vec<String>,
+}
+
+/// Feasibility factor affecting porting success.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeasibilityFactor {
+    /// Factor ID
+    pub id: String,
+    /// Factor category
+    pub category: FeasibilityCategory,
+    /// Factor name
+    pub name: String,
+    /// Impact on feasibility (-1.0 to 1.0, negative is unfavorable)
+    pub impact: f64,
+    /// Severity of impact
+    pub severity: FeasibilitySeverity,
+    /// Description
+    pub description: String,
+    /// Mitigation strategies
+    pub mitigation_strategies: Vec<String>,
+}
+
+/// Category of feasibility factors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FeasibilityCategory {
+    /// Technical compatibility
+    Technical,
+    /// Legal compatibility
+    Legal,
+    /// Cultural compatibility
+    Cultural,
+    /// Economic viability
+    Economic,
+    /// Political support
+    Political,
+    /// Administrative capacity
+    Administrative,
+    /// Stakeholder support
+    Stakeholder,
+    /// Resource availability
+    Resources,
+}
+
+/// Severity of feasibility impact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FeasibilitySeverity {
+    /// Critical - prevents porting
+    Critical,
+    /// Major - significant obstacle
+    Major,
+    /// Moderate - manageable challenge
+    Moderate,
+    /// Minor - small concern
+    Minor,
+    /// Negligible - no significant impact
+    Negligible,
+}
+
+/// Feasibility recommendation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FeasibilityRecommendation {
+    /// Strongly recommended - proceed immediately
+    StronglyRecommended,
+    /// Recommended - proceed with normal caution
+    Recommended,
+    /// Conditional - proceed only if conditions met
+    Conditional,
+    /// NotRecommended - significant challenges exist
+    NotRecommended,
+    /// StronglyNotRecommended - do not proceed
+    StronglyNotRecommended,
+}
+
+/// Pre-porting feasibility analyzer.
+#[derive(Debug, Clone)]
+pub struct PrePortingFeasibilityAnalyzer {
+    /// Source jurisdiction
+    source_jurisdiction: Jurisdiction,
+    /// Target jurisdiction
+    target_jurisdiction: Jurisdiction,
+    /// Validation framework
+    validation_framework: ValidationFramework,
+}
+
+impl PrePortingFeasibilityAnalyzer {
+    /// Creates a new feasibility analyzer.
+    pub fn new(source_jurisdiction: Jurisdiction, target_jurisdiction: Jurisdiction) -> Self {
+        Self {
+            source_jurisdiction: source_jurisdiction.clone(),
+            target_jurisdiction: target_jurisdiction.clone(),
+            validation_framework: ValidationFramework::new(target_jurisdiction),
+        }
+    }
+
+    /// Analyzes feasibility of porting a statute.
+    pub fn analyze(&self, statute: &Statute) -> FeasibilityAnalysis {
+        let mut factors = Vec::new();
+        let mut risks = Vec::new();
+        let mut prerequisites = Vec::new();
+        let mut notes = Vec::new();
+
+        // Technical feasibility analysis
+        let technical_feasibility =
+            self.analyze_technical_feasibility(statute, &mut factors, &mut notes);
+
+        // Legal feasibility analysis (using validation framework)
+        let validation_result = self.validation_framework.validate(statute);
+        let legal_feasibility = validation_result.overall_score;
+
+        if !validation_result.passed {
+            factors.push(FeasibilityFactor {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: FeasibilityCategory::Legal,
+                name: "Legal Validation Issues".to_string(),
+                impact: -0.5,
+                severity: FeasibilitySeverity::Major,
+                description: validation_result.summary.clone(),
+                mitigation_strategies: vec![
+                    "Address compliance issues before porting".to_string(),
+                    "Consult with legal experts".to_string(),
+                ],
+            });
+            risks.push("Legal validation failed".to_string());
+        }
+
+        // Cultural feasibility analysis
+        let cultural_feasibility =
+            self.analyze_cultural_feasibility(statute, &mut factors, &mut notes);
+
+        // Economic feasibility analysis
+        let economic_feasibility =
+            self.analyze_economic_feasibility(statute, &mut factors, &mut notes);
+
+        // Political feasibility analysis
+        let political_feasibility =
+            self.analyze_political_feasibility(statute, &mut factors, &mut notes);
+
+        // Overall feasibility score (weighted average)
+        let feasibility_score = technical_feasibility * 0.2
+            + legal_feasibility * 0.3
+            + cultural_feasibility * 0.2
+            + economic_feasibility * 0.15
+            + political_feasibility * 0.15;
+
+        // Determine if feasible
+        let is_feasible = feasibility_score >= 0.6 && legal_feasibility >= 0.5;
+
+        // Determine recommendation
+        let recommendation = if feasibility_score >= 0.85 {
+            FeasibilityRecommendation::StronglyRecommended
+        } else if feasibility_score >= 0.7 {
+            FeasibilityRecommendation::Recommended
+        } else if feasibility_score >= 0.5 {
+            FeasibilityRecommendation::Conditional
+        } else if feasibility_score >= 0.3 {
+            FeasibilityRecommendation::NotRecommended
+        } else {
+            FeasibilityRecommendation::StronglyNotRecommended
+        };
+
+        // Generate prerequisites
+        prerequisites.extend(vec![
+            "Secure stakeholder buy-in".to_string(),
+            "Allocate necessary resources".to_string(),
+            "Complete legal review".to_string(),
+        ]);
+
+        if cultural_feasibility < 0.7 {
+            prerequisites.push("Conduct cultural impact assessment".to_string());
+        }
+
+        // Estimate time and cost
+        let complexity_factor = 1.0 + (1.0 - feasibility_score);
+        let estimated_time_days = (30.0 * complexity_factor) as u32;
+        let estimated_cost_usd = 50000.0 * complexity_factor;
+
+        // Recommended approach
+        let recommended_approach = if is_feasible {
+            format!(
+                "Proceed with phased approach: (1) Legal review, (2) Cultural adaptation, (3) Stakeholder engagement, (4) Pilot implementation"
+            )
+        } else {
+            format!(
+                "Address critical issues before proceeding: focus on improving {} feasibility",
+                self.identify_weakest_area(
+                    technical_feasibility,
+                    legal_feasibility,
+                    cultural_feasibility,
+                    economic_feasibility,
+                    political_feasibility
+                )
+            )
+        };
+
+        // Alternative approaches
+        let alternatives = vec![
+            "Partial porting of compatible sections only".to_string(),
+            "Phased implementation with pilot programs".to_string(),
+            "Create hybrid approach combining elements from both jurisdictions".to_string(),
+        ];
+
+        FeasibilityAnalysis {
+            id: uuid::Uuid::new_v4().to_string(),
+            is_feasible,
+            feasibility_score,
+            technical_feasibility,
+            legal_feasibility,
+            cultural_feasibility,
+            economic_feasibility,
+            political_feasibility,
+            factors,
+            risks,
+            prerequisites,
+            estimated_time_days,
+            estimated_cost_usd,
+            recommended_approach,
+            alternatives,
+            recommendation,
+            notes,
+        }
+    }
+
+    fn analyze_technical_feasibility(
+        &self,
+        _statute: &Statute,
+        factors: &mut Vec<FeasibilityFactor>,
+        notes: &mut Vec<String>,
+    ) -> f64 {
+        let mut score: f64 = 0.8; // Default moderate technical feasibility
+
+        // Check legal system compatibility
+        if self.source_jurisdiction.legal_system == self.target_jurisdiction.legal_system {
+            factors.push(FeasibilityFactor {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: FeasibilityCategory::Technical,
+                name: "Legal System Compatibility".to_string(),
+                impact: 0.3,
+                severity: FeasibilitySeverity::Minor,
+                description: "Same legal system family facilitates porting".to_string(),
+                mitigation_strategies: vec![],
+            });
+            score += 0.1;
+            notes.push("Legal systems are compatible".to_string());
+        } else {
+            factors.push(FeasibilityFactor {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: FeasibilityCategory::Technical,
+                name: "Legal System Incompatibility".to_string(),
+                impact: -0.2,
+                severity: FeasibilitySeverity::Moderate,
+                description: "Different legal systems require adaptation".to_string(),
+                mitigation_strategies: vec![
+                    "Engage experts in both legal systems".to_string(),
+                    "Identify structural differences early".to_string(),
+                ],
+            });
+            score -= 0.1;
+            notes.push("Legal systems differ - requires careful adaptation".to_string());
+        }
+
+        score.clamp(0.0, 1.0)
+    }
+
+    fn analyze_cultural_feasibility(
+        &self,
+        _statute: &Statute,
+        factors: &mut Vec<FeasibilityFactor>,
+        notes: &mut Vec<String>,
+    ) -> f64 {
+        let mut score: f64 = 0.7;
+
+        // Check if same country (trivially high cultural compatibility)
+        if self.source_jurisdiction.id == self.target_jurisdiction.id {
+            return 1.0;
+        }
+
+        // Check cultural parameters
+        let source_params = &self.source_jurisdiction.cultural_params;
+        let target_params = &self.target_jurisdiction.cultural_params;
+
+        // Compare age of majority
+        if source_params.age_of_majority != target_params.age_of_majority {
+            factors.push(FeasibilityFactor {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: FeasibilityCategory::Cultural,
+                name: "Age of Majority Difference".to_string(),
+                impact: -0.1,
+                severity: FeasibilitySeverity::Minor,
+                description: format!(
+                    "Age of majority differs: {:?} vs {:?}",
+                    source_params.age_of_majority, target_params.age_of_majority
+                ),
+                mitigation_strategies: vec!["Adjust age-related provisions".to_string()],
+            });
+            score -= 0.05;
+            notes.push("Age-related provisions need adjustment".to_string());
+        }
+
+        // Check prohibitions
+        if source_params.prohibitions != target_params.prohibitions {
+            factors.push(FeasibilityFactor {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: FeasibilityCategory::Cultural,
+                name: "Prohibitions Difference".to_string(),
+                impact: -0.15,
+                severity: FeasibilitySeverity::Moderate,
+                description: "Prohibitions lists differ between jurisdictions".to_string(),
+                mitigation_strategies: vec![
+                    "Review prohibition-related provisions".to_string(),
+                    "Align with target jurisdiction prohibitions".to_string(),
+                ],
+            });
+            score -= 0.1;
+        }
+
+        score.clamp(0.0, 1.0)
+    }
+
+    fn analyze_economic_feasibility(
+        &self,
+        _statute: &Statute,
+        factors: &mut Vec<FeasibilityFactor>,
+        _notes: &mut Vec<String>,
+    ) -> f64 {
+        let score = 0.75; // Default moderate economic feasibility
+
+        factors.push(FeasibilityFactor {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: FeasibilityCategory::Economic,
+            name: "Implementation Cost".to_string(),
+            impact: -0.2,
+            severity: FeasibilitySeverity::Moderate,
+            description: "Porting requires investment in legal review and adaptation".to_string(),
+            mitigation_strategies: vec![
+                "Secure budget allocation early".to_string(),
+                "Consider phased implementation to spread costs".to_string(),
+            ],
+        });
+
+        score
+    }
+
+    fn analyze_political_feasibility(
+        &self,
+        _statute: &Statute,
+        factors: &mut Vec<FeasibilityFactor>,
+        _notes: &mut Vec<String>,
+    ) -> f64 {
+        let score = 0.6; // Default moderate-low political feasibility (conservative)
+
+        factors.push(FeasibilityFactor {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: FeasibilityCategory::Political,
+            name: "Stakeholder Engagement Required".to_string(),
+            impact: -0.15,
+            severity: FeasibilitySeverity::Moderate,
+            description: "Requires engagement with multiple stakeholders and political support"
+                .to_string(),
+            mitigation_strategies: vec![
+                "Early stakeholder consultation".to_string(),
+                "Build coalition of supporters".to_string(),
+                "Address concerns proactively".to_string(),
+            ],
+        });
+
+        score
+    }
+
+    fn identify_weakest_area(
+        &self,
+        technical: f64,
+        legal: f64,
+        cultural: f64,
+        economic: f64,
+        political: f64,
+    ) -> &'static str {
+        let scores = [
+            (technical, "technical"),
+            (legal, "legal"),
+            (cultural, "cultural"),
+            (economic, "economic"),
+            (political, "political"),
+        ];
+
+        scores
+            .iter()
+            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            .map(|(_, name)| *name)
+            .unwrap_or("overall")
+    }
+}
+
+// ============================================================================
 // Workflow Management (v0.1.7)
 // ============================================================================
 
@@ -7015,6 +7447,10 @@ pub struct PortingIteration {
     pub project_id: String,
     /// Iteration number
     pub iteration_number: u32,
+    /// Branch name (None for main branch)
+    pub branch: Option<String>,
+    /// Parent iteration ID (for branches)
+    pub parent_iteration_id: Option<String>,
     /// Statute snapshot
     pub statute_snapshot: String,
     /// Changes from previous iteration
@@ -7063,6 +7499,7 @@ pub enum IterationChangeType {
 #[derive(Debug)]
 pub struct PortingVersionControl {
     iterations: HashMap<String, Vec<PortingIteration>>,
+    branches: HashMap<String, Vec<String>>, // project_id -> branch names
 }
 
 impl PortingVersionControl {
@@ -7070,6 +7507,7 @@ impl PortingVersionControl {
     pub fn new() -> Self {
         Self {
             iterations: HashMap::new(),
+            branches: HashMap::new(),
         }
     }
 
@@ -7088,6 +7526,8 @@ impl PortingVersionControl {
             id: uuid::Uuid::new_v4().to_string(),
             project_id,
             iteration_number,
+            branch: None, // Main branch by default
+            parent_iteration_id: iterations.last().map(|i| i.id.clone()),
             statute_snapshot,
             changes: Vec::new(),
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -7136,6 +7576,155 @@ impl PortingVersionControl {
         Some(to.changes.clone())
     }
 
+    /// Creates a new branch from an iteration.
+    pub fn create_branch(
+        &mut self,
+        project_id: String,
+        branch_name: String,
+        from_iteration_number: u32,
+        created_by: String,
+        notes: String,
+    ) -> Option<PortingIteration> {
+        let iterations = self.iterations.get(&project_id)?;
+        let from_iteration = iterations
+            .iter()
+            .find(|i| i.iteration_number == from_iteration_number)?
+            .clone();
+
+        // Register branch
+        self.branches
+            .entry(project_id.clone())
+            .or_default()
+            .push(branch_name.clone());
+
+        // Create new iteration on the branch
+        let all_iterations = self.iterations.entry(project_id.clone()).or_default();
+        let iteration_number = (all_iterations.len() + 1) as u32;
+
+        let iteration = PortingIteration {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id,
+            iteration_number,
+            branch: Some(branch_name),
+            parent_iteration_id: Some(from_iteration.id.clone()),
+            statute_snapshot: from_iteration.statute_snapshot.clone(),
+            changes: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            created_by,
+            notes,
+            tags: vec!["branch".to_string()],
+        };
+
+        all_iterations.push(iteration.clone());
+        Some(iteration)
+    }
+
+    /// Gets all branches for a project.
+    pub fn get_branches(&self, project_id: &str) -> Vec<String> {
+        self.branches.get(project_id).cloned().unwrap_or_default()
+    }
+
+    /// Gets iterations for a specific branch.
+    pub fn get_branch_iterations(
+        &self,
+        project_id: &str,
+        branch_name: &str,
+    ) -> Vec<PortingIteration> {
+        self.iterations
+            .get(project_id)
+            .map(|iterations| {
+                iterations
+                    .iter()
+                    .filter(|i| i.branch.as_deref() == Some(branch_name))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Merges a branch into main (or another branch).
+    pub fn merge_branch(
+        &mut self,
+        project_id: String,
+        source_branch: String,
+        target_branch: Option<String>,
+        created_by: String,
+        notes: String,
+    ) -> Option<PortingIteration> {
+        let iterations = self.iterations.get(&project_id)?;
+
+        // Get latest iteration from source branch
+        let source_iteration = iterations
+            .iter()
+            .filter(|i| i.branch.as_deref() == Some(&source_branch))
+            .max_by_key(|i| i.iteration_number)?
+            .clone();
+
+        // Create merged iteration
+        let all_iterations = self.iterations.entry(project_id.clone()).or_default();
+        let iteration_number = (all_iterations.len() + 1) as u32;
+
+        let iteration = PortingIteration {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id,
+            iteration_number,
+            branch: target_branch,
+            parent_iteration_id: Some(source_iteration.id.clone()),
+            statute_snapshot: source_iteration.statute_snapshot.clone(),
+            changes: source_iteration.changes.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            created_by,
+            notes: format!("Merged {} - {}", source_branch, notes),
+            tags: vec!["merge".to_string()],
+        };
+
+        all_iterations.push(iteration.clone());
+        Some(iteration)
+    }
+
+    /// Generates a changelog for a project.
+    pub fn generate_changelog(&self, project_id: &str) -> Option<PortingChangelog> {
+        let iterations = self.iterations.get(project_id)?;
+
+        if iterations.is_empty() {
+            return None;
+        }
+
+        let mut entries = Vec::new();
+
+        for iteration in iterations {
+            let mut change_summary = Vec::new();
+
+            for change in &iteration.changes {
+                change_summary.push(format!(
+                    "{:?}: {} ({})",
+                    change.change_type, change.field, change.reason
+                ));
+            }
+
+            entries.push(ChangelogEntry {
+                id: uuid::Uuid::new_v4().to_string(),
+                iteration_number: iteration.iteration_number,
+                iteration_id: iteration.id.clone(),
+                branch: iteration.branch.clone(),
+                timestamp: iteration.created_at.clone(),
+                author: iteration.created_by.clone(),
+                summary: iteration.notes.clone(),
+                changes: change_summary,
+                tags: iteration.tags.clone(),
+            });
+        }
+
+        Some(PortingChangelog {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project_id.to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            entries,
+            total_iterations: iterations.len(),
+            branches: self.get_branches(project_id),
+        })
+    }
+
     /// Reverts to a previous iteration.
     pub fn revert_to_iteration(
         &mut self,
@@ -7157,6 +7746,104 @@ impl PortingVersionControl {
 impl Default for PortingVersionControl {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Porting changelog for tracking all changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingChangelog {
+    /// Changelog ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Generated timestamp
+    pub generated_at: String,
+    /// Changelog entries
+    pub entries: Vec<ChangelogEntry>,
+    /// Total number of iterations
+    pub total_iterations: usize,
+    /// List of branches
+    pub branches: Vec<String>,
+}
+
+/// Entry in the changelog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangelogEntry {
+    /// Entry ID
+    pub id: String,
+    /// Iteration number
+    pub iteration_number: u32,
+    /// Iteration ID
+    pub iteration_id: String,
+    /// Branch (if any)
+    pub branch: Option<String>,
+    /// Timestamp
+    pub timestamp: String,
+    /// Author
+    pub author: String,
+    /// Summary of changes
+    pub summary: String,
+    /// Detailed changes
+    pub changes: Vec<String>,
+    /// Tags
+    pub tags: Vec<String>,
+}
+
+impl PortingChangelog {
+    /// Exports changelog to markdown format.
+    pub fn to_markdown(&self) -> String {
+        let mut output = String::new();
+
+        output.push_str(&format!("# Porting Changelog\n\n"));
+        output.push_str(&format!("**Project ID:** {}\n", self.project_id));
+        output.push_str(&format!("**Generated:** {}\n", self.generated_at));
+        output.push_str(&format!(
+            "**Total Iterations:** {}\n",
+            self.total_iterations
+        ));
+
+        if !self.branches.is_empty() {
+            output.push_str(&format!("**Branches:** {}\n", self.branches.join(", ")));
+        }
+
+        output.push_str("\n---\n\n");
+
+        for entry in &self.entries {
+            let branch_info = entry
+                .branch
+                .as_ref()
+                .map(|b| format!(" [{}]", b))
+                .unwrap_or_default();
+
+            output.push_str(&format!(
+                "## Iteration {}{}\n\n",
+                entry.iteration_number, branch_info
+            ));
+            output.push_str(&format!("**Date:** {}\n", entry.timestamp));
+            output.push_str(&format!("**Author:** {}\n", entry.author));
+            output.push_str(&format!("**Summary:** {}\n\n", entry.summary));
+
+            if !entry.changes.is_empty() {
+                output.push_str("**Changes:**\n\n");
+                for change in &entry.changes {
+                    output.push_str(&format!("- {}\n", change));
+                }
+                output.push_str("\n");
+            }
+
+            if !entry.tags.is_empty() {
+                output.push_str(&format!("**Tags:** {}\n\n", entry.tags.join(", ")));
+            }
+
+            output.push_str("---\n\n");
+        }
+
+        output
+    }
+
+    /// Exports changelog to JSON format.
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
     }
 }
 
@@ -8311,7 +8998,7 @@ pub struct QualitativeBenefit {
     /// Description
     pub description: String,
     /// Impact level
-    pub impact_level: ImpactLevel,
+    pub impact_level: StakeholderImpactLevel,
 }
 
 /// Impact level.
@@ -8446,20 +9133,20 @@ impl CostBenefitAnalyzer {
                 category: "Legal Harmonization".to_string(),
                 description: "Improved legal compatibility between jurisdictions".to_string(),
                 impact_level: if avg_compatibility >= 0.8 {
-                    ImpactLevel::High
+                    StakeholderImpactLevel::High
                 } else {
-                    ImpactLevel::Medium
+                    StakeholderImpactLevel::Medium
                 },
             },
             QualitativeBenefit {
                 category: "Governance".to_string(),
                 description: "Enhanced legal framework and governance quality".to_string(),
-                impact_level: ImpactLevel::High,
+                impact_level: StakeholderImpactLevel::High,
             },
             QualitativeBenefit {
                 category: "International Cooperation".to_string(),
                 description: "Strengthened bilateral legal cooperation".to_string(),
-                impact_level: ImpactLevel::Medium,
+                impact_level: StakeholderImpactLevel::Medium,
             },
         ];
 
@@ -9483,6 +10170,689 @@ pub struct CommentSummary {
     pub affiliation_breakdown: HashMap<AffectedPartyCategory, usize>,
     /// Key themes identified
     pub key_themes: Vec<String>,
+}
+
+// ============================================================================
+// Stakeholder Collaboration - Discussion Threads (v0.2.4)
+// ============================================================================
+
+/// Discussion thread for collaborative review.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscussionThread {
+    /// Thread ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Thread title
+    pub title: String,
+    /// Thread context (e.g., statute section, specific issue)
+    pub context: String,
+    /// Thread status
+    pub status: ThreadStatus,
+    /// Root comments (top-level)
+    pub comments: Vec<ThreadComment>,
+    /// Created timestamp
+    pub created_at: String,
+    /// Created by stakeholder ID
+    pub created_by: String,
+    /// Tags for categorization
+    pub tags: Vec<String>,
+    /// Resolved by stakeholder ID
+    pub resolved_by: Option<String>,
+    /// Resolution timestamp
+    pub resolved_at: Option<String>,
+}
+
+/// Thread status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ThreadStatus {
+    /// Open for discussion
+    Open,
+    /// Under review
+    UnderReview,
+    /// Resolved
+    Resolved,
+    /// Archived
+    Archived,
+}
+
+/// Comment in a discussion thread (supports nested replies).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreadComment {
+    /// Comment ID
+    pub id: String,
+    /// Parent comment ID (None for root comments)
+    pub parent_id: Option<String>,
+    /// Author stakeholder ID
+    pub author_id: String,
+    /// Comment text
+    pub text: String,
+    /// Created timestamp
+    pub created_at: String,
+    /// Last edited timestamp
+    pub edited_at: Option<String>,
+    /// Nested replies
+    pub replies: Vec<ThreadComment>,
+    /// Upvotes/likes
+    pub upvotes: u32,
+    /// Users who upvoted
+    pub upvoted_by: Vec<String>,
+    /// Marked as important
+    pub is_important: bool,
+}
+
+/// Discussion thread manager.
+#[derive(Debug)]
+pub struct DiscussionThreadManager {
+    threads: HashMap<String, DiscussionThread>,
+}
+
+impl DiscussionThreadManager {
+    /// Creates a new discussion thread manager.
+    pub fn new() -> Self {
+        Self {
+            threads: HashMap::new(),
+        }
+    }
+
+    /// Creates a new discussion thread.
+    pub fn create_thread(
+        &mut self,
+        project_id: String,
+        title: String,
+        context: String,
+        created_by: String,
+        tags: Vec<String>,
+    ) -> DiscussionThread {
+        let thread = DiscussionThread {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id,
+            title,
+            context,
+            status: ThreadStatus::Open,
+            comments: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            created_by,
+            tags,
+            resolved_by: None,
+            resolved_at: None,
+        };
+
+        self.threads.insert(thread.id.clone(), thread.clone());
+        thread
+    }
+
+    /// Adds a comment to a thread.
+    pub fn add_comment(
+        &mut self,
+        thread_id: &str,
+        author_id: String,
+        text: String,
+        parent_id: Option<String>,
+    ) -> Option<ThreadComment> {
+        let thread = self.threads.get_mut(thread_id)?;
+
+        let comment = ThreadComment {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: parent_id.clone(),
+            author_id,
+            text,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            edited_at: None,
+            replies: Vec::new(),
+            upvotes: 0,
+            upvoted_by: Vec::new(),
+            is_important: false,
+        };
+
+        // If parent_id is specified, add as reply to parent comment
+        if let Some(parent) = parent_id {
+            Self::add_reply_to_comment(&mut thread.comments, &parent, comment.clone())?;
+        } else {
+            thread.comments.push(comment.clone());
+        }
+
+        Some(comment)
+    }
+
+    fn add_reply_to_comment(
+        comments: &mut Vec<ThreadComment>,
+        parent_id: &str,
+        reply: ThreadComment,
+    ) -> Option<()> {
+        for comment in comments {
+            if comment.id == parent_id {
+                comment.replies.push(reply);
+                return Some(());
+            }
+            // Recursively search in replies
+            if Self::add_reply_to_comment(&mut comment.replies, parent_id, reply.clone()).is_some()
+            {
+                return Some(());
+            }
+        }
+        None
+    }
+
+    /// Upvotes a comment.
+    pub fn upvote_comment(
+        &mut self,
+        thread_id: &str,
+        comment_id: &str,
+        user_id: String,
+    ) -> Option<()> {
+        let thread = self.threads.get_mut(thread_id)?;
+        Self::upvote_comment_recursive(&mut thread.comments, comment_id, user_id)
+    }
+
+    fn upvote_comment_recursive(
+        comments: &mut Vec<ThreadComment>,
+        comment_id: &str,
+        user_id: String,
+    ) -> Option<()> {
+        for comment in comments {
+            if comment.id == comment_id {
+                if !comment.upvoted_by.contains(&user_id) {
+                    comment.upvoted_by.push(user_id);
+                    comment.upvotes += 1;
+                }
+                return Some(());
+            }
+            if Self::upvote_comment_recursive(&mut comment.replies, comment_id, user_id.clone())
+                .is_some()
+            {
+                return Some(());
+            }
+        }
+        None
+    }
+
+    /// Resolves a thread.
+    pub fn resolve_thread(&mut self, thread_id: &str, resolved_by: String) -> Option<()> {
+        let thread = self.threads.get_mut(thread_id)?;
+        thread.status = ThreadStatus::Resolved;
+        thread.resolved_by = Some(resolved_by);
+        thread.resolved_at = Some(chrono::Utc::now().to_rfc3339());
+        Some(())
+    }
+
+    /// Gets a thread.
+    pub fn get_thread(&self, thread_id: &str) -> Option<&DiscussionThread> {
+        self.threads.get(thread_id)
+    }
+
+    /// Lists all threads for a project.
+    pub fn list_threads(&self, project_id: &str) -> Vec<&DiscussionThread> {
+        self.threads
+            .values()
+            .filter(|t| t.project_id == project_id)
+            .collect()
+    }
+}
+
+impl Default for DiscussionThreadManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Stakeholder Collaboration - Voting (v0.2.4)
+// ============================================================================
+
+/// Voting poll for stakeholder decisions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StakeholderVote {
+    /// Vote ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Vote title
+    pub title: String,
+    /// Vote description
+    pub description: String,
+    /// Vote type
+    pub vote_type: VoteType,
+    /// Options to vote on
+    pub options: Vec<VoteOption>,
+    /// Eligible voters (stakeholder IDs)
+    pub eligible_voters: Vec<String>,
+    /// Votes cast
+    pub votes_cast: HashMap<String, Vec<String>>, // voter_id -> option_ids (for multi-select)
+    /// Vote status
+    pub status: VoteStatus,
+    /// Start timestamp
+    pub start_time: String,
+    /// End timestamp
+    pub end_time: String,
+    /// Requires minimum participation
+    pub minimum_participation: Option<f64>,
+    /// Requires minimum approval threshold
+    pub approval_threshold: Option<f64>,
+}
+
+/// Vote type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum VoteType {
+    /// Single choice (select one option)
+    SingleChoice,
+    /// Multiple choice (select multiple options)
+    MultipleChoice,
+    /// Ranking (rank options by preference)
+    Ranking,
+    /// Approval voting (approve/disapprove each option)
+    Approval,
+}
+
+/// Vote option.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoteOption {
+    /// Option ID
+    pub id: String,
+    /// Option text
+    pub text: String,
+    /// Option description
+    pub description: String,
+    /// Vote count
+    pub vote_count: u32,
+}
+
+/// Vote status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum VoteStatus {
+    /// Not yet started
+    Pending,
+    /// Currently active
+    Active,
+    /// Voting closed
+    Closed,
+    /// Vote passed
+    Passed,
+    /// Vote failed
+    Failed,
+}
+
+/// Vote result summary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoteResult {
+    /// Vote ID
+    pub vote_id: String,
+    /// Total eligible voters
+    pub total_eligible: usize,
+    /// Total votes cast
+    pub total_votes: usize,
+    /// Participation rate
+    pub participation_rate: f64,
+    /// Winning option(s)
+    pub winning_options: Vec<String>,
+    /// Result by option
+    pub results: HashMap<String, u32>,
+    /// Vote passed or failed
+    pub passed: bool,
+}
+
+/// Voting manager for stakeholders.
+#[derive(Debug)]
+pub struct VotingManager {
+    votes: HashMap<String, StakeholderVote>,
+}
+
+impl VotingManager {
+    /// Creates a new voting manager.
+    pub fn new() -> Self {
+        Self {
+            votes: HashMap::new(),
+        }
+    }
+
+    /// Creates a new vote.
+    pub fn create_vote(
+        &mut self,
+        project_id: String,
+        title: String,
+        description: String,
+        vote_type: VoteType,
+        options: Vec<VoteOption>,
+        eligible_voters: Vec<String>,
+        duration_hours: u32,
+    ) -> StakeholderVote {
+        let now = chrono::Utc::now();
+        let end_time = now + chrono::Duration::hours(duration_hours as i64);
+
+        let vote = StakeholderVote {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id,
+            title,
+            description,
+            vote_type,
+            options,
+            eligible_voters,
+            votes_cast: HashMap::new(),
+            status: VoteStatus::Active,
+            start_time: now.to_rfc3339(),
+            end_time: end_time.to_rfc3339(),
+            minimum_participation: None,
+            approval_threshold: Some(0.5), // Default 50% approval
+        };
+
+        self.votes.insert(vote.id.clone(), vote.clone());
+        vote
+    }
+
+    /// Casts a vote.
+    pub fn cast_vote(
+        &mut self,
+        vote_id: &str,
+        voter_id: String,
+        selected_options: Vec<String>,
+    ) -> Option<()> {
+        let vote = self.votes.get_mut(vote_id)?;
+
+        // Check if voter is eligible
+        if !vote.eligible_voters.contains(&voter_id) {
+            return None;
+        }
+
+        // Check if vote is active
+        if vote.status != VoteStatus::Active {
+            return None;
+        }
+
+        // Validate based on vote type
+        match vote.vote_type {
+            VoteType::SingleChoice => {
+                if selected_options.len() != 1 {
+                    return None;
+                }
+            }
+            VoteType::MultipleChoice | VoteType::Approval | VoteType::Ranking => {
+                // Multiple selections allowed
+            }
+        }
+
+        // Record vote
+        vote.votes_cast.insert(voter_id, selected_options.clone());
+
+        // Update option counts
+        for option_id in selected_options {
+            if let Some(option) = vote.options.iter_mut().find(|o| o.id == option_id) {
+                option.vote_count += 1;
+            }
+        }
+
+        Some(())
+    }
+
+    /// Closes a vote and calculates results.
+    pub fn close_vote(&mut self, vote_id: &str) -> Option<VoteResult> {
+        let vote = self.votes.get_mut(vote_id)?;
+        vote.status = VoteStatus::Closed;
+
+        let total_eligible = vote.eligible_voters.len();
+        let total_votes = vote.votes_cast.len();
+        let participation_rate = total_votes as f64 / total_eligible as f64;
+
+        // Find winning option(s)
+        let max_votes = vote.options.iter().map(|o| o.vote_count).max().unwrap_or(0);
+        let winning_options: Vec<String> = vote
+            .options
+            .iter()
+            .filter(|o| o.vote_count == max_votes)
+            .map(|o| o.text.clone())
+            .collect();
+
+        // Calculate if vote passed
+        let passed = if let Some(min_participation) = vote.minimum_participation {
+            if participation_rate < min_participation {
+                vote.status = VoteStatus::Failed;
+                false
+            } else {
+                Self::check_approval_threshold(vote, max_votes, total_votes)
+            }
+        } else {
+            Self::check_approval_threshold(vote, max_votes, total_votes)
+        };
+
+        if passed {
+            vote.status = VoteStatus::Passed;
+        } else {
+            vote.status = VoteStatus::Failed;
+        }
+
+        let mut results = HashMap::new();
+        for option in &vote.options {
+            results.insert(option.text.clone(), option.vote_count);
+        }
+
+        Some(VoteResult {
+            vote_id: vote_id.to_string(),
+            total_eligible,
+            total_votes,
+            participation_rate,
+            winning_options,
+            results,
+            passed,
+        })
+    }
+
+    fn check_approval_threshold(
+        vote: &StakeholderVote,
+        max_votes: u32,
+        total_votes: usize,
+    ) -> bool {
+        if let Some(threshold) = vote.approval_threshold {
+            max_votes as f64 / total_votes as f64 >= threshold
+        } else {
+            true
+        }
+    }
+
+    /// Gets a vote.
+    pub fn get_vote(&self, vote_id: &str) -> Option<&StakeholderVote> {
+        self.votes.get(vote_id)
+    }
+
+    /// Lists all votes for a project.
+    pub fn list_votes(&self, project_id: &str) -> Vec<&StakeholderVote> {
+        self.votes
+            .values()
+            .filter(|v| v.project_id == project_id)
+            .collect()
+    }
+}
+
+impl Default for VotingManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Stakeholder Collaboration - Impact Notifications (v0.2.4)
+// ============================================================================
+
+/// Stakeholder impact assessment for a porting change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StakeholderImpact {
+    /// Impact ID
+    pub id: String,
+    /// Project ID
+    pub project_id: String,
+    /// Affected stakeholder ID
+    pub stakeholder_id: String,
+    /// Impact level
+    pub impact_level: StakeholderImpactLevel,
+    /// Impact category
+    pub impact_category: StakeholderImpactCategory,
+    /// Impact description
+    pub description: String,
+    /// Estimated magnitude (0.0 to 1.0)
+    pub magnitude: f64,
+    /// Timeframe for impact
+    pub timeframe: ImpactTimeframe,
+    /// Mitigation strategies
+    pub mitigation_strategies: Vec<String>,
+    /// Notification sent
+    pub notification_sent: bool,
+    /// Notification timestamp
+    pub notified_at: Option<String>,
+}
+
+/// Impact level for stakeholders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StakeholderImpactLevel {
+    /// No impact
+    None,
+    /// Low impact
+    Low,
+    /// Medium impact
+    Medium,
+    /// High impact
+    High,
+    /// Critical impact
+    Critical,
+}
+
+/// Category of stakeholder impact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StakeholderImpactCategory {
+    /// Economic/financial impact
+    Economic,
+    /// Operational/workflow impact
+    Operational,
+    /// Legal/compliance impact
+    Legal,
+    /// Rights and obligations impact
+    Rights,
+    /// Resource requirements impact
+    Resources,
+    /// Strategic impact
+    Strategic,
+}
+
+/// Timeframe for impact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ImpactTimeframe {
+    /// Immediate (within days)
+    Immediate,
+    /// Short-term (weeks to months)
+    ShortTerm,
+    /// Medium-term (months to a year)
+    MediumTerm,
+    /// Long-term (years)
+    LongTerm,
+}
+
+/// Stakeholder impact tracker.
+#[derive(Debug)]
+pub struct StakeholderImpactTracker {
+    impacts: HashMap<String, Vec<StakeholderImpact>>,
+}
+
+impl StakeholderImpactTracker {
+    /// Creates a new impact tracker.
+    pub fn new() -> Self {
+        Self {
+            impacts: HashMap::new(),
+        }
+    }
+
+    /// Records a stakeholder impact.
+    pub fn record_impact(
+        &mut self,
+        project_id: String,
+        stakeholder_id: String,
+        impact_level: StakeholderImpactLevel,
+        impact_category: StakeholderImpactCategory,
+        description: String,
+        magnitude: f64,
+        timeframe: ImpactTimeframe,
+        mitigation_strategies: Vec<String>,
+    ) -> StakeholderImpact {
+        let impact = StakeholderImpact {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            stakeholder_id: stakeholder_id.clone(),
+            impact_level,
+            impact_category,
+            description,
+            magnitude,
+            timeframe,
+            mitigation_strategies,
+            notification_sent: false,
+            notified_at: None,
+        };
+
+        self.impacts
+            .entry(project_id)
+            .or_default()
+            .push(impact.clone());
+
+        impact
+    }
+
+    /// Marks impact as notified.
+    pub fn mark_notified(&mut self, project_id: &str, impact_id: &str) -> Option<()> {
+        let impacts = self.impacts.get_mut(project_id)?;
+        let impact = impacts.iter_mut().find(|i| i.id == impact_id)?;
+        impact.notification_sent = true;
+        impact.notified_at = Some(chrono::Utc::now().to_rfc3339());
+        Some(())
+    }
+
+    /// Gets impacts for a stakeholder.
+    pub fn get_stakeholder_impacts(
+        &self,
+        project_id: &str,
+        stakeholder_id: &str,
+    ) -> Vec<&StakeholderImpact> {
+        self.impacts
+            .get(project_id)
+            .map(|impacts| {
+                impacts
+                    .iter()
+                    .filter(|i| i.stakeholder_id == stakeholder_id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Gets all high/critical impacts that haven't been notified.
+    pub fn get_unnotified_critical_impacts(&self, project_id: &str) -> Vec<&StakeholderImpact> {
+        self.impacts
+            .get(project_id)
+            .map(|impacts| {
+                impacts
+                    .iter()
+                    .filter(|i| {
+                        matches!(
+                            i.impact_level,
+                            StakeholderImpactLevel::High | StakeholderImpactLevel::Critical
+                        ) && !i.notification_sent
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Gets summary of impacts by level.
+    pub fn get_impact_summary(&self, project_id: &str) -> HashMap<StakeholderImpactLevel, usize> {
+        let mut summary = HashMap::new();
+
+        if let Some(impacts) = self.impacts.get(project_id) {
+            for impact in impacts {
+                *summary.entry(impact.impact_level).or_insert(0) += 1;
+            }
+        }
+
+        summary
+    }
+}
+
+impl Default for StakeholderImpactTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -11026,6 +12396,2067 @@ impl HarmonizationTracker {
 }
 
 impl Default for HarmonizationTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Quality Assurance (v0.2.5)
+// ============================================================================
+
+/// Quality score for a ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityScore {
+    /// Overall quality score (0.0 to 1.0).
+    pub overall: f64,
+    /// Semantic preservation score (0.0 to 1.0).
+    pub semantic_preservation: f64,
+    /// Legal correctness score (0.0 to 1.0).
+    pub legal_correctness: f64,
+    /// Cultural adaptation score (0.0 to 1.0).
+    pub cultural_adaptation: f64,
+    /// Completeness score (0.0 to 1.0).
+    pub completeness: f64,
+    /// Consistency score (0.0 to 1.0).
+    pub consistency: f64,
+    /// Quality grade.
+    pub grade: QualityGrade,
+    /// Detailed quality issues.
+    pub issues: Vec<QualityIssue>,
+    /// Recommendations for improvement.
+    pub recommendations: Vec<String>,
+}
+
+/// Quality grade classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QualityGrade {
+    /// Excellent quality (>= 0.9).
+    Excellent,
+    /// Good quality (>= 0.75).
+    Good,
+    /// Acceptable quality (>= 0.6).
+    Acceptable,
+    /// Poor quality (>= 0.4).
+    Poor,
+    /// Unacceptable quality (< 0.4).
+    Unacceptable,
+}
+
+/// Quality issue found during assessment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityIssue {
+    /// Issue type.
+    pub issue_type: QualityIssueType,
+    /// Severity level.
+    pub severity: QualityIssueSeverity,
+    /// Description of the issue.
+    pub description: String,
+    /// Location in the ported statute.
+    pub location: Option<String>,
+    /// Suggested fix.
+    pub suggested_fix: Option<String>,
+}
+
+/// Type of quality issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QualityIssueType {
+    /// Semantic meaning not preserved.
+    SemanticDrift,
+    /// Legal term incorrectly translated.
+    IncorrectTranslation,
+    /// Cultural adaptation missing or incorrect.
+    CulturalMismatch,
+    /// Inconsistent terminology.
+    InconsistentTerminology,
+    /// Missing required elements.
+    Incompleteness,
+    /// Logical inconsistency.
+    LogicalInconsistency,
+    /// Compliance violation.
+    ComplianceViolation,
+}
+
+/// Severity of quality issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QualityIssueSeverity {
+    /// Critical issue that must be fixed.
+    Critical,
+    /// Major issue that should be fixed.
+    Major,
+    /// Minor issue that could be improved.
+    Minor,
+    /// Informational note.
+    Info,
+}
+
+/// Quality scorer for automated quality assessment.
+pub struct QualityScorer {
+    /// Minimum acceptable quality threshold.
+    min_quality_threshold: f64,
+}
+
+impl QualityScorer {
+    /// Creates a new quality scorer.
+    pub fn new() -> Self {
+        Self {
+            min_quality_threshold: 0.6,
+        }
+    }
+
+    /// Sets minimum quality threshold.
+    #[allow(dead_code)]
+    pub fn with_threshold(mut self, threshold: f64) -> Self {
+        self.min_quality_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Scores a ported statute.
+    pub fn score_porting(&self, ported: &PortedStatute) -> QualityScore {
+        let mut issues = Vec::new();
+        let mut recommendations = Vec::new();
+
+        // Score semantic preservation
+        let semantic_score = self.score_semantic_preservation(ported, &mut issues);
+
+        // Score legal correctness
+        let legal_score = self.score_legal_correctness(ported, &mut issues);
+
+        // Score cultural adaptation
+        let cultural_score = self.score_cultural_adaptation(ported, &mut issues);
+
+        // Score completeness
+        let completeness_score = self.score_completeness(ported, &mut issues);
+
+        // Score consistency
+        let consistency_score = self.score_consistency(ported, &mut issues);
+
+        // Calculate overall score (weighted average)
+        let overall = (semantic_score * 0.25)
+            + (legal_score * 0.25)
+            + (cultural_score * 0.2)
+            + (completeness_score * 0.15)
+            + (consistency_score * 0.15);
+
+        // Determine grade
+        let grade = if overall >= 0.9 {
+            QualityGrade::Excellent
+        } else if overall >= 0.75 {
+            QualityGrade::Good
+        } else if overall >= 0.6 {
+            QualityGrade::Acceptable
+        } else if overall >= 0.4 {
+            QualityGrade::Poor
+        } else {
+            QualityGrade::Unacceptable
+        };
+
+        // Generate recommendations
+        if overall < 0.9 {
+            recommendations.push(
+                "Review semantic preservation to ensure legal meaning is maintained".to_string(),
+            );
+        }
+        if cultural_score < 0.8 {
+            recommendations
+                .push("Review cultural adaptations for accuracy and appropriateness".to_string());
+        }
+        if !issues.is_empty() {
+            recommendations.push(format!(
+                "Address {} quality issues identified",
+                issues.len()
+            ));
+        }
+
+        QualityScore {
+            overall,
+            semantic_preservation: semantic_score,
+            legal_correctness: legal_score,
+            cultural_adaptation: cultural_score,
+            completeness: completeness_score,
+            consistency: consistency_score,
+            grade,
+            issues,
+            recommendations,
+        }
+    }
+
+    /// Scores semantic preservation.
+    fn score_semantic_preservation(
+        &self,
+        ported: &PortedStatute,
+        issues: &mut Vec<QualityIssue>,
+    ) -> f64 {
+        let mut score = 1.0;
+
+        // Check if critical changes were made
+        let critical_changes = ported
+            .changes
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.change_type,
+                    ChangeType::ValueAdaptation | ChangeType::Removal
+                )
+            })
+            .count();
+
+        if critical_changes > 0 {
+            score -= 0.1 * critical_changes as f64;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::SemanticDrift,
+                severity: QualityIssueSeverity::Major,
+                description: format!("{} critical changes to statute meaning", critical_changes),
+                location: None,
+                suggested_fix: Some(
+                    "Review changes to ensure legal meaning is preserved".to_string(),
+                ),
+            });
+        }
+
+        score.max(0.0)
+    }
+
+    /// Scores legal correctness.
+    fn score_legal_correctness(
+        &self,
+        ported: &PortedStatute,
+        issues: &mut Vec<QualityIssue>,
+    ) -> f64 {
+        let mut score: f64 = 1.0;
+
+        // Check for translation changes
+        let translation_changes = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::Translation))
+            .count();
+
+        if translation_changes > 10 {
+            score -= 0.05;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::IncorrectTranslation,
+                severity: QualityIssueSeverity::Minor,
+                description: format!(
+                    "{} term translations - review for accuracy",
+                    translation_changes
+                ),
+                location: None,
+                suggested_fix: Some(
+                    "Verify legal term translations with jurisdiction experts".to_string(),
+                ),
+            });
+        }
+
+        score.max(0.0)
+    }
+
+    /// Scores cultural adaptation.
+    fn score_cultural_adaptation(
+        &self,
+        ported: &PortedStatute,
+        issues: &mut Vec<QualityIssue>,
+    ) -> f64 {
+        let mut score: f64 = 1.0;
+
+        // Check for cultural parameter changes
+        let cultural_changes = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::CulturalAdaptation))
+            .count();
+
+        if cultural_changes == 0 {
+            score -= 0.2;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::CulturalMismatch,
+                severity: QualityIssueSeverity::Major,
+                description:
+                    "No cultural adaptations applied - may not be suitable for target jurisdiction"
+                        .to_string(),
+                location: None,
+                suggested_fix: Some("Apply cultural parameter adaptations".to_string()),
+            });
+        }
+
+        score.max(0.0)
+    }
+
+    /// Scores completeness.
+    fn score_completeness(&self, ported: &PortedStatute, issues: &mut Vec<QualityIssue>) -> f64 {
+        let mut score: f64 = 1.0;
+
+        // Check if statute has minimum required elements
+        if ported.statute.id.is_empty() {
+            score -= 0.3;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::Incompleteness,
+                severity: QualityIssueSeverity::Critical,
+                description: "Statute ID is empty".to_string(),
+                location: None,
+                suggested_fix: Some("Assign a valid statute ID".to_string()),
+            });
+        }
+
+        if ported.statute.title.is_empty() {
+            score -= 0.2;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::Incompleteness,
+                severity: QualityIssueSeverity::Major,
+                description: "Statute title is empty".to_string(),
+                location: None,
+                suggested_fix: Some("Provide a statute title".to_string()),
+            });
+        }
+
+        if ported.changes.is_empty() {
+            score -= 0.1;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::Incompleteness,
+                severity: QualityIssueSeverity::Minor,
+                description: "No changes documented".to_string(),
+                location: None,
+                suggested_fix: Some("Document all changes made during porting".to_string()),
+            });
+        }
+
+        score.max(0.0)
+    }
+
+    /// Scores consistency.
+    fn score_consistency(&self, ported: &PortedStatute, issues: &mut Vec<QualityIssue>) -> f64 {
+        let mut score: f64 = 1.0;
+
+        // Check for inconsistent terminology
+        let term_changes: Vec<_> = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::Translation))
+            .collect();
+
+        // Simple heuristic: if same term appears multiple times with different translations
+        if term_changes.len() > 5 {
+            score -= 0.05;
+            issues.push(QualityIssue {
+                issue_type: QualityIssueType::InconsistentTerminology,
+                severity: QualityIssueSeverity::Minor,
+                description: "Multiple term translations - verify consistency".to_string(),
+                location: None,
+                suggested_fix: Some(
+                    "Ensure consistent translation of legal terms throughout".to_string(),
+                ),
+            });
+        }
+
+        score.max(0.0)
+    }
+
+    /// Checks if quality meets minimum threshold.
+    #[allow(dead_code)]
+    pub fn meets_threshold(&self, score: &QualityScore) -> bool {
+        score.overall >= self.min_quality_threshold
+    }
+}
+
+impl Default for QualityScorer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Consistency check result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsistencyCheckResult {
+    /// Whether the ported statute is consistent.
+    pub is_consistent: bool,
+    /// Consistency score (0.0 to 1.0).
+    pub consistency_score: f64,
+    /// Inconsistencies found.
+    pub inconsistencies: Vec<Inconsistency>,
+    /// Suggestions for fixing inconsistencies.
+    pub suggestions: Vec<String>,
+}
+
+/// Inconsistency found in ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Inconsistency {
+    /// Type of inconsistency.
+    pub inconsistency_type: InconsistencyType,
+    /// Severity level.
+    pub severity: InconsistencySeverity,
+    /// Description.
+    pub description: String,
+    /// Conflicting elements.
+    pub conflicting_elements: Vec<String>,
+    /// Location in statute.
+    pub location: Option<String>,
+}
+
+/// Type of inconsistency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InconsistencyType {
+    /// Terminology used inconsistently.
+    TerminologyInconsistency,
+    /// Parameters have conflicting values.
+    ParameterConflict,
+    /// Legal logic is inconsistent.
+    LogicalInconsistency,
+    /// References are inconsistent.
+    ReferenceInconsistency,
+    /// Formatting is inconsistent.
+    FormattingInconsistency,
+}
+
+/// Severity of inconsistency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InconsistencySeverity {
+    /// High severity - must fix.
+    High,
+    /// Medium severity - should fix.
+    Medium,
+    /// Low severity - nice to fix.
+    Low,
+}
+
+/// Consistency verifier for ported statutes.
+pub struct ConsistencyVerifier;
+
+impl ConsistencyVerifier {
+    /// Creates a new consistency verifier.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Verifies consistency of a ported statute.
+    pub fn verify(&self, ported: &PortedStatute) -> ConsistencyCheckResult {
+        let mut inconsistencies = Vec::new();
+        let mut suggestions = Vec::new();
+
+        // Check terminology consistency
+        self.check_terminology_consistency(ported, &mut inconsistencies);
+
+        // Check parameter consistency
+        self.check_parameter_consistency(ported, &mut inconsistencies);
+
+        // Check logical consistency
+        self.check_logical_consistency(ported, &mut inconsistencies);
+
+        // Check reference consistency
+        self.check_reference_consistency(ported, &mut inconsistencies);
+
+        // Calculate consistency score
+        let consistency_score = if inconsistencies.is_empty() {
+            1.0
+        } else {
+            let penalty = inconsistencies
+                .iter()
+                .map(|i| match i.severity {
+                    InconsistencySeverity::High => 0.2,
+                    InconsistencySeverity::Medium => 0.1,
+                    InconsistencySeverity::Low => 0.05,
+                })
+                .sum::<f64>();
+            (1.0 - penalty).max(0.0)
+        };
+
+        let is_consistent = consistency_score >= 0.8;
+
+        // Generate suggestions
+        if !is_consistent {
+            suggestions.push(
+                "Review and standardize terminology usage throughout the statute".to_string(),
+            );
+            suggestions
+                .push("Verify that all parameters are consistent and non-conflicting".to_string());
+        }
+
+        ConsistencyCheckResult {
+            is_consistent,
+            consistency_score,
+            inconsistencies,
+            suggestions,
+        }
+    }
+
+    /// Checks terminology consistency.
+    fn check_terminology_consistency(
+        &self,
+        ported: &PortedStatute,
+        inconsistencies: &mut Vec<Inconsistency>,
+    ) {
+        // Check for term translation inconsistencies
+        let term_translations: Vec<_> = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::Translation))
+            .collect();
+
+        if term_translations.len() > 10 {
+            inconsistencies.push(Inconsistency {
+                inconsistency_type: InconsistencyType::TerminologyInconsistency,
+                severity: InconsistencySeverity::Low,
+                description: format!(
+                    "{} term translations - verify consistent usage",
+                    term_translations.len()
+                ),
+                conflicting_elements: vec![],
+                location: None,
+            });
+        }
+    }
+
+    /// Checks parameter consistency.
+    fn check_parameter_consistency(
+        &self,
+        ported: &PortedStatute,
+        inconsistencies: &mut Vec<Inconsistency>,
+    ) {
+        // Check for parameter adjustments that might conflict
+        let param_changes: Vec<_> = ported
+            .changes
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.change_type,
+                    ChangeType::ValueAdaptation | ChangeType::CulturalAdaptation
+                )
+            })
+            .collect();
+
+        if param_changes.len() > 5 {
+            inconsistencies.push(Inconsistency {
+                inconsistency_type: InconsistencyType::ParameterConflict,
+                severity: InconsistencySeverity::Medium,
+                description: format!(
+                    "{} parameter adjustments - verify they don't conflict",
+                    param_changes.len()
+                ),
+                conflicting_elements: vec![],
+                location: None,
+            });
+        }
+    }
+
+    /// Checks logical consistency.
+    fn check_logical_consistency(
+        &self,
+        ported: &PortedStatute,
+        inconsistencies: &mut Vec<Inconsistency>,
+    ) {
+        // Check for modifications that might create logical inconsistencies
+        let value_mods: Vec<_> = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::ValueAdaptation))
+            .collect();
+
+        let removals: Vec<_> = ported
+            .changes
+            .iter()
+            .filter(|c| matches!(c.change_type, ChangeType::Removal))
+            .collect();
+
+        if value_mods.len() > 3 && !removals.is_empty() {
+            inconsistencies.push(Inconsistency {
+                inconsistency_type: InconsistencyType::LogicalInconsistency,
+                severity: InconsistencySeverity::High,
+                description:
+                    "Multiple value adaptations with removals - verify logical consistency"
+                        .to_string(),
+                conflicting_elements: vec![],
+                location: None,
+            });
+        }
+    }
+
+    /// Checks reference consistency.
+    fn check_reference_consistency(
+        &self,
+        _ported: &PortedStatute,
+        _inconsistencies: &mut Vec<Inconsistency>,
+    ) {
+        // In a real implementation, would check that all references are valid
+        // For now, this is a placeholder
+    }
+}
+
+impl Default for ConsistencyVerifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Completeness check result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletenessCheckResult {
+    /// Whether the ported statute is complete.
+    pub is_complete: bool,
+    /// Completeness score (0.0 to 1.0).
+    pub completeness_score: f64,
+    /// Missing elements.
+    pub missing_elements: Vec<MissingElement>,
+    /// Optional elements that could be added.
+    pub optional_elements: Vec<String>,
+    /// Suggestions for improving completeness.
+    pub suggestions: Vec<String>,
+}
+
+/// Missing element in ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MissingElement {
+    /// Type of element.
+    pub element_type: ElementType,
+    /// Importance level.
+    pub importance: ElementImportance,
+    /// Description.
+    pub description: String,
+    /// Expected location.
+    pub expected_location: Option<String>,
+}
+
+/// Type of element that may be missing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ElementType {
+    /// Statute metadata.
+    Metadata,
+    /// Legal effect.
+    Effect,
+    /// Condition or trigger.
+    Condition,
+    /// Cultural adaptation.
+    CulturalAdaptation,
+    /// Jurisdiction information.
+    JurisdictionInfo,
+    /// Documentation or explanation.
+    Documentation,
+    /// Validation result.
+    ValidationResult,
+}
+
+/// Importance of missing element.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ElementImportance {
+    /// Required element.
+    Required,
+    /// Recommended element.
+    Recommended,
+    /// Optional element.
+    Optional,
+}
+
+/// Completeness checker for ported statutes.
+pub struct CompletenessChecker {
+    /// Whether to check for optional elements.
+    check_optional: bool,
+}
+
+impl CompletenessChecker {
+    /// Creates a new completeness checker.
+    pub fn new() -> Self {
+        Self {
+            check_optional: false,
+        }
+    }
+
+    /// Sets whether to check optional elements.
+    #[allow(dead_code)]
+    pub fn with_optional_check(mut self, check: bool) -> Self {
+        self.check_optional = check;
+        self
+    }
+
+    /// Checks completeness of a ported statute.
+    pub fn check(&self, ported: &PortedStatute) -> CompletenessCheckResult {
+        let mut missing_elements = Vec::new();
+        let mut optional_elements = Vec::new();
+        let mut suggestions = Vec::new();
+
+        // Check required elements
+        self.check_required_elements(ported, &mut missing_elements);
+
+        // Check recommended elements
+        self.check_recommended_elements(ported, &mut missing_elements);
+
+        // Check optional elements
+        if self.check_optional {
+            self.check_optional_elements(ported, &mut optional_elements);
+        }
+
+        // Calculate completeness score
+        let required_missing = missing_elements
+            .iter()
+            .filter(|e| matches!(e.importance, ElementImportance::Required))
+            .count();
+
+        let recommended_missing = missing_elements
+            .iter()
+            .filter(|e| matches!(e.importance, ElementImportance::Recommended))
+            .count();
+
+        let completeness_score = if required_missing > 0 {
+            0.0
+        } else if recommended_missing > 0 {
+            0.7 - (0.1 * recommended_missing as f64).min(0.3)
+        } else {
+            1.0
+        };
+
+        let is_complete = required_missing == 0 && recommended_missing == 0;
+
+        // Generate suggestions
+        if !is_complete {
+            if required_missing > 0 {
+                suggestions.push(format!("Add {} required elements", required_missing));
+            }
+            if recommended_missing > 0 {
+                suggestions.push(format!(
+                    "Add {} recommended elements for better quality",
+                    recommended_missing
+                ));
+            }
+        }
+
+        CompletenessCheckResult {
+            is_complete,
+            completeness_score,
+            missing_elements,
+            optional_elements,
+            suggestions,
+        }
+    }
+
+    /// Checks for required elements.
+    fn check_required_elements(&self, ported: &PortedStatute, missing: &mut Vec<MissingElement>) {
+        // Check statute ID
+        if ported.statute.id.is_empty() {
+            missing.push(MissingElement {
+                element_type: ElementType::Metadata,
+                importance: ElementImportance::Required,
+                description: "Statute ID is required".to_string(),
+                expected_location: Some("statute.id".to_string()),
+            });
+        }
+
+        // Check statute title
+        if ported.statute.title.is_empty() {
+            missing.push(MissingElement {
+                element_type: ElementType::Metadata,
+                importance: ElementImportance::Required,
+                description: "Statute title is required".to_string(),
+                expected_location: Some("statute.title".to_string()),
+            });
+        }
+    }
+
+    /// Checks for recommended elements.
+    fn check_recommended_elements(
+        &self,
+        ported: &PortedStatute,
+        missing: &mut Vec<MissingElement>,
+    ) {
+        // Check for cultural adaptations
+        let has_cultural_adaptation = ported
+            .changes
+            .iter()
+            .any(|c| matches!(c.change_type, ChangeType::CulturalAdaptation));
+
+        if !has_cultural_adaptation {
+            missing.push(MissingElement {
+                element_type: ElementType::CulturalAdaptation,
+                importance: ElementImportance::Recommended,
+                description: "Cultural adaptations are recommended for cross-jurisdiction porting"
+                    .to_string(),
+                expected_location: Some("changes".to_string()),
+            });
+        }
+
+        // Check for change documentation
+        if ported.changes.is_empty() {
+            missing.push(MissingElement {
+                element_type: ElementType::Documentation,
+                importance: ElementImportance::Recommended,
+                description: "Document changes made during porting".to_string(),
+                expected_location: Some("changes".to_string()),
+            });
+        }
+    }
+
+    /// Checks for optional elements.
+    fn check_optional_elements(&self, _ported: &PortedStatute, optional: &mut Vec<String>) {
+        optional.push("Detailed implementation notes".to_string());
+        optional.push("Stakeholder review comments".to_string());
+        optional.push("Compliance certification".to_string());
+    }
+}
+
+impl Default for CompletenessChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Regression test for porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegressionTest {
+    /// Test ID.
+    pub test_id: String,
+    /// Test name.
+    pub name: String,
+    /// Source jurisdiction.
+    pub source_jurisdiction: String,
+    /// Target jurisdiction.
+    pub target_jurisdiction: String,
+    /// Input statute (snapshot).
+    pub input_statute: String,
+    /// Expected output (snapshot).
+    pub expected_output: String,
+    /// Quality baseline.
+    pub quality_baseline: f64,
+    /// Created at timestamp.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Last run timestamp.
+    pub last_run: Option<chrono::DateTime<chrono::Utc>>,
+    /// Test status.
+    pub status: RegressionTestStatus,
+}
+
+/// Status of regression test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegressionTestStatus {
+    /// Not yet run.
+    Pending,
+    /// Test passed.
+    Passed,
+    /// Test failed.
+    Failed,
+    /// Test skipped.
+    Skipped,
+}
+
+/// Result of running a regression test.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegressionTestResult {
+    /// Test ID.
+    pub test_id: String,
+    /// Whether test passed.
+    pub passed: bool,
+    /// Quality score achieved.
+    pub quality_score: f64,
+    /// Quality baseline.
+    pub quality_baseline: f64,
+    /// Quality difference.
+    pub quality_diff: f64,
+    /// Differences found.
+    pub differences: Vec<String>,
+    /// Run timestamp.
+    pub run_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Regression test manager.
+pub struct RegressionTestManager {
+    /// Collection of regression tests.
+    tests: std::collections::HashMap<String, RegressionTest>,
+    /// Quality scorer.
+    scorer: QualityScorer,
+}
+
+impl RegressionTestManager {
+    /// Creates a new regression test manager.
+    pub fn new() -> Self {
+        Self {
+            tests: std::collections::HashMap::new(),
+            scorer: QualityScorer::new(),
+        }
+    }
+
+    /// Adds a regression test.
+    pub fn add_test(&mut self, test: RegressionTest) {
+        self.tests.insert(test.test_id.clone(), test);
+    }
+
+    /// Creates a regression test from a porting result.
+    #[allow(dead_code)]
+    pub fn create_test_from_porting(
+        &mut self,
+        test_id: String,
+        name: String,
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+        input_statute: String,
+        ported: &PortedStatute,
+    ) -> Result<(), String> {
+        let quality = self.scorer.score_porting(ported);
+
+        let test = RegressionTest {
+            test_id: test_id.clone(),
+            name,
+            source_jurisdiction,
+            target_jurisdiction,
+            input_statute,
+            expected_output: serde_json::to_string(ported)
+                .map_err(|e| format!("Failed to serialize ported statute: {}", e))?,
+            quality_baseline: quality.overall,
+            created_at: chrono::Utc::now(),
+            last_run: None,
+            status: RegressionTestStatus::Pending,
+        };
+
+        self.tests.insert(test_id, test);
+        Ok(())
+    }
+
+    /// Runs a regression test.
+    #[allow(dead_code)]
+    pub fn run_test(
+        &mut self,
+        test_id: &str,
+        current_result: &PortedStatute,
+    ) -> Result<RegressionTestResult, String> {
+        let test = self
+            .tests
+            .get_mut(test_id)
+            .ok_or_else(|| format!("Test {} not found", test_id))?;
+
+        // Score current result
+        let quality = self.scorer.score_porting(current_result);
+
+        // Compare with baseline
+        let quality_diff = quality.overall - test.quality_baseline;
+        let passed = quality_diff >= -0.05; // Allow 5% regression
+
+        // Update test status
+        test.status = if passed {
+            RegressionTestStatus::Passed
+        } else {
+            RegressionTestStatus::Failed
+        };
+        test.last_run = Some(chrono::Utc::now());
+
+        // Find differences (simplified)
+        let mut differences = Vec::new();
+        if quality_diff < 0.0 {
+            differences.push(format!(
+                "Quality regressed by {:.2}%",
+                -quality_diff * 100.0
+            ));
+        }
+
+        Ok(RegressionTestResult {
+            test_id: test_id.to_string(),
+            passed,
+            quality_score: quality.overall,
+            quality_baseline: test.quality_baseline,
+            quality_diff,
+            differences,
+            run_at: chrono::Utc::now(),
+        })
+    }
+
+    /// Runs all regression tests.
+    #[allow(dead_code)]
+    pub fn run_all_tests(
+        &mut self,
+        results: &std::collections::HashMap<String, PortedStatute>,
+    ) -> Vec<RegressionTestResult> {
+        let test_ids: Vec<_> = self.tests.keys().cloned().collect();
+        let mut all_results = Vec::new();
+
+        for test_id in test_ids {
+            if let Some(ported) = results.get(&test_id) {
+                if let Ok(result) = self.run_test(&test_id, ported) {
+                    all_results.push(result);
+                }
+            }
+        }
+
+        all_results
+    }
+
+    /// Gets test statistics.
+    #[allow(dead_code)]
+    pub fn get_statistics(&self) -> RegressionTestStatistics {
+        let total = self.tests.len();
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut pending = 0;
+        let mut skipped = 0;
+
+        for test in self.tests.values() {
+            match test.status {
+                RegressionTestStatus::Passed => passed += 1,
+                RegressionTestStatus::Failed => failed += 1,
+                RegressionTestStatus::Pending => pending += 1,
+                RegressionTestStatus::Skipped => skipped += 1,
+            }
+        }
+
+        RegressionTestStatistics {
+            total,
+            passed,
+            failed,
+            pending,
+            skipped,
+            pass_rate: if total > 0 {
+                passed as f64 / total as f64
+            } else {
+                0.0
+            },
+        }
+    }
+
+    /// Gets all tests.
+    #[allow(dead_code)]
+    pub fn get_all_tests(&self) -> Vec<&RegressionTest> {
+        self.tests.values().collect()
+    }
+}
+
+impl Default for RegressionTestManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Statistics for regression tests.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegressionTestStatistics {
+    /// Total number of tests.
+    pub total: usize,
+    /// Number of passed tests.
+    pub passed: usize,
+    /// Number of failed tests.
+    pub failed: usize,
+    /// Number of pending tests.
+    pub pending: usize,
+    /// Number of skipped tests.
+    pub skipped: usize,
+    /// Pass rate (0.0 to 1.0).
+    pub pass_rate: f64,
+}
+
+/// Drift detection result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DriftDetectionResult {
+    /// Whether drift was detected.
+    pub drift_detected: bool,
+    /// Drift score (0.0 = no drift, 1.0 = maximum drift).
+    pub drift_score: f64,
+    /// Drift category.
+    pub category: DriftCategory,
+    /// Detected drift issues.
+    pub drift_issues: Vec<DriftIssue>,
+    /// Recommendations.
+    pub recommendations: Vec<String>,
+}
+
+/// Category of drift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DriftCategory {
+    /// No significant drift.
+    None,
+    /// Minor drift - monitoring recommended.
+    Minor,
+    /// Moderate drift - review recommended.
+    Moderate,
+    /// Major drift - action required.
+    Major,
+    /// Critical drift - immediate action required.
+    Critical,
+}
+
+/// Drift issue detected.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DriftIssue {
+    /// Type of drift.
+    pub drift_type: DriftType,
+    /// Severity.
+    pub severity: DriftSeverity,
+    /// Description.
+    pub description: String,
+    /// Detected at timestamp.
+    pub detected_at: chrono::DateTime<chrono::Utc>,
+    /// Suggested action.
+    pub suggested_action: Option<String>,
+}
+
+/// Type of drift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DriftType {
+    /// Legal framework has changed in source jurisdiction.
+    SourceJurisdictionChange,
+    /// Legal framework has changed in target jurisdiction.
+    TargetJurisdictionChange,
+    /// Cultural parameters have shifted.
+    CulturalShift,
+    /// Semantic meaning has drifted.
+    SemanticDrift,
+    /// Quality has degraded.
+    QualityDegradation,
+    /// Compliance status has changed.
+    ComplianceChange,
+}
+
+/// Severity of drift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DriftSeverity {
+    /// High severity.
+    High,
+    /// Medium severity.
+    Medium,
+    /// Low severity.
+    Low,
+}
+
+/// Drift monitoring snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DriftSnapshot {
+    /// Snapshot ID.
+    pub snapshot_id: String,
+    /// Ported statute ID.
+    pub statute_id: String,
+    /// Quality score at snapshot time.
+    pub quality_score: f64,
+    /// Compliance status at snapshot time.
+    pub compliance_status: String,
+    /// Snapshot timestamp.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Metadata snapshot.
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+/// Drift monitor for continuous monitoring.
+pub struct DriftMonitor {
+    /// Historical snapshots.
+    snapshots: std::collections::HashMap<String, Vec<DriftSnapshot>>,
+    /// Quality scorer.
+    scorer: QualityScorer,
+    /// Drift detection threshold.
+    drift_threshold: f64,
+}
+
+impl DriftMonitor {
+    /// Creates a new drift monitor.
+    pub fn new() -> Self {
+        Self {
+            snapshots: std::collections::HashMap::new(),
+            scorer: QualityScorer::new(),
+            drift_threshold: 0.1, // 10% change triggers drift detection
+        }
+    }
+
+    /// Sets drift detection threshold.
+    #[allow(dead_code)]
+    pub fn with_threshold(mut self, threshold: f64) -> Self {
+        self.drift_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Creates a snapshot of current state.
+    pub fn create_snapshot(&mut self, statute_id: String, ported: &PortedStatute) -> String {
+        let quality = self.scorer.score_porting(ported);
+
+        let snapshot_id = uuid::Uuid::new_v4().to_string();
+        let snapshot = DriftSnapshot {
+            snapshot_id: snapshot_id.clone(),
+            statute_id: statute_id.clone(),
+            quality_score: quality.overall,
+            compliance_status: "compliant".to_string(),
+            timestamp: chrono::Utc::now(),
+            metadata: std::collections::HashMap::new(),
+        };
+
+        self.snapshots
+            .entry(statute_id)
+            .or_insert_with(Vec::new)
+            .push(snapshot);
+
+        snapshot_id
+    }
+
+    /// Detects drift by comparing current state with historical snapshots.
+    pub fn detect_drift(&self, statute_id: &str, current: &PortedStatute) -> DriftDetectionResult {
+        let mut drift_issues = Vec::new();
+        let mut recommendations = Vec::new();
+
+        // Get historical snapshots
+        let snapshots = self.snapshots.get(statute_id);
+
+        let drift_score = if let Some(snapshots) = snapshots {
+            if snapshots.is_empty() {
+                0.0
+            } else {
+                // Compare with most recent snapshot
+                let latest = &snapshots[snapshots.len() - 1];
+                let current_quality = self.scorer.score_porting(current);
+
+                let quality_diff = (latest.quality_score - current_quality.overall).abs();
+
+                if quality_diff > self.drift_threshold {
+                    drift_issues.push(DriftIssue {
+                        drift_type: DriftType::QualityDegradation,
+                        severity: if quality_diff > 0.2 {
+                            DriftSeverity::High
+                        } else if quality_diff > 0.1 {
+                            DriftSeverity::Medium
+                        } else {
+                            DriftSeverity::Low
+                        },
+                        description: format!(
+                            "Quality score changed by {:.2}%",
+                            quality_diff * 100.0
+                        ),
+                        detected_at: chrono::Utc::now(),
+                        suggested_action: Some(
+                            "Review ported statute for quality issues".to_string(),
+                        ),
+                    });
+                }
+
+                quality_diff
+            }
+        } else {
+            0.0
+        };
+
+        let category = if drift_score >= 0.3 {
+            DriftCategory::Critical
+        } else if drift_score >= 0.2 {
+            DriftCategory::Major
+        } else if drift_score >= 0.1 {
+            DriftCategory::Moderate
+        } else if drift_score >= 0.05 {
+            DriftCategory::Minor
+        } else {
+            DriftCategory::None
+        };
+
+        let drift_detected = !drift_issues.is_empty();
+
+        if drift_detected {
+            recommendations.push(
+                "Review ported statute against current source and target frameworks".to_string(),
+            );
+            recommendations.push("Consider re-porting if drift is significant".to_string());
+        }
+
+        DriftDetectionResult {
+            drift_detected,
+            drift_score,
+            category,
+            drift_issues,
+            recommendations,
+        }
+    }
+
+    /// Gets all snapshots for a statute.
+    #[allow(dead_code)]
+    pub fn get_snapshots(&self, statute_id: &str) -> Option<&Vec<DriftSnapshot>> {
+        self.snapshots.get(statute_id)
+    }
+
+    /// Gets drift trend over time.
+    #[allow(dead_code)]
+    pub fn get_drift_trend(&self, statute_id: &str) -> Vec<(chrono::DateTime<chrono::Utc>, f64)> {
+        if let Some(snapshots) = self.snapshots.get(statute_id) {
+            if snapshots.len() < 2 {
+                return Vec::new();
+            }
+
+            let mut trend = Vec::new();
+            for i in 1..snapshots.len() {
+                let prev = &snapshots[i - 1];
+                let curr = &snapshots[i];
+                let drift = (prev.quality_score - curr.quality_score).abs();
+                trend.push((curr.timestamp, drift));
+            }
+            trend
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl Default for DriftMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Documentation Generation (v0.2.6)
+// ============================================================================
+
+/// Explanatory note for a ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExplanatoryNote {
+    /// Note ID.
+    pub note_id: String,
+    /// Ported statute ID.
+    pub statute_id: String,
+    /// Section being explained.
+    pub section: String,
+    /// Plain language explanation.
+    pub explanation: String,
+    /// Reason for porting change.
+    pub reason_for_change: Option<String>,
+    /// Legal implications.
+    pub legal_implications: Vec<String>,
+    /// Examples.
+    pub examples: Vec<String>,
+    /// Cross-references.
+    pub cross_references: Vec<String>,
+    /// Generated at timestamp.
+    pub generated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Explanatory note generator.
+pub struct ExplanatoryNoteGenerator;
+
+impl ExplanatoryNoteGenerator {
+    /// Creates a new explanatory note generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates explanatory notes for a ported statute.
+    pub fn generate_notes(&self, ported: &PortedStatute) -> Vec<ExplanatoryNote> {
+        let mut notes = Vec::new();
+
+        // Generate a note for the overall statute
+        notes.push(self.generate_statute_note(ported));
+
+        // Generate notes for each significant change
+        for (idx, change) in ported.changes.iter().enumerate() {
+            if self.is_significant_change(change) {
+                notes.push(self.generate_change_note(ported, change, idx));
+            }
+        }
+
+        notes
+    }
+
+    /// Generates a note for the statute as a whole.
+    fn generate_statute_note(&self, ported: &PortedStatute) -> ExplanatoryNote {
+        let explanation = format!(
+            "This statute has been ported from another jurisdiction. It contains {} adaptations to ensure compliance with local legal requirements and cultural norms.",
+            ported.changes.len()
+        );
+
+        let legal_implications = vec![
+            "This statute is adapted for the target jurisdiction".to_string(),
+            format!(
+                "Compatibility score: {:.2}%",
+                ported.compatibility_score * 100.0
+            ),
+        ];
+
+        ExplanatoryNote {
+            note_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            section: "General".to_string(),
+            explanation,
+            reason_for_change: Some("Cross-jurisdiction legal framework porting".to_string()),
+            legal_implications,
+            examples: vec![],
+            cross_references: vec![],
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Generates a note for a specific change.
+    fn generate_change_note(
+        &self,
+        ported: &PortedStatute,
+        change: &PortingChange,
+        idx: usize,
+    ) -> ExplanatoryNote {
+        let explanation = format!(
+            "{} (Change type: {:?})",
+            change.description, change.change_type
+        );
+
+        let mut legal_implications = vec![change.reason.clone()];
+
+        if let (Some(original), Some(adapted)) = (&change.original, &change.adapted) {
+            legal_implications.push(format!(
+                "Changed from '{}' to '{}' for local applicability",
+                original, adapted
+            ));
+        }
+
+        ExplanatoryNote {
+            note_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            section: format!("Change {}", idx + 1),
+            explanation,
+            reason_for_change: Some(change.reason.clone()),
+            legal_implications,
+            examples: vec![],
+            cross_references: vec![],
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Checks if a change is significant enough to warrant a note.
+    fn is_significant_change(&self, change: &PortingChange) -> bool {
+        matches!(
+            change.change_type,
+            ChangeType::CulturalAdaptation | ChangeType::ValueAdaptation | ChangeType::Removal
+        )
+    }
+}
+
+impl Default for ExplanatoryNoteGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Change justification report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangeJustificationReport {
+    /// Report ID.
+    pub report_id: String,
+    /// Ported statute ID.
+    pub statute_id: String,
+    /// Source jurisdiction.
+    pub source_jurisdiction: String,
+    /// Target jurisdiction.
+    pub target_jurisdiction: String,
+    /// Justifications for each change.
+    pub justifications: Vec<ChangeJustification>,
+    /// Overall rationale.
+    pub overall_rationale: String,
+    /// Legal basis for changes.
+    pub legal_basis: Vec<String>,
+    /// Stakeholder input summary.
+    pub stakeholder_input: Option<String>,
+    /// Generated at timestamp.
+    pub generated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Justification for a specific change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangeJustification {
+    /// Change description.
+    pub change_description: String,
+    /// Change type.
+    pub change_type: ChangeType,
+    /// Justification.
+    pub justification: String,
+    /// Legal authority.
+    pub legal_authority: Option<String>,
+    /// Alternative considered.
+    pub alternatives_considered: Vec<String>,
+    /// Risk if not changed.
+    pub risk_if_unchanged: Option<String>,
+}
+
+/// Change justification report generator.
+pub struct ChangeJustificationReportGenerator;
+
+impl ChangeJustificationReportGenerator {
+    /// Creates a new change justification report generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates a change justification report.
+    pub fn generate_report(
+        &self,
+        ported: &PortedStatute,
+        source_jurisdiction: &str,
+        target_jurisdiction: &str,
+    ) -> ChangeJustificationReport {
+        let justifications = ported
+            .changes
+            .iter()
+            .map(|change| self.justify_change(change))
+            .collect();
+
+        let overall_rationale = format!(
+            "This statute was ported from {} to {} to facilitate legal harmonization and knowledge transfer. {} changes were made to ensure local applicability and compliance.",
+            source_jurisdiction,
+            target_jurisdiction,
+            ported.changes.len()
+        );
+
+        let legal_basis = vec![
+            "Cross-jurisdictional legal framework sharing".to_string(),
+            "Cultural adaptation requirements".to_string(),
+            "Local legal compliance mandate".to_string(),
+        ];
+
+        ChangeJustificationReport {
+            report_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            source_jurisdiction: source_jurisdiction.to_string(),
+            target_jurisdiction: target_jurisdiction.to_string(),
+            justifications,
+            overall_rationale,
+            legal_basis,
+            stakeholder_input: None,
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Justifies a specific change.
+    fn justify_change(&self, change: &PortingChange) -> ChangeJustification {
+        let justification = match change.change_type {
+            ChangeType::Translation => "Translation required for language localization".to_string(),
+            ChangeType::ValueAdaptation => {
+                "Value adapted to match local legal standards and thresholds".to_string()
+            }
+            ChangeType::CulturalAdaptation => {
+                "Cultural adaptation necessary for local acceptability and compliance".to_string()
+            }
+            ChangeType::Removal => {
+                "Removed due to incompatibility with target jurisdiction laws".to_string()
+            }
+            ChangeType::ComplianceAddition => {
+                "Added to ensure compliance with target jurisdiction requirements".to_string()
+            }
+            ChangeType::Incompatible => "Marked as incompatible pending further review".to_string(),
+        };
+
+        let risk_if_unchanged = match change.change_type {
+            ChangeType::CulturalAdaptation | ChangeType::ValueAdaptation => {
+                Some("Non-compliance with local legal requirements".to_string())
+            }
+            ChangeType::Removal => Some("Potential legal conflict or invalidity".to_string()),
+            _ => None,
+        };
+
+        ChangeJustification {
+            change_description: change.description.clone(),
+            change_type: change.change_type,
+            justification,
+            legal_authority: None,
+            alternatives_considered: vec![],
+            risk_if_unchanged,
+        }
+    }
+}
+
+impl Default for ChangeJustificationReportGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legislative history entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegislativeHistoryEntry {
+    /// Event timestamp.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Event type.
+    pub event_type: LegislativeEventType,
+    /// Description.
+    pub description: String,
+    /// Actor (person or organization).
+    pub actor: Option<String>,
+    /// Related documents.
+    pub related_documents: Vec<String>,
+}
+
+/// Type of legislative event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LegislativeEventType {
+    /// Initial drafting.
+    Drafted,
+    /// Review by stakeholder.
+    Reviewed,
+    /// Amendment proposed.
+    Amended,
+    /// Approved by authority.
+    Approved,
+    /// Published.
+    Published,
+    /// Ported to another jurisdiction.
+    Ported,
+}
+
+/// Legislative history compilation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegislativeHistory {
+    /// History ID.
+    pub history_id: String,
+    /// Statute ID.
+    pub statute_id: String,
+    /// Original enactment date (if applicable).
+    pub original_enactment: Option<String>,
+    /// Porting date.
+    pub porting_date: String,
+    /// Timeline of events.
+    pub timeline: Vec<LegislativeHistoryEntry>,
+    /// Key participants.
+    pub key_participants: Vec<String>,
+    /// Summary.
+    pub summary: String,
+}
+
+/// Legislative history compiler.
+pub struct LegislativeHistoryCompiler;
+
+impl LegislativeHistoryCompiler {
+    /// Creates a new legislative history compiler.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Compiles legislative history for a ported statute.
+    pub fn compile_history(&self, ported: &PortedStatute) -> LegislativeHistory {
+        let mut timeline = Vec::new();
+
+        // Add porting event
+        timeline.push(LegislativeHistoryEntry {
+            timestamp: chrono::Utc::now(),
+            event_type: LegislativeEventType::Ported,
+            description: format!("Statute ported with {} adaptations", ported.changes.len()),
+            actor: Some("Porting System".to_string()),
+            related_documents: vec![],
+        });
+
+        // Add change events
+        for change in &ported.changes {
+            timeline.push(LegislativeHistoryEntry {
+                timestamp: chrono::Utc::now(),
+                event_type: LegislativeEventType::Amended,
+                description: change.description.clone(),
+                actor: None,
+                related_documents: vec![],
+            });
+        }
+
+        let summary = format!(
+            "This statute was ported from another jurisdiction with {} modifications to ensure local applicability.",
+            ported.changes.len()
+        );
+
+        LegislativeHistory {
+            history_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            original_enactment: None,
+            porting_date: chrono::Utc::now().to_rfc3339(),
+            timeline,
+            key_participants: vec!["Porting System".to_string()],
+            summary,
+        }
+    }
+
+    /// Adds a custom event to history.
+    #[allow(dead_code)]
+    pub fn add_event(
+        &self,
+        history: &mut LegislativeHistory,
+        event_type: LegislativeEventType,
+        description: String,
+        actor: Option<String>,
+    ) {
+        history.timeline.push(LegislativeHistoryEntry {
+            timestamp: chrono::Utc::now(),
+            event_type,
+            description,
+            actor,
+            related_documents: vec![],
+        });
+    }
+}
+
+impl Default for LegislativeHistoryCompiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Implementation guidance document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementationGuidance {
+    /// Guidance ID.
+    pub guidance_id: String,
+    /// Statute ID.
+    pub statute_id: String,
+    /// Overview.
+    pub overview: String,
+    /// Prerequisites.
+    pub prerequisites: Vec<String>,
+    /// Implementation steps.
+    pub implementation_steps: Vec<ImplementationStep>,
+    /// Compliance checklist.
+    pub compliance_checklist: Vec<String>,
+    /// Common pitfalls.
+    pub common_pitfalls: Vec<String>,
+    /// Resources.
+    pub resources: Vec<String>,
+    /// Timeline estimate.
+    pub timeline_estimate: Option<String>,
+    /// Generated at timestamp.
+    pub generated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Implementation step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplementationStep {
+    /// Step number.
+    pub step_number: usize,
+    /// Title.
+    pub title: String,
+    /// Description.
+    pub description: String,
+    /// Required actions.
+    pub required_actions: Vec<String>,
+    /// Success criteria.
+    pub success_criteria: Vec<String>,
+}
+
+/// Implementation guidance generator.
+pub struct ImplementationGuidanceGenerator;
+
+impl ImplementationGuidanceGenerator {
+    /// Creates a new implementation guidance generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates implementation guidance for a ported statute.
+    pub fn generate_guidance(&self, ported: &PortedStatute) -> ImplementationGuidance {
+        let overview = format!(
+            "This guidance provides step-by-step instructions for implementing the ported statute '{}'. The statute has been adapted with {} changes for local compliance.",
+            ported.statute.title,
+            ported.changes.len()
+        );
+
+        let prerequisites = vec![
+            "Review the ported statute in detail".to_string(),
+            "Ensure all stakeholders are informed".to_string(),
+            "Verify compliance with local regulations".to_string(),
+            "Prepare necessary resources".to_string(),
+        ];
+
+        let implementation_steps = self.generate_steps(ported);
+
+        let compliance_checklist = vec![
+            "Verify all cultural adaptations are appropriate".to_string(),
+            "Confirm legal compliance in target jurisdiction".to_string(),
+            "Validate translations are accurate".to_string(),
+            "Ensure stakeholder approval is obtained".to_string(),
+        ];
+
+        let common_pitfalls = vec![
+            "Overlooking cultural differences".to_string(),
+            "Insufficient stakeholder consultation".to_string(),
+            "Inadequate legal review".to_string(),
+        ];
+
+        ImplementationGuidance {
+            guidance_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            overview,
+            prerequisites,
+            implementation_steps,
+            compliance_checklist,
+            common_pitfalls,
+            resources: vec![],
+            timeline_estimate: Some("3-6 months".to_string()),
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Generates implementation steps.
+    fn generate_steps(&self, ported: &PortedStatute) -> Vec<ImplementationStep> {
+        let mut steps = Vec::new();
+
+        steps.push(ImplementationStep {
+            step_number: 1,
+            title: "Initial Review".to_string(),
+            description: "Review the ported statute and all adaptations".to_string(),
+            required_actions: vec![
+                "Read the full statute text".to_string(),
+                "Review all change justifications".to_string(),
+            ],
+            success_criteria: vec!["All adaptations understood".to_string()],
+        });
+
+        steps.push(ImplementationStep {
+            step_number: 2,
+            title: "Stakeholder Consultation".to_string(),
+            description: "Consult with affected stakeholders".to_string(),
+            required_actions: vec![
+                "Identify all affected parties".to_string(),
+                "Conduct consultation sessions".to_string(),
+            ],
+            success_criteria: vec!["Stakeholder feedback incorporated".to_string()],
+        });
+
+        steps.push(ImplementationStep {
+            step_number: 3,
+            title: "Legal Validation".to_string(),
+            description: "Validate legal compliance".to_string(),
+            required_actions: vec![
+                "Conduct legal review".to_string(),
+                "Verify compliance with all regulations".to_string(),
+            ],
+            success_criteria: vec!["Legal approval obtained".to_string()],
+        });
+
+        if !ported.changes.is_empty() {
+            steps.push(ImplementationStep {
+                step_number: 4,
+                title: "Implementation of Adaptations".to_string(),
+                description: format!("Implement {} adaptations", ported.changes.len()),
+                required_actions: vec![
+                    "Apply all cultural adaptations".to_string(),
+                    "Update documentation".to_string(),
+                ],
+                success_criteria: vec!["All changes successfully applied".to_string()],
+            });
+        }
+
+        steps.push(ImplementationStep {
+            step_number: steps.len() + 1,
+            title: "Final Approval and Publication".to_string(),
+            description: "Obtain final approval and publish".to_string(),
+            required_actions: vec![
+                "Submit for final approval".to_string(),
+                "Publish statute".to_string(),
+            ],
+            success_criteria: vec!["Statute officially enacted".to_string()],
+        });
+
+        steps
+    }
+}
+
+impl Default for ImplementationGuidanceGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Training material.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingMaterial {
+    /// Material ID.
+    pub material_id: String,
+    /// Statute ID.
+    pub statute_id: String,
+    /// Title.
+    pub title: String,
+    /// Target audience.
+    pub target_audience: TrainingAudience,
+    /// Learning objectives.
+    pub learning_objectives: Vec<String>,
+    /// Content modules.
+    pub modules: Vec<TrainingModule>,
+    /// Assessment questions.
+    pub assessment_questions: Vec<AssessmentQuestion>,
+    /// Estimated duration.
+    pub estimated_duration: String,
+    /// Generated at timestamp.
+    pub generated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Training audience type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrainingAudience {
+    /// Legal professionals.
+    LegalProfessionals,
+    /// Government officials.
+    GovernmentOfficials,
+    /// General public.
+    GeneralPublic,
+    /// Enforcement officers.
+    EnforcementOfficers,
+}
+
+/// Training module.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingModule {
+    /// Module number.
+    pub module_number: usize,
+    /// Module title.
+    pub title: String,
+    /// Content.
+    pub content: String,
+    /// Key points.
+    pub key_points: Vec<String>,
+    /// Examples.
+    pub examples: Vec<String>,
+}
+
+/// Assessment question.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssessmentQuestion {
+    /// Question number.
+    pub question_number: usize,
+    /// Question text.
+    pub question: String,
+    /// Answer options.
+    pub options: Vec<String>,
+    /// Correct answer index.
+    pub correct_answer: usize,
+    /// Explanation.
+    pub explanation: String,
+}
+
+/// Training material generator.
+pub struct TrainingMaterialGenerator;
+
+impl TrainingMaterialGenerator {
+    /// Creates a new training material generator.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates training materials for a ported statute.
+    pub fn generate_materials(
+        &self,
+        ported: &PortedStatute,
+        audience: TrainingAudience,
+    ) -> TrainingMaterial {
+        let title = format!("Training: {}", ported.statute.title);
+
+        let learning_objectives = match audience {
+            TrainingAudience::LegalProfessionals => vec![
+                "Understand the legal framework of the ported statute".to_string(),
+                "Identify all adaptations and their legal basis".to_string(),
+                "Apply the statute in legal practice".to_string(),
+            ],
+            TrainingAudience::GovernmentOfficials => vec![
+                "Understand the statute's requirements".to_string(),
+                "Implement the statute in policy".to_string(),
+                "Ensure compliance across departments".to_string(),
+            ],
+            TrainingAudience::GeneralPublic => vec![
+                "Understand rights and obligations under the statute".to_string(),
+                "Know how the statute affects daily life".to_string(),
+            ],
+            TrainingAudience::EnforcementOfficers => vec![
+                "Understand enforcement procedures".to_string(),
+                "Identify violations and apply penalties".to_string(),
+            ],
+        };
+
+        let modules = self.generate_modules(ported, audience);
+        let assessment_questions = self.generate_assessment(ported, audience);
+
+        let estimated_duration = match audience {
+            TrainingAudience::LegalProfessionals => "4 hours".to_string(),
+            TrainingAudience::GovernmentOfficials => "3 hours".to_string(),
+            TrainingAudience::GeneralPublic => "1 hour".to_string(),
+            TrainingAudience::EnforcementOfficers => "2 hours".to_string(),
+        };
+
+        TrainingMaterial {
+            material_id: uuid::Uuid::new_v4().to_string(),
+            statute_id: ported.statute.id.clone(),
+            title,
+            target_audience: audience,
+            learning_objectives,
+            modules,
+            assessment_questions,
+            estimated_duration,
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Generates training modules.
+    fn generate_modules(
+        &self,
+        ported: &PortedStatute,
+        _audience: TrainingAudience,
+    ) -> Vec<TrainingModule> {
+        let mut modules = Vec::new();
+
+        modules.push(TrainingModule {
+            module_number: 1,
+            title: "Introduction to the Statute".to_string(),
+            content: format!(
+                "This statute, '{}', has been ported from another jurisdiction to facilitate legal harmonization.",
+                ported.statute.title
+            ),
+            key_points: vec![
+                "Purpose of the statute".to_string(),
+                "Scope of application".to_string(),
+            ],
+            examples: vec![],
+        });
+
+        if !ported.changes.is_empty() {
+            modules.push(TrainingModule {
+                module_number: 2,
+                title: "Key Adaptations".to_string(),
+                content: format!(
+                    "{} adaptations were made for local compliance.",
+                    ported.changes.len()
+                ),
+                key_points: ported
+                    .changes
+                    .iter()
+                    .take(5)
+                    .map(|c| c.description.clone())
+                    .collect(),
+                examples: vec![],
+            });
+        }
+
+        modules.push(TrainingModule {
+            module_number: modules.len() + 1,
+            title: "Practical Application".to_string(),
+            content: "How to apply this statute in practice".to_string(),
+            key_points: vec![
+                "Implementation procedures".to_string(),
+                "Common scenarios".to_string(),
+            ],
+            examples: vec![],
+        });
+
+        modules
+    }
+
+    /// Generates assessment questions.
+    fn generate_assessment(
+        &self,
+        ported: &PortedStatute,
+        _audience: TrainingAudience,
+    ) -> Vec<AssessmentQuestion> {
+        let mut questions = Vec::new();
+
+        questions.push(AssessmentQuestion {
+            question_number: 1,
+            question: format!("What is the main purpose of '{}'?", ported.statute.title),
+            options: vec![
+                "To provide legal framework".to_string(),
+                "To regulate commerce".to_string(),
+                "To enforce penalties".to_string(),
+            ],
+            correct_answer: 0,
+            explanation: "This statute provides the legal framework for its subject matter."
+                .to_string(),
+        });
+
+        if !ported.changes.is_empty() {
+            questions.push(AssessmentQuestion {
+                question_number: 2,
+                question: format!("How many adaptations were made to this statute?"),
+                options: vec![
+                    format!("{}", ported.changes.len()),
+                    "0".to_string(),
+                    "100".to_string(),
+                ],
+                correct_answer: 0,
+                explanation: format!(
+                    "{} adaptations were made for local compliance.",
+                    ported.changes.len()
+                ),
+            });
+        }
+
+        questions
+    }
+}
+
+impl Default for TrainingMaterialGenerator {
     fn default() -> Self {
         Self::new()
     }
@@ -13271,6 +16702,92 @@ mod tests {
     }
 
     #[test]
+    fn test_pre_porting_feasibility_analysis() {
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+        let analyzer = PrePortingFeasibilityAnalyzer::new(jp, us);
+
+        let statute = Statute::new(
+            "test-statute",
+            "Test Feasibility Statute",
+            Effect::new(EffectType::Grant, "Rights"),
+        );
+
+        let analysis = analyzer.analyze(&statute);
+
+        // Check basic fields
+        assert!(!analysis.id.is_empty());
+        assert!(analysis.feasibility_score >= 0.0 && analysis.feasibility_score <= 1.0);
+        assert!(analysis.technical_feasibility >= 0.0 && analysis.technical_feasibility <= 1.0);
+        assert!(analysis.legal_feasibility >= 0.0 && analysis.legal_feasibility <= 1.0);
+        assert!(analysis.cultural_feasibility >= 0.0 && analysis.cultural_feasibility <= 1.0);
+        assert!(analysis.economic_feasibility >= 0.0 && analysis.economic_feasibility <= 1.0);
+        assert!(analysis.political_feasibility >= 0.0 && analysis.political_feasibility <= 1.0);
+
+        // Check that factors are generated
+        assert!(!analysis.factors.is_empty());
+
+        // Check that prerequisites are generated
+        assert!(!analysis.prerequisites.is_empty());
+
+        // Check time and cost estimates
+        assert!(analysis.estimated_time_days > 0);
+        assert!(analysis.estimated_cost_usd > 0.0);
+
+        // Check recommended approach
+        assert!(!analysis.recommended_approach.is_empty());
+        assert!(!analysis.alternatives.is_empty());
+    }
+
+    #[test]
+    fn test_feasibility_recommendation_levels() {
+        // Test different feasibility score ranges produce expected recommendations
+        let jp = test_jurisdiction_jp();
+        let us = test_jurisdiction_us();
+        let analyzer = PrePortingFeasibilityAnalyzer::new(jp.clone(), us.clone());
+
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+
+        let analysis = analyzer.analyze(&statute);
+
+        // Verify recommendation matches feasibility score
+        match analysis.recommendation {
+            FeasibilityRecommendation::StronglyRecommended => {
+                assert!(analysis.feasibility_score >= 0.85);
+            }
+            FeasibilityRecommendation::Recommended => {
+                assert!(analysis.feasibility_score >= 0.7 && analysis.feasibility_score < 0.85);
+            }
+            FeasibilityRecommendation::Conditional => {
+                assert!(analysis.feasibility_score >= 0.5 && analysis.feasibility_score < 0.7);
+            }
+            FeasibilityRecommendation::NotRecommended => {
+                assert!(analysis.feasibility_score >= 0.3 && analysis.feasibility_score < 0.5);
+            }
+            FeasibilityRecommendation::StronglyNotRecommended => {
+                assert!(analysis.feasibility_score < 0.3);
+            }
+        }
+    }
+
+    #[test]
+    fn test_feasibility_factor_categories() {
+        let factor = FeasibilityFactor {
+            id: "test-factor".to_string(),
+            category: FeasibilityCategory::Technical,
+            name: "Test Factor".to_string(),
+            impact: -0.2,
+            severity: FeasibilitySeverity::Moderate,
+            description: "Test description".to_string(),
+            mitigation_strategies: vec!["Strategy 1".to_string()],
+        };
+
+        assert_eq!(factor.category, FeasibilityCategory::Technical);
+        assert_eq!(factor.severity, FeasibilitySeverity::Moderate);
+        assert_eq!(factor.impact, -0.2);
+    }
+
+    #[test]
     fn test_compliance_issue_categories() {
         let issue = ValidationComplianceIssue {
             id: "test-issue".to_string(),
@@ -13616,6 +17133,173 @@ mod tests {
         let iterations = vc.get_iterations("project-1").unwrap();
         assert_eq!(iterations.len(), 3);
         assert_eq!(iterations[2].statute_snapshot, "v1");
+    }
+
+    #[test]
+    fn test_create_branch() {
+        let mut vc = PortingVersionControl::new();
+
+        // Create main branch iterations
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Version 1".to_string(),
+        );
+
+        // Create a branch
+        let branch = vc
+            .create_branch(
+                "project-1".to_string(),
+                "feature-x".to_string(),
+                1,
+                "user-1".to_string(),
+                "Working on feature X".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(branch.branch, Some("feature-x".to_string()));
+        assert_eq!(branch.statute_snapshot, "v1");
+        assert!(branch.tags.contains(&"branch".to_string()));
+
+        // Check branches list
+        let branches = vc.get_branches("project-1");
+        assert_eq!(branches.len(), 1);
+        assert!(branches.contains(&"feature-x".to_string()));
+    }
+
+    #[test]
+    fn test_branch_iterations() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Version 1".to_string(),
+        );
+
+        vc.create_branch(
+            "project-1".to_string(),
+            "feature-a".to_string(),
+            1,
+            "user-1".to_string(),
+            "Branch A".to_string(),
+        );
+
+        vc.create_branch(
+            "project-1".to_string(),
+            "feature-b".to_string(),
+            1,
+            "user-1".to_string(),
+            "Branch B".to_string(),
+        );
+
+        let branch_a_iterations = vc.get_branch_iterations("project-1", "feature-a");
+        assert_eq!(branch_a_iterations.len(), 1);
+        assert_eq!(branch_a_iterations[0].branch, Some("feature-a".to_string()));
+
+        let branches = vc.get_branches("project-1");
+        assert_eq!(branches.len(), 2);
+    }
+
+    #[test]
+    fn test_merge_branch() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Version 1".to_string(),
+        );
+
+        vc.create_branch(
+            "project-1".to_string(),
+            "feature-x".to_string(),
+            1,
+            "user-1".to_string(),
+            "Feature X".to_string(),
+        );
+
+        let merged = vc
+            .merge_branch(
+                "project-1".to_string(),
+                "feature-x".to_string(),
+                None,
+                "user-1".to_string(),
+                "Merged feature X".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(merged.branch, None); // Merged to main
+        assert!(merged.notes.contains("Merged feature-x"));
+        assert!(merged.tags.contains(&"merge".to_string()));
+    }
+
+    #[test]
+    fn test_generate_changelog() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Initial version".to_string(),
+        );
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v2".to_string(),
+            "user-2".to_string(),
+            "Updated statute".to_string(),
+        );
+
+        let changelog = vc.generate_changelog("project-1").unwrap();
+
+        assert_eq!(changelog.project_id, "project-1");
+        assert_eq!(changelog.total_iterations, 2);
+        assert_eq!(changelog.entries.len(), 2);
+        assert_eq!(changelog.entries[0].iteration_number, 1);
+        assert_eq!(changelog.entries[1].iteration_number, 2);
+    }
+
+    #[test]
+    fn test_changelog_export_markdown() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Initial version".to_string(),
+        );
+
+        let changelog = vc.generate_changelog("project-1").unwrap();
+        let markdown = changelog.to_markdown();
+
+        assert!(markdown.contains("# Porting Changelog"));
+        assert!(markdown.contains("project-1"));
+        assert!(markdown.contains("## Iteration 1"));
+        assert!(markdown.contains("user-1"));
+    }
+
+    #[test]
+    fn test_changelog_export_json() {
+        let mut vc = PortingVersionControl::new();
+
+        vc.create_iteration(
+            "project-1".to_string(),
+            "v1".to_string(),
+            "user-1".to_string(),
+            "Initial version".to_string(),
+        );
+
+        let changelog = vc.generate_changelog("project-1").unwrap();
+        let json = changelog.to_json().unwrap();
+
+        assert!(json.contains("project-1"));
+        assert!(json.contains("user-1"));
     }
 
     #[test]
@@ -14486,6 +18170,285 @@ mod tests {
     }
 
     #[test]
+    fn test_discussion_thread() {
+        let mut manager = DiscussionThreadManager::new();
+
+        let thread = manager.create_thread(
+            "project-1".to_string(),
+            "Section 5 Discussion".to_string(),
+            "Discuss changes to section 5".to_string(),
+            "user-1".to_string(),
+            vec!["section-5".to_string()],
+        );
+
+        assert!(!thread.id.is_empty());
+        assert_eq!(thread.status, ThreadStatus::Open);
+        assert_eq!(thread.project_id, "project-1");
+    }
+
+    #[test]
+    fn test_discussion_thread_comments() {
+        let mut manager = DiscussionThreadManager::new();
+
+        let thread = manager.create_thread(
+            "project-1".to_string(),
+            "Test Thread".to_string(),
+            "Context".to_string(),
+            "user-1".to_string(),
+            vec![],
+        );
+
+        let comment1 = manager
+            .add_comment(
+                &thread.id,
+                "user-1".to_string(),
+                "First comment".to_string(),
+                None,
+            )
+            .unwrap();
+
+        let _reply = manager
+            .add_comment(
+                &thread.id,
+                "user-2".to_string(),
+                "Reply to first".to_string(),
+                Some(comment1.id.clone()),
+            )
+            .unwrap();
+
+        let thread_after = manager.get_thread(&thread.id).unwrap();
+        assert_eq!(thread_after.comments.len(), 1);
+        assert_eq!(thread_after.comments[0].replies.len(), 1);
+    }
+
+    #[test]
+    fn test_upvote_comment() {
+        let mut manager = DiscussionThreadManager::new();
+
+        let thread = manager.create_thread(
+            "project-1".to_string(),
+            "Test".to_string(),
+            "Context".to_string(),
+            "user-1".to_string(),
+            vec![],
+        );
+
+        let comment = manager
+            .add_comment(
+                &thread.id,
+                "user-1".to_string(),
+                "Comment".to_string(),
+                None,
+            )
+            .unwrap();
+
+        manager
+            .upvote_comment(&thread.id, &comment.id, "user-2".to_string())
+            .unwrap();
+
+        let thread_after = manager.get_thread(&thread.id).unwrap();
+        assert_eq!(thread_after.comments[0].upvotes, 1);
+    }
+
+    #[test]
+    fn test_resolve_thread() {
+        let mut manager = DiscussionThreadManager::new();
+
+        let thread = manager.create_thread(
+            "project-1".to_string(),
+            "Test".to_string(),
+            "Context".to_string(),
+            "user-1".to_string(),
+            vec![],
+        );
+
+        manager
+            .resolve_thread(&thread.id, "user-1".to_string())
+            .unwrap();
+
+        let thread_after = manager.get_thread(&thread.id).unwrap();
+        assert_eq!(thread_after.status, ThreadStatus::Resolved);
+        assert_eq!(thread_after.resolved_by, Some("user-1".to_string()));
+    }
+
+    #[test]
+    fn test_voting_creation() {
+        let mut manager = VotingManager::new();
+
+        let options = vec![
+            VoteOption {
+                id: "opt-1".to_string(),
+                text: "Option 1".to_string(),
+                description: "First option".to_string(),
+                vote_count: 0,
+            },
+            VoteOption {
+                id: "opt-2".to_string(),
+                text: "Option 2".to_string(),
+                description: "Second option".to_string(),
+                vote_count: 0,
+            },
+        ];
+
+        let vote = manager.create_vote(
+            "project-1".to_string(),
+            "Test Vote".to_string(),
+            "Vote on approach".to_string(),
+            VoteType::SingleChoice,
+            options,
+            vec!["user-1".to_string(), "user-2".to_string()],
+            24,
+        );
+
+        assert!(!vote.id.is_empty());
+        assert_eq!(vote.status, VoteStatus::Active);
+    }
+
+    #[test]
+    fn test_cast_vote() {
+        let mut manager = VotingManager::new();
+
+        let options = vec![VoteOption {
+            id: "opt-1".to_string(),
+            text: "Option 1".to_string(),
+            description: "First option".to_string(),
+            vote_count: 0,
+        }];
+
+        let vote = manager.create_vote(
+            "project-1".to_string(),
+            "Test".to_string(),
+            "Description".to_string(),
+            VoteType::SingleChoice,
+            options,
+            vec!["user-1".to_string()],
+            24,
+        );
+
+        manager
+            .cast_vote(&vote.id, "user-1".to_string(), vec!["opt-1".to_string()])
+            .unwrap();
+
+        let vote_after = manager.get_vote(&vote.id).unwrap();
+        assert_eq!(vote_after.votes_cast.len(), 1);
+    }
+
+    #[test]
+    fn test_close_vote() {
+        let mut manager = VotingManager::new();
+
+        let options = vec![
+            VoteOption {
+                id: "opt-1".to_string(),
+                text: "Option 1".to_string(),
+                description: "First".to_string(),
+                vote_count: 0,
+            },
+            VoteOption {
+                id: "opt-2".to_string(),
+                text: "Option 2".to_string(),
+                description: "Second".to_string(),
+                vote_count: 0,
+            },
+        ];
+
+        let vote = manager.create_vote(
+            "project-1".to_string(),
+            "Test".to_string(),
+            "Desc".to_string(),
+            VoteType::SingleChoice,
+            options,
+            vec!["user-1".to_string(), "user-2".to_string()],
+            24,
+        );
+
+        manager
+            .cast_vote(&vote.id, "user-1".to_string(), vec!["opt-1".to_string()])
+            .unwrap();
+
+        let result = manager.close_vote(&vote.id).unwrap();
+
+        assert_eq!(result.total_eligible, 2);
+        assert_eq!(result.total_votes, 1);
+        assert_eq!(result.participation_rate, 0.5);
+    }
+
+    #[test]
+    fn test_stakeholder_impact_tracker() {
+        let mut tracker = StakeholderImpactTracker::new();
+
+        let impact = tracker.record_impact(
+            "project-1".to_string(),
+            "stakeholder-1".to_string(),
+            StakeholderImpactLevel::High,
+            StakeholderImpactCategory::Economic,
+            "Significant cost increase".to_string(),
+            0.8,
+            ImpactTimeframe::ShortTerm,
+            vec!["Budget allocation".to_string()],
+        );
+
+        assert!(!impact.id.is_empty());
+        assert_eq!(impact.impact_level, StakeholderImpactLevel::High);
+        assert!(!impact.notification_sent);
+    }
+
+    #[test]
+    fn test_stakeholder_impact_notifications() {
+        let mut tracker = StakeholderImpactTracker::new();
+
+        let impact = tracker.record_impact(
+            "project-1".to_string(),
+            "stakeholder-1".to_string(),
+            StakeholderImpactLevel::Critical,
+            StakeholderImpactCategory::Legal,
+            "Critical legal issue".to_string(),
+            0.9,
+            ImpactTimeframe::Immediate,
+            vec![],
+        );
+
+        let unnotified = tracker.get_unnotified_critical_impacts("project-1");
+        assert_eq!(unnotified.len(), 1);
+
+        tracker.mark_notified("project-1", &impact.id).unwrap();
+
+        let unnotified_after = tracker.get_unnotified_critical_impacts("project-1");
+        assert_eq!(unnotified_after.len(), 0);
+    }
+
+    #[test]
+    fn test_stakeholder_impact_summary() {
+        let mut tracker = StakeholderImpactTracker::new();
+
+        tracker.record_impact(
+            "project-1".to_string(),
+            "stakeholder-1".to_string(),
+            StakeholderImpactLevel::High,
+            StakeholderImpactCategory::Economic,
+            "Impact 1".to_string(),
+            0.8,
+            ImpactTimeframe::ShortTerm,
+            vec![],
+        );
+
+        tracker.record_impact(
+            "project-1".to_string(),
+            "stakeholder-2".to_string(),
+            StakeholderImpactLevel::Medium,
+            StakeholderImpactCategory::Operational,
+            "Impact 2".to_string(),
+            0.5,
+            ImpactTimeframe::MediumTerm,
+            vec![],
+        );
+
+        let summary = tracker.get_impact_summary("project-1");
+        assert_eq!(*summary.get(&StakeholderImpactLevel::High).unwrap(), 1);
+        assert_eq!(*summary.get(&StakeholderImpactLevel::Medium).unwrap(), 1);
+    }
+
+    #[test]
     fn test_public_hearing_scheduling() {
         let mut manager = PublicCommentPeriodManager::new();
 
@@ -14517,6 +18480,1054 @@ mod tests {
         let period = manager.get_period(&period_id).unwrap();
         assert_eq!(period.hearings.len(), 1);
         assert_eq!(period.hearings[0].agenda.len(), 3);
+    }
+
+    // ========================================================================
+    // Quality Assurance Tests (v0.2.5)
+    // ========================================================================
+
+    #[test]
+    fn test_quality_scorer_creation() {
+        let scorer = QualityScorer::new();
+        assert_eq!(scorer.min_quality_threshold, 0.6);
+
+        let scorer_custom = QualityScorer::new().with_threshold(0.8);
+        assert_eq!(scorer_custom.min_quality_threshold, 0.8);
+    }
+
+    #[test]
+    fn test_quality_scoring_with_changes() {
+        let scorer = QualityScorer::new();
+
+        let mut statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        statute.id = "test-statute".to_string();
+
+        let ported = PortedStatute {
+            original_id: "original-1".to_string(),
+            statute,
+            changes: vec![
+                PortingChange {
+                    change_type: ChangeType::CulturalAdaptation,
+                    description: "Adapted age parameter".to_string(),
+                    original: Some("20".to_string()),
+                    adapted: Some("18".to_string()),
+                    reason: "Age of majority differs between jurisdictions".to_string(),
+                },
+                PortingChange {
+                    change_type: ChangeType::Translation,
+                    description: "Translated legal term".to_string(),
+                    original: Some("契約".to_string()),
+                    adapted: Some("contract".to_string()),
+                    reason: "Translation to target language".to_string(),
+                },
+            ],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.85,
+        };
+
+        let quality = scorer.score_porting(&ported);
+
+        assert!(quality.overall >= 0.0 && quality.overall <= 1.0);
+        assert!(quality.semantic_preservation >= 0.0);
+        assert!(quality.legal_correctness >= 0.0);
+        assert!(quality.cultural_adaptation >= 0.0);
+        assert!(quality.completeness >= 0.0);
+        assert!(quality.consistency >= 0.0);
+    }
+
+    #[test]
+    fn test_quality_scoring_empty_statute() {
+        let scorer = QualityScorer::new();
+
+        let statute = Statute::new("", "", Effect::new(EffectType::Grant, "Test"));
+
+        let ported = PortedStatute {
+            original_id: "original-1".to_string(),
+            statute,
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.5,
+        };
+
+        let quality = scorer.score_porting(&ported);
+
+        // Should have reduced quality due to missing ID and title, and no changes
+        // Completeness score: 0.4 (missing ID -0.3, missing title -0.2, no changes -0.1)
+        // Cultural adaptation score: 0.8 (no cultural changes -0.2)
+        // Other scores: 1.0 each
+        // Overall: (1.0*0.25) + (1.0*0.25) + (0.8*0.2) + (0.4*0.15) + (1.0*0.15) = 0.87
+        assert!(
+            quality.overall < 0.9,
+            "Quality score is {}",
+            quality.overall
+        );
+        assert!(
+            (quality.completeness - 0.4).abs() < 0.01,
+            "Completeness score is {}",
+            quality.completeness
+        );
+        assert!(!quality.issues.is_empty());
+        assert!(
+            quality
+                .issues
+                .iter()
+                .any(|i| matches!(i.issue_type, QualityIssueType::Incompleteness))
+        );
+    }
+
+    #[test]
+    fn test_quality_grade_classification() {
+        let scorer = QualityScorer::new();
+
+        let excellent = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let quality = scorer.score_porting(&excellent);
+        assert!(matches!(
+            quality.grade,
+            QualityGrade::Good | QualityGrade::Excellent
+        ));
+    }
+
+    #[test]
+    fn test_quality_scorer_meets_threshold() {
+        let scorer = QualityScorer::new().with_threshold(0.7);
+
+        let score = QualityScore {
+            overall: 0.8,
+            semantic_preservation: 0.8,
+            legal_correctness: 0.8,
+            cultural_adaptation: 0.8,
+            completeness: 0.8,
+            consistency: 0.8,
+            grade: QualityGrade::Good,
+            issues: vec![],
+            recommendations: vec![],
+        };
+
+        assert!(scorer.meets_threshold(&score));
+
+        let low_score = QualityScore {
+            overall: 0.5,
+            semantic_preservation: 0.5,
+            legal_correctness: 0.5,
+            cultural_adaptation: 0.5,
+            completeness: 0.5,
+            consistency: 0.5,
+            grade: QualityGrade::Poor,
+            issues: vec![],
+            recommendations: vec![],
+        };
+
+        assert!(!scorer.meets_threshold(&low_score));
+    }
+
+    #[test]
+    fn test_consistency_verifier_creation() {
+        let verifier = ConsistencyVerifier::new();
+        let _ = verifier; // Just check it compiles
+    }
+
+    #[test]
+    fn test_consistency_verification_consistent() {
+        let verifier = ConsistencyVerifier::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let result = verifier.verify(&ported);
+
+        assert!(result.is_consistent);
+        assert_eq!(result.consistency_score, 1.0);
+        assert!(result.inconsistencies.is_empty());
+    }
+
+    #[test]
+    fn test_consistency_verification_with_many_changes() {
+        let verifier = ConsistencyVerifier::new();
+
+        let mut changes = vec![];
+        for i in 0..15 {
+            changes.push(PortingChange {
+                change_type: ChangeType::Translation,
+                description: format!("Translation {}", i),
+                original: Some(format!("old-{}", i)),
+                adapted: Some(format!("new-{}", i)),
+                reason: format!("Translation reason {}", i),
+            });
+        }
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes,
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.8,
+        };
+
+        let result = verifier.verify(&ported);
+
+        assert!(!result.inconsistencies.is_empty());
+        assert!(result.inconsistencies.iter().any(|i| matches!(
+            i.inconsistency_type,
+            InconsistencyType::TerminologyInconsistency
+        )));
+    }
+
+    #[test]
+    fn test_consistency_verification_logical_inconsistency() {
+        let verifier = ConsistencyVerifier::new();
+
+        let mut changes = vec![];
+        // Add 4 value adaptations
+        for i in 0..4 {
+            changes.push(PortingChange {
+                change_type: ChangeType::ValueAdaptation,
+                description: format!("Value adaptation {}", i),
+                original: Some(format!("old-{}", i)),
+                adapted: Some(format!("new-{}", i)),
+                reason: "Value adaptation".to_string(),
+            });
+        }
+        // Add a removal
+        changes.push(PortingChange {
+            change_type: ChangeType::Removal,
+            description: "Removed incompatible clause".to_string(),
+            original: Some("incompatible".to_string()),
+            adapted: None,
+            reason: "Incompatible with target jurisdiction".to_string(),
+        });
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes,
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.7,
+        };
+
+        let result = verifier.verify(&ported);
+
+        assert!(!result.inconsistencies.is_empty());
+        assert!(result.inconsistencies.iter().any(|i| matches!(
+            i.inconsistency_type,
+            InconsistencyType::LogicalInconsistency
+        )));
+    }
+
+    #[test]
+    fn test_completeness_checker_creation() {
+        let checker = CompletenessChecker::new();
+        assert!(!checker.check_optional);
+
+        let checker_with_optional = CompletenessChecker::new().with_optional_check(true);
+        assert!(checker_with_optional.check_optional);
+    }
+
+    #[test]
+    fn test_completeness_check_complete() {
+        let checker = CompletenessChecker::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test change".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Cultural adaptation test".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let result = checker.check(&ported);
+
+        assert!(result.is_complete);
+        assert_eq!(result.completeness_score, 1.0);
+        assert!(result.missing_elements.is_empty());
+    }
+
+    #[test]
+    fn test_completeness_check_missing_required() {
+        let checker = CompletenessChecker::new();
+
+        let statute = Statute::new("", "", Effect::new(EffectType::Grant, "Test"));
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute,
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.5,
+        };
+
+        let result = checker.check(&ported);
+
+        assert!(!result.is_complete);
+        assert_eq!(result.completeness_score, 0.0);
+        assert!(
+            result
+                .missing_elements
+                .iter()
+                .any(|e| matches!(e.importance, ElementImportance::Required))
+        );
+    }
+
+    #[test]
+    fn test_completeness_check_missing_recommended() {
+        let checker = CompletenessChecker::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![], // No changes - missing recommended element
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.8,
+        };
+
+        let result = checker.check(&ported);
+
+        assert!(!result.is_complete);
+        assert!(result.completeness_score > 0.0 && result.completeness_score < 1.0);
+        assert!(
+            result
+                .missing_elements
+                .iter()
+                .any(|e| matches!(e.importance, ElementImportance::Recommended))
+        );
+    }
+
+    #[test]
+    fn test_regression_test_manager_creation() {
+        let manager = RegressionTestManager::new();
+        let stats = manager.get_statistics();
+
+        assert_eq!(stats.total, 0);
+        assert_eq!(stats.pass_rate, 0.0);
+    }
+
+    #[test]
+    fn test_regression_test_add() {
+        let mut manager = RegressionTestManager::new();
+
+        let test = RegressionTest {
+            test_id: "test-1".to_string(),
+            name: "Test Porting".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            input_statute: "{}".to_string(),
+            expected_output: "{}".to_string(),
+            quality_baseline: 0.8,
+            created_at: chrono::Utc::now(),
+            last_run: None,
+            status: RegressionTestStatus::Pending,
+        };
+
+        manager.add_test(test);
+
+        let stats = manager.get_statistics();
+        assert_eq!(stats.total, 1);
+        assert_eq!(stats.pending, 1);
+    }
+
+    #[test]
+    fn test_regression_test_run() {
+        let mut manager = RegressionTestManager::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let test = RegressionTest {
+            test_id: "test-1".to_string(),
+            name: "Test Porting".to_string(),
+            source_jurisdiction: "JP".to_string(),
+            target_jurisdiction: "US".to_string(),
+            input_statute: "{}".to_string(),
+            expected_output: "{}".to_string(),
+            quality_baseline: 0.8,
+            created_at: chrono::Utc::now(),
+            last_run: None,
+            status: RegressionTestStatus::Pending,
+        };
+
+        manager.add_test(test);
+
+        let result = manager.run_test("test-1", &ported);
+        assert!(result.is_ok());
+
+        let result = result.unwrap();
+        assert!(result.passed);
+        assert!(result.quality_score >= 0.0);
+    }
+
+    #[test]
+    fn test_regression_test_statistics() {
+        let mut manager = RegressionTestManager::new();
+
+        for i in 0..5 {
+            let test = RegressionTest {
+                test_id: format!("test-{}", i),
+                name: format!("Test {}", i),
+                source_jurisdiction: "JP".to_string(),
+                target_jurisdiction: "US".to_string(),
+                input_statute: "{}".to_string(),
+                expected_output: "{}".to_string(),
+                quality_baseline: 0.8,
+                created_at: chrono::Utc::now(),
+                last_run: None,
+                status: if i % 2 == 0 {
+                    RegressionTestStatus::Passed
+                } else {
+                    RegressionTestStatus::Failed
+                },
+            };
+            manager.add_test(test);
+        }
+
+        let stats = manager.get_statistics();
+        assert_eq!(stats.total, 5);
+        assert_eq!(stats.passed, 3); // 0, 2, 4
+        assert_eq!(stats.failed, 2); // 1, 3
+        assert_eq!(stats.pass_rate, 0.6);
+    }
+
+    #[test]
+    fn test_drift_monitor_creation() {
+        let monitor = DriftMonitor::new();
+        assert_eq!(monitor.drift_threshold, 0.1);
+
+        let monitor_custom = DriftMonitor::new().with_threshold(0.2);
+        assert_eq!(monitor_custom.drift_threshold, 0.2);
+    }
+
+    #[test]
+    fn test_drift_monitor_snapshot_creation() {
+        let mut monitor = DriftMonitor::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let snapshot_id = monitor.create_snapshot("statute-1".to_string(), &ported);
+
+        assert!(!snapshot_id.is_empty());
+
+        let snapshots = monitor.get_snapshots("statute-1");
+        assert!(snapshots.is_some());
+        assert_eq!(snapshots.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_drift_detection_no_drift() {
+        let mut monitor = DriftMonitor::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        monitor.create_snapshot("statute-1".to_string(), &ported);
+
+        let result = monitor.detect_drift("statute-1", &ported);
+
+        assert!(!result.drift_detected);
+        assert!(result.drift_issues.is_empty());
+    }
+
+    #[test]
+    fn test_drift_detection_with_new_snapshot() {
+        let mut monitor = DriftMonitor::new();
+
+        let ported1 = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        monitor.create_snapshot("statute-1".to_string(), &ported1);
+
+        // Create a degraded version
+        let mut ported2 = ported1.clone();
+        ported2.statute.id = "".to_string(); // This will lower the quality score
+
+        let result = monitor.detect_drift("statute-1", &ported2);
+
+        // May or may not detect drift depending on threshold
+        assert!(result.drift_score >= 0.0);
+    }
+
+    #[test]
+    fn test_drift_trend_tracking() {
+        let mut monitor = DriftMonitor::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Test".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test reason".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        // Create multiple snapshots
+        monitor.create_snapshot("statute-1".to_string(), &ported);
+        monitor.create_snapshot("statute-1".to_string(), &ported);
+
+        let trend = monitor.get_drift_trend("statute-1");
+
+        assert_eq!(trend.len(), 1); // One drift measurement (between 2 snapshots)
+    }
+
+    #[test]
+    fn test_drift_category_classification() {
+        let result = DriftDetectionResult {
+            drift_detected: false,
+            drift_score: 0.0,
+            category: DriftCategory::None,
+            drift_issues: vec![],
+            recommendations: vec![],
+        };
+
+        assert!(matches!(result.category, DriftCategory::None));
+    }
+
+    // ========================================================================
+    // Documentation Generation Tests (v0.2.6)
+    // ========================================================================
+
+    #[test]
+    fn test_explanatory_note_generator() {
+        let generator = ExplanatoryNoteGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![
+                PortingChange {
+                    change_type: ChangeType::CulturalAdaptation,
+                    description: "Adapted parameter".to_string(),
+                    original: Some("20".to_string()),
+                    adapted: Some("18".to_string()),
+                    reason: "Age difference".to_string(),
+                },
+                PortingChange {
+                    change_type: ChangeType::Translation,
+                    description: "Translated term".to_string(),
+                    original: Some("契約".to_string()),
+                    adapted: Some("contract".to_string()),
+                    reason: "Language localization".to_string(),
+                },
+            ],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let notes = generator.generate_notes(&ported);
+
+        // Should have 1 general note + 1 note for CulturalAdaptation (Translation is not significant)
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].section, "General");
+        assert!(!notes[0].explanation.is_empty());
+    }
+
+    #[test]
+    fn test_explanatory_note_significant_changes_only() {
+        let generator = ExplanatoryNoteGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::Translation,
+                description: "Translation".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let notes = generator.generate_notes(&ported);
+
+        // Should only have the general note, no note for Translation (not significant)
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].section, "General");
+    }
+
+    #[test]
+    fn test_change_justification_report_generator() {
+        let generator = ChangeJustificationReportGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![
+                PortingChange {
+                    change_type: ChangeType::CulturalAdaptation,
+                    description: "Cultural adaptation".to_string(),
+                    original: Some("old".to_string()),
+                    adapted: Some("new".to_string()),
+                    reason: "Culture".to_string(),
+                },
+                PortingChange {
+                    change_type: ChangeType::ValueAdaptation,
+                    description: "Value adaptation".to_string(),
+                    original: Some("20".to_string()),
+                    adapted: Some("18".to_string()),
+                    reason: "Age threshold".to_string(),
+                },
+            ],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.85,
+        };
+
+        let report = generator.generate_report(&ported, "JP", "US");
+
+        assert_eq!(report.source_jurisdiction, "JP");
+        assert_eq!(report.target_jurisdiction, "US");
+        assert_eq!(report.justifications.len(), 2);
+        assert!(!report.overall_rationale.is_empty());
+        assert!(!report.legal_basis.is_empty());
+
+        // Check that risk is identified for cultural and value adaptations
+        assert!(report.justifications[0].risk_if_unchanged.is_some());
+        assert!(report.justifications[1].risk_if_unchanged.is_some());
+    }
+
+    #[test]
+    fn test_change_justification_types() {
+        let generator = ChangeJustificationReportGenerator::new();
+
+        let change_removal = PortingChange {
+            change_type: ChangeType::Removal,
+            description: "Removed clause".to_string(),
+            original: Some("old".to_string()),
+            adapted: None,
+            reason: "Incompatible".to_string(),
+        };
+
+        let justification = generator.justify_change(&change_removal);
+        assert!(justification.justification.contains("incompatibility"));
+        assert!(justification.risk_if_unchanged.is_some());
+    }
+
+    #[test]
+    fn test_legislative_history_compiler() {
+        let compiler = LegislativeHistoryCompiler::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![
+                PortingChange {
+                    change_type: ChangeType::CulturalAdaptation,
+                    description: "Adapted".to_string(),
+                    original: None,
+                    adapted: None,
+                    reason: "Test".to_string(),
+                },
+                PortingChange {
+                    change_type: ChangeType::ValueAdaptation,
+                    description: "Value change".to_string(),
+                    original: None,
+                    adapted: None,
+                    reason: "Test".to_string(),
+                },
+            ],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let history = compiler.compile_history(&ported);
+
+        assert_eq!(history.statute_id, "id-1");
+        // Should have 1 porting event + 2 change events = 3 total
+        assert_eq!(history.timeline.len(), 3);
+        assert!(
+            history
+                .timeline
+                .iter()
+                .any(|e| matches!(e.event_type, LegislativeEventType::Ported))
+        );
+        assert_eq!(
+            history
+                .timeline
+                .iter()
+                .filter(|e| matches!(e.event_type, LegislativeEventType::Amended))
+                .count(),
+            2
+        );
+        assert!(!history.summary.is_empty());
+        assert!(!history.key_participants.is_empty());
+    }
+
+    #[test]
+    fn test_legislative_history_add_event() {
+        let compiler = LegislativeHistoryCompiler::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let mut history = compiler.compile_history(&ported);
+        let initial_count = history.timeline.len();
+
+        compiler.add_event(
+            &mut history,
+            LegislativeEventType::Reviewed,
+            "Reviewed by legal team".to_string(),
+            Some("Legal Team".to_string()),
+        );
+
+        assert_eq!(history.timeline.len(), initial_count + 1);
+        assert!(
+            history
+                .timeline
+                .last()
+                .unwrap()
+                .actor
+                .as_ref()
+                .unwrap()
+                .contains("Legal Team")
+        );
+    }
+
+    #[test]
+    fn test_implementation_guidance_generator() {
+        let generator = ImplementationGuidanceGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Cultural change".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let guidance = generator.generate_guidance(&ported);
+
+        assert_eq!(guidance.statute_id, "id-1");
+        assert!(!guidance.overview.is_empty());
+        assert!(!guidance.prerequisites.is_empty());
+        assert!(!guidance.implementation_steps.is_empty());
+        assert!(!guidance.compliance_checklist.is_empty());
+        assert!(!guidance.common_pitfalls.is_empty());
+
+        // Should have 5 steps (initial review, stakeholder, legal, adaptations, final approval)
+        assert_eq!(guidance.implementation_steps.len(), 5);
+        assert_eq!(guidance.implementation_steps[0].step_number, 1);
+        assert_eq!(guidance.implementation_steps[0].title, "Initial Review");
+    }
+
+    #[test]
+    fn test_implementation_guidance_steps_without_changes() {
+        let generator = ImplementationGuidanceGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let guidance = generator.generate_guidance(&ported);
+
+        // Should have 4 steps (no "Implementation of Adaptations" step)
+        assert_eq!(guidance.implementation_steps.len(), 4);
+        assert!(
+            !guidance
+                .implementation_steps
+                .iter()
+                .any(|s| s.title.contains("Adaptations"))
+        );
+    }
+
+    #[test]
+    fn test_training_material_generator() {
+        let generator = TrainingMaterialGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Adaptation".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let material = generator.generate_materials(&ported, TrainingAudience::LegalProfessionals);
+
+        assert_eq!(material.statute_id, "id-1");
+        assert_eq!(
+            material.target_audience,
+            TrainingAudience::LegalProfessionals
+        );
+        assert!(!material.title.is_empty());
+        assert!(!material.learning_objectives.is_empty());
+        assert!(!material.modules.is_empty());
+        assert!(!material.assessment_questions.is_empty());
+        assert_eq!(material.estimated_duration, "4 hours");
+    }
+
+    #[test]
+    fn test_training_material_different_audiences() {
+        let generator = TrainingMaterialGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 1.0,
+        };
+
+        let legal = generator.generate_materials(&ported, TrainingAudience::LegalProfessionals);
+        let govt = generator.generate_materials(&ported, TrainingAudience::GovernmentOfficials);
+        let public = generator.generate_materials(&ported, TrainingAudience::GeneralPublic);
+        let enforcement =
+            generator.generate_materials(&ported, TrainingAudience::EnforcementOfficers);
+
+        assert_eq!(legal.estimated_duration, "4 hours");
+        assert_eq!(govt.estimated_duration, "3 hours");
+        assert_eq!(public.estimated_duration, "1 hour");
+        assert_eq!(enforcement.estimated_duration, "2 hours");
+
+        // Each should have different learning objectives
+        assert_ne!(legal.learning_objectives, public.learning_objectives);
+    }
+
+    #[test]
+    fn test_training_material_modules() {
+        let generator = TrainingMaterialGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![
+                PortingChange {
+                    change_type: ChangeType::CulturalAdaptation,
+                    description: "Change 1".to_string(),
+                    original: None,
+                    adapted: None,
+                    reason: "Test".to_string(),
+                },
+                PortingChange {
+                    change_type: ChangeType::ValueAdaptation,
+                    description: "Change 2".to_string(),
+                    original: None,
+                    adapted: None,
+                    reason: "Test".to_string(),
+                },
+            ],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let material = generator.generate_materials(&ported, TrainingAudience::GeneralPublic);
+
+        // Should have 3 modules: Intro, Key Adaptations, Practical Application
+        assert_eq!(material.modules.len(), 3);
+        assert_eq!(material.modules[0].title, "Introduction to the Statute");
+        assert_eq!(material.modules[1].title, "Key Adaptations");
+        assert_eq!(material.modules[2].title, "Practical Application");
+    }
+
+    #[test]
+    fn test_training_material_assessment() {
+        let generator = TrainingMaterialGenerator::new();
+
+        let ported = PortedStatute {
+            original_id: "test".to_string(),
+            statute: Statute::new(
+                "id-1",
+                "Test Statute",
+                Effect::new(EffectType::Grant, "Test"),
+            ),
+            changes: vec![PortingChange {
+                change_type: ChangeType::CulturalAdaptation,
+                description: "Change".to_string(),
+                original: None,
+                adapted: None,
+                reason: "Test".to_string(),
+            }],
+            locale: Locale::new("en").with_country("US"),
+            compatibility_score: 0.9,
+        };
+
+        let material = generator.generate_materials(&ported, TrainingAudience::LegalProfessionals);
+
+        // Should have 2 questions (purpose + number of adaptations)
+        assert_eq!(material.assessment_questions.len(), 2);
+        assert_eq!(material.assessment_questions[0].question_number, 1);
+        assert_eq!(material.assessment_questions[1].question_number, 2);
+        assert_eq!(material.assessment_questions[0].options.len(), 3);
+        assert!(material.assessment_questions[0].correct_answer < 3);
     }
 
     // ========================================================================

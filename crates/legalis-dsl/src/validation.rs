@@ -688,16 +688,20 @@ mod tests {
     #[test]
     fn test_circular_dependency_detection() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 1".to_string(),
                     requires: vec!["statute2".to_string()],
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "statute2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 2".to_string(),
                     requires: vec!["statute1".to_string()],
                     ..Default::default()
@@ -720,9 +724,12 @@ mod tests {
     #[test]
     fn test_undefined_reference() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "statute1".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Statute 1".to_string(),
                 requires: vec!["nonexistent".to_string()],
                 ..Default::default()
@@ -744,9 +751,12 @@ mod tests {
     #[test]
     fn test_self_reference() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "statute1".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Statute 1".to_string(),
                 requires: vec!["statute1".to_string()],
                 ..Default::default()
@@ -771,6 +781,7 @@ mod tests {
 
         let incomplete_statute = StatuteNode {
             id: "test".to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Test".to_string(),
             conditions: vec![],
             ..Default::default()
@@ -785,9 +796,12 @@ mod tests {
         use crate::ast::EffectNode;
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "unreachable".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Unreachable Statute".to_string(),
                 conditions: vec![ConditionNode::Between {
                     field: "age".to_string(),
@@ -819,10 +833,13 @@ mod tests {
         use crate::ast::EffectNode;
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "referenced".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Referenced Statute".to_string(),
                     requires: vec!["unreferenced".to_string()],
                     effects: vec![EffectNode {
@@ -834,6 +851,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "unreferenced".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Unreferenced Statute".to_string(),
                     effects: vec![EffectNode {
                         effect_type: "grant".to_string(),
@@ -860,10 +878,13 @@ mod tests {
         use crate::ast::EffectNode;
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 1".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "age".to_string(),
@@ -879,6 +900,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "statute2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 2".to_string(),
                     requires: vec!["statute1".to_string()],
                     effects: vec![EffectNode {

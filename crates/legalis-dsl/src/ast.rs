@@ -45,6 +45,14 @@ pub enum Token {
     Scope,
     Constraint,
 
+    // Module system keywords (v0.1.4)
+    Namespace,
+    From,
+    Public,
+    Private,
+    Export,
+    Star, // * for wildcard imports
+
     // Metadata keywords
     EffectiveDate,
     ExpiryDate,
@@ -95,17 +103,23 @@ pub enum Token {
 /// AST node for an import declaration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImportNode {
-    /// The path to the imported file.
+    /// The path to the imported file/module.
     pub path: String,
     /// Optional alias for the import (AS clause).
     pub alias: Option<String>,
+    /// Import kind (simple, wildcard, or selective)
+    pub kind: crate::module_system::ImportKind,
 }
 
 /// AST node for a complete legal document.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LegalDocument {
+    /// Optional namespace declaration for this module
+    pub namespace: Option<crate::module_system::NamespaceNode>,
     /// Import declarations at the top of the document.
     pub imports: Vec<ImportNode>,
+    /// Export/re-export declarations.
+    pub exports: Vec<crate::module_system::ExportNode>,
     /// Statute definitions.
     pub statutes: Vec<StatuteNode>,
 }
@@ -166,10 +180,11 @@ pub struct ConstraintNode {
 }
 
 /// AST node for a statute definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StatuteNode {
     pub id: String,
     pub title: String,
+    pub visibility: crate::module_system::Visibility,
     pub conditions: Vec<ConditionNode>,
     pub effects: Vec<EffectNode>,
     pub discretion: Option<String>,
@@ -182,6 +197,28 @@ pub struct StatuteNode {
     pub scope: Option<ScopeNode>,
     pub constraints: Vec<ConstraintNode>,
     pub priority: Option<u32>,
+}
+
+impl Default for StatuteNode {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            title: String::new(),
+            visibility: crate::module_system::Visibility::Private,
+            conditions: Vec::new(),
+            effects: Vec::new(),
+            discretion: None,
+            exceptions: Vec::new(),
+            amendments: Vec::new(),
+            supersedes: Vec::new(),
+            defaults: Vec::new(),
+            requires: Vec::new(),
+            delegates: Vec::new(),
+            scope: None,
+            constraints: Vec::new(),
+            priority: None,
+        }
+    }
 }
 
 /// AST node for conditions.
@@ -400,10 +437,13 @@ mod tests {
     #[test]
     fn test_visitor_counts_conditions() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "test".to_string(),
                 title: "Test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![ConditionNode::And(
                     Box::new(ConditionNode::Comparison {
                         field: "age".to_string(),
@@ -438,13 +478,17 @@ mod tests {
     #[test]
     fn test_visitor_walks_all_statutes() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![ImportNode {
                 path: "test.legalis".to_string(),
                 alias: None,
+                kind: crate::module_system::ImportKind::Simple,
             }],
             statutes: vec![
                 StatuteNode {
                     id: "s1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "S1".to_string(),
                     conditions: vec![ConditionNode::HasAttribute {
                         key: "a".to_string(),
@@ -464,6 +508,7 @@ mod tests {
                 StatuteNode {
                     id: "s2".to_string(),
                     title: "S2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![ConditionNode::HasAttribute {
                         key: "b".to_string(),
                     }],
@@ -874,6 +919,7 @@ pub mod transform {
         StatuteNode {
             id: statute.id.clone(),
             title: statute.title.clone(),
+            visibility: statute.visibility,
             conditions: statute.conditions.iter().map(optimize_condition).collect(),
             effects: statute.effects.clone(),
             discretion: statute.discretion.clone(),
@@ -1049,6 +1095,7 @@ pub mod transform {
             let statute = StatuteNode {
                 id: "test".to_string(),
                 title: "Test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![],
                 effects: vec![EffectNode {
                     effect_type: "grant".to_string(),
@@ -1076,6 +1123,7 @@ pub mod transform {
             let statute = StatuteNode {
                 id: "".to_string(),
                 title: "".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![],
                 effects: vec![],
                 discretion: None,
@@ -1199,6 +1247,7 @@ pub mod transform {
             let statute = StatuteNode {
                 id: "test".to_string(),
                 title: "Test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![ConditionNode::Not(Box::new(ConditionNode::Not(Box::new(
                     ConditionNode::HasAttribute {
                         key: "valid".to_string(),
@@ -1234,10 +1283,13 @@ pub mod transform {
         #[test]
         fn test_diff_documents_no_changes() {
             let doc = LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![],
                 statutes: vec![StatuteNode {
                     id: "test".to_string(),
                     title: "Test".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,
@@ -1261,15 +1313,20 @@ pub mod transform {
         #[test]
         fn test_diff_documents_added_statute() {
             let old_doc = LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![],
                 statutes: vec![],
             };
 
             let new_doc = LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![],
                 statutes: vec![StatuteNode {
                     id: "new-statute".to_string(),
                     title: "New Statute".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,
@@ -1294,14 +1351,19 @@ pub mod transform {
         #[test]
         fn test_diff_documents_removed_import() {
             let old_doc = LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![ImportNode {
                     path: "old.legalis".to_string(),
                     alias: None,
+                    kind: crate::module_system::ImportKind::Simple,
                 }],
                 statutes: vec![],
             };
 
             let new_doc = LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![],
                 statutes: vec![],
             };
@@ -1317,6 +1379,7 @@ pub mod transform {
             let old_statute = StatuteNode {
                 id: "test".to_string(),
                 title: "Old Title".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![],
                 effects: vec![],
                 discretion: None,
@@ -1334,6 +1397,7 @@ pub mod transform {
             let new_statute = StatuteNode {
                 id: "test".to_string(),
                 title: "New Title".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![],
                 effects: vec![],
                 discretion: None,
@@ -1365,6 +1429,7 @@ pub mod transform {
             let old_statute = StatuteNode {
                 id: "test".to_string(),
                 title: "Test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![ConditionNode::HasAttribute {
                     key: "old_cond".to_string(),
                 }],
@@ -1384,6 +1449,7 @@ pub mod transform {
             let new_statute = StatuteNode {
                 id: "test".to_string(),
                 title: "Test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 conditions: vec![ConditionNode::HasAttribute {
                     key: "new_cond".to_string(),
                 }],

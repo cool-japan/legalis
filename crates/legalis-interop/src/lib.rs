@@ -14,17 +14,23 @@
 //! - **Creative Commons**: CC license format (RDF/XML)
 //! - **SPDX**: Software Package Data Exchange license expressions (ISO/IEC 5962:2021)
 
+pub mod ai_converter;
 pub mod akoma_ntoso;
 #[cfg(feature = "async")]
 pub mod async_converter;
+pub mod basel3;
 #[cfg(feature = "batch")]
 pub mod batch;
 pub mod bpmn;
 pub mod cache;
 pub mod catala;
+pub mod cicero;
+pub mod clauseio;
 pub mod cli;
 pub mod cmmn;
+pub mod commonform;
 pub mod compatibility;
+pub mod contractexpress;
 pub mod coverage;
 pub mod creative_commons;
 pub mod dmn;
@@ -34,7 +40,9 @@ mod edge_cases_tests;
 pub mod enhanced;
 pub mod error_handling;
 pub mod errors;
+pub mod finreg;
 pub mod format_detection;
+pub mod formex;
 pub mod incremental;
 pub mod l4;
 pub mod legalcite;
@@ -43,10 +51,14 @@ pub mod legalruleml;
 pub mod lkif;
 pub mod metalex;
 pub mod metrics;
+pub mod mifid2;
 pub mod mpeg21_rel;
+pub mod niem;
+pub mod openlaw;
 pub mod optimizations;
 pub mod performance;
 pub mod quality;
+pub mod regml;
 pub mod rest_api;
 pub mod ruleml;
 pub mod sbvr;
@@ -57,6 +69,7 @@ pub mod streaming;
 pub mod transformation;
 pub mod validation;
 pub mod webhooks;
+pub mod xbrl;
 
 use legalis_core::Statute;
 use serde::{Deserialize, Serialize};
@@ -129,6 +142,30 @@ pub enum LegalFormat {
     RuleML,
     /// SBVR - Semantics of Business Vocabulary and Business Rules
     Sbvr,
+    /// OpenLaw - Protocol for creating and executing legal agreements
+    OpenLaw,
+    /// Cicero - Accord Project smart legal contract templates
+    Cicero,
+    /// CommonForm - Format for legal forms and contracts (JSON)
+    CommonForm,
+    /// Clause.io - Contract automation platform templates
+    ClauseIo,
+    /// ContractExpress - Document automation platform
+    ContractExpress,
+    /// FORMEX - EU Official Journal format
+    Formex,
+    /// NIEM - National Information Exchange Model
+    Niem,
+    /// FinReg - Financial Regulatory format
+    FinReg,
+    /// XBRL - eXtensible Business Reporting Language
+    Xbrl,
+    /// RegML - Regulation Markup Language
+    RegML,
+    /// MiFID II - Markets in Financial Instruments Directive II
+    MiFID2,
+    /// Basel III - International regulatory framework for banks
+    Basel3,
 }
 
 impl LegalFormat {
@@ -153,6 +190,18 @@ impl LegalFormat {
             LegalFormat::Cmmn => "cmmn",
             LegalFormat::RuleML => "ruleml",
             LegalFormat::Sbvr => "sbvr",
+            LegalFormat::OpenLaw => "openlaw",
+            LegalFormat::Cicero => "cicero",
+            LegalFormat::CommonForm => "json",
+            LegalFormat::ClauseIo => "json",
+            LegalFormat::ContractExpress => "docx",
+            LegalFormat::Formex => "xml",
+            LegalFormat::Niem => "xml",
+            LegalFormat::FinReg => "json",
+            LegalFormat::Xbrl => "xbrl",
+            LegalFormat::RegML => "xml",
+            LegalFormat::MiFID2 => "json",
+            LegalFormat::Basel3 => "json",
         }
     }
 
@@ -171,6 +220,18 @@ impl LegalFormat {
             "cmmn" => Some(LegalFormat::Cmmn),
             "ruleml" => Some(LegalFormat::RuleML),
             "sbvr" => Some(LegalFormat::Sbvr),
+            "openlaw" => Some(LegalFormat::OpenLaw),
+            "cicero" => Some(LegalFormat::Cicero),
+            "commonform" | "commonform.json" => Some(LegalFormat::CommonForm),
+            "clauseio" | "clauseio.json" => Some(LegalFormat::ClauseIo),
+            "contractexpress" | "docx" => Some(LegalFormat::ContractExpress),
+            "formex" => Some(LegalFormat::Formex),
+            "niem" => Some(LegalFormat::Niem),
+            "finreg" | "finreg.json" => Some(LegalFormat::FinReg),
+            "xbrl" => Some(LegalFormat::Xbrl),
+            "regml" | "regml.xml" => Some(LegalFormat::RegML),
+            "mifid2" | "mifid2.json" => Some(LegalFormat::MiFID2),
+            "basel3" | "basel3.json" => Some(LegalFormat::Basel3),
             _ => None,
         }
     }
@@ -286,6 +347,18 @@ impl LegalConverter {
                 Box::new(cmmn::CmmnImporter::new()),
                 Box::new(ruleml::RuleMLImporter::new()),
                 Box::new(sbvr::SbvrImporter::new()),
+                Box::new(openlaw::OpenLawImporter::new()),
+                Box::new(cicero::CiceroImporter::new()),
+                Box::new(commonform::CommonFormImporter::new()),
+                Box::new(clauseio::ClauseIoImporter::new()),
+                Box::new(contractexpress::ContractExpressImporter::new()),
+                Box::new(formex::FormexImporter::new()),
+                Box::new(niem::NiemImporter::new()),
+                Box::new(finreg::FinRegImporter::new()),
+                Box::new(xbrl::XbrlImporter::new()),
+                Box::new(regml::RegMLImporter::new()),
+                Box::new(mifid2::MiFID2Importer::new()),
+                Box::new(basel3::Basel3Importer::new()),
             ],
             exporters: vec![
                 Box::new(catala::CatalaExporter::new()),
@@ -305,6 +378,18 @@ impl LegalConverter {
                 Box::new(cmmn::CmmnExporter::new()),
                 Box::new(ruleml::RuleMLExporter::new()),
                 Box::new(sbvr::SbvrExporter::new()),
+                Box::new(openlaw::OpenLawExporter::new()),
+                Box::new(cicero::CiceroExporter::new()),
+                Box::new(commonform::CommonFormExporter::new()),
+                Box::new(clauseio::ClauseIoExporter::new()),
+                Box::new(contractexpress::ContractExpressExporter::new()),
+                Box::new(formex::FormexExporter::new()),
+                Box::new(niem::NiemExporter::new()),
+                Box::new(finreg::FinRegExporter::new()),
+                Box::new(xbrl::XbrlExporter::new()),
+                Box::new(regml::RegMLExporter::new()),
+                Box::new(mifid2::MiFID2Exporter::new()),
+                Box::new(basel3::Basel3Exporter::new()),
             ],
             cache: None,
         }

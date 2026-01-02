@@ -3,11 +3,14 @@ source: crates/legalis-dsl/src/tests.rs
 expression: doc
 ---
 {
+  "namespace": null,
   "imports": [],
+  "exports": [],
   "statutes": [
     {
       "id": "voting-rights",
       "title": "Voting Rights Act",
+      "visibility": "Private",
       "conditions": [
         {
           "And": [

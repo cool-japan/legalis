@@ -8,6 +8,7 @@
 //! - OpenAPI 3.0 documentation
 //! - Authentication and authorization (RBAC + ReBAC)
 
+pub mod ai_suggestions;
 pub mod anomaly;
 pub mod async_jobs;
 pub mod audit;
@@ -1302,6 +1303,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/metrics", get(metrics_endpoint))
         .route("/api/v1/statutes", get(list_statutes).post(create_statute))
         .route("/api/v1/statutes/search", get(search_statutes))
+        .route("/api/v1/statutes/suggest", post(suggest_statutes))
         .route("/api/v1/statutes/batch", post(batch_create_statutes))
         .route("/api/v1/statutes/batch/delete", post(batch_delete_statutes))
         .route("/api/v1/statutes/compare", post(compare_statutes))
@@ -1560,6 +1562,30 @@ async fn search_statutes(
         })
         .with_meta(meta),
     ))
+}
+
+/// AI-powered statute suggestion endpoint.
+async fn suggest_statutes(
+    user: auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ai_suggestions::SuggestionRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    user.require_permission(auth::Permission::ReadStatutes)?;
+
+    // Get available statutes
+    let statutes = state.statutes.read().await;
+    let statute_vec: Vec<_> = statutes.iter().cloned().collect();
+
+    // Create suggestion engine (without LLM provider for now, uses rule-based)
+    let engine = ai_suggestions::SuggestionEngine::new();
+
+    // Generate suggestions
+    let response = engine
+        .suggest(request, &statute_vec)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Suggestion failed: {}", e)))?;
+
+    Ok(Json(ApiResponse::new(response)))
 }
 
 /// Base64 encode a string.

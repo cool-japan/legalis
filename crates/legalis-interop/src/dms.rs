@@ -254,7 +254,7 @@ impl DmsProvider for FileDmsProvider {
                 && path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .map_or(false, |s| s.ends_with(".meta.json"))
+                    .is_some_and(|s| s.ends_with(".meta.json"))
             {
                 if let Ok(json) = std::fs::read_to_string(&path) {
                     if let Ok(metadata) = serde_json::from_str::<DocumentMetadata>(&json) {

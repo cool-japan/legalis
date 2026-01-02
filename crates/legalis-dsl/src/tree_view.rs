@@ -543,9 +543,12 @@ mod tests {
     #[test]
     fn test_tree_formatter_basic() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Test Statute".to_string(),
                 conditions: vec![ConditionNode::HasAttribute {
                     key: "citizen".to_string(),
@@ -576,9 +579,12 @@ mod tests {
     #[test]
     fn test_tree_formatter_with_color() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "test".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Test".to_string(),
                 conditions: vec![],
                 effects: vec![],

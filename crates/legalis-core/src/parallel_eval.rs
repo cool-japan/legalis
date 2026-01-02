@@ -121,18 +121,21 @@ impl ParallelEvaluator {
         statutes
             .par_chunks(self.chunk_size)
             .flat_map(|chunk| {
-                chunk.iter().map(|statute| {
-                    let start = std::time::Instant::now();
-                    let satisfied = statute.preconditions.is_empty()
-                        || statute.preconditions.iter().all(|_| true); // Placeholder
-                    let duration_us = start.elapsed().as_micros() as u64;
+                chunk
+                    .iter()
+                    .map(|statute| {
+                        let start = std::time::Instant::now();
+                        let satisfied = statute.preconditions.is_empty()
+                            || statute.preconditions.iter().all(|_| true); // Placeholder
+                        let duration_us = start.elapsed().as_micros() as u64;
 
-                    EvaluationResult {
-                        statute_id: statute.id.clone(),
-                        satisfied,
-                        duration_us,
-                    }
-                })
+                        EvaluationResult {
+                            statute_id: statute.id.clone(),
+                            satisfied,
+                            duration_us,
+                        }
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect()
     }
@@ -330,9 +333,12 @@ impl ConditionEvaluator {
         conditions
             .par_chunks(self.chunk_size)
             .flat_map(|chunk| {
-                chunk.iter().map(|_cond| {
-                    true // Placeholder evaluation
-                })
+                chunk
+                    .iter()
+                    .map(|_cond| {
+                        true // Placeholder evaluation
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect()
     }

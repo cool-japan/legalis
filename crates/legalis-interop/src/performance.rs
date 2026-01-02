@@ -352,6 +352,7 @@ impl Default for IncrementalConverter {
 #[cfg(feature = "parallel")]
 pub struct ParallelParser {
     /// Number of worker threads
+    #[allow(dead_code)]
     num_workers: usize,
 }
 

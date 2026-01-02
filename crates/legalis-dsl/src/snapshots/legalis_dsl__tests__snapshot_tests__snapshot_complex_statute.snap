@@ -2,10 +2,13 @@
 source: crates/legalis-dsl/src/tests.rs
 expression: doc
 ---
+namespace: ~
 imports: []
+exports: []
 statutes:
   - id: tax-credit
     title: Tax Credit Eligibility
+    visibility: Private
     conditions:
       - And:
           - Comparison:

@@ -390,11 +390,14 @@ mod tests {
 
     fn create_test_document() -> LegalDocument {
         LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
                     title: "Voting Rights Act".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![ConditionNode::Comparison {
                         field: "age".to_string(),
                         operator: ">=".to_string(),
@@ -415,6 +418,7 @@ mod tests {
                 StatuteNode {
                     id: "statute2".to_string(),
                     title: "Tax Benefits".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![ConditionNode::Between {
                         field: "income".to_string(),
                         min: ConditionValue::Number(20000),
@@ -435,6 +439,7 @@ mod tests {
                 StatuteNode {
                     id: "statute3".to_string(),
                     title: "Employment Rights".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![
                         ConditionNode::Comparison {
                             field: "age".to_string(),

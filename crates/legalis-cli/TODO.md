@@ -1,5 +1,13 @@
 # legalis-cli TODO
 
+## Status Summary
+
+Version: 0.2.0 | Status: Stable | Tests: Passing | Warnings: 0
+
+All v0.1.1 through v0.1.5 roadmap features are complete. Plugin ecosystem (v0.1.6+) and AI-powered features (v0.2.0+) are planned for future releases.
+
+---
+
 ## Completed
 
 - [x] Parse command with JSON/YAML output

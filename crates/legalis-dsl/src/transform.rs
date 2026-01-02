@@ -205,7 +205,9 @@ impl DocumentTransform for DeduplicateStatutes {
         }
 
         Ok(LegalDocument {
+            namespace: doc.namespace.clone(),
             imports: doc.imports.clone(),
+            exports: doc.exports.clone(),
             statutes: deduplicated,
         })
     }
@@ -267,7 +269,9 @@ impl DocumentTransform for SimplifyConditions {
         }
 
         Ok(LegalDocument {
+            namespace: doc.namespace.clone(),
             imports: doc.imports.clone(),
+            exports: doc.exports.clone(),
             statutes: simplified_statutes,
         })
     }
@@ -290,7 +294,9 @@ impl DocumentTransform for RemoveEmptyStatutes {
             .collect();
 
         Ok(LegalDocument {
+            namespace: doc.namespace.clone(),
             imports: doc.imports.clone(),
+            exports: doc.exports.clone(),
             statutes: filtered,
         })
     }
@@ -365,7 +371,9 @@ impl DocumentTransform for SortByDependencies {
             .collect();
 
         Ok(LegalDocument {
+            namespace: doc.namespace.clone(),
             imports: doc.imports.clone(),
+            exports: doc.exports.clone(),
             statutes: sorted_statutes,
         })
     }
@@ -415,7 +423,9 @@ impl DocumentTransform for NormalizeIds {
         }
 
         Ok(LegalDocument {
+            namespace: doc.namespace.clone(),
             imports: doc.imports.clone(),
+            exports: doc.exports.clone(),
             statutes: normalized,
         })
     }
@@ -482,6 +492,7 @@ mod tests {
         StatuteNode {
             id: id.to_string(),
             title: format!("Statute {}", id),
+            visibility: crate::module_system::Visibility::Private,
             conditions: vec![],
             effects: vec![EffectNode {
                 effect_type: "grant".to_string(),
@@ -504,6 +515,8 @@ mod tests {
     #[test]
     fn test_deduplicate_statutes() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("A", vec![]),
@@ -537,12 +550,15 @@ mod tests {
     #[test]
     fn test_remove_empty_statutes() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("A", vec![]),
                 StatuteNode {
                     id: "empty".to_string(),
                     title: "Empty".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![], // no effects
                     discretion: None,
@@ -569,6 +585,8 @@ mod tests {
     #[test]
     fn test_normalize_ids() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("My_Statute", vec!["Other_Statute".to_string()]),
@@ -587,6 +605,8 @@ mod tests {
     #[test]
     fn test_transformation_pipeline() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("A", vec![]),
@@ -594,6 +614,7 @@ mod tests {
                 StatuteNode {
                     id: "empty".to_string(),
                     title: "Empty".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,
@@ -626,6 +647,8 @@ mod tests {
     #[test]
     fn test_transform_history() {
         let initial = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("A", vec![]),
@@ -666,6 +689,8 @@ mod tests {
     #[test]
     fn test_transform_validation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute("A", vec![])],
         };
@@ -687,6 +712,8 @@ mod tests {
         use super::presets::*;
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("A", vec![]),
@@ -694,6 +721,7 @@ mod tests {
                 StatuteNode {
                     id: "EMPTY_ONE".to_string(),
                     title: "Empty".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     conditions: vec![],
                     effects: vec![],
                     discretion: None,
@@ -722,6 +750,8 @@ mod tests {
         use super::presets::*;
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 sample_statute("My_Statute", vec![]),

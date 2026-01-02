@@ -63,6 +63,18 @@ impl FormatCoverage {
             LegalFormat::Cmmn => Self::analyze_cmmn(),
             LegalFormat::RuleML => Self::analyze_ruleml(),
             LegalFormat::Sbvr => Self::analyze_sbvr(),
+            LegalFormat::OpenLaw => Self::analyze_openlaw(),
+            LegalFormat::Cicero => Self::analyze_cicero(),
+            LegalFormat::CommonForm => Self::analyze_commonform(),
+            LegalFormat::ClauseIo => Self::analyze_clauseio(),
+            LegalFormat::ContractExpress => Self::analyze_contractexpress(),
+            LegalFormat::Formex => Self::analyze_formex(),
+            LegalFormat::Niem => Self::analyze_niem(),
+            LegalFormat::FinReg => Self::analyze_finreg(),
+            LegalFormat::Xbrl => Self::analyze_xbrl(),
+            LegalFormat::RegML => Self::analyze_regml(),
+            LegalFormat::MiFID2 => Self::analyze_mifid2(),
+            LegalFormat::Basel3 => Self::analyze_basel3(),
         }
     }
 
@@ -377,6 +389,167 @@ impl FormatCoverage {
             "Concepts and terms".to_string(),
         ];
         let unsupported = vec!["Complex semantics".to_string(), "Fact models".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_openlaw() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Template variables".to_string(),
+            "Conditional sections".to_string(),
+            "Basic preconditions".to_string(),
+        ];
+        let unsupported = vec![
+            "Smart contract integration".to_string(),
+            "Complex workflows".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_cicero() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "CiceroMark templates".to_string(),
+            "Variable placeholders".to_string(),
+            "Basic clause logic".to_string(),
+        ];
+        let unsupported = vec![
+            "Ergo logic language".to_string(),
+            "Complex data models".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_commonform() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "JSON structure".to_string(),
+            "Nested content".to_string(),
+            "Definitions and references".to_string(),
+        ];
+        let unsupported = vec![
+            "Form composition".to_string(),
+            "Complex component reuse".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_clauseio() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Template structure".to_string(),
+            "Variable definitions".to_string(),
+            "Conditional sections".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex workflows".to_string(),
+            "Advanced versioning".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_contractexpress() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Merge fields".to_string(),
+            "Template sections".to_string(),
+            "Conditional logic".to_string(),
+        ];
+        let unsupported = vec![
+            "Word integration".to_string(),
+            "Complex questionnaires".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_formex() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Article structure".to_string(),
+            "EU Official Journal format".to_string(),
+            "Multilingual support markers".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex amendments".to_string(),
+            "Full publication metadata".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_niem() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Statute codes".to_string(),
+            "Jurisdiction information".to_string(),
+            "Basic exchange content".to_string(),
+        ];
+        let unsupported = vec![
+            "Domain-specific extensions".to_string(),
+            "Complex case structures".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_finreg() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Regulatory requirements".to_string(),
+            "Compliance rules".to_string(),
+            "Threshold values".to_string(),
+        ];
+        let unsupported = vec!["Complex formulas".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_xbrl() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Financial facts".to_string(),
+            "Contexts and periods".to_string(),
+            "Basic taxonomy".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex dimensions".to_string(),
+            "Custom taxonomies".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_regml() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Regulatory provisions".to_string(),
+            "Obligations and prohibitions".to_string(),
+            "Authority metadata".to_string(),
+        ];
+        let unsupported = vec!["Complex regulatory networks".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_mifid2() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Transaction reports".to_string(),
+            "Best execution reports".to_string(),
+            "Entity identification".to_string(),
+        ];
+        let unsupported = vec!["Complex instrument details".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_basel3() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Capital requirements".to_string(),
+            "Liquidity requirements".to_string(),
+            "Ratio calculations".to_string(),
+        ];
+        let unsupported = vec!["Advanced risk metrics".to_string()];
         let partial = HashMap::new();
         (supported, unsupported, partial)
     }

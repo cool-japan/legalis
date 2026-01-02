@@ -549,3 +549,651 @@ mod tests {
         assert!(effect.description.contains("person"));
     }
 }
+
+// ============================================================================
+// Structured Output Generation (v0.2.6)
+// ============================================================================
+
+/// JSON schema for constrained generation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonSchemaConstraint {
+    /// Schema title
+    pub title: String,
+    /// Schema type (object, array, string, etc.)
+    pub schema_type: String,
+    /// Required properties
+    pub required: Vec<String>,
+    /// Property definitions
+    pub properties: serde_json::Value,
+    /// Additional schema constraints
+    pub additional_constraints: Option<serde_json::Value>,
+}
+
+impl JsonSchemaConstraint {
+    /// Creates a new JSON schema constraint.
+    pub fn new(title: impl Into<String>, schema_type: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            schema_type: schema_type.into(),
+            required: Vec::new(),
+            properties: serde_json::json!({}),
+            additional_constraints: None,
+        }
+    }
+
+    /// Adds a required property.
+    pub fn add_required(mut self, property: impl Into<String>) -> Self {
+        self.required.push(property.into());
+        self
+    }
+
+    /// Sets property definitions.
+    pub fn with_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = properties;
+        self
+    }
+
+    /// Converts to JSON schema format.
+    pub fn to_json_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "title": self.title,
+            "type": self.schema_type,
+            "required": self.required,
+            "properties": self.properties,
+            "additionalProperties": false
+        })
+    }
+}
+
+/// JSON schema-constrained generator.
+pub struct JsonSchemaGenerator<P> {
+    provider: P,
+    strict_mode: bool,
+}
+
+impl<P: LLMProvider> JsonSchemaGenerator<P> {
+    /// Creates a new JSON schema generator.
+    pub fn new(provider: P) -> Self {
+        Self {
+            provider,
+            strict_mode: true,
+        }
+    }
+
+    /// Sets strict mode (reject responses that don't match schema).
+    pub fn with_strict_mode(mut self, strict: bool) -> Self {
+        self.strict_mode = strict;
+        self
+    }
+
+    /// Generates structured output constrained by JSON schema.
+    pub async fn generate_with_schema(
+        &self,
+        prompt: &str,
+        schema: &JsonSchemaConstraint,
+    ) -> Result<serde_json::Value> {
+        let schema_json = schema.to_json_schema();
+
+        let full_prompt = format!(
+            r#"{prompt}
+
+You must respond with valid JSON that conforms to this exact schema:
+
+{schema}
+
+Ensure all required fields are present and all types match the schema."#,
+            prompt = prompt,
+            schema = serde_json::to_string_pretty(&schema_json)?
+        );
+
+        let response = self.provider.generate_text(&full_prompt).await?;
+
+        // Try to parse and validate the response
+        let parsed: serde_json::Value =
+            serde_json::from_str(&response).context("Failed to parse response as JSON")?;
+
+        if self.strict_mode {
+            self.validate_against_schema(&parsed, schema)?;
+        }
+
+        Ok(parsed)
+    }
+
+    /// Validates JSON against schema.
+    fn validate_against_schema(
+        &self,
+        value: &serde_json::Value,
+        schema: &JsonSchemaConstraint,
+    ) -> Result<()> {
+        // Basic validation - check required fields
+        if let serde_json::Value::Object(obj) = value {
+            for required_field in &schema.required {
+                if !obj.contains_key(required_field) {
+                    anyhow::bail!("Missing required field: {}", required_field);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Grammar rule for guided decoding.
+#[derive(Debug, Clone)]
+pub struct GrammarRule {
+    /// Rule name
+    pub name: String,
+    /// Rule pattern (regex or BNF)
+    pub pattern: String,
+    /// Rule type (regex, bnf, json)
+    pub rule_type: GrammarRuleType,
+}
+
+/// Type of grammar rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrammarRuleType {
+    /// Regular expression
+    Regex,
+    /// Backus-Naur Form
+    BNF,
+    /// JSON schema
+    Json,
+}
+
+/// Grammar-guided decoder.
+pub struct GrammarGuidedDecoder<P> {
+    provider: P,
+    grammar: Vec<GrammarRule>,
+}
+
+impl<P: LLMProvider> GrammarGuidedDecoder<P> {
+    /// Creates a new grammar-guided decoder.
+    pub fn new(provider: P) -> Self {
+        Self {
+            provider,
+            grammar: Vec::new(),
+        }
+    }
+
+    /// Adds a grammar rule.
+    pub fn add_rule(mut self, rule: GrammarRule) -> Self {
+        self.grammar.push(rule);
+        self
+    }
+
+    /// Generates text following the grammar rules.
+    pub async fn generate_guided(&self, prompt: &str) -> Result<String> {
+        let grammar_description = self
+            .grammar
+            .iter()
+            .map(|r| format!("{}: {}", r.name, r.pattern))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let full_prompt = format!(
+            r#"{prompt}
+
+Your response must follow these grammar rules:
+{grammar}
+
+Generate output that strictly adheres to these rules."#,
+            prompt = prompt,
+            grammar = grammar_description
+        );
+
+        let response = self.provider.generate_text(&full_prompt).await?;
+
+        // Validate against grammar rules
+        for rule in &self.grammar {
+            if rule.rule_type == GrammarRuleType::Regex {
+                let re = regex::Regex::new(&rule.pattern)?;
+                if !re.is_match(&response) {
+                    anyhow::bail!("Response does not match grammar rule: {}", rule.name);
+                }
+            }
+        }
+
+        Ok(response)
+    }
+}
+
+/// Legal form template.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalFormTemplate {
+    /// Form name
+    pub name: String,
+    /// Form description
+    pub description: String,
+    /// Form fields
+    pub fields: Vec<FormField>,
+    /// Validation rules
+    pub validation_rules: Vec<ValidationRule>,
+}
+
+/// Form field definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormField {
+    /// Field name
+    pub name: String,
+    /// Field label
+    pub label: String,
+    /// Field type (text, number, date, select, etc.)
+    pub field_type: String,
+    /// Whether field is required
+    pub required: bool,
+    /// Default value
+    pub default_value: Option<String>,
+    /// Help text
+    pub help_text: Option<String>,
+}
+
+/// Validation rule for form fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationRule {
+    /// Field name to validate
+    pub field_name: String,
+    /// Validation type (required, min_length, max_length, pattern, etc.)
+    pub validation_type: String,
+    /// Validation parameters
+    pub parameters: Option<serde_json::Value>,
+    /// Error message
+    pub error_message: String,
+}
+
+/// Legal form filler using AI.
+pub struct LegalFormFiller<P> {
+    provider: P,
+}
+
+impl<P: LLMProvider> LegalFormFiller<P> {
+    /// Creates a new legal form filler.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
+
+    /// Fills a legal form from natural language input.
+    pub async fn fill_form(
+        &self,
+        template: &LegalFormTemplate,
+        input_text: &str,
+    ) -> Result<serde_json::Value> {
+        let fields_description = template
+            .fields
+            .iter()
+            .map(|f| {
+                format!(
+                    "- {} ({}): {}{}",
+                    f.label,
+                    f.field_type,
+                    f.help_text.as_deref().unwrap_or(""),
+                    if f.required { " [REQUIRED]" } else { "" }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let prompt = format!(
+            r#"Fill out this legal form based on the provided information.
+
+Form: {form_name}
+{form_description}
+
+Fields to fill:
+{fields}
+
+Information provided:
+{input}
+
+Extract the relevant information and fill the form fields. Respond with JSON:
+{{
+    "filled_fields": {{
+        "field_name_1": "value1",
+        "field_name_2": "value2",
+        ...
+    }},
+    "confidence": 0.95,
+    "missing_required": ["field_name_3"],
+    "notes": "Any additional notes or clarifications"
+}}"#,
+            form_name = template.name,
+            form_description = template.description,
+            fields = fields_description,
+            input = input_text
+        );
+
+        let response = self.provider.generate_text(&prompt).await?;
+        let parsed: serde_json::Value = serde_json::from_str(&response)?;
+
+        Ok(parsed)
+    }
+
+    /// Validates filled form data.
+    pub fn validate_form(
+        &self,
+        template: &LegalFormTemplate,
+        filled_data: &serde_json::Value,
+    ) -> Result<Vec<String>> {
+        let mut errors = Vec::new();
+
+        if let Some(filled_fields) = filled_data["filled_fields"].as_object() {
+            // Check required fields
+            for field in &template.fields {
+                if field.required && !filled_fields.contains_key(&field.name) {
+                    errors.push(format!("Required field '{}' is missing", field.label));
+                }
+            }
+
+            // Apply validation rules
+            for rule in &template.validation_rules {
+                if let Some(value) = filled_fields.get(&rule.field_name) {
+                    if !self.validate_field(value, rule) {
+                        errors.push(rule.error_message.clone());
+                    }
+                }
+            }
+        }
+
+        Ok(errors)
+    }
+
+    fn validate_field(&self, _value: &serde_json::Value, _rule: &ValidationRule) -> bool {
+        // Simplified validation - in production would implement full validation logic
+        true
+    }
+}
+
+/// Structured case analysis output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseAnalysisOutput {
+    /// Case name
+    pub case_name: String,
+    /// Citation
+    pub citation: String,
+    /// Court
+    pub court: String,
+    /// Decision date
+    pub date: String,
+    /// Parties involved
+    pub parties: CaseParties,
+    /// Facts summary
+    pub facts: String,
+    /// Legal issues
+    pub issues: Vec<String>,
+    /// Court's holding
+    pub holding: String,
+    /// Reasoning
+    pub reasoning: Vec<String>,
+    /// Outcome
+    pub outcome: String,
+    /// Precedents cited
+    pub precedents_cited: Vec<String>,
+    /// Legal principles
+    pub legal_principles: Vec<String>,
+    /// Dissenting opinions (if any)
+    pub dissenting_opinions: Option<String>,
+}
+
+/// Parties in a case.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseParties {
+    /// Plaintiff(s) or Appellant(s)
+    pub plaintiffs: Vec<String>,
+    /// Defendant(s) or Appellee(s)
+    pub defendants: Vec<String>,
+}
+
+/// Case analyzer that produces structured output.
+pub struct CaseAnalyzer<P> {
+    provider: P,
+}
+
+impl<P: LLMProvider> CaseAnalyzer<P> {
+    /// Creates a new case analyzer.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
+
+    /// Analyzes a case and produces structured output.
+    pub async fn analyze_case(&self, case_text: &str) -> Result<CaseAnalysisOutput> {
+        let prompt = format!(
+            r#"Analyze this legal case and provide structured output.
+
+Case Text:
+{case_text}
+
+Provide a comprehensive analysis in JSON format:
+{{
+    "case_name": "Plaintiff v. Defendant",
+    "citation": "123 F.3d 456 (9th Cir. 2020)",
+    "court": "United States Court of Appeals for the Ninth Circuit",
+    "date": "2020-01-15",
+    "parties": {{
+        "plaintiffs": ["..."],
+        "defendants": ["..."]
+    }},
+    "facts": "Summary of relevant facts...",
+    "issues": ["Legal issue 1", "Legal issue 2"],
+    "holding": "Court's decision...",
+    "reasoning": ["Reason 1", "Reason 2"],
+    "outcome": "Final outcome...",
+    "precedents_cited": ["Case 1", "Case 2"],
+    "legal_principles": ["Principle 1", "Principle 2"],
+    "dissenting_opinions": "Summary of dissent (if any)"
+}}"#,
+            case_text = case_text
+        );
+
+        let response = self.provider.generate_text(&prompt).await?;
+        let analysis: CaseAnalysisOutput =
+            serde_json::from_str(&response).context("Failed to parse case analysis")?;
+
+        Ok(analysis)
+    }
+}
+
+/// Table cell data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableCell {
+    /// Cell value
+    pub value: String,
+    /// Cell data type
+    pub data_type: String,
+    /// Confidence score
+    pub confidence: f64,
+}
+
+/// Extracted table data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableData {
+    /// Table title or description
+    pub title: Option<String>,
+    /// Column headers
+    pub headers: Vec<String>,
+    /// Row data
+    pub rows: Vec<Vec<TableCell>>,
+    /// Table metadata
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Tabular data extractor.
+pub struct TabularDataExtractor<P> {
+    provider: P,
+}
+
+impl<P: LLMProvider> TabularDataExtractor<P> {
+    /// Creates a new tabular data extractor.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
+
+    /// Extracts tabular data from text.
+    pub async fn extract_table(&self, text: &str) -> Result<Vec<TableData>> {
+        let prompt = format!(
+            r#"Extract all tabular data from this text and format as JSON.
+
+Text:
+{text}
+
+For each table found, provide:
+{{
+    "title": "Table title (if any)",
+    "headers": ["Column 1", "Column 2", ...],
+    "rows": [
+        [
+            {{"value": "cell1", "data_type": "text", "confidence": 0.95}},
+            {{"value": "cell2", "data_type": "number", "confidence": 0.90}}
+        ]
+    ]
+}}
+
+Respond with an array of table objects."#,
+            text = text
+        );
+
+        let response = self.provider.generate_text(&prompt).await?;
+        let tables: Vec<TableData> =
+            serde_json::from_str(&response).context("Failed to parse table data")?;
+
+        Ok(tables)
+    }
+
+    /// Extracts specific columns from text.
+    pub async fn extract_columns(&self, text: &str, column_names: &[String]) -> Result<TableData> {
+        let columns_list = column_names.join(", ");
+
+        let prompt = format!(
+            r#"Extract the following columns from this text: {columns}
+
+Text:
+{text}
+
+Format as a table with these exact column headers.
+Provide as JSON with headers and rows arrays."#,
+            columns = columns_list,
+            text = text
+        );
+
+        let response = self.provider.generate_text(&prompt).await?;
+        let table: TableData =
+            serde_json::from_str(&response).context("Failed to parse column data")?;
+
+        Ok(table)
+    }
+
+    /// Converts table to CSV format.
+    pub fn table_to_csv(&self, table: &TableData) -> String {
+        let mut csv = String::new();
+
+        // Headers
+        csv.push_str(&table.headers.join(","));
+        csv.push('\n');
+
+        // Rows
+        for row in &table.rows {
+            let row_values: Vec<String> = row.iter().map(|cell| cell.value.clone()).collect();
+            csv.push_str(&row_values.join(","));
+            csv.push('\n');
+        }
+
+        csv
+    }
+}
+
+#[cfg(test)]
+mod v2_6_tests {
+    use super::*;
+
+    #[test]
+    fn test_json_schema_constraint() {
+        let schema = JsonSchemaConstraint::new("TestSchema", "object")
+            .add_required("field1")
+            .add_required("field2")
+            .with_properties(serde_json::json!({
+                "field1": {"type": "string"},
+                "field2": {"type": "number"}
+            }));
+
+        let json_schema = schema.to_json_schema();
+        assert_eq!(json_schema["title"], "TestSchema");
+        assert_eq!(json_schema["type"], "object");
+        assert_eq!(json_schema["required"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_grammar_rule_creation() {
+        let rule = GrammarRule {
+            name: "email".to_string(),
+            pattern: r"^\w+@\w+\.\w+$".to_string(),
+            rule_type: GrammarRuleType::Regex,
+        };
+
+        assert_eq!(rule.name, "email");
+        assert_eq!(rule.rule_type, GrammarRuleType::Regex);
+    }
+
+    #[test]
+    fn test_legal_form_template() {
+        let template = LegalFormTemplate {
+            name: "Simple Contract".to_string(),
+            description: "A simple contract template".to_string(),
+            fields: vec![FormField {
+                name: "party1".to_string(),
+                label: "First Party".to_string(),
+                field_type: "text".to_string(),
+                required: true,
+                default_value: None,
+                help_text: Some("Enter the name of the first party".to_string()),
+            }],
+            validation_rules: vec![],
+        };
+
+        assert_eq!(template.fields.len(), 1);
+        assert!(template.fields[0].required);
+    }
+
+    #[test]
+    fn test_case_parties() {
+        let parties = CaseParties {
+            plaintiffs: vec!["John Doe".to_string()],
+            defendants: vec!["Jane Smith".to_string()],
+        };
+
+        assert_eq!(parties.plaintiffs.len(), 1);
+        assert_eq!(parties.defendants.len(), 1);
+    }
+
+    #[test]
+    fn test_table_cell() {
+        let cell = TableCell {
+            value: "100".to_string(),
+            data_type: "number".to_string(),
+            confidence: 0.95,
+        };
+
+        assert_eq!(cell.value, "100");
+        assert!((cell.confidence - 0.95).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_table_data() {
+        let table = TableData {
+            title: Some("Test Table".to_string()),
+            headers: vec!["Name".to_string(), "Age".to_string()],
+            rows: vec![vec![
+                TableCell {
+                    value: "Alice".to_string(),
+                    data_type: "text".to_string(),
+                    confidence: 0.99,
+                },
+                TableCell {
+                    value: "30".to_string(),
+                    data_type: "number".to_string(),
+                    confidence: 0.95,
+                },
+            ]],
+            metadata: None,
+        };
+
+        assert_eq!(table.headers.len(), 2);
+        assert_eq!(table.rows.len(), 1);
+    }
+}

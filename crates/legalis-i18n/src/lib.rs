@@ -13028,11 +13028,11 @@ mod tests {
         let formatter = BrailleFormatter::new(BrailleGrade::Grade1);
 
         let braille = formatter.to_braille("law");
-        assert!(braille.len() > 0);
+        assert!(!braille.is_empty());
         assert!(
             braille
                 .chars()
-                .all(|c| c >= '\u{2800}' && c <= '\u{28FF}' || c == ' ')
+                .all(|c| ('\u{2800}'..='\u{28FF}').contains(&c) || c == ' ')
         );
     }
 
@@ -14036,11 +14036,11 @@ mod tests {
 
         let us_locale = Locale::new("en").with_country("US");
         let us_dialects = registry.get_dialects_for_locale(&us_locale);
-        assert!(us_dialects.len() >= 1); // Louisiana
+        assert!(!us_dialects.is_empty()); // Louisiana
 
         let gb_locale = Locale::new("en").with_country("GB");
         let gb_dialects = registry.get_dialects_for_locale(&gb_locale);
-        assert!(gb_dialects.len() >= 1); // Scottish
+        assert!(!gb_dialects.is_empty()); // Scottish
     }
 
     #[test]
@@ -14939,10 +14939,10 @@ mod tests {
         assert!(contracts.len() >= 2); // NDA and Employment
 
         let court_docs = registry.find_by_type(DocumentTemplateType::CourtFiling);
-        assert!(court_docs.len() >= 1); // Complaint
+        assert!(!court_docs.is_empty()); // Complaint
 
         let corporate_docs = registry.find_by_type(DocumentTemplateType::Corporate);
-        assert!(corporate_docs.len() >= 1); // Articles of Incorporation
+        assert!(!corporate_docs.is_empty()); // Articles of Incorporation
     }
 
     #[test]
@@ -14953,7 +14953,7 @@ mod tests {
         assert!(us_templates.len() >= 3); // NDA, Employment, Complaint
 
         let de_templates = registry.find_by_jurisdiction("US-DE");
-        assert!(de_templates.len() >= 1); // Articles of Incorporation
+        assert!(!de_templates.is_empty()); // Articles of Incorporation
     }
 
     #[test]
@@ -15014,7 +15014,7 @@ mod tests {
     #[test]
     fn test_variable_type_enum() {
         // Test that all variable types can be created
-        let types = vec![
+        let types = [
             VariableType::Text,
             VariableType::Date,
             VariableType::Number,
@@ -15034,7 +15034,7 @@ mod tests {
     #[test]
     fn test_document_template_type_enum() {
         // Test that all template types can be created
-        let types = vec![
+        let types = [
             DocumentTemplateType::Contract,
             DocumentTemplateType::CourtFiling,
             DocumentTemplateType::Corporate,
@@ -15492,7 +15492,7 @@ mod tests {
 
     #[test]
     fn test_citation_type_enum() {
-        let types = vec![
+        let types = [
             CitationType::Case,
             CitationType::Statute,
             CitationType::Article,
@@ -15921,5 +15921,4962 @@ mod tests {
 
         // Verify custom patterns were used
         assert!(analysis.jurisdiction.is_some());
+    }
+}
+
+// ============================================================================
+// Machine Translation Integration (v0.2.5)
+// ============================================================================
+
+/// Translation quality score (0.0 to 1.0).
+pub type QualityScore = f32;
+
+/// Translation engine type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TranslationEngine {
+    /// Generic neural machine translation
+    Generic,
+    /// Legal-domain fine-tuned model
+    LegalDomain,
+    /// Custom model (user-provided)
+    Custom,
+}
+
+impl std::fmt::Display for TranslationEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslationEngine::Generic => write!(f, "Generic"),
+            TranslationEngine::LegalDomain => write!(f, "Legal Domain"),
+            TranslationEngine::Custom => write!(f, "Custom"),
+        }
+    }
+}
+
+/// Neural machine translation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MTTranslation {
+    /// Translated text
+    pub text: String,
+    /// Quality estimation score (0.0 to 1.0)
+    pub quality_score: QualityScore,
+    /// Source locale
+    pub source_locale: Locale,
+    /// Target locale
+    pub target_locale: Locale,
+    /// Engine used
+    pub engine: TranslationEngine,
+    /// Alternative translations (n-best list)
+    pub alternatives: Vec<(String, QualityScore)>,
+}
+
+/// Neural machine translator for legal documents.
+///
+/// Simulates legal-domain neural machine translation with quality estimation.
+#[derive(Debug, Clone)]
+pub struct NeuralMachineTranslator {
+    /// Translation engine
+    engine: TranslationEngine,
+    /// Quality threshold (0.0 to 1.0)
+    quality_threshold: QualityScore,
+    /// Legal dictionary for domain adaptation
+    dictionary: Option<Arc<LegalDictionary>>,
+}
+
+impl NeuralMachineTranslator {
+    /// Creates a new neural machine translator.
+    pub fn new(engine: TranslationEngine) -> Self {
+        Self {
+            engine,
+            quality_threshold: 0.7,
+            dictionary: None,
+        }
+    }
+
+    /// Creates a legal-domain translator.
+    pub fn legal_domain() -> Self {
+        Self::new(TranslationEngine::LegalDomain)
+    }
+
+    /// Sets the quality threshold.
+    pub fn with_quality_threshold(mut self, threshold: QualityScore) -> Self {
+        self.quality_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds a legal dictionary for domain adaptation.
+    pub fn with_dictionary(mut self, dictionary: Arc<LegalDictionary>) -> Self {
+        self.dictionary = Some(dictionary);
+        self
+    }
+
+    /// Translates text with quality estimation.
+    ///
+    /// In a real implementation, this would call an external MT API.
+    /// For this simulation, we estimate quality based on text characteristics.
+    pub fn translate(
+        &self,
+        text: &str,
+        source: &Locale,
+        target: &Locale,
+    ) -> I18nResult<MTTranslation> {
+        // Simulate translation (in production, call external API)
+        let translated_text = self.simulate_translation(text, source, target);
+
+        // Estimate quality (in production, use model-based QE)
+        let quality_score = self.estimate_quality(text, &translated_text, source, target);
+
+        // Generate alternatives (n-best list)
+        let alternatives = self.generate_alternatives(text, source, target);
+
+        Ok(MTTranslation {
+            text: translated_text,
+            quality_score,
+            source_locale: source.clone(),
+            target_locale: target.clone(),
+            engine: self.engine,
+            alternatives,
+        })
+    }
+
+    /// Simulates translation (placeholder for external MT API).
+    fn simulate_translation(&self, text: &str, _source: &Locale, target: &Locale) -> String {
+        // If we have a dictionary, try to use it
+        if let Some(dict) = &self.dictionary {
+            // Check if text is a single term in dictionary
+            if let Some(translation) = dict.translate(text) {
+                return translation.to_string();
+            }
+        }
+
+        // Simulate translation with locale marker
+        format!("[{}] {}", target.tag(), text)
+    }
+
+    /// Estimates translation quality.
+    fn estimate_quality(
+        &self,
+        source_text: &str,
+        translated_text: &str,
+        _source: &Locale,
+        _target: &Locale,
+    ) -> QualityScore {
+        // Simulate quality estimation based on heuristics
+        let mut score: f32 = 0.8; // Base score for legal domain
+
+        // Penalize very short translations
+        if translated_text.len() < source_text.len() / 2 {
+            score -= 0.2;
+        }
+
+        // Boost score if dictionary was used
+        if self.dictionary.is_some() && !translated_text.starts_with('[') {
+            score += 0.15;
+        }
+
+        // Legal domain engine gets higher scores
+        if self.engine == TranslationEngine::LegalDomain {
+            score += 0.05;
+        }
+
+        score.clamp(0.0, 1.0)
+    }
+
+    /// Generates alternative translations.
+    fn generate_alternatives(
+        &self,
+        text: &str,
+        source: &Locale,
+        target: &Locale,
+    ) -> Vec<(String, QualityScore)> {
+        let mut alternatives = Vec::new();
+
+        // Generate 2-3 alternatives with decreasing quality scores
+        alternatives.push((
+            format!("[{}] Alt1: {}", target.tag(), text),
+            self.estimate_quality(text, text, source, target) - 0.1,
+        ));
+        alternatives.push((
+            format!("[{}] Alt2: {}", target.tag(), text),
+            self.estimate_quality(text, text, source, target) - 0.2,
+        ));
+
+        alternatives
+    }
+
+    /// Returns the quality threshold.
+    pub fn quality_threshold(&self) -> QualityScore {
+        self.quality_threshold
+    }
+
+    /// Returns the engine type.
+    pub fn engine(&self) -> TranslationEngine {
+        self.engine
+    }
+}
+
+/// Term preservation mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TermPreservationMode {
+    /// Preserve terms exactly as-is (no translation)
+    Exact,
+    /// Translate term but preserve formatting
+    PreserveFormatting,
+    /// Translate with glossary enforcement
+    GlossaryEnforced,
+}
+
+/// Terminology-aware translator that preserves legal terms.
+pub struct TerminologyAwareTranslator {
+    /// Base MT translator
+    mt_translator: NeuralMachineTranslator,
+    /// Glossary for term preservation
+    glossary: HashMap<String, String>,
+    /// Preservation mode
+    preservation_mode: TermPreservationMode,
+}
+
+impl TerminologyAwareTranslator {
+    /// Creates a new terminology-aware translator.
+    pub fn new(mt_translator: NeuralMachineTranslator) -> Self {
+        Self {
+            mt_translator,
+            glossary: HashMap::new(),
+            preservation_mode: TermPreservationMode::GlossaryEnforced,
+        }
+    }
+
+    /// Adds a term to the glossary.
+    pub fn add_term(&mut self, source_term: impl Into<String>, target_term: impl Into<String>) {
+        self.glossary.insert(source_term.into(), target_term.into());
+    }
+
+    /// Loads glossary from dictionary.
+    pub fn load_glossary_from_dictionary(
+        &mut self,
+        dictionary: &LegalDictionary,
+        _target: &Locale,
+    ) {
+        for (term, translation) in dictionary.translations.iter() {
+            self.glossary.insert(term.clone(), translation.clone());
+        }
+    }
+
+    /// Sets preservation mode.
+    pub fn with_preservation_mode(mut self, mode: TermPreservationMode) -> Self {
+        self.preservation_mode = mode;
+        self
+    }
+
+    /// Translates text while preserving terminology.
+    pub fn translate(
+        &self,
+        text: &str,
+        source: &Locale,
+        target: &Locale,
+    ) -> I18nResult<MTTranslation> {
+        // First, identify and mark terms to preserve
+        let (marked_text, term_positions) = self.mark_terms(text);
+
+        // Translate the marked text
+        let mut translation = self.mt_translator.translate(&marked_text, source, target)?;
+
+        // Restore preserved terms
+        translation.text = self.restore_terms(&translation.text, &term_positions);
+
+        // Boost quality score for term preservation
+        translation.quality_score = (translation.quality_score + 0.1).min(1.0);
+
+        Ok(translation)
+    }
+
+    /// Marks terms in text that should be preserved.
+    fn mark_terms(&self, text: &str) -> (String, Vec<(String, String)>) {
+        let mut marked = text.to_string();
+        let mut positions = Vec::new();
+
+        // Sort glossary terms by length (longest first) to handle overlapping terms
+        let mut terms: Vec<(&String, &String)> = self.glossary.iter().collect();
+        terms.sort_by_key(|(k, _)| std::cmp::Reverse(k.len()));
+
+        for (source_term, target_term) in terms {
+            match self.preservation_mode {
+                TermPreservationMode::Exact => {
+                    // Mark term for exact preservation
+                    let marker = format!("__TERM_{}__", positions.len());
+                    if marked.contains(source_term.as_str()) {
+                        marked = marked.replace(source_term, &marker);
+                        positions.push((marker, source_term.clone()));
+                    }
+                }
+                TermPreservationMode::GlossaryEnforced => {
+                    // Mark term for glossary replacement
+                    let marker = format!("__TERM_{}__", positions.len());
+                    if marked.contains(source_term.as_str()) {
+                        marked = marked.replace(source_term, &marker);
+                        positions.push((marker, target_term.clone()));
+                    }
+                }
+                TermPreservationMode::PreserveFormatting => {
+                    // Let MT translate but we'll restore formatting
+                    // (simplified for this implementation)
+                    let marker = format!("__TERM_{}__", positions.len());
+                    if marked.contains(source_term.as_str()) {
+                        marked = marked.replace(source_term, &marker);
+                        positions.push((marker, target_term.clone()));
+                    }
+                }
+            }
+        }
+
+        (marked, positions)
+    }
+
+    /// Restores preserved terms in translated text.
+    fn restore_terms(&self, translated: &str, positions: &[(String, String)]) -> String {
+        let mut result = translated.to_string();
+
+        for (marker, term) in positions {
+            result = result.replace(marker, term);
+        }
+
+        result
+    }
+
+    /// Returns the number of glossary terms.
+    pub fn glossary_size(&self) -> usize {
+        self.glossary.len()
+    }
+}
+
+/// Translation with memory integration.
+#[derive(Debug, Clone)]
+pub struct MTWithMemory {
+    /// Neural MT translator
+    mt_translator: Arc<NeuralMachineTranslator>,
+    /// Translation memory
+    memory: Arc<Mutex<TranslationMemory>>,
+    /// Minimum fuzzy match threshold
+    fuzzy_threshold: f32,
+}
+
+impl MTWithMemory {
+    /// Creates a new MT with memory integration.
+    pub fn new(
+        mt_translator: NeuralMachineTranslator,
+        memory: Arc<Mutex<TranslationMemory>>,
+    ) -> Self {
+        Self {
+            mt_translator: Arc::new(mt_translator),
+            memory,
+            fuzzy_threshold: 0.85,
+        }
+    }
+
+    /// Sets fuzzy match threshold.
+    pub fn with_fuzzy_threshold(mut self, threshold: f32) -> Self {
+        self.fuzzy_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Translates with memory lookup and MT fallback.
+    pub fn translate(
+        &self,
+        text: &str,
+        source: &Locale,
+        target: &Locale,
+    ) -> I18nResult<MTTranslation> {
+        // Try exact match first
+        {
+            let memory_guard = self.memory.lock().unwrap();
+            let exact_matches = memory_guard.find_exact(text, source, target);
+            if !exact_matches.is_empty() {
+                let target_text = exact_matches[0].target_text.clone();
+                drop(memory_guard);
+                return Ok(MTTranslation {
+                    text: target_text,
+                    quality_score: 1.0, // Exact match = perfect quality
+                    source_locale: source.clone(),
+                    target_locale: target.clone(),
+                    engine: TranslationEngine::Generic,
+                    alternatives: vec![],
+                });
+            }
+
+            // Try fuzzy match
+            let fuzzy_matches =
+                memory_guard.find_fuzzy_levenshtein(text, source, target, self.fuzzy_threshold);
+            if !fuzzy_matches.is_empty() {
+                let (entry, score) = fuzzy_matches[0];
+                let target_text = entry.target_text.clone();
+                drop(memory_guard);
+                return Ok(MTTranslation {
+                    text: target_text,
+                    quality_score: score, // Fuzzy match quality
+                    source_locale: source.clone(),
+                    target_locale: target.clone(),
+                    engine: TranslationEngine::Generic,
+                    alternatives: vec![],
+                });
+            }
+        }
+
+        // Fall back to MT
+        let mt_result = self.mt_translator.translate(text, source, target)?;
+
+        // Add to memory if quality is good
+        if mt_result.quality_score >= 0.8 {
+            let mut memory_guard = self.memory.lock().unwrap();
+            memory_guard.add_translation(
+                text.to_string(),
+                source.clone(),
+                mt_result.text.clone(),
+                target.clone(),
+            );
+        }
+
+        Ok(mt_result)
+    }
+
+    /// Returns the fuzzy match threshold.
+    pub fn fuzzy_threshold(&self) -> f32 {
+        self.fuzzy_threshold
+    }
+}
+
+/// Glossary enforcer for terminology consistency.
+pub struct GlossaryEnforcer {
+    /// Mandatory terms (source -> target)
+    mandatory_terms: HashMap<String, String>,
+    /// Forbidden terms (terms that should not appear)
+    forbidden_terms: Vec<String>,
+    /// Case-sensitive enforcement
+    case_sensitive: bool,
+}
+
+impl GlossaryEnforcer {
+    /// Creates a new glossary enforcer.
+    pub fn new() -> Self {
+        Self {
+            mandatory_terms: HashMap::new(),
+            forbidden_terms: Vec::new(),
+            case_sensitive: false,
+        }
+    }
+
+    /// Adds a mandatory term mapping.
+    pub fn add_mandatory_term(
+        &mut self,
+        source_term: impl Into<String>,
+        target_term: impl Into<String>,
+    ) {
+        self.mandatory_terms
+            .insert(source_term.into(), target_term.into());
+    }
+
+    /// Adds a forbidden term.
+    pub fn add_forbidden_term(&mut self, term: impl Into<String>) {
+        self.forbidden_terms.push(term.into());
+    }
+
+    /// Enables case-sensitive enforcement.
+    pub fn with_case_sensitive(mut self, enabled: bool) -> Self {
+        self.case_sensitive = enabled;
+        self
+    }
+
+    /// Enforces glossary on translation.
+    pub fn enforce(&self, source: &str, translation: &str) -> (String, Vec<GlossaryViolation>) {
+        let mut enforced = translation.to_string();
+        let mut violations = Vec::new();
+
+        // Check for mandatory term violations
+        for (source_term, target_term) in &self.mandatory_terms {
+            let source_match = if self.case_sensitive {
+                source.contains(source_term)
+            } else {
+                source.to_lowercase().contains(&source_term.to_lowercase())
+            };
+
+            let target_match = if self.case_sensitive {
+                enforced.contains(target_term)
+            } else {
+                enforced
+                    .to_lowercase()
+                    .contains(&target_term.to_lowercase())
+            };
+
+            if source_match && !target_match {
+                violations.push(GlossaryViolation {
+                    violation_type: ViolationType::MissingMandatoryTerm,
+                    term: source_term.clone(),
+                    expected: Some(target_term.clone()),
+                    found: None,
+                });
+            }
+        }
+
+        // Check for forbidden terms
+        for forbidden in &self.forbidden_terms {
+            let contains = if self.case_sensitive {
+                enforced.contains(forbidden)
+            } else {
+                enforced.to_lowercase().contains(&forbidden.to_lowercase())
+            };
+
+            if contains {
+                violations.push(GlossaryViolation {
+                    violation_type: ViolationType::ForbiddenTermUsed,
+                    term: forbidden.clone(),
+                    expected: None,
+                    found: Some(forbidden.clone()),
+                });
+
+                // Remove forbidden term
+                if self.case_sensitive {
+                    enforced = enforced.replace(forbidden, "[REMOVED]");
+                } else {
+                    // Case-insensitive replacement is more complex
+                    // For simplicity, just mark it
+                    enforced = enforced.replace(forbidden, "[FORBIDDEN]");
+                }
+            }
+        }
+
+        (enforced, violations)
+    }
+
+    /// Returns the number of mandatory terms.
+    pub fn mandatory_term_count(&self) -> usize {
+        self.mandatory_terms.len()
+    }
+
+    /// Returns the number of forbidden terms.
+    pub fn forbidden_term_count(&self) -> usize {
+        self.forbidden_terms.len()
+    }
+}
+
+impl Default for GlossaryEnforcer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Glossary violation type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ViolationType {
+    /// Mandatory term missing in translation
+    MissingMandatoryTerm,
+    /// Forbidden term found in translation
+    ForbiddenTermUsed,
+}
+
+impl std::fmt::Display for ViolationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ViolationType::MissingMandatoryTerm => write!(f, "Missing Mandatory Term"),
+            ViolationType::ForbiddenTermUsed => write!(f, "Forbidden Term Used"),
+        }
+    }
+}
+
+/// Glossary violation.
+#[derive(Debug, Clone)]
+pub struct GlossaryViolation {
+    /// Violation type
+    pub violation_type: ViolationType,
+    /// Term involved
+    pub term: String,
+    /// Expected term (for mandatory violations)
+    pub expected: Option<String>,
+    /// Found term (for forbidden violations)
+    pub found: Option<String>,
+}
+
+/// Post-editing action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PostEditAction {
+    /// Accept translation as-is
+    Accept,
+    /// Reject and request new translation
+    Reject,
+    /// Edit specific segments
+    Edit,
+}
+
+/// Post-editing feedback.
+#[derive(Debug, Clone)]
+pub struct PostEditFeedback {
+    /// Original translation
+    pub original: String,
+    /// Edited translation (if action is Edit)
+    pub edited: Option<String>,
+    /// Action taken
+    pub action: PostEditAction,
+    /// Quality rating (0.0 to 1.0)
+    pub quality_rating: Option<QualityScore>,
+    /// Comments
+    pub comments: Vec<String>,
+}
+
+/// Post-editing workflow for translation review.
+pub struct PostEditingWorkflow {
+    /// Pending translations for review
+    pending: Vec<(String, MTTranslation)>,
+    /// Accepted translations
+    accepted: Vec<(String, String)>,
+    /// Rejected translations
+    rejected: Vec<(String, String)>,
+}
+
+impl PostEditingWorkflow {
+    /// Creates a new post-editing workflow.
+    pub fn new() -> Self {
+        Self {
+            pending: Vec::new(),
+            accepted: Vec::new(),
+            rejected: Vec::new(),
+        }
+    }
+
+    /// Adds a translation for review.
+    pub fn add_for_review(&mut self, source: impl Into<String>, translation: MTTranslation) {
+        self.pending.push((source.into(), translation));
+    }
+
+    /// Submits post-editing feedback.
+    pub fn submit_feedback(&mut self, index: usize, feedback: PostEditFeedback) {
+        if index >= self.pending.len() {
+            return;
+        }
+
+        let (source, translation) = self.pending.remove(index);
+
+        match feedback.action {
+            PostEditAction::Accept => {
+                self.accepted.push((source, translation.text));
+            }
+            PostEditAction::Reject => {
+                self.rejected.push((source, translation.text));
+            }
+            PostEditAction::Edit => {
+                if let Some(edited) = feedback.edited {
+                    self.accepted.push((source, edited));
+                } else {
+                    // If no edited text provided, treat as accept
+                    self.accepted.push((source, translation.text));
+                }
+            }
+        }
+    }
+
+    /// Returns pending translations count.
+    pub fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Returns accepted translations count.
+    pub fn accepted_count(&self) -> usize {
+        self.accepted.len()
+    }
+
+    /// Returns rejected translations count.
+    pub fn rejected_count(&self) -> usize {
+        self.rejected.len()
+    }
+
+    /// Gets pending translation at index.
+    pub fn get_pending(&self, index: usize) -> Option<&(String, MTTranslation)> {
+        self.pending.get(index)
+    }
+
+    /// Exports accepted translations to translation memory.
+    pub fn export_to_memory(
+        &self,
+        memory: &mut TranslationMemory,
+        source_locale: &Locale,
+        target_locale: &Locale,
+    ) {
+        for (source, target) in &self.accepted {
+            memory.add_translation(
+                source.clone(),
+                source_locale.clone(),
+                target.clone(),
+                target_locale.clone(),
+            );
+        }
+    }
+
+    /// Clears all translations.
+    pub fn clear(&mut self) {
+        self.pending.clear();
+        self.accepted.clear();
+        self.rejected.clear();
+    }
+}
+
+impl Default for PostEditingWorkflow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod mt_tests {
+    use super::*;
+
+    #[test]
+    fn test_neural_mt_basic() {
+        let translator = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let result = translator.translate("contract", &source, &target);
+        assert!(result.is_ok());
+
+        let translation = result.unwrap();
+        assert!(!translation.text.is_empty());
+        assert!(translation.quality_score >= 0.0 && translation.quality_score <= 1.0);
+        assert_eq!(translation.engine, TranslationEngine::Generic);
+    }
+
+    #[test]
+    fn test_neural_mt_legal_domain() {
+        let translator = NeuralMachineTranslator::legal_domain();
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("de").with_country("DE");
+
+        let result = translator.translate("plaintiff", &source, &target);
+        assert!(result.is_ok());
+
+        let translation = result.unwrap();
+        assert_eq!(translation.engine, TranslationEngine::LegalDomain);
+        // Legal domain should have slightly higher quality
+        assert!(translation.quality_score >= 0.8);
+    }
+
+    #[test]
+    fn test_neural_mt_with_dictionary() {
+        let locale_en_us = Locale::new("en").with_country("US");
+        let mut dict = LegalDictionary::new(locale_en_us.clone());
+        dict.add_translation("contract", "Vertrag");
+
+        let translator = NeuralMachineTranslator::new(TranslationEngine::Generic)
+            .with_dictionary(Arc::new(dict));
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("de").with_country("DE");
+
+        let result = translator.translate("contract", &source, &target).unwrap();
+        assert_eq!(result.text, "Vertrag");
+        assert!(result.quality_score > 0.9); // Dictionary use boosts quality
+    }
+
+    #[test]
+    fn test_neural_mt_alternatives() {
+        let translator = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let result = translator.translate("statute", &source, &target).unwrap();
+        assert!(!result.alternatives.is_empty());
+        assert!(result.alternatives.len() >= 2);
+    }
+
+    #[test]
+    fn test_terminology_aware_translator() {
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let mut term_translator = TerminologyAwareTranslator::new(mt);
+
+        term_translator.add_term("plaintiff", "demandeur");
+        term_translator.add_term("defendant", "défendeur");
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let result = term_translator
+            .translate("The plaintiff sued the defendant", &source, &target)
+            .unwrap();
+
+        assert!(result.text.contains("demandeur"));
+        assert!(result.text.contains("défendeur"));
+        assert_eq!(term_translator.glossary_size(), 2);
+    }
+
+    #[test]
+    fn test_terminology_aware_with_dictionary() {
+        let locale_en_us = Locale::new("en").with_country("US");
+        let mut dict = LegalDictionary::new(locale_en_us);
+        dict.add_translation("tort", "responsabilité civile");
+        dict.add_translation("contract", "contrat");
+
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let mut term_translator = TerminologyAwareTranslator::new(mt);
+
+        let target = Locale::new("fr").with_country("FR");
+        term_translator.load_glossary_from_dictionary(&dict, &target);
+
+        assert_eq!(term_translator.glossary_size(), 2);
+    }
+
+    #[test]
+    fn test_mt_with_memory_exact_match() {
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let mut memory = TranslationMemory::new();
+        let source_locale = Locale::new("en").with_country("US");
+        let target_locale = Locale::new("fr").with_country("FR");
+        memory.add_translation(
+            "contract".to_string(),
+            source_locale.clone(),
+            "contrat".to_string(),
+            target_locale.clone(),
+        );
+
+        let mt_with_memory = MTWithMemory::new(mt, Arc::new(Mutex::new(memory)));
+
+        let result = mt_with_memory
+            .translate("contract", &source_locale, &target_locale)
+            .unwrap();
+        assert_eq!(result.text, "contrat");
+        assert_eq!(result.quality_score, 1.0); // Exact match = perfect quality
+    }
+
+    #[test]
+    fn test_mt_with_memory_fallback() {
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let memory = TranslationMemory::new();
+
+        let mt_with_memory = MTWithMemory::new(mt, Arc::new(Mutex::new(memory)));
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let result = mt_with_memory
+            .translate("new term", &source, &target)
+            .unwrap();
+        assert!(!result.text.is_empty());
+    }
+
+    #[test]
+    fn test_glossary_enforcer_mandatory_terms() {
+        let mut enforcer = GlossaryEnforcer::new();
+        enforcer.add_mandatory_term("plaintiff", "demandeur");
+        enforcer.add_mandatory_term("defendant", "défendeur");
+
+        let source = "The plaintiff sued the defendant";
+        let translation = "Le demandeur a poursuivi la partie adverse";
+
+        let (_, violations) = enforcer.enforce(source, translation);
+
+        // Should detect missing "défendeur"
+        assert!(!violations.is_empty());
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::MissingMandatoryTerm)
+        );
+    }
+
+    #[test]
+    fn test_glossary_enforcer_forbidden_terms() {
+        let mut enforcer = GlossaryEnforcer::new();
+        enforcer.add_forbidden_term("bad word");
+        enforcer.add_forbidden_term("inappropriate");
+
+        let source = "This is a test";
+        let translation = "This contains a bad word";
+
+        let (enforced, violations) = enforcer.enforce(source, translation);
+
+        assert!(!violations.is_empty());
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.violation_type == ViolationType::ForbiddenTermUsed)
+        );
+        assert!(enforced.contains("[REMOVED]") || enforced.contains("[FORBIDDEN]"));
+    }
+
+    #[test]
+    fn test_glossary_enforcer_counts() {
+        let mut enforcer = GlossaryEnforcer::new();
+        enforcer.add_mandatory_term("term1", "translation1");
+        enforcer.add_mandatory_term("term2", "translation2");
+        enforcer.add_forbidden_term("forbidden1");
+
+        assert_eq!(enforcer.mandatory_term_count(), 2);
+        assert_eq!(enforcer.forbidden_term_count(), 1);
+    }
+
+    #[test]
+    fn test_post_editing_workflow() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let translation1 = MTTranslation {
+            text: "contrat".to_string(),
+            quality_score: 0.9,
+            source_locale: source.clone(),
+            target_locale: target.clone(),
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        let translation2 = MTTranslation {
+            text: "accord".to_string(),
+            quality_score: 0.7,
+            source_locale: source.clone(),
+            target_locale: target.clone(),
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("contract", translation1);
+        workflow.add_for_review("agreement", translation2);
+
+        assert_eq!(workflow.pending_count(), 2);
+        assert_eq!(workflow.accepted_count(), 0);
+        assert_eq!(workflow.rejected_count(), 0);
+    }
+
+    #[test]
+    fn test_post_editing_accept() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let translation = MTTranslation {
+            text: "contrat".to_string(),
+            quality_score: 0.95,
+            source_locale: source,
+            target_locale: target,
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("contract", translation);
+
+        let feedback = PostEditFeedback {
+            original: "contrat".to_string(),
+            edited: None,
+            action: PostEditAction::Accept,
+            quality_rating: Some(0.95),
+            comments: vec![],
+        };
+
+        workflow.submit_feedback(0, feedback);
+
+        assert_eq!(workflow.pending_count(), 0);
+        assert_eq!(workflow.accepted_count(), 1);
+        assert_eq!(workflow.rejected_count(), 0);
+    }
+
+    #[test]
+    fn test_post_editing_reject() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let translation = MTTranslation {
+            text: "bad translation".to_string(),
+            quality_score: 0.4,
+            source_locale: source,
+            target_locale: target,
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("contract", translation);
+
+        let feedback = PostEditFeedback {
+            original: "bad translation".to_string(),
+            edited: None,
+            action: PostEditAction::Reject,
+            quality_rating: Some(0.2),
+            comments: vec!["Poor quality".to_string()],
+        };
+
+        workflow.submit_feedback(0, feedback);
+
+        assert_eq!(workflow.pending_count(), 0);
+        assert_eq!(workflow.accepted_count(), 0);
+        assert_eq!(workflow.rejected_count(), 1);
+    }
+
+    #[test]
+    fn test_post_editing_edit() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("de").with_country("DE");
+
+        let translation = MTTranslation {
+            text: "Kontrakt".to_string(),
+            quality_score: 0.7,
+            source_locale: source,
+            target_locale: target,
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("contract", translation);
+
+        let feedback = PostEditFeedback {
+            original: "Kontrakt".to_string(),
+            edited: Some("Vertrag".to_string()),
+            action: PostEditAction::Edit,
+            quality_rating: Some(0.9),
+            comments: vec!["Corrected to proper legal term".to_string()],
+        };
+
+        workflow.submit_feedback(0, feedback);
+
+        assert_eq!(workflow.pending_count(), 0);
+        assert_eq!(workflow.accepted_count(), 1);
+    }
+
+    #[test]
+    fn test_post_editing_export_to_memory() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let translation = MTTranslation {
+            text: "contrat".to_string(),
+            quality_score: 0.95,
+            source_locale: source.clone(),
+            target_locale: target.clone(),
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("contract", translation);
+
+        let feedback = PostEditFeedback {
+            original: "contrat".to_string(),
+            edited: None,
+            action: PostEditAction::Accept,
+            quality_rating: Some(0.95),
+            comments: vec![],
+        };
+
+        workflow.submit_feedback(0, feedback);
+
+        let mut memory = TranslationMemory::new();
+        workflow.export_to_memory(&mut memory, &source, &target);
+
+        let entries = memory.find_exact("contract", &source, &target);
+        assert!(!entries.is_empty());
+        assert_eq!(entries[0].target_text, "contrat");
+    }
+
+    #[test]
+    fn test_translation_engine_display() {
+        assert_eq!(TranslationEngine::Generic.to_string(), "Generic");
+        assert_eq!(TranslationEngine::LegalDomain.to_string(), "Legal Domain");
+        assert_eq!(TranslationEngine::Custom.to_string(), "Custom");
+    }
+
+    #[test]
+    fn test_violation_type_display() {
+        assert_eq!(
+            ViolationType::MissingMandatoryTerm.to_string(),
+            "Missing Mandatory Term"
+        );
+        assert_eq!(
+            ViolationType::ForbiddenTermUsed.to_string(),
+            "Forbidden Term Used"
+        );
+    }
+
+    #[test]
+    fn test_term_preservation_modes() {
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+
+        // Test exact preservation
+        let translator_exact = TerminologyAwareTranslator::new(mt.clone())
+            .with_preservation_mode(TermPreservationMode::Exact);
+        assert_eq!(
+            translator_exact.preservation_mode,
+            TermPreservationMode::Exact
+        );
+
+        // Test glossary enforced
+        let translator_glossary = TerminologyAwareTranslator::new(mt.clone())
+            .with_preservation_mode(TermPreservationMode::GlossaryEnforced);
+        assert_eq!(
+            translator_glossary.preservation_mode,
+            TermPreservationMode::GlossaryEnforced
+        );
+    }
+
+    #[test]
+    fn test_mt_quality_threshold() {
+        let translator =
+            NeuralMachineTranslator::new(TranslationEngine::Generic).with_quality_threshold(0.85);
+
+        assert_eq!(translator.quality_threshold(), 0.85);
+    }
+
+    #[test]
+    fn test_mt_with_memory_fuzzy_threshold() {
+        let mt = NeuralMachineTranslator::new(TranslationEngine::Generic);
+        let memory = TranslationMemory::new();
+
+        let mt_with_memory =
+            MTWithMemory::new(mt, Arc::new(Mutex::new(memory))).with_fuzzy_threshold(0.9);
+
+        assert_eq!(mt_with_memory.fuzzy_threshold(), 0.9);
+    }
+
+    #[test]
+    fn test_workflow_clear() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let translation = MTTranslation {
+            text: "test".to_string(),
+            quality_score: 0.8,
+            source_locale: source,
+            target_locale: target,
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("test", translation);
+        assert_eq!(workflow.pending_count(), 1);
+
+        workflow.clear();
+        assert_eq!(workflow.pending_count(), 0);
+        assert_eq!(workflow.accepted_count(), 0);
+        assert_eq!(workflow.rejected_count(), 0);
+    }
+
+    #[test]
+    fn test_workflow_get_pending() {
+        let mut workflow = PostEditingWorkflow::new();
+
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let translation = MTTranslation {
+            text: "test".to_string(),
+            quality_score: 0.8,
+            source_locale: source,
+            target_locale: target,
+            engine: TranslationEngine::Generic,
+            alternatives: vec![],
+        };
+
+        workflow.add_for_review("original", translation);
+
+        let pending = workflow.get_pending(0);
+        assert!(pending.is_some());
+        assert_eq!(pending.unwrap().0, "original");
+    }
+}
+
+// ============================================================================
+// Cultural Adaptation (v0.2.6)
+// ============================================================================
+
+/// Cultural context category.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ContextCategory {
+    /// Social hierarchy and honorifics
+    SocialHierarchy,
+    /// Family structure and relationships
+    FamilyStructure,
+    /// Religious practices
+    ReligiousPractice,
+    /// Business etiquette
+    BusinessEtiquette,
+    /// Legal formality levels
+    LegalFormality,
+    /// Gender roles and expectations
+    GenderRoles,
+    /// Time perception (monochronic vs polychronic)
+    TimePerception,
+    /// Communication style (direct vs indirect)
+    CommunicationStyle,
+    /// Custom category
+    Custom(String),
+}
+
+impl std::fmt::Display for ContextCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContextCategory::SocialHierarchy => write!(f, "Social Hierarchy"),
+            ContextCategory::FamilyStructure => write!(f, "Family Structure"),
+            ContextCategory::ReligiousPractice => write!(f, "Religious Practice"),
+            ContextCategory::BusinessEtiquette => write!(f, "Business Etiquette"),
+            ContextCategory::LegalFormality => write!(f, "Legal Formality"),
+            ContextCategory::GenderRoles => write!(f, "Gender Roles"),
+            ContextCategory::TimePerception => write!(f, "Time Perception"),
+            ContextCategory::CommunicationStyle => write!(f, "Communication Style"),
+            ContextCategory::Custom(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+/// Cultural context annotation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalContext {
+    /// Locale this context applies to
+    pub locale: Locale,
+    /// Category of cultural context
+    pub category: ContextCategory,
+    /// Legal term or concept
+    pub term: String,
+    /// Cultural explanation
+    pub explanation: String,
+    /// Usage guidelines
+    pub guidelines: Vec<String>,
+    /// Related concepts in other cultures
+    pub cross_cultural_equivalents: HashMap<String, String>,
+}
+
+impl CulturalContext {
+    /// Creates a new cultural context annotation.
+    pub fn new(
+        locale: Locale,
+        category: ContextCategory,
+        term: impl Into<String>,
+        explanation: impl Into<String>,
+    ) -> Self {
+        Self {
+            locale,
+            category,
+            term: term.into(),
+            explanation: explanation.into(),
+            guidelines: Vec::new(),
+            cross_cultural_equivalents: HashMap::new(),
+        }
+    }
+
+    /// Adds a usage guideline.
+    pub fn add_guideline(&mut self, guideline: impl Into<String>) {
+        self.guidelines.push(guideline.into());
+    }
+
+    /// Adds a cross-cultural equivalent.
+    pub fn add_equivalent(&mut self, culture: impl Into<String>, equivalent: impl Into<String>) {
+        self.cross_cultural_equivalents
+            .insert(culture.into(), equivalent.into());
+    }
+
+    /// Builder pattern for adding guideline.
+    pub fn with_guideline(mut self, guideline: impl Into<String>) -> Self {
+        self.add_guideline(guideline);
+        self
+    }
+
+    /// Builder pattern for adding equivalent.
+    pub fn with_equivalent(
+        mut self,
+        culture: impl Into<String>,
+        equivalent: impl Into<String>,
+    ) -> Self {
+        self.add_equivalent(culture, equivalent);
+        self
+    }
+}
+
+/// Cultural context registry.
+#[derive(Debug, Clone, Default)]
+pub struct CulturalContextRegistry {
+    /// Contexts indexed by locale tag
+    contexts: HashMap<String, Vec<CulturalContext>>,
+}
+
+impl CulturalContextRegistry {
+    /// Creates a new cultural context registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default cultural contexts.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+        registry.add_default_contexts();
+        registry
+    }
+
+    /// Adds a cultural context.
+    pub fn add_context(&mut self, context: CulturalContext) {
+        self.contexts
+            .entry(context.locale.tag())
+            .or_default()
+            .push(context);
+    }
+
+    /// Gets all contexts for a locale.
+    pub fn get_contexts(&self, locale: &Locale) -> Vec<&CulturalContext> {
+        self.contexts
+            .get(&locale.tag())
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets contexts by category for a locale.
+    pub fn get_by_category(
+        &self,
+        locale: &Locale,
+        category: &ContextCategory,
+    ) -> Vec<&CulturalContext> {
+        self.get_contexts(locale)
+            .into_iter()
+            .filter(|c| &c.category == category)
+            .collect()
+    }
+
+    /// Finds context for a specific term.
+    pub fn find_term(&self, locale: &Locale, term: &str) -> Option<&CulturalContext> {
+        self.get_contexts(locale)
+            .into_iter()
+            .find(|c| c.term == term)
+    }
+
+    /// Adds default cultural contexts.
+    fn add_default_contexts(&mut self) {
+        // Japanese contexts
+        let ja_jp = Locale::new("ja").with_country("JP");
+        self.add_context(
+            CulturalContext::new(
+                ja_jp.clone(),
+                ContextCategory::SocialHierarchy,
+                "keigo",
+                "Honorific language system used in legal and business contexts to show respect",
+            )
+            .with_guideline(
+                "Use appropriate honorific forms when addressing parties of different status",
+            )
+            .with_guideline(
+                "Failure to use proper keigo may be seen as disrespectful in legal proceedings",
+            )
+            .with_equivalent("en-US", "formal address"),
+        );
+
+        self.add_context(
+            CulturalContext::new(
+                ja_jp.clone(),
+                ContextCategory::BusinessEtiquette,
+                "hanko",
+                "Personal seal used for legal authentication, equivalent to signature",
+            )
+            .with_guideline("Hanko is legally binding and often required for contracts")
+            .with_guideline("Company hanko (corporate seal) has special legal significance")
+            .with_equivalent("en-US", "signature")
+            .with_equivalent("zh-CN", "印章 (seal)"),
+        );
+
+        // Chinese contexts
+        let zh_cn = Locale::new("zh").with_script("Hans").with_country("CN");
+        self.add_context(
+            CulturalContext::new(
+                zh_cn.clone(),
+                ContextCategory::SocialHierarchy,
+                "guanxi",
+                "Network of relationships and mutual obligations crucial in business and legal matters",
+            )
+            .with_guideline("Understanding guanxi is essential for contract negotiations")
+            .with_guideline("Legal disputes may be resolved through guanxi rather than formal proceedings")
+            .with_equivalent("ja-JP", "人間関係 (human relationships)"),
+        );
+
+        // Arabic contexts
+        let ar_sa = Locale::new("ar").with_country("SA");
+        self.add_context(
+            CulturalContext::new(
+                ar_sa.clone(),
+                ContextCategory::ReligiousPractice,
+                "wasta",
+                "System of intercession and mediation in legal and business matters",
+            )
+            .with_guideline("Wasta can play a significant role in dispute resolution")
+            .with_guideline("Consider cultural expectations when drafting contracts")
+            .with_equivalent("zh-CN", "关系 (guanxi)"),
+        );
+
+        // Indian contexts
+        let hi_in = Locale::new("hi").with_country("IN");
+        self.add_context(
+            CulturalContext::new(
+                hi_in,
+                ContextCategory::FamilyStructure,
+                "joint family",
+                "Extended family system with legal implications for property and inheritance",
+            )
+            .with_guideline("Property law must account for joint family ownership structures")
+            .with_guideline("Inheritance differs from Western nuclear family assumptions"),
+        );
+    }
+
+    /// Returns the total number of contexts.
+    pub fn context_count(&self) -> usize {
+        self.contexts.values().map(|v| v.len()).sum()
+    }
+
+    /// Returns the number of locales with contexts.
+    pub fn locale_count(&self) -> usize {
+        self.contexts.len()
+    }
+}
+
+/// Local custom type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CustomType {
+    /// Marriage and family customs
+    Marriage,
+    /// Inheritance and succession
+    Inheritance,
+    /// Property ownership
+    Property,
+    /// Business practices
+    Business,
+    /// Dispute resolution
+    DisputeResolution,
+    /// Contract formation
+    Contract,
+}
+
+impl std::fmt::Display for CustomType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CustomType::Marriage => write!(f, "Marriage"),
+            CustomType::Inheritance => write!(f, "Inheritance"),
+            CustomType::Property => write!(f, "Property"),
+            CustomType::Business => write!(f, "Business"),
+            CustomType::DisputeResolution => write!(f, "Dispute Resolution"),
+            CustomType::Contract => write!(f, "Contract"),
+        }
+    }
+}
+
+/// Local custom.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalCustom {
+    /// Custom name
+    pub name: String,
+    /// Region where custom applies
+    pub region: String,
+    /// Locale
+    pub locale: Locale,
+    /// Type of custom
+    pub custom_type: CustomType,
+    /// Description
+    pub description: String,
+    /// Legal recognition level (0.0 = not recognized, 1.0 = fully recognized)
+    pub recognition_level: f32,
+    /// Statutory basis (if any)
+    pub statutory_basis: Option<String>,
+}
+
+impl LocalCustom {
+    /// Creates a new local custom.
+    pub fn new(
+        name: impl Into<String>,
+        region: impl Into<String>,
+        locale: Locale,
+        custom_type: CustomType,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            region: region.into(),
+            locale,
+            custom_type,
+            description: description.into(),
+            recognition_level: 0.5,
+            statutory_basis: None,
+        }
+    }
+
+    /// Sets recognition level.
+    pub fn with_recognition_level(mut self, level: f32) -> Self {
+        self.recognition_level = level.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets statutory basis.
+    pub fn with_statutory_basis(mut self, basis: impl Into<String>) -> Self {
+        self.statutory_basis = Some(basis.into());
+        self
+    }
+}
+
+/// Local custom registry.
+#[derive(Debug, Clone, Default)]
+pub struct LocalCustomRegistry {
+    /// Customs indexed by region
+    customs: HashMap<String, Vec<LocalCustom>>,
+}
+
+impl LocalCustomRegistry {
+    /// Creates a new local custom registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default customs.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+        registry.add_default_customs();
+        registry
+    }
+
+    /// Adds a custom.
+    pub fn add_custom(&mut self, custom: LocalCustom) {
+        self.customs
+            .entry(custom.region.clone())
+            .or_default()
+            .push(custom);
+    }
+
+    /// Gets customs for a region.
+    pub fn get_customs(&self, region: &str) -> Vec<&LocalCustom> {
+        self.customs
+            .get(region)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets customs by type.
+    pub fn get_by_type(&self, region: &str, custom_type: &CustomType) -> Vec<&LocalCustom> {
+        self.get_customs(region)
+            .into_iter()
+            .filter(|c| &c.custom_type == custom_type)
+            .collect()
+    }
+
+    /// Finds a specific custom by name.
+    pub fn find_custom(&self, region: &str, name: &str) -> Option<&LocalCustom> {
+        self.get_customs(region)
+            .into_iter()
+            .find(|c| c.name == name)
+    }
+
+    /// Adds default customs.
+    fn add_default_customs(&mut self) {
+        // Japanese customs
+        self.add_custom(
+            LocalCustom::new(
+                "Miai marriage",
+                "Japan",
+                Locale::new("ja").with_country("JP"),
+                CustomType::Marriage,
+                "Traditional arranged marriage introduction system with legal implications for family law",
+            )
+            .with_recognition_level(0.3),
+        );
+
+        self.add_custom(
+            LocalCustom::new(
+                "Ie system",
+                "Japan",
+                Locale::new("ja").with_country("JP"),
+                CustomType::Inheritance,
+                "Traditional household system affecting inheritance and family law",
+            )
+            .with_recognition_level(0.4)
+            .with_statutory_basis("Civil Code Article 897 (family grave inheritance)"),
+        );
+
+        // Chinese customs
+        self.add_custom(
+            LocalCustom::new(
+                "Red packet custom",
+                "China",
+                Locale::new("zh").with_script("Hans").with_country("CN"),
+                CustomType::Business,
+                "Monetary gift custom in business relationships and contracts",
+            )
+            .with_recognition_level(0.6),
+        );
+
+        // Indian customs
+        self.add_custom(
+            LocalCustom::new(
+                "Hindu Undivided Family",
+                "India",
+                Locale::new("hi").with_country("IN"),
+                CustomType::Property,
+                "Joint family property ownership system with tax and inheritance implications",
+            )
+            .with_recognition_level(1.0)
+            .with_statutory_basis("Hindu Succession Act, 1956"),
+        );
+
+        // Islamic customs
+        self.add_custom(
+            LocalCustom::new(
+                "Mahr",
+                "Saudi Arabia",
+                Locale::new("ar").with_country("SA"),
+                CustomType::Marriage,
+                "Mandatory marriage gift from groom to bride under Islamic law",
+            )
+            .with_recognition_level(1.0)
+            .with_statutory_basis("Sharia law"),
+        );
+
+        // Native American customs (US)
+        self.add_custom(
+            LocalCustom::new(
+                "Tribal sovereignty",
+                "United States",
+                Locale::new("en").with_country("US"),
+                CustomType::DisputeResolution,
+                "Tribal courts have jurisdiction over certain matters on reservations",
+            )
+            .with_recognition_level(1.0)
+            .with_statutory_basis("Indian Civil Rights Act of 1968"),
+        );
+    }
+
+    /// Returns the total number of customs.
+    pub fn custom_count(&self) -> usize {
+        self.customs.values().map(|v| v.len()).sum()
+    }
+
+    /// Returns the number of regions.
+    pub fn region_count(&self) -> usize {
+        self.customs.len()
+    }
+}
+
+/// Religious law system type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ReligiousLawType {
+    /// Islamic law (Sharia)
+    Islamic,
+    /// Jewish law (Halakha)
+    Jewish,
+    /// Canon law (Catholic)
+    Canon,
+    /// Hindu law
+    Hindu,
+    /// Buddhist law (Dharma)
+    Buddhist,
+}
+
+impl std::fmt::Display for ReligiousLawType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReligiousLawType::Islamic => write!(f, "Islamic Law (Sharia)"),
+            ReligiousLawType::Jewish => write!(f, "Jewish Law (Halakha)"),
+            ReligiousLawType::Canon => write!(f, "Canon Law"),
+            ReligiousLawType::Hindu => write!(f, "Hindu Law"),
+            ReligiousLawType::Buddhist => write!(f, "Buddhist Law (Dharma)"),
+        }
+    }
+}
+
+/// Religious law system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligiousLawSystem {
+    /// Type of religious law
+    pub law_type: ReligiousLawType,
+    /// Jurisdictions where this system is recognized
+    pub jurisdictions: Vec<String>,
+    /// Integration level with civil law (0.0 = separate, 1.0 = fully integrated)
+    pub integration_level: f32,
+    /// Key principles
+    pub principles: Vec<String>,
+    /// Sources of authority
+    pub sources: Vec<String>,
+    /// Civil law equivalents
+    pub civil_equivalents: HashMap<String, String>,
+}
+
+impl ReligiousLawSystem {
+    /// Creates a new religious law system.
+    pub fn new(law_type: ReligiousLawType) -> Self {
+        Self {
+            law_type,
+            jurisdictions: Vec::new(),
+            integration_level: 0.5,
+            principles: Vec::new(),
+            sources: Vec::new(),
+            civil_equivalents: HashMap::new(),
+        }
+    }
+
+    /// Adds a jurisdiction.
+    pub fn add_jurisdiction(&mut self, jurisdiction: impl Into<String>) {
+        self.jurisdictions.push(jurisdiction.into());
+    }
+
+    /// Sets integration level.
+    pub fn with_integration_level(mut self, level: f32) -> Self {
+        self.integration_level = level.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds a principle.
+    pub fn with_principle(mut self, principle: impl Into<String>) -> Self {
+        self.principles.push(principle.into());
+        self
+    }
+
+    /// Adds a source.
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        self.sources.push(source.into());
+        self
+    }
+
+    /// Adds a civil law equivalent.
+    pub fn with_equivalent(
+        mut self,
+        religious_concept: impl Into<String>,
+        civil_equivalent: impl Into<String>,
+    ) -> Self {
+        self.civil_equivalents
+            .insert(religious_concept.into(), civil_equivalent.into());
+        self
+    }
+
+    /// Creates an Islamic law system.
+    pub fn islamic() -> Self {
+        Self::new(ReligiousLawType::Islamic)
+            .with_integration_level(0.9)
+            .with_principle("Quran as primary source of law")
+            .with_principle("Hadith (Prophet's traditions) as secondary source")
+            .with_principle("Ijma (scholarly consensus)")
+            .with_principle("Qiyas (analogical reasoning)")
+            .with_source("Quran")
+            .with_source("Sunnah")
+            .with_source("Scholarly interpretations (fiqh)")
+            .with_equivalent("mahr", "marriage settlement")
+            .with_equivalent("talaq", "divorce")
+            .with_equivalent("zakat", "charitable tax")
+            .with_equivalent("riba", "usury/interest prohibition")
+    }
+
+    /// Creates a Jewish law system.
+    pub fn jewish() -> Self {
+        Self::new(ReligiousLawType::Jewish)
+            .with_integration_level(0.3)
+            .with_principle("Torah as divine law")
+            .with_principle("Talmudic interpretation")
+            .with_principle("Rabbinical authority")
+            .with_source("Torah (Written Law)")
+            .with_source("Talmud (Oral Law)")
+            .with_source("Responsa literature")
+            .with_equivalent("get", "religious divorce decree")
+            .with_equivalent("ketubah", "marriage contract")
+            .with_equivalent("heter iska", "business partnership permitting profit")
+    }
+
+    /// Creates a Hindu law system.
+    pub fn hindu() -> Self {
+        Self::new(ReligiousLawType::Hindu)
+            .with_integration_level(0.7)
+            .with_principle("Dharma (righteous duty)")
+            .with_principle("Karma (action and consequence)")
+            .with_principle("Varna (social order)")
+            .with_source("Vedas")
+            .with_source("Smritis (legal texts)")
+            .with_source("Dharmashastra")
+            .with_equivalent("vivaha", "marriage")
+            .with_equivalent("sampatti", "property")
+    }
+}
+
+/// Religious law registry.
+#[derive(Debug, Clone, Default)]
+pub struct ReligiousLawRegistry {
+    /// Systems indexed by type
+    systems: HashMap<ReligiousLawType, ReligiousLawSystem>,
+}
+
+impl ReligiousLawRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default systems.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        let mut islamic = ReligiousLawSystem::islamic();
+        islamic.add_jurisdiction("Saudi Arabia");
+        islamic.add_jurisdiction("Iran");
+        islamic.add_jurisdiction("Pakistan");
+        islamic.add_jurisdiction("UAE");
+        registry.add_system(islamic);
+
+        let mut jewish = ReligiousLawSystem::jewish();
+        jewish.add_jurisdiction("Israel");
+        registry.add_system(jewish);
+
+        let mut hindu = ReligiousLawSystem::hindu();
+        hindu.add_jurisdiction("India");
+        hindu.add_jurisdiction("Nepal");
+        registry.add_system(hindu);
+
+        registry
+    }
+
+    /// Adds a religious law system.
+    pub fn add_system(&mut self, system: ReligiousLawSystem) {
+        self.systems.insert(system.law_type, system);
+    }
+
+    /// Gets a system by type.
+    pub fn get_system(&self, law_type: ReligiousLawType) -> Option<&ReligiousLawSystem> {
+        self.systems.get(&law_type)
+    }
+
+    /// Gets all systems for a jurisdiction.
+    pub fn get_by_jurisdiction(&self, jurisdiction: &str) -> Vec<&ReligiousLawSystem> {
+        self.systems
+            .values()
+            .filter(|s| s.jurisdictions.iter().any(|j| j == jurisdiction))
+            .collect()
+    }
+
+    /// Returns the number of systems.
+    pub fn system_count(&self) -> usize {
+        self.systems.len()
+    }
+}
+
+/// Indigenous legal tradition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndigenousLawSystem {
+    /// Name of indigenous people
+    pub people_name: String,
+    /// Geographic region
+    pub region: String,
+    /// Legal principles
+    pub principles: Vec<String>,
+    /// Dispute resolution methods
+    pub dispute_resolution: Vec<String>,
+    /// Property concepts
+    pub property_concepts: Vec<String>,
+    /// Recognition status in state law
+    pub state_recognition: bool,
+    /// Treaty or statutory basis
+    pub legal_basis: Option<String>,
+}
+
+impl IndigenousLawSystem {
+    /// Creates a new indigenous law system.
+    pub fn new(people_name: impl Into<String>, region: impl Into<String>) -> Self {
+        Self {
+            people_name: people_name.into(),
+            region: region.into(),
+            principles: Vec::new(),
+            dispute_resolution: Vec::new(),
+            property_concepts: Vec::new(),
+            state_recognition: false,
+            legal_basis: None,
+        }
+    }
+
+    /// Adds a principle.
+    pub fn with_principle(mut self, principle: impl Into<String>) -> Self {
+        self.principles.push(principle.into());
+        self
+    }
+
+    /// Adds a dispute resolution method.
+    pub fn with_dispute_resolution(mut self, method: impl Into<String>) -> Self {
+        self.dispute_resolution.push(method.into());
+        self
+    }
+
+    /// Adds a property concept.
+    pub fn with_property_concept(mut self, concept: impl Into<String>) -> Self {
+        self.property_concepts.push(concept.into());
+        self
+    }
+
+    /// Sets state recognition.
+    pub fn with_state_recognition(mut self, recognized: bool) -> Self {
+        self.state_recognition = recognized;
+        self
+    }
+
+    /// Sets legal basis.
+    pub fn with_legal_basis(mut self, basis: impl Into<String>) -> Self {
+        self.legal_basis = Some(basis.into());
+        self
+    }
+}
+
+/// Indigenous law registry.
+#[derive(Debug, Clone, Default)]
+pub struct IndigenousLawRegistry {
+    /// Systems indexed by people name
+    systems: HashMap<String, IndigenousLawSystem>,
+}
+
+impl IndigenousLawRegistry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a registry with default systems.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Native American (Navajo Nation)
+        registry.add_system(
+            IndigenousLawSystem::new("Navajo Nation", "Southwestern United States")
+                .with_principle("Hózhǫ́ (harmony and balance)")
+                .with_principle("K'é (kinship and clan relationships)")
+                .with_principle("Restorative justice over punitive measures")
+                .with_dispute_resolution("Peacemaking circles")
+                .with_dispute_resolution("Talking circles")
+                .with_property_concept("Communal land ownership")
+                .with_property_concept("Grazing permits")
+                .with_state_recognition(true)
+                .with_legal_basis("Treaty of 1868; Navajo Nation Code"),
+        );
+
+        // Māori (New Zealand)
+        registry.add_system(
+            IndigenousLawSystem::new("Māori", "New Zealand")
+                .with_principle("Tikanga (customary law)")
+                .with_principle("Mana (authority and prestige)")
+                .with_principle("Utu (reciprocity and balance)")
+                .with_dispute_resolution("Hui (community meetings)")
+                .with_dispute_resolution("Rūnanga (tribal councils)")
+                .with_property_concept("Whenua (ancestral land)")
+                .with_property_concept("Kaitiakitanga (guardianship)")
+                .with_state_recognition(true)
+                .with_legal_basis("Treaty of Waitangi 1840; Te Ture Whenua Māori Act 1993"),
+        );
+
+        // Aboriginal Australian
+        registry.add_system(
+            IndigenousLawSystem::new("Aboriginal Australians", "Australia")
+                .with_principle("Dreaming (creation law)")
+                .with_principle("Country (connection to land)")
+                .with_principle("Kinship obligations")
+                .with_dispute_resolution("Elder councils")
+                .with_dispute_resolution("Sorry business (reconciliation)")
+                .with_property_concept("Native title")
+                .with_property_concept("Sacred sites")
+                .with_state_recognition(true)
+                .with_legal_basis("Native Title Act 1993"),
+        );
+
+        // Inuit (Canada)
+        registry.add_system(
+            IndigenousLawSystem::new("Inuit", "Northern Canada")
+                .with_principle("Inuit Qaujimajatuqangit (traditional knowledge)")
+                .with_principle("Collective decision-making")
+                .with_principle("Environmental stewardship")
+                .with_dispute_resolution("Elders' councils")
+                .with_dispute_resolution("Community consensus")
+                .with_property_concept("Land claims agreements")
+                .with_property_concept("Harvesting rights")
+                .with_state_recognition(true)
+                .with_legal_basis("Nunavut Land Claims Agreement 1993"),
+        );
+
+        registry
+    }
+
+    /// Adds a system.
+    pub fn add_system(&mut self, system: IndigenousLawSystem) {
+        self.systems.insert(system.people_name.clone(), system);
+    }
+
+    /// Gets a system by people name.
+    pub fn get_system(&self, people_name: &str) -> Option<&IndigenousLawSystem> {
+        self.systems.get(people_name)
+    }
+
+    /// Gets all systems for a region.
+    pub fn get_by_region(&self, region: &str) -> Vec<&IndigenousLawSystem> {
+        self.systems
+            .values()
+            .filter(|s| s.region.to_lowercase().contains(&region.to_lowercase()))
+            .collect()
+    }
+
+    /// Gets all state-recognized systems.
+    pub fn get_recognized(&self) -> Vec<&IndigenousLawSystem> {
+        self.systems
+            .values()
+            .filter(|s| s.state_recognition)
+            .collect()
+    }
+
+    /// Returns the number of systems.
+    pub fn system_count(&self) -> usize {
+        self.systems.len()
+    }
+}
+
+/// Colonial legacy type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColonialPower {
+    /// British Empire
+    British,
+    /// French Empire
+    French,
+    /// Spanish Empire
+    Spanish,
+    /// Portuguese Empire
+    Portuguese,
+    /// Dutch Empire
+    Dutch,
+    /// German Empire
+    German,
+    /// Belgian Empire
+    Belgian,
+    /// Italian Empire
+    Italian,
+}
+
+impl std::fmt::Display for ColonialPower {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColonialPower::British => write!(f, "British"),
+            ColonialPower::French => write!(f, "French"),
+            ColonialPower::Spanish => write!(f, "Spanish"),
+            ColonialPower::Portuguese => write!(f, "Portuguese"),
+            ColonialPower::Dutch => write!(f, "Dutch"),
+            ColonialPower::German => write!(f, "German"),
+            ColonialPower::Belgian => write!(f, "Belgian"),
+            ColonialPower::Italian => write!(f, "Italian"),
+        }
+    }
+}
+
+/// Colonial legacy mapping.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColonialLegacy {
+    /// Former colonial power
+    pub colonial_power: ColonialPower,
+    /// Modern jurisdiction
+    pub jurisdiction: String,
+    /// Colonial legal concepts still in use
+    pub retained_concepts: Vec<String>,
+    /// Hybrid legal concepts (colonial + indigenous)
+    pub hybrid_concepts: HashMap<String, String>,
+    /// Decolonization reforms
+    pub reforms: Vec<String>,
+}
+
+impl ColonialLegacy {
+    /// Creates a new colonial legacy.
+    pub fn new(colonial_power: ColonialPower, jurisdiction: impl Into<String>) -> Self {
+        Self {
+            colonial_power,
+            jurisdiction: jurisdiction.into(),
+            retained_concepts: Vec::new(),
+            hybrid_concepts: HashMap::new(),
+            reforms: Vec::new(),
+        }
+    }
+
+    /// Adds a retained concept.
+    pub fn with_retained_concept(mut self, concept: impl Into<String>) -> Self {
+        self.retained_concepts.push(concept.into());
+        self
+    }
+
+    /// Adds a hybrid concept.
+    pub fn with_hybrid_concept(
+        mut self,
+        colonial: impl Into<String>,
+        indigenous: impl Into<String>,
+    ) -> Self {
+        self.hybrid_concepts
+            .insert(colonial.into(), indigenous.into());
+        self
+    }
+
+    /// Adds a reform.
+    pub fn with_reform(mut self, reform: impl Into<String>) -> Self {
+        self.reforms.push(reform.into());
+        self
+    }
+}
+
+/// Colonial legacy mapper.
+#[derive(Debug, Clone, Default)]
+pub struct ColonialLegacyMapper {
+    /// Legacies indexed by jurisdiction
+    legacies: HashMap<String, ColonialLegacy>,
+}
+
+impl ColonialLegacyMapper {
+    /// Creates a new mapper.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a mapper with default legacies.
+    pub fn with_defaults() -> Self {
+        let mut mapper = Self::new();
+
+        // India (British)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::British, "India")
+                .with_retained_concept("Common law system")
+                .with_retained_concept("Adversarial legal procedure")
+                .with_retained_concept("Judicial precedent")
+                .with_retained_concept("Westminster parliamentary system")
+                .with_hybrid_concept("Anglo-Hindu law", "Hindu personal law")
+                .with_hybrid_concept("Anglo-Muhammadan law", "Islamic personal law")
+                .with_reform("Constitution of India 1950 (republican)")
+                .with_reform("Hindu Code Bills (modernization of personal law)"),
+        );
+
+        // Hong Kong (British)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::British, "Hong Kong")
+                .with_retained_concept("Common law")
+                .with_retained_concept("Basic Law")
+                .with_hybrid_concept(
+                    "One country, two systems",
+                    "Chinese sovereignty + British legal system",
+                )
+                .with_reform("Handover to China 1997"),
+        );
+
+        // Algeria (French)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::French, "Algeria")
+                .with_retained_concept("Civil law system")
+                .with_retained_concept("Code-based legal framework")
+                .with_hybrid_concept("French civil law + Sharia", "Personal status law")
+                .with_reform("Arabization of legal system post-independence")
+                .with_reform("Family Code 1984 (Islamic family law)"),
+        );
+
+        // Philippines (Spanish then American)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::Spanish, "Philippines")
+                .with_retained_concept("Civil law foundation")
+                .with_retained_concept("Catholic Canon law influence")
+                .with_hybrid_concept(
+                    "Spanish civil law + American common law",
+                    "Mixed legal system",
+                )
+                .with_reform("Constitution of 1987 (post-Marcos democratic reforms)"),
+        );
+
+        // Brazil (Portuguese)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::Portuguese, "Brazil")
+                .with_retained_concept("Civil law system")
+                .with_retained_concept("Inquisitorial procedure")
+                .with_reform("Constitution of 1988 (democratic transition)")
+                .with_reform("New Civil Code 2002"),
+        );
+
+        // Indonesia (Dutch)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::Dutch, "Indonesia")
+                .with_retained_concept("Civil law system (based on Dutch Civil Code)")
+                .with_hybrid_concept("Adat law", "Customary indigenous law")
+                .with_hybrid_concept("Islamic law in Aceh", "Special autonomy for Islamic law")
+                .with_reform("Constitution of 1945 (Pancasila principles)"),
+        );
+
+        // Rwanda (Belgian then German)
+        mapper.add_legacy(
+            ColonialLegacy::new(ColonialPower::Belgian, "Rwanda")
+                .with_retained_concept("Civil law system")
+                .with_hybrid_concept(
+                    "Gacaca courts",
+                    "Traditional community justice + modern genocide trials",
+                )
+                .with_reform("Post-genocide justice system reforms"),
+        );
+
+        mapper
+    }
+
+    /// Adds a legacy.
+    pub fn add_legacy(&mut self, legacy: ColonialLegacy) {
+        self.legacies.insert(legacy.jurisdiction.clone(), legacy);
+    }
+
+    /// Gets legacy for a jurisdiction.
+    pub fn get_legacy(&self, jurisdiction: &str) -> Option<&ColonialLegacy> {
+        self.legacies.get(jurisdiction)
+    }
+
+    /// Gets all legacies for a colonial power.
+    pub fn get_by_colonial_power(&self, power: ColonialPower) -> Vec<&ColonialLegacy> {
+        self.legacies
+            .values()
+            .filter(|l| l.colonial_power == power)
+            .collect()
+    }
+
+    /// Returns the number of mapped legacies.
+    pub fn legacy_count(&self) -> usize {
+        self.legacies.len()
+    }
+}
+
+// ============================================================================
+// v0.2.7: Accessibility Features (Enhanced)
+// ============================================================================
+
+/// Simplification strategy for plain language generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SimplificationStrategy {
+    /// Replace legal jargon with common terms
+    ReplaceJargon,
+    /// Break long sentences into shorter ones
+    ShortenSentences,
+    /// Remove passive voice
+    ActiveVoice,
+    /// Add explanatory context
+    AddContext,
+    /// Simplify complex grammatical structures
+    SimplifyGrammar,
+}
+
+impl std::fmt::Display for SimplificationStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SimplificationStrategy::ReplaceJargon => write!(f, "Replace Jargon"),
+            SimplificationStrategy::ShortenSentences => write!(f, "Shorten Sentences"),
+            SimplificationStrategy::ActiveVoice => write!(f, "Active Voice"),
+            SimplificationStrategy::AddContext => write!(f, "Add Context"),
+            SimplificationStrategy::SimplifyGrammar => write!(f, "Simplify Grammar"),
+        }
+    }
+}
+
+/// Plain language generator with AI-assisted simplification.
+#[derive(Debug, Clone)]
+pub struct PlainLanguageGenerator {
+    /// Target reading level (Flesch-Kincaid grade)
+    target_grade: f64,
+    /// Simplification strategies to apply
+    strategies: Vec<SimplificationStrategy>,
+    /// Custom jargon replacements
+    jargon_map: HashMap<String, String>,
+    /// Locale for language-specific simplification
+    locale: Locale,
+}
+
+impl PlainLanguageGenerator {
+    /// Creates a new plain language generator.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_grade` - Target reading level (Flesch-Kincaid grade, e.g., 8.0 for 8th grade)
+    /// * `locale` - Locale for language-specific simplification
+    pub fn new(target_grade: f64, locale: Locale) -> Self {
+        Self {
+            target_grade,
+            strategies: vec![
+                SimplificationStrategy::ReplaceJargon,
+                SimplificationStrategy::ShortenSentences,
+                SimplificationStrategy::SimplifyGrammar,
+            ],
+            jargon_map: HashMap::new(),
+            locale,
+        }
+    }
+
+    /// Adds a custom jargon replacement.
+    pub fn add_jargon_replacement(
+        mut self,
+        legal_term: impl Into<String>,
+        plain_term: impl Into<String>,
+    ) -> Self {
+        self.jargon_map.insert(legal_term.into(), plain_term.into());
+        self
+    }
+
+    /// Sets the simplification strategies.
+    pub fn with_strategies(mut self, strategies: Vec<SimplificationStrategy>) -> Self {
+        self.strategies = strategies;
+        self
+    }
+
+    /// Simplifies legal text to plain language.
+    pub fn simplify(&self, text: &str) -> String {
+        let mut result = text.to_string();
+
+        for strategy in &self.strategies {
+            result = match strategy {
+                SimplificationStrategy::ReplaceJargon => self.replace_jargon(&result),
+                SimplificationStrategy::ShortenSentences => self.shorten_sentences(&result),
+                SimplificationStrategy::ActiveVoice => self.convert_to_active_voice(&result),
+                SimplificationStrategy::AddContext => self.add_context(&result),
+                SimplificationStrategy::SimplifyGrammar => self.simplify_grammar(&result),
+            };
+        }
+
+        result
+    }
+
+    fn replace_jargon(&self, text: &str) -> String {
+        let mut result = text.to_string();
+
+        // Apply custom jargon replacements
+        for (legal_term, plain_term) in &self.jargon_map {
+            result = result.replace(legal_term, plain_term);
+        }
+
+        // Apply default replacements based on locale
+        let default_replacements = self.get_default_replacements();
+        for (legal_term, plain_term) in default_replacements {
+            result = result.replace(legal_term, plain_term);
+        }
+
+        result
+    }
+
+    fn get_default_replacements(&self) -> Vec<(&'static str, &'static str)> {
+        match self.locale.language.as_str() {
+            "en" => vec![
+                ("hereinafter", "from now on"),
+                ("whereas", "because"),
+                ("pursuant to", "according to"),
+                ("notwithstanding", "despite"),
+                ("forthwith", "immediately"),
+                ("heretofore", "before now"),
+                ("hereby", "by this document"),
+                ("aforementioned", "mentioned above"),
+                ("commence", "start"),
+                ("terminate", "end"),
+            ],
+            "ja" => vec![
+                ("以下", "これから"),
+                ("前述", "上で述べた"),
+                ("規定", "ルール"),
+                ("条項", "項目"),
+            ],
+            _ => vec![],
+        }
+    }
+
+    fn shorten_sentences(&self, text: &str) -> String {
+        // Split long sentences at common conjunctions
+        text.replace(", and ", ". Also, ")
+            .replace(", but ", ". However, ")
+            .replace("; ", ". ")
+    }
+
+    fn convert_to_active_voice(&self, text: &str) -> String {
+        // Simple passive voice detection and conversion
+        text.replace("is required to", "must")
+            .replace("shall be", "will be")
+            .replace("is prohibited from", "cannot")
+    }
+
+    fn add_context(&self, text: &str) -> String {
+        // Add explanatory context for complex terms (simplified implementation)
+        text.replace("liability", "liability (legal responsibility)")
+            .replace("indemnify", "indemnify (compensate for loss or damage)")
+    }
+
+    fn simplify_grammar(&self, text: &str) -> String {
+        // Remove unnecessary legal formality
+        text.replace("shall", "will")
+            .replace("may not", "cannot")
+            .replace("such", "this")
+            .replace("said", "the")
+    }
+
+    /// Estimates reading level of text.
+    pub fn estimate_reading_level(&self, text: &str) -> f64 {
+        let assessor = ReadingLevelAssessor::new();
+        assessor.flesch_kincaid_grade(text) as f64
+    }
+
+    /// Checks if text meets target reading level.
+    pub fn meets_target(&self, text: &str) -> bool {
+        self.estimate_reading_level(text) <= self.target_grade
+    }
+}
+
+/// Reading level to adjust to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TargetReadingLevel {
+    /// Elementary (grades 3-5, Flesch-Kincaid 3-5)
+    Elementary,
+    /// Middle school (grades 6-8, Flesch-Kincaid 6-8)
+    MiddleSchool,
+    /// High school (grades 9-12, Flesch-Kincaid 9-12)
+    HighSchool,
+    /// College (undergraduate, Flesch-Kincaid 13-16)
+    College,
+    /// Professional (graduate+, Flesch-Kincaid 16+)
+    Professional,
+}
+
+impl TargetReadingLevel {
+    /// Returns the Flesch-Kincaid grade level.
+    pub fn grade_level(&self) -> f64 {
+        match self {
+            TargetReadingLevel::Elementary => 4.0,
+            TargetReadingLevel::MiddleSchool => 7.0,
+            TargetReadingLevel::HighSchool => 10.0,
+            TargetReadingLevel::College => 14.0,
+            TargetReadingLevel::Professional => 18.0,
+        }
+    }
+}
+
+impl std::fmt::Display for TargetReadingLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetReadingLevel::Elementary => write!(f, "Elementary (grades 3-5)"),
+            TargetReadingLevel::MiddleSchool => write!(f, "Middle School (grades 6-8)"),
+            TargetReadingLevel::HighSchool => write!(f, "High School (grades 9-12)"),
+            TargetReadingLevel::College => write!(f, "College (grades 13-16)"),
+            TargetReadingLevel::Professional => write!(f, "Professional (graduate+)"),
+        }
+    }
+}
+
+/// Reading level adjuster for adaptive content.
+#[derive(Debug, Clone)]
+pub struct ReadingLevelAdjuster {
+    /// Target reading level
+    target_level: TargetReadingLevel,
+    /// Plain language generator
+    generator: PlainLanguageGenerator,
+    /// Maximum iterations for adjustment
+    max_iterations: usize,
+}
+
+impl ReadingLevelAdjuster {
+    /// Creates a new reading level adjuster.
+    pub fn new(target_level: TargetReadingLevel, locale: Locale) -> Self {
+        let generator = PlainLanguageGenerator::new(target_level.grade_level(), locale);
+        Self {
+            target_level,
+            generator,
+            max_iterations: 3,
+        }
+    }
+
+    /// Sets the maximum iterations for adjustment.
+    pub fn with_max_iterations(mut self, max_iterations: usize) -> Self {
+        self.max_iterations = max_iterations;
+        self
+    }
+
+    /// Adds a custom jargon replacement.
+    pub fn add_jargon_replacement(
+        mut self,
+        legal_term: impl Into<String>,
+        plain_term: impl Into<String>,
+    ) -> Self {
+        self.generator = self
+            .generator
+            .add_jargon_replacement(legal_term, plain_term);
+        self
+    }
+
+    /// Adjusts text to target reading level.
+    pub fn adjust(&self, text: &str) -> AdjustedText {
+        let original_level = self.generator.estimate_reading_level(text);
+        let mut current_text = text.to_string();
+        let mut iterations = 0;
+
+        while iterations < self.max_iterations
+            && !self.generator.meets_target(&current_text)
+            && iterations < 10
+        {
+            current_text = self.generator.simplify(&current_text);
+            iterations += 1;
+        }
+
+        let final_level = self.generator.estimate_reading_level(&current_text);
+
+        AdjustedText {
+            original: text.to_string(),
+            adjusted: current_text,
+            original_level,
+            final_level,
+            target_level: self.target_level.grade_level(),
+            iterations,
+            meets_target: final_level <= self.target_level.grade_level(),
+        }
+    }
+}
+
+/// Adjusted text with reading level information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdjustedText {
+    /// Original text
+    pub original: String,
+    /// Adjusted text
+    pub adjusted: String,
+    /// Original reading level
+    pub original_level: f64,
+    /// Final reading level after adjustment
+    pub final_level: f64,
+    /// Target reading level
+    pub target_level: f64,
+    /// Number of iterations performed
+    pub iterations: usize,
+    /// Whether the adjusted text meets the target level
+    pub meets_target: bool,
+}
+
+impl AdjustedText {
+    /// Returns improvement in grade levels.
+    pub fn improvement(&self) -> f64 {
+        self.original_level - self.final_level
+    }
+}
+
+/// WCAG conformance level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum WCAGLevel {
+    /// Level A (minimum)
+    A,
+    /// Level AA (mid-range)
+    AA,
+    /// Level AAA (highest)
+    AAA,
+}
+
+impl std::fmt::Display for WCAGLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WCAGLevel::A => write!(f, "WCAG Level A"),
+            WCAGLevel::AA => write!(f, "WCAG Level AA"),
+            WCAGLevel::AAA => write!(f, "WCAG Level AAA"),
+        }
+    }
+}
+
+/// Screen reader optimizer with enhanced WCAG compliance.
+#[derive(Debug, Clone)]
+pub struct ScreenReaderOptimizer {
+    /// Target WCAG level
+    wcag_level: WCAGLevel,
+    /// Include skip links
+    include_skip_links: bool,
+    /// Add landmark roles
+    add_landmarks: bool,
+    /// Locale for language-specific optimization
+    locale: Locale,
+}
+
+impl ScreenReaderOptimizer {
+    /// Creates a new screen reader optimizer.
+    pub fn new(wcag_level: WCAGLevel, locale: Locale) -> Self {
+        Self {
+            wcag_level,
+            include_skip_links: true,
+            add_landmarks: true,
+            locale,
+        }
+    }
+
+    /// Sets whether to include skip links.
+    pub fn with_skip_links(mut self, include: bool) -> Self {
+        self.include_skip_links = include;
+        self
+    }
+
+    /// Sets whether to add landmark roles.
+    pub fn with_landmarks(mut self, add: bool) -> Self {
+        self.add_landmarks = add;
+        self
+    }
+
+    /// Optimizes HTML for screen readers.
+    pub fn optimize_html(&self, html: &str) -> String {
+        let mut result = html.to_string();
+
+        // Add language attribute
+        if !result.contains("<html") {
+            result = format!(
+                "<html lang=\"{}\">\n{}\n</html>",
+                self.locale.language, result
+            );
+        }
+
+        // Add skip links
+        if self.include_skip_links {
+            let skip_link = self.generate_skip_link();
+            result = format!("{}\n{}", skip_link, result);
+        }
+
+        // Add landmark roles
+        if self.add_landmarks {
+            result = self.add_landmark_roles(&result);
+        }
+
+        // Enhance headings with hierarchy
+        result = self.enhance_headings(&result);
+
+        // Add alt text reminders for images
+        result = self.add_image_alt_reminders(&result);
+
+        result
+    }
+
+    fn generate_skip_link(&self) -> String {
+        let link_text = match self.locale.language.as_str() {
+            "en" => "Skip to main content",
+            "ja" => "メインコンテンツへスキップ",
+            "es" => "Saltar al contenido principal",
+            "fr" => "Passer au contenu principal",
+            "de" => "Zum Hauptinhalt springen",
+            _ => "Skip to main content",
+        };
+
+        format!(
+            "<a href=\"#main-content\" class=\"skip-link\">{}</a>",
+            link_text
+        )
+    }
+
+    fn add_landmark_roles(&self, html: &str) -> String {
+        html.replace("<nav>", "<nav role=\"navigation\">")
+            .replace("<main>", "<main role=\"main\" id=\"main-content\">")
+            .replace("<header>", "<header role=\"banner\">")
+            .replace("<footer>", "<footer role=\"contentinfo\">")
+            .replace("<aside>", "<aside role=\"complementary\">")
+            .replace("<form>", "<form role=\"form\">")
+    }
+
+    fn enhance_headings(&self, html: &str) -> String {
+        // Ensure proper heading hierarchy (simplified implementation)
+        html.to_string()
+    }
+
+    fn add_image_alt_reminders(&self, html: &str) -> String {
+        // Mark images without alt text
+        html.replace("<img ", "<img alt=\"[ADD DESCRIPTION]\" ")
+    }
+
+    /// Generates accessible legal document structure.
+    pub fn generate_document_structure(&self, title: &str, sections: Vec<(&str, &str)>) -> String {
+        let mut html = format!(
+            "<!DOCTYPE html>\n<html lang=\"{}\">\n<head>\n<meta charset=\"UTF-8\">\n<title>{}</title>\n</head>\n<body>\n",
+            self.locale.language, title
+        );
+
+        if self.include_skip_links {
+            html.push_str(&self.generate_skip_link());
+            html.push('\n');
+        }
+
+        html.push_str("<main role=\"main\" id=\"main-content\">\n");
+        html.push_str(&format!("<h1>{}</h1>\n", title));
+
+        for (section_title, section_content) in sections {
+            html.push_str(&format!(
+                "<section>\n<h2>{}</h2>\n<p>{}</p>\n</section>\n",
+                section_title, section_content
+            ));
+        }
+
+        html.push_str("</main>\n</body>\n</html>");
+        html
+    }
+
+    /// Checks WCAG compliance.
+    pub fn check_compliance(&self, html: &str) -> ComplianceReport {
+        let mut issues = Vec::new();
+
+        // Check for language attribute
+        if !html.contains("lang=") {
+            issues.push("Missing language attribute on html element".to_string());
+        }
+
+        // Check for skip links (AA and AAA)
+        if matches!(self.wcag_level, WCAGLevel::AA | WCAGLevel::AAA)
+            && !html.contains("skip-link")
+            && !html.contains("Skip to")
+        {
+            issues.push("Missing skip link (required for AA/AAA)".to_string());
+        }
+
+        // Check for heading hierarchy
+        if !html.contains("<h1") {
+            issues.push("Missing h1 heading (main page title)".to_string());
+        }
+
+        // Check for landmark roles
+        if self.add_landmarks && !html.contains("role=") {
+            issues.push("Missing ARIA landmark roles".to_string());
+        }
+
+        let is_compliant = issues.is_empty();
+
+        ComplianceReport {
+            wcag_level: self.wcag_level,
+            is_compliant,
+            issues,
+        }
+    }
+}
+
+/// WCAG compliance report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceReport {
+    /// Target WCAG level
+    pub wcag_level: WCAGLevel,
+    /// Whether the content is compliant
+    pub is_compliant: bool,
+    /// List of compliance issues
+    pub issues: Vec<String>,
+}
+
+/// SSML (Speech Synthesis Markup Language) tag type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SSMLTag {
+    /// Pause/break
+    Break { duration_ms: u32 },
+    /// Emphasis
+    Emphasis { level: EmphasisLevel },
+    /// Prosody (rate, pitch, volume)
+    Prosody { rate: f32, pitch: f32, volume: f32 },
+    /// Say-as (interpret as specific type)
+    SayAs { interpret_as: String },
+    /// Phoneme (pronunciation)
+    Phoneme { ph: String, alphabet: String },
+}
+
+/// Emphasis level for SSML.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmphasisLevel {
+    None,
+    Reduced,
+    Moderate,
+    Strong,
+}
+
+impl std::fmt::Display for EmphasisLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmphasisLevel::None => write!(f, "none"),
+            EmphasisLevel::Reduced => write!(f, "reduced"),
+            EmphasisLevel::Moderate => write!(f, "moderate"),
+            EmphasisLevel::Strong => write!(f, "strong"),
+        }
+    }
+}
+
+/// Audio narration support with SSML integration.
+#[derive(Debug, Clone)]
+pub struct AudioNarrationSupport {
+    /// Locale for language-specific narration
+    locale: Locale,
+    /// Speaking rate (1.0 = normal)
+    speaking_rate: f32,
+    /// Pitch adjustment (1.0 = normal)
+    pitch: f32,
+    /// Volume level (1.0 = normal)
+    volume: f32,
+}
+
+impl AudioNarrationSupport {
+    /// Creates a new audio narration support.
+    pub fn new(locale: Locale) -> Self {
+        Self {
+            locale,
+            speaking_rate: 1.0,
+            pitch: 1.0,
+            volume: 1.0,
+        }
+    }
+
+    /// Sets speaking rate.
+    pub fn with_speaking_rate(mut self, rate: f32) -> Self {
+        self.speaking_rate = rate;
+        self
+    }
+
+    /// Sets pitch.
+    pub fn with_pitch(mut self, pitch: f32) -> Self {
+        self.pitch = pitch;
+        self
+    }
+
+    /// Sets volume.
+    pub fn with_volume(mut self, volume: f32) -> Self {
+        self.volume = volume;
+        self
+    }
+
+    /// Generates SSML markup for legal text.
+    pub fn generate_ssml(&self, text: &str) -> String {
+        let mut ssml = format!(
+            "<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xml:lang=\"{}\">\n",
+            self.locale.tag()
+        );
+
+        // Add prosody for speaking rate, pitch, and volume
+        ssml.push_str(&format!(
+            "<prosody rate=\"{}\" pitch=\"{}%\" volume=\"{}\">\n",
+            self.format_rate(),
+            (self.pitch * 100.0) as i32,
+            self.format_volume()
+        ));
+
+        // Process text for legal-specific narration
+        let processed_text = self.process_legal_text(text);
+        ssml.push_str(&processed_text);
+
+        ssml.push_str("\n</prosody>\n</speak>");
+        ssml
+    }
+
+    fn format_rate(&self) -> String {
+        if self.speaking_rate < 0.9 {
+            "slow".to_string()
+        } else if self.speaking_rate > 1.1 {
+            "fast".to_string()
+        } else {
+            "medium".to_string()
+        }
+    }
+
+    fn format_volume(&self) -> String {
+        if self.volume < 0.7 {
+            "soft".to_string()
+        } else if self.volume > 1.3 {
+            "loud".to_string()
+        } else {
+            "medium".to_string()
+        }
+    }
+
+    fn process_legal_text(&self, text: &str) -> String {
+        let mut result = text.to_string();
+
+        // Add pauses after legal citations
+        result = result.replace(
+            " v. ",
+            " <break time=\"300ms\"/> versus <break time=\"200ms\"/> ",
+        );
+
+        // Interpret section numbers as ordinals
+        result = result.replace(
+            "Section ",
+            "<say-as interpret-as=\"ordinal\">Section</say-as> ",
+        );
+
+        // Add emphasis on important legal terms
+        result = result.replace("shall", "<emphasis level=\"strong\">shall</emphasis>");
+        result = result.replace("must", "<emphasis level=\"strong\">must</emphasis>");
+        result = result.replace("may not", "<emphasis level=\"strong\">may not</emphasis>");
+
+        result
+    }
+
+    /// Generates narration script for legal document section.
+    pub fn narrate_section(&self, section_number: &str, title: &str, content: &str) -> String {
+        let intro = match self.locale.language.as_str() {
+            "en" => format!("Section {}. {}", section_number, title),
+            "ja" => format!("第{}条。{}", section_number, title),
+            "es" => format!("Sección {}. {}", section_number, title),
+            "fr" => format!("Section {}. {}", section_number, title),
+            "de" => format!("Abschnitt {}. {}", section_number, title),
+            _ => format!("Section {}. {}", section_number, title),
+        };
+
+        let full_text = format!("{}\n<break time=\"500ms\"/>\n{}", intro, content);
+        self.generate_ssml(&full_text)
+    }
+
+    /// Generates narration for legal citation.
+    pub fn narrate_citation(&self, citation: &str) -> String {
+        // Parse and narrate citation components
+        let narration = citation
+            .replace(" v. ", " versus ")
+            .replace("U.S.", "United States")
+            .replace("F.3d", "Federal Reporter, Third Series")
+            .replace("F.2d", "Federal Reporter, Second Series")
+            .replace("S.Ct.", "Supreme Court Reporter");
+
+        self.generate_ssml(&narration)
+    }
+}
+
+/// Sign language type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SignLanguageType {
+    /// American Sign Language
+    ASL,
+    /// British Sign Language
+    BSL,
+    /// Japanese Sign Language
+    JSL,
+    /// International Sign
+    IS,
+    /// Other sign language
+    Other,
+}
+
+impl std::fmt::Display for SignLanguageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SignLanguageType::ASL => write!(f, "American Sign Language (ASL)"),
+            SignLanguageType::BSL => write!(f, "British Sign Language (BSL)"),
+            SignLanguageType::JSL => write!(f, "Japanese Sign Language (JSL)"),
+            SignLanguageType::IS => write!(f, "International Sign (IS)"),
+            SignLanguageType::Other => write!(f, "Other Sign Language"),
+        }
+    }
+}
+
+/// Sign language reference for video/image linking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignLanguageReference {
+    /// Term or phrase in spoken/written language
+    pub term: String,
+    /// Sign language type
+    pub sign_language: SignLanguageType,
+    /// URL to video demonstrating the sign
+    pub video_url: Option<String>,
+    /// URL to image/diagram of the sign
+    pub image_url: Option<String>,
+    /// Description of how to perform the sign
+    pub description: Option<String>,
+    /// Locale of the term
+    pub locale: Locale,
+}
+
+impl SignLanguageReference {
+    /// Creates a new sign language reference.
+    pub fn new(term: impl Into<String>, sign_language: SignLanguageType, locale: Locale) -> Self {
+        Self {
+            term: term.into(),
+            sign_language,
+            video_url: None,
+            image_url: None,
+            description: None,
+            locale,
+        }
+    }
+
+    /// Adds a video URL.
+    pub fn with_video(mut self, url: impl Into<String>) -> Self {
+        self.video_url = Some(url.into());
+        self
+    }
+
+    /// Adds an image URL.
+    pub fn with_image(mut self, url: impl Into<String>) -> Self {
+        self.image_url = Some(url.into());
+        self
+    }
+
+    /// Adds a description.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+}
+
+/// Sign language referencer for legal terminology.
+#[derive(Debug, Clone)]
+pub struct SignLanguageReferencer {
+    /// References indexed by term
+    references: HashMap<String, Vec<SignLanguageReference>>,
+}
+
+impl SignLanguageReferencer {
+    /// Creates a new sign language referencer.
+    pub fn new() -> Self {
+        Self {
+            references: HashMap::new(),
+        }
+    }
+
+    /// Creates a referencer with default legal sign language references.
+    pub fn with_defaults() -> Self {
+        let mut referencer = Self::new();
+
+        // ASL legal terms
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "contract",
+                SignLanguageType::ASL,
+                Locale::new("en").with_country("US"),
+            )
+            .with_description("Hands form C-shape, move together and apart repeatedly"),
+        );
+
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "law",
+                SignLanguageType::ASL,
+                Locale::new("en").with_country("US"),
+            )
+            .with_description("L-hand on open palm, representing law/legislation"),
+        );
+
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "court",
+                SignLanguageType::ASL,
+                Locale::new("en").with_country("US"),
+            )
+            .with_description(
+                "C-hands move down from head level, representing judge and courtroom",
+            ),
+        );
+
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "attorney",
+                SignLanguageType::ASL,
+                Locale::new("en").with_country("US"),
+            )
+            .with_description("A-hand taps shoulder, representing lawyer/attorney"),
+        );
+
+        // BSL legal terms
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "solicitor",
+                SignLanguageType::BSL,
+                Locale::new("en").with_country("GB"),
+            )
+            .with_description("S-hand moves from ear to mouth, representing legal advice"),
+        );
+
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "barrister",
+                SignLanguageType::BSL,
+                Locale::new("en").with_country("GB"),
+            )
+            .with_description(
+                "Hands gesture as if putting on a wig, representing courtroom lawyer",
+            ),
+        );
+
+        // JSL legal terms
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "法律",
+                SignLanguageType::JSL,
+                Locale::new("ja").with_country("JP"),
+            )
+            .with_description("Hands form book shape near head, representing law books"),
+        );
+
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "裁判所",
+                SignLanguageType::JSL,
+                Locale::new("ja").with_country("JP"),
+            )
+            .with_description("Gavel motion with fist, representing court judgment"),
+        );
+
+        referencer
+    }
+
+    /// Adds a sign language reference.
+    pub fn add_reference(&mut self, reference: SignLanguageReference) {
+        self.references
+            .entry(reference.term.clone())
+            .or_default()
+            .push(reference);
+    }
+
+    /// Gets references for a term.
+    pub fn get_references(&self, term: &str) -> Vec<&SignLanguageReference> {
+        self.references
+            .get(term)
+            .map(|refs| refs.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets references for a term in a specific sign language.
+    pub fn get_references_for_sign_language(
+        &self,
+        term: &str,
+        sign_language: SignLanguageType,
+    ) -> Vec<&SignLanguageReference> {
+        self.references
+            .get(term)
+            .map(|refs| {
+                refs.iter()
+                    .filter(|r| r.sign_language == sign_language)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Generates HTML with sign language links.
+    pub fn generate_accessible_html(&self, text: &str) -> String {
+        let mut result = text.to_string();
+
+        for (term, references) in &self.references {
+            if result.contains(term) {
+                let links = references
+                    .iter()
+                    .filter_map(|r| {
+                        r.video_url.as_ref().map(|url| {
+                            format!(
+                                "<a href=\"{}\" class=\"sign-language-link\" data-sign-type=\"{}\" aria-label=\"{} in {}\">🎥</a>",
+                                url, r.sign_language, term, r.sign_language
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                if !links.is_empty() {
+                    let replacement = format!("{} {}", term, links);
+                    result = result.replace(term, &replacement);
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Returns the number of references.
+    pub fn reference_count(&self) -> usize {
+        self.references.values().map(|v| v.len()).sum()
+    }
+
+    /// Returns the number of unique terms.
+    pub fn term_count(&self) -> usize {
+        self.references.len()
+    }
+}
+
+impl Default for SignLanguageReferencer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// v0.2.8: Historical Legal Language
+// ============================================================================
+
+/// Historical period for legal language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum HistoricalPeriod {
+    /// Old English (450-1150 AD)
+    OldEnglish,
+    /// Middle English (1150-1500 AD)
+    MiddleEnglish,
+    /// Early Modern English (1500-1700 AD)
+    EarlyModern,
+    /// Classical Latin (Roman Empire)
+    ClassicalLatin,
+    /// Medieval Latin (500-1500 AD)
+    MedievalLatin,
+    /// Renaissance (1400-1600 AD)
+    Renaissance,
+    /// Enlightenment (1600-1800 AD)
+    Enlightenment,
+    /// Victorian (1837-1901 AD)
+    Victorian,
+}
+
+impl std::fmt::Display for HistoricalPeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HistoricalPeriod::OldEnglish => write!(f, "Old English (450-1150)"),
+            HistoricalPeriod::MiddleEnglish => write!(f, "Middle English (1150-1500)"),
+            HistoricalPeriod::EarlyModern => write!(f, "Early Modern English (1500-1700)"),
+            HistoricalPeriod::ClassicalLatin => write!(f, "Classical Latin (Roman Empire)"),
+            HistoricalPeriod::MedievalLatin => write!(f, "Medieval Latin (500-1500)"),
+            HistoricalPeriod::Renaissance => write!(f, "Renaissance (1400-1600)"),
+            HistoricalPeriod::Enlightenment => write!(f, "Enlightenment (1600-1800)"),
+            HistoricalPeriod::Victorian => write!(f, "Victorian (1837-1901)"),
+        }
+    }
+}
+
+/// Archaic legal term with historical context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchaicTerm {
+    /// The archaic term
+    pub term: String,
+    /// Historical period when the term was used
+    pub period: HistoricalPeriod,
+    /// Modern equivalent term
+    pub modern_equivalent: String,
+    /// Definition of the term
+    pub definition: String,
+    /// Example usage in historical context
+    pub example: Option<String>,
+    /// Locale of the term
+    pub locale: Locale,
+}
+
+impl ArchaicTerm {
+    /// Creates a new archaic term.
+    pub fn new(
+        term: impl Into<String>,
+        period: HistoricalPeriod,
+        modern_equivalent: impl Into<String>,
+        definition: impl Into<String>,
+        locale: Locale,
+    ) -> Self {
+        Self {
+            term: term.into(),
+            period,
+            modern_equivalent: modern_equivalent.into(),
+            definition: definition.into(),
+            example: None,
+            locale,
+        }
+    }
+
+    /// Adds an example usage.
+    pub fn with_example(mut self, example: impl Into<String>) -> Self {
+        self.example = Some(example.into());
+        self
+    }
+}
+
+/// Archaic term dictionary for historical legal language.
+#[derive(Debug, Clone)]
+pub struct ArchaicTermDictionary {
+    /// Terms indexed by period
+    terms_by_period: HashMap<HistoricalPeriod, Vec<ArchaicTerm>>,
+    /// Terms indexed by archaic term
+    terms_by_name: HashMap<String, Vec<ArchaicTerm>>,
+}
+
+impl ArchaicTermDictionary {
+    /// Creates a new archaic term dictionary.
+    pub fn new() -> Self {
+        Self {
+            terms_by_period: HashMap::new(),
+            terms_by_name: HashMap::new(),
+        }
+    }
+
+    /// Creates a dictionary with default archaic legal terms.
+    pub fn with_defaults() -> Self {
+        let mut dict = Self::new();
+
+        // Old English terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "folcriht",
+                HistoricalPeriod::OldEnglish,
+                "common law",
+                "The law of the people, customary law",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("Under folcriht, disputes were settled by the community"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "wergild",
+                HistoricalPeriod::OldEnglish,
+                "blood money",
+                "Compensation paid to the family of a slain person",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("The wergild for a thane was 1200 shillings"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "moot",
+                HistoricalPeriod::OldEnglish,
+                "assembly",
+                "A judicial assembly or court",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("The shire moot met twice yearly"),
+        );
+
+        // Middle English terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "feoffment",
+                HistoricalPeriod::MiddleEnglish,
+                "grant of land",
+                "The grant of a fief or fee; transfer of property",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("A feoffment required livery of seisin"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "frankpledge",
+                HistoricalPeriod::MiddleEnglish,
+                "mutual surety",
+                "System of collective responsibility for law and order",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("All freemen were organized into frankpledge groups"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "assize",
+                HistoricalPeriod::MiddleEnglish,
+                "court session",
+                "A session of a court; also a statute or ordinance",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("The assize of clarendon established procedures for criminal justice"),
+        );
+
+        // Early Modern English terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "attainder",
+                HistoricalPeriod::EarlyModern,
+                "forfeiture",
+                "Loss of civil rights and property upon conviction of treason",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("Bills of attainder were abolished in 1870"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "praemunire",
+                HistoricalPeriod::EarlyModern,
+                "usurpation of royal authority",
+                "Offense of appealing to foreign authority over the Crown",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("Praemunire was used against those asserting papal authority"),
+        );
+
+        // Classical Latin terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "ius civile",
+                HistoricalPeriod::ClassicalLatin,
+                "civil law",
+                "The law applicable to Roman citizens",
+                Locale::new("la"),
+            )
+            .with_example("Ius civile governed property and contract matters"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "lex aquilia",
+                HistoricalPeriod::ClassicalLatin,
+                "tort law",
+                "Roman law governing damages to property",
+                Locale::new("la"),
+            )
+            .with_example("The lex aquilia provided for compensation for wrongful damage"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "mancipatio",
+                HistoricalPeriod::ClassicalLatin,
+                "formal transfer",
+                "Formal procedure for transferring ownership of property",
+                Locale::new("la"),
+            )
+            .with_example("Mancipatio required five witnesses and a scale bearer"),
+        );
+
+        // Medieval Latin terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "mainour",
+                HistoricalPeriod::MedievalLatin,
+                "stolen goods",
+                "Stolen property found in the possession of a thief",
+                Locale::new("la"),
+            )
+            .with_example("A thief taken with mainour could be summarily tried"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "essoign",
+                HistoricalPeriod::MedievalLatin,
+                "excuse",
+                "An excuse for non-appearance in court",
+                Locale::new("la"),
+            )
+            .with_example("Illness was a valid essoign for missing court"),
+        );
+
+        // Victorian terms
+        dict.add_term(
+            ArchaicTerm::new(
+                "mesne profits",
+                HistoricalPeriod::Victorian,
+                "interim profits",
+                "Profits from land wrongfully withheld from the rightful owner",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("The tenant was liable for mesne profits during the wrongful occupation"),
+        );
+
+        dict.add_term(
+            ArchaicTerm::new(
+                "copyhold",
+                HistoricalPeriod::Victorian,
+                "tenure by copy",
+                "Land held by copy of the manorial court roll",
+                Locale::new("en").with_country("GB"),
+            )
+            .with_example("Copyhold was abolished in 1925"),
+        );
+
+        dict
+    }
+
+    /// Adds an archaic term.
+    pub fn add_term(&mut self, term: ArchaicTerm) {
+        self.terms_by_period
+            .entry(term.period)
+            .or_default()
+            .push(term.clone());
+        self.terms_by_name
+            .entry(term.term.clone())
+            .or_default()
+            .push(term);
+    }
+
+    /// Gets terms by historical period.
+    pub fn get_by_period(&self, period: HistoricalPeriod) -> Vec<&ArchaicTerm> {
+        self.terms_by_period
+            .get(&period)
+            .map(|terms| terms.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets terms by archaic name.
+    pub fn get_by_name(&self, name: &str) -> Vec<&ArchaicTerm> {
+        self.terms_by_name
+            .get(name)
+            .map(|terms| terms.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Translates archaic term to modern equivalent.
+    pub fn translate_to_modern(&self, archaic_term: &str) -> Option<String> {
+        self.terms_by_name
+            .get(archaic_term)
+            .and_then(|terms| terms.first())
+            .map(|term| term.modern_equivalent.clone())
+    }
+
+    /// Returns the number of terms in the dictionary.
+    pub fn term_count(&self) -> usize {
+        self.terms_by_name.len()
+    }
+
+    /// Returns the number of periods represented.
+    pub fn period_count(&self) -> usize {
+        self.terms_by_period.len()
+    }
+}
+
+impl Default for ArchaicTermDictionary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Historical calendar system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum HistoricalCalendar {
+    /// Julian calendar (45 BC - 1582 AD in Catholic countries)
+    Julian,
+    /// Gregorian calendar (1582 AD onwards)
+    Gregorian,
+    /// Roman calendar (pre-Julian)
+    Roman,
+    /// French Revolutionary calendar (1793-1805)
+    FrenchRevolutionary,
+}
+
+impl std::fmt::Display for HistoricalCalendar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HistoricalCalendar::Julian => write!(f, "Julian Calendar"),
+            HistoricalCalendar::Gregorian => write!(f, "Gregorian Calendar"),
+            HistoricalCalendar::Roman => write!(f, "Roman Calendar"),
+            HistoricalCalendar::FrenchRevolutionary => write!(f, "French Revolutionary Calendar"),
+        }
+    }
+}
+
+/// Historical calendar converter.
+#[derive(Debug, Clone)]
+pub struct HistoricalCalendarConverter {
+    /// Source calendar
+    source_calendar: HistoricalCalendar,
+}
+
+impl HistoricalCalendarConverter {
+    /// Creates a new historical calendar converter.
+    pub fn new(source_calendar: HistoricalCalendar) -> Self {
+        Self { source_calendar }
+    }
+
+    /// Converts a Julian date to Gregorian.
+    /// Returns (year, month, day) in Gregorian calendar.
+    pub fn julian_to_gregorian(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+        // Calculate Julian Day Number
+        let a = (14 - month) / 12;
+        let y = year + 4800 - a as i32;
+        let m = month + 12 * a - 3;
+
+        let jdn = day as i32 + (153 * m as i32 + 2) / 5 + 365 * y + y / 4 - 32083;
+
+        // Convert JDN to Gregorian
+        let a = jdn + 32044;
+        let b = (4 * a + 3) / 146097;
+        let c = a - (146097 * b) / 4;
+        let d = (4 * c + 3) / 1461;
+        let e = c - (1461 * d) / 4;
+        let m = (5 * e + 2) / 153;
+
+        let greg_day = e - (153 * m + 2) / 5 + 1;
+        let greg_month = m + 3 - 12 * (m / 10);
+        let greg_year = 100 * b + d - 4800 + m / 10;
+
+        (greg_year, greg_month as u32, greg_day as u32)
+    }
+
+    /// Converts a Gregorian date to Julian.
+    /// Returns (year, month, day) in Julian calendar.
+    pub fn gregorian_to_julian(&self, year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+        // Calculate Julian Day Number from Gregorian
+        let a = (14 - month) / 12;
+        let y = year + 4800 - a as i32;
+        let m = month + 12 * a - 3;
+
+        let jdn =
+            day as i32 + (153 * m as i32 + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045;
+
+        // Convert JDN to Julian
+        let c = jdn + 32082;
+        let d = (4 * c + 3) / 1461;
+        let e = c - (1461 * d) / 4;
+        let m = (5 * e + 2) / 153;
+
+        let jul_day = e - (153 * m + 2) / 5 + 1;
+        let jul_month = m + 3 - 12 * (m / 10);
+        let jul_year = d - 4800 + m / 10;
+
+        (jul_year, jul_month as u32, jul_day as u32)
+    }
+
+    /// Calculates the difference in days between Julian and Gregorian calendars.
+    pub fn julian_gregorian_offset(&self, year: i32) -> i32 {
+        if year < 1582 {
+            0 // Before Gregorian reform
+        } else {
+            let centuries = (year - 1600) / 100;
+            centuries * 3 / 4 + 10 // Approximate offset
+        }
+    }
+
+    /// Formats a date in historical calendar notation.
+    pub fn format_historical_date(&self, year: i32, month: u32, day: u32) -> String {
+        match self.source_calendar {
+            HistoricalCalendar::Julian => {
+                format!("{} {} {} (O.S.)", day, self.month_name_latin(month), year)
+            }
+            HistoricalCalendar::Gregorian => {
+                format!("{} {} {} (N.S.)", day, self.month_name_latin(month), year)
+            }
+            HistoricalCalendar::Roman => self.format_roman_date(year, month, day),
+            HistoricalCalendar::FrenchRevolutionary => {
+                self.format_french_revolutionary_date(year, month, day)
+            }
+        }
+    }
+
+    fn month_name_latin(&self, month: u32) -> &'static str {
+        match month {
+            1 => "Januarius",
+            2 => "Februarius",
+            3 => "Martius",
+            4 => "Aprilis",
+            5 => "Maius",
+            6 => "Junius",
+            7 => "Julius",
+            8 => "Augustus",
+            9 => "September",
+            10 => "October",
+            11 => "November",
+            12 => "December",
+            _ => "Unknown",
+        }
+    }
+
+    fn format_roman_date(&self, _year: i32, month: u32, day: u32) -> String {
+        let month_name = self.month_name_latin(month);
+        format!("a.d. {} {}", day, month_name)
+    }
+
+    fn format_french_revolutionary_date(&self, year: i32, month: u32, day: u32) -> String {
+        let revolutionary_months = [
+            "Vendémiaire",
+            "Brumaire",
+            "Frimaire",
+            "Nivôse",
+            "Pluviôse",
+            "Ventôse",
+            "Germinal",
+            "Floréal",
+            "Prairial",
+            "Messidor",
+            "Thermidor",
+            "Fructidor",
+        ];
+
+        let month_name = if month <= 12 {
+            revolutionary_months[(month - 1) as usize]
+        } else {
+            "Sansculottides"
+        };
+
+        format!("{} {} An {}", day, month_name, year)
+    }
+}
+
+/// Language family for etymology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LanguageFamily {
+    /// Germanic languages
+    Germanic,
+    /// Romance languages
+    Romance,
+    /// Latin
+    Latin,
+    /// Greek
+    Greek,
+    /// Celtic languages
+    Celtic,
+    /// Norman French
+    NormanFrench,
+    /// Old French
+    OldFrench,
+}
+
+impl std::fmt::Display for LanguageFamily {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LanguageFamily::Germanic => write!(f, "Germanic"),
+            LanguageFamily::Romance => write!(f, "Romance"),
+            LanguageFamily::Latin => write!(f, "Latin"),
+            LanguageFamily::Greek => write!(f, "Greek"),
+            LanguageFamily::Celtic => write!(f, "Celtic"),
+            LanguageFamily::NormanFrench => write!(f, "Norman French"),
+            LanguageFamily::OldFrench => write!(f, "Old French"),
+        }
+    }
+}
+
+/// Etymology information for a legal term.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Etymology {
+    /// The modern term
+    pub term: String,
+    /// Original term or root
+    pub root: String,
+    /// Language family of origin
+    pub language_family: LanguageFamily,
+    /// Original language
+    pub original_language: String,
+    /// Meaning of the root
+    pub root_meaning: String,
+    /// Historical period of first usage
+    pub first_usage: Option<HistoricalPeriod>,
+    /// Evolution of the term through time
+    pub evolution: Vec<String>,
+}
+
+impl Etymology {
+    /// Creates a new etymology.
+    pub fn new(
+        term: impl Into<String>,
+        root: impl Into<String>,
+        language_family: LanguageFamily,
+        original_language: impl Into<String>,
+        root_meaning: impl Into<String>,
+    ) -> Self {
+        Self {
+            term: term.into(),
+            root: root.into(),
+            language_family,
+            original_language: original_language.into(),
+            root_meaning: root_meaning.into(),
+            first_usage: None,
+            evolution: Vec::new(),
+        }
+    }
+
+    /// Adds first usage period.
+    pub fn with_first_usage(mut self, period: HistoricalPeriod) -> Self {
+        self.first_usage = Some(period);
+        self
+    }
+
+    /// Adds evolution step.
+    pub fn add_evolution(mut self, evolution_step: impl Into<String>) -> Self {
+        self.evolution.push(evolution_step.into());
+        self
+    }
+}
+
+/// Etymology tracker for legal terms.
+#[derive(Debug, Clone)]
+pub struct EtymologyTracker {
+    /// Etymologies indexed by term
+    etymologies: HashMap<String, Etymology>,
+}
+
+impl EtymologyTracker {
+    /// Creates a new etymology tracker.
+    pub fn new() -> Self {
+        Self {
+            etymologies: HashMap::new(),
+        }
+    }
+
+    /// Creates a tracker with default legal term etymologies.
+    pub fn with_defaults() -> Self {
+        let mut tracker = Self::new();
+
+        // Contract
+        tracker.add_etymology(
+            Etymology::new(
+                "contract",
+                "contractus",
+                LanguageFamily::Latin,
+                "Latin",
+                "drawn together, agreed upon",
+            )
+            .with_first_usage(HistoricalPeriod::ClassicalLatin)
+            .add_evolution("Latin contractus → Old French contract → Middle English contract"),
+        );
+
+        // Tort
+        tracker.add_etymology(
+            Etymology::new(
+                "tort",
+                "tortus",
+                LanguageFamily::Latin,
+                "Latin",
+                "twisted, wrong",
+            )
+            .with_first_usage(HistoricalPeriod::MedievalLatin)
+            .add_evolution("Latin tortus → Old French tort → Middle English tort"),
+        );
+
+        // Jury
+        tracker.add_etymology(
+            Etymology::new(
+                "jury",
+                "jurata",
+                LanguageFamily::Latin,
+                "Latin",
+                "sworn (group)",
+            )
+            .with_first_usage(HistoricalPeriod::MedievalLatin)
+            .add_evolution("Latin jurata → Old French juree → Middle English jury"),
+        );
+
+        // Attorney
+        tracker.add_etymology(
+            Etymology::new(
+                "attorney",
+                "atorner",
+                LanguageFamily::OldFrench,
+                "Old French",
+                "to turn over, assign",
+            )
+            .with_first_usage(HistoricalPeriod::MiddleEnglish)
+            .add_evolution("Old French atorner → Anglo-Norman atourne → Middle English attorney"),
+        );
+
+        // Mortgage
+        tracker.add_etymology(
+            Etymology::new(
+                "mortgage",
+                "mort + gage",
+                LanguageFamily::OldFrench,
+                "Old French",
+                "dead pledge",
+            )
+            .with_first_usage(HistoricalPeriod::MiddleEnglish)
+            .add_evolution("Old French mort (dead) + gage (pledge) → Middle English mortgage"),
+        );
+
+        // Habeas corpus
+        tracker.add_etymology(
+            Etymology::new(
+                "habeas corpus",
+                "habeas corpus",
+                LanguageFamily::Latin,
+                "Latin",
+                "you shall have the body",
+            )
+            .with_first_usage(HistoricalPeriod::MedievalLatin)
+            .add_evolution("Latin legal phrase preserved in English common law"),
+        );
+
+        // Bailiff
+        tracker.add_etymology(
+            Etymology::new(
+                "bailiff",
+                "baillif",
+                LanguageFamily::NormanFrench,
+                "Norman French",
+                "administrator, manager",
+            )
+            .with_first_usage(HistoricalPeriod::MiddleEnglish)
+            .add_evolution(
+                "Norman French baillif → Middle English bailif → Modern English bailiff",
+            ),
+        );
+
+        // Equity
+        tracker.add_etymology(
+            Etymology::new(
+                "equity",
+                "aequitas",
+                LanguageFamily::Latin,
+                "Latin",
+                "fairness, equality",
+            )
+            .with_first_usage(HistoricalPeriod::ClassicalLatin)
+            .add_evolution("Latin aequitas → Old French equite → Middle English equity"),
+        );
+
+        tracker
+    }
+
+    /// Adds an etymology.
+    pub fn add_etymology(&mut self, etymology: Etymology) {
+        self.etymologies.insert(etymology.term.clone(), etymology);
+    }
+
+    /// Gets etymology for a term.
+    pub fn get_etymology(&self, term: &str) -> Option<&Etymology> {
+        self.etymologies.get(term)
+    }
+
+    /// Gets all etymologies by language family.
+    pub fn get_by_language_family(&self, family: LanguageFamily) -> Vec<&Etymology> {
+        self.etymologies
+            .values()
+            .filter(|e| e.language_family == family)
+            .collect()
+    }
+
+    /// Returns the number of tracked etymologies.
+    pub fn etymology_count(&self) -> usize {
+        self.etymologies.len()
+    }
+}
+
+impl Default for EtymologyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Historical context annotation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoricalContext {
+    /// The legal term or concept
+    pub term: String,
+    /// Historical period
+    pub period: HistoricalPeriod,
+    /// Historical context description
+    pub context: String,
+    /// Legal significance in that period
+    pub legal_significance: String,
+    /// Modern relevance
+    pub modern_relevance: Option<String>,
+    /// Related legal documents or cases
+    pub related_documents: Vec<String>,
+}
+
+impl HistoricalContext {
+    /// Creates a new historical context.
+    pub fn new(
+        term: impl Into<String>,
+        period: HistoricalPeriod,
+        context: impl Into<String>,
+        legal_significance: impl Into<String>,
+    ) -> Self {
+        Self {
+            term: term.into(),
+            period,
+            context: context.into(),
+            legal_significance: legal_significance.into(),
+            modern_relevance: None,
+            related_documents: Vec::new(),
+        }
+    }
+
+    /// Adds modern relevance.
+    pub fn with_modern_relevance(mut self, relevance: impl Into<String>) -> Self {
+        self.modern_relevance = Some(relevance.into());
+        self
+    }
+
+    /// Adds a related document.
+    pub fn add_related_document(mut self, document: impl Into<String>) -> Self {
+        self.related_documents.push(document.into());
+        self
+    }
+}
+
+/// Historical context annotator.
+#[derive(Debug, Clone)]
+pub struct HistoricalContextAnnotator {
+    /// Contexts indexed by term
+    contexts: HashMap<String, Vec<HistoricalContext>>,
+}
+
+impl HistoricalContextAnnotator {
+    /// Creates a new historical context annotator.
+    pub fn new() -> Self {
+        Self {
+            contexts: HashMap::new(),
+        }
+    }
+
+    /// Creates an annotator with default historical contexts.
+    pub fn with_defaults() -> Self {
+        let mut annotator = Self::new();
+
+        // Magna Carta
+        annotator.add_context(
+            HistoricalContext::new(
+                "Magna Carta",
+                HistoricalPeriod::MiddleEnglish,
+                "Charter signed by King John in 1215 at Runnymede",
+                "Established principle that everyone, including the king, is subject to the law",
+            )
+            .with_modern_relevance("Foundation of constitutional law and due process")
+            .add_related_document("Petition of Right (1628)")
+            .add_related_document("Bill of Rights (1689)"),
+        );
+
+        // Trial by jury
+        annotator.add_context(
+            HistoricalContext::new(
+                "trial by jury",
+                HistoricalPeriod::MiddleEnglish,
+                "Established in England following the Assize of Clarendon (1166)",
+                "Replaced trial by ordeal and compurgation with judgment by peers",
+            )
+            .with_modern_relevance("Fundamental right in common law jurisdictions")
+            .add_related_document("Sixth Amendment (US Constitution)")
+            .add_related_document("Seventh Amendment (US Constitution)"),
+        );
+
+        // Writ of habeas corpus
+        annotator.add_context(
+            HistoricalContext::new(
+                "habeas corpus",
+                HistoricalPeriod::MiddleEnglish,
+                "Developed in medieval England as protection against unlawful detention",
+                "Required authorities to bring detained persons before a court",
+            )
+            .with_modern_relevance("Core protection against arbitrary detention worldwide")
+            .add_related_document("Habeas Corpus Act 1679")
+            .add_related_document("US Constitution Article I, Section 9"),
+        );
+
+        // Equity
+        annotator.add_context(
+            HistoricalContext::new(
+                "equity",
+                HistoricalPeriod::MiddleEnglish,
+                "Developed in Court of Chancery to provide remedies unavailable at common law",
+                "Offered flexible relief based on fairness when common law was too rigid",
+            )
+            .with_modern_relevance(
+                "Equitable remedies (injunctions, specific performance) still used",
+            )
+            .add_related_document("Judicature Acts (1873-1875)")
+            .add_related_document("Earl of Oxford's Case (1615)"),
+        );
+
+        // Statute of Frauds
+        annotator.add_context(
+            HistoricalContext::new(
+                "Statute of Frauds",
+                HistoricalPeriod::EarlyModern,
+                "Enacted in 1677 to prevent fraud in certain contracts",
+                "Required certain contracts to be in writing to be enforceable",
+            )
+            .with_modern_relevance(
+                "Modern statutes of frauds still require written evidence for land sales, etc.",
+            )
+            .add_related_document("Statute of Frauds 1677 (29 Car. 2 c. 3)"),
+        );
+
+        // Bill of Rights
+        annotator.add_context(
+            HistoricalContext::new(
+                "Bill of Rights",
+                HistoricalPeriod::Enlightenment,
+                "English Bill of Rights 1689 following Glorious Revolution",
+                "Established parliamentary supremacy and limited royal prerogative",
+            )
+            .with_modern_relevance("Model for constitutional rights documents worldwide")
+            .add_related_document("US Bill of Rights (1791)")
+            .add_related_document("Canadian Charter of Rights (1982)"),
+        );
+
+        annotator
+    }
+
+    /// Adds a historical context.
+    pub fn add_context(&mut self, context: HistoricalContext) {
+        self.contexts
+            .entry(context.term.clone())
+            .or_default()
+            .push(context);
+    }
+
+    /// Gets contexts for a term.
+    pub fn get_contexts(&self, term: &str) -> Vec<&HistoricalContext> {
+        self.contexts
+            .get(term)
+            .map(|contexts| contexts.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets all contexts by historical period.
+    pub fn get_by_period(&self, period: HistoricalPeriod) -> Vec<&HistoricalContext> {
+        self.contexts
+            .values()
+            .flatten()
+            .filter(|c| c.period == period)
+            .collect()
+    }
+
+    /// Returns the number of annotated terms.
+    pub fn context_count(&self) -> usize {
+        self.contexts.len()
+    }
+}
+
+impl Default for HistoricalContextAnnotator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod cultural_tests {
+    use super::*;
+
+    #[test]
+    fn test_cultural_context_creation() {
+        let locale = Locale::new("ja").with_country("JP");
+        let context = CulturalContext::new(
+            locale,
+            ContextCategory::SocialHierarchy,
+            "keigo",
+            "Honorific language system",
+        );
+
+        assert_eq!(context.term, "keigo");
+        assert_eq!(context.category, ContextCategory::SocialHierarchy);
+        assert!(context.guidelines.is_empty());
+    }
+
+    #[test]
+    fn test_cultural_context_with_guidelines() {
+        let locale = Locale::new("ja").with_country("JP");
+        let context = CulturalContext::new(
+            locale,
+            ContextCategory::BusinessEtiquette,
+            "hanko",
+            "Personal seal",
+        )
+        .with_guideline("Required for contracts")
+        .with_equivalent("en-US", "signature");
+
+        assert_eq!(context.guidelines.len(), 1);
+        assert_eq!(context.cross_cultural_equivalents.len(), 1);
+    }
+
+    #[test]
+    fn test_cultural_context_registry() {
+        let registry = CulturalContextRegistry::with_defaults();
+        let ja_jp = Locale::new("ja").with_country("JP");
+
+        let contexts = registry.get_contexts(&ja_jp);
+        assert!(!contexts.is_empty());
+
+        let keigo = registry.find_term(&ja_jp, "keigo");
+        assert!(keigo.is_some());
+        assert_eq!(keigo.unwrap().term, "keigo");
+    }
+
+    #[test]
+    fn test_cultural_context_by_category() {
+        let registry = CulturalContextRegistry::with_defaults();
+        let ja_jp = Locale::new("ja").with_country("JP");
+
+        let hierarchy_contexts =
+            registry.get_by_category(&ja_jp, &ContextCategory::SocialHierarchy);
+        assert!(!hierarchy_contexts.is_empty());
+    }
+
+    #[test]
+    fn test_context_category_display() {
+        assert_eq!(
+            ContextCategory::SocialHierarchy.to_string(),
+            "Social Hierarchy"
+        );
+        assert_eq!(
+            ContextCategory::ReligiousPractice.to_string(),
+            "Religious Practice"
+        );
+    }
+
+    #[test]
+    fn test_local_custom_creation() {
+        let locale = Locale::new("ja").with_country("JP");
+        let custom = LocalCustom::new(
+            "Miai marriage",
+            "Japan",
+            locale,
+            CustomType::Marriage,
+            "Traditional arranged marriage introduction",
+        )
+        .with_recognition_level(0.3);
+
+        assert_eq!(custom.name, "Miai marriage");
+        assert_eq!(custom.recognition_level, 0.3);
+    }
+
+    #[test]
+    fn test_local_custom_registry() {
+        let registry = LocalCustomRegistry::with_defaults();
+
+        let japan_customs = registry.get_customs("Japan");
+        assert!(!japan_customs.is_empty());
+
+        let miai = registry.find_custom("Japan", "Miai marriage");
+        assert!(miai.is_some());
+    }
+
+    #[test]
+    fn test_local_custom_by_type() {
+        let registry = LocalCustomRegistry::with_defaults();
+
+        let marriage_customs = registry.get_by_type("Saudi Arabia", &CustomType::Marriage);
+        assert!(!marriage_customs.is_empty());
+    }
+
+    #[test]
+    fn test_custom_type_display() {
+        assert_eq!(CustomType::Marriage.to_string(), "Marriage");
+        assert_eq!(
+            CustomType::DisputeResolution.to_string(),
+            "Dispute Resolution"
+        );
+    }
+
+    #[test]
+    fn test_religious_law_islamic() {
+        let islamic = ReligiousLawSystem::islamic();
+
+        assert_eq!(islamic.law_type, ReligiousLawType::Islamic);
+        assert!(!islamic.principles.is_empty());
+        assert!(!islamic.sources.is_empty());
+        assert!(islamic.civil_equivalents.contains_key("mahr"));
+    }
+
+    #[test]
+    fn test_religious_law_jewish() {
+        let jewish = ReligiousLawSystem::jewish();
+
+        assert_eq!(jewish.law_type, ReligiousLawType::Jewish);
+        assert!(jewish.civil_equivalents.contains_key("get"));
+    }
+
+    #[test]
+    fn test_religious_law_registry() {
+        let registry = ReligiousLawRegistry::with_defaults();
+
+        let islamic = registry.get_system(ReligiousLawType::Islamic);
+        assert!(islamic.is_some());
+
+        let sa_systems = registry.get_by_jurisdiction("Saudi Arabia");
+        assert!(!sa_systems.is_empty());
+    }
+
+    #[test]
+    fn test_religious_law_type_display() {
+        assert_eq!(
+            ReligiousLawType::Islamic.to_string(),
+            "Islamic Law (Sharia)"
+        );
+        assert_eq!(ReligiousLawType::Jewish.to_string(), "Jewish Law (Halakha)");
+    }
+
+    #[test]
+    fn test_indigenous_law_creation() {
+        let system = IndigenousLawSystem::new("Navajo Nation", "Southwestern United States")
+            .with_principle("Hózhǫ́ (harmony)")
+            .with_dispute_resolution("Peacemaking circles")
+            .with_property_concept("Communal land ownership")
+            .with_state_recognition(true);
+
+        assert_eq!(system.people_name, "Navajo Nation");
+        assert!(system.state_recognition);
+        assert!(!system.principles.is_empty());
+    }
+
+    #[test]
+    fn test_indigenous_law_registry() {
+        let registry = IndigenousLawRegistry::with_defaults();
+
+        let navajo = registry.get_system("Navajo Nation");
+        assert!(navajo.is_some());
+
+        let recognized = registry.get_recognized();
+        assert_eq!(recognized.len(), 4); // All default systems are recognized
+    }
+
+    #[test]
+    fn test_indigenous_law_by_region() {
+        let registry = IndigenousLawRegistry::with_defaults();
+
+        let nz_systems = registry.get_by_region("New Zealand");
+        assert!(!nz_systems.is_empty());
+    }
+
+    #[test]
+    fn test_colonial_legacy_creation() {
+        let legacy = ColonialLegacy::new(ColonialPower::British, "India")
+            .with_retained_concept("Common law")
+            .with_hybrid_concept("Anglo-Hindu law", "Hindu personal law")
+            .with_reform("Constitution of India 1950");
+
+        assert_eq!(legacy.colonial_power, ColonialPower::British);
+        assert_eq!(legacy.jurisdiction, "India");
+        assert!(!legacy.retained_concepts.is_empty());
+        assert!(!legacy.hybrid_concepts.is_empty());
+    }
+
+    #[test]
+    fn test_colonial_legacy_mapper() {
+        let mapper = ColonialLegacyMapper::with_defaults();
+
+        let india = mapper.get_legacy("India");
+        assert!(india.is_some());
+        assert_eq!(india.unwrap().colonial_power, ColonialPower::British);
+
+        let british_legacies = mapper.get_by_colonial_power(ColonialPower::British);
+        assert!(!british_legacies.is_empty());
+    }
+
+    #[test]
+    fn test_colonial_power_display() {
+        assert_eq!(ColonialPower::British.to_string(), "British");
+        assert_eq!(ColonialPower::French.to_string(), "French");
+    }
+
+    #[test]
+    fn test_registry_counts() {
+        let cultural_registry = CulturalContextRegistry::with_defaults();
+        assert!(cultural_registry.context_count() > 0);
+        assert!(cultural_registry.locale_count() > 0);
+
+        let custom_registry = LocalCustomRegistry::with_defaults();
+        assert!(custom_registry.custom_count() > 0);
+        assert!(custom_registry.region_count() > 0);
+
+        let religious_registry = ReligiousLawRegistry::with_defaults();
+        assert_eq!(religious_registry.system_count(), 3);
+
+        let indigenous_registry = IndigenousLawRegistry::with_defaults();
+        assert_eq!(indigenous_registry.system_count(), 4);
+
+        let colonial_mapper = ColonialLegacyMapper::with_defaults();
+        assert_eq!(colonial_mapper.legacy_count(), 7);
+    }
+}
+
+// ============================================================================
+// v0.2.7: Accessibility Features Tests
+// ============================================================================
+
+#[cfg(test)]
+mod accessibility_tests {
+    use super::*;
+
+    #[test]
+    fn test_plain_language_generator() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = PlainLanguageGenerator::new(8.0, locale);
+
+        let legal_text = "The party hereinafter referred to as the Plaintiff shall forthwith commence proceedings pursuant to the aforementioned statute.";
+        let simplified = generator.simplify(legal_text);
+
+        assert!(simplified.contains("from now on"));
+        assert!(simplified.contains("immediately"));
+        assert!(simplified.contains("start"));
+    }
+
+    #[test]
+    fn test_plain_language_custom_jargon() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = PlainLanguageGenerator::new(8.0, locale)
+            .add_jargon_replacement("consideration", "payment");
+
+        let text = "Valid consideration is required.";
+        let simplified = generator.simplify(text);
+
+        assert!(simplified.contains("payment"));
+    }
+
+    #[test]
+    fn test_plain_language_meets_target() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = PlainLanguageGenerator::new(8.0, locale);
+
+        let simple_text = "The party must pay now.";
+        assert!(generator.meets_target(simple_text));
+    }
+
+    #[test]
+    fn test_simplification_strategy_display() {
+        assert_eq!(
+            SimplificationStrategy::ReplaceJargon.to_string(),
+            "Replace Jargon"
+        );
+        assert_eq!(
+            SimplificationStrategy::ShortenSentences.to_string(),
+            "Shorten Sentences"
+        );
+        assert_eq!(
+            SimplificationStrategy::ActiveVoice.to_string(),
+            "Active Voice"
+        );
+    }
+
+    #[test]
+    fn test_reading_level_adjuster() {
+        let locale = Locale::new("en").with_country("US");
+        let adjuster = ReadingLevelAdjuster::new(TargetReadingLevel::MiddleSchool, locale);
+
+        let legal_text = "The party shall forthwith pay consideration.";
+        let adjusted = adjuster.adjust(legal_text);
+
+        assert_eq!(adjusted.original, legal_text);
+        assert!(adjusted.iterations > 0);
+        assert_ne!(adjusted.adjusted, adjusted.original);
+    }
+
+    #[test]
+    fn test_reading_level_improvement() {
+        let locale = Locale::new("en").with_country("US");
+        let adjuster = ReadingLevelAdjuster::new(TargetReadingLevel::MiddleSchool, locale);
+
+        let legal_text = "The party hereinafter shall forthwith commence.";
+        let adjusted = adjuster.adjust(legal_text);
+
+        let improvement = adjusted.improvement();
+        assert!(improvement >= 0.0); // Should not get worse
+    }
+
+    #[test]
+    fn test_target_reading_level_display() {
+        assert_eq!(
+            TargetReadingLevel::Elementary.to_string(),
+            "Elementary (grades 3-5)"
+        );
+        assert_eq!(
+            TargetReadingLevel::MiddleSchool.to_string(),
+            "Middle School (grades 6-8)"
+        );
+        assert_eq!(
+            TargetReadingLevel::HighSchool.to_string(),
+            "High School (grades 9-12)"
+        );
+    }
+
+    #[test]
+    fn test_target_reading_level_grade() {
+        assert_eq!(TargetReadingLevel::Elementary.grade_level(), 4.0);
+        assert_eq!(TargetReadingLevel::MiddleSchool.grade_level(), 7.0);
+        assert_eq!(TargetReadingLevel::College.grade_level(), 14.0);
+    }
+
+    #[test]
+    fn test_screen_reader_optimizer() {
+        let locale = Locale::new("en").with_country("US");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let html = "<nav>Menu</nav><main>Content</main>";
+        let optimized = optimizer.optimize_html(html);
+
+        assert!(optimized.contains("role=\"navigation\""));
+        assert!(optimized.contains("role=\"main\""));
+        assert!(optimized.contains("lang=\"en\""));
+    }
+
+    #[test]
+    fn test_screen_reader_skip_links() {
+        let locale = Locale::new("en").with_country("US");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let html = "<main>Content</main>";
+        let optimized = optimizer.optimize_html(html);
+
+        assert!(optimized.contains("Skip to main content"));
+        assert!(optimized.contains("skip-link"));
+    }
+
+    #[test]
+    fn test_screen_reader_skip_links_locale() {
+        let locale = Locale::new("ja").with_country("JP");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let html = "<main>Content</main>";
+        let optimized = optimizer.optimize_html(html);
+
+        assert!(optimized.contains("メインコンテンツへスキップ"));
+    }
+
+    #[test]
+    fn test_screen_reader_document_structure() {
+        let locale = Locale::new("en").with_country("US");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let sections = vec![
+            ("Introduction", "This is the introduction."),
+            ("Terms", "These are the terms."),
+        ];
+        let html = optimizer.generate_document_structure("Legal Agreement", sections);
+
+        assert!(html.contains("<h1>Legal Agreement</h1>"));
+        assert!(html.contains("<h2>Introduction</h2>"));
+        assert!(html.contains("<h2>Terms</h2>"));
+        assert!(html.contains("lang=\"en\""));
+    }
+
+    #[test]
+    fn test_screen_reader_compliance_check() {
+        let locale = Locale::new("en").with_country("US");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let good_html = "<html lang=\"en\"><h1>Title</h1><main role=\"main\"><a href=\"#main\" class=\"skip-link\">Skip</a></main></html>";
+        let report = optimizer.check_compliance(good_html);
+
+        assert!(report.is_compliant);
+        assert_eq!(report.issues.len(), 0);
+    }
+
+    #[test]
+    fn test_screen_reader_compliance_issues() {
+        let locale = Locale::new("en").with_country("US");
+        let optimizer = ScreenReaderOptimizer::new(WCAGLevel::AA, locale);
+
+        let bad_html = "<div>Content</div>";
+        let report = optimizer.check_compliance(bad_html);
+
+        assert!(!report.is_compliant);
+        assert!(!report.issues.is_empty());
+    }
+
+    #[test]
+    fn test_wcag_level_display() {
+        assert_eq!(WCAGLevel::A.to_string(), "WCAG Level A");
+        assert_eq!(WCAGLevel::AA.to_string(), "WCAG Level AA");
+        assert_eq!(WCAGLevel::AAA.to_string(), "WCAG Level AAA");
+    }
+
+    #[test]
+    fn test_audio_narration_ssml() {
+        let locale = Locale::new("en").with_country("US");
+        let narration = AudioNarrationSupport::new(locale);
+
+        let text = "The party shall pay.";
+        let ssml = narration.generate_ssml(text);
+
+        assert!(ssml.contains("<speak"));
+        assert!(ssml.contains("xml:lang=\"en-US\""));
+        assert!(ssml.contains("<prosody"));
+        assert!(ssml.contains("</speak>"));
+    }
+
+    #[test]
+    fn test_audio_narration_legal_text() {
+        let locale = Locale::new("en").with_country("US");
+        let narration = AudioNarrationSupport::new(locale);
+
+        let text = "The contract shall be valid.";
+        let ssml = narration.generate_ssml(text);
+
+        assert!(ssml.contains("<emphasis level=\"strong\">shall</emphasis>"));
+    }
+
+    #[test]
+    fn test_audio_narration_section() {
+        let locale = Locale::new("en").with_country("US");
+        let narration = AudioNarrationSupport::new(locale);
+
+        let ssml = narration.narrate_section("1", "Definitions", "Terms are defined here.");
+
+        assert!(ssml.contains("Section") || ssml.contains("ordinal"));
+        assert!(ssml.contains("Definitions"));
+        assert!(ssml.contains("<break time=\"500ms\"/>"));
+    }
+
+    #[test]
+    fn test_audio_narration_citation() {
+        let locale = Locale::new("en").with_country("US");
+        let narration = AudioNarrationSupport::new(locale);
+
+        let ssml = narration.narrate_citation("Brown v. Board of Education, 347 U.S. 483 (1954)");
+
+        assert!(ssml.contains("versus"));
+        assert!(ssml.contains("United States"));
+    }
+
+    #[test]
+    fn test_audio_narration_with_settings() {
+        let locale = Locale::new("en").with_country("US");
+        let narration = AudioNarrationSupport::new(locale)
+            .with_speaking_rate(1.2)
+            .with_pitch(1.1)
+            .with_volume(0.9);
+
+        let ssml = narration.generate_ssml("Test");
+        assert!(ssml.contains("<prosody"));
+    }
+
+    #[test]
+    fn test_emphasis_level_display() {
+        assert_eq!(EmphasisLevel::None.to_string(), "none");
+        assert_eq!(EmphasisLevel::Reduced.to_string(), "reduced");
+        assert_eq!(EmphasisLevel::Moderate.to_string(), "moderate");
+        assert_eq!(EmphasisLevel::Strong.to_string(), "strong");
+    }
+
+    #[test]
+    fn test_sign_language_reference() {
+        let locale = Locale::new("en").with_country("US");
+        let reference = SignLanguageReference::new("contract", SignLanguageType::ASL, locale)
+            .with_video("https://example.com/contract.mp4")
+            .with_image("https://example.com/contract.jpg")
+            .with_description("Hands form C-shape");
+
+        assert_eq!(reference.term, "contract");
+        assert_eq!(reference.sign_language, SignLanguageType::ASL);
+        assert!(reference.video_url.is_some());
+        assert!(reference.image_url.is_some());
+        assert!(reference.description.is_some());
+    }
+
+    #[test]
+    fn test_sign_language_referencer() {
+        let referencer = SignLanguageReferencer::with_defaults();
+
+        assert!(referencer.term_count() > 0);
+        assert!(referencer.reference_count() > 0);
+    }
+
+    #[test]
+    fn test_sign_language_get_references() {
+        let referencer = SignLanguageReferencer::with_defaults();
+
+        let refs = referencer.get_references("contract");
+        assert!(!refs.is_empty());
+    }
+
+    #[test]
+    fn test_sign_language_by_type() {
+        let referencer = SignLanguageReferencer::with_defaults();
+
+        let asl_refs =
+            referencer.get_references_for_sign_language("contract", SignLanguageType::ASL);
+        assert!(!asl_refs.is_empty());
+
+        let bsl_refs =
+            referencer.get_references_for_sign_language("solicitor", SignLanguageType::BSL);
+        assert!(!bsl_refs.is_empty());
+    }
+
+    #[test]
+    fn test_sign_language_html_generation() {
+        let mut referencer = SignLanguageReferencer::new();
+        referencer.add_reference(
+            SignLanguageReference::new(
+                "law",
+                SignLanguageType::ASL,
+                Locale::new("en").with_country("US"),
+            )
+            .with_video("https://example.com/law.mp4"),
+        );
+
+        let html = referencer.generate_accessible_html("This is about law.");
+        assert!(html.contains("sign-language-link"));
+        assert!(html.contains("aria-label"));
+    }
+
+    #[test]
+    fn test_sign_language_type_display() {
+        assert_eq!(
+            SignLanguageType::ASL.to_string(),
+            "American Sign Language (ASL)"
+        );
+        assert_eq!(
+            SignLanguageType::BSL.to_string(),
+            "British Sign Language (BSL)"
+        );
+        assert_eq!(
+            SignLanguageType::JSL.to_string(),
+            "Japanese Sign Language (JSL)"
+        );
+        assert_eq!(SignLanguageType::IS.to_string(), "International Sign (IS)");
+    }
+
+    #[test]
+    fn test_sign_language_add_custom() {
+        let mut referencer = SignLanguageReferencer::new();
+        let locale = Locale::new("en").with_country("US");
+
+        referencer.add_reference(
+            SignLanguageReference::new("judge", SignLanguageType::ASL, locale)
+                .with_description("Gavel motion"),
+        );
+
+        assert_eq!(referencer.term_count(), 1);
+        assert_eq!(referencer.reference_count(), 1);
+    }
+}
+
+// ============================================================================
+// v0.2.8: Historical Legal Language Tests
+// ============================================================================
+
+#[cfg(test)]
+mod historical_tests {
+    use super::*;
+
+    #[test]
+    fn test_archaic_term_creation() {
+        let term = ArchaicTerm::new(
+            "wergild",
+            HistoricalPeriod::OldEnglish,
+            "blood money",
+            "Compensation paid to slain person's family",
+            Locale::new("en").with_country("GB"),
+        )
+        .with_example("Wergild was 1200 shillings");
+
+        assert_eq!(term.term, "wergild");
+        assert_eq!(term.period, HistoricalPeriod::OldEnglish);
+        assert_eq!(term.modern_equivalent, "blood money");
+        assert!(term.example.is_some());
+    }
+
+    #[test]
+    fn test_archaic_dictionary_defaults() {
+        let dict = ArchaicTermDictionary::with_defaults();
+
+        assert!(dict.term_count() > 0);
+        assert!(dict.period_count() > 0);
+    }
+
+    #[test]
+    fn test_archaic_dictionary_by_period() {
+        let dict = ArchaicTermDictionary::with_defaults();
+
+        let old_english_terms = dict.get_by_period(HistoricalPeriod::OldEnglish);
+        assert!(!old_english_terms.is_empty());
+
+        let latin_terms = dict.get_by_period(HistoricalPeriod::ClassicalLatin);
+        assert!(!latin_terms.is_empty());
+    }
+
+    #[test]
+    fn test_archaic_dictionary_translate() {
+        let dict = ArchaicTermDictionary::with_defaults();
+
+        let modern = dict.translate_to_modern("wergild");
+        assert_eq!(modern, Some("blood money".to_string()));
+
+        let modern = dict.translate_to_modern("feoffment");
+        assert_eq!(modern, Some("grant of land".to_string()));
+    }
+
+    #[test]
+    fn test_archaic_dictionary_by_name() {
+        let dict = ArchaicTermDictionary::with_defaults();
+
+        let terms = dict.get_by_name("moot");
+        assert!(!terms.is_empty());
+        assert_eq!(terms[0].modern_equivalent, "assembly");
+    }
+
+    #[test]
+    fn test_historical_period_display() {
+        assert_eq!(
+            HistoricalPeriod::OldEnglish.to_string(),
+            "Old English (450-1150)"
+        );
+        assert_eq!(
+            HistoricalPeriod::MiddleEnglish.to_string(),
+            "Middle English (1150-1500)"
+        );
+        assert_eq!(
+            HistoricalPeriod::ClassicalLatin.to_string(),
+            "Classical Latin (Roman Empire)"
+        );
+    }
+
+    #[test]
+    fn test_historical_calendar_display() {
+        assert_eq!(HistoricalCalendar::Julian.to_string(), "Julian Calendar");
+        assert_eq!(
+            HistoricalCalendar::Gregorian.to_string(),
+            "Gregorian Calendar"
+        );
+        assert_eq!(
+            HistoricalCalendar::FrenchRevolutionary.to_string(),
+            "French Revolutionary Calendar"
+        );
+    }
+
+    #[test]
+    fn test_julian_to_gregorian_conversion() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::Julian);
+
+        // October 15, 1582 (Gregorian) = October 5, 1582 (Julian)
+        let (year, month, day) = converter.julian_to_gregorian(1582, 10, 5);
+
+        // The conversion should result in a later date
+        assert_eq!(year, 1582);
+        assert_eq!(month, 10);
+        assert!(day >= 5); // Gregorian date is later
+    }
+
+    #[test]
+    fn test_gregorian_to_julian_conversion() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::Gregorian);
+
+        let (year, month, day) = converter.gregorian_to_julian(1700, 1, 1);
+
+        // The conversion should maintain the year
+        assert!(year >= 1699 && year <= 1700);
+        assert!(month >= 1 && month <= 12);
+        assert!(day >= 1 && day <= 31);
+    }
+
+    #[test]
+    fn test_julian_gregorian_offset() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::Julian);
+
+        let offset_before = converter.julian_gregorian_offset(1500);
+        assert_eq!(offset_before, 0); // Before 1582
+
+        let offset_after = converter.julian_gregorian_offset(1700);
+        assert!(offset_after > 0); // After 1582
+    }
+
+    #[test]
+    fn test_format_historical_date_julian() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::Julian);
+
+        let formatted = converter.format_historical_date(1215, 6, 15);
+        assert!(formatted.contains("15"));
+        assert!(formatted.contains("1215"));
+        assert!(formatted.contains("(O.S.)")); // Old Style
+    }
+
+    #[test]
+    fn test_format_historical_date_gregorian() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::Gregorian);
+
+        let formatted = converter.format_historical_date(1789, 7, 14);
+        assert!(formatted.contains("14"));
+        assert!(formatted.contains("1789"));
+        assert!(formatted.contains("(N.S.)")); // New Style
+    }
+
+    #[test]
+    fn test_format_french_revolutionary_date() {
+        let converter = HistoricalCalendarConverter::new(HistoricalCalendar::FrenchRevolutionary);
+
+        let formatted = converter.format_french_revolutionary_date(2, 11, 9);
+        assert!(formatted.contains("9"));
+        assert!(formatted.contains("Thermidor"));
+        assert!(formatted.contains("An 2"));
+    }
+
+    #[test]
+    fn test_language_family_display() {
+        assert_eq!(LanguageFamily::Germanic.to_string(), "Germanic");
+        assert_eq!(LanguageFamily::Latin.to_string(), "Latin");
+        assert_eq!(LanguageFamily::NormanFrench.to_string(), "Norman French");
+    }
+
+    #[test]
+    fn test_etymology_creation() {
+        let etymology = Etymology::new(
+            "contract",
+            "contractus",
+            LanguageFamily::Latin,
+            "Latin",
+            "drawn together",
+        )
+        .with_first_usage(HistoricalPeriod::ClassicalLatin)
+        .add_evolution("Latin → Old French → Middle English");
+
+        assert_eq!(etymology.term, "contract");
+        assert_eq!(etymology.root, "contractus");
+        assert_eq!(etymology.language_family, LanguageFamily::Latin);
+        assert!(etymology.first_usage.is_some());
+        assert_eq!(etymology.evolution.len(), 1);
+    }
+
+    #[test]
+    fn test_etymology_tracker_defaults() {
+        let tracker = EtymologyTracker::with_defaults();
+
+        assert!(tracker.etymology_count() > 0);
+    }
+
+    #[test]
+    fn test_etymology_tracker_get() {
+        let tracker = EtymologyTracker::with_defaults();
+
+        let etymology = tracker.get_etymology("contract");
+        assert!(etymology.is_some());
+        assert_eq!(etymology.unwrap().root, "contractus");
+    }
+
+    #[test]
+    fn test_etymology_by_language_family() {
+        let tracker = EtymologyTracker::with_defaults();
+
+        let latin_etymologies = tracker.get_by_language_family(LanguageFamily::Latin);
+        assert!(!latin_etymologies.is_empty());
+
+        let french_etymologies = tracker.get_by_language_family(LanguageFamily::OldFrench);
+        assert!(!french_etymologies.is_empty());
+    }
+
+    #[test]
+    fn test_historical_context_creation() {
+        let context = HistoricalContext::new(
+            "Magna Carta",
+            HistoricalPeriod::MiddleEnglish,
+            "Signed in 1215",
+            "Established rule of law",
+        )
+        .with_modern_relevance("Foundation of constitutional law")
+        .add_related_document("Bill of Rights 1689");
+
+        assert_eq!(context.term, "Magna Carta");
+        assert_eq!(context.period, HistoricalPeriod::MiddleEnglish);
+        assert!(context.modern_relevance.is_some());
+        assert_eq!(context.related_documents.len(), 1);
+    }
+
+    #[test]
+    fn test_historical_context_annotator_defaults() {
+        let annotator = HistoricalContextAnnotator::with_defaults();
+
+        assert!(annotator.context_count() > 0);
+    }
+
+    #[test]
+    fn test_historical_context_get() {
+        let annotator = HistoricalContextAnnotator::with_defaults();
+
+        let contexts = annotator.get_contexts("Magna Carta");
+        assert!(!contexts.is_empty());
+        assert!(contexts[0].modern_relevance.is_some());
+    }
+
+    #[test]
+    fn test_historical_context_by_period() {
+        let annotator = HistoricalContextAnnotator::with_defaults();
+
+        let middle_english = annotator.get_by_period(HistoricalPeriod::MiddleEnglish);
+        assert!(!middle_english.is_empty());
+
+        let enlightenment = annotator.get_by_period(HistoricalPeriod::Enlightenment);
+        assert!(!enlightenment.is_empty());
+    }
+
+    #[test]
+    fn test_archaic_dictionary_add_custom() {
+        let mut dict = ArchaicTermDictionary::new();
+
+        dict.add_term(ArchaicTerm::new(
+            "gavelkind",
+            HistoricalPeriod::MiddleEnglish,
+            "equal inheritance",
+            "System of land inheritance divided equally among sons",
+            Locale::new("en").with_country("GB"),
+        ));
+
+        assert_eq!(dict.term_count(), 1);
+        assert!(dict.translate_to_modern("gavelkind").is_some());
+    }
+
+    #[test]
+    fn test_etymology_tracker_add_custom() {
+        let mut tracker = EtymologyTracker::new();
+
+        tracker.add_etymology(Etymology::new(
+            "judge",
+            "iudex",
+            LanguageFamily::Latin,
+            "Latin",
+            "one who declares law",
+        ));
+
+        assert_eq!(tracker.etymology_count(), 1);
+        assert!(tracker.get_etymology("judge").is_some());
+    }
+
+    #[test]
+    fn test_historical_context_add_custom() {
+        let mut annotator = HistoricalContextAnnotator::new();
+
+        annotator.add_context(HistoricalContext::new(
+            "Common Law",
+            HistoricalPeriod::MiddleEnglish,
+            "Developed in medieval England",
+            "Based on judicial precedent",
+        ));
+
+        assert_eq!(annotator.context_count(), 1);
+        assert!(!annotator.get_contexts("Common Law").is_empty());
     }
 }

@@ -399,9 +399,12 @@ mod tests {
     #[test]
     fn test_no_issues_simple_doc() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "statute1".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Test Statute".to_string(),
                 conditions: vec![],
                 effects: vec![],
@@ -427,16 +430,20 @@ mod tests {
     #[test]
     fn test_circular_supersession() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "a".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "A".to_string(),
                     supersedes: vec!["b".to_string()],
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "b".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "B".to_string(),
                     supersedes: vec!["a".to_string()],
                     ..Default::default()
@@ -457,21 +464,26 @@ mod tests {
     #[test]
     fn test_requires_superseded() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "new".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "New".to_string(),
                     requires: vec!["old".to_string()],
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "old".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Old".to_string(),
                     ..Default::default()
                 },
                 StatuteNode {
                     id: "replacement".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Replacement".to_string(),
                     supersedes: vec!["old".to_string()],
                     ..Default::default()
@@ -492,10 +504,13 @@ mod tests {
     #[test]
     fn test_effect_conflict() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 1".to_string(),
                     effects: vec![EffectNode {
                         effect_type: "grant".to_string(),
@@ -506,6 +521,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "statute2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 2".to_string(),
                     effects: vec![EffectNode {
                         effect_type: "revoke".to_string(),
@@ -530,10 +546,13 @@ mod tests {
     #[test]
     fn test_conflicting_defaults() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 1".to_string(),
                     defaults: vec![crate::ast::DefaultNode {
                         field: "status".to_string(),
@@ -543,6 +562,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "statute2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 2".to_string(),
                     defaults: vec![crate::ast::DefaultNode {
                         field: "status".to_string(),

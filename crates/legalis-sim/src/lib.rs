@@ -72,6 +72,35 @@
 //! - Validation Framework (empirical validation, cross-validation, confidence intervals, uncertainty quantification)
 //! - Domain-Specific Models (tax systems, benefit eligibility, regulatory compliance, court case prediction, legislative forecasting)
 //!
+//! ## GPU Acceleration (v0.2.0)
+//! - CUDA backend for NVIDIA GPU acceleration
+//! - OpenCL backend for cross-platform GPU support
+//! - WebGPU backend for browser-based simulations
+//! - GPU-optimized condition evaluation kernels
+//! - Tensor-based population representations
+//! - Memory pooling for efficient GPU memory management
+//!
+//! ## Distributed Simulation (v0.2.1)
+//! - Multi-node simulation framework with message passing
+//! - Partition-based entity distribution strategies
+//! - Cross-node communication abstractions
+//! - Dynamic load balancing with multiple strategies
+//! - Fault-tolerant coordination and synchronization
+//!
+//! ## Agent-Based Modeling 2.0 (v0.2.2)
+//! - Deep reinforcement learning (DQN, Actor-Critic)
+//! - Multi-agent coordination protocols (Contract Net, AMAS)
+//! - Emergent behavior detection
+//! - Social network dynamics
+//! - Cultural evolution modeling
+//!
+//! ## Real-Time Simulation (v0.2.3)
+//! - Streaming simulation updates
+//! - Live parameter adjustment
+//! - Real-time visualization integration
+//! - Simulation pause/resume/rewind
+//! - Breakpoint debugging
+//!
 //! ## Integration & API (2025-Q4)
 //! - Simulation-as-a-Service API with job queuing
 //! - Persistent result storage with file-based backend
@@ -86,6 +115,7 @@
 //! - Parameter sweep orchestration for sensitivity analysis
 //! - Execution history tracking and statistics
 
+mod agent_based_2;
 mod agent_intelligence;
 mod analysis;
 mod api;
@@ -94,12 +124,14 @@ mod builder;
 mod calibration;
 mod comparison;
 mod demographic_modeling;
+mod distributed;
 mod domain_models;
 mod economic;
 mod engine;
 mod error;
 mod event_driven;
 mod forecasting;
+mod gpu;
 mod impact;
 mod incremental;
 mod metrics;
@@ -112,6 +144,7 @@ mod persistence;
 mod policy_analysis;
 mod population;
 mod portfolio;
+mod realtime;
 mod relationships;
 mod risk;
 mod scenarios;
@@ -121,6 +154,7 @@ mod utils;
 mod validation;
 mod visualization;
 
+pub use agent_based_2::*;
 pub use agent_intelligence::*;
 pub use analysis::*;
 pub use api::*;
@@ -129,12 +163,14 @@ pub use builder::*;
 pub use calibration::*;
 pub use comparison::*;
 pub use demographic_modeling::*;
+pub use distributed::*;
 pub use domain_models::*;
 pub use economic::*;
 pub use engine::*;
 pub use error::*;
 pub use event_driven::*;
 pub use forecasting::*;
+pub use gpu::*;
 pub use impact::*;
 pub use incremental::*;
 pub use metrics::*;
@@ -147,6 +183,7 @@ pub use persistence::*;
 pub use policy_analysis::*;
 pub use population::*;
 pub use portfolio::*;
+pub use realtime::*;
 pub use relationships::*;
 pub use risk::*;
 pub use scenarios::*;

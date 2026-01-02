@@ -1017,7 +1017,7 @@ pub mod legal_document_analysis {
     }
 
     /// Metadata extracted from a legal document.
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
     pub struct LegalDocMetadata {
         /// Document title.
         pub title: Option<String>,
@@ -1069,21 +1069,6 @@ pub mod legal_document_analysis {
         /// Returns the number of pages in the document.
         pub fn page_count(&self) -> usize {
             self.layout.as_ref().map_or(1, |l| l.page_count)
-        }
-    }
-
-    impl Default for LegalDocMetadata {
-        fn default() -> Self {
-            Self {
-                title: None,
-                date: None,
-                parties: Vec::new(),
-                jurisdiction: None,
-                court: None,
-                case_number: None,
-                doc_type: None,
-                language: None,
-            }
         }
     }
 

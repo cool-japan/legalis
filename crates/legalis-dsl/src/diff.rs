@@ -318,6 +318,7 @@ mod tests {
         StatuteNode {
             id: id.to_string(),
             title: title.to_string(),
+            visibility: crate::module_system::Visibility::Private,
             conditions: Vec::new(),
             effects: Vec::new(),
             discretion: None,
@@ -362,11 +363,15 @@ mod tests {
     #[test]
     fn test_document_diff_added_statutes() {
         let doc1 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Statute 1")],
         };
 
         let doc2 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![
                 create_test_statute("stat1", "Statute 1"),
@@ -383,6 +388,8 @@ mod tests {
     #[test]
     fn test_document_diff_removed_statutes() {
         let doc1 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![
                 create_test_statute("stat1", "Statute 1"),
@@ -391,6 +398,8 @@ mod tests {
         };
 
         let doc2 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Statute 1")],
         };
@@ -404,11 +413,15 @@ mod tests {
     #[test]
     fn test_document_diff_modified_statutes() {
         let doc1 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Old Title")],
         };
 
         let doc2 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "New Title")],
         };
@@ -424,11 +437,15 @@ mod tests {
     #[test]
     fn test_has_changes() {
         let doc1 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Title")],
         };
 
         let doc2 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Title")],
         };
@@ -437,6 +454,8 @@ mod tests {
         assert!(!diff.has_changes());
 
         let doc3 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "New Title")],
         };
@@ -448,11 +467,15 @@ mod tests {
     #[test]
     fn test_diff_report() {
         let doc1 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![create_test_statute("stat1", "Old")],
         };
 
         let doc2 = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![
                 create_test_statute("stat1", "New"),

@@ -436,6 +436,7 @@ mod tests {
     fn create_test_statute() -> StatuteNode {
         StatuteNode {
             id: "test-1".to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Test Statute".to_string(),
             conditions: vec![ConditionNode::HasAttribute {
                 key: "citizen".to_string(),
@@ -461,6 +462,8 @@ mod tests {
     #[test]
     fn test_html_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![create_test_statute()],
         };
@@ -485,6 +488,8 @@ mod tests {
     #[test]
     fn test_dark_theme() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![create_test_statute()],
         };
@@ -498,6 +503,8 @@ mod tests {
     #[test]
     fn test_without_toc() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![create_test_statute()],
         };

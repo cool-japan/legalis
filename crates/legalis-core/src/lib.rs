@@ -301,6 +301,18 @@ pub mod parallel_eval;
 // Distributed Legal Reasoning (v0.2.0)
 pub mod distributed;
 
+// Formal Methods Integration (v0.2.1)
+pub mod formal_methods;
+
+// Legal Knowledge Graphs (v0.2.2)
+pub mod knowledge_graph;
+
+// Advanced Temporal Logic (v0.2.3)
+pub mod temporal;
+
+// Legal Document Processing (v0.2.4)
+pub mod document_processing;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;

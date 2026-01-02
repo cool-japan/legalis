@@ -280,6 +280,163 @@ impl Default for BatchDiffer {
     }
 }
 
+/// Precompiled diff metadata for fast incremental updates.
+#[derive(Debug, Clone)]
+pub struct PrecompiledDiffMetadata {
+    /// Statute ID
+    pub statute_id: String,
+    /// Precomputed precondition hashes
+    pub precondition_hashes: Vec<u64>,
+    /// Precomputed effect hash
+    pub effect_hash: u64,
+    /// Precomputed title hash
+    pub title_hash: u64,
+    /// Timestamp of compilation
+    pub compiled_at: std::time::Instant,
+}
+
+impl PrecompiledDiffMetadata {
+    /// Compiles metadata for a statute.
+    pub fn compile(statute: &Statute) -> Self {
+        use std::collections::hash_map::DefaultHasher;
+
+        let mut precondition_hashes = Vec::new();
+        for precondition in &statute.preconditions {
+            let mut hasher = DefaultHasher::new();
+            format!("{:?}", precondition).hash(&mut hasher);
+            precondition_hashes.push(hasher.finish());
+        }
+
+        let mut effect_hasher = DefaultHasher::new();
+        format!("{:?}", statute.effect).hash(&mut effect_hasher);
+        let effect_hash = effect_hasher.finish();
+
+        let mut title_hasher = DefaultHasher::new();
+        statute.title.hash(&mut title_hasher);
+        let title_hash = title_hasher.finish();
+
+        Self {
+            statute_id: statute.id.clone(),
+            precondition_hashes,
+            effect_hash,
+            title_hash,
+            compiled_at: std::time::Instant::now(),
+        }
+    }
+
+    /// Checks if the metadata is still valid for the given statute.
+    pub fn is_valid_for(&self, statute: &Statute) -> bool {
+        self.statute_id == statute.id
+            && self.precondition_hashes.len() == statute.preconditions.len()
+    }
+
+    /// Computes a quick diff against another precompiled metadata.
+    pub fn quick_diff(&self, other: &Self) -> QuickDiffResult {
+        let mut changed_preconditions = Vec::new();
+        let max_len = self
+            .precondition_hashes
+            .len()
+            .max(other.precondition_hashes.len());
+
+        for i in 0..max_len {
+            let old_hash = self.precondition_hashes.get(i).copied();
+            let new_hash = other.precondition_hashes.get(i).copied();
+
+            if old_hash != new_hash {
+                changed_preconditions.push(i);
+            }
+        }
+
+        QuickDiffResult {
+            title_changed: self.title_hash != other.title_hash,
+            effect_changed: self.effect_hash != other.effect_hash,
+            changed_precondition_indices: changed_preconditions,
+        }
+    }
+}
+
+/// Result of a quick diff between precompiled metadata.
+#[derive(Debug, Clone)]
+pub struct QuickDiffResult {
+    /// Whether the title changed
+    pub title_changed: bool,
+    /// Whether the effect changed
+    pub effect_changed: bool,
+    /// Indices of preconditions that changed
+    pub changed_precondition_indices: Vec<usize>,
+}
+
+impl QuickDiffResult {
+    /// Returns true if there are any changes.
+    pub fn has_changes(&self) -> bool {
+        self.title_changed || self.effect_changed || !self.changed_precondition_indices.is_empty()
+    }
+}
+
+/// Incremental compilation cache for diff metadata.
+pub struct IncrementalCompilationCache {
+    /// Cached precompiled metadata
+    cache: HashMap<String, PrecompiledDiffMetadata>,
+    /// Maximum cache size
+    max_size: usize,
+}
+
+impl IncrementalCompilationCache {
+    /// Creates a new incremental compilation cache.
+    #[must_use]
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_size,
+        }
+    }
+
+    /// Gets or compiles metadata for a statute.
+    pub fn get_or_compile(&mut self, statute: &Statute) -> &PrecompiledDiffMetadata {
+        if !self.cache.contains_key(&statute.id) || !self.cache[&statute.id].is_valid_for(statute) {
+            if self.cache.len() >= self.max_size {
+                // Simple eviction: remove first entry
+                if let Some(key) = self.cache.keys().next().cloned() {
+                    self.cache.remove(&key);
+                }
+            }
+
+            let metadata = PrecompiledDiffMetadata::compile(statute);
+            self.cache.insert(statute.id.clone(), metadata);
+        }
+
+        self.cache.get(&statute.id).unwrap()
+    }
+
+    /// Performs a quick diff using precompiled metadata.
+    pub fn quick_diff(&mut self, old: &Statute, new: &Statute) -> QuickDiffResult {
+        let old_metadata = self.get_or_compile(old).clone();
+        let new_metadata = self.get_or_compile(new).clone();
+        old_metadata.quick_diff(&new_metadata)
+    }
+
+    /// Clears the cache.
+    pub fn clear(&mut self) {
+        self.cache.clear();
+    }
+
+    /// Returns the number of cached entries.
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    /// Returns true if the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+}
+
+impl Default for IncrementalCompilationCache {
+    fn default() -> Self {
+        Self::new(100)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,5 +575,97 @@ mod tests {
         cache.clear();
         assert_eq!(cache.stats().size, 0);
         assert_eq!(cache.stats().hits, 0);
+    }
+
+    #[test]
+    fn test_precompiled_metadata_compile() {
+        let statute = create_test_statute("test", "Test", 18);
+        let metadata = PrecompiledDiffMetadata::compile(&statute);
+
+        assert_eq!(metadata.statute_id, "test");
+        assert_eq!(metadata.precondition_hashes.len(), 1);
+        assert!(metadata.effect_hash > 0);
+        assert!(metadata.title_hash > 0);
+    }
+
+    #[test]
+    fn test_precompiled_metadata_validity() {
+        let statute = create_test_statute("test", "Test", 18);
+        let metadata = PrecompiledDiffMetadata::compile(&statute);
+
+        assert!(metadata.is_valid_for(&statute));
+
+        let different = create_test_statute("other", "Test", 18);
+        assert!(!metadata.is_valid_for(&different));
+    }
+
+    #[test]
+    fn test_quick_diff_no_changes() {
+        let statute = create_test_statute("test", "Test", 18);
+        let metadata1 = PrecompiledDiffMetadata::compile(&statute);
+        let metadata2 = PrecompiledDiffMetadata::compile(&statute);
+
+        let result = metadata1.quick_diff(&metadata2);
+        assert!(!result.has_changes());
+    }
+
+    #[test]
+    fn test_quick_diff_with_changes() {
+        let old = create_test_statute("test", "Old", 18);
+        let new = create_test_statute("test", "New", 21);
+
+        let old_metadata = PrecompiledDiffMetadata::compile(&old);
+        let new_metadata = PrecompiledDiffMetadata::compile(&new);
+
+        let result = old_metadata.quick_diff(&new_metadata);
+        assert!(result.has_changes());
+        assert!(result.title_changed);
+    }
+
+    #[test]
+    fn test_incremental_compilation_cache() {
+        let mut cache = IncrementalCompilationCache::new(10);
+        let statute = create_test_statute("test", "Test", 18);
+
+        let metadata1 = cache.get_or_compile(&statute).clone();
+        let metadata2 = cache.get_or_compile(&statute).clone();
+
+        assert_eq!(metadata1.statute_id, metadata2.statute_id);
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_incremental_cache_quick_diff() {
+        let mut cache = IncrementalCompilationCache::new(10);
+        let old = create_test_statute("test-v1", "Old", 18);
+        let new = create_test_statute("test-v2", "New", 21);
+
+        let result = cache.quick_diff(&old, &new);
+        assert!(result.has_changes());
+        assert_eq!(cache.len(), 2); // Different IDs, so two entries
+    }
+
+    #[test]
+    fn test_incremental_cache_eviction() {
+        let mut cache = IncrementalCompilationCache::new(2);
+
+        for i in 0..5 {
+            let statute = create_test_statute(&format!("test{}", i), "Test", 18);
+            cache.get_or_compile(&statute);
+        }
+
+        assert!(cache.len() <= 2);
+    }
+
+    #[test]
+    fn test_incremental_cache_clear() {
+        let mut cache = IncrementalCompilationCache::new(10);
+        let statute = create_test_statute("test", "Test", 18);
+
+        cache.get_or_compile(&statute);
+        assert!(!cache.is_empty());
+
+        cache.clear();
+        assert!(cache.is_empty());
     }
 }

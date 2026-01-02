@@ -255,6 +255,7 @@ mod tests {
     fn create_test_statute(id: &str, effect_type: &str) -> StatuteNode {
         StatuteNode {
             id: id.to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Test".to_string(),
             conditions: vec![],
             effects: vec![EffectNode {
@@ -278,6 +279,8 @@ mod tests {
     #[test]
     fn test_compliance_matrix_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 create_test_statute("US-CA-law-1", "GRANT"),
@@ -300,6 +303,8 @@ mod tests {
     #[test]
     fn test_compliance_stats() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 create_test_statute("US-CA-law-1", "GRANT"),
@@ -317,6 +322,8 @@ mod tests {
     #[test]
     fn test_csv_export() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 create_test_statute("US-CA-law-1", "GRANT"),
@@ -337,6 +344,8 @@ mod tests {
     #[test]
     fn test_find_gaps() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 create_test_statute("US-CA-law-1", "GRANT"),
@@ -356,6 +365,8 @@ mod tests {
     #[test]
     fn test_text_report() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![create_test_statute("US-CA-law-1", "GRANT")],
         };

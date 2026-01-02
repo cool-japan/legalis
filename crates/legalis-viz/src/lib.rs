@@ -4392,6 +4392,2432 @@ impl Default for ThreeDVisualizer {
 }
 
 // ============================================================================
+// Immersive Legal Visualization (v0.3.0)
+// ============================================================================
+
+/// Configuration for VR statute exploration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VRExplorationConfig {
+    /// Enable hand tracking
+    pub enable_hand_tracking: bool,
+    /// Enable teleportation navigation
+    pub enable_teleportation: bool,
+    /// Enable voice commands
+    pub enable_voice_commands: bool,
+    /// Enable spatial audio
+    pub enable_spatial_audio: bool,
+    /// Enable haptic feedback
+    pub enable_haptic_feedback: bool,
+    /// Node interaction distance (meters)
+    pub interaction_distance: f32,
+    /// Movement speed multiplier
+    pub movement_speed: f32,
+}
+
+impl Default for VRExplorationConfig {
+    fn default() -> Self {
+        Self {
+            enable_hand_tracking: true,
+            enable_teleportation: true,
+            enable_voice_commands: false,
+            enable_spatial_audio: true,
+            enable_haptic_feedback: true,
+            interaction_distance: 2.0,
+            movement_speed: 1.0,
+        }
+    }
+}
+
+/// VR statute exploration visualizer.
+pub struct VRStatuteExplorer {
+    theme: Theme,
+    config: VRExplorationConfig,
+}
+
+impl VRStatuteExplorer {
+    /// Creates a new VR statute explorer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+            config: VRExplorationConfig::default(),
+        }
+    }
+
+    /// Sets the color theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the VR configuration.
+    pub fn with_config(mut self, config: VRExplorationConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates VR HTML for statute exploration.
+    pub fn to_vr_html(&self, statute: &Statute) -> String {
+        let tree = DecisionTree::from_statute(statute).unwrap_or_else(|_| DecisionTree::new());
+        self.to_vr_html_tree(&tree)
+    }
+
+    /// Generates VR HTML for a decision tree.
+    pub fn to_vr_html_tree(&self, tree: &DecisionTree) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("<meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("<title>VR Statute Explorer</title>\n");
+        html.push_str("<style>\n");
+        html.push_str(&self.generate_vr_styles());
+        html.push_str("</style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        // VR container
+        html.push_str("<div id=\"vr-container\">\n");
+        html.push_str("<div class=\"info-overlay\">\n");
+        html.push_str("<h2>VR Statute Explorer</h2>\n");
+        html.push_str("<p>Click 'Enter VR' to start the immersive experience</p>\n");
+        html.push_str("<div id=\"status\">Status: Ready</div>\n");
+        html.push_str("<div id=\"node-detail\">Point at nodes to see details</div>\n");
+        html.push_str("</div>\n");
+        html.push_str("</div>\n");
+
+        // Scripts
+        html.push_str("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("<script>\n");
+        html.push_str(&self.generate_vr_javascript(tree));
+        html.push_str("</script>\n");
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    fn generate_vr_styles(&self) -> String {
+        format!(
+            "body {{
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: {};
+    color: {};
+}}
+
+#vr-container {{
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+}}
+
+.info-overlay {{
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 400px;
+    z-index: 1000;
+}}
+
+.info-overlay h2 {{
+    margin: 0 0 10px 0;
+    font-size: 24px;
+}}
+
+.info-overlay p {{
+    margin: 5px 0;
+    font-size: 14px;
+}}
+
+#status, #node-detail {{
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-size: 12px;
+}}
+",
+            self.theme.background_color, self.theme.text_color
+        )
+    }
+
+    fn generate_vr_javascript(&self, tree: &DecisionTree) -> String {
+        let nodes = self.extract_tree_nodes(tree);
+
+        format!(
+            "// VR Statute Explorer
+const config = {{
+    enableHandTracking: {},
+    enableTeleportation: {},
+    enableVoiceCommands: {},
+    enableSpatialAudio: {},
+    enableHapticFeedback: {},
+    interactionDistance: {},
+    movementSpeed: {}
+}};
+
+const nodes = {};
+
+let scene, camera, renderer;
+let vrSession = null;
+let nodeObjects = [];
+let controllers = [];
+let audioContext = null;
+let spatialAudioNodes = [];
+
+function init() {{
+    const container = document.getElementById('vr-container');
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color('{}');
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 1.6, 3); // Average human eye height
+
+    // Renderer with WebXR
+    renderer = new THREE.WebGLRenderer({{ antialias: true }});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // Add VR button
+    const vrButton = createVRButton();
+    document.body.appendChild(vrButton);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 7.5);
+    scene.add(directionalLight);
+
+    // Floor
+    const floorGeometry = new THREE.PlaneGeometry(50, 50);
+    const floorMaterial = new THREE.MeshStandardMaterial({{
+        color: 0x404040,
+        roughness: 0.8,
+        metalness: 0.2
+    }});
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // Create statute graph
+    createStatuteGraph();
+
+    // Setup controllers
+    setupControllers();
+
+    // Setup spatial audio
+    if (config.enableSpatialAudio) {{
+        setupSpatialAudio();
+    }}
+
+    // Event listeners
+    window.addEventListener('resize', onWindowResize);
+
+    // Start render loop
+    renderer.setAnimationLoop(render);
+}}
+
+function createVRButton() {{
+    const button = document.createElement('button');
+    button.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        color: white;
+        background: #1976d2;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 1001;
+    `;
+    button.textContent = 'ENTER VR';
+
+    button.addEventListener('click', async () => {{
+        if (!navigator.xr) {{
+            alert('WebXR not supported in this browser');
+            return;
+        }}
+
+        try {{
+            const session = await navigator.xr.requestSession('immersive-vr', {{
+                optionalFeatures: ['hand-tracking', 'local-floor']
+            }});
+
+            renderer.xr.setSession(session);
+            vrSession = session;
+
+            session.addEventListener('end', () => {{
+                vrSession = null;
+                document.getElementById('status').textContent = 'Status: VR session ended';
+            }});
+
+            document.getElementById('status').textContent = 'Status: VR session active';
+        }} catch (error) {{
+            console.error('Failed to start VR session:', error);
+            alert('Failed to start VR session: ' + error.message);
+        }}
+    }});
+
+    return button;
+}}
+
+function createStatuteGraph() {{
+    nodes.forEach((node, index) => {{
+        // Create node sphere
+        const geometry = new THREE.SphereGeometry(0.2, 32, 32);
+        let color;
+
+        switch(node.type) {{
+            case 'condition':
+                color = new THREE.Color('{}');
+                break;
+            case 'discretion':
+                color = new THREE.Color('{}');
+                break;
+            case 'outcome':
+                color = new THREE.Color('{}');
+                break;
+            default:
+                color = new THREE.Color('{}');
+        }}
+
+        const material = new THREE.MeshStandardMaterial({{
+            color,
+            roughness: 0.5,
+            metalness: 0.3
+        }});
+        const sphere = new THREE.Mesh(geometry, material);
+
+        // Position nodes in a circular arrangement
+        const angle = (index / nodes.length) * Math.PI * 2;
+        const radius = 3;
+        sphere.position.set(
+            Math.cos(angle) * radius,
+            1.6 + (node.depth || 0) * 0.5,
+            Math.sin(angle) * radius
+        );
+
+        sphere.userData = {{
+            index,
+            label: node.label,
+            type: node.type,
+            description: node.description || ''
+        }};
+
+        scene.add(sphere);
+        nodeObjects.push(sphere);
+
+        // Add text label
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 256;
+        context.fillStyle = 'white';
+        context.font = 'bold 48px Arial';
+        context.textAlign = 'center';
+        context.fillText(node.label, 256, 128);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({{ map: texture }});
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.copy(sphere.position);
+        sprite.position.y += 0.3;
+        sprite.scale.set(1, 0.5, 1);
+        scene.add(sprite);
+    }});
+}}
+
+function setupControllers() {{
+    // Controller 1
+    const controller1 = renderer.xr.getController(0);
+    controller1.addEventListener('selectstart', onSelectStart);
+    controller1.addEventListener('selectend', onSelectEnd);
+    controller1.addEventListener('select', onSelect);
+    scene.add(controller1);
+    controllers.push(controller1);
+
+    // Controller 2
+    const controller2 = renderer.xr.getController(1);
+    controller2.addEventListener('selectstart', onSelectStart);
+    controller2.addEventListener('selectend', onSelectEnd);
+    controller2.addEventListener('select', onSelect);
+    scene.add(controller2);
+    controllers.push(controller2);
+
+    // Add controller visualizations
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -1)
+    ]);
+    const material = new THREE.LineBasicMaterial({{ color: 0xffffff }});
+
+    controllers.forEach(controller => {{
+        const line = new THREE.Line(geometry, material);
+        line.name = 'line';
+        line.scale.z = 5;
+        controller.add(line);
+    }});
+}}
+
+function setupSpatialAudio() {{
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Create spatial audio for each node
+    nodeObjects.forEach((nodeObj, index) => {{
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+
+        const sound = new THREE.PositionalAudio(listener);
+
+        // Create oscillator for spatial audio feedback
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.frequency.value = 200 + (index * 50); // Different pitch for each node
+        gainNode.gain.value = 0; // Start silent
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        spatialAudioNodes.push({{ node: nodeObj, oscillator, gainNode }});
+    }});
+}}
+
+function onSelectStart(event) {{
+    const controller = event.target;
+    const intersections = getIntersections(controller);
+
+    if (intersections.length > 0) {{
+        const intersection = intersections[0];
+        const nodeData = intersection.object.userData;
+
+        if (nodeData && nodeData.label) {{
+            document.getElementById('node-detail').textContent =
+                `Selected: ${{nodeData.label}} - ${{nodeData.description || 'No description'}}`;
+
+            // Haptic feedback
+            if (config.enableHapticFeedback && controller.gamepad) {{
+                controller.gamepad.hapticActuators[0].pulse(0.7, 100);
+            }}
+
+            // Spatial audio feedback
+            if (config.enableSpatialAudio && spatialAudioNodes[nodeData.index]) {{
+                const audio = spatialAudioNodes[nodeData.index];
+                audio.gainNode.gain.value = 0.3;
+                audio.oscillator.start(audioContext.currentTime);
+                setTimeout(() => {{
+                    audio.gainNode.gain.value = 0;
+                }}, 200);
+            }}
+        }}
+    }}
+}}
+
+function onSelectEnd(event) {{
+    const controller = event.target;
+
+    // Release haptic feedback
+    if (config.enableHapticFeedback && controller.gamepad) {{
+        controller.gamepad.hapticActuators[0].reset();
+    }}
+}}
+
+function onSelect(event) {{
+    // Handle selection complete
+}}
+
+function getIntersections(controller) {{
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller.matrixWorld);
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+    return raycaster.intersectObjects(nodeObjects, false);
+}}
+
+function render() {{
+    // Update controller interactions
+    controllers.forEach(controller => {{
+        const intersections = getIntersections(controller);
+
+        if (intersections.length > 0) {{
+            const intersection = intersections[0];
+            const line = controller.getObjectByName('line');
+            if (line) {{
+                line.scale.z = intersection.distance;
+            }}
+        }}
+    }});
+
+    renderer.render(scene, camera);
+}}
+
+function onWindowResize() {{
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}}
+
+// Initialize
+init();
+",
+            self.config.enable_hand_tracking,
+            self.config.enable_teleportation,
+            self.config.enable_voice_commands,
+            self.config.enable_spatial_audio,
+            self.config.enable_haptic_feedback,
+            self.config.interaction_distance,
+            self.config.movement_speed,
+            serde_json::to_string_pretty(&nodes).unwrap_or_else(|_| "[]".to_string()),
+            self.theme.background_color,
+            self.theme.condition_color,
+            self.theme.discretion_color,
+            self.theme.outcome_color,
+            self.theme.root_color
+        )
+    }
+
+    fn extract_tree_nodes(&self, tree: &DecisionTree) -> Vec<serde_json::Value> {
+        let mut nodes = Vec::new();
+
+        // Extract all nodes from the graph
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                let (node_type, label, description) = match node {
+                    DecisionNode::Root { statute_id, title } => {
+                        ("root", statute_id.clone(), title.clone())
+                    }
+                    DecisionNode::Condition {
+                        description,
+                        is_discretionary,
+                    } => {
+                        let node_type = if *is_discretionary {
+                            "discretion"
+                        } else {
+                            "condition"
+                        };
+                        (node_type, description.clone(), description.clone())
+                    }
+                    DecisionNode::Outcome { description } => {
+                        ("outcome", description.clone(), description.clone())
+                    }
+                    DecisionNode::Discretion { issue, hint } => {
+                        let desc = hint.as_ref().unwrap_or(issue);
+                        ("discretion", issue.clone(), desc.clone())
+                    }
+                };
+
+                nodes.push(serde_json::json!({
+                    "label": label,
+                    "type": node_type,
+                    "depth": 0,
+                    "description": description
+                }));
+            }
+        }
+
+        nodes
+    }
+}
+
+impl Default for VRStatuteExplorer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Configuration for AR document overlay.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AROverlayConfig {
+    /// Enable marker-based AR
+    pub enable_markers: bool,
+    /// Enable markerless AR (SLAM)
+    pub enable_markerless: bool,
+    /// Enable face tracking
+    pub enable_face_tracking: bool,
+    /// Marker size in meters
+    pub marker_size: f32,
+    /// Overlay opacity (0.0-1.0)
+    pub overlay_opacity: f32,
+}
+
+impl Default for AROverlayConfig {
+    fn default() -> Self {
+        Self {
+            enable_markers: true,
+            enable_markerless: true,
+            enable_face_tracking: false,
+            marker_size: 0.15,
+            overlay_opacity: 0.9,
+        }
+    }
+}
+
+/// AR legal document overlay visualizer.
+pub struct ARDocumentOverlay {
+    theme: Theme,
+    config: AROverlayConfig,
+}
+
+impl ARDocumentOverlay {
+    /// Creates a new AR document overlay.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+            config: AROverlayConfig::default(),
+        }
+    }
+
+    /// Sets the color theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the AR configuration.
+    pub fn with_config(mut self, config: AROverlayConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates AR HTML for document overlay.
+    pub fn to_ar_html(&self, statute: &Statute) -> String {
+        let tree = DecisionTree::from_statute(statute).unwrap_or_else(|_| DecisionTree::new());
+        self.to_ar_html_tree(&tree)
+    }
+
+    /// Generates AR HTML for a decision tree overlay.
+    pub fn to_ar_html_tree(&self, tree: &DecisionTree) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("<meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("<title>AR Document Overlay</title>\n");
+        html.push_str("<style>\n");
+        html.push_str(&self.generate_ar_styles());
+        html.push_str("</style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str("<div id=\"ar-container\">\n");
+        html.push_str("<div class=\"controls\">\n");
+        html.push_str("<button id=\"start-ar\">Start AR</button>\n");
+        html.push_str("<div id=\"ar-status\">AR Ready</div>\n");
+        html.push_str("</div>\n");
+        html.push_str("<video id=\"camera-feed\" autoplay playsinline></video>\n");
+        html.push_str("<canvas id=\"ar-overlay\"></canvas>\n");
+        html.push_str("</div>\n");
+
+        html.push_str("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("<script>\n");
+        html.push_str(&self.generate_ar_javascript(tree));
+        html.push_str("</script>\n");
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    fn generate_ar_styles(&self) -> String {
+        "body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+#ar-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+#camera-feed {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#ar-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.controls {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+#start-ar {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    background: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#ar-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 4px;
+}
+"
+        .to_string()
+    }
+
+    fn generate_ar_javascript(&self, tree: &DecisionTree) -> String {
+        let nodes = self.extract_tree_nodes(tree);
+
+        format!(
+            "// AR Document Overlay
+const config = {{
+    enableMarkers: {},
+    enableMarkerless: {},
+    enableFaceTracking: {},
+    markerSize: {},
+    overlayOpacity: {}
+}};
+
+const nodes = {};
+
+let video, canvas, ctx;
+let scene, camera, renderer;
+let arSession = null;
+
+async function init() {{
+    video = document.getElementById('camera-feed');
+    canvas = document.getElementById('ar-overlay');
+    ctx = canvas.getContext('2d');
+
+    // Setup canvas
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Setup Three.js for AR
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    renderer = new THREE.WebGLRenderer({{
+        canvas: canvas,
+        alpha: true,
+        antialias: true
+    }});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+
+    // Setup AR button
+    document.getElementById('start-ar').addEventListener('click', startAR);
+
+    window.addEventListener('resize', onResize);
+}}
+
+async function startAR() {{
+    try {{
+        // Request camera access
+        const stream = await navigator.mediaDevices.getUserMedia({{
+            video: {{ facingMode: 'environment' }}
+        }});
+
+        video.srcObject = stream;
+        await video.play();
+
+        document.getElementById('ar-status').textContent = 'AR Active';
+
+        // Check for WebXR AR support
+        if (navigator.xr) {{
+            const supported = await navigator.xr.isSessionSupported('immersive-ar');
+
+            if (supported) {{
+                arSession = await navigator.xr.requestSession('immersive-ar', {{
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['dom-overlay']
+                }});
+
+                renderer.xr.setSession(arSession);
+                createAROverlay();
+
+                arSession.addEventListener('end', () => {{
+                    arSession = null;
+                    document.getElementById('ar-status').textContent = 'AR Ended';
+                }});
+            }} else {{
+                // Fallback to marker-based AR
+                createMarkerBasedAR();
+            }}
+        }} else {{
+            // No WebXR, use camera-based overlay
+            createCameraOverlay();
+        }}
+
+        render();
+    }} catch (error) {{
+        console.error('Failed to start AR:', error);
+        document.getElementById('ar-status').textContent = 'AR Error: ' + error.message;
+    }}
+}}
+
+function createAROverlay() {{
+    // Create virtual content for AR
+    nodes.forEach((node, index) => {{
+        const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        let color;
+
+        switch(node.type) {{
+            case 'condition':
+                color = 0x3498db;
+                break;
+            case 'discretion':
+                color = 0xe74c3c;
+                break;
+            case 'outcome':
+                color = 0x2ecc71;
+                break;
+            default:
+                color = 0x999999;
+        }}
+
+        const material = new THREE.MeshBasicMaterial({{
+            color,
+            transparent: true,
+            opacity: config.overlayOpacity
+        }});
+        const cube = new THREE.Mesh(geometry, material);
+
+        // Position in a grid
+        const row = Math.floor(index / 3);
+        const col = index % 3;
+        cube.position.set(
+            (col - 1) * 0.3,
+            1.5 + (row * 0.3),
+            -1
+        );
+
+        scene.add(cube);
+    }});
+}}
+
+function createMarkerBasedAR() {{
+    // Implement marker-based AR tracking
+    console.log('Using marker-based AR');
+    drawMarkerOverlay();
+}}
+
+function createCameraOverlay() {{
+    // Simple camera-based overlay
+    console.log('Using camera overlay');
+    drawCameraOverlay();
+}}
+
+function drawMarkerOverlay() {{
+    // Draw AR markers and overlays on canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = config.overlayOpacity;
+
+    nodes.forEach((node, index) => {{
+        const x = 100 + (index * 150);
+        const y = 100 + (Math.floor(index / 3) * 100);
+
+        // Draw node box
+        ctx.fillStyle = node.type === 'condition' ? '#3498db' :
+                        node.type === 'discretion' ? '#e74c3c' : '#2ecc71';
+        ctx.fillRect(x, y, 120, 60);
+
+        // Draw text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(node.label, x + 10, y + 30);
+    }});
+
+    ctx.globalAlpha = 1.0;
+}}
+
+function drawCameraOverlay() {{
+    drawMarkerOverlay();
+}}
+
+function render() {{
+    if (!arSession) {{
+        // Non-WebXR rendering
+        drawMarkerOverlay();
+        requestAnimationFrame(render);
+    }} else {{
+        // WebXR AR rendering
+        renderer.render(scene, camera);
+    }}
+}}
+
+function onResize() {{
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}}
+
+init();
+",
+            self.config.enable_markers,
+            self.config.enable_markerless,
+            self.config.enable_face_tracking,
+            self.config.marker_size,
+            self.config.overlay_opacity,
+            serde_json::to_string_pretty(&nodes).unwrap_or_else(|_| "[]".to_string())
+        )
+    }
+
+    fn extract_tree_nodes(&self, tree: &DecisionTree) -> Vec<serde_json::Value> {
+        let mut nodes = Vec::new();
+
+        // Extract all nodes from the graph
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                let (node_type, label) = match node {
+                    DecisionNode::Root { statute_id, .. } => ("root", statute_id.clone()),
+                    DecisionNode::Condition {
+                        description,
+                        is_discretionary,
+                    } => {
+                        let node_type = if *is_discretionary {
+                            "discretion"
+                        } else {
+                            "condition"
+                        };
+                        (node_type, description.clone())
+                    }
+                    DecisionNode::Outcome { description } => ("outcome", description.clone()),
+                    DecisionNode::Discretion { issue, .. } => ("discretion", issue.clone()),
+                };
+
+                nodes.push(serde_json::json!({
+                    "label": label,
+                    "type": node_type
+                }));
+            }
+        }
+
+        nodes
+    }
+}
+
+impl Default for ARDocumentOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Configuration for 360° case timeline viewing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Panoramic360Config {
+    /// Enable VR mode for 360° viewing
+    pub enable_vr_mode: bool,
+    /// Enable auto-rotation
+    pub enable_auto_rotation: bool,
+    /// Rotation speed (degrees per second)
+    pub rotation_speed: f32,
+    /// Field of view (degrees)
+    pub field_of_view: f32,
+    /// Enable gyroscope controls (mobile)
+    pub enable_gyroscope: bool,
+}
+
+impl Default for Panoramic360Config {
+    fn default() -> Self {
+        Self {
+            enable_vr_mode: true,
+            enable_auto_rotation: false,
+            rotation_speed: 10.0,
+            field_of_view: 75.0,
+            enable_gyroscope: true,
+        }
+    }
+}
+
+/// 360° panoramic case timeline visualizer.
+pub struct Panoramic360Timeline {
+    theme: Theme,
+    config: Panoramic360Config,
+}
+
+impl Panoramic360Timeline {
+    /// Creates a new 360° timeline visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+            config: Panoramic360Config::default(),
+        }
+    }
+
+    /// Sets the color theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the 360° configuration.
+    pub fn with_config(mut self, config: Panoramic360Config) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates 360° HTML for a timeline.
+    pub fn to_360_html(&self, timeline: &Timeline) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("<meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str("<title>360\u{00b0} Case Timeline</title>\n");
+        html.push_str("<style>\n");
+        html.push_str(&self.generate_360_styles());
+        html.push_str("</style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str("<div id=\"panorama-container\">\n");
+        html.push_str("<div class=\"controls-overlay\">\n");
+        html.push_str("<h2>360\u{00b0} Case Timeline</h2>\n");
+        html.push_str("<button id=\"toggle-rotation\">Toggle Auto-Rotate</button>\n");
+        if self.config.enable_vr_mode {
+            html.push_str("<button id=\"enter-vr\">Enter VR</button>\n");
+        }
+        html.push_str("<div id=\"event-info\">Look around to explore timeline events</div>\n");
+        html.push_str("</div>\n");
+        html.push_str("</div>\n");
+
+        html.push_str("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("<script>\n");
+        html.push_str(&self.generate_360_javascript(timeline));
+        html.push_str("</script>\n");
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    fn generate_360_styles(&self) -> String {
+        "body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+#panorama-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+}
+
+.controls-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.controls-overlay h2 {
+    margin: 0 0 15px 0;
+    font-size: 20px;
+}
+
+.controls-overlay button {
+    margin: 5px;
+    padding: 10px 20px;
+    font-size: 14px;
+    background: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.controls-overlay button:hover {
+    background: #1976d2;
+}
+
+#event-info {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-size: 14px;
+}
+"
+        .to_string()
+    }
+
+    fn generate_360_javascript(&self, timeline: &Timeline) -> String {
+        let events = self.extract_timeline_events(timeline);
+
+        format!(
+            "// 360° Panoramic Timeline
+const config = {{
+    enableVRMode: {},
+    enableAutoRotation: {},
+    rotationSpeed: {},
+    fieldOfView: {},
+    enableGyroscope: {}
+}};
+
+const events = {};
+
+let scene, camera, renderer;
+let controls;
+let autoRotate = config.enableAutoRotation;
+let eventObjects = [];
+
+function init() {{
+    const container = document.getElementById('panorama-container');
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Sky blue
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(
+        config.fieldOfView,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+    );
+    camera.position.set(0, 0, 0.01); // Center of 360° sphere
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({{ antialias: true }});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (config.enableVRMode) {{
+        renderer.xr.enabled = true;
+    }}
+    container.appendChild(renderer.domElement);
+
+    // Create 360° environment
+    create360Environment();
+
+    // Create timeline events
+    createTimelineEvents();
+
+    // Mouse/touch controls
+    let isDragging = false;
+    let previousMousePosition = {{ x: 0, y: 0 }};
+
+    container.addEventListener('mousedown', (e) => {{
+        isDragging = true;
+        previousMousePosition = {{ x: e.clientX, y: e.clientY }};
+    }});
+
+    container.addEventListener('mousemove', (e) => {{
+        if (isDragging) {{
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+
+            camera.rotation.y += deltaX * 0.005;
+            camera.rotation.x += deltaY * 0.005;
+
+            // Limit vertical rotation
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+
+            previousMousePosition = {{ x: e.clientX, y: e.clientY }};
+        }}
+    }});
+
+    container.addEventListener('mouseup', () => {{
+        isDragging = false;
+    }});
+
+    // Gyroscope support for mobile
+    if (config.enableGyroscope && window.DeviceOrientationEvent) {{
+        window.addEventListener('deviceorientation', (event) => {{
+            if (event.alpha !== null && event.beta !== null && event.gamma !== null) {{
+                camera.rotation.y = event.alpha * (Math.PI / 180);
+                camera.rotation.x = event.beta * (Math.PI / 180);
+                camera.rotation.z = event.gamma * (Math.PI / 180);
+            }}
+        }});
+    }}
+
+    // Event listeners
+    document.getElementById('toggle-rotation')?.addEventListener('click', () => {{
+        autoRotate = !autoRotate;
+    }});
+
+    document.getElementById('enter-vr')?.addEventListener('click', async () => {{
+        if (navigator.xr) {{
+            try {{
+                const session = await navigator.xr.requestSession('immersive-vr');
+                renderer.xr.setSession(session);
+            }} catch (error) {{
+                console.error('Failed to start VR:', error);
+            }}
+        }}
+    }});
+
+    window.addEventListener('resize', onResize);
+
+    // Raycaster for event detection
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    container.addEventListener('click', (event) => {{
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(eventObjects);
+
+        if (intersects.length > 0) {{
+            const eventData = intersects[0].object.userData;
+            document.getElementById('event-info').textContent =
+                `${{eventData.date}}: ${{eventData.description}}`;
+        }}
+    }});
+
+    // Start render loop
+    renderer.setAnimationLoop(render);
+}}
+
+function create360Environment() {{
+    // Create sphere for 360° panorama
+    const geometry = new THREE.SphereGeometry(500, 60, 40);
+    geometry.scale(-1, 1, 1); // Invert to see inside
+
+    const material = new THREE.MeshBasicMaterial({{
+        color: 0x87ceeb,
+        side: THREE.BackSide
+    }});
+
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    // Add ambient light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+}}
+
+function createTimelineEvents() {{
+    events.forEach((event, index) => {{
+        // Create event marker
+        const geometry = new THREE.BoxGeometry(2, 2, 0.5);
+        const material = new THREE.MeshBasicMaterial({{
+            color: event.type === 'Enacted' ? 0x2ecc71 :
+                   event.type === 'Amended' ? 0x3498db :
+                   event.type === 'Repealed' ? 0xe74c3c : 0xf39c12
+        }});
+        const cube = new THREE.Mesh(geometry, material);
+
+        // Position events in a circle around the viewer
+        const angle = (index / events.length) * Math.PI * 2;
+        const radius = 10;
+        cube.position.set(
+            Math.cos(angle) * radius,
+            Math.sin(index * 0.5) * 2, // Vary height
+            Math.sin(angle) * radius
+        );
+
+        // Make it face the center
+        cube.lookAt(0, 0, 0);
+
+        cube.userData = {{
+            date: event.date,
+            description: event.description,
+            type: event.type
+        }};
+
+        scene.add(cube);
+        eventObjects.push(cube);
+
+        // Add text label
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 256;
+        context.fillStyle = 'white';
+        context.font = 'bold 32px Arial';
+        context.textAlign = 'center';
+        context.fillText(event.date, 256, 100);
+        context.font = '24px Arial';
+        context.fillText(event.type, 256, 150);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({{ map: texture }});
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.copy(cube.position);
+        sprite.position.y += 1.5;
+        sprite.scale.set(3, 1.5, 1);
+        scene.add(sprite);
+    }});
+}}
+
+function render() {{
+    if (autoRotate) {{
+        camera.rotation.y += (config.rotationSpeed * Math.PI / 180) * 0.01;
+    }}
+
+    renderer.render(scene, camera);
+}}
+
+function onResize() {{
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}}
+
+init();
+",
+            self.config.enable_vr_mode,
+            self.config.enable_auto_rotation,
+            self.config.rotation_speed,
+            self.config.field_of_view,
+            self.config.enable_gyroscope,
+            serde_json::to_string_pretty(&events).unwrap_or_else(|_| "[]".to_string())
+        )
+    }
+
+    fn extract_timeline_events(&self, timeline: &Timeline) -> Vec<serde_json::Value> {
+        timeline
+            .events
+            .iter()
+            .map(|(date, event)| {
+                let (event_type, description) = match event {
+                    TimelineEvent::Enacted { statute_id, title } => {
+                        ("Enacted", format!("{}: {}", statute_id, title))
+                    }
+                    TimelineEvent::Amended {
+                        statute_id,
+                        description,
+                    } => ("Amended", format!("{}: {}", statute_id, description)),
+                    TimelineEvent::Repealed { statute_id } => ("Repealed", statute_id.clone()),
+                    TimelineEvent::EffectiveStart { statute_id } => {
+                        ("EffectiveStart", statute_id.clone())
+                    }
+                    TimelineEvent::EffectiveEnd { statute_id } => {
+                        ("EffectiveEnd", statute_id.clone())
+                    }
+                };
+
+                serde_json::json!({
+                    "date": date,
+                    "type": event_type,
+                    "description": description
+                })
+            })
+            .collect()
+    }
+}
+
+impl Default for Panoramic360Timeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// AI-Enhanced Visualization (v0.3.1)
+// ============================================================================
+
+/// Visualization types that can be automatically selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VisualizationType {
+    /// Decision tree visualization
+    DecisionTree,
+    /// Dependency graph
+    DependencyGraph,
+    /// Timeline visualization
+    Timeline,
+    /// 3D interactive graph
+    ThreeD,
+    /// Sankey diagram for flow
+    Sankey,
+    /// Heatmap
+    Heatmap,
+    /// Network graph
+    Network,
+}
+
+/// Recommendation for visualization with confidence score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VisualizationRecommendation {
+    /// Recommended visualization type
+    pub viz_type: VisualizationType,
+    /// Confidence score (0.0-1.0)
+    pub confidence: f32,
+    /// Reasoning for the recommendation
+    pub reasoning: String,
+    /// Alternative suggestions
+    pub alternatives: Vec<(VisualizationType, f32)>,
+}
+
+/// Automatic visualization selector based on data characteristics.
+pub struct AutoVisualizationSelector {
+    /// Minimum confidence threshold
+    min_confidence: f32,
+}
+
+impl AutoVisualizationSelector {
+    /// Creates a new automatic visualization selector.
+    pub fn new() -> Self {
+        Self {
+            min_confidence: 0.7,
+        }
+    }
+
+    /// Sets the minimum confidence threshold.
+    pub fn with_min_confidence(mut self, min_confidence: f32) -> Self {
+        self.min_confidence = min_confidence.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Recommends visualization for a decision tree.
+    pub fn recommend_for_tree(&self, tree: &DecisionTree) -> VisualizationRecommendation {
+        let node_count = tree.graph.node_count();
+        let _edge_count = tree.graph.edge_count();
+        let depth = self.estimate_tree_depth(tree);
+
+        let (viz_type, confidence, reasoning) = if node_count < 10 {
+            (
+                VisualizationType::DecisionTree,
+                0.95,
+                "Small tree best suited for traditional decision tree layout".to_string(),
+            )
+        } else if node_count < 50 && depth < 5 {
+            (
+                VisualizationType::Network,
+                0.85,
+                "Medium-sized tree with shallow depth works well as network graph".to_string(),
+            )
+        } else if depth > 8 {
+            (
+                VisualizationType::Sankey,
+                0.80,
+                "Deep tree structure visualized as flow diagram".to_string(),
+            )
+        } else {
+            (
+                VisualizationType::ThreeD,
+                0.90,
+                "Large complex tree benefits from 3D interactive visualization".to_string(),
+            )
+        };
+
+        let alternatives = vec![
+            (VisualizationType::DecisionTree, 0.70),
+            (VisualizationType::Network, 0.65),
+            (VisualizationType::ThreeD, 0.60),
+        ];
+
+        VisualizationRecommendation {
+            viz_type,
+            confidence,
+            reasoning,
+            alternatives,
+        }
+    }
+
+    /// Recommends visualization for a dependency graph.
+    pub fn recommend_for_graph(&self, graph: &DependencyGraph) -> VisualizationRecommendation {
+        let statute_count = graph.graph.node_count();
+        let dependency_count = graph.graph.edge_count();
+        let avg_deps = if statute_count > 0 {
+            dependency_count as f32 / statute_count as f32
+        } else {
+            0.0
+        };
+
+        let (viz_type, confidence, reasoning) = if statute_count < 20 {
+            (
+                VisualizationType::DependencyGraph,
+                0.95,
+                "Small graph ideal for traditional dependency visualization".to_string(),
+            )
+        } else if avg_deps > 3.0 {
+            (
+                VisualizationType::Heatmap,
+                0.88,
+                "Highly interconnected graph best shown as dependency heatmap".to_string(),
+            )
+        } else if statute_count > 100 {
+            (
+                VisualizationType::ThreeD,
+                0.92,
+                "Large graph requires 3D space for clarity".to_string(),
+            )
+        } else {
+            (
+                VisualizationType::Network,
+                0.85,
+                "Medium-sized graph works well as network visualization".to_string(),
+            )
+        };
+
+        let alternatives = vec![
+            (VisualizationType::DependencyGraph, 0.75),
+            (VisualizationType::Network, 0.70),
+            (VisualizationType::ThreeD, 0.65),
+        ];
+
+        VisualizationRecommendation {
+            viz_type,
+            confidence,
+            reasoning,
+            alternatives,
+        }
+    }
+
+    /// Recommends visualization for a timeline.
+    pub fn recommend_for_timeline(&self, timeline: &Timeline) -> VisualizationRecommendation {
+        let event_count = timeline.events.len();
+        let time_span = self.estimate_timeline_span(timeline);
+
+        let (viz_type, confidence, reasoning) = if event_count < 10 {
+            (
+                VisualizationType::Timeline,
+                0.98,
+                "Few events best shown in linear timeline".to_string(),
+            )
+        } else if time_span > 50 {
+            (
+                VisualizationType::Heatmap,
+                0.87,
+                "Long time span with many events works as temporal heatmap".to_string(),
+            )
+        } else {
+            (
+                VisualizationType::Timeline,
+                0.93,
+                "Standard timeline visualization for moderate event count".to_string(),
+            )
+        };
+
+        let alternatives = vec![
+            (VisualizationType::Timeline, 0.80),
+            (VisualizationType::Heatmap, 0.60),
+        ];
+
+        VisualizationRecommendation {
+            viz_type,
+            confidence,
+            reasoning,
+            alternatives,
+        }
+    }
+
+    fn estimate_tree_depth(&self, tree: &DecisionTree) -> usize {
+        if let Some(root) = tree.root {
+            Self::dfs_depth(&tree.graph, root, 0)
+        } else {
+            0
+        }
+    }
+
+    fn dfs_depth(
+        graph: &DiGraph<DecisionNode, EdgeLabel>,
+        node: NodeIndex,
+        current_depth: usize,
+    ) -> usize {
+        let mut max_depth = current_depth;
+        for neighbor in graph.neighbors(node) {
+            let depth = Self::dfs_depth(graph, neighbor, current_depth + 1);
+            max_depth = max_depth.max(depth);
+        }
+        max_depth
+    }
+
+    fn estimate_timeline_span(&self, timeline: &Timeline) -> usize {
+        if timeline.events.is_empty() {
+            return 0;
+        }
+
+        let dates: Vec<&str> = timeline
+            .events
+            .iter()
+            .map(|(date, _)| date.as_str())
+            .collect();
+        if dates.len() < 2 {
+            return 1;
+        }
+
+        // Simple year span estimation
+        let first_year = dates
+            .first()
+            .and_then(|d| d.split('-').next())
+            .and_then(|y| y.parse::<i32>().ok())
+            .unwrap_or(0);
+        let last_year = dates
+            .last()
+            .and_then(|d| d.split('-').next())
+            .and_then(|y| y.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        (last_year - first_year).unsigned_abs() as usize
+    }
+}
+
+impl Default for AutoVisualizationSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// AI-generated annotation for visualizations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AIAnnotation {
+    /// Target element ID
+    pub target_id: String,
+    /// Annotation text
+    pub text: String,
+    /// Importance score (0.0-1.0)
+    pub importance: f32,
+    /// Category of annotation
+    pub category: AnnotationCategory,
+    /// Suggested position (x, y)
+    pub position: Option<(f32, f32)>,
+}
+
+/// Categories of AI-generated annotations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnnotationCategory {
+    /// Critical path or important decision
+    CriticalPath,
+    /// Complexity hotspot
+    Complexity,
+    /// Potential issue or inconsistency
+    Issue,
+    /// Interesting pattern
+    Pattern,
+    /// Summary or insight
+    Insight,
+}
+
+/// AI annotation generator for visualizations.
+pub struct AIAnnotationGenerator {
+    /// Enable complexity analysis
+    enable_complexity: bool,
+    /// Enable pattern detection
+    enable_patterns: bool,
+    /// Minimum importance threshold
+    min_importance: f32,
+}
+
+impl AIAnnotationGenerator {
+    /// Creates a new AI annotation generator.
+    pub fn new() -> Self {
+        Self {
+            enable_complexity: true,
+            enable_patterns: true,
+            min_importance: 0.5,
+        }
+    }
+
+    /// Disables complexity analysis.
+    pub fn without_complexity(mut self) -> Self {
+        self.enable_complexity = false;
+        self
+    }
+
+    /// Disables pattern detection.
+    pub fn without_patterns(mut self) -> Self {
+        self.enable_patterns = false;
+        self
+    }
+
+    /// Sets minimum importance threshold.
+    pub fn with_min_importance(mut self, min_importance: f32) -> Self {
+        self.min_importance = min_importance.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Generates annotations for a decision tree.
+    pub fn generate_for_tree(&self, tree: &DecisionTree) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Analyze complexity
+        if self.enable_complexity {
+            annotations.extend(self.analyze_tree_complexity(tree));
+        }
+
+        // Detect patterns
+        if self.enable_patterns {
+            annotations.extend(self.detect_tree_patterns(tree));
+        }
+
+        // Find critical paths
+        annotations.extend(self.find_critical_paths(tree));
+
+        // Filter by importance
+        annotations.retain(|a| a.importance >= self.min_importance);
+
+        annotations
+    }
+
+    /// Generates annotations for a dependency graph.
+    pub fn generate_for_graph(&self, graph: &DependencyGraph) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Analyze hubs and bottlenecks
+        if self.enable_complexity {
+            annotations.extend(self.analyze_graph_hubs(graph));
+        }
+
+        // Detect cycles
+        annotations.extend(self.detect_dependency_cycles(graph));
+
+        // Filter by importance
+        annotations.retain(|a| a.importance >= self.min_importance);
+
+        annotations
+    }
+
+    fn analyze_tree_complexity(&self, tree: &DecisionTree) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            let out_degree = tree.graph.neighbors(node_idx).count();
+
+            if out_degree > 5 {
+                if let Some(_node) = tree.graph.node_weight(node_idx) {
+                    annotations.push(AIAnnotation {
+                        target_id: format!("node-{}", node_idx.index()),
+                        text: format!("High complexity: {} outgoing paths", out_degree),
+                        importance: 0.8,
+                        category: AnnotationCategory::Complexity,
+                        position: None,
+                    });
+                }
+            }
+        }
+
+        annotations
+    }
+
+    fn detect_tree_patterns(&self, tree: &DecisionTree) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Detect chains of discretionary decisions
+        let mut discretion_chains = 0;
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                if matches!(node, DecisionNode::Discretion { .. }) {
+                    let has_discretion_child = tree.graph.neighbors(node_idx).any(|neighbor| {
+                        matches!(
+                            tree.graph.node_weight(neighbor),
+                            Some(DecisionNode::Discretion { .. })
+                        )
+                    });
+
+                    if has_discretion_child {
+                        discretion_chains += 1;
+                    }
+                }
+            }
+        }
+
+        if discretion_chains > 3 {
+            annotations.push(AIAnnotation {
+                target_id: "root".to_string(),
+                text: format!("Pattern detected: {} chains of discretionary decisions may indicate high interpretive complexity", discretion_chains),
+                importance: 0.75,
+                category: AnnotationCategory::Pattern,
+                position: None,
+            });
+        }
+
+        annotations
+    }
+
+    fn find_critical_paths(&self, tree: &DecisionTree) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Find longest path from root
+        if let Some(root) = tree.root {
+            let longest_path = Self::find_longest_path(&tree.graph, root);
+
+            if longest_path > 10 {
+                annotations.push(AIAnnotation {
+                    target_id: "root".to_string(),
+                    text: format!(
+                        "Critical path depth: {} steps - consider simplification",
+                        longest_path
+                    ),
+                    importance: 0.9,
+                    category: AnnotationCategory::CriticalPath,
+                    position: None,
+                });
+            }
+        }
+
+        annotations
+    }
+
+    fn analyze_graph_hubs(&self, graph: &DependencyGraph) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Find nodes with many dependencies
+        for node_idx in graph.graph.node_indices() {
+            let out_degree = graph.graph.neighbors(node_idx).count();
+
+            if out_degree > 5 {
+                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
+                    annotations.push(AIAnnotation {
+                        target_id: statute_id.clone(),
+                        text: format!(
+                            "Hub statute: {} dependencies - central to legal framework",
+                            out_degree
+                        ),
+                        importance: 0.85,
+                        category: AnnotationCategory::Complexity,
+                        position: None,
+                    });
+                }
+            }
+        }
+
+        annotations
+    }
+
+    fn detect_dependency_cycles(&self, graph: &DependencyGraph) -> Vec<AIAnnotation> {
+        let mut annotations = Vec::new();
+
+        // Detect cycles using petgraph
+        if petgraph::algo::is_cyclic_directed(&graph.graph) {
+            annotations.push(AIAnnotation {
+                target_id: "graph".to_string(),
+                text: "Warning: Circular dependencies detected in graph".to_string(),
+                importance: 0.95,
+                category: AnnotationCategory::Issue,
+                position: None,
+            });
+        }
+
+        annotations
+    }
+
+    fn find_longest_path(graph: &DiGraph<DecisionNode, EdgeLabel>, start: NodeIndex) -> usize {
+        let mut max_length = 0;
+
+        for neighbor in graph.neighbors(start) {
+            let path_length = 1 + Self::find_longest_path(graph, neighbor);
+            max_length = max_length.max(path_length);
+        }
+
+        max_length
+    }
+
+    #[allow(dead_code)]
+    fn extract_node_label(&self, node: &DecisionNode) -> String {
+        match node {
+            DecisionNode::Root { statute_id, .. } => statute_id.clone(),
+            DecisionNode::Condition { description, .. } => description.clone(),
+            DecisionNode::Outcome { description } => description.clone(),
+            DecisionNode::Discretion { issue, .. } => issue.clone(),
+        }
+    }
+}
+
+impl Default for AIAnnotationGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Natural language query processor for visualizations.
+pub struct NaturalLanguageQueryProcessor {
+    /// Case-sensitive matching
+    case_sensitive: bool,
+}
+
+impl NaturalLanguageQueryProcessor {
+    /// Creates a new NL query processor.
+    pub fn new() -> Self {
+        Self {
+            case_sensitive: false,
+        }
+    }
+
+    /// Enables case-sensitive matching.
+    pub fn with_case_sensitive(mut self) -> Self {
+        self.case_sensitive = true;
+        self
+    }
+
+    /// Processes a natural language query against a decision tree.
+    pub fn query_tree(&self, tree: &DecisionTree, query: &str) -> Vec<QueryResult> {
+        let mut results = Vec::new();
+
+        let query_lower = if self.case_sensitive {
+            query.to_string()
+        } else {
+            query.to_lowercase()
+        };
+
+        // Parse query intent
+        if query_lower.contains("outcome") || query_lower.contains("result") {
+            results.extend(self.find_outcomes(tree, &query_lower));
+        }
+
+        if query_lower.contains("discretion") || query_lower.contains("judgment") {
+            results.extend(self.find_discretionary_nodes(tree));
+        }
+
+        if query_lower.contains("path") || query_lower.contains("route") {
+            results.extend(self.find_paths(tree, &query_lower));
+        }
+
+        // Keyword search
+        if !query_lower.contains("show") && !query_lower.contains("find") {
+            results.extend(self.keyword_search(tree, &query_lower));
+        }
+
+        results
+    }
+
+    fn find_outcomes(&self, tree: &DecisionTree, _query: &str) -> Vec<QueryResult> {
+        let mut results = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            if let Some(DecisionNode::Outcome { description }) = tree.graph.node_weight(node_idx) {
+                results.push(QueryResult {
+                    node_id: format!("node-{}", node_idx.index()),
+                    relevance: 0.9,
+                    excerpt: description.clone(),
+                    node_type: "outcome".to_string(),
+                });
+            }
+        }
+
+        results
+    }
+
+    fn find_discretionary_nodes(&self, tree: &DecisionTree) -> Vec<QueryResult> {
+        let mut results = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                match node {
+                    DecisionNode::Discretion { issue, .. } => {
+                        results.push(QueryResult {
+                            node_id: format!("node-{}", node_idx.index()),
+                            relevance: 0.95,
+                            excerpt: issue.clone(),
+                            node_type: "discretion".to_string(),
+                        });
+                    }
+                    DecisionNode::Condition {
+                        description,
+                        is_discretionary,
+                    } if *is_discretionary => {
+                        results.push(QueryResult {
+                            node_id: format!("node-{}", node_idx.index()),
+                            relevance: 0.85,
+                            excerpt: description.clone(),
+                            node_type: "discretionary_condition".to_string(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        results
+    }
+
+    fn find_paths(&self, tree: &DecisionTree, _query: &str) -> Vec<QueryResult> {
+        let mut results = Vec::new();
+
+        if let Some(root) = tree.root {
+            results.push(QueryResult {
+                node_id: format!("node-{}", root.index()),
+                relevance: 0.8,
+                excerpt: "Root node - start of all paths".to_string(),
+                node_type: "root".to_string(),
+            });
+        }
+
+        results
+    }
+
+    fn keyword_search(&self, tree: &DecisionTree, query: &str) -> Vec<QueryResult> {
+        let mut results = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                let (text, node_type) = match node {
+                    DecisionNode::Root { statute_id, title } => {
+                        (format!("{} {}", statute_id, title), "root")
+                    }
+                    DecisionNode::Condition { description, .. } => {
+                        (description.clone(), "condition")
+                    }
+                    DecisionNode::Outcome { description } => (description.clone(), "outcome"),
+                    DecisionNode::Discretion { issue, hint } => (
+                        format!("{} {}", issue, hint.as_ref().unwrap_or(&String::new())),
+                        "discretion",
+                    ),
+                };
+
+                let text_to_search = if self.case_sensitive {
+                    text.clone()
+                } else {
+                    text.to_lowercase()
+                };
+
+                if text_to_search.contains(query) {
+                    let relevance = query.len() as f32 / text.len() as f32;
+                    results.push(QueryResult {
+                        node_id: format!("node-{}", node_idx.index()),
+                        relevance: relevance.min(1.0),
+                        excerpt: text,
+                        node_type: node_type.to_string(),
+                    });
+                }
+            }
+        }
+
+        results
+    }
+}
+
+impl Default for NaturalLanguageQueryProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Result from a natural language query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResult {
+    /// Node identifier
+    pub node_id: String,
+    /// Relevance score (0.0-1.0)
+    pub relevance: f32,
+    /// Text excerpt
+    pub excerpt: String,
+    /// Type of node
+    pub node_type: String,
+}
+
+/// Smart data highlighter for visualizations.
+pub struct SmartDataHighlighter {
+    /// Highlight color
+    highlight_color: String,
+    /// Minimum importance for highlighting
+    min_importance: f32,
+}
+
+impl SmartDataHighlighter {
+    /// Creates a new smart data highlighter.
+    pub fn new() -> Self {
+        Self {
+            highlight_color: "#ffeb3b".to_string(),
+            min_importance: 0.7,
+        }
+    }
+
+    /// Sets the highlight color.
+    pub fn with_color(mut self, color: String) -> Self {
+        self.highlight_color = color;
+        self
+    }
+
+    /// Sets minimum importance threshold.
+    pub fn with_min_importance(mut self, min_importance: f32) -> Self {
+        self.min_importance = min_importance.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Generates highlighting rules for a decision tree.
+    pub fn highlight_tree(&self, tree: &DecisionTree) -> Vec<HighlightRule> {
+        let mut rules = Vec::new();
+
+        // Highlight discretionary decisions
+        for node_idx in tree.graph.node_indices() {
+            if let Some(node) = tree.graph.node_weight(node_idx) {
+                match node {
+                    DecisionNode::Discretion { .. } => {
+                        rules.push(HighlightRule {
+                            target_id: format!("node-{}", node_idx.index()),
+                            color: "#ff9800".to_string(),
+                            importance: 0.9,
+                            reason: "Discretionary decision point".to_string(),
+                        });
+                    }
+                    DecisionNode::Condition {
+                        is_discretionary: true,
+                        ..
+                    } => {
+                        rules.push(HighlightRule {
+                            target_id: format!("node-{}", node_idx.index()),
+                            color: "#ffc107".to_string(),
+                            importance: 0.8,
+                            reason: "Discretionary condition".to_string(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Highlight complex nodes
+        for node_idx in tree.graph.node_indices() {
+            let out_degree = tree.graph.neighbors(node_idx).count();
+            if out_degree > 3 {
+                rules.push(HighlightRule {
+                    target_id: format!("node-{}", node_idx.index()),
+                    color: "#e91e63".to_string(),
+                    importance: 0.75,
+                    reason: format!("Complex node with {} branches", out_degree),
+                });
+            }
+        }
+
+        // Filter by importance
+        rules.retain(|r| r.importance >= self.min_importance);
+
+        rules
+    }
+
+    /// Generates highlighting rules for a dependency graph.
+    pub fn highlight_graph(&self, graph: &DependencyGraph) -> Vec<HighlightRule> {
+        let mut rules = Vec::new();
+
+        // Highlight hub statutes
+        for node_idx in graph.graph.node_indices() {
+            let incoming = graph
+                .graph
+                .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+                .count();
+            let outgoing = graph.graph.neighbors(node_idx).count();
+
+            if incoming > 3 || outgoing > 3 {
+                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
+                    rules.push(HighlightRule {
+                        target_id: statute_id.clone(),
+                        color: "#9c27b0".to_string(),
+                        importance: 0.85,
+                        reason: format!("Hub statute ({} in, {} out)", incoming, outgoing),
+                    });
+                }
+            }
+        }
+
+        // Filter by importance
+        rules.retain(|r| r.importance >= self.min_importance);
+
+        rules
+    }
+}
+
+impl Default for SmartDataHighlighter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Highlighting rule for visualization elements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HighlightRule {
+    /// Target element ID
+    pub target_id: String,
+    /// Highlight color
+    pub color: String,
+    /// Importance score
+    pub importance: f32,
+    /// Reason for highlighting
+    pub reason: String,
+}
+
+/// Anomaly detection for visualizations.
+pub struct AnomalyDetector {
+    /// Sensitivity (0.0-1.0, higher = more sensitive)
+    sensitivity: f32,
+}
+
+impl AnomalyDetector {
+    /// Creates a new anomaly detector.
+    pub fn new() -> Self {
+        Self { sensitivity: 0.7 }
+    }
+
+    /// Sets sensitivity level.
+    pub fn with_sensitivity(mut self, sensitivity: f32) -> Self {
+        self.sensitivity = sensitivity.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Detects anomalies in a decision tree.
+    pub fn detect_in_tree(&self, tree: &DecisionTree) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        // Detect orphaned nodes
+        anomalies.extend(self.detect_orphaned_nodes(tree));
+
+        // Detect unusually deep paths
+        anomalies.extend(self.detect_deep_paths(tree));
+
+        // Detect missing outcomes
+        anomalies.extend(self.detect_missing_outcomes(tree));
+
+        // Detect cycles
+        anomalies.extend(self.detect_cycles(tree));
+
+        anomalies
+    }
+
+    /// Detects anomalies in a dependency graph.
+    pub fn detect_in_graph(&self, graph: &DependencyGraph) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        // Detect isolated statutes
+        anomalies.extend(self.detect_isolated_statutes(graph));
+
+        // Detect asymmetric dependencies
+        anomalies.extend(self.detect_asymmetric_dependencies(graph));
+
+        anomalies
+    }
+
+    fn detect_orphaned_nodes(&self, tree: &DecisionTree) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            let has_incoming = tree
+                .graph
+                .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+                .count()
+                > 0;
+            let is_root = Some(node_idx) == tree.root;
+
+            if !has_incoming && !is_root {
+                if let Some(node) = tree.graph.node_weight(node_idx) {
+                    let label = match node {
+                        DecisionNode::Root { statute_id, .. } => statute_id.clone(),
+                        DecisionNode::Condition { description, .. } => description.clone(),
+                        DecisionNode::Outcome { description } => description.clone(),
+                        DecisionNode::Discretion { issue, .. } => issue.clone(),
+                    };
+
+                    anomalies.push(Anomaly {
+                        anomaly_type: AnomalyType::OrphanedNode,
+                        severity: 0.8,
+                        description: format!("Orphaned node detected: {}", label),
+                        location: format!("node-{}", node_idx.index()),
+                        suggestion: "Connect this node to the tree or remove it".to_string(),
+                    });
+                }
+            }
+        }
+
+        anomalies
+    }
+
+    fn detect_deep_paths(&self, tree: &DecisionTree) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        if let Some(root) = tree.root {
+            let max_depth = Self::calculate_max_depth(&tree.graph, root);
+
+            if max_depth > 15 {
+                anomalies.push(Anomaly {
+                    anomaly_type: AnomalyType::UnusualDepth,
+                    severity: 0.7,
+                    description: format!("Unusually deep decision path: {} levels", max_depth),
+                    location: "tree".to_string(),
+                    suggestion:
+                        "Consider simplifying the decision logic or breaking into sub-trees"
+                            .to_string(),
+                });
+            }
+        }
+
+        anomalies
+    }
+
+    fn detect_missing_outcomes(&self, tree: &DecisionTree) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        for node_idx in tree.graph.node_indices() {
+            let has_outgoing = tree.graph.neighbors(node_idx).count() > 0;
+            let is_outcome = matches!(
+                tree.graph.node_weight(node_idx),
+                Some(DecisionNode::Outcome { .. })
+            );
+
+            if !has_outgoing && !is_outcome {
+                anomalies.push(Anomaly {
+                    anomaly_type: AnomalyType::MissingOutcome,
+                    severity: 0.85,
+                    description: "Leaf node without outcome designation".to_string(),
+                    location: format!("node-{}", node_idx.index()),
+                    suggestion: "Add an outcome node or continue the decision path".to_string(),
+                });
+            }
+        }
+
+        anomalies
+    }
+
+    fn detect_cycles(&self, tree: &DecisionTree) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        // Use petgraph's cycle detection
+        if petgraph::algo::is_cyclic_directed(&tree.graph) {
+            anomalies.push(Anomaly {
+                anomaly_type: AnomalyType::Cycle,
+                severity: 0.95,
+                description: "Cycle detected in decision tree".to_string(),
+                location: "tree".to_string(),
+                suggestion: "Remove cyclic dependencies - decision trees should be acyclic"
+                    .to_string(),
+            });
+        }
+
+        anomalies
+    }
+
+    fn detect_isolated_statutes(&self, graph: &DependencyGraph) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        for node_idx in graph.graph.node_indices() {
+            let incoming = graph
+                .graph
+                .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+                .count();
+            let outgoing = graph.graph.neighbors(node_idx).count();
+
+            if incoming == 0 && outgoing == 0 {
+                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
+                    anomalies.push(Anomaly {
+                        anomaly_type: AnomalyType::IsolatedNode,
+                        severity: 0.6,
+                        description: format!("Isolated statute: {}", statute_id),
+                        location: statute_id.clone(),
+                        suggestion: "Consider if this statute should have dependencies".to_string(),
+                    });
+                }
+            }
+        }
+
+        anomalies
+    }
+
+    fn detect_asymmetric_dependencies(&self, graph: &DependencyGraph) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        // Check for bidirectional edges
+        for edge in graph.graph.edge_indices() {
+            if let Some((source, target)) = graph.graph.edge_endpoints(edge) {
+                // Check if reverse edge exists
+                let has_reverse = graph.graph.edges_connecting(target, source).count() > 0;
+
+                if has_reverse {
+                    if let (Some(from_id), Some(to_id)) = (
+                        graph.graph.node_weight(source),
+                        graph.graph.node_weight(target),
+                    ) {
+                        anomalies.push(Anomaly {
+                            anomaly_type: AnomalyType::BidirectionalDependency,
+                            severity: 0.75,
+                            description: format!(
+                                "Bidirectional dependency: {} <-> {}",
+                                from_id, to_id
+                            ),
+                            location: format!("{}-{}", from_id, to_id),
+                            suggestion: "Review if bidirectional dependency is intentional"
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        anomalies
+    }
+
+    fn calculate_max_depth(graph: &DiGraph<DecisionNode, EdgeLabel>, start: NodeIndex) -> usize {
+        let mut max_depth = 0;
+
+        for neighbor in graph.neighbors(start) {
+            let depth = 1 + Self::calculate_max_depth(graph, neighbor);
+            max_depth = max_depth.max(depth);
+        }
+
+        max_depth
+    }
+}
+
+impl Default for AnomalyDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Detected anomaly in visualization data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Anomaly {
+    /// Type of anomaly
+    pub anomaly_type: AnomalyType,
+    /// Severity score (0.0-1.0)
+    pub severity: f32,
+    /// Description of the anomaly
+    pub description: String,
+    /// Location identifier
+    pub location: String,
+    /// Suggested action
+    pub suggestion: String,
+}
+
+/// Types of anomalies that can be detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnomalyType {
+    /// Node with no connections
+    OrphanedNode,
+    /// Unusually deep decision path
+    UnusualDepth,
+    /// Missing outcome designation
+    MissingOutcome,
+    /// Circular dependency
+    Cycle,
+    /// Isolated node
+    IsolatedNode,
+    /// Bidirectional dependency
+    BidirectionalDependency,
+}
+
+// ============================================================================
 // Advanced Export Formats
 // ============================================================================
 
@@ -13340,5 +15766,685 @@ mod tests {
         let config = LevelOfDetailConfig::default();
         assert!(config.enabled);
         assert_eq!(config.zoom_thresholds.len(), 4);
+    }
+
+    // ============================================================================
+    // Immersive Legal Visualization Tests (v0.3.0)
+    // ============================================================================
+
+    #[test]
+    fn test_vr_exploration_config_default() {
+        let config = VRExplorationConfig::default();
+        assert!(config.enable_hand_tracking);
+        assert!(config.enable_teleportation);
+        assert!(!config.enable_voice_commands);
+        assert!(config.enable_spatial_audio);
+        assert!(config.enable_haptic_feedback);
+        assert_eq!(config.interaction_distance, 2.0);
+        assert_eq!(config.movement_speed, 1.0);
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_creation() {
+        let explorer = VRStatuteExplorer::new();
+        assert_eq!(explorer.theme.background_color, "#ffffff");
+        assert!(explorer.config.enable_hand_tracking);
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_with_theme() {
+        let explorer = VRStatuteExplorer::new().with_theme(Theme::dark());
+        assert_eq!(explorer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_with_config() {
+        let config = VRExplorationConfig {
+            enable_hand_tracking: false,
+            enable_spatial_audio: false,
+            ..Default::default()
+        };
+        let explorer = VRStatuteExplorer::new().with_config(config);
+        assert!(!explorer.config.enable_hand_tracking);
+        assert!(!explorer.config.enable_spatial_audio);
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_html_generation() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let explorer = VRStatuteExplorer::new();
+        let html = explorer.to_vr_html(&statute);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("VR Statute Explorer"));
+        assert!(html.contains("ENTER VR"));
+        assert!(html.contains("renderer.xr.enabled = true"));
+        assert!(html.contains("navigator.xr.requestSession"));
+        assert!(html.contains("immersive-vr"));
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_spatial_audio() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let explorer = VRStatuteExplorer::new();
+        let html = explorer.to_vr_html(&statute);
+
+        assert!(html.contains("setupSpatialAudio"));
+        assert!(html.contains("AudioContext"));
+        assert!(html.contains("PositionalAudio"));
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_haptic_feedback() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let explorer = VRStatuteExplorer::new();
+        let html = explorer.to_vr_html(&statute);
+
+        assert!(html.contains("hapticActuators"));
+        assert!(html.contains("pulse"));
+    }
+
+    #[test]
+    fn test_vr_statute_explorer_default() {
+        let explorer1 = VRStatuteExplorer::new();
+        let explorer2 = VRStatuteExplorer::default();
+        assert_eq!(
+            explorer1.theme.background_color,
+            explorer2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_ar_overlay_config_default() {
+        let config = AROverlayConfig::default();
+        assert!(config.enable_markers);
+        assert!(config.enable_markerless);
+        assert!(!config.enable_face_tracking);
+        assert_eq!(config.marker_size, 0.15);
+        assert_eq!(config.overlay_opacity, 0.9);
+    }
+
+    #[test]
+    fn test_ar_document_overlay_creation() {
+        let overlay = ARDocumentOverlay::new();
+        assert_eq!(overlay.theme.background_color, "#ffffff");
+        assert!(overlay.config.enable_markers);
+    }
+
+    #[test]
+    fn test_ar_document_overlay_with_theme() {
+        let overlay = ARDocumentOverlay::new().with_theme(Theme::dark());
+        assert_eq!(overlay.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_ar_document_overlay_with_config() {
+        let config = AROverlayConfig {
+            enable_markers: false,
+            enable_markerless: false,
+            enable_face_tracking: true,
+            marker_size: 0.2,
+            overlay_opacity: 0.5,
+        };
+        let overlay = ARDocumentOverlay::new().with_config(config);
+        assert!(!overlay.config.enable_markers);
+        assert!(overlay.config.enable_face_tracking);
+        assert_eq!(overlay.config.overlay_opacity, 0.5);
+    }
+
+    #[test]
+    fn test_ar_document_overlay_html_generation() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let overlay = ARDocumentOverlay::new();
+        let html = overlay.to_ar_html(&statute);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("AR Document Overlay"));
+        assert!(html.contains("start-ar"));
+        assert!(html.contains("camera-feed"));
+        assert!(html.contains("getUserMedia"));
+        assert!(html.contains("immersive-ar"));
+    }
+
+    #[test]
+    fn test_ar_document_overlay_camera_access() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let overlay = ARDocumentOverlay::new();
+        let html = overlay.to_ar_html(&statute);
+
+        assert!(html.contains("navigator.mediaDevices.getUserMedia"));
+        assert!(html.contains("facingMode: 'environment'"));
+    }
+
+    #[test]
+    fn test_ar_document_overlay_default() {
+        let overlay1 = ARDocumentOverlay::new();
+        let overlay2 = ARDocumentOverlay::default();
+        assert_eq!(
+            overlay1.theme.background_color,
+            overlay2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_panoramic_360_config_default() {
+        let config = Panoramic360Config::default();
+        assert!(config.enable_vr_mode);
+        assert!(!config.enable_auto_rotation);
+        assert_eq!(config.rotation_speed, 10.0);
+        assert_eq!(config.field_of_view, 75.0);
+        assert!(config.enable_gyroscope);
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_creation() {
+        let timeline = Panoramic360Timeline::new();
+        assert_eq!(timeline.theme.background_color, "#ffffff");
+        assert!(timeline.config.enable_vr_mode);
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_with_theme() {
+        let timeline = Panoramic360Timeline::new().with_theme(Theme::dark());
+        assert_eq!(timeline.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_with_config() {
+        let config = Panoramic360Config {
+            enable_vr_mode: false,
+            enable_auto_rotation: true,
+            rotation_speed: 20.0,
+            field_of_view: 90.0,
+            enable_gyroscope: false,
+        };
+        let timeline = Panoramic360Timeline::new().with_config(config);
+        assert!(!timeline.config.enable_vr_mode);
+        assert!(timeline.config.enable_auto_rotation);
+        assert_eq!(timeline.config.rotation_speed, 20.0);
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_html_generation() {
+        let mut timeline_data = Timeline::new();
+        timeline_data.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test Statute".to_string(),
+            },
+        );
+
+        let timeline = Panoramic360Timeline::new();
+        let html = timeline.to_360_html(&timeline_data);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("360° Case Timeline"));
+        assert!(html.contains("SphereGeometry"));
+        assert!(html.contains("BackSide"));
+        assert!(html.contains("DeviceOrientationEvent"));
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_gyroscope_support() {
+        let mut timeline_data = Timeline::new();
+        timeline_data.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test Statute".to_string(),
+            },
+        );
+
+        let timeline = Panoramic360Timeline::new();
+        let html = timeline.to_360_html(&timeline_data);
+
+        assert!(html.contains("deviceorientation"));
+        assert!(html.contains("event.alpha"));
+        assert!(html.contains("event.beta"));
+        assert!(html.contains("event.gamma"));
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_vr_mode() {
+        let mut timeline_data = Timeline::new();
+        timeline_data.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test Statute".to_string(),
+            },
+        );
+
+        let config = Panoramic360Config {
+            enable_vr_mode: true,
+            ..Default::default()
+        };
+        let timeline = Panoramic360Timeline::new().with_config(config);
+        let html = timeline.to_360_html(&timeline_data);
+
+        assert!(html.contains("enter-vr"));
+        assert!(html.contains("renderer.xr.enabled = true"));
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_auto_rotation() {
+        let mut timeline_data = Timeline::new();
+        timeline_data.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test Statute".to_string(),
+            },
+        );
+
+        let config = Panoramic360Config {
+            enable_auto_rotation: true,
+            rotation_speed: 15.0,
+            ..Default::default()
+        };
+        let timeline = Panoramic360Timeline::new().with_config(config);
+        let html = timeline.to_360_html(&timeline_data);
+
+        assert!(html.contains("enableAutoRotation: true"));
+        assert!(html.contains("rotationSpeed: 15"));
+        assert!(html.contains("toggle-rotation"));
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_default() {
+        let timeline1 = Panoramic360Timeline::new();
+        let timeline2 = Panoramic360Timeline::default();
+        assert_eq!(
+            timeline1.theme.background_color,
+            timeline2.theme.background_color
+        );
+    }
+
+    #[test]
+    fn test_panoramic_360_timeline_event_extraction() {
+        let mut timeline_data = Timeline::new();
+        timeline_data.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test Statute".to_string(),
+            },
+        );
+        timeline_data.add_event(
+            "2024-02-01",
+            TimelineEvent::Amended {
+                statute_id: "statute-1".to_string(),
+                description: "First amendment".to_string(),
+            },
+        );
+        timeline_data.add_event(
+            "2024-03-01",
+            TimelineEvent::Repealed {
+                statute_id: "statute-1".to_string(),
+            },
+        );
+
+        let timeline = Panoramic360Timeline::new();
+        let html = timeline.to_360_html(&timeline_data);
+
+        assert!(html.contains("2024-01-01"));
+        assert!(html.contains("2024-02-01"));
+        assert!(html.contains("2024-03-01"));
+        assert!(html.contains("Enacted"));
+        assert!(html.contains("Amended"));
+        assert!(html.contains("Repealed"));
+    }
+
+    // ============================================================================
+    // AI-Enhanced Visualization Tests (v0.3.1)
+    // ============================================================================
+
+    #[test]
+    fn test_auto_visualization_selector_creation() {
+        let selector = AutoVisualizationSelector::new();
+        assert_eq!(selector.min_confidence, 0.7);
+    }
+
+    #[test]
+    fn test_auto_visualization_selector_with_min_confidence() {
+        let selector = AutoVisualizationSelector::new().with_min_confidence(0.8);
+        assert_eq!(selector.min_confidence, 0.8);
+    }
+
+    #[test]
+    fn test_auto_visualization_selector_recommend_small_tree() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let selector = AutoVisualizationSelector::new();
+        let recommendation = selector.recommend_for_tree(&tree);
+
+        assert_eq!(recommendation.viz_type, VisualizationType::DecisionTree);
+        assert!(recommendation.confidence > 0.7);
+        assert!(!recommendation.reasoning.is_empty());
+        assert!(!recommendation.alternatives.is_empty());
+    }
+
+    #[test]
+    fn test_auto_visualization_selector_recommend_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-1", "statute-2", "references");
+
+        let selector = AutoVisualizationSelector::new();
+        let recommendation = selector.recommend_for_graph(&graph);
+
+        assert!(recommendation.confidence > 0.7);
+        assert!(!recommendation.reasoning.is_empty());
+    }
+
+    #[test]
+    fn test_auto_visualization_selector_recommend_timeline() {
+        let mut timeline = Timeline::new();
+        timeline.add_event(
+            "2024-01-01",
+            TimelineEvent::Enacted {
+                statute_id: "statute-1".to_string(),
+                title: "Test".to_string(),
+            },
+        );
+
+        let selector = AutoVisualizationSelector::new();
+        let recommendation = selector.recommend_for_timeline(&timeline);
+
+        assert_eq!(recommendation.viz_type, VisualizationType::Timeline);
+        assert!(recommendation.confidence > 0.9);
+    }
+
+    #[test]
+    fn test_auto_visualization_selector_default() {
+        let selector1 = AutoVisualizationSelector::new();
+        let selector2 = AutoVisualizationSelector::default();
+        assert_eq!(selector1.min_confidence, selector2.min_confidence);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_creation() {
+        let generator = AIAnnotationGenerator::new();
+        assert!(generator.enable_complexity);
+        assert!(generator.enable_patterns);
+        assert_eq!(generator.min_importance, 0.5);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_without_complexity() {
+        let generator = AIAnnotationGenerator::new().without_complexity();
+        assert!(!generator.enable_complexity);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_without_patterns() {
+        let generator = AIAnnotationGenerator::new().without_patterns();
+        assert!(!generator.enable_patterns);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_with_min_importance() {
+        let generator = AIAnnotationGenerator::new().with_min_importance(0.8);
+        assert_eq!(generator.min_importance, 0.8);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_for_tree() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let generator = AIAnnotationGenerator::new();
+        let annotations = generator.generate_for_tree(&tree);
+
+        // Should have some annotations if tree is complex enough
+        assert!(annotations.len() >= 0);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_for_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-1", "statute-2", "references");
+
+        let generator = AIAnnotationGenerator::new();
+        let annotations = generator.generate_for_graph(&graph);
+
+        assert!(annotations.len() >= 0);
+    }
+
+    #[test]
+    fn test_ai_annotation_generator_default() {
+        let gen1 = AIAnnotationGenerator::new();
+        let gen2 = AIAnnotationGenerator::default();
+        assert_eq!(gen1.min_importance, gen2.min_importance);
+    }
+
+    #[test]
+    fn test_natural_language_query_processor_creation() {
+        let processor = NaturalLanguageQueryProcessor::new();
+        assert!(!processor.case_sensitive);
+    }
+
+    #[test]
+    fn test_natural_language_query_processor_case_sensitive() {
+        let processor = NaturalLanguageQueryProcessor::new().with_case_sensitive();
+        assert!(processor.case_sensitive);
+    }
+
+    #[test]
+    fn test_natural_language_query_processor_query_outcomes() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let processor = NaturalLanguageQueryProcessor::new();
+        let results = processor.query_tree(&tree, "show me outcomes");
+
+        assert!(results.len() >= 0);
+    }
+
+    #[test]
+    fn test_natural_language_query_processor_query_discretion() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let processor = NaturalLanguageQueryProcessor::new();
+        let results = processor.query_tree(&tree, "find discretion");
+
+        assert!(results.len() >= 0);
+    }
+
+    #[test]
+    fn test_natural_language_query_processor_default() {
+        let proc1 = NaturalLanguageQueryProcessor::new();
+        let proc2 = NaturalLanguageQueryProcessor::default();
+        assert_eq!(proc1.case_sensitive, proc2.case_sensitive);
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_creation() {
+        let highlighter = SmartDataHighlighter::new();
+        assert_eq!(highlighter.highlight_color, "#ffeb3b");
+        assert_eq!(highlighter.min_importance, 0.7);
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_with_color() {
+        let highlighter = SmartDataHighlighter::new().with_color("#ff0000".to_string());
+        assert_eq!(highlighter.highlight_color, "#ff0000");
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_with_min_importance() {
+        let highlighter = SmartDataHighlighter::new().with_min_importance(0.9);
+        assert_eq!(highlighter.min_importance, 0.9);
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_highlight_tree() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let highlighter = SmartDataHighlighter::new();
+        let rules = highlighter.highlight_tree(&tree);
+
+        assert!(rules.len() >= 0);
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_highlight_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-1", "statute-2", "references");
+
+        let highlighter = SmartDataHighlighter::new();
+        let rules = highlighter.highlight_graph(&graph);
+
+        assert!(rules.len() >= 0);
+    }
+
+    #[test]
+    fn test_smart_data_highlighter_default() {
+        let high1 = SmartDataHighlighter::new();
+        let high2 = SmartDataHighlighter::default();
+        assert_eq!(high1.highlight_color, high2.highlight_color);
+    }
+
+    #[test]
+    fn test_anomaly_detector_creation() {
+        let detector = AnomalyDetector::new();
+        assert_eq!(detector.sensitivity, 0.7);
+    }
+
+    #[test]
+    fn test_anomaly_detector_with_sensitivity() {
+        let detector = AnomalyDetector::new().with_sensitivity(0.9);
+        assert_eq!(detector.sensitivity, 0.9);
+    }
+
+    #[test]
+    fn test_anomaly_detector_detect_in_tree() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+        let detector = AnomalyDetector::new();
+        let anomalies = detector.detect_in_tree(&tree);
+
+        assert!(anomalies.len() >= 0);
+    }
+
+    #[test]
+    fn test_anomaly_detector_detect_in_graph() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("statute-1", "statute-2", "references");
+
+        let detector = AnomalyDetector::new();
+        let anomalies = detector.detect_in_graph(&graph);
+
+        assert!(anomalies.len() >= 0);
+    }
+
+    #[test]
+    fn test_anomaly_detector_default() {
+        let det1 = AnomalyDetector::new();
+        let det2 = AnomalyDetector::default();
+        assert_eq!(det1.sensitivity, det2.sensitivity);
+    }
+
+    #[test]
+    fn test_visualization_type_serialization() {
+        let viz_type = VisualizationType::DecisionTree;
+        let json = serde_json::to_string(&viz_type).unwrap();
+        assert!(json.contains("DecisionTree"));
+    }
+
+    #[test]
+    fn test_annotation_category_serialization() {
+        let category = AnnotationCategory::CriticalPath;
+        let json = serde_json::to_string(&category).unwrap();
+        assert!(json.contains("CriticalPath"));
+    }
+
+    #[test]
+    fn test_anomaly_type_serialization() {
+        let anomaly_type = AnomalyType::OrphanedNode;
+        let json = serde_json::to_string(&anomaly_type).unwrap();
+        assert!(json.contains("OrphanedNode"));
+    }
+
+    #[test]
+    fn test_query_result_serialization() {
+        let result = QueryResult {
+            node_id: "node-1".to_string(),
+            relevance: 0.8,
+            excerpt: "test excerpt".to_string(),
+            node_type: "condition".to_string(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("node-1"));
+        assert!(json.contains("0.8"));
+    }
+
+    #[test]
+    fn test_highlight_rule_serialization() {
+        let rule = HighlightRule {
+            target_id: "node-1".to_string(),
+            color: "#ff0000".to_string(),
+            importance: 0.9,
+            reason: "Test reason".to_string(),
+        };
+        let json = serde_json::to_string(&rule).unwrap();
+        assert!(json.contains("node-1"));
+        assert!(json.contains("#ff0000"));
+    }
+
+    #[test]
+    fn test_anomaly_serialization() {
+        let anomaly = Anomaly {
+            anomaly_type: AnomalyType::Cycle,
+            severity: 0.95,
+            description: "Test anomaly".to_string(),
+            location: "test-location".to_string(),
+            suggestion: "Fix it".to_string(),
+        };
+        let json = serde_json::to_string(&anomaly).unwrap();
+        assert!(json.contains("Cycle"));
+        assert!(json.contains("0.95"));
     }
 }

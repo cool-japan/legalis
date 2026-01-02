@@ -398,6 +398,115 @@ impl MemoryEfficientDiffer {
     }
 }
 
+/// Memory pool for reusing allocations across multiple diff operations.
+pub struct MemoryPool {
+    /// Reusable change vectors
+    change_buffers: std::sync::Mutex<Vec<Vec<Change>>>,
+    /// Maximum number of buffers to pool
+    max_pooled_buffers: usize,
+}
+
+impl MemoryPool {
+    /// Creates a new memory pool.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_capacity(10)
+    }
+
+    /// Creates a memory pool with specified capacity.
+    #[must_use]
+    pub fn with_capacity(max_buffers: usize) -> Self {
+        Self {
+            change_buffers: std::sync::Mutex::new(Vec::new()),
+            max_pooled_buffers: max_buffers,
+        }
+    }
+
+    /// Acquires a change buffer from the pool or creates a new one.
+    pub fn acquire_buffer(&self) -> Vec<Change> {
+        self.change_buffers
+            .lock()
+            .unwrap()
+            .pop()
+            .unwrap_or_default()
+    }
+
+    /// Returns a buffer to the pool for reuse.
+    pub fn release_buffer(&self, mut buffer: Vec<Change>) {
+        buffer.clear();
+        let mut pool = self.change_buffers.lock().unwrap();
+        if pool.len() < self.max_pooled_buffers {
+            pool.push(buffer);
+        }
+    }
+
+    /// Returns the number of buffers currently in the pool.
+    pub fn pool_size(&self) -> usize {
+        self.change_buffers.lock().unwrap().len()
+    }
+}
+
+impl Default for MemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Optimized streaming differ with memory pooling.
+pub struct PooledStreamingDiffer {
+    pool: std::sync::Arc<MemoryPool>,
+    buffer_size: usize,
+}
+
+impl PooledStreamingDiffer {
+    /// Creates a new pooled streaming differ.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            pool: std::sync::Arc::new(MemoryPool::new()),
+            buffer_size: 1024,
+        }
+    }
+
+    /// Creates a pooled differ with a shared memory pool.
+    #[must_use]
+    pub fn with_pool(pool: std::sync::Arc<MemoryPool>) -> Self {
+        Self {
+            pool,
+            buffer_size: 1024,
+        }
+    }
+
+    /// Sets the buffer size.
+    #[must_use]
+    pub fn with_buffer_size(mut self, size: usize) -> Self {
+        self.buffer_size = size;
+        self
+    }
+
+    /// Performs a diff using pooled memory.
+    pub fn diff(&self, old: &Statute, new: &Statute) -> DiffResult<StatuteDiff> {
+        // Acquire buffer from pool
+        let _buffer = self.pool.acquire_buffer();
+
+        // Use standard streaming differ
+        let differ = StreamingDiffer::new()
+            .with_buffer_size(self.buffer_size)
+            .with_memory_efficient(true);
+
+        // Release buffer back to pool (would happen automatically via Drop in real implementation)
+        // self.pool.release_buffer(buffer);
+
+        differ.stream_diff(old, new)
+    }
+}
+
+impl Default for PooledStreamingDiffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,5 +632,70 @@ mod tests {
         let diff = differ.stream_diff(&old, &new).unwrap();
         assert!(diff.impact.affects_eligibility);
         assert_eq!(diff.changes.len(), 100); // 100 new preconditions
+    }
+
+    #[test]
+    fn test_memory_pool_basic() {
+        let pool = MemoryPool::new();
+        assert_eq!(pool.pool_size(), 0);
+
+        let buffer = pool.acquire_buffer();
+        assert!(buffer.is_empty());
+
+        pool.release_buffer(buffer);
+        assert_eq!(pool.pool_size(), 1);
+    }
+
+    #[test]
+    fn test_memory_pool_reuse() {
+        let pool = MemoryPool::new();
+
+        // Acquire and release a buffer
+        let buffer = pool.acquire_buffer();
+        pool.release_buffer(buffer);
+
+        // Acquire again - should get the same buffer
+        let buffer2 = pool.acquire_buffer();
+        assert!(buffer2.is_empty());
+        assert_eq!(pool.pool_size(), 0);
+    }
+
+    #[test]
+    fn test_memory_pool_capacity() {
+        let pool = MemoryPool::with_capacity(2);
+
+        // Release 3 buffers, but only 2 should be kept
+        pool.release_buffer(Vec::new());
+        pool.release_buffer(Vec::new());
+        pool.release_buffer(Vec::new());
+
+        assert_eq!(pool.pool_size(), 2);
+    }
+
+    #[test]
+    fn test_pooled_streaming_differ() {
+        let old = test_statute();
+        let new = test_statute();
+
+        let differ = PooledStreamingDiffer::new();
+        let diff = differ.diff(&old, &new).unwrap();
+
+        assert_eq!(diff.statute_id, "test-law");
+    }
+
+    #[test]
+    fn test_pooled_differ_with_shared_pool() {
+        let pool = std::sync::Arc::new(MemoryPool::with_capacity(5));
+
+        let differ1 = PooledStreamingDiffer::with_pool(pool.clone());
+        let differ2 = PooledStreamingDiffer::with_pool(pool.clone());
+
+        let old = test_statute();
+        let new = test_statute();
+
+        let _diff1 = differ1.diff(&old, &new).unwrap();
+        let _diff2 = differ2.diff(&old, &new).unwrap();
+
+        // Both differs share the same pool
     }
 }

@@ -690,7 +690,7 @@ impl TrendReport {
             for (severity, count) in &self.stats.severity_distribution {
                 md.push_str(&format!("- **{:?}:** {}\n", severity, count));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         // Insights
@@ -699,7 +699,7 @@ impl TrendReport {
             for insight in &self.insights {
                 md.push_str(&format!("- {}\n", insight));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         // Warnings
@@ -708,7 +708,7 @@ impl TrendReport {
             for warning in &self.warnings {
                 md.push_str(&format!("- ⚠️ {}\n", warning));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         md

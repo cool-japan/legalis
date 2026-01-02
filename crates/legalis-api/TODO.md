@@ -1,5 +1,13 @@
 # legalis-api TODO
 
+## Status Summary
+
+Version: 0.2.0 | Status: Stable | Tests: 108 passing | Warnings: 0
+
+All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK generation (v0.2.0+) planned for future releases.
+
+---
+
 ## Completed
 
 - [x] Axum-based REST API server

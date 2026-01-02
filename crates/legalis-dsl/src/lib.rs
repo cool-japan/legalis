@@ -84,11 +84,13 @@ pub mod incremental;
 pub mod interpolation;
 pub mod lsp;
 pub mod metadata;
+pub mod module_system;
 pub mod numeric;
 mod parser;
 mod printer;
 pub mod profiler;
 pub mod query;
+pub mod search_index;
 pub mod statistics;
 pub mod taint;
 pub mod templates;
@@ -108,7 +110,7 @@ pub use compliance::{ComplianceMatrix, ComplianceStats};
 pub use consistency::{ConsistencyChecker, ConsistencyIssue};
 pub use dataflow::{DataFlowAnalyzer, DataFlowIssue, DataFlowState};
 pub use diff::{Change, DocumentDiff, StatuteDiff};
-pub use docgen::{DocGenerator, MarkdownGenerator};
+pub use docgen::{DocGenerator, LaTeXGenerator, MarkdownGenerator};
 pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
 pub use graph::{
     DependencyGraph, GraphFormat, GraphOptions, generate_dot_graph, generate_mermaid_graph,
@@ -125,11 +127,13 @@ pub use metadata::{
     AmendmentAuditTrail, AuditEntry, EntityRelationships, JurisdictionHierarchy, VersionEntry,
     VersionHistory,
 };
+pub use module_system::{ExportNode, ImportKind, NamespaceNode, Visibility};
 pub use numeric::{NumericError, NumericParser, NumericValue, parse_numeric};
 pub use parser::*;
 pub use printer::*;
 pub use profiler::{ParseProfiler, ProfileComparison, ProfileReport, Profiler};
 pub use query::{ConditionSearch, StatuteQuery};
+pub use search_index::{IndexStats, SearchIndex, SearchResult, StatuteMetadata};
 pub use statistics::{
     ComplexityMetrics, DependencyAnalysis, DocumentStatistics, analyze_complexity,
 };
@@ -744,10 +748,23 @@ impl LegalDslParser {
         let tokens: Vec<Token> = spanned_tokens.into_iter().map(|st| st.token).collect();
         let mut iter = tokens.iter().peekable();
 
-        // Parse imports first
+        // Parse namespace declaration (optional)
+        let namespace = if matches!(iter.peek(), Some(Token::Namespace)) {
+            Some(self.parse_namespace(&mut iter)?)
+        } else {
+            None
+        };
+
+        // Parse imports
         let mut imports = Vec::new();
         while matches!(iter.peek(), Some(Token::Import)) {
             imports.push(self.parse_import(&mut iter)?);
+        }
+
+        // Parse exports (optional)
+        let mut exports = Vec::new();
+        while matches!(iter.peek(), Some(Token::Export)) {
+            exports.push(self.parse_export(&mut iter)?);
         }
 
         // Parse statutes
@@ -799,7 +816,12 @@ impl LegalDslParser {
             }
         }
 
-        Ok(ast::LegalDocument { imports, statutes })
+        Ok(ast::LegalDocument {
+            namespace,
+            imports,
+            exports,
+            statutes,
+        })
     }
 
     /// Parses a complete legal document with error recovery.
@@ -883,7 +905,12 @@ impl LegalDslParser {
             }
         }
 
-        let doc = ast::LegalDocument { imports, statutes };
+        let doc = ast::LegalDocument {
+            namespace: None,
+            imports,
+            exports: vec![],
+            statutes,
+        };
 
         if errors.is_empty() {
             ParseResult::ok(doc)
@@ -907,6 +934,10 @@ impl LegalDslParser {
     }
 
     /// Parses an IMPORT statement.
+    /// Supports:
+    /// - Simple: IMPORT "path" [AS alias]
+    /// - Wildcard: IMPORT path.*
+    /// - Selective: IMPORT { item1, item2 } FROM path
     fn parse_import<'a, I>(&self, iter: &mut std::iter::Peekable<I>) -> DslResult<ast::ImportNode>
     where
         I: Iterator<Item = &'a Token>,
@@ -917,13 +948,69 @@ impl LegalDslParser {
             _ => return Err(DslError::parse_error("Expected 'IMPORT' keyword")),
         }
 
-        // Get path
-        let path = match iter.next() {
-            Some(Token::StringLit(s)) => s.clone(),
-            _ => return Err(DslError::parse_error("Expected import path string")),
+        // Check for selective import: IMPORT { ... }
+        if matches!(iter.peek(), Some(Token::LBrace)) {
+            iter.next(); // consume {
+
+            let mut items = Vec::new();
+            loop {
+                match iter.next() {
+                    Some(Token::Ident(id)) => items.push(id.clone()),
+                    Some(Token::RBrace) => break,
+                    Some(Token::Comma) => continue,
+                    _ => {
+                        return Err(DslError::parse_error(
+                            "Expected identifier or '}' in import list",
+                        ));
+                    }
+                }
+            }
+
+            // Expect FROM keyword
+            match iter.next() {
+                Some(Token::From) => {}
+                _ => return Err(DslError::parse_error("Expected 'FROM' after import list")),
+            }
+
+            // Get path
+            let path = match iter.next() {
+                Some(Token::StringLit(s)) => s.clone(),
+                Some(Token::Ident(s)) => s.clone(),
+                _ => return Err(DslError::parse_error("Expected module path after 'FROM'")),
+            };
+
+            return Ok(ast::ImportNode {
+                path,
+                alias: None,
+                kind: crate::module_system::ImportKind::Selective(items),
+            });
+        }
+
+        // Check for wildcard or simple import
+        let first_token = iter.next();
+        let (path_part, is_ident) = match first_token {
+            Some(Token::StringLit(s)) => (s.clone(), false),
+            Some(Token::Ident(s)) => (s.clone(), true),
+            _ => return Err(DslError::parse_error("Expected import path")),
         };
 
-        // Check for optional AS clause
+        // Check for wildcard import: path.*
+        if is_ident && matches!(iter.peek(), Some(Token::Dot)) {
+            iter.next(); // consume .
+            match iter.peek() {
+                Some(Token::Star) => {
+                    iter.next(); // consume *
+                    return Ok(ast::ImportNode {
+                        path: path_part,
+                        alias: None,
+                        kind: crate::module_system::ImportKind::Wildcard,
+                    });
+                }
+                _ => {} // Not a wildcard, continue as simple import
+            }
+        }
+
+        // Simple import - check for optional AS clause
         let alias = if matches!(iter.peek(), Some(Token::As)) {
             iter.next(); // consume AS
             match iter.next() {
@@ -938,12 +1025,120 @@ impl LegalDslParser {
             None
         };
 
-        Ok(ast::ImportNode { path, alias })
+        Ok(ast::ImportNode {
+            path: path_part,
+            alias,
+            kind: crate::module_system::ImportKind::Simple,
+        })
+    }
+
+    /// Parses a NAMESPACE declaration.
+    fn parse_namespace<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<crate::module_system::NamespaceNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Expect NAMESPACE
+        match iter.next() {
+            Some(Token::Namespace) => {}
+            _ => return Err(DslError::parse_error("Expected 'NAMESPACE' keyword")),
+        }
+
+        // Get namespace path (either Ident or String)
+        let path = match iter.next() {
+            Some(Token::Ident(s)) => s.clone(),
+            Some(Token::StringLit(s)) => s.clone(),
+            _ => {
+                return Err(DslError::parse_error(
+                    "Expected namespace path (identifier or string)",
+                ));
+            }
+        };
+
+        Ok(crate::module_system::NamespaceNode { path })
+    }
+
+    /// Parses an EXPORT declaration.
+    fn parse_export<'a, I>(
+        &self,
+        iter: &mut std::iter::Peekable<I>,
+    ) -> DslResult<crate::module_system::ExportNode>
+    where
+        I: Iterator<Item = &'a Token>,
+    {
+        // Expect EXPORT
+        match iter.next() {
+            Some(Token::Export) => {}
+            _ => return Err(DslError::parse_error("Expected 'EXPORT' keyword")),
+        }
+
+        let mut items = Vec::new();
+
+        // Check for wildcard export (EXPORT *)
+        if matches!(iter.peek(), Some(Token::Star)) {
+            iter.next(); // consume *
+            items.push("*".to_string());
+            return Ok(crate::module_system::ExportNode { items, from: None });
+        }
+
+        // Check for selective export (EXPORT { item1, item2 })
+        if matches!(iter.peek(), Some(Token::LBrace)) {
+            iter.next(); // consume {
+
+            loop {
+                match iter.next() {
+                    Some(Token::Ident(id)) => items.push(id.clone()),
+                    Some(Token::RBrace) => break,
+                    Some(Token::Comma) => continue,
+                    _ => {
+                        return Err(DslError::parse_error(
+                            "Expected identifier or '}' in export list",
+                        ));
+                    }
+                }
+            }
+        } else {
+            // Single item export
+            match iter.next() {
+                Some(Token::Ident(id)) => items.push(id.clone()),
+                _ => return Err(DslError::parse_error("Expected identifier to export")),
+            }
+        }
+
+        // Check for optional FROM clause (re-export)
+        let from = if matches!(iter.peek(), Some(Token::From)) {
+            iter.next(); // consume FROM
+            match iter.next() {
+                Some(Token::StringLit(s)) => Some(s.clone()),
+                Some(Token::Ident(s)) => Some(s.clone()),
+                _ => return Err(DslError::parse_error("Expected module path after 'FROM'")),
+            }
+        } else {
+            None
+        };
+
+        Ok(crate::module_system::ExportNode { items, from })
     }
 
     /// Parses tokens into an AST StatuteNode.
+    /// Supports optional visibility modifier: PUBLIC STATUTE ... or PRIVATE STATUTE ...
     fn parse_statute_node(&self, tokens: &[Token]) -> DslResult<ast::StatuteNode> {
         let mut iter = tokens.iter().peekable();
+
+        // Check for optional visibility modifier
+        let visibility = match iter.peek() {
+            Some(Token::Public) => {
+                iter.next(); // consume PUBLIC
+                crate::module_system::Visibility::Public
+            }
+            Some(Token::Private) => {
+                iter.next(); // consume PRIVATE
+                crate::module_system::Visibility::Private
+            }
+            _ => crate::module_system::Visibility::Private, // Default to private
+        };
 
         // Expect STATUTE
         match iter.next() {
@@ -1072,6 +1267,7 @@ impl LegalDslParser {
         Ok(ast::StatuteNode {
             id,
             title,
+            visibility,
             conditions,
             effects,
             discretion,
@@ -2187,6 +2383,12 @@ impl LegalDslParser {
                         "PRIORITY" => Token::Priority,
                         "SCOPE" => Token::Scope,
                         "CONSTRAINT" | "CONSTRAINTS" | "INVARIANT" => Token::Constraint,
+                        // Module system keywords (v0.1.4)
+                        "NAMESPACE" => Token::Namespace,
+                        "FROM" => Token::From,
+                        "PUBLIC" => Token::Public,
+                        "PRIVATE" => Token::Private,
+                        "EXPORT" => Token::Export,
                         "AND" => Token::And,
                         "OR" => Token::Or,
                         "NOT" => Token::Not,
@@ -2256,6 +2458,12 @@ impl LegalDslParser {
                         }
                     }
                     tokens.push(SpannedToken::new(Token::Operator(op), token_start));
+                }
+                '*' => {
+                    tokens.push(SpannedToken::new(Token::Star, token_start));
+                    chars.next();
+                    offset += 1;
+                    column += 1;
                 }
                 _ => {
                     chars.next();

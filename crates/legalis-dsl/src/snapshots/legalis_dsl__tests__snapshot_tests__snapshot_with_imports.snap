@@ -2,14 +2,19 @@
 source: crates/legalis-dsl/src/tests.rs
 expression: doc
 ---
+namespace: ~
 imports:
   - path: common/definitions.legalis
     alias: ~
+    kind: Simple
   - path: lib/utils.legalis
     alias: utils
+    kind: Simple
+exports: []
 statutes:
   - id: test
     title: Test Statute
+    visibility: Private
     conditions:
       - Comparison:
           field: age

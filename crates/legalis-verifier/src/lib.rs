@@ -2131,18 +2131,37 @@ impl std::fmt::Display for ImpactLevel {
 
 /// Risk level classification.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 pub enum RiskLevel {
+    Minimal,
     Low,
     Medium,
     High,
     Critical,
 }
 
+impl RiskLevel {
+    /// Classifies a risk score into a level
+    pub fn from_score(score: f64) -> Self {
+        if score < 0.25 {
+            RiskLevel::Minimal
+        } else if score < 0.50 {
+            RiskLevel::Low
+        } else if score < 0.75 {
+            RiskLevel::Medium
+        } else if score < 0.90 {
+            RiskLevel::High
+        } else {
+            RiskLevel::Critical
+        }
+    }
+}
+
 impl std::fmt::Display for RiskLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Minimal => write!(f, "Minimal"),
             Self::Low => write!(f, "Low"),
             Self::Medium => write!(f, "Medium"),
             Self::High => write!(f, "High"),
@@ -14862,6 +14881,2420 @@ pub fn proof_comparison_report(
     report
 }
 
+// =============================================================================
+// Multi-Party Verification (v0.2.1)
+// =============================================================================
+
+/// Represents a stakeholder in the legal system
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Stakeholder {
+    /// Unique identifier
+    pub id: String,
+    /// Name of the stakeholder
+    pub name: String,
+    /// Type of stakeholder (e.g., "individual", "corporation", "government")
+    pub stakeholder_type: String,
+    /// Interests or goals
+    pub interests: Vec<String>,
+    /// Statutes that directly affect this stakeholder
+    pub affected_by: Vec<String>,
+}
+
+impl Stakeholder {
+    /// Creates a new stakeholder
+    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            stakeholder_type: "individual".to_string(),
+            interests: Vec::new(),
+            affected_by: Vec::new(),
+        }
+    }
+
+    /// Sets the stakeholder type
+    pub fn with_type(mut self, stakeholder_type: impl Into<String>) -> Self {
+        self.stakeholder_type = stakeholder_type.into();
+        self
+    }
+
+    /// Adds an interest
+    pub fn with_interest(mut self, interest: impl Into<String>) -> Self {
+        self.interests.push(interest.into());
+        self
+    }
+
+    /// Adds a statute that affects this stakeholder
+    pub fn affected_by_statute(mut self, statute_id: impl Into<String>) -> Self {
+        self.affected_by.push(statute_id.into());
+        self
+    }
+}
+
+/// Represents a conflict between multiple stakeholders
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StakeholderConflict {
+    /// Involved stakeholders
+    pub stakeholders: Vec<String>,
+    /// Conflicting statutes
+    pub statutes: Vec<String>,
+    /// Nature of the conflict
+    pub conflict_type: ConflictNature,
+    /// Severity of the conflict
+    pub severity: Severity,
+    /// Description of the conflict
+    pub description: String,
+    /// Potential resolution strategies
+    pub resolutions: Vec<String>,
+}
+
+/// Nature of stakeholder conflicts
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum ConflictNature {
+    /// Direct opposition of interests
+    DirectOpposition,
+    /// Competing for limited resources
+    ResourceCompetition,
+    /// Different interpretations of the same statute
+    InterpretationDifference,
+    /// Overlapping jurisdictions
+    JurisdictionalOverlap,
+    /// Asymmetric power dynamics
+    PowerImbalance,
+}
+
+impl std::fmt::Display for ConflictNature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DirectOpposition => write!(f, "Direct Opposition"),
+            Self::ResourceCompetition => write!(f, "Resource Competition"),
+            Self::InterpretationDifference => write!(f, "Interpretation Difference"),
+            Self::JurisdictionalOverlap => write!(f, "Jurisdictional Overlap"),
+            Self::PowerImbalance => write!(f, "Power Imbalance"),
+        }
+    }
+}
+
+/// Analyzes conflicts between multiple stakeholders
+pub fn analyze_stakeholder_conflicts(
+    stakeholders: &[Stakeholder],
+    statutes: &[Statute],
+) -> Vec<StakeholderConflict> {
+    let mut conflicts = Vec::new();
+
+    // Find stakeholders affected by the same statutes
+    let mut statute_to_stakeholders: HashMap<String, Vec<String>> = HashMap::new();
+    for stakeholder in stakeholders {
+        for statute_id in &stakeholder.affected_by {
+            statute_to_stakeholders
+                .entry(statute_id.clone())
+                .or_default()
+                .push(stakeholder.id.clone());
+        }
+    }
+
+    // Analyze potential conflicts for each statute
+    for (statute_id, affected_stakeholders) in &statute_to_stakeholders {
+        if affected_stakeholders.len() < 2 {
+            continue; // No conflict with single stakeholder
+        }
+
+        // Find the actual statute
+        let statute = statutes.iter().find(|s| &s.id == statute_id);
+        if statute.is_none() {
+            continue;
+        }
+        let statute = statute.unwrap();
+
+        // Check for direct opposition based on effect types
+        let has_prohibition = matches!(statute.effect.effect_type, EffectType::Prohibition);
+        let has_grant = matches!(statute.effect.effect_type, EffectType::Grant);
+        let has_revoke = matches!(statute.effect.effect_type, EffectType::Revoke);
+
+        if has_prohibition || has_revoke {
+            // Prohibition/Revoke creates opposition between enforcer and affected party
+            let mut resolutions = vec![
+                "Provide clear appeal mechanism".to_string(),
+                "Ensure proportionality of enforcement".to_string(),
+            ];
+
+            if has_revoke {
+                resolutions.push("Implement grandfathering provisions".to_string());
+            }
+
+            conflicts.push(StakeholderConflict {
+                stakeholders: affected_stakeholders.clone(),
+                statutes: vec![statute_id.clone()],
+                conflict_type: ConflictNature::DirectOpposition,
+                severity: Severity::Warning,
+                description: format!(
+                    "Statute {} creates potential opposition between {} stakeholders",
+                    statute_id,
+                    affected_stakeholders.len()
+                ),
+                resolutions,
+            });
+        }
+
+        if has_grant {
+            // Grant might create resource competition
+            conflicts.push(StakeholderConflict {
+                stakeholders: affected_stakeholders.clone(),
+                statutes: vec![statute_id.clone()],
+                conflict_type: ConflictNature::ResourceCompetition,
+                severity: Severity::Info,
+                description: format!(
+                    "Statute {} may create resource competition among {} stakeholders",
+                    statute_id,
+                    affected_stakeholders.len()
+                ),
+                resolutions: vec![
+                    "Define clear eligibility criteria".to_string(),
+                    "Establish priority ranking system".to_string(),
+                    "Set resource allocation caps".to_string(),
+                ],
+            });
+        }
+    }
+
+    // Check for conflicts based on overlapping interests
+    for i in 0..stakeholders.len() {
+        for j in (i + 1)..stakeholders.len() {
+            let s1 = &stakeholders[i];
+            let s2 = &stakeholders[j];
+
+            // Check for overlapping affected statutes
+            let common_statutes: Vec<String> = s1
+                .affected_by
+                .iter()
+                .filter(|id| s2.affected_by.contains(id))
+                .cloned()
+                .collect();
+
+            if !common_statutes.is_empty() {
+                // Check if they have conflicting interests
+                let conflicting_interests = !s1.interests.is_empty()
+                    && !s2.interests.is_empty()
+                    && s1
+                        .interests
+                        .iter()
+                        .all(|i1| s2.interests.iter().all(|i2| i1 != i2));
+
+                if conflicting_interests {
+                    conflicts.push(StakeholderConflict {
+                        stakeholders: vec![s1.id.clone(), s2.id.clone()],
+                        statutes: common_statutes.clone(),
+                        conflict_type: ConflictNature::InterpretationDifference,
+                        severity: Severity::Warning,
+                        description: format!(
+                            "Stakeholders {} and {} have conflicting interests regarding {} statutes",
+                            s1.name,
+                            s2.name,
+                            common_statutes.len()
+                        ),
+                        resolutions: vec![
+                            "Provide detailed implementation guidelines".to_string(),
+                            "Establish mediation process".to_string(),
+                            "Create stakeholder consultation mechanism".to_string(),
+                        ],
+                    });
+                }
+            }
+        }
+    }
+
+    conflicts
+}
+
+/// Generates a stakeholder conflict analysis report
+pub fn stakeholder_conflict_report(conflicts: &[StakeholderConflict]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Multi-Stakeholder Conflict Analysis\n\n");
+    report.push_str(&format!(
+        "**Total Conflicts Detected**: {}\n\n",
+        conflicts.len()
+    ));
+
+    if conflicts.is_empty() {
+        report.push_str("No stakeholder conflicts detected.\n");
+        return report;
+    }
+
+    // Group by conflict type
+    let mut by_type: HashMap<ConflictNature, Vec<&StakeholderConflict>> = HashMap::new();
+    for conflict in conflicts {
+        by_type
+            .entry(conflict.conflict_type)
+            .or_default()
+            .push(conflict);
+    }
+
+    for (conflict_type, type_conflicts) in &by_type {
+        report.push_str(&format!(
+            "## {} ({} conflicts)\n\n",
+            conflict_type,
+            type_conflicts.len()
+        ));
+
+        for conflict in type_conflicts {
+            report.push_str(&format!(
+                "### Conflict: {} stakeholders involved\n\n",
+                conflict.stakeholders.len()
+            ));
+            report.push_str(&format!("- **Severity**: {}\n", conflict.severity));
+            report.push_str(&format!(
+                "- **Stakeholders**: {}\n",
+                conflict.stakeholders.join(", ")
+            ));
+            report.push_str(&format!(
+                "- **Statutes**: {}\n",
+                conflict.statutes.join(", ")
+            ));
+            report.push_str(&format!("- **Description**: {}\n", conflict.description));
+            report.push_str("\n**Potential Resolutions**:\n");
+            for resolution in &conflict.resolutions {
+                report.push_str(&format!("- {}\n", resolution));
+            }
+            report.push('\n');
+        }
+    }
+
+    report
+}
+
+/// Represents a strategy in a game-theoretic model
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Strategy {
+    /// Stakeholder who plays this strategy
+    pub stakeholder_id: String,
+    /// Name of the strategy
+    pub name: String,
+    /// Description of the strategy
+    pub description: String,
+    /// Statutes invoked or complied with
+    pub statute_actions: Vec<String>,
+}
+
+impl Strategy {
+    /// Creates a new strategy
+    pub fn new(stakeholder_id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            stakeholder_id: stakeholder_id.into(),
+            name: name.into(),
+            description: String::new(),
+            statute_actions: Vec::new(),
+        }
+    }
+
+    /// Sets the description
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// Adds a statute action
+    pub fn with_statute_action(mut self, statute_id: impl Into<String>) -> Self {
+        self.statute_actions.push(statute_id.into());
+        self
+    }
+}
+
+/// Represents an outcome in the game
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GameOutcome {
+    /// Strategies played by each stakeholder
+    pub strategies: Vec<String>,
+    /// Payoffs for each stakeholder (indexed by stakeholder position)
+    pub payoffs: Vec<i32>,
+    /// Whether this is a Nash equilibrium
+    pub is_nash_equilibrium: bool,
+    /// Description of the outcome
+    pub description: String,
+}
+
+/// Represents a game-theoretic model
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GameTheoreticModel {
+    /// Stakeholders (players)
+    pub stakeholders: Vec<String>,
+    /// Available strategies for each stakeholder
+    pub strategies: Vec<Vec<Strategy>>,
+    /// All possible outcomes
+    pub outcomes: Vec<GameOutcome>,
+}
+
+impl GameTheoreticModel {
+    /// Creates a new game-theoretic model
+    pub fn new(stakeholders: Vec<String>) -> Self {
+        let strategies = vec![Vec::new(); stakeholders.len()];
+        Self {
+            stakeholders,
+            strategies,
+            outcomes: Vec::new(),
+        }
+    }
+
+    /// Adds a strategy for a stakeholder
+    pub fn add_strategy(&mut self, stakeholder_idx: usize, strategy: Strategy) {
+        if stakeholder_idx < self.strategies.len() {
+            self.strategies[stakeholder_idx].push(strategy);
+        }
+    }
+
+    /// Adds an outcome
+    pub fn add_outcome(&mut self, outcome: GameOutcome) {
+        self.outcomes.push(outcome);
+    }
+}
+
+/// Detects Nash equilibria in statute interactions
+pub fn detect_nash_equilibria(model: &GameTheoreticModel) -> Vec<&GameOutcome> {
+    model
+        .outcomes
+        .iter()
+        .filter(|outcome| outcome.is_nash_equilibrium)
+        .collect()
+}
+
+/// Predicts game-theoretic outcomes from statute interactions
+pub fn predict_game_outcomes(
+    stakeholders: &[Stakeholder],
+    _statutes: &[Statute],
+) -> GameTheoreticModel {
+    let stakeholder_ids: Vec<String> = stakeholders.iter().map(|s| s.id.clone()).collect();
+    let mut model = GameTheoreticModel::new(stakeholder_ids);
+
+    // Generate strategies for each stakeholder based on affected statutes
+    for (idx, stakeholder) in stakeholders.iter().enumerate() {
+        // Strategy 1: Comply with all statutes
+        let comply_strategy = Strategy::new(&stakeholder.id, "Full Compliance")
+            .with_description("Comply with all applicable statutes");
+
+        model.add_strategy(idx, comply_strategy);
+
+        // Strategy 2: Selective compliance
+        if !stakeholder.affected_by.is_empty() {
+            let selective = Strategy::new(&stakeholder.id, "Selective Compliance")
+                .with_description("Comply only with high-priority statutes");
+
+            model.add_strategy(idx, selective);
+        }
+
+        // Strategy 3: Non-compliance (for modeling purposes)
+        let non_comply = Strategy::new(&stakeholder.id, "Non-Compliance")
+            .with_description("Minimal or no compliance");
+
+        model.add_strategy(idx, non_comply);
+    }
+
+    // Generate sample outcomes for two-player games
+    if stakeholders.len() == 2 {
+        // Both comply: high social welfare, moderate individual payoff
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Full Compliance".to_string(), "Full Compliance".to_string()],
+            payoffs: vec![5, 5],
+            is_nash_equilibrium: true,
+            description: "Both stakeholders comply, creating stable equilibrium".to_string(),
+        });
+
+        // One complies, one doesn't: asymmetric payoffs
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Full Compliance".to_string(), "Non-Compliance".to_string()],
+            payoffs: vec![2, 7],
+            is_nash_equilibrium: false,
+            description: "Asymmetric compliance creates instability".to_string(),
+        });
+
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Non-Compliance".to_string(), "Full Compliance".to_string()],
+            payoffs: vec![7, 2],
+            is_nash_equilibrium: false,
+            description: "Asymmetric compliance creates instability".to_string(),
+        });
+
+        // Both don't comply: low payoffs due to lack of coordination
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Non-Compliance".to_string(), "Non-Compliance".to_string()],
+            payoffs: vec![1, 1],
+            is_nash_equilibrium: true,
+            description: "Both stakeholders defect, creating suboptimal equilibrium".to_string(),
+        });
+    }
+
+    model
+}
+
+/// Generates a game-theoretic analysis report
+pub fn game_theoretic_report(model: &GameTheoreticModel) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Game-Theoretic Outcome Prediction\n\n");
+    report.push_str(&format!("**Players**: {}\n", model.stakeholders.len()));
+    report.push_str(&format!("**Total Outcomes**: {}\n\n", model.outcomes.len()));
+
+    // List stakeholders and their strategies
+    report.push_str("## Stakeholders and Strategies\n\n");
+    for (idx, stakeholder_id) in model.stakeholders.iter().enumerate() {
+        report.push_str(&format!("### {}\n\n", stakeholder_id));
+        if idx < model.strategies.len() {
+            report.push_str("**Available Strategies**:\n");
+            for strategy in &model.strategies[idx] {
+                report.push_str(&format!(
+                    "- **{}**: {}\n",
+                    strategy.name, strategy.description
+                ));
+            }
+            report.push('\n');
+        }
+    }
+
+    // List Nash equilibria
+    let equilibria = detect_nash_equilibria(model);
+    report.push_str(&format!(
+        "## Nash Equilibria ({} found)\n\n",
+        equilibria.len()
+    ));
+
+    if equilibria.is_empty() {
+        report.push_str("No pure-strategy Nash equilibria found.\n\n");
+    } else {
+        for (i, outcome) in equilibria.iter().enumerate() {
+            report.push_str(&format!("### Equilibrium {}\n\n", i + 1));
+            report.push_str(&format!("- **Description**: {}\n", outcome.description));
+            report.push_str("- **Strategies**: ");
+            report.push_str(&outcome.strategies.join(" vs. "));
+            report.push('\n');
+            report.push_str("- **Payoffs**: ");
+            report.push_str(
+                &outcome
+                    .payoffs
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            report.push_str("\n\n");
+        }
+    }
+
+    // List all outcomes
+    report.push_str("## All Possible Outcomes\n\n");
+    for (i, outcome) in model.outcomes.iter().enumerate() {
+        report.push_str(&format!("{}. ", i + 1));
+        report.push_str(&outcome.strategies.join(" vs. "));
+        report.push_str(&format!(
+            " → Payoffs: ({})",
+            outcome
+                .payoffs
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+        if outcome.is_nash_equilibrium {
+            report.push_str(" **[Nash Equilibrium]**");
+        }
+        report.push('\n');
+    }
+
+    report
+}
+
+/// Represents a coalition of stakeholders
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Coalition {
+    /// Member stakeholder IDs
+    pub members: Vec<String>,
+    /// Shared objectives
+    pub objectives: Vec<String>,
+    /// Collective effects of the coalition
+    pub collective_effects: Vec<String>,
+    /// Strength of the coalition (0.0 to 1.0)
+    pub strength: f64,
+    /// Whether the coalition is stable
+    pub is_stable: bool,
+}
+
+impl Coalition {
+    /// Creates a new coalition
+    pub fn new(members: Vec<String>) -> Self {
+        Self {
+            members,
+            objectives: Vec::new(),
+            collective_effects: Vec::new(),
+            strength: 0.0,
+            is_stable: false,
+        }
+    }
+
+    /// Adds an objective
+    pub fn with_objective(mut self, objective: impl Into<String>) -> Self {
+        self.objectives.push(objective.into());
+        self
+    }
+
+    /// Adds a collective effect
+    pub fn with_collective_effect(mut self, effect: impl Into<String>) -> Self {
+        self.collective_effects.push(effect.into());
+        self
+    }
+
+    /// Sets the strength
+    pub fn with_strength(mut self, strength: f64) -> Self {
+        self.strength = strength.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets stability
+    pub fn with_stability(mut self, is_stable: bool) -> Self {
+        self.is_stable = is_stable;
+        self
+    }
+}
+
+/// Analyzes potential coalitions among stakeholders
+pub fn analyze_coalitions(stakeholders: &[Stakeholder], statutes: &[Statute]) -> Vec<Coalition> {
+    let mut coalitions = Vec::new();
+
+    // Find stakeholders with common interests
+    let mut interest_groups: HashMap<String, Vec<String>> = HashMap::new();
+    for stakeholder in stakeholders {
+        for interest in &stakeholder.interests {
+            interest_groups
+                .entry(interest.clone())
+                .or_default()
+                .push(stakeholder.id.clone());
+        }
+    }
+
+    // Create coalitions for each interest group with 2+ members
+    for (interest, members) in &interest_groups {
+        if members.len() >= 2 {
+            // Calculate coalition strength based on affected statutes
+            let affected_statutes: HashSet<String> = stakeholders
+                .iter()
+                .filter(|s| members.contains(&s.id))
+                .flat_map(|s| s.affected_by.iter().cloned())
+                .collect();
+
+            let strength = (affected_statutes.len() as f64 / statutes.len().max(1) as f64).min(1.0);
+
+            // Coalition is stable if all members are affected by common statutes
+            let common_statutes = stakeholders
+                .iter()
+                .filter(|s| members.contains(&s.id))
+                .fold(None, |acc: Option<HashSet<String>>, s| {
+                    let current: HashSet<String> = s.affected_by.iter().cloned().collect();
+                    match acc {
+                        None => Some(current),
+                        Some(prev) => Some(prev.intersection(&current).cloned().collect()),
+                    }
+                });
+
+            let is_stable = common_statutes.is_some_and(|s| !s.is_empty());
+
+            let mut coalition = Coalition::new(members.clone())
+                .with_objective(interest.clone())
+                .with_strength(strength)
+                .with_stability(is_stable);
+
+            // Add collective effects
+            for statute_id in &affected_statutes {
+                if let Some(statute) = statutes.iter().find(|s| &s.id == statute_id) {
+                    coalition = coalition.with_collective_effect(format!(
+                        "Collectively influenced by statute {} ({})",
+                        statute_id, statute.title
+                    ));
+                }
+            }
+
+            coalitions.push(coalition);
+        }
+    }
+
+    // Sort by strength (descending)
+    coalitions.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    coalitions
+}
+
+/// Generates a coalition analysis report
+pub fn coalition_analysis_report(coalitions: &[Coalition]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Coalition Analysis\n\n");
+    report.push_str(&format!(
+        "**Total Coalitions Detected**: {}\n\n",
+        coalitions.len()
+    ));
+
+    if coalitions.is_empty() {
+        report.push_str("No coalitions detected. Stakeholders may have divergent interests.\n");
+        return report;
+    }
+
+    let stable_count = coalitions.iter().filter(|c| c.is_stable).count();
+    report.push_str(&format!("**Stable Coalitions**: {}\n", stable_count));
+    report.push_str(&format!(
+        "**Unstable Coalitions**: {}\n\n",
+        coalitions.len() - stable_count
+    ));
+
+    for (i, coalition) in coalitions.iter().enumerate() {
+        report.push_str(&format!(
+            "## Coalition {} - {} members\n\n",
+            i + 1,
+            coalition.members.len()
+        ));
+        report.push_str(&format!(
+            "- **Members**: {}\n",
+            coalition.members.join(", ")
+        ));
+        report.push_str(&format!("- **Strength**: {:.2}\n", coalition.strength));
+        report.push_str(&format!(
+            "- **Stability**: {}\n",
+            if coalition.is_stable {
+                "Stable"
+            } else {
+                "Unstable"
+            }
+        ));
+
+        if !coalition.objectives.is_empty() {
+            report.push_str("\n**Shared Objectives**:\n");
+            for objective in &coalition.objectives {
+                report.push_str(&format!("- {}\n", objective));
+            }
+        }
+
+        if !coalition.collective_effects.is_empty() {
+            report.push_str("\n**Collective Effects**:\n");
+            for effect in &coalition.collective_effects {
+                report.push_str(&format!("- {}\n", effect));
+            }
+        }
+
+        report.push('\n');
+    }
+
+    report
+}
+
+// =============================================================================
+// Mechanism Design Verification
+// =============================================================================
+
+/// Represents a mechanism design property
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum MechanismProperty {
+    /// Incentive compatibility - agents benefit from truthful behavior
+    IncentiveCompatibility,
+    /// Individual rationality - participation is voluntary and beneficial
+    IndividualRationality,
+    /// Budget balance - transfers sum to zero or non-negative
+    BudgetBalance,
+    /// Pareto efficiency - no alternative allocation is better for all
+    ParetoEfficiency,
+    /// Strategy-proofness - truthful reporting is dominant strategy
+    StrategyProofness,
+    /// Non-dictatorship - no single agent controls outcomes
+    NonDictatorship,
+}
+
+impl std::fmt::Display for MechanismProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IncentiveCompatibility => write!(f, "Incentive Compatibility"),
+            Self::IndividualRationality => write!(f, "Individual Rationality"),
+            Self::BudgetBalance => write!(f, "Budget Balance"),
+            Self::ParetoEfficiency => write!(f, "Pareto Efficiency"),
+            Self::StrategyProofness => write!(f, "Strategy-Proofness"),
+            Self::NonDictatorship => write!(f, "Non-Dictatorship"),
+        }
+    }
+}
+
+/// Represents a mechanism design issue
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MechanismIssue {
+    /// Property violated
+    pub property: MechanismProperty,
+    /// Statute(s) involved
+    pub statute_ids: Vec<String>,
+    /// Severity of the issue
+    pub severity: Severity,
+    /// Description of the issue
+    pub description: String,
+    /// Suggested fixes
+    pub suggestions: Vec<String>,
+}
+
+/// Mechanism design analysis result
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MechanismAnalysis {
+    /// Issues found
+    pub issues: Vec<MechanismIssue>,
+    /// Properties satisfied
+    pub satisfied_properties: Vec<MechanismProperty>,
+    /// Overall mechanism quality score (0.0-1.0)
+    pub quality_score: f64,
+}
+
+impl MechanismAnalysis {
+    /// Creates a new mechanism analysis
+    pub fn new() -> Self {
+        Self {
+            issues: Vec::new(),
+            satisfied_properties: Vec::new(),
+            quality_score: 1.0,
+        }
+    }
+
+    /// Adds an issue
+    pub fn add_issue(&mut self, issue: MechanismIssue) {
+        self.issues.push(issue);
+        self.recalculate_score();
+    }
+
+    /// Marks a property as satisfied
+    pub fn satisfy_property(&mut self, property: MechanismProperty) {
+        if !self.satisfied_properties.contains(&property) {
+            self.satisfied_properties.push(property);
+        }
+    }
+
+    /// Recalculates the quality score
+    fn recalculate_score(&mut self) {
+        let total_properties = 6.0; // Total mechanism properties
+        let critical_issues = self
+            .issues
+            .iter()
+            .filter(|i| i.severity == Severity::Critical)
+            .count() as f64;
+        let errors = self
+            .issues
+            .iter()
+            .filter(|i| i.severity == Severity::Error)
+            .count() as f64;
+        let warnings = self
+            .issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
+            .count() as f64;
+
+        // Penalty for issues
+        let penalty = (critical_issues * 0.3) + (errors * 0.15) + (warnings * 0.05);
+
+        // Bonus for satisfied properties
+        let bonus = self.satisfied_properties.len() as f64 / total_properties;
+
+        self.quality_score = (1.0 - penalty + bonus).clamp(0.0, 1.0);
+    }
+}
+
+impl Default for MechanismAnalysis {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Verifies mechanism design properties of statutes
+pub fn verify_mechanism_design(
+    statutes: &[Statute],
+    stakeholders: &[Stakeholder],
+) -> MechanismAnalysis {
+    let mut analysis = MechanismAnalysis::new();
+
+    // Check incentive compatibility
+    check_incentive_compatibility(statutes, stakeholders, &mut analysis);
+
+    // Check individual rationality
+    check_individual_rationality(statutes, stakeholders, &mut analysis);
+
+    // Check budget balance
+    check_budget_balance(statutes, &mut analysis);
+
+    // Check strategy-proofness
+    check_strategy_proofness(statutes, &mut analysis);
+
+    // Check non-dictatorship
+    check_non_dictatorship(statutes, stakeholders, &mut analysis);
+
+    analysis
+}
+
+/// Checks if the mechanism is incentive compatible
+fn check_incentive_compatibility(
+    statutes: &[Statute],
+    _stakeholders: &[Stakeholder],
+    analysis: &mut MechanismAnalysis,
+) {
+    let mut has_issues = false;
+
+    for statute in statutes {
+        // Check for penalties without corresponding benefits
+        let has_penalty = matches!(
+            statute.effect.effect_type,
+            EffectType::Prohibition | EffectType::Revoke | EffectType::MonetaryTransfer
+        );
+
+        if has_penalty {
+            // Check if there's a clear incentive to comply
+            let has_compliance_incentive = statute
+                .discretion_logic
+                .as_ref()
+                .is_some_and(|logic| logic.contains("comply") || logic.contains("benefit"));
+
+            if !has_compliance_incentive {
+                has_issues = true;
+                analysis.add_issue(MechanismIssue {
+                    property: MechanismProperty::IncentiveCompatibility,
+                    statute_ids: vec![statute.id.clone()],
+                    severity: Severity::Warning,
+                    description: format!(
+                        "Statute {} imposes penalties without clear compliance incentives",
+                        statute.id
+                    ),
+                    suggestions: vec![
+                        "Add explicit compliance benefits".to_string(),
+                        "Clarify positive incentives in discretion logic".to_string(),
+                        "Consider reward mechanisms for compliance".to_string(),
+                    ],
+                });
+            }
+        }
+
+        // Check for gaming opportunities
+        if statute.preconditions.len() > 3 {
+            // Complex preconditions might allow gaming
+            analysis.add_issue(MechanismIssue {
+                property: MechanismProperty::IncentiveCompatibility,
+                statute_ids: vec![statute.id.clone()],
+                severity: Severity::Info,
+                description: format!(
+                    "Statute {} has complex preconditions that may allow strategic manipulation",
+                    statute.id
+                ),
+                suggestions: vec![
+                    "Simplify preconditions to reduce gaming opportunities".to_string(),
+                    "Add verification mechanisms for condition claims".to_string(),
+                ],
+            });
+        }
+    }
+
+    if !has_issues {
+        analysis.satisfy_property(MechanismProperty::IncentiveCompatibility);
+    }
+}
+
+/// Checks if the mechanism satisfies individual rationality
+fn check_individual_rationality(
+    statutes: &[Statute],
+    stakeholders: &[Stakeholder],
+    analysis: &mut MechanismAnalysis,
+) {
+    let mut has_issues = false;
+
+    // Check if any stakeholder is forced into worse outcomes
+    for stakeholder in stakeholders {
+        let affected_statutes: Vec<&Statute> = statutes
+            .iter()
+            .filter(|s| stakeholder.affected_by.contains(&s.id))
+            .collect();
+
+        // Count negative effects
+        let negative_effects = affected_statutes
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.effect.effect_type,
+                    EffectType::Prohibition | EffectType::Revoke
+                )
+            })
+            .count();
+
+        // Count positive effects
+        let positive_effects = affected_statutes
+            .iter()
+            .filter(|s| matches!(s.effect.effect_type, EffectType::Grant))
+            .count();
+
+        // If only negative effects, individual rationality may be violated
+        if negative_effects > 0 && positive_effects == 0 {
+            has_issues = true;
+            let statute_ids: Vec<String> = affected_statutes.iter().map(|s| s.id.clone()).collect();
+            analysis.add_issue(MechanismIssue {
+                property: MechanismProperty::IndividualRationality,
+                statute_ids,
+                severity: Severity::Warning,
+                description: format!(
+                    "Stakeholder {} faces only penalties without benefits, violating individual rationality",
+                    stakeholder.name
+                ),
+                suggestions: vec![
+                    "Add compensatory benefits".to_string(),
+                    "Make participation voluntary".to_string(),
+                    "Provide alternative compliance paths".to_string(),
+                ],
+            });
+        }
+    }
+
+    if !has_issues {
+        analysis.satisfy_property(MechanismProperty::IndividualRationality);
+    }
+}
+
+/// Checks budget balance for monetary transfers
+fn check_budget_balance(statutes: &[Statute], analysis: &mut MechanismAnalysis) {
+    let monetary_transfers: Vec<&Statute> = statutes
+        .iter()
+        .filter(|s| matches!(s.effect.effect_type, EffectType::MonetaryTransfer))
+        .collect();
+
+    if monetary_transfers.is_empty() {
+        // No monetary transfers, budget balance is trivially satisfied
+        analysis.satisfy_property(MechanismProperty::BudgetBalance);
+        return;
+    }
+
+    // Check if transfers are paired (in/out)
+    let mut has_balanced_transfers = false;
+
+    for transfer in &monetary_transfers {
+        // Check if there's a corresponding reverse transfer
+        let has_reverse = monetary_transfers
+            .iter()
+            .any(|t| t.id != transfer.id && t.jurisdiction == transfer.jurisdiction);
+
+        if has_reverse {
+            has_balanced_transfers = true;
+        }
+    }
+
+    if !has_balanced_transfers && !monetary_transfers.is_empty() {
+        analysis.add_issue(MechanismIssue {
+            property: MechanismProperty::BudgetBalance,
+            statute_ids: monetary_transfers.iter().map(|s| s.id.clone()).collect(),
+            severity: Severity::Warning,
+            description: "Monetary transfers may not be budget-balanced".to_string(),
+            suggestions: vec![
+                "Ensure transfers sum to zero or non-negative".to_string(),
+                "Add corresponding revenue or expenditure statutes".to_string(),
+                "Implement transfer tracking mechanisms".to_string(),
+            ],
+        });
+    } else {
+        analysis.satisfy_property(MechanismProperty::BudgetBalance);
+    }
+}
+
+/// Checks for strategy-proofness
+fn check_strategy_proofness(statutes: &[Statute], analysis: &mut MechanismAnalysis) {
+    let mut has_issues = false;
+
+    for statute in statutes {
+        // Check for conditions that could be easily misrepresented
+        for condition in &statute.preconditions {
+            if matches!(condition, legalis_core::Condition::Custom { .. }) {
+                has_issues = true;
+                analysis.add_issue(MechanismIssue {
+                    property: MechanismProperty::StrategyProofness,
+                    statute_ids: vec![statute.id.clone()],
+                    severity: Severity::Info,
+                    description: format!(
+                        "Statute {} has custom conditions that may be difficult to verify truthfully",
+                        statute.id
+                    ),
+                    suggestions: vec![
+                        "Add verification mechanisms for custom conditions".to_string(),
+                        "Use objective, verifiable conditions where possible".to_string(),
+                        "Implement audit trails for condition claims".to_string(),
+                    ],
+                });
+            }
+        }
+
+        // Check if grants have clear, verifiable criteria
+        if matches!(statute.effect.effect_type, EffectType::Grant)
+            && statute.preconditions.is_empty()
+        {
+            has_issues = true;
+            analysis.add_issue(MechanismIssue {
+                property: MechanismProperty::StrategyProofness,
+                statute_ids: vec![statute.id.clone()],
+                severity: Severity::Warning,
+                description: format!(
+                    "Statute {} grants benefits without verifiable conditions",
+                    statute.id
+                ),
+                suggestions: vec![
+                    "Add objective eligibility criteria".to_string(),
+                    "Implement verification procedures".to_string(),
+                ],
+            });
+        }
+    }
+
+    if !has_issues {
+        analysis.satisfy_property(MechanismProperty::StrategyProofness);
+    }
+}
+
+/// Checks for non-dictatorship
+fn check_non_dictatorship(
+    statutes: &[Statute],
+    stakeholders: &[Stakeholder],
+    analysis: &mut MechanismAnalysis,
+) {
+    if stakeholders.is_empty() {
+        analysis.satisfy_property(MechanismProperty::NonDictatorship);
+        return;
+    }
+
+    // Check if any single stakeholder controls too many statutes
+    let mut statute_control: HashMap<String, usize> = HashMap::new();
+
+    for stakeholder in stakeholders {
+        statute_control.insert(stakeholder.id.clone(), stakeholder.affected_by.len());
+    }
+
+    let total_statutes = statutes.len();
+    let max_control = statute_control.values().max().copied().unwrap_or(0);
+
+    // If one stakeholder controls >50% of statutes, flag as potential dictatorship
+    if max_control as f64 > (total_statutes as f64 * 0.5) {
+        let dictator = statute_control
+            .iter()
+            .find(|(_, count)| **count == max_control)
+            .map(|(id, _)| id.clone())
+            .unwrap_or_default();
+
+        analysis.add_issue(MechanismIssue {
+            property: MechanismProperty::NonDictatorship,
+            statute_ids: vec![],
+            severity: Severity::Error,
+            description: format!(
+                "Stakeholder {} controls {}% of statutes, suggesting potential dictatorship",
+                dictator,
+                (max_control as f64 / total_statutes as f64 * 100.0) as i32
+            ),
+            suggestions: vec![
+                "Distribute statute influence more evenly".to_string(),
+                "Add checks and balances".to_string(),
+                "Implement multi-stakeholder approval mechanisms".to_string(),
+            ],
+        });
+    } else {
+        analysis.satisfy_property(MechanismProperty::NonDictatorship);
+    }
+}
+
+/// Generates a mechanism design analysis report
+pub fn mechanism_design_report(analysis: &MechanismAnalysis) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Mechanism Design Analysis\n\n");
+    report.push_str(&format!(
+        "**Overall Quality Score**: {:.2}/1.00\n\n",
+        analysis.quality_score
+    ));
+
+    // Quality assessment
+    let quality_level = if analysis.quality_score >= 0.9 {
+        "Excellent"
+    } else if analysis.quality_score >= 0.7 {
+        "Good"
+    } else if analysis.quality_score >= 0.5 {
+        "Fair"
+    } else {
+        "Poor"
+    };
+
+    report.push_str(&format!("**Quality Level**: {}\n\n", quality_level));
+
+    // Satisfied properties
+    report.push_str(&format!(
+        "## Satisfied Properties ({}/6)\n\n",
+        analysis.satisfied_properties.len()
+    ));
+
+    if analysis.satisfied_properties.is_empty() {
+        report.push_str("None\n\n");
+    } else {
+        for property in &analysis.satisfied_properties {
+            report.push_str(&format!("- ✓ {}\n", property));
+        }
+        report.push('\n');
+    }
+
+    // Issues
+    report.push_str(&format!("## Issues ({} found)\n\n", analysis.issues.len()));
+
+    if analysis.issues.is_empty() {
+        report.push_str("No mechanism design issues detected. The mechanism is well-designed.\n\n");
+    } else {
+        // Group by property
+        let mut by_property: HashMap<MechanismProperty, Vec<&MechanismIssue>> = HashMap::new();
+        for issue in &analysis.issues {
+            by_property.entry(issue.property).or_default().push(issue);
+        }
+
+        for (property, issues) in &by_property {
+            report.push_str(&format!("### {} - {} issues\n\n", property, issues.len()));
+
+            for issue in issues {
+                report.push_str(&format!("**Severity**: {}\n\n", issue.severity));
+                report.push_str(&format!("**Description**: {}\n\n", issue.description));
+
+                if !issue.statute_ids.is_empty() {
+                    report.push_str(&format!(
+                        "**Affected Statutes**: {}\n\n",
+                        issue.statute_ids.join(", ")
+                    ));
+                }
+
+                report.push_str("**Suggestions**:\n");
+                for suggestion in &issue.suggestions {
+                    report.push_str(&format!("- {}\n", suggestion));
+                }
+                report.push('\n');
+            }
+        }
+    }
+
+    report
+}
+
+// ============================================================================
+// Probabilistic Verification (v0.2.2)
+// ============================================================================
+
+/// Represents a state in a Markov chain
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct MarkovState {
+    /// Unique state identifier
+    pub id: String,
+    /// Human-readable state description
+    pub description: String,
+    /// Whether this is an accepting state
+    pub accepting: bool,
+}
+
+impl MarkovState {
+    /// Creates a new Markov state
+    pub fn new(id: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            description: description.into(),
+            accepting: false,
+        }
+    }
+
+    /// Marks this state as accepting
+    pub fn accepting(mut self) -> Self {
+        self.accepting = true;
+        self
+    }
+}
+
+/// Represents a transition between states with probability
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MarkovTransition {
+    /// Source state ID
+    pub from: String,
+    /// Target state ID
+    pub to: String,
+    /// Transition probability (0.0 to 1.0)
+    pub probability: f64,
+    /// Optional action/event label
+    pub action: Option<String>,
+}
+
+impl MarkovTransition {
+    /// Creates a new transition
+    pub fn new(from: impl Into<String>, to: impl Into<String>, probability: f64) -> Self {
+        Self {
+            from: from.into(),
+            to: to.into(),
+            probability: probability.clamp(0.0, 1.0),
+            action: None,
+        }
+    }
+
+    /// Adds an action label
+    pub fn with_action(mut self, action: impl Into<String>) -> Self {
+        self.action = Some(action.into());
+        self
+    }
+}
+
+/// Discrete-Time Markov Chain (DTMC)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MarkovChain {
+    /// Chain identifier
+    pub id: String,
+    /// All states in the chain
+    pub states: Vec<MarkovState>,
+    /// State transitions with probabilities
+    pub transitions: Vec<MarkovTransition>,
+    /// Initial state ID
+    pub initial_state: String,
+}
+
+impl MarkovChain {
+    /// Creates a new Markov chain
+    pub fn new(id: impl Into<String>, initial_state: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            states: vec![],
+            transitions: vec![],
+            initial_state: initial_state.into(),
+        }
+    }
+
+    /// Adds a state to the chain
+    pub fn add_state(mut self, state: MarkovState) -> Self {
+        self.states.push(state);
+        self
+    }
+
+    /// Adds a transition to the chain
+    pub fn add_transition(mut self, transition: MarkovTransition) -> Self {
+        self.transitions.push(transition);
+        self
+    }
+
+    /// Validates that transition probabilities from each state sum to 1.0
+    pub fn validate(&self) -> Result<(), String> {
+        use std::collections::HashMap;
+
+        let mut outgoing: HashMap<&str, f64> = HashMap::new();
+
+        for transition in &self.transitions {
+            *outgoing.entry(&transition.from).or_insert(0.0) += transition.probability;
+        }
+
+        for (state, total_prob) in outgoing {
+            if (total_prob - 1.0).abs() > 0.01 {
+                return Err(format!(
+                    "State '{}' has transitions summing to {:.3} (should be 1.0)",
+                    state, total_prob
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Computes steady-state probabilities using iterative method
+    pub fn steady_state_probabilities(&self, max_iterations: usize) -> HashMap<String, f64> {
+        use std::collections::HashMap;
+
+        let mut probabilities: HashMap<String, f64> = HashMap::new();
+
+        // Initialize uniformly
+        let num_states = self.states.len();
+        if num_states == 0 {
+            return probabilities;
+        }
+
+        let initial_prob = 1.0 / num_states as f64;
+        for state in &self.states {
+            probabilities.insert(state.id.clone(), initial_prob);
+        }
+
+        // Iterate to convergence
+        for _ in 0..max_iterations {
+            let mut new_probs: HashMap<String, f64> = HashMap::new();
+
+            for state in &self.states {
+                let mut incoming_prob = 0.0;
+
+                for transition in &self.transitions {
+                    if transition.to == state.id {
+                        let from_prob = probabilities.get(&transition.from).copied().unwrap_or(0.0);
+                        incoming_prob += from_prob * transition.probability;
+                    }
+                }
+
+                new_probs.insert(state.id.clone(), incoming_prob);
+            }
+
+            probabilities = new_probs;
+        }
+
+        probabilities
+    }
+
+    /// Computes reachability probability to accepting states
+    pub fn reachability_probability(&self, steps: usize) -> f64 {
+        use std::collections::HashMap;
+
+        let mut probabilities: HashMap<String, f64> = HashMap::new();
+        probabilities.insert(self.initial_state.clone(), 1.0);
+
+        // Track cumulative probability of reaching accepting states
+        let mut accepting_prob = 0.0;
+
+        for _ in 0..steps {
+            let mut new_probs: HashMap<String, f64> = HashMap::new();
+
+            for (from_state, from_prob) in &probabilities {
+                // Check if this state is accepting
+                let is_accepting = self
+                    .states
+                    .iter()
+                    .any(|s| s.id == *from_state && s.accepting);
+
+                if is_accepting {
+                    // Accumulate probability from accepting states
+                    accepting_prob += from_prob;
+                } else {
+                    // Propagate probability through transitions
+                    for transition in &self.transitions {
+                        if &transition.from == from_state {
+                            *new_probs.entry(transition.to.clone()).or_insert(0.0) +=
+                                from_prob * transition.probability;
+                        }
+                    }
+                }
+            }
+
+            probabilities = new_probs;
+        }
+
+        // Add any remaining probability in accepting states
+        for (state_id, prob) in &probabilities {
+            if self.states.iter().any(|s| s.id == *state_id && s.accepting) {
+                accepting_prob += prob;
+            }
+        }
+
+        accepting_prob
+    }
+}
+
+/// Statistical model checking result
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatisticalCheckResult {
+    /// Property being checked
+    pub property: String,
+    /// Estimated probability of satisfaction
+    pub estimated_probability: f64,
+    /// Confidence interval lower bound (95%)
+    pub confidence_lower: f64,
+    /// Confidence interval upper bound (95%)
+    pub confidence_upper: f64,
+    /// Number of simulation runs
+    pub num_samples: usize,
+    /// Number of successful runs
+    pub num_successes: usize,
+    /// Hypothesis test result (true = accept, false = reject)
+    pub hypothesis_accepted: bool,
+}
+
+impl StatisticalCheckResult {
+    /// Creates a new result from samples
+    pub fn from_samples(
+        property: impl Into<String>,
+        num_samples: usize,
+        num_successes: usize,
+        threshold: f64,
+    ) -> Self {
+        let p_hat = num_successes as f64 / num_samples as f64;
+
+        // 95% confidence interval using normal approximation
+        let z = 1.96; // 95% confidence
+        let std_err = (p_hat * (1.0 - p_hat) / num_samples as f64).sqrt();
+        let margin = z * std_err;
+
+        let confidence_lower = (p_hat - margin).max(0.0);
+        let confidence_upper = (p_hat + margin).min(1.0);
+
+        // Hypothesis test: H0: p >= threshold
+        let hypothesis_accepted = confidence_lower >= threshold;
+
+        Self {
+            property: property.into(),
+            estimated_probability: p_hat,
+            confidence_lower,
+            confidence_upper,
+            num_samples,
+            num_successes,
+            hypothesis_accepted,
+        }
+    }
+}
+
+/// Monte Carlo simulation for statute verification
+pub fn monte_carlo_verification(
+    chain: &MarkovChain,
+    num_simulations: usize,
+    max_steps: usize,
+) -> StatisticalCheckResult {
+    use rand::Rng;
+
+    let mut successes = 0;
+
+    for _ in 0..num_simulations {
+        let mut current_state = chain.initial_state.clone();
+        let mut reached_accepting = false;
+
+        for _ in 0..max_steps {
+            // Check if current state is accepting
+            if let Some(state) = chain.states.iter().find(|s| s.id == current_state) {
+                if state.accepting {
+                    reached_accepting = true;
+                    break;
+                }
+            }
+
+            // Get outgoing transitions
+            let outgoing: Vec<&MarkovTransition> = chain
+                .transitions
+                .iter()
+                .filter(|t| t.from == current_state)
+                .collect();
+
+            if outgoing.is_empty() {
+                break;
+            }
+
+            // Sample next transition
+            let mut rng = rand::rng();
+            let r: f64 = rng.random();
+            let mut cumulative = 0.0;
+
+            for transition in outgoing {
+                cumulative += transition.probability;
+                if r <= cumulative {
+                    current_state = transition.to.clone();
+                    break;
+                }
+            }
+        }
+
+        if reached_accepting {
+            successes += 1;
+        }
+    }
+
+    StatisticalCheckResult::from_samples(
+        "Reachability of accepting states",
+        num_simulations,
+        successes,
+        0.5, // Default threshold
+    )
+}
+
+/// Risk factor for statute analysis
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RiskFactor {
+    /// Factor name
+    pub name: String,
+    /// Factor description
+    pub description: String,
+    /// Risk contribution (0.0-1.0)
+    pub score: f64,
+    /// Weight in overall risk (0.0-1.0)
+    pub weight: f64,
+}
+
+impl RiskFactor {
+    /// Creates a new risk factor
+    pub fn new(name: impl Into<String>, description: impl Into<String>, score: f64) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            score: score.clamp(0.0, 1.0),
+            weight: 1.0,
+        }
+    }
+
+    /// Sets the weight
+    pub fn with_weight(mut self, weight: f64) -> Self {
+        self.weight = weight.clamp(0.0, 1.0);
+        self
+    }
+}
+
+/// Risk quantification analysis result
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RiskQuantification {
+    /// Statute ID
+    pub statute_id: String,
+    /// Individual risk factors
+    pub factors: Vec<RiskFactor>,
+    /// Overall risk score (0.0-1.0)
+    pub overall_score: f64,
+    /// Risk level classification
+    pub risk_level: RiskLevel,
+    /// Mitigation recommendations
+    pub mitigations: Vec<String>,
+}
+
+impl RiskQuantification {
+    /// Creates a new risk quantification
+    pub fn new(statute_id: impl Into<String>, factors: Vec<RiskFactor>) -> Self {
+        let total_weight: f64 = factors.iter().map(|f| f.weight).sum();
+        let overall_score = if total_weight > 0.0 {
+            factors.iter().map(|f| f.score * f.weight).sum::<f64>() / total_weight
+        } else {
+            0.0
+        };
+
+        let risk_level = RiskLevel::from_score(overall_score);
+
+        Self {
+            statute_id: statute_id.into(),
+            factors,
+            overall_score,
+            risk_level,
+            mitigations: vec![],
+        }
+    }
+
+    /// Adds a mitigation recommendation
+    pub fn add_mitigation(mut self, mitigation: impl Into<String>) -> Self {
+        self.mitigations.push(mitigation.into());
+        self
+    }
+}
+
+/// Analyzes statute risk using multiple factors
+pub fn analyze_statute_risk(
+    statute: &Statute,
+    verification_result: &VerificationResult,
+) -> RiskQuantification {
+    let mut factors = vec![];
+
+    // Factor 1: Complexity risk
+    let complexity_metrics = analyze_complexity(statute);
+    let complexity_score = match complexity_metrics.complexity_level {
+        ComplexityLevel::Simple => 0.1,
+        ComplexityLevel::Moderate => 0.3,
+        ComplexityLevel::Complex => 0.6,
+        ComplexityLevel::VeryComplex => 0.9,
+    };
+    factors.push(
+        RiskFactor::new(
+            "Complexity Risk",
+            format!(
+                "Statute complexity: {:?}",
+                complexity_metrics.complexity_level
+            ),
+            complexity_score,
+        )
+        .with_weight(0.25),
+    );
+
+    // Factor 2: Verification error risk
+    let error_score = if verification_result.errors.is_empty() {
+        0.0
+    } else {
+        let critical_errors = verification_result
+            .errors
+            .iter()
+            .filter(|e| e.severity() == Severity::Critical)
+            .count();
+        let error_count = verification_result.errors.len();
+        (0.5 + (critical_errors as f64 * 0.1))
+            .min(1.0)
+            .max(error_count as f64 * 0.1)
+    };
+    factors.push(
+        RiskFactor::new(
+            "Verification Error Risk",
+            format!(
+                "{} errors found (including critical)",
+                verification_result.errors.len()
+            ),
+            error_score,
+        )
+        .with_weight(0.35),
+    );
+
+    // Factor 3: Ambiguity risk
+    let ambiguities = detect_ambiguities(statute);
+    let ambiguity_score = (ambiguities.len() as f64 * 0.15).min(1.0);
+    factors.push(
+        RiskFactor::new(
+            "Ambiguity Risk",
+            format!("{} ambiguities detected", ambiguities.len()),
+            ambiguity_score,
+        )
+        .with_weight(0.20),
+    );
+
+    // Factor 4: Impact risk
+    let impact = analyze_regulatory_impact(statute);
+    let impact_score = impact.impact_score as f64 / 100.0;
+    factors.push(
+        RiskFactor::new(
+            "Regulatory Impact Risk",
+            format!("Impact level: {:?}", impact.impact_level),
+            impact_score,
+        )
+        .with_weight(0.20),
+    );
+
+    let mut quantification = RiskQuantification::new(statute.id.clone(), factors);
+
+    // Add mitigations based on risk level
+    match quantification.risk_level {
+        RiskLevel::Critical | RiskLevel::High => {
+            quantification = quantification
+                .add_mitigation("Immediate review and simplification required")
+                .add_mitigation("Resolve all critical errors before deployment")
+                .add_mitigation("Add comprehensive test coverage")
+                .add_mitigation("Implement staged rollout with monitoring");
+        }
+        RiskLevel::Medium => {
+            quantification = quantification
+                .add_mitigation("Address identified ambiguities")
+                .add_mitigation("Consider simplification if possible")
+                .add_mitigation("Add monitoring for edge cases");
+        }
+        RiskLevel::Low => {
+            quantification = quantification
+                .add_mitigation("Regular monitoring recommended")
+                .add_mitigation("Consider proactive testing");
+        }
+        RiskLevel::Minimal => {
+            quantification =
+                quantification.add_mitigation("Continue standard compliance monitoring");
+        }
+    }
+
+    quantification
+}
+
+/// Generates a risk quantification report
+pub fn risk_quantification_report(risks: &[RiskQuantification]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Risk Quantification Report\n\n");
+    report.push_str(&format!("**Total Statutes Analyzed**: {}\n\n", risks.len()));
+
+    // Risk level distribution
+    let mut risk_distribution: HashMap<RiskLevel, usize> = HashMap::new();
+    for risk in risks {
+        *risk_distribution.entry(risk.risk_level).or_insert(0) += 1;
+    }
+
+    report.push_str("## Risk Level Distribution\n\n");
+    for level in &[
+        RiskLevel::Critical,
+        RiskLevel::High,
+        RiskLevel::Medium,
+        RiskLevel::Low,
+        RiskLevel::Minimal,
+    ] {
+        let count = risk_distribution.get(level).copied().unwrap_or(0);
+        report.push_str(&format!("- {}: {} statutes\n", level, count));
+    }
+    report.push('\n');
+
+    // Individual statute risks
+    report.push_str("## Statute Risk Analysis\n\n");
+
+    let mut sorted_risks: Vec<_> = risks.iter().collect();
+    sorted_risks.sort_by(|a, b| b.overall_score.partial_cmp(&a.overall_score).unwrap());
+
+    for risk in sorted_risks {
+        report.push_str(&format!("### Statute: {}\n\n", risk.statute_id));
+        report.push_str(&format!(
+            "**Overall Risk Score**: {:.2}/1.00 ({})\n\n",
+            risk.overall_score, risk.risk_level
+        ));
+
+        report.push_str("**Risk Factors**:\n");
+        for factor in &risk.factors {
+            report.push_str(&format!(
+                "- {}: {:.2} (weight: {:.2}) - {}\n",
+                factor.name, factor.score, factor.weight, factor.description
+            ));
+        }
+        report.push('\n');
+
+        if !risk.mitigations.is_empty() {
+            report.push_str("**Mitigation Recommendations**:\n");
+            for mitigation in &risk.mitigations {
+                report.push_str(&format!("- {}\n", mitigation));
+            }
+            report.push('\n');
+        }
+    }
+
+    report
+}
+
+/// Generates a statistical model checking report
+pub fn statistical_model_checking_report(results: &[StatisticalCheckResult]) -> String {
+    let mut report = String::new();
+
+    report.push_str("# Statistical Model Checking Report\n\n");
+    report.push_str(&format!("**Properties Checked**: {}\n\n", results.len()));
+
+    for result in results {
+        report.push_str(&format!("## Property: {}\n\n", result.property));
+        report.push_str(&format!(
+            "**Estimated Probability**: {:.4}\n",
+            result.estimated_probability
+        ));
+        report.push_str(&format!(
+            "**95% Confidence Interval**: [{:.4}, {:.4}]\n",
+            result.confidence_lower, result.confidence_upper
+        ));
+        report.push_str(&format!("**Samples**: {}\n", result.num_samples));
+        report.push_str(&format!("**Successes**: {}\n", result.num_successes));
+        report.push_str(&format!(
+            "**Hypothesis Test**: {}\n\n",
+            if result.hypothesis_accepted {
+                "ACCEPTED"
+            } else {
+                "REJECTED"
+            }
+        ));
+    }
+
+    report
+}
+
+// ============================================================================
+// Explainable Verification (v0.2.3)
+// ============================================================================
+
+/// Natural language explanation for a verification error
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NaturalLanguageExplanation {
+    /// The original verification error
+    pub error_type: String,
+    /// Simple explanation (for laypersons)
+    pub simple_explanation: String,
+    /// Detailed technical explanation
+    pub technical_explanation: String,
+    /// Why this is a problem
+    pub why_it_matters: String,
+    /// Suggested fix in plain language
+    pub how_to_fix: String,
+    /// Example scenario illustrating the problem
+    pub example_scenario: Option<String>,
+}
+
+impl NaturalLanguageExplanation {
+    /// Creates a new explanation
+    pub fn new(
+        error_type: impl Into<String>,
+        simple: impl Into<String>,
+        technical: impl Into<String>,
+        why: impl Into<String>,
+        fix: impl Into<String>,
+    ) -> Self {
+        Self {
+            error_type: error_type.into(),
+            simple_explanation: simple.into(),
+            technical_explanation: technical.into(),
+            why_it_matters: why.into(),
+            how_to_fix: fix.into(),
+            example_scenario: None,
+        }
+    }
+
+    /// Adds an example scenario
+    pub fn with_example(mut self, example: impl Into<String>) -> Self {
+        self.example_scenario = Some(example.into());
+        self
+    }
+
+    /// Generates a formatted explanation
+    pub fn format(&self, include_technical: bool) -> String {
+        let mut output = String::new();
+        output.push_str(&format!("# {}\n\n", self.error_type));
+        output.push_str(&format!(
+            "## What's Wrong?\n{}\n\n",
+            self.simple_explanation
+        ));
+
+        if include_technical {
+            output.push_str(&format!(
+                "## Technical Details\n{}\n\n",
+                self.technical_explanation
+            ));
+        }
+
+        output.push_str(&format!("## Why This Matters\n{}\n\n", self.why_it_matters));
+        output.push_str(&format!("## How to Fix It\n{}\n\n", self.how_to_fix));
+
+        if let Some(example) = &self.example_scenario {
+            output.push_str(&format!("## Example\n{}\n\n", example));
+        }
+
+        output
+    }
+}
+
+/// Generates natural language explanation for a verification error
+pub fn explain_error(error: &VerificationError) -> NaturalLanguageExplanation {
+    match error {
+        VerificationError::CircularReference { message } => {
+            NaturalLanguageExplanation::new(
+                "Circular Reference",
+                "This law refers to itself in a way that creates an infinite loop.",
+                format!("Circular dependency detected: {}", message),
+                "Circular references make it impossible to determine what the law actually requires, \
+                 since each requirement depends on itself.",
+                "Break the circular chain by removing one of the references, or restructure the \
+                 statutes so they don't depend on each other in a loop.",
+            )
+            .with_example(
+                "Imagine Law A says 'Follow Law B', and Law B says 'Follow Law A'. \
+                 Which one do you follow first? It's impossible to tell!",
+            )
+        }
+        VerificationError::DeadStatute { statute_id } => NaturalLanguageExplanation::new(
+            "Impossible to Satisfy",
+            format!("Law '{}' has conditions that can never be met.", statute_id),
+            format!("Dead statute detected: {} has contradictory preconditions", statute_id),
+            "If a law can never be satisfied, it's useless and confusing. People might waste time \
+             trying to comply with something that's impossible.",
+            "Review the conditions and remove contradictory requirements. Make sure the conditions \
+             are logically possible to satisfy.",
+        )
+        .with_example(
+            "This is like a rule that says 'You must be both over 18 AND under 16 years old'. \
+             Nobody can satisfy both conditions at the same time.",
+        ),
+        VerificationError::ConstitutionalConflict {
+            statute_id,
+            principle,
+        } => NaturalLanguageExplanation::new(
+            "Constitutional Conflict",
+            format!(
+                "Law '{}' conflicts with the constitutional principle: {}",
+                statute_id, principle
+            ),
+            format!(
+                "Statute {} violates constitutional principle: {}",
+                statute_id, principle
+            ),
+            "Constitutional principles are fundamental rights and protections. Laws that violate \
+             them may be invalid and could cause harm to people's rights.",
+            format!(
+                "Revise the law to align with the '{}' principle. Consider adding safeguards or \
+                 exceptions that protect constitutional rights.",
+                principle
+            ),
+        ),
+        VerificationError::LogicalContradiction { message } => NaturalLanguageExplanation::new(
+            "Logical Contradiction",
+            "This law contains conditions that contradict each other.",
+            format!("Logical contradiction found: {}", message),
+            "Contradictory conditions create confusion and make it unclear what the law actually requires.",
+            "Remove or revise the contradictory conditions so they work together logically.",
+        )
+        .with_example(
+            "This is like saying 'You can drive if you have a license AND you can drive if you \
+             don't have a license' - which is it?",
+        ),
+        VerificationError::Ambiguity { message } => NaturalLanguageExplanation::new(
+            "Ambiguous Language",
+            "This law uses vague or unclear language that could be interpreted multiple ways.",
+            format!("Ambiguity detected: {}", message),
+            "Ambiguous laws lead to inconsistent enforcement and confusion about what's actually required.",
+            "Replace vague terms with specific, measurable criteria. Define unclear terms explicitly.",
+        )
+        .with_example(
+            "Instead of saying 'a reasonable amount', specify exactly what the amount should be \
+             (e.g., 'no more than $100').",
+        ),
+        VerificationError::UnreachableCode { message } => NaturalLanguageExplanation::new(
+            "Unreachable Provision",
+            "Part of this law can never be triggered or applied.",
+            format!("Unreachable code detected: {}", message),
+            "Dead provisions waste space in the legal code and may confuse people into thinking \
+             they're relevant when they're not.",
+            "Remove the unreachable provisions, or fix the conditions so they can actually be triggered.",
+        ),
+    }
+}
+
+/// Conflict explanation for laypersons
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConflictExplanation {
+    /// The statutes in conflict
+    pub statute_ids: Vec<String>,
+    /// Simple description of the conflict
+    pub description: String,
+    /// Real-world impact
+    pub impact: String,
+    /// Who is affected
+    pub affected_parties: Vec<String>,
+    /// Resolution options
+    pub resolution_options: Vec<String>,
+}
+
+impl ConflictExplanation {
+    /// Creates a new conflict explanation
+    pub fn new(statute_ids: Vec<String>, description: impl Into<String>) -> Self {
+        Self {
+            statute_ids,
+            description: description.into(),
+            impact: String::new(),
+            affected_parties: vec![],
+            resolution_options: vec![],
+        }
+    }
+
+    /// Adds impact description
+    pub fn with_impact(mut self, impact: impl Into<String>) -> Self {
+        self.impact = impact.into();
+        self
+    }
+
+    /// Adds affected party
+    pub fn add_affected_party(mut self, party: impl Into<String>) -> Self {
+        self.affected_parties.push(party.into());
+        self
+    }
+
+    /// Adds resolution option
+    pub fn add_resolution_option(mut self, option: impl Into<String>) -> Self {
+        self.resolution_options.push(option.into());
+        self
+    }
+
+    /// Formats the explanation
+    pub fn format(&self) -> String {
+        let mut output = String::new();
+        output.push_str(&format!(
+            "# Conflict Between: {}\n\n",
+            self.statute_ids.join(", ")
+        ));
+        output.push_str(&format!(
+            "## What's the Conflict?\n{}\n\n",
+            self.description
+        ));
+
+        if !self.impact.is_empty() {
+            output.push_str(&format!("## Real-World Impact\n{}\n\n", self.impact));
+        }
+
+        if !self.affected_parties.is_empty() {
+            output.push_str("## Who's Affected?\n");
+            for party in &self.affected_parties {
+                output.push_str(&format!("- {}\n", party));
+            }
+            output.push('\n');
+        }
+
+        if !self.resolution_options.is_empty() {
+            output.push_str("## How to Resolve This\n");
+            for (i, option) in self.resolution_options.iter().enumerate() {
+                output.push_str(&format!("{}. {}\n", i + 1, option));
+            }
+            output.push('\n');
+        }
+
+        output
+    }
+}
+
+/// Explains statute conflicts in layperson terms
+pub fn explain_conflict(conflict: &StatuteConflict) -> ConflictExplanation {
+    let mut explanation = ConflictExplanation::new(
+        conflict.statute_ids.clone(),
+        match &conflict.conflict_type {
+            ConflictType::EffectConflict => {
+                "These laws have overlapping conditions but contradictory effects - they would \
+                 apply to the same situations but produce different outcomes.".to_string()
+            }
+            ConflictType::JurisdictionalOverlap => {
+                "These laws overlap in their jurisdiction, creating uncertainty about which applies.".to_string()
+            }
+            ConflictType::TemporalConflict => {
+                "These laws have conflicting rules during overlapping time periods.".to_string()
+            }
+            ConflictType::HierarchyViolation => {
+                "A lower-level law contradicts a higher-level law, which violates legal hierarchy.".to_string()
+            }
+            ConflictType::IdCollision => {
+                "These laws have the same identifier in different jurisdictions, causing confusion.".to_string()
+            }
+        },
+    );
+
+    explanation = explanation.with_impact(
+        "This conflict creates legal uncertainty. People affected by these laws may not know \
+         which one to follow, leading to potential compliance issues or unfair treatment.",
+    );
+
+    // Add affected parties based on conflict type
+    match &conflict.conflict_type {
+        ConflictType::EffectConflict => {
+            explanation = explanation
+                .add_affected_party("Anyone trying to comply with both laws")
+                .add_affected_party("Law enforcement agencies")
+                .add_affected_party("Courts interpreting the laws");
+        }
+        ConflictType::JurisdictionalOverlap => {
+            explanation = explanation
+                .add_affected_party("People living or operating in the overlapping jurisdiction")
+                .add_affected_party("Multiple regulatory bodies");
+        }
+        ConflictType::TemporalConflict => {
+            explanation = explanation
+                .add_affected_party("People affected during the overlapping time period")
+                .add_affected_party("Legal administrators managing transitions");
+        }
+        ConflictType::HierarchyViolation => {
+            explanation = explanation
+                .add_affected_party("Courts enforcing legal hierarchy")
+                .add_affected_party("Citizens relying on proper legal authority");
+        }
+        ConflictType::IdCollision => {
+            explanation = explanation
+                .add_affected_party("Cross-jurisdictional entities")
+                .add_affected_party("Legal databases and systems");
+        }
+    }
+
+    // Add resolution options
+    for suggestion in &conflict.resolution_suggestions {
+        explanation = explanation.add_resolution_option(suggestion.clone());
+    }
+
+    explanation
+}
+
+/// Verification path node for visualization
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerificationPathNode {
+    /// Node identifier
+    pub id: String,
+    /// Node type (statute, condition, effect, etc.)
+    pub node_type: String,
+    /// Display label
+    pub label: String,
+    /// Whether this node passed verification
+    pub passed: bool,
+    /// Child nodes
+    pub children: Vec<VerificationPathNode>,
+    /// Additional metadata
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+impl VerificationPathNode {
+    /// Creates a new path node
+    pub fn new(
+        id: impl Into<String>,
+        node_type: impl Into<String>,
+        label: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            node_type: node_type.into(),
+            label: label.into(),
+            passed: true,
+            children: vec![],
+            metadata: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Sets the pass/fail status
+    pub fn with_status(mut self, passed: bool) -> Self {
+        self.passed = passed;
+        self
+    }
+
+    /// Adds a child node
+    pub fn add_child(mut self, child: VerificationPathNode) -> Self {
+        self.children.push(child);
+        self
+    }
+
+    /// Adds metadata
+    pub fn add_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+
+    /// Exports as DOT format for Graphviz
+    pub fn to_dot(&self) -> String {
+        let mut dot = String::from("digraph VerificationPath {\n");
+        dot.push_str("  node [shape=box];\n");
+        self.to_dot_recursive(&mut dot, None);
+        dot.push_str("}\n");
+        dot
+    }
+
+    fn to_dot_recursive(&self, dot: &mut String, parent_id: Option<&str>) {
+        let color = if self.passed { "green" } else { "red" };
+        let style = if self.passed { "solid" } else { "bold" };
+
+        dot.push_str(&format!(
+            "  \"{}\" [label=\"{}\\n({})\", color={}, style={}];\n",
+            self.id, self.label, self.node_type, color, style
+        ));
+
+        if let Some(parent) = parent_id {
+            dot.push_str(&format!("  \"{}\" -> \"{}\";\n", parent, self.id));
+        }
+
+        for child in &self.children {
+            child.to_dot_recursive(dot, Some(&self.id));
+        }
+    }
+}
+
+/// Builds a verification path from a statute and result
+pub fn build_verification_path(
+    statute: &Statute,
+    result: &VerificationResult,
+) -> VerificationPathNode {
+    let mut root = VerificationPathNode::new(
+        &statute.id,
+        "statute",
+        format!("Statute: {}", statute.title),
+    )
+    .with_status(result.passed);
+
+    // Add preconditions node
+    if !statute.preconditions.is_empty() {
+        for (i, precondition) in statute.preconditions.iter().enumerate() {
+            let precondition_node =
+                build_condition_path(precondition, &format!("precondition_{}", i));
+            root = root.add_child(precondition_node);
+        }
+    }
+
+    // Add effect node
+    let effect_node = VerificationPathNode::new(
+        format!("{}_effect", statute.id),
+        "effect",
+        format!("Effect: {:?}", statute.effect.effect_type),
+    )
+    .add_metadata("description", &statute.effect.description);
+    root = root.add_child(effect_node);
+
+    // Add error nodes
+    for (i, error) in result.errors.iter().enumerate() {
+        let error_node = VerificationPathNode::new(
+            format!("{}_error_{}", statute.id, i),
+            "error",
+            format!("Error: {:?}", error),
+        )
+        .with_status(false)
+        .add_metadata("severity", format!("{:?}", error.severity()));
+        root = root.add_child(error_node);
+    }
+
+    root
+}
+
+fn build_condition_path(condition: &legalis_core::Condition, prefix: &str) -> VerificationPathNode {
+    use legalis_core::{ComparisonOp, Condition};
+
+    match condition {
+        Condition::Age { operator, value } => VerificationPathNode::new(
+            format!("{}_age", prefix),
+            "condition",
+            format!(
+                "Age {} {}",
+                match operator {
+                    ComparisonOp::Equal => "==",
+                    ComparisonOp::NotEqual => "!=",
+                    ComparisonOp::LessThan => "<",
+                    ComparisonOp::LessOrEqual => "<=",
+                    ComparisonOp::GreaterThan => ">",
+                    ComparisonOp::GreaterOrEqual => ">=",
+                },
+                value
+            ),
+        ),
+        Condition::Income { operator, value } => VerificationPathNode::new(
+            format!("{}_income", prefix),
+            "condition",
+            format!(
+                "Income {} ${}",
+                match operator {
+                    ComparisonOp::Equal => "==",
+                    ComparisonOp::NotEqual => "!=",
+                    ComparisonOp::LessThan => "<",
+                    ComparisonOp::LessOrEqual => "<=",
+                    ComparisonOp::GreaterThan => ">",
+                    ComparisonOp::GreaterOrEqual => ">=",
+                },
+                value
+            ),
+        ),
+        Condition::And(left, right) => {
+            let mut node = VerificationPathNode::new(format!("{}_and", prefix), "logic", "AND");
+            node = node.add_child(build_condition_path(left, &format!("{}_left", prefix)));
+            node = node.add_child(build_condition_path(right, &format!("{}_right", prefix)));
+            node
+        }
+        Condition::Or(left, right) => {
+            let mut node = VerificationPathNode::new(format!("{}_or", prefix), "logic", "OR");
+            node = node.add_child(build_condition_path(left, &format!("{}_left", prefix)));
+            node = node.add_child(build_condition_path(right, &format!("{}_right", prefix)));
+            node
+        }
+        Condition::Not(inner) => {
+            let mut node = VerificationPathNode::new(format!("{}_not", prefix), "logic", "NOT");
+            node = node.add_child(build_condition_path(inner, &format!("{}_inner", prefix)));
+            node
+        }
+        _ => VerificationPathNode::new(
+            format!("{}_condition", prefix),
+            "condition",
+            "Complex Condition",
+        ),
+    }
+}
+
+/// What-if scenario for testing statute changes
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WhatIfScenario {
+    /// Scenario description
+    pub description: String,
+    /// Original statute
+    pub original_statute: Statute,
+    /// Modified statute
+    pub modified_statute: Statute,
+    /// Changes made
+    pub changes: Vec<String>,
+    /// Original verification result
+    pub original_result: VerificationResult,
+    /// New verification result after changes
+    pub new_result: VerificationResult,
+}
+
+impl WhatIfScenario {
+    /// Creates a new what-if scenario
+    pub fn new(
+        description: impl Into<String>,
+        original: Statute,
+        modified: Statute,
+        original_result: VerificationResult,
+        new_result: VerificationResult,
+    ) -> Self {
+        let changes = Self::detect_changes(&original, &modified);
+        Self {
+            description: description.into(),
+            original_statute: original,
+            modified_statute: modified,
+            changes,
+            original_result,
+            new_result,
+        }
+    }
+
+    fn detect_changes(original: &Statute, modified: &Statute) -> Vec<String> {
+        let mut changes = vec![];
+
+        if original.title != modified.title {
+            changes.push(format!(
+                "Title changed from '{}' to '{}'",
+                original.title, modified.title
+            ));
+        }
+
+        if original.effect.effect_type != modified.effect.effect_type {
+            changes.push(format!(
+                "Effect type changed from {:?} to {:?}",
+                original.effect.effect_type, modified.effect.effect_type
+            ));
+        }
+
+        if original.preconditions != modified.preconditions {
+            changes.push("Preconditions modified".to_string());
+        }
+
+        if original.jurisdiction != modified.jurisdiction {
+            changes.push("Jurisdiction changed".to_string());
+        }
+
+        changes
+    }
+
+    /// Generates a comparison report
+    pub fn report(&self) -> String {
+        let mut output = String::new();
+        output.push_str(&format!("# What-If Scenario: {}\n\n", self.description));
+
+        output.push_str("## Changes Made\n");
+        for change in &self.changes {
+            output.push_str(&format!("- {}\n", change));
+        }
+        output.push('\n');
+
+        output.push_str("## Impact Analysis\n");
+        output.push_str(&format!(
+            "**Before**: {} errors, {} warnings\n",
+            self.original_result.errors.len(),
+            self.original_result.warnings.len()
+        ));
+        output.push_str(&format!(
+            "**After**: {} errors, {} warnings\n\n",
+            self.new_result.errors.len(),
+            self.new_result.warnings.len()
+        ));
+
+        let error_delta =
+            self.new_result.errors.len() as i32 - self.original_result.errors.len() as i32;
+        let warning_delta =
+            self.new_result.warnings.len() as i32 - self.original_result.warnings.len() as i32;
+
+        if error_delta < 0 {
+            output.push_str(&format!("✓ Reduced errors by {}\n", error_delta.abs()));
+        } else if error_delta > 0 {
+            output.push_str(&format!("✗ Increased errors by {}\n", error_delta));
+        }
+
+        if warning_delta < 0 {
+            output.push_str(&format!("✓ Reduced warnings by {}\n", warning_delta.abs()));
+        } else if warning_delta > 0 {
+            output.push_str(&format!("✗ Increased warnings by {}\n", warning_delta));
+        }
+
+        output.push('\n');
+
+        if self.new_result.passed && !self.original_result.passed {
+            output.push_str("**✓ This change fixes the statute!**\n\n");
+        } else if !self.new_result.passed && self.original_result.passed {
+            output.push_str("**✗ This change breaks the statute!**\n\n");
+        }
+
+        output
+    }
+}
+
+/// Performs what-if analysis on a statute modification
+pub fn what_if_analysis(
+    description: impl Into<String>,
+    original: Statute,
+    modifier: impl FnOnce(&mut Statute),
+) -> WhatIfScenario {
+    let verifier = StatuteVerifier::new();
+
+    let original_result = verifier.verify(&[original.clone()]);
+
+    let mut modified = original.clone();
+    modifier(&mut modified);
+
+    let new_result = verifier.verify(&[modified.clone()]);
+
+    WhatIfScenario::new(description, original, modified, original_result, new_result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -18921,5 +21354,1512 @@ mod tests {
 
         // No channels configured
         assert!(!send_notification(&config, &message));
+    }
+
+    // =============================================================================
+    // Multi-Party Verification Tests (v0.2.1)
+    // =============================================================================
+
+    #[test]
+    fn test_stakeholder_creation() {
+        let stakeholder = Stakeholder::new("S1", "Alice")
+            .with_type("individual")
+            .with_interest("privacy")
+            .with_interest("fairness")
+            .affected_by_statute("statute-1");
+
+        assert_eq!(stakeholder.id, "S1");
+        assert_eq!(stakeholder.name, "Alice");
+        assert_eq!(stakeholder.stakeholder_type, "individual");
+        assert_eq!(stakeholder.interests.len(), 2);
+        assert_eq!(stakeholder.affected_by.len(), 1);
+    }
+
+    #[test]
+    fn test_analyze_stakeholder_conflicts_prohibition() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .with_interest("freedom")
+                .affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob")
+                .with_interest("security")
+                .affected_by_statute("statute-1"),
+        ];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Prohibition Law",
+            Effect::new(EffectType::Prohibition, "Prohibit certain actions"),
+        )];
+
+        let conflicts = analyze_stakeholder_conflicts(&stakeholders, &statutes);
+
+        assert!(!conflicts.is_empty());
+        assert_eq!(conflicts[0].conflict_type, ConflictNature::DirectOpposition);
+        assert_eq!(conflicts[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_analyze_stakeholder_conflicts_grant() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice").affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob").affected_by_statute("statute-1"),
+        ];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Grant Law",
+            Effect::new(EffectType::Grant, "Grant benefits"),
+        )];
+
+        let conflicts = analyze_stakeholder_conflicts(&stakeholders, &statutes);
+
+        assert!(!conflicts.is_empty());
+        assert!(
+            conflicts
+                .iter()
+                .any(|c| c.conflict_type == ConflictNature::ResourceCompetition)
+        );
+    }
+
+    #[test]
+    fn test_analyze_stakeholder_conflicts_conflicting_interests() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .with_interest("privacy")
+                .affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob")
+                .with_interest("transparency")
+                .affected_by_statute("statute-1"),
+        ];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Data Law",
+            Effect::new(EffectType::Grant, "Grant access"),
+        )];
+
+        let conflicts = analyze_stakeholder_conflicts(&stakeholders, &statutes);
+
+        assert!(
+            conflicts
+                .iter()
+                .any(|c| c.conflict_type == ConflictNature::InterpretationDifference)
+        );
+    }
+
+    #[test]
+    fn test_stakeholder_conflict_report() {
+        let conflicts = vec![StakeholderConflict {
+            stakeholders: vec!["S1".to_string(), "S2".to_string()],
+            statutes: vec!["statute-1".to_string()],
+            conflict_type: ConflictNature::DirectOpposition,
+            severity: Severity::Warning,
+            description: "Test conflict".to_string(),
+            resolutions: vec!["Resolution 1".to_string(), "Resolution 2".to_string()],
+        }];
+
+        let report = stakeholder_conflict_report(&conflicts);
+
+        assert!(report.contains("Multi-Stakeholder Conflict Analysis"));
+        assert!(report.contains("Direct Opposition"));
+        assert!(report.contains("Test conflict"));
+        assert!(report.contains("Resolution 1"));
+    }
+
+    #[test]
+    fn test_stakeholder_conflict_report_empty() {
+        let conflicts = vec![];
+        let report = stakeholder_conflict_report(&conflicts);
+
+        assert!(report.contains("No stakeholder conflicts detected"));
+    }
+
+    #[test]
+    fn test_strategy_creation() {
+        let strategy = Strategy::new("S1", "Full Compliance")
+            .with_description("Comply with all laws")
+            .with_statute_action("statute-1")
+            .with_statute_action("statute-2");
+
+        assert_eq!(strategy.stakeholder_id, "S1");
+        assert_eq!(strategy.name, "Full Compliance");
+        assert_eq!(strategy.description, "Comply with all laws");
+        assert_eq!(strategy.statute_actions.len(), 2);
+    }
+
+    #[test]
+    fn test_game_theoretic_model_creation() {
+        let mut model = GameTheoreticModel::new(vec!["S1".to_string(), "S2".to_string()]);
+
+        assert_eq!(model.stakeholders.len(), 2);
+        assert_eq!(model.strategies.len(), 2);
+        assert_eq!(model.outcomes.len(), 0);
+
+        let strategy1 = Strategy::new("S1", "Comply");
+        model.add_strategy(0, strategy1);
+
+        assert_eq!(model.strategies[0].len(), 1);
+    }
+
+    #[test]
+    fn test_detect_nash_equilibria() {
+        let mut model = GameTheoreticModel::new(vec!["S1".to_string(), "S2".to_string()]);
+
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Comply".to_string(), "Comply".to_string()],
+            payoffs: vec![5, 5],
+            is_nash_equilibrium: true,
+            description: "Both comply".to_string(),
+        });
+
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Comply".to_string(), "Defect".to_string()],
+            payoffs: vec![2, 7],
+            is_nash_equilibrium: false,
+            description: "Asymmetric".to_string(),
+        });
+
+        let equilibria = detect_nash_equilibria(&model);
+
+        assert_eq!(equilibria.len(), 1);
+        assert_eq!(equilibria[0].payoffs, vec![5, 5]);
+    }
+
+    #[test]
+    fn test_predict_game_outcomes_two_players() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice").affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob").affected_by_statute("statute-1"),
+        ];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Test Law",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )];
+
+        let model = predict_game_outcomes(&stakeholders, &statutes);
+
+        assert_eq!(model.stakeholders.len(), 2);
+        assert_eq!(model.strategies.len(), 2);
+        assert!(!model.strategies[0].is_empty());
+        assert!(!model.strategies[1].is_empty());
+
+        // Two-player game should have 4 outcomes
+        assert_eq!(model.outcomes.len(), 4);
+
+        // Should have 2 Nash equilibria (both comply, both defect)
+        let equilibria = detect_nash_equilibria(&model);
+        assert_eq!(equilibria.len(), 2);
+    }
+
+    #[test]
+    fn test_game_theoretic_report() {
+        let mut model = GameTheoreticModel::new(vec!["S1".to_string(), "S2".to_string()]);
+
+        model.add_strategy(
+            0,
+            Strategy::new("S1", "Comply").with_description("Full compliance"),
+        );
+        model.add_strategy(
+            1,
+            Strategy::new("S2", "Comply").with_description("Full compliance"),
+        );
+
+        model.add_outcome(GameOutcome {
+            strategies: vec!["Comply".to_string(), "Comply".to_string()],
+            payoffs: vec![5, 5],
+            is_nash_equilibrium: true,
+            description: "Both comply equilibrium".to_string(),
+        });
+
+        let report = game_theoretic_report(&model);
+
+        assert!(report.contains("Game-Theoretic Outcome Prediction"));
+        assert!(report.contains("Nash Equilibria"));
+        assert!(report.contains("Full compliance"));
+        assert!(report.contains("Equilibrium 1"));
+    }
+
+    #[test]
+    fn test_coalition_creation() {
+        let coalition = Coalition::new(vec!["S1".to_string(), "S2".to_string()])
+            .with_objective("Privacy protection")
+            .with_collective_effect("Influence statute-1")
+            .with_strength(0.75)
+            .with_stability(true);
+
+        assert_eq!(coalition.members.len(), 2);
+        assert_eq!(coalition.objectives.len(), 1);
+        assert_eq!(coalition.collective_effects.len(), 1);
+        assert_eq!(coalition.strength, 0.75);
+        assert!(coalition.is_stable);
+    }
+
+    #[test]
+    fn test_coalition_strength_clamping() {
+        let coalition1 = Coalition::new(vec!["S1".to_string()]).with_strength(1.5);
+        assert_eq!(coalition1.strength, 1.0);
+
+        let coalition2 = Coalition::new(vec!["S1".to_string()]).with_strength(-0.5);
+        assert_eq!(coalition2.strength, 0.0);
+    }
+
+    #[test]
+    fn test_analyze_coalitions() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .with_interest("privacy")
+                .affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob")
+                .with_interest("privacy")
+                .affected_by_statute("statute-1"),
+            Stakeholder::new("S3", "Carol")
+                .with_interest("security")
+                .affected_by_statute("statute-2"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Privacy Law",
+                Effect::new(EffectType::Grant, "Grant privacy rights"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Security Law",
+                Effect::new(EffectType::Grant, "Grant security"),
+            ),
+        ];
+
+        let coalitions = analyze_coalitions(&stakeholders, &statutes);
+
+        // Should find at least one coalition (privacy group)
+        assert!(!coalitions.is_empty());
+
+        // Privacy coalition should have 2 members
+        let privacy_coalition = coalitions
+            .iter()
+            .find(|c| c.objectives.contains(&"privacy".to_string()));
+        assert!(privacy_coalition.is_some());
+        assert_eq!(privacy_coalition.unwrap().members.len(), 2);
+    }
+
+    #[test]
+    fn test_analyze_coalitions_stable() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .with_interest("education")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2"),
+            Stakeholder::new("S2", "Bob")
+                .with_interest("education")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Education Law 1",
+                Effect::new(EffectType::Grant, "Grant education"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Education Law 2",
+                Effect::new(EffectType::Grant, "Grant education"),
+            ),
+        ];
+
+        let coalitions = analyze_coalitions(&stakeholders, &statutes);
+
+        assert!(!coalitions.is_empty());
+        // Coalition should be stable since both members are affected by common statutes
+        assert!(coalitions[0].is_stable);
+    }
+
+    #[test]
+    fn test_coalition_analysis_report() {
+        let coalitions = vec![
+            Coalition::new(vec!["S1".to_string(), "S2".to_string()])
+                .with_objective("Privacy")
+                .with_collective_effect("Effect 1")
+                .with_strength(0.8)
+                .with_stability(true),
+            Coalition::new(vec!["S3".to_string(), "S4".to_string()])
+                .with_objective("Security")
+                .with_strength(0.5)
+                .with_stability(false),
+        ];
+
+        let report = coalition_analysis_report(&coalitions);
+
+        assert!(report.contains("Coalition Analysis"));
+        assert!(report.contains("**Total Coalitions Detected**: 2"));
+        assert!(report.contains("**Stable Coalitions**: 1"));
+        assert!(report.contains("**Unstable Coalitions**: 1"));
+        assert!(report.contains("Privacy"));
+        assert!(report.contains("Security"));
+    }
+
+    #[test]
+    fn test_coalition_analysis_report_empty() {
+        let coalitions = vec![];
+        let report = coalition_analysis_report(&coalitions);
+
+        assert!(report.contains("No coalitions detected"));
+        assert!(report.contains("divergent interests"));
+    }
+
+    #[test]
+    fn test_coalition_sorting_by_strength() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .with_interest("privacy")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2"),
+            Stakeholder::new("S2", "Bob")
+                .with_interest("privacy")
+                .affected_by_statute("statute-1"),
+            Stakeholder::new("S3", "Carol")
+                .with_interest("security")
+                .affected_by_statute("statute-3"),
+            Stakeholder::new("S4", "Dave")
+                .with_interest("security")
+                .affected_by_statute("statute-3"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Privacy Law 1",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Privacy Law 2",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-3",
+                "Security Law",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+        ];
+
+        let coalitions = analyze_coalitions(&stakeholders, &statutes);
+
+        // Coalitions should be sorted by strength (descending)
+        for i in 1..coalitions.len() {
+            assert!(coalitions[i - 1].strength >= coalitions[i].strength);
+        }
+    }
+
+    // =============================================================================
+    // Mechanism Design Verification Tests
+    // =============================================================================
+
+    #[test]
+    fn test_mechanism_analysis_creation() {
+        let analysis = MechanismAnalysis::new();
+
+        assert!(analysis.issues.is_empty());
+        assert!(analysis.satisfied_properties.is_empty());
+        assert_eq!(analysis.quality_score, 1.0);
+    }
+
+    #[test]
+    fn test_mechanism_analysis_add_issue() {
+        let mut analysis = MechanismAnalysis::new();
+
+        analysis.add_issue(MechanismIssue {
+            property: MechanismProperty::IncentiveCompatibility,
+            statute_ids: vec!["S1".to_string()],
+            severity: Severity::Warning,
+            description: "Test issue".to_string(),
+            suggestions: vec!["Fix it".to_string()],
+        });
+
+        assert_eq!(analysis.issues.len(), 1);
+        assert!(analysis.quality_score < 1.0);
+    }
+
+    #[test]
+    fn test_mechanism_analysis_satisfy_property() {
+        let mut analysis = MechanismAnalysis::new();
+
+        analysis.satisfy_property(MechanismProperty::IncentiveCompatibility);
+        analysis.satisfy_property(MechanismProperty::BudgetBalance);
+
+        assert_eq!(analysis.satisfied_properties.len(), 2);
+    }
+
+    #[test]
+    fn test_mechanism_design_incentive_compatibility_violation() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Prohibition Law",
+            Effect::new(EffectType::Prohibition, "Prohibit action"),
+        )];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find incentive compatibility issue
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::IncentiveCompatibility)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_incentive_compatibility_satisfied() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Grant Law",
+                Effect::new(EffectType::Grant, "Grant benefit"),
+            )
+            .with_discretion("Comply to receive benefit")
+            .with_precondition(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should satisfy incentive compatibility
+        assert!(
+            analysis
+                .satisfied_properties
+                .contains(&MechanismProperty::IncentiveCompatibility)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_individual_rationality_violation() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Prohibition 1",
+                Effect::new(EffectType::Prohibition, "Prohibit A"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Prohibition 2",
+                Effect::new(EffectType::Revoke, "Revoke B"),
+            ),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find individual rationality issue (only penalties, no benefits)
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::IndividualRationality)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_individual_rationality_satisfied() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Grant Law",
+                Effect::new(EffectType::Grant, "Grant benefit"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Prohibition Law",
+                Effect::new(EffectType::Prohibition, "Prohibit action"),
+            ),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should satisfy individual rationality (has both benefits and penalties)
+        assert!(
+            analysis
+                .satisfied_properties
+                .contains(&MechanismProperty::IndividualRationality)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_budget_balance_no_transfers() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Grant Law",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Budget balance should be satisfied trivially (no monetary transfers)
+        assert!(
+            analysis
+                .satisfied_properties
+                .contains(&MechanismProperty::BudgetBalance)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_budget_balance_with_transfers() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Transfer Law",
+                Effect::new(EffectType::MonetaryTransfer, "Transfer money"),
+            )
+            .with_jurisdiction("US"),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find budget balance issue (unbalanced transfer)
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::BudgetBalance)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_strategy_proofness_custom_condition() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Custom Condition Law",
+                Effect::new(EffectType::Grant, "Grant benefit"),
+            )
+            .with_precondition(Condition::Custom {
+                description: "Custom check".to_string(),
+            }),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find strategy-proofness issue (custom condition hard to verify)
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::StrategyProofness)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_strategy_proofness_grant_no_conditions() {
+        let stakeholders = vec![Stakeholder::new("S1", "Alice")];
+
+        let statutes = vec![Statute::new(
+            "statute-1",
+            "Unconditional Grant",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find strategy-proofness issue (grant without verifiable conditions)
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::StrategyProofness)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_non_dictatorship_violation() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice")
+                .affected_by_statute("statute-1")
+                .affected_by_statute("statute-2")
+                .affected_by_statute("statute-3"),
+            Stakeholder::new("S2", "Bob").affected_by_statute("statute-4"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Law 1",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Law 2",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-3",
+                "Law 3",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-4",
+                "Law 4",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should find non-dictatorship issue (Alice controls 75% of statutes)
+        assert!(
+            analysis
+                .issues
+                .iter()
+                .any(|i| i.property == MechanismProperty::NonDictatorship)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_non_dictatorship_satisfied() {
+        let stakeholders = vec![
+            Stakeholder::new("S1", "Alice").affected_by_statute("statute-1"),
+            Stakeholder::new("S2", "Bob").affected_by_statute("statute-2"),
+        ];
+
+        let statutes = vec![
+            Statute::new(
+                "statute-1",
+                "Law 1",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+            Statute::new(
+                "statute-2",
+                "Law 2",
+                Effect::new(EffectType::Grant, "Grant"),
+            ),
+        ];
+
+        let analysis = verify_mechanism_design(&statutes, &stakeholders);
+
+        // Should satisfy non-dictatorship (control is balanced)
+        assert!(
+            analysis
+                .satisfied_properties
+                .contains(&MechanismProperty::NonDictatorship)
+        );
+    }
+
+    #[test]
+    fn test_mechanism_design_report_no_issues() {
+        let analysis = MechanismAnalysis {
+            issues: vec![],
+            satisfied_properties: vec![
+                MechanismProperty::IncentiveCompatibility,
+                MechanismProperty::BudgetBalance,
+            ],
+            quality_score: 1.0,
+        };
+
+        let report = mechanism_design_report(&analysis);
+
+        assert!(report.contains("Mechanism Design Analysis"));
+        assert!(report.contains("No mechanism design issues detected"));
+        assert!(report.contains("Incentive Compatibility"));
+    }
+
+    #[test]
+    fn test_mechanism_design_report_with_issues() {
+        let mut analysis = MechanismAnalysis::new();
+
+        analysis.add_issue(MechanismIssue {
+            property: MechanismProperty::IncentiveCompatibility,
+            statute_ids: vec!["S1".to_string()],
+            severity: Severity::Warning,
+            description: "Test issue".to_string(),
+            suggestions: vec!["Fix suggestion".to_string()],
+        });
+
+        let report = mechanism_design_report(&analysis);
+
+        assert!(report.contains("Mechanism Design Analysis"));
+        assert!(report.contains("Incentive Compatibility"));
+        assert!(report.contains("Test issue"));
+        assert!(report.contains("Fix suggestion"));
+    }
+
+    #[test]
+    fn test_mechanism_property_display() {
+        assert_eq!(
+            MechanismProperty::IncentiveCompatibility.to_string(),
+            "Incentive Compatibility"
+        );
+        assert_eq!(
+            MechanismProperty::IndividualRationality.to_string(),
+            "Individual Rationality"
+        );
+        assert_eq!(
+            MechanismProperty::BudgetBalance.to_string(),
+            "Budget Balance"
+        );
+        assert_eq!(
+            MechanismProperty::StrategyProofness.to_string(),
+            "Strategy-Proofness"
+        );
+        assert_eq!(
+            MechanismProperty::NonDictatorship.to_string(),
+            "Non-Dictatorship"
+        );
+    }
+
+    #[test]
+    fn test_mechanism_quality_score_calculation() {
+        let mut analysis = MechanismAnalysis::new();
+
+        // Add critical issue
+        analysis.add_issue(MechanismIssue {
+            property: MechanismProperty::IncentiveCompatibility,
+            statute_ids: vec![],
+            severity: Severity::Critical,
+            description: "Critical".to_string(),
+            suggestions: vec![],
+        });
+
+        // Quality score should decrease significantly
+        assert!(analysis.quality_score <= 0.7);
+
+        // Add satisfied properties to increase score
+        analysis.satisfy_property(MechanismProperty::BudgetBalance);
+        analysis.satisfy_property(MechanismProperty::NonDictatorship);
+
+        // Score should improve slightly
+        assert!(analysis.quality_score > 0.0);
+    }
+
+    // ============================================================================
+    // Probabilistic Verification Tests (v0.2.2)
+    // ============================================================================
+
+    #[test]
+    fn test_markov_state_creation() {
+        let state = MarkovState::new("s1", "Initial State").accepting();
+        assert_eq!(state.id, "s1");
+        assert_eq!(state.description, "Initial State");
+        assert!(state.accepting);
+    }
+
+    #[test]
+    fn test_markov_transition_creation() {
+        let transition = MarkovTransition::new("s1", "s2", 0.7).with_action("comply");
+        assert_eq!(transition.from, "s1");
+        assert_eq!(transition.to, "s2");
+        assert_eq!(transition.probability, 0.7);
+        assert_eq!(transition.action.as_ref().unwrap(), "comply");
+    }
+
+    #[test]
+    fn test_markov_chain_validation_valid() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "End").accepting())
+            .add_transition(MarkovTransition::new("s1", "s2", 0.6))
+            .add_transition(MarkovTransition::new("s1", "s1", 0.4));
+
+        assert!(chain.validate().is_ok());
+    }
+
+    #[test]
+    fn test_markov_chain_validation_invalid() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "End"))
+            .add_transition(MarkovTransition::new("s1", "s2", 0.3)); // Only 0.3, should be 1.0
+
+        assert!(chain.validate().is_err());
+    }
+
+    #[test]
+    fn test_markov_chain_reachability_probability() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "Accepting").accepting())
+            .add_transition(MarkovTransition::new("s1", "s2", 1.0));
+
+        let prob = chain.reachability_probability(5);
+        assert!((prob - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_markov_chain_steady_state() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "State 1"))
+            .add_state(MarkovState::new("s2", "State 2"))
+            .add_transition(MarkovTransition::new("s1", "s2", 0.5))
+            .add_transition(MarkovTransition::new("s1", "s1", 0.5))
+            .add_transition(MarkovTransition::new("s2", "s1", 0.5))
+            .add_transition(MarkovTransition::new("s2", "s2", 0.5));
+
+        let probs = chain.steady_state_probabilities(100);
+
+        // In a symmetric chain, should converge to equal probabilities
+        let p1 = probs.get("s1").copied().unwrap_or(0.0);
+        let p2 = probs.get("s2").copied().unwrap_or(0.0);
+        assert!((p1 - 0.5).abs() < 0.1);
+        assert!((p2 - 0.5).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_statistical_check_result_from_samples() {
+        let result = StatisticalCheckResult::from_samples("test property", 1000, 750, 0.7);
+
+        assert_eq!(result.num_samples, 1000);
+        assert_eq!(result.num_successes, 750);
+        assert!((result.estimated_probability - 0.75).abs() < 0.01);
+        assert!(result.hypothesis_accepted); // 0.75 >= 0.7
+    }
+
+    #[test]
+    fn test_statistical_check_result_hypothesis_rejected() {
+        let result = StatisticalCheckResult::from_samples("test property", 1000, 400, 0.5);
+
+        assert_eq!(result.num_samples, 1000);
+        assert_eq!(result.num_successes, 400);
+        assert!((result.estimated_probability - 0.4).abs() < 0.01);
+        assert!(!result.hypothesis_accepted); // 0.4 < 0.5 (considering confidence interval)
+    }
+
+    #[test]
+    fn test_risk_level_from_score() {
+        assert_eq!(RiskLevel::from_score(0.1), RiskLevel::Minimal);
+        assert_eq!(RiskLevel::from_score(0.3), RiskLevel::Low);
+        assert_eq!(RiskLevel::from_score(0.6), RiskLevel::Medium);
+        assert_eq!(RiskLevel::from_score(0.8), RiskLevel::High);
+        assert_eq!(RiskLevel::from_score(0.95), RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_risk_level_display() {
+        assert_eq!(RiskLevel::Minimal.to_string(), "Minimal");
+        assert_eq!(RiskLevel::Low.to_string(), "Low");
+        assert_eq!(RiskLevel::Medium.to_string(), "Medium");
+        assert_eq!(RiskLevel::High.to_string(), "High");
+        assert_eq!(RiskLevel::Critical.to_string(), "Critical");
+    }
+
+    #[test]
+    fn test_risk_factor_creation() {
+        let factor = RiskFactor::new("Test Risk", "Description", 0.7).with_weight(0.5);
+
+        assert_eq!(factor.name, "Test Risk");
+        assert_eq!(factor.description, "Description");
+        assert_eq!(factor.score, 0.7);
+        assert_eq!(factor.weight, 0.5);
+    }
+
+    #[test]
+    fn test_risk_factor_score_clamping() {
+        let factor = RiskFactor::new("Test", "Desc", 1.5); // > 1.0
+        assert_eq!(factor.score, 1.0); // Should be clamped
+
+        let factor2 = RiskFactor::new("Test", "Desc", -0.5); // < 0.0
+        assert_eq!(factor2.score, 0.0); // Should be clamped
+    }
+
+    #[test]
+    fn test_risk_quantification_creation() {
+        let factors = vec![
+            RiskFactor::new("Factor 1", "Desc 1", 0.5).with_weight(0.5),
+            RiskFactor::new("Factor 2", "Desc 2", 0.9).with_weight(0.5),
+        ];
+
+        let quant = RiskQuantification::new("statute-1", factors);
+
+        assert_eq!(quant.statute_id, "statute-1");
+        assert_eq!(quant.factors.len(), 2);
+        // Overall score should be (0.5*0.5 + 0.9*0.5) / 1.0 = 0.7
+        assert!((quant.overall_score - 0.7).abs() < 0.01);
+        assert_eq!(quant.risk_level, RiskLevel::Medium);
+    }
+
+    #[test]
+    fn test_risk_quantification_with_mitigations() {
+        let factors = vec![RiskFactor::new("Test", "Desc", 0.95)];
+        let quant = RiskQuantification::new("statute-1", factors)
+            .add_mitigation("Mitigation 1")
+            .add_mitigation("Mitigation 2");
+
+        assert_eq!(quant.mitigations.len(), 2);
+        assert_eq!(quant.mitigations[0], "Mitigation 1");
+    }
+
+    #[test]
+    fn test_analyze_statute_risk_simple() {
+        let statute = Statute::new(
+            "test-1",
+            "Simple Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let verifier = StatuteVerifier::new();
+        let result = verifier.verify(&[statute.clone()]);
+
+        let risk = analyze_statute_risk(&statute, &result);
+
+        assert_eq!(risk.statute_id, "test-1");
+        assert_eq!(risk.factors.len(), 4); // 4 risk factors
+        assert!(risk.overall_score >= 0.0 && risk.overall_score <= 1.0);
+        assert!(!risk.mitigations.is_empty());
+    }
+
+    #[test]
+    fn test_analyze_statute_risk_with_errors() {
+        let statute = Statute::new(
+            "test-1",
+            "Statute with Issues",
+            Effect::new(EffectType::Prohibition, "Prohibit something"),
+        );
+
+        let mut result = VerificationResult::pass();
+        result.errors.push(VerificationError::CircularReference {
+            message: "Test error".to_string(),
+        });
+        result.passed = false;
+
+        let risk = analyze_statute_risk(&statute, &result);
+
+        // Should have higher risk due to errors
+        assert!(risk.overall_score > 0.3);
+        assert!(risk.mitigations.len() >= 1);
+    }
+
+    #[test]
+    fn test_risk_quantification_report() {
+        let factors = vec![RiskFactor::new("Test Factor", "Description", 0.6)];
+        let risk = RiskQuantification::new("statute-1", factors).add_mitigation("Fix issue");
+
+        let report = risk_quantification_report(&[risk]);
+
+        assert!(report.contains("Risk Quantification Report"));
+        assert!(report.contains("statute-1"));
+        assert!(report.contains("Test Factor"));
+        assert!(report.contains("Fix issue"));
+    }
+
+    #[test]
+    fn test_statistical_model_checking_report() {
+        let results = vec![
+            StatisticalCheckResult::from_samples("Property 1", 1000, 800, 0.75),
+            StatisticalCheckResult::from_samples("Property 2", 500, 250, 0.5),
+        ];
+
+        let report = statistical_model_checking_report(&results);
+
+        assert!(report.contains("Statistical Model Checking Report"));
+        assert!(report.contains("Property 1"));
+        assert!(report.contains("Property 2"));
+        assert!(report.contains("ACCEPTED"));
+    }
+
+    #[test]
+    fn test_monte_carlo_verification_simple() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "Accept").accepting())
+            .add_transition(MarkovTransition::new("s1", "s2", 1.0));
+
+        let result = monte_carlo_verification(&chain, 100, 10);
+
+        assert_eq!(result.num_samples, 100);
+        // With probability 1.0 of reaching accepting state, should get ~100% success
+        assert!(result.num_successes > 90);
+        assert!(result.estimated_probability > 0.9);
+    }
+
+    #[test]
+    fn test_monte_carlo_verification_probabilistic() {
+        let chain = MarkovChain::new("test", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "Accept").accepting())
+            .add_state(MarkovState::new("s3", "Reject"))
+            .add_transition(MarkovTransition::new("s1", "s2", 0.5))
+            .add_transition(MarkovTransition::new("s1", "s3", 0.5));
+
+        let result = monte_carlo_verification(&chain, 1000, 10);
+
+        assert_eq!(result.num_samples, 1000);
+        // Should reach accepting state approximately 50% of the time
+        assert!(result.estimated_probability > 0.4 && result.estimated_probability < 0.6);
+    }
+
+    #[test]
+    fn test_risk_quantification_critical_level() {
+        let factors = vec![RiskFactor::new("Critical Factor", "Very high risk", 0.95)];
+
+        let quant = RiskQuantification::new("statute-critical", factors);
+
+        assert_eq!(quant.risk_level, RiskLevel::Critical);
+        assert!(quant.overall_score >= 0.9);
+    }
+
+    #[test]
+    fn test_risk_quantification_minimal_level() {
+        let factors = vec![RiskFactor::new("Low Risk Factor", "Very low risk", 0.1)];
+
+        let quant = RiskQuantification::new("statute-safe", factors);
+
+        assert_eq!(quant.risk_level, RiskLevel::Minimal);
+        assert!(quant.overall_score < 0.25);
+    }
+
+    #[test]
+    fn test_markov_chain_complex_reachability() {
+        // Create a chain with multiple paths to accepting state
+        let chain = MarkovChain::new("complex", "s1")
+            .add_state(MarkovState::new("s1", "Start"))
+            .add_state(MarkovState::new("s2", "Intermediate"))
+            .add_state(MarkovState::new("s3", "Accepting").accepting())
+            .add_transition(MarkovTransition::new("s1", "s2", 0.5))
+            .add_transition(MarkovTransition::new("s1", "s3", 0.5))
+            .add_transition(MarkovTransition::new("s2", "s3", 1.0));
+
+        let prob = chain.reachability_probability(10);
+
+        // Should eventually reach s3 with very high probability
+        assert!(prob > 0.9);
+    }
+
+    #[test]
+    fn test_statistical_result_confidence_interval() {
+        let result = StatisticalCheckResult::from_samples("test", 10000, 5000, 0.48);
+
+        // With 10000 samples and 50% success rate, confidence interval should be tight
+        assert!(result.confidence_lower < 0.5);
+        assert!(result.confidence_upper > 0.5);
+        assert!(result.confidence_upper - result.confidence_lower < 0.05);
+    }
+
+    // ============================================================================
+    // Explainable Verification Tests (v0.2.3)
+    // ============================================================================
+
+    #[test]
+    fn test_natural_language_explanation_creation() {
+        let explanation = NaturalLanguageExplanation::new(
+            "Test Error",
+            "Simple explanation",
+            "Technical explanation",
+            "Why it matters",
+            "How to fix",
+        )
+        .with_example("Example scenario");
+
+        assert_eq!(explanation.error_type, "Test Error");
+        assert_eq!(explanation.simple_explanation, "Simple explanation");
+        assert!(explanation.example_scenario.is_some());
+    }
+
+    #[test]
+    fn test_natural_language_explanation_format() {
+        let explanation =
+            NaturalLanguageExplanation::new("Test Error", "Simple", "Technical", "Why", "Fix");
+
+        let formatted = explanation.format(true);
+        assert!(formatted.contains("# Test Error"));
+        assert!(formatted.contains("## What's Wrong?"));
+        assert!(formatted.contains("## Technical Details"));
+        assert!(formatted.contains("## Why This Matters"));
+        assert!(formatted.contains("## How to Fix It"));
+
+        let formatted_simple = explanation.format(false);
+        assert!(!formatted_simple.contains("## Technical Details"));
+    }
+
+    #[test]
+    fn test_explain_error_circular_reference() {
+        let error = VerificationError::CircularReference {
+            message: "Test circular ref".to_string(),
+        };
+
+        let explanation = explain_error(&error);
+        assert_eq!(explanation.error_type, "Circular Reference");
+        assert!(explanation.simple_explanation.contains("infinite loop"));
+        assert!(explanation.example_scenario.is_some());
+    }
+
+    #[test]
+    fn test_explain_error_dead_statute() {
+        let error = VerificationError::DeadStatute {
+            statute_id: "statute-1".to_string(),
+        };
+
+        let explanation = explain_error(&error);
+        assert_eq!(explanation.error_type, "Impossible to Satisfy");
+        assert!(explanation.simple_explanation.contains("statute-1"));
+        assert!(explanation.why_it_matters.contains("impossible"));
+    }
+
+    #[test]
+    fn test_explain_error_constitutional_conflict() {
+        let error = VerificationError::ConstitutionalConflict {
+            statute_id: "statute-1".to_string(),
+            principle: "Equal Protection".to_string(),
+        };
+
+        let explanation = explain_error(&error);
+        assert_eq!(explanation.error_type, "Constitutional Conflict");
+        assert!(explanation.simple_explanation.contains("Equal Protection"));
+        assert!(explanation.how_to_fix.contains("Equal Protection"));
+    }
+
+    #[test]
+    fn test_explain_error_ambiguity() {
+        let error = VerificationError::Ambiguity {
+            message: "Vague term".to_string(),
+        };
+
+        let explanation = explain_error(&error);
+        assert_eq!(explanation.error_type, "Ambiguous Language");
+        assert!(explanation.how_to_fix.contains("specific"));
+    }
+
+    #[test]
+    fn test_conflict_explanation_creation() {
+        let explanation = ConflictExplanation::new(
+            vec!["statute-1".to_string(), "statute-2".to_string()],
+            "Test conflict",
+        )
+        .with_impact("Test impact")
+        .add_affected_party("Party 1")
+        .add_resolution_option("Option 1");
+
+        assert_eq!(explanation.statute_ids.len(), 2);
+        assert_eq!(explanation.impact, "Test impact");
+        assert_eq!(explanation.affected_parties.len(), 1);
+        assert_eq!(explanation.resolution_options.len(), 1);
+    }
+
+    #[test]
+    fn test_conflict_explanation_format() {
+        let explanation = ConflictExplanation::new(
+            vec!["S1".to_string(), "S2".to_string()],
+            "Conflict description",
+        )
+        .with_impact("Impact")
+        .add_affected_party("Party A")
+        .add_resolution_option("Fix 1");
+
+        let formatted = explanation.format();
+        assert!(formatted.contains("# Conflict Between: S1, S2"));
+        assert!(formatted.contains("## What's the Conflict?"));
+        assert!(formatted.contains("## Real-World Impact"));
+        assert!(formatted.contains("## Who's Affected?"));
+        assert!(formatted.contains("## How to Resolve This"));
+    }
+
+    #[test]
+    fn test_explain_conflict_effect_conflict() {
+        let conflict = StatuteConflict {
+            conflict_type: ConflictType::EffectConflict,
+            statute_ids: vec!["S1".to_string(), "S2".to_string()],
+            description: "Test conflict".to_string(),
+            severity: Severity::Error,
+            resolution_suggestions: vec!["Suggestion 1".to_string()],
+        };
+
+        let explanation = explain_conflict(&conflict);
+        assert_eq!(explanation.statute_ids.len(), 2);
+        assert!(explanation.description.contains("overlapping conditions"));
+        assert!(!explanation.affected_parties.is_empty());
+        assert_eq!(explanation.resolution_options.len(), 1);
+    }
+
+    #[test]
+    fn test_explain_conflict_jurisdictional_overlap() {
+        let conflict = StatuteConflict {
+            conflict_type: ConflictType::JurisdictionalOverlap,
+            statute_ids: vec!["S1".to_string(), "S2".to_string()],
+            description: "Overlapping jurisdiction".to_string(),
+            severity: Severity::Warning,
+            resolution_suggestions: vec![],
+        };
+
+        let explanation = explain_conflict(&conflict);
+        assert!(explanation.description.contains("jurisdiction"));
+        assert!(
+            explanation
+                .affected_parties
+                .iter()
+                .any(|p| p.contains("jurisdiction"))
+        );
+    }
+
+    #[test]
+    fn test_verification_path_node_creation() {
+        let node = VerificationPathNode::new("node-1", "statute", "Test Statute")
+            .with_status(true)
+            .add_metadata("key", "value");
+
+        assert_eq!(node.id, "node-1");
+        assert_eq!(node.node_type, "statute");
+        assert!(node.passed);
+        assert_eq!(node.metadata.get("key").unwrap(), "value");
+    }
+
+    #[test]
+    fn test_verification_path_node_with_children() {
+        let child = VerificationPathNode::new("child", "condition", "Age >= 18");
+        let parent =
+            VerificationPathNode::new("parent", "statute", "Parent Statute").add_child(child);
+
+        assert_eq!(parent.children.len(), 1);
+        assert_eq!(parent.children[0].id, "child");
+    }
+
+    #[test]
+    fn test_verification_path_to_dot() {
+        let node = VerificationPathNode::new("root", "statute", "Test")
+            .with_status(true)
+            .add_child(VerificationPathNode::new("child", "condition", "Condition"));
+
+        let dot = node.to_dot();
+        assert!(dot.contains("digraph VerificationPath"));
+        assert!(dot.contains("\"root\""));
+        assert!(dot.contains("\"child\""));
+        assert!(dot.contains("->"));
+        assert!(dot.contains("green"));
+    }
+
+    #[test]
+    fn test_build_verification_path_simple() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let result = VerificationResult::pass();
+        let path = build_verification_path(&statute, &result);
+
+        assert_eq!(path.id, "test-1");
+        assert!(path.passed);
+        assert!(!path.children.is_empty()); // Should have effect node
+    }
+
+    #[test]
+    fn test_build_verification_path_with_preconditions() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        )
+        .with_precondition(Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        });
+
+        let result = VerificationResult::pass();
+        let path = build_verification_path(&statute, &result);
+
+        assert_eq!(path.id, "test-1");
+        // Should have precondition and effect nodes
+        assert!(path.children.len() >= 2);
+    }
+
+    #[test]
+    fn test_build_verification_path_with_errors() {
+        let statute = Statute::new("test-1", "Test", Effect::new(EffectType::Grant, "Test"));
+
+        let mut result = VerificationResult::pass();
+        result.passed = false;
+        result.errors.push(VerificationError::CircularReference {
+            message: "Test error".to_string(),
+        });
+
+        let path = build_verification_path(&statute, &result);
+        assert!(!path.passed);
+        // Should have error nodes
+        assert!(path.children.iter().any(|c| c.node_type == "error"));
+    }
+
+    #[test]
+    fn test_what_if_scenario_creation() {
+        let original = Statute::new(
+            "test-1",
+            "Original Title",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let modified = Statute::new(
+            "test-1",
+            "Modified Title",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let scenario = WhatIfScenario::new(
+            "Title change test",
+            original.clone(),
+            modified,
+            VerificationResult::pass(),
+            VerificationResult::pass(),
+        );
+
+        assert_eq!(scenario.description, "Title change test");
+        assert!(!scenario.changes.is_empty());
+        assert!(scenario.changes[0].contains("Title changed"));
+    }
+
+    #[test]
+    fn test_what_if_scenario_detect_effect_change() {
+        let original = Statute::new("test-1", "Test", Effect::new(EffectType::Grant, "Test"));
+
+        let modified = Statute::new(
+            "test-1",
+            "Test",
+            Effect::new(EffectType::Prohibition, "Test"),
+        );
+
+        let scenario = WhatIfScenario::new(
+            "Effect change",
+            original,
+            modified,
+            VerificationResult::pass(),
+            VerificationResult::pass(),
+        );
+
+        assert!(
+            scenario
+                .changes
+                .iter()
+                .any(|c| c.contains("Effect type changed"))
+        );
+    }
+
+    #[test]
+    fn test_what_if_scenario_report() {
+        let original = Statute::new("test-1", "Test", Effect::new(EffectType::Grant, "Test"));
+        let modified = original.clone();
+
+        let mut orig_result = VerificationResult::pass();
+        orig_result.errors.push(VerificationError::Ambiguity {
+            message: "Test".to_string(),
+        });
+        orig_result.passed = false;
+
+        let new_result = VerificationResult::pass();
+
+        let scenario =
+            WhatIfScenario::new("Fix ambiguity", original, modified, orig_result, new_result);
+
+        let report = scenario.report();
+        assert!(report.contains("# What-If Scenario"));
+        assert!(report.contains("## Impact Analysis"));
+        assert!(report.contains("✓")); // Improved
+    }
+
+    #[test]
+    fn test_what_if_analysis() {
+        let statute = Statute::new(
+            "test-1",
+            "Original Title",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+
+        let scenario = what_if_analysis("Change title", statute, |s| {
+            s.title = "New Title".to_string();
+        });
+
+        assert_eq!(scenario.description, "Change title");
+        assert_eq!(scenario.modified_statute.title, "New Title");
+        assert!(scenario.changes.iter().any(|c| c.contains("Title changed")));
+    }
+
+    #[test]
+    fn test_what_if_breaking_change() {
+        let statute = Statute::new("test-1", "Test", Effect::new(EffectType::Grant, "Test"));
+
+        // Modify to add a precondition that might fail verification in some context
+        let scenario = what_if_analysis("Add precondition", statute, |s| {
+            s.preconditions.push(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            });
+        });
+
+        assert!(
+            scenario
+                .changes
+                .iter()
+                .any(|c| c.contains("Preconditions modified"))
+        );
+    }
+
+    #[test]
+    fn test_build_condition_path_age() {
+        use legalis_core::{ComparisonOp, Condition};
+
+        let condition = Condition::Age {
+            operator: ComparisonOp::GreaterOrEqual,
+            value: 18,
+        };
+
+        let node = build_condition_path(&condition, "test");
+        assert_eq!(node.node_type, "condition");
+        assert!(node.label.contains("Age"));
+        assert!(node.label.contains("18"));
+    }
+
+    #[test]
+    fn test_build_condition_path_complex() {
+        use legalis_core::{ComparisonOp, Condition};
+
+        let condition = Condition::And(
+            Box::new(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: 18,
+            }),
+            Box::new(Condition::Income {
+                operator: ComparisonOp::LessThan,
+                value: 50000,
+            }),
+        );
+
+        let node = build_condition_path(&condition, "test");
+        assert_eq!(node.node_type, "logic");
+        assert_eq!(node.label, "AND");
+        assert_eq!(node.children.len(), 2);
+    }
+
+    #[test]
+    fn test_verification_path_failed_status() {
+        let node = VerificationPathNode::new("failed", "error", "Test Error").with_status(false);
+
+        let dot = node.to_dot();
+        assert!(dot.contains("red"));
+        assert!(dot.contains("bold"));
     }
 }

@@ -440,9 +440,12 @@ mod tests {
     #[test]
     fn test_taint_detection_basic() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "statute1".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "SSN Statute".to_string(),
                 conditions: vec![ConditionNode::Comparison {
                     field: "ssn".to_string(),
@@ -475,10 +478,13 @@ mod tests {
     #[test]
     fn test_taint_propagation_requires() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "base".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Base".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "credit_card".to_string(),
@@ -494,6 +500,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "derived".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Derived".to_string(),
                     requires: vec!["base".to_string()],
                     effects: vec![EffectNode {
@@ -522,10 +529,13 @@ mod tests {
     #[test]
     fn test_taint_report() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![
                 StatuteNode {
                     id: "statute1".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 1".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "ssn".to_string(),
@@ -536,6 +546,7 @@ mod tests {
                 },
                 StatuteNode {
                     id: "statute2".to_string(),
+                    visibility: crate::module_system::Visibility::Private,
                     title: "Statute 2".to_string(),
                     conditions: vec![ConditionNode::Comparison {
                         field: "medical_record".to_string(),
@@ -568,9 +579,12 @@ mod tests {
     #[test]
     fn test_no_taint() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![StatuteNode {
                 id: "statute1".to_string(),
+                visibility: crate::module_system::Visibility::Private,
                 title: "Clean Statute".to_string(),
                 conditions: vec![ConditionNode::Comparison {
                     field: "age".to_string(),

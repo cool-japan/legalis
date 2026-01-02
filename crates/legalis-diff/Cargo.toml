@@ -13,6 +13,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 rayon = "1.10"
+rhai = { version = "1.19", features = ["serde", "sync"] }
+lru = "0.12"
 
 [dev-dependencies]
 criterion = "0.5"

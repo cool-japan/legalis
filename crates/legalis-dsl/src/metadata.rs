@@ -341,6 +341,7 @@ mod tests {
     ) -> StatuteNode {
         StatuteNode {
             id: id.to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: format!("Test Statute {}", id),
             conditions: Vec::new(),
             effects: Vec::new(),
@@ -360,6 +361,8 @@ mod tests {
     #[test]
     fn test_jurisdiction_extraction() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![
                 create_test_statute("US-CA-law-1", vec![], vec![]),
@@ -380,6 +383,8 @@ mod tests {
     #[test]
     fn test_entity_relationships() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![
                 create_test_statute("stat1", vec!["stat2".to_string()], vec![]),
@@ -434,6 +439,8 @@ mod tests {
         }];
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: Vec::new(),
             statutes: vec![statute1],
         };

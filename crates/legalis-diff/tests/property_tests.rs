@@ -350,15 +350,12 @@ mod fuzz_style_tests {
         /// Fuzz test: Random mutations should not panic
         #[test]
         fn fuzz_random_statute_mutations(statute in statute_strategy(), seed in any::<u64>()) {
-            use std::collections::hash_map::RandomState;
-            use std::hash::{BuildHasher, Hash, Hasher};
+            use std::hash::{BuildHasher, RandomState};
 
             let mut modified = statute.clone();
 
             // Apply random mutations based on seed
-            let mut hasher = RandomState::new().build_hasher();
-            seed.hash(&mut hasher);
-            let mutation_type = hasher.finish() % 5;
+            let mutation_type = RandomState::new().hash_one(seed) % 5;
 
             match mutation_type {
                 0 => modified.title.push_str("_mutated"),
@@ -369,7 +366,7 @@ mod fuzz_style_tests {
                 },
                 2 => modified.effect = Effect::new(EffectType::Revoke, "Mutated"),
                 3 => modified.discretion_logic = Some("Mutated logic".to_string()),
-                _ => modified.id.push_str("x"),
+                _ => modified.id.push('x'),
             }
 
             // Should not panic, even with ID mismatch
@@ -393,7 +390,7 @@ mod fuzz_style_tests {
         fn fuzz_large_sequences(count in 1usize..50) {
             let effect = Effect::new(EffectType::Grant, "Test");
             let statutes: Vec<_> = (0..count)
-                .map(|i| Statute::new("test", &format!("Title {}", i), effect.clone()))
+                .map(|i| Statute::new("test", format!("Title {}", i), effect.clone()))
                 .collect();
 
             let result = legalis_diff::diff_sequence(&statutes);

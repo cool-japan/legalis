@@ -679,6 +679,7 @@ mod tests {
     fn sample_statute() -> StatuteNode {
         StatuteNode {
             id: "voting-rights".to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Voting Rights Statute".to_string(),
             conditions: vec![
                 ConditionNode::Comparison {
@@ -711,6 +712,8 @@ mod tests {
     #[test]
     fn test_sql_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -726,6 +729,8 @@ mod tests {
     #[test]
     fn test_python_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -755,6 +760,8 @@ mod tests {
     #[test]
     fn test_prolog_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -777,6 +784,8 @@ mod tests {
     #[test]
     fn test_prolog_module_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -794,6 +803,8 @@ mod tests {
     #[test]
     fn test_prolog_effect_generation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -808,6 +819,8 @@ mod tests {
     #[test]
     fn test_sql_roundtrip_validation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -828,6 +841,8 @@ mod tests {
     #[test]
     fn test_python_roundtrip_validation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -847,6 +862,8 @@ mod tests {
     #[test]
     fn test_prolog_roundtrip_validation() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![sample_statute()],
         };
@@ -866,6 +883,7 @@ mod tests {
     fn test_complex_document_all_generators() {
         let complex_statute = StatuteNode {
             id: "complex-law".to_string(),
+            visibility: crate::module_system::Visibility::Private,
             title: "Complex Law Test".to_string(),
             conditions: vec![ConditionNode::And(
                 Box::new(ConditionNode::Comparison {
@@ -906,6 +924,8 @@ mod tests {
         };
 
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![],
             statutes: vec![complex_statute],
         };

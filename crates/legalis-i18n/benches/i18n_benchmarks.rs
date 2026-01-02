@@ -181,12 +181,12 @@ fn lazy_loading_benchmark(c: &mut Criterion) {
 
     c.bench_function("lazy dictionary - first access", |b| {
         b.iter(|| {
-            let lazy_dict = LazyDictionary::new(locale.clone(), || LegalDictionary::english_us());
+            let lazy_dict = LazyDictionary::new(locale.clone(), LegalDictionary::english_us);
             black_box(lazy_dict.get())
         })
     });
 
-    let lazy_dict = LazyDictionary::new(locale.clone(), || LegalDictionary::english_us());
+    let lazy_dict = LazyDictionary::new(locale.clone(), LegalDictionary::english_us);
     let _ = lazy_dict.get(); // Load it
 
     c.bench_function("lazy dictionary - already loaded", |b| {

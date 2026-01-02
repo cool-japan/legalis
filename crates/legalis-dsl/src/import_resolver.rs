@@ -226,8 +226,11 @@ mod tests {
     #[test]
     fn test_validate_imports_nonexistent() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![ImportNode {
                 path: "/nonexistent/file.legalis".to_string(),
+                kind: crate::ImportKind::Simple,
                 alias: None,
             }],
             statutes: vec![],
@@ -242,8 +245,11 @@ mod tests {
     #[test]
     fn test_circular_import_detection() {
         let doc = LegalDocument {
+            namespace: None,
+            exports: vec![],
             imports: vec![ImportNode {
                 path: "circular.legalis".to_string(),
+                kind: crate::ImportKind::Simple,
                 alias: None,
             }],
             statutes: vec![],

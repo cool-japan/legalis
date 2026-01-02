@@ -52,6 +52,14 @@ pub enum SimulationError {
     /// Execution error
     #[error("Execution error: {0}")]
     ExecutionError(String),
+
+    /// Invalid population
+    #[error("Invalid population: {0}")]
+    InvalidPopulation(String),
+
+    /// Invalid parameter or value
+    #[error("Invalid parameter: {0}")]
+    InvalidParameter(String),
 }
 
 /// Result type for simulation operations.

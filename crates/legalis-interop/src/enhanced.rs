@@ -174,6 +174,18 @@ impl EnhancedConverter {
             | LegalFormat::RuleML => false,
             // Native and business vocabulary formats
             LegalFormat::Legalis | LegalFormat::Sbvr => false,
+            // Contract formats - text-based templates benefit from normalization
+            LegalFormat::OpenLaw | LegalFormat::Cicero | LegalFormat::ContractExpress => true,
+            // JSON-based formats
+            LegalFormat::CommonForm | LegalFormat::ClauseIo => false,
+            // XML formats
+            LegalFormat::Formex | LegalFormat::Niem => false,
+            // Regulatory formats - JSON/XML-based, no normalization
+            LegalFormat::FinReg
+            | LegalFormat::Xbrl
+            | LegalFormat::RegML
+            | LegalFormat::MiFID2
+            | LegalFormat::Basel3 => false,
         }
     }
 

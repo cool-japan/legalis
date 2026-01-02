@@ -12,22 +12,17 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 /// Priority level for simulation jobs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum JobPriority {
     /// Low priority (background jobs)
     Low = 0,
     /// Normal priority (default)
+    #[default]
     Normal = 1,
     /// High priority (urgent jobs)
     High = 2,
     /// Critical priority (immediate execution)
     Critical = 3,
-}
-
-impl Default for JobPriority {
-    fn default() -> Self {
-        JobPriority::Normal
-    }
 }
 
 /// Status of a simulation job

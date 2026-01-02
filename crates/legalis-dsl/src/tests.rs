@@ -2583,7 +2583,8 @@ mod proptest_tests {
 
             let statute = StatuteNode {
                 id: id.clone(),
-                title: "Test Statute".to_string(),
+                visibility: crate::module_system::Visibility::Private,
+            title: "Test Statute".to_string(),
                 conditions: vec![ConditionNode::Comparison {
                     field: "age".to_string(),
                     operator: ">=".to_string(),
@@ -2696,6 +2697,7 @@ mod proptest_tests {
                 .prop_map(|(id, title, conditions, effects)| StatuteNode {
                     id,
                     title,
+                    visibility: crate::module_system::Visibility::Private,
                     conditions,
                     effects,
                     discretion: None,
@@ -2714,6 +2716,8 @@ mod proptest_tests {
         /// Generates arbitrary legal documents
         pub fn arb_document() -> impl Strategy<Value = LegalDocument> {
             prop::collection::vec(arb_statute(), 1..5).prop_map(|statutes| LegalDocument {
+                namespace: None,
+                exports: vec![],
                 imports: vec![],
                 statutes,
             })

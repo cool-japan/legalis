@@ -3,11 +3,14 @@ source: crates/legalis-dsl/src/tests.rs
 expression: doc
 ---
 {
+  "namespace": null,
   "imports": [],
+  "exports": [],
   "statutes": [
     {
       "id": "complex",
       "title": "Complex Conditions",
+      "visibility": "Private",
       "conditions": [
         {
           "Or": [

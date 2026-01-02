@@ -3,11 +3,14 @@ source: crates/legalis-dsl/src/tests.rs
 expression: doc
 ---
 {
+  "namespace": null,
   "imports": [],
+  "exports": [],
   "statutes": [
     {
       "id": "statute1",
       "title": "First Statute",
+      "visibility": "Private",
       "conditions": [
         {
           "Comparison": {
@@ -40,6 +43,7 @@ expression: doc
     {
       "id": "statute2",
       "title": "Second Statute",
+      "visibility": "Private",
       "conditions": [],
       "effects": [
         {

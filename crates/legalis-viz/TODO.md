@@ -1,5 +1,13 @@
 # legalis-viz TODO
 
+## Status Summary
+
+Version: 0.3.1 | Status: Stable | Tests: Passing (299 tests) | Warnings: 0
+
+All v0.1.x, v0.2.x, v0.3.0, and v0.3.1 series features complete. Includes Mermaid, GraphViz, D3.js, PlantUML, 3D/WebGL visualization, accessibility (WCAG 2.1 AA), framework wrappers (React, Vue, Angular), mobile/PWA support, analytics dashboards, geographic visualization, **VR statute exploration**, **AR legal document overlay**, **360° panoramic timeline viewing** with spatial audio and haptic feedback, **AI-powered automatic visualization selection**, **AI-generated annotations**, **natural language queries**, **smart data highlighting**, and **anomaly detection**.
+
+---
+
 ## Completed
 
 - [x] Mermaid flowchart generation
@@ -1325,18 +1333,18 @@ legalis-visualization/
 ## Roadmap for 0.3.0 Series (Next-Gen Features)
 
 ### Immersive Legal Visualization (v0.3.0)
-- [ ] Add VR statute exploration
-- [ ] Implement AR legal document overlay
-- [ ] Add 360° case timeline viewing
-- [ ] Create spatial audio for data sonification
-- [ ] Add haptic feedback for importance
+- [x] Add VR statute exploration
+- [x] Implement AR legal document overlay
+- [x] Add 360° case timeline viewing
+- [x] Create spatial audio for data sonification
+- [x] Add haptic feedback for importance
 
 ### AI-Enhanced Visualization (v0.3.1)
-- [ ] Add automatic visualization selection
-- [ ] Implement AI-generated chart annotations
-- [ ] Add natural language visualization queries
-- [ ] Create smart data highlighting
-- [ ] Add anomaly visual detection
+- [x] Add automatic visualization selection
+- [x] Implement AI-generated chart annotations
+- [x] Add natural language visualization queries
+- [x] Create smart data highlighting
+- [x] Add anomaly visual detection
 
 ### Real-Time Legal Intelligence (v0.3.2)
 - [ ] Add live court proceeding visualization
@@ -1358,6 +1366,299 @@ legalis-visualization/
 - [ ] Add 3D printed visualization export
 - [ ] Create volumetric data rendering
 - [ ] Add gesture-based holographic interaction
+
+## New Features Documentation (v0.3.0)
+
+### VR Statute Exploration
+
+Explore legal statutes in immersive virtual reality with full WebXR support:
+
+```rust
+use legalis_viz::{VRStatuteExplorer, VRExplorationConfig};
+
+// Create VR explorer with default settings
+let explorer = VRStatuteExplorer::new();
+
+// Generate VR HTML for a statute
+let html = explorer.to_vr_html(&statute);
+
+// Customize VR settings
+let config = VRExplorationConfig {
+    enable_hand_tracking: true,
+    enable_teleportation: true,
+    enable_voice_commands: false,
+    enable_spatial_audio: true,
+    enable_haptic_feedback: true,
+    interaction_distance: 2.0,
+    movement_speed: 1.0,
+};
+
+let explorer = VRStatuteExplorer::new()
+    .with_theme(Theme::dark())
+    .with_config(config);
+
+let vr_html = explorer.to_vr_html(&statute);
+```
+
+Features:
+- **WebXR Support**: Full immersive VR mode with hand tracking
+- **Spatial Audio**: 3D positional audio for node interactions
+- **Haptic Feedback**: Controller vibration for important nodes
+- **Hand Tracking**: Natural hand gestures for interaction
+- **Teleportation**: Navigate large statute graphs easily
+- **360° Environment**: Immersive legal document exploration
+
+### AR Legal Document Overlay
+
+Overlay legal information on physical documents using augmented reality:
+
+```rust
+use legalis_viz::{ARDocumentOverlay, AROverlayConfig};
+
+// Create AR overlay
+let overlay = ARDocumentOverlay::new();
+
+// Generate AR HTML
+let html = overlay.to_ar_html(&statute);
+
+// Configure AR features
+let config = AROverlayConfig {
+    enable_markers: true,
+    enable_markerless: true,
+    enable_face_tracking: false,
+    marker_size: 0.15,
+    overlay_opacity: 0.9,
+};
+
+let overlay = ARDocumentOverlay::new()
+    .with_theme(Theme::colorblind_friendly())
+    .with_config(config);
+
+let ar_html = overlay.to_ar_html(&statute);
+```
+
+Features:
+- **WebXR AR**: Immersive AR with hit-test support
+- **Camera Access**: Real-time video feed overlay
+- **Marker-Based AR**: Track AR markers for precise placement
+- **Markerless AR**: SLAM-based AR without markers
+- **Face Tracking**: Optional face-based AR interactions
+- **Configurable Opacity**: Adjust overlay transparency
+
+### 360° Case Timeline Viewing
+
+Explore legal timelines in panoramic 360° view:
+
+```rust
+use legalis_viz::{Panoramic360Timeline, Panoramic360Config};
+
+// Create 360° timeline visualizer
+let visualizer = Panoramic360Timeline::new();
+
+// Generate 360° HTML
+let html = visualizer.to_360_html(&timeline);
+
+// Configure 360° features
+let config = Panoramic360Config {
+    enable_vr_mode: true,
+    enable_auto_rotation: false,
+    rotation_speed: 10.0,
+    field_of_view: 75.0,
+    enable_gyroscope: true,
+};
+
+let visualizer = Panoramic360Timeline::new()
+    .with_theme(Theme::dark())
+    .with_config(config);
+
+let html = visualizer.to_360_html(&timeline);
+```
+
+Features:
+- **360° Panorama**: Full spherical environment for timeline events
+- **VR Mode**: Optional VR support for immersive viewing
+- **Gyroscope Controls**: Mobile device orientation tracking
+- **Mouse/Touch Controls**: Drag to pan, click to interact
+- **Auto-Rotation**: Optional automatic camera rotation
+- **Event Markers**: 3D positioned timeline events around viewer
+
+### Spatial Audio Data Sonification
+
+Integrated into VR Statute Explorer:
+- **Positional Audio**: 3D audio feedback for node proximity
+- **Oscillator-Based**: Different frequencies for different node types
+- **Dynamic Gain**: Audio intensity based on interaction
+- **WebAudio API**: Browser-based spatial audio processing
+
+### Haptic Feedback
+
+Integrated into VR Statute Explorer:
+- **Controller Vibration**: Tactile feedback on node selection
+- **Configurable Intensity**: Adjustable vibration strength
+- **Gamepad API**: Browser-based haptic actuator access
+- **Pulse Patterns**: Different patterns for different node types
+
+## New Features Documentation (v0.3.1)
+
+### AI-Powered Automatic Visualization Selection
+
+Automatically recommends the best visualization type for your data:
+
+```rust
+use legalis_viz::{AutoVisualizationSelector, DecisionTree, DependencyGraph, Timeline};
+
+// Create selector
+let selector = AutoVisualizationSelector::new()
+    .with_min_confidence(0.8);
+
+// Get recommendation for decision tree
+let tree = DecisionTree::from_statute(&statute)?;
+let recommendation = selector.recommend_for_tree(&tree);
+
+println!("Recommended: {:?}", recommendation.viz_type);
+println!("Confidence: {}", recommendation.confidence);
+println!("Reasoning: {}", recommendation.reasoning);
+
+// Get recommendation for dependency graph
+let graph = DependencyGraph::new();
+let recommendation = selector.recommend_for_graph(&graph);
+
+// Get recommendation for timeline
+let timeline = Timeline::new();
+let recommendation = selector.recommend_for_timeline(&timeline);
+```
+
+Features:
+- **Smart Analysis**: Analyzes data characteristics (size, complexity, structure)
+- **Confidence Scores**: Provides confidence levels for each recommendation
+- **Alternative Suggestions**: Offers alternative visualization types
+- **Detailed Reasoning**: Explains why each visualization was recommended
+
+### AI-Generated Chart Annotations
+
+Automatically generates intelligent annotations for visualizations:
+
+```rust
+use legalis_viz::AIAnnotationGenerator;
+
+// Create annotation generator
+let generator = AIAnnotationGenerator::new()
+    .with_min_importance(0.7);
+
+// Generate annotations for decision tree
+let annotations = generator.generate_for_tree(&tree);
+
+for annotation in annotations {
+    println!("Target: {}", annotation.target_id);
+    println!("Text: {}", annotation.text);
+    println!("Importance: {}", annotation.importance);
+    println!("Category: {:?}", annotation.category);
+}
+
+// Generate annotations for dependency graph
+let annotations = generator.generate_for_graph(&graph);
+```
+
+Features:
+- **Complexity Analysis**: Identifies complex nodes and patterns
+- **Pattern Detection**: Detects chains of discretionary decisions
+- **Critical Path Finding**: Highlights longest paths and bottlenecks
+- **Hub Detection**: Identifies central statutes in dependency graphs
+- **Cycle Detection**: Warns about circular dependencies
+
+### Natural Language Visualization Queries
+
+Query visualizations using natural language:
+
+```rust
+use legalis_viz::NaturalLanguageQueryProcessor;
+
+// Create query processor
+let processor = NaturalLanguageQueryProcessor::new();
+
+// Query decision tree
+let results = processor.query_tree(&tree, "show me all outcomes");
+let results = processor.query_tree(&tree, "find discretionary decisions");
+let results = processor.query_tree(&tree, "what are the critical paths");
+
+for result in results {
+    println!("Node: {}", result.node_id);
+    println!("Relevance: {}", result.relevance);
+    println!("Excerpt: {}", result.excerpt);
+}
+```
+
+Features:
+- **Intent Recognition**: Understands query intent (find, show, search)
+- **Keyword Matching**: Searches for specific terms in nodes
+- **Type Filtering**: Filters by node type (outcome, discretion, condition)
+- **Relevance Scoring**: Ranks results by relevance
+- **Case-Insensitive**: Optional case-sensitive search
+
+### Smart Data Highlighting
+
+Intelligently highlights important elements in visualizations:
+
+```rust
+use legalis_viz::SmartDataHighlighter;
+
+// Create highlighter
+let highlighter = SmartDataHighlighter::new()
+    .with_color("#ffeb3b".to_string())
+    .with_min_importance(0.75);
+
+// Generate highlighting rules for decision tree
+let rules = highlighter.highlight_tree(&tree);
+
+for rule in rules {
+    println!("Highlight: {}", rule.target_id);
+    println!("Color: {}", rule.color);
+    println!("Reason: {}", rule.reason);
+}
+
+// Highlight dependency graph hubs
+let rules = highlighter.highlight_graph(&graph);
+```
+
+Features:
+- **Discretionary Detection**: Highlights discretionary decision points
+- **Complexity Highlighting**: Marks complex nodes with many branches
+- **Hub Identification**: Highlights central nodes in dependency graphs
+- **Customizable Colors**: Configure highlight colors per category
+- **Importance Filtering**: Only highlights above threshold
+
+### Anomaly Visual Detection
+
+Detects and reports anomalies in visualization data:
+
+```rust
+use legalis_viz::AnomalyDetector;
+
+// Create anomaly detector
+let detector = AnomalyDetector::new()
+    .with_sensitivity(0.8);
+
+// Detect anomalies in decision tree
+let anomalies = detector.detect_in_tree(&tree);
+
+for anomaly in anomalies {
+    println!("Type: {:?}", anomaly.anomaly_type);
+    println!("Severity: {}", anomaly.severity);
+    println!("Description: {}", anomaly.description);
+    println!("Suggestion: {}", anomaly.suggestion);
+}
+
+// Detect anomalies in dependency graph
+let anomalies = detector.detect_in_graph(&graph);
+```
+
+Features:
+- **Orphaned Nodes**: Detects disconnected nodes in trees
+- **Deep Path Detection**: Warns about unusually deep decision paths
+- **Missing Outcomes**: Identifies leaf nodes without outcome designation
+- **Cycle Detection**: Finds circular dependencies (should not exist in trees)
+- **Isolated Statutes**: Detects statutes with no dependencies
+- **Bidirectional Dependencies**: Flags potentially problematic bidirectional links
 
 ## New Features Documentation (v0.2.6-0.2.8)
 
