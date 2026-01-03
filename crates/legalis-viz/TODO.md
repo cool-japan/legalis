@@ -2,7 +2,7 @@
 
 ## Status Summary
 
-Version: 0.3.4 | Status: Stable | Tests: Passing (401 tests) | Warnings: 0
+Version: 0.2.0 | Status: Stable | Tests: Passing (420 tests) | Warnings: 0
 
 All v0.1.x, v0.2.x, v0.3.0, v0.3.1, v0.3.2, v0.3.3, and v0.3.4 series features complete. Includes Mermaid, GraphViz, D3.js, PlantUML, 3D/WebGL visualization, accessibility (WCAG 2.1 AA), framework wrappers (React, Vue, Angular), mobile/PWA support, analytics dashboards, geographic visualization, **VR statute exploration**, **AR legal document overlay**, **360° panoramic timeline viewing** with spatial audio and haptic feedback, **AI-powered automatic visualization selection**, **AI-generated annotations**, **natural language queries**, **smart data highlighting**, **anomaly detection**, **live court proceeding visualization**, **breaking legal news feeds**, **regulatory change monitoring**, **enforcement action tracking**, **market impact visualization**, **legal history scrollytelling**, **case story generation**, **timeline narrative views**, **guided exploration tours**, **educational walkthroughs**, **Looking Glass holographic display**, **holographic statute models**, **3D print export (STL/OBJ/3MF)**, **volumetric data rendering**, and **gesture-based holographic interaction**.
 
@@ -1786,3 +1786,239 @@ Features:
 - **Point Clustering**: Automatic marker clustering for large datasets
 - **Custom Tile Providers**: Support for OpenStreetMap, Mapbox, Google Maps, and custom tiles
 - **Interactive Maps**: Built on Leaflet.js with zoom, pan, and popup interactions
+
+## Roadmap for 0.4.0 Series (Advanced Features)
+
+### Cross-Jurisdictional Comparison (v0.4.0)
+- [x] Add side-by-side statute comparison visualization
+- [x] Implement jurisdictional difference highlighting
+- [x] Add synchronized navigation across jurisdictions
+- [ ] Create comparative timeline views
+- [x] Add jurisdictional heatmap overlays
+
+### Semantic Legal Network (v0.4.1)
+- [ ] Add legal concept relationship graphs
+- [ ] Implement statute-to-concept mapping
+- [ ] Add ontology-based visualization
+- [ ] Create semantic search highlighting
+- [ ] Add concept hierarchy trees
+
+### Temporal Legal Analytics (v0.4.2)
+- [ ] Add time-series visualization for statute changes
+- [ ] Implement legal evolution timeline
+- [ ] Add amendment impact analysis
+- [ ] Create legislative trend charts
+- [ ] Add historical comparison views
+
+### Advanced Export Formats (v0.4.3)
+- [ ] Add LaTeX/TikZ export for academic papers
+- [ ] Implement GraphML export for network analysis
+- [ ] Add Cypher query export for Neo4j
+- [ ] Create SPARQL export for semantic web
+- [ ] Add Jupyter notebook integration
+
+### Performance and Optimization (v0.4.4)
+- [ ] Add incremental rendering for massive graphs
+- [ ] Implement graph simplification algorithms
+- [ ] Add intelligent node clustering
+- [ ] Create adaptive level-of-detail
+- [ ] Add memory usage optimization
+
+### Accessibility Enhancements (v0.4.5)
+- [ ] Add audio descriptions for visualizations
+- [ ] Implement tactile graphics export
+- [ ] Add motor impairment navigation modes
+- [ ] Create cognitive load reduction options
+- [ ] Add dyslexia-friendly text rendering
+
+### Data Import/Export (v0.4.6)
+- [ ] Add CSV import for statute data
+- [ ] Implement Excel export for charts
+- [ ] Add JSON-LD export for linked data
+- [ ] Create XML export for interoperability
+- [ ] Add SQLite export for offline querying
+
+### Visualization Templates (v0.4.7)
+- [ ] Add pre-built visualization templates
+- [ ] Implement template customization system
+- [ ] Add template library with examples
+- [ ] Create template import/export
+- [ ] Add template versioning support
+
+### Interactive Filtering (v0.4.8)
+- [ ] Add multi-criteria filtering UI
+- [ ] Implement date range filtering
+- [ ] Add tag-based filtering
+- [ ] Create saved filter presets
+- [ ] Add filter combination logic (AND/OR/NOT)
+
+### Collaboration Features 2.0 (v0.4.9)
+- [ ] Add version control for visualizations
+- [ ] Implement diff view for visualization changes
+- [ ] Add comment threading on nodes
+- [ ] Create collaborative editing sessions
+- [ ] Add user permission management
+
+## New Features Documentation (v0.4.0)
+
+### Cross-Jurisdictional Comparison
+
+Compare statutes across different legal jurisdictions with side-by-side visualization and difference highlighting:
+
+```rust
+use legalis_viz::{CrossJurisdictionalComparison, JurisdictionalStatute, JurisdictionalDifference};
+use legalis_core::{Statute, Effect, EffectType};
+
+// Create comparison
+let mut comparison = CrossJurisdictionalComparison::new("Adult Rights Comparison");
+
+// Add statutes from different jurisdictions
+let us_statute = Statute::new(
+    "us-adult-rights",
+    "US Adult Rights Act",
+    Effect::new(EffectType::Grant, "Grants rights at age 18"),
+);
+let us_js = JurisdictionalStatute::new("US", "United States", us_statute)
+    .with_metadata("enacted", "1971")
+    .with_metadata("amended", "2020");
+
+let jp_statute = Statute::new(
+    "jp-adult-rights",
+    "Japan Civil Code Article 4",
+    Effect::new(EffectType::Grant, "Grants rights at age 20"),
+);
+let jp_js = JurisdictionalStatute::new("JP", "Japan", jp_statute)
+    .with_metadata("enacted", "1896")
+    .with_metadata("amended", "2022");
+
+let de_statute = Statute::new(
+    "de-adult-rights",
+    "German Civil Code BGB §2",
+    Effect::new(EffectType::Grant, "Grants rights at age 18"),
+);
+let de_js = JurisdictionalStatute::new("DE", "Germany", de_statute)
+    .with_metadata("enacted", "1975");
+
+comparison.add_statute(us_js);
+comparison.add_statute(jp_js);
+comparison.add_statute(de_js);
+
+// Add differences
+let age_diff = JurisdictionalDifference::new(
+    "age_of_majority",
+    "Different age requirements for adult rights"
+)
+.with_value("US", "18 years")
+.with_value("JP", "20 years (lowered from 20 to 18 in 2022)")
+.with_value("DE", "18 years")
+.with_severity(0.6); // Moderate severity
+
+let citizenship_diff = JurisdictionalDifference::new(
+    "citizenship_requirement",
+    "Citizenship or residency requirements differ"
+)
+.with_value("US", "Citizenship required")
+.with_value("JP", "Japanese nationality required")
+.with_value("DE", "EU citizenship or residence permit")
+.with_severity(0.8); // High severity
+
+comparison.add_difference(age_diff);
+comparison.add_difference(citizenship_diff);
+
+// Generate visualizations
+let side_by_side_html = comparison.to_side_by_side_html();
+let heatmap_html = comparison.to_heatmap_html();
+
+// Customize with theme and options
+let comparison = CrossJurisdictionalComparison::new("Rights Comparison")
+    .with_theme(Theme::dark())
+    .with_synchronized_nav(true); // Enable synchronized scrolling
+
+// Write to files
+std::fs::write("comparison_side_by_side.html", side_by_side_html)?;
+std::fs::write("comparison_heatmap.html", heatmap_html)?;
+```
+
+Features:
+- **Side-by-Side Visualization**: Compare statutes across jurisdictions in parallel columns
+- **Difference Highlighting**: Automatically highlight key differences with severity indicators
+- **Synchronized Navigation**: Scroll all jurisdiction columns together for easy comparison
+- **Heatmap View**: Grid-based heatmap showing differences across multiple dimensions
+- **Severity Classification**: Differences classified as minor (green), moderate (orange), or major (red)
+- **Metadata Support**: Add contextual information like enactment dates, amendments, etc.
+- **Theme Support**: Full customization with light, dark, and custom themes
+
+#### JurisdictionalStatute
+
+Represents a statute with jurisdiction metadata:
+
+```rust
+pub struct JurisdictionalStatute {
+    pub jurisdiction: String,           // Jurisdiction code (e.g., "US", "JP")
+    pub jurisdiction_name: String,      // Full jurisdiction name
+    pub statute: Statute,               // The statute being compared
+    pub metadata: HashMap<String, String>, // Additional context
+}
+```
+
+Methods:
+- `new(jurisdiction, jurisdiction_name, statute)` - Create a new jurisdictional statute
+- `with_metadata(key, value)` - Add metadata key-value pairs
+
+#### JurisdictionalDifference
+
+Represents a difference between jurisdictions:
+
+```rust
+pub struct JurisdictionalDifference {
+    pub aspect: String,                    // What aspect differs
+    pub description: String,               // Description of the difference
+    pub values: HashMap<String, String>,   // Values per jurisdiction
+    pub severity: f64,                     // Severity: 0.0 (minor) to 1.0 (major)
+}
+```
+
+Methods:
+- `new(aspect, description)` - Create a new difference
+- `with_value(jurisdiction, value)` - Add jurisdiction-specific value
+- `with_severity(severity)` - Set severity level (0.0-1.0, clamped)
+
+#### CrossJurisdictionalComparison
+
+Main comparison visualizer:
+
+```rust
+pub struct CrossJurisdictionalComparison {
+    pub title: String,
+    pub statutes: Vec<JurisdictionalStatute>,
+    pub differences: Vec<JurisdictionalDifference>,
+    pub theme: Theme,
+    pub synchronized_nav: bool,
+}
+```
+
+Methods:
+- `new(title)` - Create a new comparison
+- `add_statute(statute)` - Add a statute for comparison
+- `add_difference(difference)` - Add a difference between jurisdictions
+- `with_theme(theme)` - Set the theme
+- `with_synchronized_nav(enabled)` - Enable/disable synchronized scrolling
+- `to_side_by_side_html()` - Generate side-by-side comparison HTML
+- `to_heatmap_html()` - Generate heatmap visualization HTML
+
+#### Use Cases
+
+**Comparative Legal Research**:
+Compare how different countries handle the same legal concept (e.g., age of majority, copyright duration, data privacy requirements).
+
+**International Compliance**:
+Visualize differences in regulatory requirements across jurisdictions for multinational compliance.
+
+**Legal Harmonization**:
+Identify areas where legal systems differ and could be harmonized (e.g., EU directives).
+
+**Academic Analysis**:
+Research and present comparative law studies with visual evidence.
+
+**Policy Development**:
+Inform policy decisions by comparing approaches from different jurisdictions.

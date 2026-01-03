@@ -51,6 +51,12 @@ members = [
     "examples/private-international-law",
     "examples/laos-civil-code",
     "examples/religious-legal-systems",
+    # Technical Feature Examples
+    "examples/smart-contract-export",
+    "examples/legal-knowledge-graph",
+    "examples/statute-version-control",
+    "examples/legal-dsl-interop",
+    "examples/multilingual-statute",
 ]
 
 [workspace.package]

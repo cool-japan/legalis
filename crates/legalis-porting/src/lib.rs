@@ -432,6 +432,7 @@ pub enum RiskLevel {
     Medium,
     High,
     Critical,
+    Negligible,
 }
 
 /// A specific risk.
@@ -3403,6 +3404,7 @@ impl PortingEngine {
         } else {
             // Convert RiskLevel to numeric value for calculation
             let risk_level_to_f64 = |level: RiskLevel| match level {
+                RiskLevel::Negligible => 0.1,
                 RiskLevel::Low => 0.25,
                 RiskLevel::Medium => 0.5,
                 RiskLevel::High => 0.75,
@@ -4585,6 +4587,1551 @@ pub enum DiffChangeType {
     Modified,
     Added,
     Removed,
+}
+
+// ============================================================================
+// Cultural Adaptation v0.2.7 - Advanced Cultural Context
+// ============================================================================
+
+/// Cultural context analysis for a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalContextAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Jurisdiction analyzed
+    pub jurisdiction: String,
+    /// Social norms and values
+    pub social_norms: Vec<SocialNorm>,
+    /// Historical context factors
+    pub historical_context: Vec<HistoricalFactor>,
+    /// Contemporary cultural trends
+    pub cultural_trends: Vec<CulturalTrend>,
+    /// Power distance index (0.0 - 1.0)
+    pub power_distance: f64,
+    /// Individualism vs collectivism (-1.0 to 1.0)
+    pub individualism_score: f64,
+    /// Uncertainty avoidance (0.0 - 1.0)
+    pub uncertainty_avoidance: f64,
+    /// Long-term vs short-term orientation (-1.0 to 1.0)
+    pub time_orientation: f64,
+}
+
+/// Social norm in a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SocialNorm {
+    /// Norm description
+    pub description: String,
+    /// Norm category
+    pub category: NormCategory,
+    /// Strength (0.0 - 1.0)
+    pub strength: f64,
+    /// Legal recognition
+    pub legally_recognized: bool,
+}
+
+/// Category of social norm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NormCategory {
+    /// Family relations
+    Family,
+    /// Gender roles
+    Gender,
+    /// Age hierarchy
+    Age,
+    /// Economic behavior
+    Economic,
+    /// Public conduct
+    Public,
+    /// Private conduct
+    Private,
+}
+
+/// Historical factor affecting current legal culture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoricalFactor {
+    /// Description
+    pub description: String,
+    /// Time period
+    pub period: String,
+    /// Impact on legal system (0.0 - 1.0)
+    pub impact: f64,
+    /// Related legal principles
+    pub legal_principles: Vec<String>,
+}
+
+/// Contemporary cultural trend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CulturalTrend {
+    /// Trend description
+    pub description: String,
+    /// Direction (positive = increasing, negative = decreasing)
+    pub direction: f64,
+    /// Velocity of change (0.0 - 1.0)
+    pub velocity: f64,
+    /// Legal adaptation status
+    pub legal_status: TrendLegalStatus,
+}
+
+/// Legal status of a cultural trend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrendLegalStatus {
+    /// Already reflected in law
+    Codified,
+    /// Being considered for legislation
+    UnderConsideration,
+    /// Not yet addressed by law
+    Unaddressed,
+    /// Actively resisted by law
+    Resisted,
+}
+
+impl CulturalContextAnalysis {
+    /// Creates a new cultural context analysis.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction,
+            social_norms: Vec::new(),
+            historical_context: Vec::new(),
+            cultural_trends: Vec::new(),
+            power_distance: 0.5,
+            individualism_score: 0.0,
+            uncertainty_avoidance: 0.5,
+            time_orientation: 0.0,
+        }
+    }
+
+    /// Adds a social norm.
+    pub fn add_norm(&mut self, norm: SocialNorm) {
+        self.social_norms.push(norm);
+    }
+
+    /// Adds a historical factor.
+    pub fn add_historical_factor(&mut self, factor: HistoricalFactor) {
+        self.historical_context.push(factor);
+    }
+
+    /// Adds a cultural trend.
+    pub fn add_trend(&mut self, trend: CulturalTrend) {
+        self.cultural_trends.push(trend);
+    }
+
+    /// Assesses compatibility with another jurisdiction's context.
+    pub fn assess_compatibility(&self, other: &CulturalContextAnalysis) -> f64 {
+        let mut score = 0.0;
+        let mut factors = 0.0;
+
+        // Compare cultural dimensions
+        score += 1.0 - (self.power_distance - other.power_distance).abs();
+        score += 1.0 - ((self.individualism_score - other.individualism_score).abs() / 2.0);
+        score += 1.0 - (self.uncertainty_avoidance - other.uncertainty_avoidance).abs();
+        score += 1.0 - ((self.time_orientation - other.time_orientation).abs() / 2.0);
+        factors += 4.0;
+
+        if factors > 0.0 { score / factors } else { 0.5 }
+    }
+}
+
+/// Local practice integration system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalPracticeIntegration {
+    /// Integration ID
+    pub id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Documented local practices
+    pub practices: Vec<LocalPractice>,
+    /// Integration recommendations
+    pub recommendations: Vec<IntegrationRecommendation>,
+}
+
+/// A documented local practice.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalPractice {
+    /// Practice name
+    pub name: String,
+    /// Description
+    pub description: String,
+    /// Practice type
+    pub practice_type: PracticeType,
+    /// Geographic scope
+    pub geographic_scope: GeographicScope,
+    /// Usage prevalence (0.0 - 1.0)
+    pub prevalence: f64,
+    /// Legal recognition status
+    pub legal_status: PracticeLegalStatus,
+    /// Conflict with formal law
+    pub conflicts_with_law: bool,
+    /// Related statutes
+    pub related_statutes: Vec<String>,
+}
+
+/// Type of local practice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PracticeType {
+    /// Business practice
+    Business,
+    /// Dispute resolution
+    DisputeResolution,
+    /// Contract formation
+    Contract,
+    /// Property transaction
+    Property,
+    /// Marriage/family
+    Family,
+    /// Inheritance
+    Inheritance,
+    /// Community governance
+    Governance,
+}
+
+/// Geographic scope of practice.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GeographicScope {
+    /// National
+    National,
+    /// Regional
+    Regional(String),
+    /// Local/Municipal
+    Local(String),
+    /// Community-specific
+    Community(String),
+}
+
+/// Legal status of a local practice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PracticeLegalStatus {
+    /// Fully recognized in law
+    Recognized,
+    /// Permitted but not codified
+    Permitted,
+    /// Tolerated informally
+    Tolerated,
+    /// Legally ambiguous
+    Ambiguous,
+    /// Prohibited
+    Prohibited,
+}
+
+/// Recommendation for integrating local practice.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrationRecommendation {
+    /// Practice being recommended
+    pub practice_name: String,
+    /// Recommendation type
+    pub recommendation_type: RecommendationType,
+    /// Justification
+    pub justification: String,
+    /// Implementation steps
+    pub implementation_steps: Vec<String>,
+    /// Priority (0.0 - 1.0)
+    pub priority: f64,
+}
+
+/// Type of integration recommendation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecommendationType {
+    /// Codify the practice
+    Codify,
+    /// Reference the practice
+    Reference,
+    /// Create exception for the practice
+    Exception,
+    /// Harmonize with the practice
+    Harmonize,
+    /// Prohibit conflicting provisions
+    Prohibit,
+}
+
+impl LocalPracticeIntegration {
+    /// Creates a new local practice integration system.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction,
+            practices: Vec::new(),
+            recommendations: Vec::new(),
+        }
+    }
+
+    /// Adds a local practice.
+    pub fn add_practice(&mut self, practice: LocalPractice) {
+        self.practices.push(practice);
+    }
+
+    /// Analyzes practices and generates recommendations.
+    pub fn generate_recommendations(&mut self, _statute: &Statute) {
+        for practice in &self.practices {
+            if practice.prevalence > 0.7 && practice.legal_status == PracticeLegalStatus::Tolerated
+            {
+                self.recommendations.push(IntegrationRecommendation {
+                    practice_name: practice.name.clone(),
+                    recommendation_type: RecommendationType::Codify,
+                    justification: format!(
+                        "High prevalence ({:.1}%) warrants formal recognition",
+                        practice.prevalence * 100.0
+                    ),
+                    implementation_steps: vec![
+                        "Draft codification language".to_string(),
+                        "Stakeholder consultation".to_string(),
+                        "Legislative proposal".to_string(),
+                    ],
+                    priority: practice.prevalence,
+                });
+            }
+        }
+    }
+}
+
+/// Customary law consideration system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomaryLawConsideration {
+    /// Consideration ID
+    pub id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Documented customary laws
+    pub customary_laws: Vec<CustomaryLaw>,
+    /// Interaction analysis
+    pub interactions: Vec<CustomaryStatutoryInteraction>,
+}
+
+/// A customary law rule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomaryLaw {
+    /// Rule name
+    pub name: String,
+    /// Description
+    pub description: String,
+    /// Subject matter
+    pub subject: CustomarySubject,
+    /// Age of the custom (years)
+    pub age_years: usize,
+    /// Geographic applicability
+    pub geographic_scope: GeographicScope,
+    /// Recognition status
+    pub recognition: CustomaryRecognition,
+    /// Binding force
+    pub binding_force: f64,
+    /// Consistency with modern values (0.0 - 1.0)
+    pub modern_compatibility: f64,
+}
+
+/// Subject matter of customary law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CustomarySubject {
+    /// Land and property
+    Land,
+    /// Water rights
+    Water,
+    /// Fishing and hunting
+    Fishing,
+    /// Marriage
+    Marriage,
+    /// Inheritance
+    Inheritance,
+    /// Dispute resolution
+    Dispute,
+    /// Criminal justice
+    Criminal,
+    /// Commercial transactions
+    Commercial,
+}
+
+/// Recognition status of customary law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CustomaryRecognition {
+    /// Fully incorporated into statutory law
+    Incorporated,
+    /// Recognized as supplementary law
+    Supplementary,
+    /// Acknowledged but not binding
+    Acknowledged,
+    /// Informal recognition only
+    Informal,
+    /// Not recognized
+    Unrecognized,
+}
+
+/// Interaction between customary and statutory law.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomaryStatutoryInteraction {
+    /// Customary law involved
+    pub customary_law: String,
+    /// Statutory law involved
+    pub statutory_law: String,
+    /// Type of interaction
+    pub interaction_type: InteractionType,
+    /// Resolution mechanism
+    pub resolution: String,
+    /// Precedents
+    pub precedents: Vec<String>,
+}
+
+/// Type of customary-statutory interaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InteractionType {
+    /// Laws are harmonious
+    Harmonious,
+    /// Statutory law defers to customary
+    StatutoryDefers,
+    /// Customary law defers to statutory
+    CustomaryDefers,
+    /// Conflict requiring resolution
+    Conflict,
+    /// Parallel application
+    Parallel,
+}
+
+impl CustomaryLawConsideration {
+    /// Creates a new customary law consideration system.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction,
+            customary_laws: Vec::new(),
+            interactions: Vec::new(),
+        }
+    }
+
+    /// Adds a customary law.
+    pub fn add_customary_law(&mut self, law: CustomaryLaw) {
+        self.customary_laws.push(law);
+    }
+
+    /// Analyzes interaction with a statute.
+    pub fn analyze_interaction(
+        &mut self,
+        statute: &Statute,
+        customary_law: &CustomaryLaw,
+    ) -> InteractionType {
+        // Simple heuristic analysis
+        let interaction_type = if customary_law.modern_compatibility > 0.8 {
+            InteractionType::Harmonious
+        } else if customary_law.recognition == CustomaryRecognition::Incorporated {
+            InteractionType::StatutoryDefers
+        } else if customary_law.recognition == CustomaryRecognition::Unrecognized {
+            InteractionType::CustomaryDefers
+        } else {
+            InteractionType::Parallel
+        };
+
+        self.interactions.push(CustomaryStatutoryInteraction {
+            customary_law: customary_law.name.clone(),
+            statutory_law: statute.id.clone(),
+            interaction_type,
+            resolution: "To be determined through consultation".to_string(),
+            precedents: Vec::new(),
+        });
+
+        interaction_type
+    }
+}
+
+/// Religious law compatibility system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligiousLawCompatibility {
+    /// Compatibility ID
+    pub id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Religious law systems present
+    pub religious_systems: Vec<ReligiousLawSystem>,
+    /// Compatibility assessments
+    pub assessments: Vec<CompatibilityAssessment>,
+}
+
+/// A religious law system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligiousLawSystem {
+    /// System name
+    pub name: String,
+    /// Religion
+    pub religion: Religion,
+    /// Legal status in jurisdiction
+    pub legal_status: ReligiousLegalStatus,
+    /// Applicable population (percentage)
+    pub population_percentage: f64,
+    /// Subject matters covered
+    pub subject_matters: Vec<ReligiousSubject>,
+    /// Interaction with civil law
+    pub civil_interaction: CivilReligiousInteraction,
+}
+
+/// Major religions with legal systems.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Religion {
+    /// Islamic law (Sharia)
+    Islam,
+    /// Jewish law (Halakha)
+    Judaism,
+    /// Hindu law
+    Hinduism,
+    /// Canon law (Catholic)
+    Catholicism,
+    /// Buddhist law
+    Buddhism,
+    /// Other religious system
+    Other,
+}
+
+/// Legal status of religious law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReligiousLegalStatus {
+    /// Official state religion
+    StateReligion,
+    /// Recognized parallel legal system
+    ParallelSystem,
+    /// Recognized for personal status only
+    PersonalStatus,
+    /// Voluntary arbitration only
+    Voluntary,
+    /// No legal recognition
+    Unrecognized,
+}
+
+/// Subject matters in religious law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReligiousSubject {
+    /// Marriage
+    Marriage,
+    /// Divorce
+    Divorce,
+    /// Inheritance
+    Inheritance,
+    /// Dietary laws
+    Dietary,
+    /// Sabbath/holy days
+    HolyDays,
+    /// Financial transactions
+    Finance,
+    /// Criminal law
+    Criminal,
+    /// All matters
+    Comprehensive,
+}
+
+/// Interaction between civil and religious law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CivilReligiousInteraction {
+    /// Religious law takes precedence
+    ReligiousPrecedence,
+    /// Civil law takes precedence
+    CivilPrecedence,
+    /// Equal authority in respective domains
+    DualSystem,
+    /// Individual choice
+    OptIn,
+    /// Complete separation
+    Separated,
+}
+
+/// Compatibility assessment between statute and religious law.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompatibilityAssessment {
+    /// Assessment ID
+    pub id: String,
+    /// Religious system assessed
+    pub religious_system: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Compatibility score (0.0 - 1.0)
+    pub compatibility_score: f64,
+    /// Conflicts identified
+    pub conflicts: Vec<ReligiousConflict>,
+    /// Accommodation options
+    pub accommodations: Vec<String>,
+}
+
+/// Conflict with religious law.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligiousConflict {
+    /// Conflict description
+    pub description: String,
+    /// Severity (0.0 - 1.0)
+    pub severity: f64,
+    /// Affected population percentage
+    pub affected_population: f64,
+    /// Possible resolution
+    pub resolution_option: String,
+}
+
+impl ReligiousLawCompatibility {
+    /// Creates a new religious law compatibility system.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction,
+            religious_systems: Vec::new(),
+            assessments: Vec::new(),
+        }
+    }
+
+    /// Adds a religious law system.
+    pub fn add_religious_system(&mut self, system: ReligiousLawSystem) {
+        self.religious_systems.push(system);
+    }
+
+    /// Assesses compatibility with a statute.
+    pub fn assess_compatibility(&mut self, statute: &Statute) {
+        for system in &self.religious_systems {
+            let conflicts = Vec::new();
+
+            // Adjust based on interaction type
+            let compatibility_score = match system.civil_interaction {
+                CivilReligiousInteraction::Separated => 1.0,
+                CivilReligiousInteraction::OptIn => 0.9,
+                CivilReligiousInteraction::DualSystem => 0.7,
+                CivilReligiousInteraction::CivilPrecedence => 0.8,
+                CivilReligiousInteraction::ReligiousPrecedence => 0.5,
+            };
+
+            self.assessments.push(CompatibilityAssessment {
+                id: uuid::Uuid::new_v4().to_string(),
+                religious_system: system.name.clone(),
+                statute_id: statute.id.clone(),
+                compatibility_score,
+                conflicts,
+                accommodations: vec![
+                    "Provide religious exemption clause".to_string(),
+                    "Create alternative compliance pathway".to_string(),
+                ],
+            });
+        }
+    }
+}
+
+/// Indigenous rights assessment system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndigenousRightsAssessment {
+    /// Assessment ID
+    pub id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Indigenous peoples/communities
+    pub indigenous_peoples: Vec<IndigenousPeople>,
+    /// Rights recognized
+    pub recognized_rights: Vec<IndigenousRight>,
+    /// Impact assessments
+    pub impact_assessments: Vec<IndigenousImpact>,
+}
+
+/// An indigenous people or community.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndigenousPeople {
+    /// People name
+    pub name: String,
+    /// Population
+    pub population: usize,
+    /// Traditional territories
+    pub territories: Vec<String>,
+    /// Legal recognition status
+    pub recognition_status: IndigenousRecognition,
+    /// Self-governance level
+    pub self_governance: GovernanceLevel,
+}
+
+/// Recognition status of indigenous people.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IndigenousRecognition {
+    /// Full legal recognition with treaties
+    TreatyRecognized,
+    /// Constitutional recognition
+    ConstitutionallyRecognized,
+    /// Statutory recognition
+    StatutoryRecognized,
+    /// Administrative recognition
+    AdministrativeRecognition,
+    /// Not formally recognized
+    Unrecognized,
+}
+
+/// Level of self-governance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GovernanceLevel {
+    /// Full sovereignty
+    Sovereign,
+    /// Substantial autonomy
+    Autonomous,
+    /// Limited self-governance
+    Limited,
+    /// Consultation rights only
+    Consultation,
+    /// No self-governance
+    None,
+}
+
+/// An indigenous right.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndigenousRight {
+    /// Right description
+    pub description: String,
+    /// Right category
+    pub category: IndigenousRightCategory,
+    /// Legal basis
+    pub legal_basis: Vec<String>,
+    /// Geographic scope
+    pub geographic_scope: Option<Vec<String>>,
+    /// Limitation/qualifications
+    pub limitations: Vec<String>,
+}
+
+/// Category of indigenous rights.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IndigenousRightCategory {
+    /// Land and territory rights
+    Land,
+    /// Self-determination
+    SelfDetermination,
+    /// Cultural preservation
+    Culture,
+    /// Language rights
+    Language,
+    /// Resource rights
+    Resources,
+    /// Consultation and consent
+    Consultation,
+    /// Traditional practices
+    Traditional,
+}
+
+/// Impact assessment on indigenous peoples.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndigenousImpact {
+    /// Impact ID
+    pub id: String,
+    /// Statute being assessed
+    pub statute_id: String,
+    /// Affected indigenous people
+    pub affected_people: Vec<String>,
+    /// Impact areas
+    pub impact_areas: Vec<ImpactArea>,
+    /// Overall impact score (-1.0 to 1.0, negative = harmful)
+    pub impact_score: f64,
+    /// Consultation conducted
+    pub consultation_conducted: bool,
+    /// Free, prior, and informed consent obtained
+    pub fpic_obtained: bool,
+    /// Mitigation measures
+    pub mitigation_measures: Vec<String>,
+}
+
+/// Area of impact on indigenous peoples.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImpactArea {
+    /// Area description
+    pub description: String,
+    /// Impact type
+    pub impact_type: ImpactType,
+    /// Severity (-1.0 to 1.0)
+    pub severity: f64,
+    /// Affected rights
+    pub affected_rights: Vec<IndigenousRightCategory>,
+}
+
+/// Type of impact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ImpactType {
+    /// Positive impact
+    Positive,
+    /// Neutral impact
+    Neutral,
+    /// Negative impact
+    Negative,
+    /// Mixed impact
+    Mixed,
+}
+
+impl IndigenousRightsAssessment {
+    /// Creates a new indigenous rights assessment system.
+    pub fn new(jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction,
+            indigenous_peoples: Vec::new(),
+            recognized_rights: Vec::new(),
+            impact_assessments: Vec::new(),
+        }
+    }
+
+    /// Adds an indigenous people.
+    pub fn add_people(&mut self, people: IndigenousPeople) {
+        self.indigenous_peoples.push(people);
+    }
+
+    /// Adds a recognized right.
+    pub fn add_right(&mut self, right: IndigenousRight) {
+        self.recognized_rights.push(right);
+    }
+
+    /// Assesses impact of a statute on indigenous peoples.
+    pub fn assess_impact(&mut self, statute: &Statute) -> f64 {
+        let mut total_impact = 0.0;
+        let mut count = 0;
+
+        for people in &self.indigenous_peoples {
+            let impact = IndigenousImpact {
+                id: uuid::Uuid::new_v4().to_string(),
+                statute_id: statute.id.clone(),
+                affected_people: vec![people.name.clone()],
+                impact_areas: vec![],
+                impact_score: 0.0,
+                consultation_conducted: false,
+                fpic_obtained: false,
+                mitigation_measures: vec![
+                    "Conduct consultation with affected communities".to_string(),
+                    "Obtain free, prior, and informed consent".to_string(),
+                    "Include cultural exception provisions".to_string(),
+                ],
+            };
+            total_impact += impact.impact_score;
+            count += 1;
+            self.impact_assessments.push(impact);
+        }
+
+        if count > 0 {
+            total_impact / count as f64
+        } else {
+            0.0
+        }
+    }
+
+    /// Checks if consultation requirements are met.
+    pub fn check_consultation_requirements(&self) -> bool {
+        self.impact_assessments
+            .iter()
+            .all(|impact| impact.consultation_conducted && impact.fpic_obtained)
+    }
+}
+
+// ============================================================================
+// Economic Impact Analysis v0.2.8
+// ============================================================================
+
+/// Cost-benefit projection for statute porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostBenefitProjection {
+    /// Projection ID
+    pub id: String,
+    /// Statute being ported
+    pub statute_id: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Implementation costs
+    pub costs: Vec<PortingCost>,
+    /// Expected benefits
+    pub benefits: Vec<PortingBenefit>,
+    /// Total estimated cost
+    pub total_cost: f64,
+    /// Total estimated benefit
+    pub total_benefit: f64,
+    /// Net benefit (benefit - cost)
+    pub net_benefit: f64,
+    /// Benefit-cost ratio
+    pub benefit_cost_ratio: f64,
+    /// Payback period (years)
+    pub payback_period: Option<f64>,
+    /// Risk-adjusted metrics
+    pub risk_adjustment: RiskAdjustment,
+}
+
+/// A cost associated with porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingCost {
+    /// Cost category
+    pub category: CostCategory,
+    /// Description
+    pub description: String,
+    /// Amount (in target jurisdiction currency)
+    pub amount: f64,
+    /// Timeframe
+    pub timeframe: CostTimeframe,
+    /// Certainty level (0.0 - 1.0)
+    pub certainty: f64,
+}
+
+/// Category of porting cost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CostCategory {
+    /// Legal drafting and review
+    Legal,
+    /// Translation costs
+    Translation,
+    /// Stakeholder consultation
+    Consultation,
+    /// Legislative process
+    Legislative,
+    /// Implementation and enforcement
+    Implementation,
+    /// Training and capacity building
+    Training,
+    /// Technology and systems
+    Technology,
+    /// Monitoring and evaluation
+    Monitoring,
+}
+
+/// Timeframe for costs/benefits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CostTimeframe {
+    /// One-time cost
+    OneTime,
+    /// Annual recurring
+    Annual,
+    /// Multi-year (specified duration)
+    MultiYear(u32),
+}
+
+/// A benefit from porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingBenefit {
+    /// Benefit category
+    pub category: BenefitCategory,
+    /// Description
+    pub description: String,
+    /// Monetized value (if quantifiable)
+    pub monetary_value: Option<f64>,
+    /// Qualitative value description
+    pub qualitative_value: String,
+    /// Timeframe
+    pub timeframe: CostTimeframe,
+    /// Certainty level (0.0 - 1.0)
+    pub certainty: f64,
+}
+
+/// Category of porting benefit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BenefitCategory {
+    /// Economic growth
+    Economic,
+    /// Social welfare improvement
+    Social,
+    /// Legal harmonization
+    Legal,
+    /// Trade facilitation
+    Trade,
+    /// Administrative efficiency
+    Administrative,
+    /// Human rights advancement
+    HumanRights,
+    /// Environmental protection
+    Environmental,
+}
+
+/// Risk adjustment for cost-benefit analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskAdjustment {
+    /// Risk discount factor (0.0 - 1.0)
+    pub discount_factor: f64,
+    /// Identified risks
+    pub risks: Vec<String>,
+    /// Sensitivity analysis scenarios
+    pub scenarios: Vec<Scenario>,
+}
+
+/// Scenario for sensitivity analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Scenario {
+    /// Scenario name
+    pub name: String,
+    /// Probability (0.0 - 1.0)
+    pub probability: f64,
+    /// Net benefit in this scenario
+    pub net_benefit: f64,
+}
+
+impl CostBenefitProjection {
+    /// Creates a new cost-benefit projection.
+    pub fn new(
+        statute_id: String,
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            source_jurisdiction,
+            target_jurisdiction,
+            costs: Vec::new(),
+            benefits: Vec::new(),
+            total_cost: 0.0,
+            total_benefit: 0.0,
+            net_benefit: 0.0,
+            benefit_cost_ratio: 0.0,
+            payback_period: None,
+            risk_adjustment: RiskAdjustment {
+                discount_factor: 1.0,
+                risks: Vec::new(),
+                scenarios: Vec::new(),
+            },
+        }
+    }
+
+    /// Adds a cost.
+    pub fn add_cost(&mut self, cost: PortingCost) {
+        self.costs.push(cost);
+        self.recalculate();
+    }
+
+    /// Adds a benefit.
+    pub fn add_benefit(&mut self, benefit: PortingBenefit) {
+        self.benefits.push(benefit);
+        self.recalculate();
+    }
+
+    /// Recalculates totals and ratios.
+    fn recalculate(&mut self) {
+        self.total_cost = self.costs.iter().map(|c| c.amount).sum();
+        self.total_benefit = self.benefits.iter().filter_map(|b| b.monetary_value).sum();
+        self.net_benefit = self.total_benefit - self.total_cost;
+        self.benefit_cost_ratio = if self.total_cost > 0.0 {
+            self.total_benefit / self.total_cost
+        } else {
+            0.0
+        };
+
+        // Simple payback period calculation
+        if self.total_benefit > self.total_cost && self.total_benefit > 0.0 {
+            let annual_benefit: f64 = self
+                .benefits
+                .iter()
+                .filter(|b| matches!(b.timeframe, CostTimeframe::Annual))
+                .filter_map(|b| b.monetary_value)
+                .sum();
+            if annual_benefit > 0.0 {
+                self.payback_period = Some(self.total_cost / annual_benefit);
+            }
+        }
+    }
+}
+
+/// Market impact assessment for porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketImpactAssessment {
+    /// Assessment ID
+    pub id: String,
+    /// Statute being assessed
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Affected market sectors
+    pub affected_sectors: Vec<MarketSector>,
+    /// Competitiveness impact
+    pub competitiveness_impact: CompetitivenessImpact,
+    /// Market entry barriers
+    pub entry_barriers: Vec<EntryBarrier>,
+    /// Expected market changes
+    pub market_changes: Vec<MarketChange>,
+    /// Overall market impact score (-1.0 to 1.0)
+    pub impact_score: f64,
+}
+
+/// Market sector affected by porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketSector {
+    /// Sector name
+    pub name: String,
+    /// Sector size (GDP percentage)
+    pub size_percentage: f64,
+    /// Number of businesses affected
+    pub businesses_affected: usize,
+    /// Impact type
+    pub impact_type: ImpactType,
+    /// Impact magnitude (0.0 - 1.0)
+    pub impact_magnitude: f64,
+}
+
+/// Competitiveness impact analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompetitivenessImpact {
+    /// Domestic competitiveness change (-1.0 to 1.0)
+    pub domestic_change: f64,
+    /// International competitiveness change (-1.0 to 1.0)
+    pub international_change: f64,
+    /// Key drivers
+    pub drivers: Vec<String>,
+    /// Affected competitive advantages
+    pub advantages: Vec<String>,
+}
+
+/// Market entry barrier.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntryBarrier {
+    /// Barrier type
+    pub barrier_type: BarrierType,
+    /// Description
+    pub description: String,
+    /// Severity (0.0 - 1.0)
+    pub severity: f64,
+    /// Affected parties
+    pub affected_parties: Vec<String>,
+}
+
+/// Type of market entry barrier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BarrierType {
+    /// Regulatory barrier
+    Regulatory,
+    /// Cost barrier
+    Cost,
+    /// Technical barrier
+    Technical,
+    /// Information barrier
+    Information,
+    /// Cultural barrier
+    Cultural,
+}
+
+/// Expected market change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketChange {
+    /// Change description
+    pub description: String,
+    /// Timeframe
+    pub timeframe: String,
+    /// Probability (0.0 - 1.0)
+    pub probability: f64,
+    /// Impact on market structure
+    pub structural_impact: bool,
+}
+
+impl MarketImpactAssessment {
+    /// Creates a new market impact assessment.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            affected_sectors: Vec::new(),
+            competitiveness_impact: CompetitivenessImpact {
+                domestic_change: 0.0,
+                international_change: 0.0,
+                drivers: Vec::new(),
+                advantages: Vec::new(),
+            },
+            entry_barriers: Vec::new(),
+            market_changes: Vec::new(),
+            impact_score: 0.0,
+        }
+    }
+
+    /// Adds an affected sector.
+    pub fn add_sector(&mut self, sector: MarketSector) {
+        self.affected_sectors.push(sector);
+        self.recalculate_impact();
+    }
+
+    /// Recalculates overall market impact score.
+    fn recalculate_impact(&mut self) {
+        if self.affected_sectors.is_empty() {
+            self.impact_score = 0.0;
+            return;
+        }
+
+        let weighted_impact: f64 = self
+            .affected_sectors
+            .iter()
+            .map(|s| {
+                let magnitude = s.impact_magnitude;
+                let sign = match s.impact_type {
+                    ImpactType::Positive => 1.0,
+                    ImpactType::Negative => -1.0,
+                    ImpactType::Neutral => 0.0,
+                    ImpactType::Mixed => 0.0,
+                };
+                s.size_percentage * magnitude * sign
+            })
+            .sum();
+
+        self.impact_score = weighted_impact.clamp(-1.0, 1.0);
+    }
+}
+
+/// Compliance cost estimation for porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceCostEstimation {
+    /// Estimation ID
+    pub id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Direct compliance costs
+    pub direct_costs: Vec<ComplianceCost>,
+    /// Indirect compliance costs
+    pub indirect_costs: Vec<ComplianceCost>,
+    /// Affected entities
+    pub affected_entities: Vec<AffectedEntity>,
+    /// Total compliance burden
+    pub total_burden: f64,
+    /// Per-entity average cost
+    pub average_cost_per_entity: f64,
+}
+
+/// A compliance cost.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceCost {
+    /// Cost type
+    pub cost_type: ComplianceCostType,
+    /// Description
+    pub description: String,
+    /// Total amount
+    pub amount: f64,
+    /// Frequency
+    pub frequency: CostTimeframe,
+    /// Certainty (0.0 - 1.0)
+    pub certainty: f64,
+}
+
+/// Type of compliance cost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComplianceCostType {
+    /// Administrative costs
+    Administrative,
+    /// Reporting requirements
+    Reporting,
+    /// Audit and verification
+    Audit,
+    /// System modifications
+    Systems,
+    /// Personnel training
+    Training,
+    /// Professional services
+    Professional,
+    /// Opportunity cost
+    Opportunity,
+}
+
+/// Entity affected by compliance requirements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AffectedEntity {
+    /// Entity type
+    pub entity_type: EntityType,
+    /// Number of entities
+    pub count: usize,
+    /// Average compliance cost per entity
+    pub average_cost: f64,
+    /// Capacity to comply
+    pub capacity: ComplianceCapacity,
+}
+
+/// Type of affected entity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntityType {
+    /// Large business
+    LargeBusiness,
+    /// Small/medium enterprise
+    SME,
+    /// Individual
+    Individual,
+    /// Government agency
+    Government,
+    /// Non-profit organization
+    NonProfit,
+}
+
+/// Capacity to comply with requirements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComplianceCapacity {
+    /// High capacity
+    High,
+    /// Moderate capacity
+    Moderate,
+    /// Low capacity
+    Low,
+    /// Insufficient capacity
+    Insufficient,
+}
+
+impl ComplianceCostEstimation {
+    /// Creates a new compliance cost estimation.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            direct_costs: Vec::new(),
+            indirect_costs: Vec::new(),
+            affected_entities: Vec::new(),
+            total_burden: 0.0,
+            average_cost_per_entity: 0.0,
+        }
+    }
+
+    /// Adds a direct cost.
+    pub fn add_direct_cost(&mut self, cost: ComplianceCost) {
+        self.direct_costs.push(cost);
+        self.recalculate();
+    }
+
+    /// Adds an indirect cost.
+    pub fn add_indirect_cost(&mut self, cost: ComplianceCost) {
+        self.indirect_costs.push(cost);
+        self.recalculate();
+    }
+
+    /// Adds an affected entity.
+    pub fn add_affected_entity(&mut self, entity: AffectedEntity) {
+        self.affected_entities.push(entity);
+        self.recalculate();
+    }
+
+    /// Recalculates total burden and averages.
+    fn recalculate(&mut self) {
+        let direct_total: f64 = self.direct_costs.iter().map(|c| c.amount).sum();
+        let indirect_total: f64 = self.indirect_costs.iter().map(|c| c.amount).sum();
+        self.total_burden = direct_total + indirect_total;
+
+        let total_entities: usize = self.affected_entities.iter().map(|e| e.count).sum();
+        self.average_cost_per_entity = if total_entities > 0 {
+            self.total_burden / total_entities as f64
+        } else {
+            0.0
+        };
+    }
+}
+
+/// Business impact report for porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BusinessImpactReport {
+    /// Report ID
+    pub id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Report timestamp
+    pub generated_at: String,
+    /// Executive summary
+    pub executive_summary: String,
+    /// Sector-specific impacts
+    pub sector_impacts: Vec<SectorImpact>,
+    /// Size-specific impacts
+    pub size_impacts: Vec<SizeImpact>,
+    /// Regional impacts
+    pub regional_impacts: Vec<RegionalImpact>,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+    /// Overall business climate impact (-1.0 to 1.0)
+    pub business_climate_score: f64,
+}
+
+/// Impact on a specific business sector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SectorImpact {
+    /// Sector name
+    pub sector: String,
+    /// Impact description
+    pub description: String,
+    /// Jobs impact (net change)
+    pub jobs_impact: i32,
+    /// Revenue impact (percentage change)
+    pub revenue_impact_percent: f64,
+    /// Investment impact
+    pub investment_impact: String,
+}
+
+/// Impact by business size.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SizeImpact {
+    /// Business size category
+    pub size_category: EntityType,
+    /// Compliance burden relative to revenue
+    pub burden_ratio: f64,
+    /// Competitive impact
+    pub competitive_impact: String,
+    /// Survival risk
+    pub survival_risk: RiskLevel,
+}
+
+/// Regional economic impact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionalImpact {
+    /// Region name
+    pub region: String,
+    /// Economic impact description
+    pub description: String,
+    /// GDP impact (percentage)
+    pub gdp_impact_percent: f64,
+    /// Employment impact
+    pub employment_impact: i32,
+}
+
+impl BusinessImpactReport {
+    /// Creates a new business impact report.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            executive_summary: String::new(),
+            sector_impacts: Vec::new(),
+            size_impacts: Vec::new(),
+            regional_impacts: Vec::new(),
+            recommendations: Vec::new(),
+            business_climate_score: 0.0,
+        }
+    }
+
+    /// Generates executive summary.
+    pub fn generate_summary(&mut self) {
+        let sector_count = self.sector_impacts.len();
+        let avg_revenue_impact: f64 = if !self.sector_impacts.is_empty() {
+            self.sector_impacts
+                .iter()
+                .map(|s| s.revenue_impact_percent)
+                .sum::<f64>()
+                / sector_count as f64
+        } else {
+            0.0
+        };
+
+        self.executive_summary = format!(
+            "Business Impact Analysis for statute {}: {} sectors analyzed, average revenue impact {:.1}%, overall business climate score {:.2}",
+            self.statute_id, sector_count, avg_revenue_impact, self.business_climate_score
+        );
+    }
+}
+
+/// Industry consultation integration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndustryConsultation {
+    /// Consultation ID
+    pub id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Industry associations consulted
+    pub associations: Vec<IndustryAssociation>,
+    /// Consultation responses
+    pub responses: Vec<ConsultationResponse>,
+    /// Public hearing IDs
+    pub hearing_ids: Vec<String>,
+    /// Feedback analysis
+    pub feedback_analysis: FeedbackAnalysis,
+}
+
+/// Industry association or business group.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndustryAssociation {
+    /// Association name
+    pub name: String,
+    /// Sector represented
+    pub sector: String,
+    /// Member count
+    pub member_count: usize,
+    /// Contact information
+    pub contact: String,
+    /// Consultation status
+    pub status: ConsultationStatus,
+}
+
+/// Status of consultation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsultationStatus {
+    /// Not yet contacted
+    NotContacted,
+    /// Invited
+    Invited,
+    /// Response received
+    Responded,
+    /// Declined to participate
+    Declined,
+    /// Follow-up needed
+    FollowUpNeeded,
+}
+
+/// Response from industry consultation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsultationResponse {
+    /// Responding organization
+    pub organization: String,
+    /// Response date
+    pub date: String,
+    /// Support level (-1.0 to 1.0)
+    pub support_level: f64,
+    /// Key concerns
+    pub concerns: Vec<String>,
+    /// Suggested modifications
+    pub suggestions: Vec<String>,
+    /// Economic impact claims
+    pub claimed_impacts: Vec<String>,
+}
+
+/// Analysis of consultation feedback.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackAnalysis {
+    /// Total responses received
+    pub response_count: usize,
+    /// Average support level
+    pub average_support: f64,
+    /// Common concerns
+    pub common_concerns: Vec<String>,
+    /// Consensus recommendations
+    pub consensus_recommendations: Vec<String>,
+    /// Divided issues
+    pub divided_issues: Vec<String>,
+}
+
+impl IndustryConsultation {
+    /// Creates a new industry consultation.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            associations: Vec::new(),
+            responses: Vec::new(),
+            hearing_ids: Vec::new(),
+            feedback_analysis: FeedbackAnalysis {
+                response_count: 0,
+                average_support: 0.0,
+                common_concerns: Vec::new(),
+                consensus_recommendations: Vec::new(),
+                divided_issues: Vec::new(),
+            },
+        }
+    }
+
+    /// Adds an industry association.
+    pub fn add_association(&mut self, association: IndustryAssociation) {
+        self.associations.push(association);
+    }
+
+    /// Adds a consultation response.
+    pub fn add_response(&mut self, response: ConsultationResponse) {
+        self.responses.push(response);
+        self.analyze_feedback();
+    }
+
+    /// Analyzes all feedback received.
+    fn analyze_feedback(&mut self) {
+        self.feedback_analysis.response_count = self.responses.len();
+
+        if !self.responses.is_empty() {
+            self.feedback_analysis.average_support =
+                self.responses.iter().map(|r| r.support_level).sum::<f64>()
+                    / self.responses.len() as f64;
+
+            // Collect common concerns (simplified)
+            let mut concern_map: HashMap<String, usize> = HashMap::new();
+            for response in &self.responses {
+                for concern in &response.concerns {
+                    *concern_map.entry(concern.clone()).or_insert(0) += 1;
+                }
+            }
+
+            self.feedback_analysis.common_concerns = concern_map
+                .into_iter()
+                .filter(|(_, count)| *count >= 2)
+                .map(|(concern, _)| concern)
+                .collect();
+        }
+    }
 }
 
 // ============================================================================
@@ -16373,6 +17920,746 @@ mod tests {
         // US: 18, JP: 14
         assert_eq!(us_criminal.unwrap().minimum_age, 18);
         assert_eq!(jp_criminal.unwrap().minimum_age, 14);
+    }
+
+    // ========================================================================
+    // Cultural Adaptation v0.2.7 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_cultural_context_analysis_creation() {
+        let mut analysis = CulturalContextAnalysis::new(String::from("US"));
+
+        assert_eq!(analysis.jurisdiction, "US");
+        assert_eq!(analysis.social_norms.len(), 0);
+        assert_eq!(analysis.power_distance, 0.5);
+        assert_eq!(analysis.individualism_score, 0.0);
+
+        let norm = SocialNorm {
+            description: "Individual freedom valued".to_string(),
+            category: NormCategory::Public,
+            strength: 0.9,
+            legally_recognized: true,
+        };
+        analysis.add_norm(norm);
+        assert_eq!(analysis.social_norms.len(), 1);
+    }
+
+    #[test]
+    fn test_cultural_context_compatibility() {
+        let mut us_context = CulturalContextAnalysis::new(String::from("US"));
+        us_context.power_distance = 0.4;
+        us_context.individualism_score = 0.9;
+        us_context.uncertainty_avoidance = 0.5;
+        us_context.time_orientation = 0.3;
+
+        let mut jp_context = CulturalContextAnalysis::new(String::from("JP"));
+        jp_context.power_distance = 0.6;
+        jp_context.individualism_score = -0.3;
+        jp_context.uncertainty_avoidance = 0.8;
+        jp_context.time_orientation = 0.7;
+
+        let compatibility = us_context.assess_compatibility(&jp_context);
+        assert!(compatibility >= 0.0 && compatibility <= 1.0);
+        // Different cultural dimensions should result in lower compatibility
+        assert!(compatibility < 0.8);
+    }
+
+    #[test]
+    fn test_cultural_context_historical_factors() {
+        let mut analysis = CulturalContextAnalysis::new(String::from("US"));
+
+        let factor = HistoricalFactor {
+            description: "Common law tradition from English colonial period".to_string(),
+            period: "1600-1776".to_string(),
+            impact: 0.9,
+            legal_principles: vec!["Stare decisis".to_string(), "Jury trials".to_string()],
+        };
+        analysis.add_historical_factor(factor);
+
+        assert_eq!(analysis.historical_context.len(), 1);
+        assert_eq!(analysis.historical_context[0].impact, 0.9);
+    }
+
+    #[test]
+    fn test_cultural_trends() {
+        let mut analysis = CulturalContextAnalysis::new(String::from("US"));
+
+        let trend = CulturalTrend {
+            description: "Increasing acceptance of same-sex marriage".to_string(),
+            direction: 1.0,
+            velocity: 0.7,
+            legal_status: TrendLegalStatus::Codified,
+        };
+        analysis.add_trend(trend);
+
+        assert_eq!(analysis.cultural_trends.len(), 1);
+        assert_eq!(
+            analysis.cultural_trends[0].legal_status,
+            TrendLegalStatus::Codified
+        );
+    }
+
+    #[test]
+    fn test_local_practice_integration() {
+        let mut integration = LocalPracticeIntegration::new(String::from("US"));
+
+        let practice = LocalPractice {
+            name: "Handshake agreements".to_string(),
+            description: "Verbal contracts sealed with handshake".to_string(),
+            practice_type: PracticeType::Contract,
+            geographic_scope: GeographicScope::Regional("Rural areas".to_string()),
+            prevalence: 0.75,
+            legal_status: PracticeLegalStatus::Tolerated,
+            conflicts_with_law: false,
+            related_statutes: vec![],
+        };
+
+        integration.add_practice(practice);
+        assert_eq!(integration.practices.len(), 1);
+        assert_eq!(integration.practices[0].prevalence, 0.75);
+    }
+
+    #[test]
+    fn test_local_practice_recommendations() {
+        let mut integration = LocalPracticeIntegration::new(String::from("US"));
+
+        let practice = LocalPractice {
+            name: "Community mediation".to_string(),
+            description: "Local elders mediate disputes".to_string(),
+            practice_type: PracticeType::DisputeResolution,
+            geographic_scope: GeographicScope::Community("Tribal community".to_string()),
+            prevalence: 0.85,
+            legal_status: PracticeLegalStatus::Tolerated,
+            conflicts_with_law: false,
+            related_statutes: vec![],
+        };
+
+        integration.add_practice(practice);
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+        integration.generate_recommendations(&statute);
+
+        // High prevalence tolerated practice should generate recommendation
+        assert!(!integration.recommendations.is_empty());
+        assert_eq!(
+            integration.recommendations[0].recommendation_type,
+            RecommendationType::Codify
+        );
+    }
+
+    #[test]
+    fn test_geographic_scope_variants() {
+        let national = GeographicScope::National;
+        let regional = GeographicScope::Regional("Midwest".to_string());
+        let local = GeographicScope::Local("Chicago".to_string());
+        let _community = GeographicScope::Community("Amish".to_string());
+
+        assert_eq!(national, GeographicScope::National);
+        assert_ne!(regional, local);
+    }
+
+    #[test]
+    fn test_customary_law_consideration() {
+        let mut consideration = CustomaryLawConsideration::new(String::from("NZ"));
+
+        let customary = CustomaryLaw {
+            name: "Maori fishing rights".to_string(),
+            description: "Traditional fishing grounds reserved".to_string(),
+            subject: CustomarySubject::Fishing,
+            age_years: 800,
+            geographic_scope: GeographicScope::Regional("Coastal areas".to_string()),
+            recognition: CustomaryRecognition::Incorporated,
+            binding_force: 0.9,
+            modern_compatibility: 0.85,
+        };
+
+        consideration.add_customary_law(customary);
+        assert_eq!(consideration.customary_laws.len(), 1);
+        assert_eq!(
+            consideration.customary_laws[0].subject,
+            CustomarySubject::Fishing
+        );
+    }
+
+    #[test]
+    fn test_customary_statutory_interaction() {
+        let mut consideration = CustomaryLawConsideration::new(String::from("NZ"));
+
+        let customary = CustomaryLaw {
+            name: "Traditional land use".to_string(),
+            description: "Customary land rights".to_string(),
+            subject: CustomarySubject::Land,
+            age_years: 1000,
+            geographic_scope: GeographicScope::National,
+            recognition: CustomaryRecognition::Incorporated,
+            binding_force: 0.95,
+            modern_compatibility: 0.9,
+        };
+
+        let statute = Statute::new(
+            "land-statute",
+            "Land Act",
+            Effect::new(EffectType::Grant, "Property rights"),
+        );
+        let interaction_type = consideration.analyze_interaction(&statute, &customary);
+
+        // With high modern_compatibility (0.9 > 0.8), the interaction is Harmonious
+        assert_eq!(interaction_type, InteractionType::Harmonious);
+        assert_eq!(consideration.interactions.len(), 1);
+    }
+
+    #[test]
+    fn test_customary_recognition_levels() {
+        let incorporated = CustomaryRecognition::Incorporated;
+        let supplementary = CustomaryRecognition::Supplementary;
+        let _acknowledged = CustomaryRecognition::Acknowledged;
+        let _informal = CustomaryRecognition::Informal;
+        let unrecognized = CustomaryRecognition::Unrecognized;
+
+        assert_eq!(incorporated, CustomaryRecognition::Incorporated);
+        assert_ne!(supplementary, unrecognized);
+    }
+
+    #[test]
+    fn test_religious_law_compatibility() {
+        let mut compatibility = ReligiousLawCompatibility::new(String::from("IL"));
+
+        let system = ReligiousLawSystem {
+            name: "Halakha".to_string(),
+            religion: Religion::Judaism,
+            legal_status: ReligiousLegalStatus::PersonalStatus,
+            population_percentage: 75.0,
+            subject_matters: vec![ReligiousSubject::Marriage, ReligiousSubject::Divorce],
+            civil_interaction: CivilReligiousInteraction::DualSystem,
+        };
+
+        compatibility.add_religious_system(system);
+        assert_eq!(compatibility.religious_systems.len(), 1);
+        assert_eq!(
+            compatibility.religious_systems[0].religion,
+            Religion::Judaism
+        );
+    }
+
+    #[test]
+    fn test_religious_compatibility_assessment() {
+        let mut compatibility = ReligiousLawCompatibility::new(String::from("IL"));
+
+        let system = ReligiousLawSystem {
+            name: "Jewish Law".to_string(),
+            religion: Religion::Judaism,
+            legal_status: ReligiousLegalStatus::PersonalStatus,
+            population_percentage: 75.0,
+            subject_matters: vec![ReligiousSubject::Marriage],
+            civil_interaction: CivilReligiousInteraction::DualSystem,
+        };
+
+        compatibility.add_religious_system(system);
+        let statute = Statute::new(
+            "marriage-law",
+            "Marriage Act",
+            Effect::new(EffectType::Grant, "Marriage rights"),
+        );
+        compatibility.assess_compatibility(&statute);
+
+        assert_eq!(compatibility.assessments.len(), 1);
+        assert!(compatibility.assessments[0].compatibility_score > 0.0);
+        assert!(!compatibility.assessments[0].accommodations.is_empty());
+    }
+
+    #[test]
+    fn test_religion_types() {
+        let islam = Religion::Islam;
+        let judaism = Religion::Judaism;
+        let _hinduism = Religion::Hinduism;
+        let _catholicism = Religion::Catholicism;
+        let buddhism = Religion::Buddhism;
+        let _other = Religion::Other;
+
+        assert_eq!(islam, Religion::Islam);
+        assert_ne!(judaism, buddhism);
+    }
+
+    #[test]
+    fn test_civil_religious_interaction_types() {
+        let separated = CivilReligiousInteraction::Separated;
+        let dual = CivilReligiousInteraction::DualSystem;
+
+        assert_eq!(separated, CivilReligiousInteraction::Separated);
+        assert_ne!(separated, dual);
+    }
+
+    #[test]
+    fn test_indigenous_rights_assessment() {
+        let mut assessment = IndigenousRightsAssessment::new(String::from("CA"));
+
+        let people = IndigenousPeople {
+            name: "First Nations".to_string(),
+            population: 1_500_000,
+            territories: vec!["British Columbia".to_string(), "Alberta".to_string()],
+            recognition_status: IndigenousRecognition::TreatyRecognized,
+            self_governance: GovernanceLevel::Autonomous,
+        };
+
+        assessment.add_people(people);
+        assert_eq!(assessment.indigenous_peoples.len(), 1);
+        assert_eq!(assessment.indigenous_peoples[0].population, 1_500_000);
+    }
+
+    #[test]
+    fn test_indigenous_rights() {
+        let mut assessment = IndigenousRightsAssessment::new(String::from("CA"));
+
+        let right = IndigenousRight {
+            description: "Right to self-determination".to_string(),
+            category: IndigenousRightCategory::SelfDetermination,
+            legal_basis: vec![
+                "UNDRIP Article 3".to_string(),
+                "Constitution Act 1982".to_string(),
+            ],
+            geographic_scope: Some(vec!["National".to_string()]),
+            limitations: vec![],
+        };
+
+        assessment.add_right(right);
+        assert_eq!(assessment.recognized_rights.len(), 1);
+        assert_eq!(
+            assessment.recognized_rights[0].category,
+            IndigenousRightCategory::SelfDetermination
+        );
+    }
+
+    #[test]
+    fn test_indigenous_impact_assessment() {
+        let mut assessment = IndigenousRightsAssessment::new(String::from("CA"));
+
+        let people = IndigenousPeople {
+            name: "Inuit".to_string(),
+            population: 65_000,
+            territories: vec!["Nunavut".to_string()],
+            recognition_status: IndigenousRecognition::ConstitutionallyRecognized,
+            self_governance: GovernanceLevel::Autonomous,
+        };
+
+        assessment.add_people(people);
+        let statute = Statute::new(
+            "resource-law",
+            "Resource Development Act",
+            Effect::new(EffectType::Prohibition, "Land use"),
+        );
+        let impact_score = assessment.assess_impact(&statute);
+
+        assert!(impact_score >= -1.0 && impact_score <= 1.0);
+        assert_eq!(assessment.impact_assessments.len(), 1);
+        assert!(
+            !assessment.impact_assessments[0]
+                .mitigation_measures
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_indigenous_consultation_requirements() {
+        let mut assessment = IndigenousRightsAssessment::new(String::from("CA"));
+
+        let people = IndigenousPeople {
+            name: "Métis".to_string(),
+            population: 587_000,
+            territories: vec!["Manitoba".to_string()],
+            recognition_status: IndigenousRecognition::ConstitutionallyRecognized,
+            self_governance: GovernanceLevel::Limited,
+        };
+
+        assessment.add_people(people);
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Rights"));
+        assessment.assess_impact(&statute);
+
+        // Initially, consultation requirements should not be met
+        assert!(!assessment.check_consultation_requirements());
+    }
+
+    #[test]
+    fn test_indigenous_right_categories() {
+        let land = IndigenousRightCategory::Land;
+        let culture = IndigenousRightCategory::Culture;
+        let language = IndigenousRightCategory::Language;
+        let _resources = IndigenousRightCategory::Resources;
+
+        assert_eq!(land, IndigenousRightCategory::Land);
+        assert_ne!(culture, language);
+    }
+
+    #[test]
+    fn test_governance_levels() {
+        let sovereign = GovernanceLevel::Sovereign;
+        let autonomous = GovernanceLevel::Autonomous;
+        let _limited = GovernanceLevel::Limited;
+        let _consultation = GovernanceLevel::Consultation;
+        let none = GovernanceLevel::None;
+
+        assert_eq!(sovereign, GovernanceLevel::Sovereign);
+        assert_ne!(autonomous, none);
+    }
+
+    #[test]
+    fn test_impact_type_classifications() {
+        let positive = ImpactType::Positive;
+        let neutral = ImpactType::Neutral;
+        let negative = ImpactType::Negative;
+        let _mixed = ImpactType::Mixed;
+
+        assert_eq!(positive, ImpactType::Positive);
+        assert_ne!(neutral, negative);
+    }
+
+    // ========================================================================
+    // Economic Impact Analysis v0.2.8 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_cost_benefit_projection_creation() {
+        let projection = CostBenefitProjection::new(
+            "test-statute".to_string(),
+            "US".to_string(),
+            "JP".to_string(),
+        );
+
+        assert_eq!(projection.statute_id, "test-statute");
+        assert_eq!(projection.source_jurisdiction, "US");
+        assert_eq!(projection.target_jurisdiction, "JP");
+        assert_eq!(projection.total_cost, 0.0);
+        assert_eq!(projection.total_benefit, 0.0);
+        assert_eq!(projection.net_benefit, 0.0);
+    }
+
+    #[test]
+    fn test_cost_benefit_with_costs_and_benefits() {
+        let mut projection =
+            CostBenefitProjection::new("test".to_string(), "US".to_string(), "JP".to_string());
+
+        let cost = PortingCost {
+            category: CostCategory::Legal,
+            description: "Legal review".to_string(),
+            amount: 50000.0,
+            timeframe: CostTimeframe::OneTime,
+            certainty: 0.9,
+        };
+
+        let benefit = PortingBenefit {
+            category: BenefitCategory::Economic,
+            description: "Trade facilitation".to_string(),
+            monetary_value: Some(200000.0),
+            qualitative_value: "Enhanced business environment".to_string(),
+            timeframe: CostTimeframe::Annual,
+            certainty: 0.8,
+        };
+
+        projection.add_cost(cost);
+        projection.add_benefit(benefit);
+
+        assert_eq!(projection.total_cost, 50000.0);
+        assert_eq!(projection.total_benefit, 200000.0);
+        assert_eq!(projection.net_benefit, 150000.0);
+        assert_eq!(projection.benefit_cost_ratio, 4.0);
+        assert!(projection.payback_period.is_some());
+    }
+
+    #[test]
+    fn test_cost_categories() {
+        let legal = CostCategory::Legal;
+        let translation = CostCategory::Translation;
+        let consultation = CostCategory::Consultation;
+
+        assert_eq!(legal, CostCategory::Legal);
+        assert_ne!(translation, consultation);
+    }
+
+    #[test]
+    fn test_cost_timeframe_variants() {
+        let one_time = CostTimeframe::OneTime;
+        let annual = CostTimeframe::Annual;
+        let multi_year = CostTimeframe::MultiYear(5);
+
+        assert_eq!(one_time, CostTimeframe::OneTime);
+        assert_eq!(annual, CostTimeframe::Annual);
+        assert_eq!(multi_year, CostTimeframe::MultiYear(5));
+    }
+
+    #[test]
+    fn test_benefit_categories() {
+        let economic = BenefitCategory::Economic;
+        let social = BenefitCategory::Social;
+        let legal = BenefitCategory::Legal;
+
+        assert_eq!(economic, BenefitCategory::Economic);
+        assert_ne!(social, legal);
+    }
+
+    #[test]
+    fn test_market_impact_assessment() {
+        let mut assessment =
+            MarketImpactAssessment::new("test-statute".to_string(), "US".to_string());
+
+        assert_eq!(assessment.statute_id, "test-statute");
+        assert_eq!(assessment.jurisdiction, "US");
+        assert_eq!(assessment.impact_score, 0.0);
+        assert_eq!(assessment.affected_sectors.len(), 0);
+    }
+
+    #[test]
+    fn test_market_sector_impact() {
+        let mut assessment = MarketImpactAssessment::new("test".to_string(), "US".to_string());
+
+        let sector = MarketSector {
+            name: "Technology".to_string(),
+            size_percentage: 15.0,
+            businesses_affected: 5000,
+            impact_type: ImpactType::Positive,
+            impact_magnitude: 0.7,
+        };
+
+        assessment.add_sector(sector);
+
+        assert_eq!(assessment.affected_sectors.len(), 1);
+        assert!(assessment.impact_score > 0.0); // Positive impact
+    }
+
+    #[test]
+    fn test_market_impact_score_calculation() {
+        let mut assessment = MarketImpactAssessment::new("test".to_string(), "US".to_string());
+
+        let positive_sector = MarketSector {
+            name: "Tech".to_string(),
+            size_percentage: 10.0,
+            businesses_affected: 1000,
+            impact_type: ImpactType::Positive,
+            impact_magnitude: 0.8,
+        };
+
+        let negative_sector = MarketSector {
+            name: "Traditional".to_string(),
+            size_percentage: 5.0,
+            businesses_affected: 500,
+            impact_type: ImpactType::Negative,
+            impact_magnitude: 0.6,
+        };
+
+        assessment.add_sector(positive_sector);
+        assessment.add_sector(negative_sector);
+
+        // Net impact should be positive (10*0.8 - 5*0.6 = 8.0 - 3.0 = 5.0)
+        assert!(assessment.impact_score > 0.0);
+    }
+
+    #[test]
+    fn test_barrier_types() {
+        let regulatory = BarrierType::Regulatory;
+        let cost = BarrierType::Cost;
+        let technical = BarrierType::Technical;
+
+        assert_eq!(regulatory, BarrierType::Regulatory);
+        assert_ne!(cost, technical);
+    }
+
+    #[test]
+    fn test_compliance_cost_estimation() {
+        let mut estimation =
+            ComplianceCostEstimation::new("test-statute".to_string(), "US".to_string());
+
+        assert_eq!(estimation.statute_id, "test-statute");
+        assert_eq!(estimation.total_burden, 0.0);
+        assert_eq!(estimation.average_cost_per_entity, 0.0);
+    }
+
+    #[test]
+    fn test_compliance_cost_calculation() {
+        let mut estimation = ComplianceCostEstimation::new("test".to_string(), "US".to_string());
+
+        let direct_cost = ComplianceCost {
+            cost_type: ComplianceCostType::Administrative,
+            description: "Form filing".to_string(),
+            amount: 10000.0,
+            frequency: CostTimeframe::Annual,
+            certainty: 0.95,
+        };
+
+        let indirect_cost = ComplianceCost {
+            cost_type: ComplianceCostType::Opportunity,
+            description: "Time spent on compliance".to_string(),
+            amount: 5000.0,
+            frequency: CostTimeframe::Annual,
+            certainty: 0.7,
+        };
+
+        let entity = AffectedEntity {
+            entity_type: EntityType::SME,
+            count: 100,
+            average_cost: 150.0,
+            capacity: ComplianceCapacity::Moderate,
+        };
+
+        estimation.add_direct_cost(direct_cost);
+        estimation.add_indirect_cost(indirect_cost);
+        estimation.add_affected_entity(entity);
+
+        assert_eq!(estimation.total_burden, 15000.0);
+        assert_eq!(estimation.average_cost_per_entity, 150.0);
+    }
+
+    #[test]
+    fn test_compliance_cost_types() {
+        let admin = ComplianceCostType::Administrative;
+        let reporting = ComplianceCostType::Reporting;
+        let audit = ComplianceCostType::Audit;
+
+        assert_eq!(admin, ComplianceCostType::Administrative);
+        assert_ne!(reporting, audit);
+    }
+
+    #[test]
+    fn test_entity_types() {
+        let large = EntityType::LargeBusiness;
+        let sme = EntityType::SME;
+        let individual = EntityType::Individual;
+
+        assert_eq!(large, EntityType::LargeBusiness);
+        assert_ne!(sme, individual);
+    }
+
+    #[test]
+    fn test_compliance_capacity_levels() {
+        let high = ComplianceCapacity::High;
+        let moderate = ComplianceCapacity::Moderate;
+        let low = ComplianceCapacity::Low;
+        let insufficient = ComplianceCapacity::Insufficient;
+
+        assert_eq!(high, ComplianceCapacity::High);
+        assert_ne!(moderate, insufficient);
+    }
+
+    #[test]
+    fn test_business_impact_report_creation() {
+        let report = BusinessImpactReport::new("test-statute".to_string(), "US".to_string());
+
+        assert_eq!(report.statute_id, "test-statute");
+        assert_eq!(report.jurisdiction, "US");
+        assert_eq!(report.business_climate_score, 0.0);
+        assert!(report.executive_summary.is_empty());
+    }
+
+    #[test]
+    fn test_business_impact_summary_generation() {
+        let mut report = BusinessImpactReport::new("test".to_string(), "US".to_string());
+
+        report.sector_impacts.push(SectorImpact {
+            sector: "Tech".to_string(),
+            description: "Positive impact".to_string(),
+            jobs_impact: 100,
+            revenue_impact_percent: 5.0,
+            investment_impact: "Increased".to_string(),
+        });
+
+        report.sector_impacts.push(SectorImpact {
+            sector: "Manufacturing".to_string(),
+            description: "Moderate impact".to_string(),
+            jobs_impact: -20,
+            revenue_impact_percent: -2.0,
+            investment_impact: "Stable".to_string(),
+        });
+
+        report.business_climate_score = 0.6;
+        report.generate_summary();
+
+        assert!(!report.executive_summary.is_empty());
+        assert!(report.executive_summary.contains("2 sectors"));
+    }
+
+    #[test]
+    fn test_risk_level_with_negligible() {
+        let negligible = RiskLevel::Negligible;
+        let low = RiskLevel::Low;
+        let medium = RiskLevel::Medium;
+        let high = RiskLevel::High;
+        let critical = RiskLevel::Critical;
+
+        assert_eq!(negligible, RiskLevel::Negligible);
+        assert_ne!(low, high);
+        assert_eq!(critical, RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_industry_consultation_creation() {
+        let consultation = IndustryConsultation::new("test-statute".to_string(), "US".to_string());
+
+        assert_eq!(consultation.statute_id, "test-statute");
+        assert_eq!(consultation.jurisdiction, "US");
+        assert_eq!(consultation.associations.len(), 0);
+        assert_eq!(consultation.responses.len(), 0);
+        assert_eq!(consultation.feedback_analysis.response_count, 0);
+    }
+
+    #[test]
+    fn test_industry_association_management() {
+        let mut consultation = IndustryConsultation::new("test".to_string(), "US".to_string());
+
+        let association = IndustryAssociation {
+            name: "Tech Industry Association".to_string(),
+            sector: "Technology".to_string(),
+            member_count: 500,
+            contact: "contact@example.com".to_string(),
+            status: ConsultationStatus::Invited,
+        };
+
+        consultation.add_association(association);
+
+        assert_eq!(consultation.associations.len(), 1);
+        assert_eq!(
+            consultation.associations[0].name,
+            "Tech Industry Association"
+        );
+    }
+
+    #[test]
+    fn test_consultation_response_analysis() {
+        let mut consultation = IndustryConsultation::new("test".to_string(), "US".to_string());
+
+        let response1 = ConsultationResponse {
+            organization: "Org1".to_string(),
+            date: "2024-01-01".to_string(),
+            support_level: 0.8,
+            concerns: vec!["Cost".to_string(), "Timeline".to_string()],
+            suggestions: vec!["Phase implementation".to_string()],
+            claimed_impacts: vec!["10% cost increase".to_string()],
+        };
+
+        let response2 = ConsultationResponse {
+            organization: "Org2".to_string(),
+            date: "2024-01-02".to_string(),
+            support_level: 0.6,
+            concerns: vec!["Cost".to_string()],
+            suggestions: vec![],
+            claimed_impacts: vec![],
+        };
+
+        consultation.add_response(response1);
+        consultation.add_response(response2);
+
+        assert_eq!(consultation.feedback_analysis.response_count, 2);
+        assert_eq!(consultation.feedback_analysis.average_support, 0.7);
+        // "Cost" appears twice, so it should be in common_concerns
+        assert!(!consultation.feedback_analysis.common_concerns.is_empty());
+    }
+
+    #[test]
+    fn test_consultation_status_variants() {
+        let not_contacted = ConsultationStatus::NotContacted;
+        let invited = ConsultationStatus::Invited;
+        let responded = ConsultationStatus::Responded;
+        let declined = ConsultationStatus::Declined;
+
+        assert_eq!(not_contacted, ConsultationStatus::NotContacted);
+        assert_ne!(invited, responded);
+        assert_eq!(declined, ConsultationStatus::Declined);
     }
 
     // Validation Framework Tests (v0.1.6)

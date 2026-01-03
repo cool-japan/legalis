@@ -153,6 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             r.severity, r.category, r.description
         );
         let likelihood_pct = match r.likelihood {
+            legalis_porting::RiskLevel::Negligible => 10.0,
             legalis_porting::RiskLevel::Low => 25.0,
             legalis_porting::RiskLevel::Medium => 50.0,
             legalis_porting::RiskLevel::High => 75.0,

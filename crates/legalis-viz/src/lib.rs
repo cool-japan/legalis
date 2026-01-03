@@ -14796,7 +14796,7 @@ impl GuidedExplorationTour {
         html.push_str("});\n");
 
         if self.auto_advance {
-            html.push_str(&format!("setInterval(() => {{\n"));
+            html.push_str("setInterval(() => {\n");
             html.push_str("    if (currentStop < stops.length - 1) {\n");
             html.push_str("        currentStop++;\n");
             html.push_str("        updateTour();\n");
@@ -15785,6 +15785,411 @@ impl HolographicGestureController {
 impl Default for HolographicGestureController {
     fn default() -> Self {
         Self::new("Gesture-Controlled Holographic Visualization")
+    }
+}
+
+// ============================================================================
+// Cross-Jurisdictional Comparison (v0.4.0)
+// ============================================================================
+
+/// Represents a statute with jurisdiction information for comparison.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JurisdictionalStatute {
+    /// The jurisdiction code (e.g., "US", "JP", "DE", "FR")
+    pub jurisdiction: String,
+    /// The jurisdiction's full name
+    pub jurisdiction_name: String,
+    /// The statute being compared
+    pub statute: Statute,
+    /// Additional metadata
+    pub metadata: HashMap<String, String>,
+}
+
+impl JurisdictionalStatute {
+    /// Creates a new jurisdictional statute.
+    pub fn new(jurisdiction: &str, jurisdiction_name: &str, statute: Statute) -> Self {
+        Self {
+            jurisdiction: jurisdiction.to_string(),
+            jurisdiction_name: jurisdiction_name.to_string(),
+            statute,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Adds metadata to the jurisdictional statute.
+    pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
+        self.metadata.insert(key.to_string(), value.to_string());
+        self
+    }
+}
+
+/// Represents a difference between jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JurisdictionalDifference {
+    /// The aspect being compared (e.g., "eligibility", "age_requirement")
+    pub aspect: String,
+    /// Description of the difference
+    pub description: String,
+    /// Values for each jurisdiction
+    pub values: HashMap<String, String>,
+    /// Severity of the difference (0.0 = minor, 1.0 = major)
+    pub severity: f64,
+}
+
+impl JurisdictionalDifference {
+    /// Creates a new jurisdictional difference.
+    pub fn new(aspect: &str, description: &str) -> Self {
+        Self {
+            aspect: aspect.to_string(),
+            description: description.to_string(),
+            values: HashMap::new(),
+            severity: 0.5,
+        }
+    }
+
+    /// Adds a jurisdiction's value for this difference.
+    pub fn with_value(mut self, jurisdiction: &str, value: &str) -> Self {
+        self.values
+            .insert(jurisdiction.to_string(), value.to_string());
+        self
+    }
+
+    /// Sets the severity level.
+    pub fn with_severity(mut self, severity: f64) -> Self {
+        self.severity = severity.clamp(0.0, 1.0);
+        self
+    }
+}
+
+/// Side-by-side statute comparison across jurisdictions.
+#[derive(Debug, Clone)]
+pub struct CrossJurisdictionalComparison {
+    /// Title of the comparison
+    pub title: String,
+    /// Statutes being compared
+    pub statutes: Vec<JurisdictionalStatute>,
+    /// Identified differences
+    pub differences: Vec<JurisdictionalDifference>,
+    /// Theme for visualization
+    pub theme: Theme,
+    /// Enable synchronized navigation
+    pub synchronized_nav: bool,
+}
+
+impl CrossJurisdictionalComparison {
+    /// Creates a new cross-jurisdictional comparison.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            statutes: Vec::new(),
+            differences: Vec::new(),
+            theme: Theme::light(),
+            synchronized_nav: true,
+        }
+    }
+
+    /// Adds a statute for comparison.
+    pub fn add_statute(&mut self, statute: JurisdictionalStatute) {
+        self.statutes.push(statute);
+    }
+
+    /// Adds a difference between jurisdictions.
+    pub fn add_difference(&mut self, difference: JurisdictionalDifference) {
+        self.differences.push(difference);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Enables or disables synchronized navigation.
+    pub fn with_synchronized_nav(mut self, enabled: bool) -> Self {
+        self.synchronized_nav = enabled;
+        self
+    }
+
+    /// Generates side-by-side HTML comparison.
+    pub fn to_side_by_side_html(&self) -> String {
+        let mut html = String::new();
+
+        // HTML header
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str("        body {\n");
+        html.push_str(&format!(
+            "            background-color: {};\n",
+            self.theme.background_color
+        ));
+        html.push_str(&format!("            color: {};\n", self.theme.text_color));
+        html.push_str("            font-family: 'Segoe UI', Arial, sans-serif;\n");
+        html.push_str("            margin: 0; padding: 20px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .comparison-container {\n");
+        html.push_str("            display: flex;\n");
+        html.push_str("            gap: 20px;\n");
+        html.push_str("            margin-bottom: 30px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .jurisdiction-column {\n");
+        html.push_str("            flex: 1;\n");
+        html.push_str("            border: 2px solid #ccc;\n");
+        html.push_str("            border-radius: 8px;\n");
+        html.push_str("            padding: 15px;\n");
+        html.push_str("            overflow-y: auto;\n");
+        html.push_str("            max-height: 600px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .jurisdiction-header {\n");
+        html.push_str("            font-size: 1.5em;\n");
+        html.push_str("            font-weight: bold;\n");
+        html.push_str("            margin-bottom: 10px;\n");
+        html.push_str("            padding-bottom: 10px;\n");
+        html.push_str("            border-bottom: 2px solid #666;\n");
+        html.push_str("        }\n");
+        html.push_str("        .statute-content {\n");
+        html.push_str("            line-height: 1.6;\n");
+        html.push_str("        }\n");
+        html.push_str("        .differences-section {\n");
+        html.push_str("            margin-top: 30px;\n");
+        html.push_str("            padding: 20px;\n");
+        html.push_str("            background-color: rgba(255, 200, 0, 0.1);\n");
+        html.push_str("            border-radius: 8px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .difference-item {\n");
+        html.push_str("            margin-bottom: 20px;\n");
+        html.push_str("            padding: 15px;\n");
+        html.push_str("            background-color: rgba(255, 255, 255, 0.05);\n");
+        html.push_str("            border-left: 4px solid;\n");
+        html.push_str("            border-radius: 4px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .difference-minor { border-left-color: #4caf50; }\n");
+        html.push_str("        .difference-moderate { border-left-color: #ff9800; }\n");
+        html.push_str("        .difference-major { border-left-color: #f44336; }\n");
+        html.push_str("        .difference-aspect {\n");
+        html.push_str("            font-weight: bold;\n");
+        html.push_str("            font-size: 1.1em;\n");
+        html.push_str("            margin-bottom: 5px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .difference-values {\n");
+        html.push_str("            display: flex;\n");
+        html.push_str("            gap: 15px;\n");
+        html.push_str("            flex-wrap: wrap;\n");
+        html.push_str("            margin-top: 10px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .difference-value {\n");
+        html.push_str("            padding: 5px 10px;\n");
+        html.push_str("            background-color: rgba(100, 100, 100, 0.2);\n");
+        html.push_str("            border-radius: 4px;\n");
+        html.push_str("        }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        // Title
+        html.push_str(&format!("    <h1>{}</h1>\n", self.title));
+
+        // Side-by-side comparison
+        html.push_str("    <div class=\"comparison-container\">\n");
+        for statute in &self.statutes {
+            html.push_str("        <div class=\"jurisdiction-column\">\n");
+            html.push_str(&format!(
+                "            <div class=\"jurisdiction-header\">{} ({})</div>\n",
+                statute.jurisdiction_name, statute.jurisdiction
+            ));
+            html.push_str("            <div class=\"statute-content\">\n");
+            html.push_str(&format!(
+                "                <strong>ID:</strong> {}<br>\n",
+                statute.statute.id
+            ));
+            html.push_str(&format!(
+                "                <strong>Title:</strong> {}<br>\n",
+                statute.statute.title
+            ));
+            html.push_str(&format!(
+                "                <strong>Effect:</strong> {}<br>\n",
+                statute.statute.effect.description
+            ));
+
+            // Metadata
+            if !statute.metadata.is_empty() {
+                html.push_str("                <br><strong>Additional Information:</strong><br>\n");
+                for (key, value) in &statute.metadata {
+                    html.push_str(&format!(
+                        "                <em>{}:</em> {}<br>\n",
+                        key, value
+                    ));
+                }
+            }
+
+            html.push_str("            </div>\n");
+            html.push_str("        </div>\n");
+        }
+        html.push_str("    </div>\n");
+
+        // Differences section
+        if !self.differences.is_empty() {
+            html.push_str("    <div class=\"differences-section\">\n");
+            html.push_str("        <h2>Key Differences</h2>\n");
+
+            for diff in &self.differences {
+                let severity_class = if diff.severity < 0.33 {
+                    "difference-minor"
+                } else if diff.severity < 0.67 {
+                    "difference-moderate"
+                } else {
+                    "difference-major"
+                };
+
+                html.push_str(&format!(
+                    "        <div class=\"difference-item {}\">\n",
+                    severity_class
+                ));
+                html.push_str(&format!(
+                    "            <div class=\"difference-aspect\">{}</div>\n",
+                    diff.aspect
+                ));
+                html.push_str(&format!("            <div>{}</div>\n", diff.description));
+                html.push_str("            <div class=\"difference-values\">\n");
+
+                for (jurisdiction, value) in &diff.values {
+                    html.push_str(&format!(
+                        "                <div class=\"difference-value\"><strong>{}:</strong> {}</div>\n",
+                        jurisdiction, value
+                    ));
+                }
+
+                html.push_str("            </div>\n");
+                html.push_str("        </div>\n");
+            }
+
+            html.push_str("    </div>\n");
+        }
+
+        // Synchronized navigation script
+        if self.synchronized_nav {
+            html.push_str("    <script>\n");
+            html.push_str(
+                "        const columns = document.querySelectorAll('.jurisdiction-column');\n",
+            );
+            html.push_str("        columns.forEach(col => {\n");
+            html.push_str("            col.addEventListener('scroll', (e) => {\n");
+            html.push_str("                const scrollRatio = e.target.scrollTop / (e.target.scrollHeight - e.target.clientHeight);\n");
+            html.push_str("                columns.forEach(otherCol => {\n");
+            html.push_str("                    if (otherCol !== e.target) {\n");
+            html.push_str("                        otherCol.scrollTop = scrollRatio * (otherCol.scrollHeight - otherCol.clientHeight);\n");
+            html.push_str("                    }\n");
+            html.push_str("                });\n");
+            html.push_str("            });\n");
+            html.push_str("        });\n");
+            html.push_str("    </script>\n");
+        }
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+
+    /// Generates a jurisdictional heatmap showing differences across regions.
+    pub fn to_heatmap_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(&format!("    <title>{} - Heatmap</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str("        body {\n");
+        html.push_str(&format!(
+            "            background-color: {};\n",
+            self.theme.background_color
+        ));
+        html.push_str(&format!("            color: {};\n", self.theme.text_color));
+        html.push_str("            font-family: Arial, sans-serif;\n");
+        html.push_str("            padding: 20px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .heatmap-container {\n");
+        html.push_str("            display: grid;\n");
+        html.push_str(&format!(
+            "            grid-template-columns: 200px repeat({}, 1fr);\n",
+            self.statutes.len()
+        ));
+        html.push_str("            gap: 2px;\n");
+        html.push_str("            margin-top: 20px;\n");
+        html.push_str("        }\n");
+        html.push_str("        .heatmap-cell {\n");
+        html.push_str("            padding: 10px;\n");
+        html.push_str("            text-align: center;\n");
+        html.push_str("            border: 1px solid #ccc;\n");
+        html.push_str("            min-height: 50px;\n");
+        html.push_str("            display: flex;\n");
+        html.push_str("            align-items: center;\n");
+        html.push_str("            justify-content: center;\n");
+        html.push_str("        }\n");
+        html.push_str("        .heatmap-header {\n");
+        html.push_str("            font-weight: bold;\n");
+        html.push_str("            background-color: rgba(100, 100, 100, 0.3);\n");
+        html.push_str("        }\n");
+        html.push_str("        .heatmap-low { background-color: rgba(76, 175, 80, 0.3); }\n");
+        html.push_str("        .heatmap-medium { background-color: rgba(255, 152, 0, 0.3); }\n");
+        html.push_str("        .heatmap-high { background-color: rgba(244, 67, 54, 0.3); }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str(&format!(
+            "    <h1>{} - Jurisdictional Heatmap</h1>\n",
+            self.title
+        ));
+        html.push_str("    <div class=\"heatmap-container\">\n");
+
+        // Header row
+        html.push_str("        <div class=\"heatmap-cell heatmap-header\">Aspect</div>\n");
+        for statute in &self.statutes {
+            html.push_str(&format!(
+                "        <div class=\"heatmap-cell heatmap-header\">{}</div>\n",
+                statute.jurisdiction
+            ));
+        }
+
+        // Difference rows
+        for diff in &self.differences {
+            html.push_str(&format!(
+                "        <div class=\"heatmap-cell heatmap-header\">{}</div>\n",
+                diff.aspect
+            ));
+
+            for statute in &self.statutes {
+                let cell_class = if diff.severity < 0.33 {
+                    "heatmap-low"
+                } else if diff.severity < 0.67 {
+                    "heatmap-medium"
+                } else {
+                    "heatmap-high"
+                };
+
+                let value = diff
+                    .values
+                    .get(&statute.jurisdiction)
+                    .map(|v| v.as_str())
+                    .unwrap_or("N/A");
+
+                html.push_str(&format!(
+                    "        <div class=\"heatmap-cell {}\">{}</div>\n",
+                    cell_class, value
+                ));
+            }
+        }
+
+        html.push_str("    </div>\n");
+        html.push_str("</body>\n</html>");
+        html
+    }
+}
+
+impl Default for CrossJurisdictionalComparison {
+    fn default() -> Self {
+        Self::new("Jurisdictional Comparison")
     }
 }
 
@@ -20636,5 +21041,363 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("enable_hand_tracking"));
         assert!(json.contains("sensitivity"));
+    }
+
+    // ========================================================================
+    // Cross-Jurisdictional Comparison Tests (v0.4.0)
+    // ========================================================================
+
+    #[test]
+    fn test_jurisdictional_statute_creation() {
+        let statute = Statute::new(
+            "adult-rights",
+            "Adult Rights Act",
+            Effect::new(EffectType::Grant, "Grants adult rights"),
+        );
+
+        let js = JurisdictionalStatute::new("US", "United States", statute);
+
+        assert_eq!(js.jurisdiction, "US");
+        assert_eq!(js.jurisdiction_name, "United States");
+        assert_eq!(js.statute.id, "adult-rights");
+        assert!(js.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_jurisdictional_statute_with_metadata() {
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+
+        let js = JurisdictionalStatute::new("JP", "Japan", statute)
+            .with_metadata("enacted", "2020")
+            .with_metadata("status", "active");
+
+        assert_eq!(js.metadata.len(), 2);
+        assert_eq!(js.metadata.get("enacted"), Some(&"2020".to_string()));
+        assert_eq!(js.metadata.get("status"), Some(&"active".to_string()));
+    }
+
+    #[test]
+    fn test_jurisdictional_difference_creation() {
+        let diff = JurisdictionalDifference::new(
+            "age_requirement",
+            "Different age requirements across jurisdictions",
+        );
+
+        assert_eq!(diff.aspect, "age_requirement");
+        assert_eq!(diff.severity, 0.5);
+        assert!(diff.values.is_empty());
+    }
+
+    #[test]
+    fn test_jurisdictional_difference_with_values() {
+        let diff = JurisdictionalDifference::new("age", "Age requirement differs")
+            .with_value("US", "18 years")
+            .with_value("JP", "20 years")
+            .with_value("DE", "18 years")
+            .with_severity(0.7);
+
+        assert_eq!(diff.values.len(), 3);
+        assert_eq!(diff.values.get("US"), Some(&"18 years".to_string()));
+        assert_eq!(diff.values.get("JP"), Some(&"20 years".to_string()));
+        assert_eq!(diff.severity, 0.7);
+    }
+
+    #[test]
+    fn test_jurisdictional_difference_severity_clamping() {
+        let diff1 = JurisdictionalDifference::new("test", "test").with_severity(1.5);
+        assert_eq!(diff1.severity, 1.0);
+
+        let diff2 = JurisdictionalDifference::new("test", "test").with_severity(-0.5);
+        assert_eq!(diff2.severity, 0.0);
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_creation() {
+        let comparison = CrossJurisdictionalComparison::new("Adult Rights Comparison");
+
+        assert_eq!(comparison.title, "Adult Rights Comparison");
+        assert!(comparison.statutes.is_empty());
+        assert!(comparison.differences.is_empty());
+        assert!(comparison.synchronized_nav);
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_default() {
+        let comparison = CrossJurisdictionalComparison::default();
+
+        assert_eq!(comparison.title, "Jurisdictional Comparison");
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_add_statute() {
+        let mut comparison = CrossJurisdictionalComparison::new("Test");
+
+        let statute1 = Statute::new("test1", "Test 1", Effect::new(EffectType::Grant, "Test"));
+        let js1 = JurisdictionalStatute::new("US", "United States", statute1);
+
+        comparison.add_statute(js1);
+
+        assert_eq!(comparison.statutes.len(), 1);
+        assert_eq!(comparison.statutes[0].jurisdiction, "US");
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_add_difference() {
+        let mut comparison = CrossJurisdictionalComparison::new("Test");
+
+        let diff = JurisdictionalDifference::new("age", "Age differs")
+            .with_value("US", "18")
+            .with_value("JP", "20");
+
+        comparison.add_difference(diff);
+
+        assert_eq!(comparison.differences.len(), 1);
+        assert_eq!(comparison.differences[0].aspect, "age");
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_with_theme() {
+        let comparison = CrossJurisdictionalComparison::new("Test").with_theme(Theme::dark());
+
+        assert_eq!(comparison.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_with_synchronized_nav() {
+        let comparison1 = CrossJurisdictionalComparison::new("Test").with_synchronized_nav(true);
+        assert!(comparison1.synchronized_nav);
+
+        let comparison2 = CrossJurisdictionalComparison::new("Test").with_synchronized_nav(false);
+        assert!(!comparison2.synchronized_nav);
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_side_by_side_html() {
+        let mut comparison = CrossJurisdictionalComparison::new("Adult Rights Comparison");
+
+        let statute_us = Statute::new(
+            "us-adult",
+            "US Adult Rights",
+            Effect::new(EffectType::Grant, "Grants rights at 18"),
+        );
+        let js_us = JurisdictionalStatute::new("US", "United States", statute_us)
+            .with_metadata("enacted", "1971");
+
+        let statute_jp = Statute::new(
+            "jp-adult",
+            "Japan Adult Rights",
+            Effect::new(EffectType::Grant, "Grants rights at 20"),
+        );
+        let js_jp =
+            JurisdictionalStatute::new("JP", "Japan", statute_jp).with_metadata("enacted", "2022");
+
+        comparison.add_statute(js_us);
+        comparison.add_statute(js_jp);
+
+        let diff = JurisdictionalDifference::new("age_requirement", "Age of majority differs")
+            .with_value("US", "18 years")
+            .with_value("JP", "20 years")
+            .with_severity(0.6);
+
+        comparison.add_difference(diff);
+
+        let html = comparison.to_side_by_side_html();
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Adult Rights Comparison"));
+        assert!(html.contains("United States"));
+        assert!(html.contains("Japan"));
+        assert!(html.contains("us-adult"));
+        assert!(html.contains("jp-adult"));
+        assert!(html.contains("age_requirement"));
+        assert!(html.contains("18 years"));
+        assert!(html.contains("20 years"));
+        assert!(html.contains("jurisdiction-column"));
+        assert!(html.contains("differences-section"));
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_side_by_side_html_no_differences() {
+        let mut comparison = CrossJurisdictionalComparison::new("Test Comparison");
+
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        let js = JurisdictionalStatute::new("US", "United States", statute);
+
+        comparison.add_statute(js);
+
+        let html = comparison.to_side_by_side_html();
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Test Comparison"));
+        assert!(html.contains("United States"));
+        // Should not have differences section
+        assert!(!html.contains("Key Differences"));
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_synchronized_navigation_script() {
+        let comparison1 = CrossJurisdictionalComparison::new("Test").with_synchronized_nav(true);
+        let html1 = comparison1.to_side_by_side_html();
+        assert!(html1.contains("addEventListener('scroll'"));
+        assert!(html1.contains("scrollRatio"));
+
+        let comparison2 = CrossJurisdictionalComparison::new("Test").with_synchronized_nav(false);
+        let html2 = comparison2.to_side_by_side_html();
+        assert!(!html2.contains("addEventListener('scroll'"));
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_heatmap_html() {
+        let mut comparison = CrossJurisdictionalComparison::new("Rights Comparison");
+
+        let statute_us = Statute::new(
+            "us-rights",
+            "US Rights",
+            Effect::new(EffectType::Grant, "US rights"),
+        );
+        let js_us = JurisdictionalStatute::new("US", "United States", statute_us);
+
+        let statute_jp = Statute::new(
+            "jp-rights",
+            "JP Rights",
+            Effect::new(EffectType::Grant, "JP rights"),
+        );
+        let js_jp = JurisdictionalStatute::new("JP", "Japan", statute_jp);
+
+        let statute_de = Statute::new(
+            "de-rights",
+            "DE Rights",
+            Effect::new(EffectType::Grant, "DE rights"),
+        );
+        let js_de = JurisdictionalStatute::new("DE", "Germany", statute_de);
+
+        comparison.add_statute(js_us);
+        comparison.add_statute(js_jp);
+        comparison.add_statute(js_de);
+
+        let diff1 = JurisdictionalDifference::new("age", "Age requirement")
+            .with_value("US", "18")
+            .with_value("JP", "20")
+            .with_value("DE", "18")
+            .with_severity(0.3); // Low severity
+
+        let diff2 = JurisdictionalDifference::new("citizenship", "Citizenship requirement")
+            .with_value("US", "Yes")
+            .with_value("JP", "No")
+            .with_value("DE", "EU only")
+            .with_severity(0.8); // High severity
+
+        comparison.add_difference(diff1);
+        comparison.add_difference(diff2);
+
+        let html = comparison.to_heatmap_html();
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Jurisdictional Heatmap"));
+        assert!(html.contains("heatmap-container"));
+        assert!(html.contains("US"));
+        assert!(html.contains("JP"));
+        assert!(html.contains("DE"));
+        assert!(html.contains("age"));
+        assert!(html.contains("citizenship"));
+        assert!(html.contains("heatmap-low"));
+        assert!(html.contains("heatmap-high"));
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_heatmap_severity_classes() {
+        let mut comparison = CrossJurisdictionalComparison::new("Test");
+
+        let statute = Statute::new("test", "Test", Effect::new(EffectType::Grant, "Test"));
+        let js = JurisdictionalStatute::new("US", "United States", statute);
+        comparison.add_statute(js);
+
+        // Test all severity levels
+        let diff_low = JurisdictionalDifference::new("low", "Low severity")
+            .with_value("US", "Low")
+            .with_severity(0.2);
+
+        let diff_medium = JurisdictionalDifference::new("medium", "Medium severity")
+            .with_value("US", "Medium")
+            .with_severity(0.5);
+
+        let diff_high = JurisdictionalDifference::new("high", "High severity")
+            .with_value("US", "High")
+            .with_severity(0.9);
+
+        comparison.add_difference(diff_low);
+        comparison.add_difference(diff_medium);
+        comparison.add_difference(diff_high);
+
+        let html = comparison.to_heatmap_html();
+
+        assert!(html.contains("heatmap-low"));
+        assert!(html.contains("heatmap-medium"));
+        assert!(html.contains("heatmap-high"));
+    }
+
+    #[test]
+    fn test_cross_jurisdictional_comparison_heatmap_missing_values() {
+        let mut comparison = CrossJurisdictionalComparison::new("Test");
+
+        let statute_us = Statute::new("us", "US", Effect::new(EffectType::Grant, "US"));
+        let js_us = JurisdictionalStatute::new("US", "United States", statute_us);
+
+        let statute_jp = Statute::new("jp", "JP", Effect::new(EffectType::Grant, "JP"));
+        let js_jp = JurisdictionalStatute::new("JP", "Japan", statute_jp);
+
+        comparison.add_statute(js_us);
+        comparison.add_statute(js_jp);
+
+        // Difference with value only for US
+        let diff = JurisdictionalDifference::new("test", "Test difference")
+            .with_value("US", "Available")
+            .with_severity(0.5);
+
+        comparison.add_difference(diff);
+
+        let html = comparison.to_heatmap_html();
+
+        assert!(html.contains("Available"));
+        assert!(html.contains("N/A")); // Should show N/A for JP
+    }
+
+    #[test]
+    fn test_jurisdictional_statute_serialization() {
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test"),
+        );
+        let js = JurisdictionalStatute::new("US", "United States", statute)
+            .with_metadata("year", "2020");
+
+        let json = serde_json::to_string(&js).unwrap();
+        assert!(json.contains("US"));
+        assert!(json.contains("United States"));
+        assert!(json.contains("test"));
+        assert!(json.contains("year"));
+    }
+
+    #[test]
+    fn test_jurisdictional_difference_serialization() {
+        let diff = JurisdictionalDifference::new("age", "Age differs")
+            .with_value("US", "18")
+            .with_value("JP", "20")
+            .with_severity(0.7);
+
+        let json = serde_json::to_string(&diff).unwrap();
+        assert!(json.contains("age"));
+        assert!(json.contains("18"));
+        assert!(json.contains("20"));
+        assert!(json.contains("0.7"));
     }
 }

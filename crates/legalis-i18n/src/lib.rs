@@ -19990,6 +19990,2408 @@ impl Default for HistoricalContextAnnotator {
     }
 }
 
+// ============================================================================
+// v0.2.9: International Standards
+// ============================================================================
+
+/// ISO 639-3 language code (3-letter code).
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ISO639_3 {
+    /// 3-letter language code (e.g., "eng", "jpn", "fra").
+    pub code: String,
+    /// English name of the language.
+    pub name: String,
+    /// Type of language (Individual, Macrolanguage, Special).
+    pub language_type: LanguageType,
+    /// Scope (Individual, Macrolanguage, Special).
+    pub scope: LanguageScope,
+}
+
+/// Type of language in ISO 639-3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LanguageType {
+    /// Living language.
+    Living,
+    /// Extinct language.
+    Extinct,
+    /// Ancient language.
+    Ancient,
+    /// Historical language.
+    Historical,
+    /// Constructed language.
+    Constructed,
+}
+
+/// Scope of language in ISO 639-3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LanguageScope {
+    /// Individual language.
+    Individual,
+    /// Macrolanguage (group of closely related languages).
+    Macrolanguage,
+    /// Special code.
+    Special,
+}
+
+impl std::fmt::Display for LanguageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LanguageType::Living => write!(f, "Living"),
+            LanguageType::Extinct => write!(f, "Extinct"),
+            LanguageType::Ancient => write!(f, "Ancient"),
+            LanguageType::Historical => write!(f, "Historical"),
+            LanguageType::Constructed => write!(f, "Constructed"),
+        }
+    }
+}
+
+impl std::fmt::Display for LanguageScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LanguageScope::Individual => write!(f, "Individual"),
+            LanguageScope::Macrolanguage => write!(f, "Macrolanguage"),
+            LanguageScope::Special => write!(f, "Special"),
+        }
+    }
+}
+
+impl ISO639_3 {
+    /// Creates a new ISO 639-3 language code.
+    pub fn new(code: &str, name: &str, language_type: LanguageType, scope: LanguageScope) -> Self {
+        Self {
+            code: code.to_lowercase(),
+            name: name.to_string(),
+            language_type,
+            scope,
+        }
+    }
+
+    /// Converts to ISO 639-1 (2-letter code) if possible.
+    pub fn to_iso639_1(&self) -> Option<String> {
+        match self.code.as_str() {
+            "eng" => Some("en".to_string()),
+            "jpn" => Some("ja".to_string()),
+            "fra" => Some("fr".to_string()),
+            "deu" => Some("de".to_string()),
+            "spa" => Some("es".to_string()),
+            "zho" => Some("zh".to_string()),
+            "ara" => Some("ar".to_string()),
+            "rus" => Some("ru".to_string()),
+            "por" => Some("pt".to_string()),
+            "ita" => Some("it".to_string()),
+            "nld" => Some("nl".to_string()),
+            "pol" => Some("pl".to_string()),
+            "kor" => Some("ko".to_string()),
+            "heb" => Some("he".to_string()),
+            "hin" => Some("hi".to_string()),
+            "fas" => Some("fa".to_string()),
+            "tha" => Some("th".to_string()),
+            "vie" => Some("vi".to_string()),
+            "ind" => Some("id".to_string()),
+            "swe" => Some("sv".to_string()),
+            "dan" => Some("da".to_string()),
+            "fin" => Some("fi".to_string()),
+            "nor" => Some("no".to_string()),
+            "tur" => Some("tr".to_string()),
+            "lat" => Some("la".to_string()),
+            _ => None,
+        }
+    }
+
+    /// Checks if this is a legal language (used in legal contexts).
+    pub fn is_legal_language(&self) -> bool {
+        matches!(
+            self.code.as_str(),
+            "eng" | "fra" | "deu" | "spa" | "lat" | "jpn" | "zho" | "ara" | "rus" | "por" | "ita"
+        )
+    }
+}
+
+/// Registry for ISO 639-3 language codes.
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone)]
+pub struct ISO639_3_Registry {
+    codes: HashMap<String, ISO639_3>,
+}
+
+impl ISO639_3_Registry {
+    /// Creates a new registry.
+    pub fn new() -> Self {
+        Self {
+            codes: HashMap::new(),
+        }
+    }
+
+    /// Creates a registry with default legal language codes.
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Major legal languages
+        registry.add_code(ISO639_3::new(
+            "eng",
+            "English",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "fra",
+            "French",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "deu",
+            "German",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "spa",
+            "Spanish",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "jpn",
+            "Japanese",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "zho",
+            "Chinese",
+            LanguageType::Living,
+            LanguageScope::Macrolanguage,
+        ));
+        registry.add_code(ISO639_3::new(
+            "ara",
+            "Arabic",
+            LanguageType::Living,
+            LanguageScope::Macrolanguage,
+        ));
+        registry.add_code(ISO639_3::new(
+            "rus",
+            "Russian",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "por",
+            "Portuguese",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "ita",
+            "Italian",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "nld",
+            "Dutch",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "pol",
+            "Polish",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "kor",
+            "Korean",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "heb",
+            "Hebrew",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "hin",
+            "Hindi",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        ));
+
+        // Historical legal languages
+        registry.add_code(ISO639_3::new(
+            "lat",
+            "Latin",
+            LanguageType::Ancient,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "ang",
+            "Old English",
+            LanguageType::Historical,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "enm",
+            "Middle English",
+            LanguageType::Historical,
+            LanguageScope::Individual,
+        ));
+        registry.add_code(ISO639_3::new(
+            "fro",
+            "Old French",
+            LanguageType::Historical,
+            LanguageScope::Individual,
+        ));
+
+        registry
+    }
+
+    /// Adds a language code to the registry.
+    pub fn add_code(&mut self, code: ISO639_3) {
+        self.codes.insert(code.code.clone(), code);
+    }
+
+    /// Gets a language code by its ISO 639-3 code.
+    pub fn get_code(&self, code: &str) -> Option<&ISO639_3> {
+        self.codes.get(&code.to_lowercase())
+    }
+
+    /// Gets all legal languages in the registry.
+    pub fn get_legal_languages(&self) -> Vec<&ISO639_3> {
+        self.codes
+            .values()
+            .filter(|code| code.is_legal_language())
+            .collect()
+    }
+
+    /// Gets all historical/ancient languages.
+    pub fn get_historical_languages(&self) -> Vec<&ISO639_3> {
+        self.codes
+            .values()
+            .filter(|code| {
+                matches!(
+                    code.language_type,
+                    LanguageType::Ancient | LanguageType::Historical
+                )
+            })
+            .collect()
+    }
+
+    /// Returns the number of language codes in the registry.
+    pub fn code_count(&self) -> usize {
+        self.codes.len()
+    }
+}
+
+impl Default for ISO639_3_Registry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// CLDR (Common Locale Data Repository) field type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CLDRFieldType {
+    /// Language display name.
+    Languages,
+    /// Territory (country/region) display name.
+    Territories,
+    /// Script display name.
+    Scripts,
+    /// Variant display name.
+    Variants,
+    /// Currency display name.
+    Currencies,
+    /// Time zone display name.
+    TimeZones,
+    /// Date format pattern.
+    DateFormats,
+    /// Time format pattern.
+    TimeFormats,
+    /// Number format pattern.
+    NumberFormats,
+}
+
+impl std::fmt::Display for CLDRFieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CLDRFieldType::Languages => write!(f, "Languages"),
+            CLDRFieldType::Territories => write!(f, "Territories"),
+            CLDRFieldType::Scripts => write!(f, "Scripts"),
+            CLDRFieldType::Variants => write!(f, "Variants"),
+            CLDRFieldType::Currencies => write!(f, "Currencies"),
+            CLDRFieldType::TimeZones => write!(f, "Time Zones"),
+            CLDRFieldType::DateFormats => write!(f, "Date Formats"),
+            CLDRFieldType::TimeFormats => write!(f, "Time Formats"),
+            CLDRFieldType::NumberFormats => write!(f, "Number Formats"),
+        }
+    }
+}
+
+/// CLDR data entry.
+#[derive(Debug, Clone)]
+pub struct CLDREntry {
+    /// The locale for this entry.
+    pub locale: Locale,
+    /// The field type.
+    pub field_type: CLDRFieldType,
+    /// The key (e.g., language code, territory code).
+    pub key: String,
+    /// The display value in the locale's language.
+    pub value: String,
+}
+
+impl CLDREntry {
+    /// Creates a new CLDR entry.
+    pub fn new(locale: Locale, field_type: CLDRFieldType, key: &str, value: &str) -> Self {
+        Self {
+            locale,
+            field_type,
+            key: key.to_string(),
+            value: value.to_string(),
+        }
+    }
+}
+
+/// CLDR (Common Locale Data Repository) integration.
+#[derive(Debug, Clone)]
+pub struct CLDRData {
+    entries: HashMap<String, Vec<CLDREntry>>,
+}
+
+impl CLDRData {
+    /// Creates a new CLDR data store.
+    pub fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+
+    /// Creates CLDR data with default legal localization data.
+    pub fn with_defaults() -> Self {
+        let mut cldr = Self::new();
+
+        // English CLDR data
+        let en_us = Locale::new("en").with_country("US");
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Languages,
+            "en",
+            "English",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Languages,
+            "ja",
+            "Japanese",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Languages,
+            "fr",
+            "French",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Languages,
+            "de",
+            "German",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Territories,
+            "US",
+            "United States",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Territories,
+            "GB",
+            "United Kingdom",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            en_us.clone(),
+            CLDRFieldType::Territories,
+            "JP",
+            "Japan",
+        ));
+
+        // Japanese CLDR data
+        let ja_jp = Locale::new("ja").with_country("JP");
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Languages,
+            "en",
+            "英語",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Languages,
+            "ja",
+            "日本語",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Languages,
+            "fr",
+            "フランス語",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Territories,
+            "US",
+            "アメリカ合衆国",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Territories,
+            "GB",
+            "イギリス",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            ja_jp.clone(),
+            CLDRFieldType::Territories,
+            "JP",
+            "日本",
+        ));
+
+        // French CLDR data
+        let fr_fr = Locale::new("fr").with_country("FR");
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Languages,
+            "en",
+            "anglais",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Languages,
+            "ja",
+            "japonais",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Languages,
+            "fr",
+            "français",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Territories,
+            "US",
+            "États-Unis",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Territories,
+            "GB",
+            "Royaume-Uni",
+        ));
+        cldr.add_entry(CLDREntry::new(
+            fr_fr.clone(),
+            CLDRFieldType::Territories,
+            "FR",
+            "France",
+        ));
+
+        cldr
+    }
+
+    /// Adds a CLDR entry.
+    pub fn add_entry(&mut self, entry: CLDREntry) {
+        let key = format!("{}:{}", entry.locale, entry.field_type);
+        self.entries.entry(key).or_default().push(entry);
+    }
+
+    /// Gets CLDR entries for a locale and field type.
+    pub fn get_entries(&self, locale: &Locale, field_type: CLDRFieldType) -> Vec<&CLDREntry> {
+        let key = format!("{}:{}", locale, field_type);
+        self.entries
+            .get(&key)
+            .map(|entries| entries.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets a specific CLDR value.
+    pub fn get_value(
+        &self,
+        locale: &Locale,
+        field_type: CLDRFieldType,
+        key: &str,
+    ) -> Option<String> {
+        self.get_entries(locale, field_type)
+            .into_iter()
+            .find(|entry| entry.key == key)
+            .map(|entry| entry.value.clone())
+    }
+
+    /// Returns the number of locales with CLDR data.
+    pub fn locale_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Returns the total number of entries.
+    pub fn entry_count(&self) -> usize {
+        self.entries.values().map(|v| v.len()).sum()
+    }
+}
+
+impl Default for CLDRData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Unicode CLDR legal extension type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LegalExtensionType {
+    /// Legal system type (u-legal).
+    LegalSystem,
+    /// Citation style (u-cite).
+    CitationStyle,
+    /// Court type (u-court).
+    CourtType,
+    /// Legal formality level (u-formality).
+    FormalityLevel,
+}
+
+impl std::fmt::Display for LegalExtensionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LegalExtensionType::LegalSystem => write!(f, "u-legal"),
+            LegalExtensionType::CitationStyle => write!(f, "u-cite"),
+            LegalExtensionType::CourtType => write!(f, "u-court"),
+            LegalExtensionType::FormalityLevel => write!(f, "u-formality"),
+        }
+    }
+}
+
+/// Unicode CLDR legal extension.
+#[derive(Debug, Clone)]
+pub struct LegalExtension {
+    /// The extension type.
+    pub extension_type: LegalExtensionType,
+    /// The extension value (e.g., "common", "civil", "bluebook").
+    pub value: String,
+}
+
+impl LegalExtension {
+    /// Creates a new legal extension.
+    pub fn new(extension_type: LegalExtensionType, value: &str) -> Self {
+        Self {
+            extension_type,
+            value: value.to_string(),
+        }
+    }
+
+    /// Formats the extension as a BCP 47 extension string.
+    pub fn to_bcp47_extension(&self) -> String {
+        match self.extension_type {
+            LegalExtensionType::LegalSystem => format!("u-legal-{}", self.value),
+            LegalExtensionType::CitationStyle => format!("u-cite-{}", self.value),
+            LegalExtensionType::CourtType => format!("u-court-{}", self.value),
+            LegalExtensionType::FormalityLevel => format!("u-formality-{}", self.value),
+        }
+    }
+
+    /// Creates a LegalSystem extension.
+    pub fn legal_system(system: &str) -> Self {
+        Self::new(LegalExtensionType::LegalSystem, system)
+    }
+
+    /// Creates a CitationStyle extension.
+    pub fn citation_style(style: &str) -> Self {
+        Self::new(LegalExtensionType::CitationStyle, style)
+    }
+
+    /// Creates a CourtType extension.
+    pub fn court_type(court: &str) -> Self {
+        Self::new(LegalExtensionType::CourtType, court)
+    }
+
+    /// Creates a FormalityLevel extension.
+    pub fn formality_level(level: &str) -> Self {
+        Self::new(LegalExtensionType::FormalityLevel, level)
+    }
+}
+
+/// W3C internationalization compliance checker.
+#[derive(Debug, Clone)]
+pub struct W3CComplianceChecker {
+    /// The locale to check.
+    pub locale: Locale,
+}
+
+impl W3CComplianceChecker {
+    /// Creates a new W3C compliance checker.
+    pub fn new(locale: Locale) -> Self {
+        Self { locale }
+    }
+
+    /// Checks if the locale has a valid language tag.
+    pub fn has_valid_language_tag(&self) -> bool {
+        !self.locale.language.is_empty() && self.locale.language.len() >= 2
+    }
+
+    /// Checks if the locale has a valid country code (if present).
+    pub fn has_valid_country_code(&self) -> bool {
+        if let Some(ref country) = self.locale.country {
+            country.len() == 2 && country.chars().all(|c| c.is_ascii_uppercase())
+        } else {
+            true // No country code is valid
+        }
+    }
+
+    /// Checks if the locale has a valid script code (if present).
+    pub fn has_valid_script_code(&self) -> bool {
+        if let Some(ref script) = self.locale.script {
+            script.len() == 4 && script.chars().next().unwrap().is_ascii_uppercase()
+        } else {
+            true // No script code is valid
+        }
+    }
+
+    /// Checks if text direction is properly specified.
+    pub fn has_text_direction(&self) -> bool {
+        // Check if locale is RTL language
+        matches!(self.locale.language.as_str(), "ar" | "he" | "fa" | "ur")
+    }
+
+    /// Gets the recommended text direction for this locale.
+    pub fn get_text_direction(&self) -> &str {
+        if self.has_text_direction() {
+            "rtl"
+        } else {
+            "ltr"
+        }
+    }
+
+    /// Generates W3C-compliant HTML lang attribute.
+    pub fn generate_html_lang_attribute(&self) -> String {
+        self.locale.to_string()
+    }
+
+    /// Generates W3C-compliant HTML dir attribute.
+    pub fn generate_html_dir_attribute(&self) -> String {
+        self.get_text_direction().to_string()
+    }
+
+    /// Performs a full W3C compliance check.
+    pub fn check_compliance(&self) -> W3CComplianceReport {
+        let mut issues = Vec::new();
+
+        if !self.has_valid_language_tag() {
+            issues.push("Invalid language tag format".to_string());
+        }
+
+        if !self.has_valid_country_code() {
+            issues.push("Invalid country code format".to_string());
+        }
+
+        if !self.has_valid_script_code() {
+            issues.push("Invalid script code format".to_string());
+        }
+
+        W3CComplianceReport {
+            locale: self.locale.clone(),
+            is_compliant: issues.is_empty(),
+            issues,
+            lang_attribute: self.generate_html_lang_attribute(),
+            dir_attribute: self.generate_html_dir_attribute(),
+        }
+    }
+}
+
+/// W3C compliance report.
+#[derive(Debug, Clone)]
+pub struct W3CComplianceReport {
+    /// The locale that was checked.
+    pub locale: Locale,
+    /// Whether the locale is W3C compliant.
+    pub is_compliant: bool,
+    /// List of compliance issues.
+    pub issues: Vec<String>,
+    /// Recommended HTML lang attribute.
+    pub lang_attribute: String,
+    /// Recommended HTML dir attribute.
+    pub dir_attribute: String,
+}
+
+impl W3CComplianceReport {
+    /// Gets a summary of the compliance check.
+    pub fn summary(&self) -> String {
+        if self.is_compliant {
+            format!("Locale '{}' is W3C compliant", self.locale)
+        } else {
+            format!(
+                "Locale '{}' has {} compliance issue(s): {}",
+                self.locale,
+                self.issues.len(),
+                self.issues.join(", ")
+            )
+        }
+    }
+}
+
+/// IETF BCP 47 language tag.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BCP47LanguageTag {
+    /// Language subtag (e.g., "en", "ja").
+    pub language: String,
+    /// Script subtag (e.g., "Latn", "Jpan").
+    pub script: Option<String>,
+    /// Region subtag (e.g., "US", "JP").
+    pub region: Option<String>,
+    /// Variant subtags.
+    pub variants: Vec<String>,
+    /// Extension subtags (e.g., "u-ca-japanese").
+    pub extensions: Vec<String>,
+    /// Private use subtags.
+    pub private_use: Vec<String>,
+}
+
+impl BCP47LanguageTag {
+    /// Creates a new BCP 47 language tag.
+    pub fn new(language: &str) -> Self {
+        Self {
+            language: language.to_lowercase(),
+            script: None,
+            region: None,
+            variants: Vec::new(),
+            extensions: Vec::new(),
+            private_use: Vec::new(),
+        }
+    }
+
+    /// Sets the script subtag.
+    pub fn with_script(mut self, script: &str) -> Self {
+        self.script = Some(
+            script
+                .chars()
+                .enumerate()
+                .map(|(i, c)| {
+                    if i == 0 {
+                        c.to_ascii_uppercase()
+                    } else {
+                        c.to_ascii_lowercase()
+                    }
+                })
+                .collect(),
+        );
+        self
+    }
+
+    /// Sets the region subtag.
+    pub fn with_region(mut self, region: &str) -> Self {
+        self.region = Some(region.to_uppercase());
+        self
+    }
+
+    /// Adds a variant subtag.
+    pub fn add_variant(mut self, variant: &str) -> Self {
+        self.variants.push(variant.to_lowercase());
+        self
+    }
+
+    /// Adds an extension subtag.
+    pub fn add_extension(mut self, extension: &str) -> Self {
+        self.extensions.push(extension.to_lowercase());
+        self
+    }
+
+    /// Adds a private use subtag.
+    pub fn add_private_use(mut self, private: &str) -> Self {
+        self.private_use.push(private.to_lowercase());
+        self
+    }
+
+    /// Formats the tag as a BCP 47 string.
+    fn format_tag(&self) -> String {
+        let mut parts = vec![self.language.clone()];
+
+        if let Some(ref script) = self.script {
+            parts.push(script.clone());
+        }
+
+        if let Some(ref region) = self.region {
+            parts.push(region.clone());
+        }
+
+        parts.extend(self.variants.clone());
+        parts.extend(self.extensions.clone());
+
+        if !self.private_use.is_empty() {
+            parts.push("x".to_string());
+            parts.extend(self.private_use.clone());
+        }
+
+        parts.join("-")
+    }
+
+    /// Parses a BCP 47 language tag from a string.
+    pub fn parse(tag: &str) -> Result<Self, String> {
+        let parts: Vec<&str> = tag.split('-').collect();
+
+        if parts.is_empty() {
+            return Err("Empty language tag".to_string());
+        }
+
+        let language = parts[0].to_lowercase();
+        if language.len() < 2 || language.len() > 3 {
+            return Err(format!("Invalid language subtag: {}", language));
+        }
+
+        let mut bcp47 = Self::new(&language);
+        let mut i = 1;
+
+        // Parse script (4 letters, first uppercase)
+        if i < parts.len() && parts[i].len() == 4 {
+            bcp47 = bcp47.with_script(parts[i]);
+            i += 1;
+        }
+
+        // Parse region (2 letters or 3 digits)
+        if i < parts.len() && (parts[i].len() == 2 || parts[i].len() == 3) {
+            bcp47 = bcp47.with_region(parts[i]);
+            i += 1;
+        }
+
+        // Parse variants and extensions
+        while i < parts.len() {
+            if parts[i] == "x" {
+                // Private use
+                i += 1;
+                while i < parts.len() {
+                    bcp47 = bcp47.add_private_use(parts[i]);
+                    i += 1;
+                }
+                break;
+            } else if parts[i].len() == 1 {
+                // Extension
+                let ext_type = parts[i];
+                i += 1;
+                while i < parts.len() && parts[i].len() > 1 && parts[i] != "x" {
+                    bcp47 = bcp47.add_extension(&format!("{}-{}", ext_type, parts[i]));
+                    i += 1;
+                }
+            } else {
+                // Variant
+                bcp47 = bcp47.add_variant(parts[i]);
+                i += 1;
+            }
+        }
+
+        Ok(bcp47)
+    }
+
+    /// Converts to a Locale.
+    pub fn to_locale(&self) -> Locale {
+        let mut locale = Locale::new(&self.language);
+
+        if let Some(ref script) = self.script {
+            locale = locale.with_script(script);
+        }
+
+        if let Some(ref region) = self.region {
+            locale = locale.with_country(region);
+        }
+
+        locale
+    }
+
+    /// Creates a BCP 47 tag from a Locale.
+    pub fn from_locale(locale: &Locale) -> Self {
+        let mut tag = Self::new(&locale.language);
+
+        if let Some(ref script) = locale.script {
+            tag = tag.with_script(script);
+        }
+
+        if let Some(ref country) = locale.country {
+            tag = tag.with_region(country);
+        }
+
+        tag
+    }
+
+    /// Validates the BCP 47 tag.
+    pub fn is_valid(&self) -> bool {
+        // Language must be 2-3 characters
+        if self.language.len() < 2 || self.language.len() > 3 {
+            return false;
+        }
+
+        // Script must be 4 characters if present
+        if let Some(ref script) = self.script {
+            if script.len() != 4 {
+                return false;
+            }
+        }
+
+        // Region must be 2-3 characters if present
+        if let Some(ref region) = self.region {
+            if region.len() < 2 || region.len() > 3 {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl std::fmt::Display for BCP47LanguageTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.format_tag())
+    }
+}
+
+#[cfg(test)]
+mod international_standards_tests {
+    use super::*;
+
+    #[test]
+    fn test_iso639_3_creation() {
+        let code = ISO639_3::new(
+            "eng",
+            "English",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        );
+
+        assert_eq!(code.code, "eng");
+        assert_eq!(code.name, "English");
+        assert_eq!(code.language_type, LanguageType::Living);
+        assert_eq!(code.scope, LanguageScope::Individual);
+    }
+
+    #[test]
+    fn test_iso639_3_to_iso639_1() {
+        let eng = ISO639_3::new(
+            "eng",
+            "English",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        );
+        assert_eq!(eng.to_iso639_1(), Some("en".to_string()));
+
+        let jpn = ISO639_3::new(
+            "jpn",
+            "Japanese",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        );
+        assert_eq!(jpn.to_iso639_1(), Some("ja".to_string()));
+
+        let lat = ISO639_3::new(
+            "lat",
+            "Latin",
+            LanguageType::Ancient,
+            LanguageScope::Individual,
+        );
+        assert_eq!(lat.to_iso639_1(), Some("la".to_string()));
+    }
+
+    #[test]
+    fn test_iso639_3_is_legal_language() {
+        let eng = ISO639_3::new(
+            "eng",
+            "English",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        );
+        assert!(eng.is_legal_language());
+
+        let lat = ISO639_3::new(
+            "lat",
+            "Latin",
+            LanguageType::Ancient,
+            LanguageScope::Individual,
+        );
+        assert!(lat.is_legal_language());
+
+        let swa = ISO639_3::new(
+            "swa",
+            "Swahili",
+            LanguageType::Living,
+            LanguageScope::Individual,
+        );
+        assert!(!swa.is_legal_language());
+    }
+
+    #[test]
+    fn test_iso639_3_registry_defaults() {
+        let registry = ISO639_3_Registry::with_defaults();
+
+        assert!(registry.code_count() > 0);
+        assert!(registry.get_code("eng").is_some());
+        assert!(registry.get_code("jpn").is_some());
+        assert!(registry.get_code("lat").is_some());
+    }
+
+    #[test]
+    fn test_iso639_3_registry_legal_languages() {
+        let registry = ISO639_3_Registry::with_defaults();
+
+        let legal_langs = registry.get_legal_languages();
+        assert!(!legal_langs.is_empty());
+        assert!(legal_langs.iter().any(|l| l.code == "eng"));
+        assert!(legal_langs.iter().any(|l| l.code == "fra"));
+    }
+
+    #[test]
+    fn test_iso639_3_registry_historical_languages() {
+        let registry = ISO639_3_Registry::with_defaults();
+
+        let historical = registry.get_historical_languages();
+        assert!(!historical.is_empty());
+        assert!(historical.iter().any(|l| l.code == "lat"));
+        assert!(historical.iter().any(|l| l.code == "ang"));
+    }
+
+    #[test]
+    fn test_language_type_display() {
+        assert_eq!(LanguageType::Living.to_string(), "Living");
+        assert_eq!(LanguageType::Ancient.to_string(), "Ancient");
+        assert_eq!(LanguageType::Historical.to_string(), "Historical");
+    }
+
+    #[test]
+    fn test_language_scope_display() {
+        assert_eq!(LanguageScope::Individual.to_string(), "Individual");
+        assert_eq!(LanguageScope::Macrolanguage.to_string(), "Macrolanguage");
+        assert_eq!(LanguageScope::Special.to_string(), "Special");
+    }
+
+    #[test]
+    fn test_cldr_entry_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let entry = CLDREntry::new(locale.clone(), CLDRFieldType::Languages, "ja", "Japanese");
+
+        assert_eq!(entry.locale, locale);
+        assert_eq!(entry.field_type, CLDRFieldType::Languages);
+        assert_eq!(entry.key, "ja");
+        assert_eq!(entry.value, "Japanese");
+    }
+
+    #[test]
+    fn test_cldr_data_defaults() {
+        let cldr = CLDRData::with_defaults();
+
+        assert!(cldr.locale_count() > 0);
+        assert!(cldr.entry_count() > 0);
+    }
+
+    #[test]
+    fn test_cldr_data_get_value() {
+        let cldr = CLDRData::with_defaults();
+        let en_us = Locale::new("en").with_country("US");
+
+        let value = cldr.get_value(&en_us, CLDRFieldType::Languages, "ja");
+        assert_eq!(value, Some("Japanese".to_string()));
+
+        let territory = cldr.get_value(&en_us, CLDRFieldType::Territories, "JP");
+        assert_eq!(territory, Some("Japan".to_string()));
+    }
+
+    #[test]
+    fn test_cldr_data_japanese_localization() {
+        let cldr = CLDRData::with_defaults();
+        let ja_jp = Locale::new("ja").with_country("JP");
+
+        let value = cldr.get_value(&ja_jp, CLDRFieldType::Languages, "en");
+        assert_eq!(value, Some("英語".to_string()));
+
+        let territory = cldr.get_value(&ja_jp, CLDRFieldType::Territories, "US");
+        assert_eq!(territory, Some("アメリカ合衆国".to_string()));
+    }
+
+    #[test]
+    fn test_cldr_field_type_display() {
+        assert_eq!(CLDRFieldType::Languages.to_string(), "Languages");
+        assert_eq!(CLDRFieldType::Territories.to_string(), "Territories");
+        assert_eq!(CLDRFieldType::TimeZones.to_string(), "Time Zones");
+    }
+
+    #[test]
+    fn test_legal_extension_creation() {
+        let ext = LegalExtension::legal_system("common");
+        assert_eq!(ext.extension_type, LegalExtensionType::LegalSystem);
+        assert_eq!(ext.value, "common");
+    }
+
+    #[test]
+    fn test_legal_extension_to_bcp47() {
+        let legal_system = LegalExtension::legal_system("common");
+        assert_eq!(legal_system.to_bcp47_extension(), "u-legal-common");
+
+        let cite_style = LegalExtension::citation_style("bluebook");
+        assert_eq!(cite_style.to_bcp47_extension(), "u-cite-bluebook");
+
+        let court = LegalExtension::court_type("supreme");
+        assert_eq!(court.to_bcp47_extension(), "u-court-supreme");
+
+        let formality = LegalExtension::formality_level("high");
+        assert_eq!(formality.to_bcp47_extension(), "u-formality-high");
+    }
+
+    #[test]
+    fn test_legal_extension_type_display() {
+        assert_eq!(LegalExtensionType::LegalSystem.to_string(), "u-legal");
+        assert_eq!(LegalExtensionType::CitationStyle.to_string(), "u-cite");
+        assert_eq!(LegalExtensionType::CourtType.to_string(), "u-court");
+        assert_eq!(
+            LegalExtensionType::FormalityLevel.to_string(),
+            "u-formality"
+        );
+    }
+
+    #[test]
+    fn test_w3c_compliance_valid_locale() {
+        let locale = Locale::new("en").with_country("US");
+        let checker = W3CComplianceChecker::new(locale);
+
+        assert!(checker.has_valid_language_tag());
+        assert!(checker.has_valid_country_code());
+        assert_eq!(checker.get_text_direction(), "ltr");
+    }
+
+    #[test]
+    fn test_w3c_compliance_rtl_locale() {
+        let locale = Locale::new("ar").with_country("SA");
+        let checker = W3CComplianceChecker::new(locale);
+
+        assert!(checker.has_text_direction());
+        assert_eq!(checker.get_text_direction(), "rtl");
+    }
+
+    #[test]
+    fn test_w3c_compliance_html_attributes() {
+        let locale = Locale::new("en").with_country("US");
+        let checker = W3CComplianceChecker::new(locale);
+
+        assert_eq!(checker.generate_html_lang_attribute(), "en-US");
+        assert_eq!(checker.generate_html_dir_attribute(), "ltr");
+    }
+
+    #[test]
+    fn test_w3c_compliance_report() {
+        let locale = Locale::new("en").with_country("US");
+        let checker = W3CComplianceChecker::new(locale);
+
+        let report = checker.check_compliance();
+        assert!(report.is_compliant);
+        assert!(report.issues.is_empty());
+        assert_eq!(report.lang_attribute, "en-US");
+        assert_eq!(report.dir_attribute, "ltr");
+    }
+
+    #[test]
+    fn test_w3c_compliance_report_summary() {
+        let locale = Locale::new("en").with_country("US");
+        let checker = W3CComplianceChecker::new(locale);
+
+        let report = checker.check_compliance();
+        let summary = report.summary();
+        assert!(summary.contains("compliant"));
+    }
+
+    #[test]
+    fn test_bcp47_creation() {
+        let tag = BCP47LanguageTag::new("en");
+        assert_eq!(tag.language, "en");
+        assert!(tag.script.is_none());
+        assert!(tag.region.is_none());
+    }
+
+    #[test]
+    fn test_bcp47_with_script_and_region() {
+        let tag = BCP47LanguageTag::new("zh")
+            .with_script("Hans")
+            .with_region("CN");
+
+        assert_eq!(tag.language, "zh");
+        assert_eq!(tag.script, Some("Hans".to_string()));
+        assert_eq!(tag.region, Some("CN".to_string()));
+        assert_eq!(tag.format_tag(), "zh-Hans-CN");
+    }
+
+    #[test]
+    fn test_bcp47_with_variants() {
+        let tag = BCP47LanguageTag::new("sl")
+            .with_region("IT")
+            .add_variant("nedis");
+
+        assert_eq!(tag.format_tag(), "sl-IT-nedis");
+    }
+
+    #[test]
+    fn test_bcp47_with_extensions() {
+        let tag = BCP47LanguageTag::new("en")
+            .with_region("US")
+            .add_extension("u-ca-gregory");
+
+        assert!(tag.format_tag().contains("u-ca-gregory"));
+    }
+
+    #[test]
+    fn test_bcp47_with_private_use() {
+        let tag = BCP47LanguageTag::new("en").add_private_use("legal");
+
+        assert!(tag.format_tag().contains("x-legal"));
+    }
+
+    #[test]
+    fn test_bcp47_parse_simple() {
+        let tag = BCP47LanguageTag::parse("en-US").unwrap();
+        assert_eq!(tag.language, "en");
+        assert_eq!(tag.region, Some("US".to_string()));
+    }
+
+    #[test]
+    fn test_bcp47_parse_with_script() {
+        let tag = BCP47LanguageTag::parse("zh-Hans-CN").unwrap();
+        assert_eq!(tag.language, "zh");
+        assert_eq!(tag.script, Some("Hans".to_string()));
+        assert_eq!(tag.region, Some("CN".to_string()));
+    }
+
+    #[test]
+    fn test_bcp47_parse_invalid() {
+        let result = BCP47LanguageTag::parse("x");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bcp47_to_locale() {
+        let tag = BCP47LanguageTag::new("en")
+            .with_script("Latn")
+            .with_region("US");
+
+        let locale = tag.to_locale();
+        assert_eq!(locale.language, "en");
+        assert_eq!(locale.script, Some("Latn".to_string()));
+        assert_eq!(locale.country, Some("US".to_string()));
+    }
+
+    #[test]
+    fn test_bcp47_from_locale() {
+        let locale = Locale::new("ja").with_script("Jpan").with_country("JP");
+
+        let tag = BCP47LanguageTag::from_locale(&locale);
+        assert_eq!(tag.language, "ja");
+        assert_eq!(tag.script, Some("Jpan".to_string()));
+        assert_eq!(tag.region, Some("JP".to_string()));
+    }
+
+    #[test]
+    fn test_bcp47_is_valid() {
+        let valid = BCP47LanguageTag::new("en").with_region("US");
+        assert!(valid.is_valid());
+
+        let mut invalid = BCP47LanguageTag::new("x");
+        assert!(!invalid.is_valid());
+
+        invalid = BCP47LanguageTag::new("en");
+        invalid.script = Some("AB".to_string()); // Script must be 4 chars
+        assert!(!invalid.is_valid());
+    }
+
+    #[test]
+    fn test_bcp47_roundtrip() {
+        let original = "en-Latn-US";
+        let tag = BCP47LanguageTag::parse(original).unwrap();
+        let reconstructed = tag.format_tag();
+        assert_eq!(original, reconstructed);
+    }
+}
+
+// ============================================================================
+// v0.3.0: AI-Powered Translation
+// ============================================================================
+
+/// LLM provider type for AI-powered translation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LLMProvider {
+    /// OpenAI GPT models.
+    OpenAI,
+    /// Anthropic Claude models.
+    Anthropic,
+    /// Google PaLM/Gemini models.
+    Google,
+    /// Meta Llama models.
+    Meta,
+    /// Custom LLM provider.
+    Custom,
+}
+
+impl std::fmt::Display for LLMProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LLMProvider::OpenAI => write!(f, "OpenAI"),
+            LLMProvider::Anthropic => write!(f, "Anthropic"),
+            LLMProvider::Google => write!(f, "Google"),
+            LLMProvider::Meta => write!(f, "Meta"),
+            LLMProvider::Custom => write!(f, "Custom"),
+        }
+    }
+}
+
+/// Legal translation prompt template.
+#[derive(Debug, Clone)]
+pub struct LegalPromptTemplate {
+    /// The system prompt for legal translation.
+    pub system_prompt: String,
+    /// The user prompt template with placeholders.
+    pub user_prompt_template: String,
+    /// Whether to include legal context in the prompt.
+    pub include_legal_context: bool,
+    /// Whether to preserve legal citations.
+    pub preserve_citations: bool,
+    /// Whether to maintain formality level.
+    pub maintain_formality: bool,
+}
+
+impl LegalPromptTemplate {
+    /// Creates a new legal prompt template.
+    pub fn new(system_prompt: &str, user_prompt_template: &str) -> Self {
+        Self {
+            system_prompt: system_prompt.to_string(),
+            user_prompt_template: user_prompt_template.to_string(),
+            include_legal_context: true,
+            preserve_citations: true,
+            maintain_formality: true,
+        }
+    }
+
+    /// Creates a default legal translation prompt template.
+    pub fn default_legal_translation() -> Self {
+        Self::new(
+            "You are a professional legal translator with expertise in multiple legal systems. \
+             Translate the following legal text accurately while preserving legal terminology, \
+             citations, and formality. Maintain the precise legal meaning and structure.",
+            "Translate the following legal text from {source_locale} to {target_locale}:\n\n\
+             Text: {text}\n\n\
+             Legal Context: {legal_context}\n\n\
+             Please provide an accurate legal translation.",
+        )
+    }
+
+    /// Sets whether to include legal context.
+    pub fn with_legal_context(mut self, include: bool) -> Self {
+        self.include_legal_context = include;
+        self
+    }
+
+    /// Sets whether to preserve citations.
+    pub fn with_citation_preservation(mut self, preserve: bool) -> Self {
+        self.preserve_citations = preserve;
+        self
+    }
+
+    /// Sets whether to maintain formality.
+    pub fn with_formality(mut self, maintain: bool) -> Self {
+        self.maintain_formality = maintain;
+        self
+    }
+
+    /// Renders the prompt with the given parameters.
+    pub fn render(
+        &self,
+        text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+        legal_context: Option<&str>,
+    ) -> String {
+        let mut prompt = self.user_prompt_template.clone();
+
+        prompt = prompt.replace("{text}", text);
+        prompt = prompt.replace("{source_locale}", &source_locale.to_string());
+        prompt = prompt.replace("{target_locale}", &target_locale.to_string());
+        prompt = prompt.replace(
+            "{legal_context}",
+            legal_context.unwrap_or("General legal text"),
+        );
+
+        prompt
+    }
+}
+
+/// LLM-based legal translator (infrastructure for external LLM integration).
+#[derive(Debug, Clone)]
+pub struct LLMTranslator {
+    /// The LLM provider to use.
+    pub provider: LLMProvider,
+    /// The model name (e.g., "gpt-4", "claude-3-opus").
+    pub model_name: String,
+    /// The prompt template for translation.
+    pub prompt_template: LegalPromptTemplate,
+    /// Maximum tokens for the response.
+    pub max_tokens: usize,
+    /// Temperature for generation (0.0 to 1.0).
+    pub temperature: f32,
+}
+
+impl LLMTranslator {
+    /// Creates a new LLM translator.
+    pub fn new(provider: LLMProvider, model_name: &str) -> Self {
+        Self {
+            provider,
+            model_name: model_name.to_string(),
+            prompt_template: LegalPromptTemplate::default_legal_translation(),
+            max_tokens: 2000,
+            temperature: 0.3, // Low temperature for consistent legal translation
+        }
+    }
+
+    /// Creates an OpenAI GPT-4 translator.
+    pub fn openai_gpt4() -> Self {
+        Self::new(LLMProvider::OpenAI, "gpt-4")
+    }
+
+    /// Creates an Anthropic Claude translator.
+    pub fn anthropic_claude() -> Self {
+        Self::new(LLMProvider::Anthropic, "claude-3-opus-20240229")
+    }
+
+    /// Sets a custom prompt template.
+    pub fn with_prompt_template(mut self, template: LegalPromptTemplate) -> Self {
+        self.prompt_template = template;
+        self
+    }
+
+    /// Sets the maximum tokens.
+    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    /// Sets the temperature.
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Generates a translation prompt for the given text.
+    pub fn generate_prompt(
+        &self,
+        text: &str,
+        source_locale: &Locale,
+        target_locale: &Locale,
+        legal_context: Option<&str>,
+    ) -> String {
+        self.prompt_template
+            .render(text, source_locale, target_locale, legal_context)
+    }
+
+    /// Gets the system prompt.
+    pub fn get_system_prompt(&self) -> &str {
+        &self.prompt_template.system_prompt
+    }
+}
+
+/// Context disambiguation type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DisambiguationType {
+    /// Disambiguate by legal domain (e.g., criminal vs. civil).
+    LegalDomain,
+    /// Disambiguate by jurisdiction.
+    Jurisdiction,
+    /// Disambiguate by document type.
+    DocumentType,
+    /// Disambiguate by temporal context (historical vs. modern).
+    Temporal,
+    /// Disambiguate by formality level.
+    Formality,
+}
+
+impl std::fmt::Display for DisambiguationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DisambiguationType::LegalDomain => write!(f, "Legal Domain"),
+            DisambiguationType::Jurisdiction => write!(f, "Jurisdiction"),
+            DisambiguationType::DocumentType => write!(f, "Document Type"),
+            DisambiguationType::Temporal => write!(f, "Temporal Context"),
+            DisambiguationType::Formality => write!(f, "Formality Level"),
+        }
+    }
+}
+
+/// Disambiguation context for legal translation.
+#[derive(Debug, Clone)]
+pub struct DisambiguationContext {
+    /// Type of disambiguation.
+    pub disambiguation_type: DisambiguationType,
+    /// Context value (e.g., "criminal_law", "en-US", "contract").
+    pub value: String,
+    /// Confidence score (0.0 to 1.0).
+    pub confidence: f32,
+    /// Explanation of the disambiguation.
+    pub explanation: Option<String>,
+}
+
+impl DisambiguationContext {
+    /// Creates a new disambiguation context.
+    pub fn new(disambiguation_type: DisambiguationType, value: &str, confidence: f32) -> Self {
+        Self {
+            disambiguation_type,
+            value: value.to_string(),
+            confidence: confidence.clamp(0.0, 1.0),
+            explanation: None,
+        }
+    }
+
+    /// Adds an explanation.
+    pub fn with_explanation(mut self, explanation: &str) -> Self {
+        self.explanation = Some(explanation.to_string());
+        self
+    }
+}
+
+/// Context-aware disambiguator for legal terms.
+#[derive(Debug, Clone)]
+pub struct ContextDisambiguator {
+    /// Map of term to disambiguation contexts.
+    contexts: HashMap<String, Vec<DisambiguationContext>>,
+}
+
+impl ContextDisambiguator {
+    /// Creates a new context disambiguator.
+    pub fn new() -> Self {
+        Self {
+            contexts: HashMap::new(),
+        }
+    }
+
+    /// Creates a disambiguator with default legal term contexts.
+    pub fn with_defaults() -> Self {
+        let mut disambiguator = Self::new();
+
+        // "Action" - can mean lawsuit or legal proceeding
+        disambiguator.add_context(
+            "action",
+            DisambiguationContext::new(DisambiguationType::LegalDomain, "civil_law", 0.8)
+                .with_explanation("In civil law, 'action' typically refers to a lawsuit"),
+        );
+        disambiguator.add_context(
+            "action",
+            DisambiguationContext::new(DisambiguationType::LegalDomain, "criminal_law", 0.7)
+                .with_explanation("In criminal law, 'action' may refer to prosecution"),
+        );
+
+        // "Consideration" - different meanings in contract law
+        disambiguator.add_context(
+            "consideration",
+            DisambiguationContext::new(DisambiguationType::LegalDomain, "contract_law", 0.9)
+                .with_explanation(
+                    "In contract law, 'consideration' is a requirement for valid contracts",
+                ),
+        );
+
+        // "Trust" - different meanings in property law
+        disambiguator.add_context(
+            "trust",
+            DisambiguationContext::new(DisambiguationType::LegalDomain, "property_law", 0.85)
+                .with_explanation("In property law, 'trust' is a fiduciary relationship"),
+        );
+
+        // "Bill" - legislative document vs. invoice
+        disambiguator.add_context(
+            "bill",
+            DisambiguationContext::new(DisambiguationType::DocumentType, "legislation", 0.8)
+                .with_explanation("In legislative context, 'bill' is a proposed law"),
+        );
+        disambiguator.add_context(
+            "bill",
+            DisambiguationContext::new(DisambiguationType::DocumentType, "commercial", 0.6)
+                .with_explanation("In commercial context, 'bill' may refer to an invoice"),
+        );
+
+        disambiguator
+    }
+
+    /// Adds a disambiguation context for a term.
+    pub fn add_context(&mut self, term: &str, context: DisambiguationContext) {
+        self.contexts
+            .entry(term.to_lowercase())
+            .or_default()
+            .push(context);
+    }
+
+    /// Gets disambiguation contexts for a term.
+    pub fn get_contexts(&self, term: &str) -> Vec<&DisambiguationContext> {
+        self.contexts
+            .get(&term.to_lowercase())
+            .map(|contexts| contexts.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Gets the best disambiguation context for a term given a type.
+    pub fn get_best_context(
+        &self,
+        term: &str,
+        disambiguation_type: DisambiguationType,
+    ) -> Option<&DisambiguationContext> {
+        self.get_contexts(term)
+            .into_iter()
+            .filter(|ctx| ctx.disambiguation_type == disambiguation_type)
+            .max_by(|a, b| {
+                a.confidence
+                    .partial_cmp(&b.confidence)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    }
+
+    /// Returns the number of terms with disambiguation contexts.
+    pub fn term_count(&self) -> usize {
+        self.contexts.len()
+    }
+
+    /// Returns the total number of disambiguation contexts.
+    pub fn context_count(&self) -> usize {
+        self.contexts.values().map(|v| v.len()).sum()
+    }
+}
+
+impl Default for ContextDisambiguator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Writing style attribute for translation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StyleAttribute {
+    /// Formality level (formal, informal, neutral).
+    Formality,
+    /// Tone (professional, conversational, authoritative).
+    Tone,
+    /// Person (first, second, third).
+    Person,
+    /// Voice (active, passive).
+    Voice,
+    /// Tense (present, past, future).
+    Tense,
+}
+
+impl std::fmt::Display for StyleAttribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StyleAttribute::Formality => write!(f, "Formality"),
+            StyleAttribute::Tone => write!(f, "Tone"),
+            StyleAttribute::Person => write!(f, "Person"),
+            StyleAttribute::Voice => write!(f, "Voice"),
+            StyleAttribute::Tense => write!(f, "Tense"),
+        }
+    }
+}
+
+/// Style profile for legal text.
+#[derive(Debug, Clone)]
+pub struct StyleProfile {
+    /// Map of style attributes to their values.
+    attributes: HashMap<StyleAttribute, String>,
+    /// Locale-specific style preferences.
+    locale_preferences: HashMap<Locale, HashMap<StyleAttribute, String>>,
+}
+
+impl StyleProfile {
+    /// Creates a new style profile.
+    pub fn new() -> Self {
+        Self {
+            attributes: HashMap::new(),
+            locale_preferences: HashMap::new(),
+        }
+    }
+
+    /// Creates a formal legal style profile.
+    pub fn formal_legal() -> Self {
+        let mut profile = Self::new();
+        profile.set_attribute(StyleAttribute::Formality, "formal");
+        profile.set_attribute(StyleAttribute::Tone, "professional");
+        profile.set_attribute(StyleAttribute::Person, "third");
+        profile.set_attribute(StyleAttribute::Voice, "passive");
+        profile.set_attribute(StyleAttribute::Tense, "present");
+        profile
+    }
+
+    /// Creates an informal legal style profile.
+    pub fn informal_legal() -> Self {
+        let mut profile = Self::new();
+        profile.set_attribute(StyleAttribute::Formality, "informal");
+        profile.set_attribute(StyleAttribute::Tone, "conversational");
+        profile.set_attribute(StyleAttribute::Person, "second");
+        profile.set_attribute(StyleAttribute::Voice, "active");
+        profile.set_attribute(StyleAttribute::Tense, "present");
+        profile
+    }
+
+    /// Sets a style attribute.
+    pub fn set_attribute(&mut self, attribute: StyleAttribute, value: &str) {
+        self.attributes.insert(attribute, value.to_string());
+    }
+
+    /// Gets a style attribute.
+    pub fn get_attribute(&self, attribute: StyleAttribute) -> Option<&String> {
+        self.attributes.get(&attribute)
+    }
+
+    /// Sets a locale-specific style preference.
+    pub fn set_locale_preference(
+        &mut self,
+        locale: Locale,
+        attribute: StyleAttribute,
+        value: &str,
+    ) {
+        self.locale_preferences
+            .entry(locale)
+            .or_default()
+            .insert(attribute, value.to_string());
+    }
+
+    /// Gets a style attribute for a specific locale (with fallback to global).
+    pub fn get_attribute_for_locale(
+        &self,
+        locale: &Locale,
+        attribute: StyleAttribute,
+    ) -> Option<&String> {
+        self.locale_preferences
+            .get(locale)
+            .and_then(|prefs| prefs.get(&attribute))
+            .or_else(|| self.attributes.get(&attribute))
+    }
+
+    /// Returns the number of style attributes.
+    pub fn attribute_count(&self) -> usize {
+        self.attributes.len()
+    }
+
+    /// Returns the number of locales with preferences.
+    pub fn locale_count(&self) -> usize {
+        self.locale_preferences.len()
+    }
+}
+
+impl Default for StyleProfile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Style-preserving translator.
+#[derive(Debug, Clone)]
+pub struct StylePreservingTranslator {
+    /// Source style profile.
+    pub source_profile: StyleProfile,
+    /// Target locale.
+    pub target_locale: Locale,
+    /// Whether to adapt style to target locale conventions.
+    pub adapt_to_target: bool,
+}
+
+impl StylePreservingTranslator {
+    /// Creates a new style-preserving translator.
+    pub fn new(source_profile: StyleProfile, target_locale: Locale) -> Self {
+        Self {
+            source_profile,
+            target_locale,
+            adapt_to_target: false,
+        }
+    }
+
+    /// Sets whether to adapt style to target locale.
+    pub fn with_adaptation(mut self, adapt: bool) -> Self {
+        self.adapt_to_target = adapt;
+        self
+    }
+
+    /// Gets the target style profile for translation.
+    pub fn get_target_profile(&self) -> StyleProfile {
+        if self.adapt_to_target {
+            // Create adapted profile based on target locale
+            let mut adapted = self.source_profile.clone();
+
+            // Add locale-specific adaptations
+            // For example, Japanese formal legal style uses more passive voice
+            if self.target_locale.language == "ja" {
+                adapted.set_locale_preference(
+                    self.target_locale.clone(),
+                    StyleAttribute::Voice,
+                    "passive",
+                );
+            }
+
+            adapted
+        } else {
+            self.source_profile.clone()
+        }
+    }
+
+    /// Generates style preservation instructions for LLM prompt.
+    pub fn generate_style_instructions(&self) -> String {
+        let profile = self.get_target_profile();
+        let mut instructions = Vec::new();
+
+        if let Some(formality) =
+            profile.get_attribute_for_locale(&self.target_locale, StyleAttribute::Formality)
+        {
+            instructions.push(format!("Maintain {} formality level", formality));
+        }
+
+        if let Some(tone) =
+            profile.get_attribute_for_locale(&self.target_locale, StyleAttribute::Tone)
+        {
+            instructions.push(format!("Use a {} tone", tone));
+        }
+
+        if let Some(voice) =
+            profile.get_attribute_for_locale(&self.target_locale, StyleAttribute::Voice)
+        {
+            instructions.push(format!("Prefer {} voice", voice));
+        }
+
+        instructions.join(". ")
+    }
+}
+
+/// Quality estimation metric for AI translations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QualityMetric {
+    /// Semantic accuracy (meaning preservation).
+    SemanticAccuracy,
+    /// Terminological consistency.
+    TerminologicalConsistency,
+    /// Grammatical correctness.
+    GrammaticalCorrectness,
+    /// Style appropriateness.
+    StyleAppropriateness,
+    /// Citation preservation.
+    CitationPreservation,
+    /// Fluency.
+    Fluency,
+}
+
+impl std::fmt::Display for QualityMetric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QualityMetric::SemanticAccuracy => write!(f, "Semantic Accuracy"),
+            QualityMetric::TerminologicalConsistency => write!(f, "Terminological Consistency"),
+            QualityMetric::GrammaticalCorrectness => write!(f, "Grammatical Correctness"),
+            QualityMetric::StyleAppropriateness => write!(f, "Style Appropriateness"),
+            QualityMetric::CitationPreservation => write!(f, "Citation Preservation"),
+            QualityMetric::Fluency => write!(f, "Fluency"),
+        }
+    }
+}
+
+/// AI quality score for a specific metric.
+#[derive(Debug, Clone)]
+pub struct AIQualityScore {
+    /// The quality metric.
+    pub metric: QualityMetric,
+    /// The score (0.0 to 1.0).
+    pub score: f32,
+    /// Explanation of the score.
+    pub explanation: Option<String>,
+}
+
+impl AIQualityScore {
+    /// Creates a new quality score.
+    pub fn new(metric: QualityMetric, score: f32) -> Self {
+        Self {
+            metric,
+            score: score.clamp(0.0, 1.0),
+            explanation: None,
+        }
+    }
+
+    /// Adds an explanation.
+    pub fn with_explanation(mut self, explanation: &str) -> Self {
+        self.explanation = Some(explanation.to_string());
+        self
+    }
+}
+
+/// Quality estimation report for AI translation.
+#[derive(Debug, Clone)]
+pub struct QualityEstimationReport {
+    /// Overall quality score (0.0 to 1.0).
+    pub overall_score: f32,
+    /// Individual metric scores.
+    pub metric_scores: HashMap<QualityMetric, AIQualityScore>,
+    /// Source text.
+    pub source_text: String,
+    /// Translated text.
+    pub translated_text: String,
+    /// Source locale.
+    pub source_locale: Locale,
+    /// Target locale.
+    pub target_locale: Locale,
+}
+
+impl QualityEstimationReport {
+    /// Creates a new quality estimation report.
+    pub fn new(
+        source_text: &str,
+        translated_text: &str,
+        source_locale: Locale,
+        target_locale: Locale,
+    ) -> Self {
+        Self {
+            overall_score: 0.0,
+            metric_scores: HashMap::new(),
+            source_text: source_text.to_string(),
+            translated_text: translated_text.to_string(),
+            source_locale,
+            target_locale,
+        }
+    }
+
+    /// Adds a quality score for a metric.
+    pub fn add_score(&mut self, score: AIQualityScore) {
+        self.metric_scores.insert(score.metric, score);
+        self.recalculate_overall_score();
+    }
+
+    /// Recalculates the overall score based on metric scores.
+    fn recalculate_overall_score(&mut self) {
+        if self.metric_scores.is_empty() {
+            self.overall_score = 0.0;
+            return;
+        }
+
+        let sum: f32 = self.metric_scores.values().map(|s| s.score).sum();
+        self.overall_score = sum / self.metric_scores.len() as f32;
+    }
+
+    /// Gets the quality level (Low, Medium, High, Excellent).
+    pub fn get_quality_level(&self) -> &str {
+        match self.overall_score {
+            s if s >= 0.9 => "Excellent",
+            s if s >= 0.75 => "High",
+            s if s >= 0.5 => "Medium",
+            _ => "Low",
+        }
+    }
+
+    /// Checks if the translation meets a minimum quality threshold.
+    pub fn meets_threshold(&self, threshold: f32) -> bool {
+        self.overall_score >= threshold
+    }
+
+    /// Generates a summary of the quality estimation.
+    pub fn summary(&self) -> String {
+        format!(
+            "Translation from {} to {} - Overall Quality: {:.2}% ({})\n\
+             Metric Scores: {}",
+            self.source_locale,
+            self.target_locale,
+            self.overall_score * 100.0,
+            self.get_quality_level(),
+            self.metric_scores.len()
+        )
+    }
+}
+
+/// Quality estimator for AI-powered translations.
+#[derive(Debug, Clone)]
+pub struct QualityEstimator {
+    /// Minimum threshold for acceptable quality (0.0 to 1.0).
+    pub min_threshold: f32,
+}
+
+impl QualityEstimator {
+    /// Creates a new quality estimator.
+    pub fn new(min_threshold: f32) -> Self {
+        Self {
+            min_threshold: min_threshold.clamp(0.0, 1.0),
+        }
+    }
+
+    /// Creates a quality estimator with default threshold (0.7).
+    pub fn with_defaults() -> Self {
+        Self::new(0.7)
+    }
+
+    /// Estimates quality for a translation (simplified heuristic-based approach).
+    pub fn estimate_quality(
+        &self,
+        source_text: &str,
+        translated_text: &str,
+        source_locale: Locale,
+        target_locale: Locale,
+    ) -> QualityEstimationReport {
+        let mut report = QualityEstimationReport::new(
+            source_text,
+            translated_text,
+            source_locale,
+            target_locale,
+        );
+
+        // Semantic Accuracy: Check length ratio (simple heuristic)
+        let length_ratio = translated_text.len() as f32 / source_text.len().max(1) as f32;
+        let semantic_score = if (0.5..=2.0).contains(&length_ratio) {
+            0.8
+        } else {
+            0.5
+        };
+        report.add_score(
+            AIQualityScore::new(QualityMetric::SemanticAccuracy, semantic_score)
+                .with_explanation("Based on length ratio between source and target"),
+        );
+
+        // Terminological Consistency: Check if common legal terms are present
+        let has_legal_terms = translated_text.to_lowercase().contains("law")
+            || translated_text.to_lowercase().contains("contract")
+            || translated_text.to_lowercase().contains("court");
+        let term_score = if has_legal_terms { 0.75 } else { 0.6 };
+        report.add_score(
+            AIQualityScore::new(QualityMetric::TerminologicalConsistency, term_score)
+                .with_explanation("Based on presence of legal terminology"),
+        );
+
+        // Grammatical Correctness: Simple check for complete sentences
+        let has_punctuation = translated_text.ends_with('.')
+            || translated_text.ends_with('?')
+            || translated_text.ends_with('!');
+        let grammar_score = if has_punctuation { 0.85 } else { 0.7 };
+        report.add_score(
+            AIQualityScore::new(QualityMetric::GrammaticalCorrectness, grammar_score)
+                .with_explanation("Based on basic sentence structure"),
+        );
+
+        // Fluency: Check if not empty and has reasonable structure
+        let fluency_score = if !translated_text.is_empty() && translated_text.len() > 10 {
+            0.8
+        } else {
+            0.4
+        };
+        report.add_score(
+            AIQualityScore::new(QualityMetric::Fluency, fluency_score)
+                .with_explanation("Based on text length and non-emptiness"),
+        );
+
+        report
+    }
+
+    /// Checks if a translation meets the minimum quality threshold.
+    pub fn is_acceptable(&self, report: &QualityEstimationReport) -> bool {
+        report.meets_threshold(self.min_threshold)
+    }
+}
+
+impl Default for QualityEstimator {
+    fn default() -> Self {
+        Self::with_defaults()
+    }
+}
+
+#[cfg(test)]
+mod ai_translation_tests {
+    use super::*;
+
+    #[test]
+    fn test_llm_provider_display() {
+        assert_eq!(LLMProvider::OpenAI.to_string(), "OpenAI");
+        assert_eq!(LLMProvider::Anthropic.to_string(), "Anthropic");
+        assert_eq!(LLMProvider::Google.to_string(), "Google");
+    }
+
+    #[test]
+    fn test_legal_prompt_template_creation() {
+        let template = LegalPromptTemplate::default_legal_translation();
+
+        assert!(template.system_prompt.contains("legal translator"));
+        assert!(template.include_legal_context);
+        assert!(template.preserve_citations);
+    }
+
+    #[test]
+    fn test_legal_prompt_template_render() {
+        let template = LegalPromptTemplate::default_legal_translation();
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let rendered = template.render(
+            "This is a contract.",
+            &source,
+            &target,
+            Some("contract_law"),
+        );
+
+        assert!(rendered.contains("This is a contract."));
+        assert!(rendered.contains("en-US"));
+        assert!(rendered.contains("fr-FR"));
+        assert!(rendered.contains("contract_law"));
+    }
+
+    #[test]
+    fn test_llm_translator_creation() {
+        let translator = LLMTranslator::new(LLMProvider::OpenAI, "gpt-4");
+
+        assert_eq!(translator.provider, LLMProvider::OpenAI);
+        assert_eq!(translator.model_name, "gpt-4");
+        assert_eq!(translator.max_tokens, 2000);
+        assert_eq!(translator.temperature, 0.3);
+    }
+
+    #[test]
+    fn test_llm_translator_openai() {
+        let translator = LLMTranslator::openai_gpt4();
+
+        assert_eq!(translator.provider, LLMProvider::OpenAI);
+        assert_eq!(translator.model_name, "gpt-4");
+    }
+
+    #[test]
+    fn test_llm_translator_anthropic() {
+        let translator = LLMTranslator::anthropic_claude();
+
+        assert_eq!(translator.provider, LLMProvider::Anthropic);
+        assert!(translator.model_name.contains("claude"));
+    }
+
+    #[test]
+    fn test_llm_translator_generate_prompt() {
+        let translator = LLMTranslator::openai_gpt4();
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let prompt =
+            translator.generate_prompt("Contract law", &source, &target, Some("civil_law"));
+
+        assert!(prompt.contains("Contract law"));
+        assert!(prompt.contains("en-US"));
+        assert!(prompt.contains("ja-JP"));
+    }
+
+    #[test]
+    fn test_disambiguation_type_display() {
+        assert_eq!(DisambiguationType::LegalDomain.to_string(), "Legal Domain");
+        assert_eq!(DisambiguationType::Jurisdiction.to_string(), "Jurisdiction");
+    }
+
+    #[test]
+    fn test_disambiguation_context_creation() {
+        let context =
+            DisambiguationContext::new(DisambiguationType::LegalDomain, "criminal_law", 0.9)
+                .with_explanation("Criminal law context");
+
+        assert_eq!(context.disambiguation_type, DisambiguationType::LegalDomain);
+        assert_eq!(context.value, "criminal_law");
+        assert_eq!(context.confidence, 0.9);
+        assert!(context.explanation.is_some());
+    }
+
+    #[test]
+    fn test_context_disambiguator_defaults() {
+        let disambiguator = ContextDisambiguator::with_defaults();
+
+        assert!(disambiguator.term_count() > 0);
+        assert!(disambiguator.context_count() > 0);
+    }
+
+    #[test]
+    fn test_context_disambiguator_get_contexts() {
+        let disambiguator = ContextDisambiguator::with_defaults();
+
+        let contexts = disambiguator.get_contexts("action");
+        assert!(!contexts.is_empty());
+    }
+
+    #[test]
+    fn test_context_disambiguator_best_context() {
+        let disambiguator = ContextDisambiguator::with_defaults();
+
+        let best = disambiguator.get_best_context("consideration", DisambiguationType::LegalDomain);
+        assert!(best.is_some());
+        assert_eq!(best.unwrap().value, "contract_law");
+    }
+
+    #[test]
+    fn test_style_attribute_display() {
+        assert_eq!(StyleAttribute::Formality.to_string(), "Formality");
+        assert_eq!(StyleAttribute::Tone.to_string(), "Tone");
+        assert_eq!(StyleAttribute::Voice.to_string(), "Voice");
+    }
+
+    #[test]
+    fn test_style_profile_formal_legal() {
+        let profile = StyleProfile::formal_legal();
+
+        assert_eq!(
+            profile.get_attribute(StyleAttribute::Formality),
+            Some(&"formal".to_string())
+        );
+        assert_eq!(
+            profile.get_attribute(StyleAttribute::Tone),
+            Some(&"professional".to_string())
+        );
+        assert_eq!(
+            profile.get_attribute(StyleAttribute::Voice),
+            Some(&"passive".to_string())
+        );
+    }
+
+    #[test]
+    fn test_style_profile_informal_legal() {
+        let profile = StyleProfile::informal_legal();
+
+        assert_eq!(
+            profile.get_attribute(StyleAttribute::Formality),
+            Some(&"informal".to_string())
+        );
+        assert_eq!(
+            profile.get_attribute(StyleAttribute::Tone),
+            Some(&"conversational".to_string())
+        );
+    }
+
+    #[test]
+    fn test_style_profile_locale_preference() {
+        let mut profile = StyleProfile::new();
+        let ja_jp = Locale::new("ja").with_country("JP");
+
+        profile.set_locale_preference(ja_jp.clone(), StyleAttribute::Voice, "passive");
+
+        let voice = profile.get_attribute_for_locale(&ja_jp, StyleAttribute::Voice);
+        assert_eq!(voice, Some(&"passive".to_string()));
+    }
+
+    #[test]
+    fn test_style_preserving_translator() {
+        let profile = StyleProfile::formal_legal();
+        let target = Locale::new("fr").with_country("FR");
+
+        let translator = StylePreservingTranslator::new(profile, target);
+
+        assert!(!translator.adapt_to_target);
+    }
+
+    #[test]
+    fn test_style_preserving_translator_instructions() {
+        let profile = StyleProfile::formal_legal();
+        let target = Locale::new("en").with_country("US");
+
+        let translator = StylePreservingTranslator::new(profile, target);
+        let instructions = translator.generate_style_instructions();
+
+        assert!(instructions.contains("formal") || instructions.contains("professional"));
+    }
+
+    #[test]
+    fn test_quality_metric_display() {
+        assert_eq!(
+            QualityMetric::SemanticAccuracy.to_string(),
+            "Semantic Accuracy"
+        );
+        assert_eq!(
+            QualityMetric::TerminologicalConsistency.to_string(),
+            "Terminological Consistency"
+        );
+    }
+
+    #[test]
+    fn test_ai_quality_score_creation() {
+        let score = AIQualityScore::new(QualityMetric::SemanticAccuracy, 0.85)
+            .with_explanation("High semantic accuracy");
+
+        assert_eq!(score.metric, QualityMetric::SemanticAccuracy);
+        assert_eq!(score.score, 0.85);
+        assert!(score.explanation.is_some());
+    }
+
+    #[test]
+    fn test_quality_estimation_report_creation() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let mut report = QualityEstimationReport::new(
+            "This is a contract",
+            "Ceci est un contrat",
+            source,
+            target,
+        );
+
+        report.add_score(AIQualityScore::new(QualityMetric::SemanticAccuracy, 0.9));
+        report.add_score(AIQualityScore::new(QualityMetric::Fluency, 0.85));
+
+        assert!(report.overall_score > 0.0);
+        assert_eq!(report.metric_scores.len(), 2);
+    }
+
+    #[test]
+    fn test_quality_estimation_report_quality_level() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let mut report = QualityEstimationReport::new("Source", "Target", source, target);
+        report.add_score(AIQualityScore::new(QualityMetric::SemanticAccuracy, 0.95));
+
+        assert_eq!(report.get_quality_level(), "Excellent");
+    }
+
+    #[test]
+    fn test_quality_estimation_report_threshold() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let mut report = QualityEstimationReport::new("Source", "Target", source, target);
+        report.add_score(AIQualityScore::new(QualityMetric::SemanticAccuracy, 0.8));
+
+        assert!(report.meets_threshold(0.7));
+        assert!(!report.meets_threshold(0.9));
+    }
+
+    #[test]
+    fn test_quality_estimator_creation() {
+        let estimator = QualityEstimator::new(0.75);
+
+        assert_eq!(estimator.min_threshold, 0.75);
+    }
+
+    #[test]
+    fn test_quality_estimator_defaults() {
+        let estimator = QualityEstimator::with_defaults();
+
+        assert_eq!(estimator.min_threshold, 0.7);
+    }
+
+    #[test]
+    fn test_quality_estimator_estimate() {
+        let estimator = QualityEstimator::with_defaults();
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let report = estimator.estimate_quality(
+            "This is a legal contract.",
+            "Ceci est un contrat juridique.",
+            source,
+            target,
+        );
+
+        assert!(report.overall_score > 0.0);
+        assert!(report.metric_scores.len() > 0);
+    }
+
+    #[test]
+    fn test_quality_estimator_is_acceptable() {
+        let estimator = QualityEstimator::new(0.6);
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let report = estimator.estimate_quality(
+            "This is a contract.",
+            "Ceci est un contrat.",
+            source,
+            target,
+        );
+
+        assert!(estimator.is_acceptable(&report));
+    }
+}
+
 #[cfg(test)]
 mod cultural_tests {
     use super::*;

@@ -154,6 +154,15 @@ legalis-rs/
 | `laos-civil-code` | Soft ODA | Laos Civil Code 2020 - Japan's legal technical assistance case study |
 | `religious-legal-systems` | Comparative | Canon Law, Islamic Finance, Jewish/Hindu Personal Law (academic) |
 
+#### Technical Feature Examples
+| Example | Crate | Description |
+|---------|-------|-------------|
+| `smart-contract-export` | legalis-chain | Export statutes to Solidity, WASM, Ink!, Move contracts |
+| `legal-knowledge-graph` | legalis-lod | RDF/TTL, JSON-LD export with SPARQL generation |
+| `statute-version-control` | legalis-registry | Version history, snapshots, backup/restore |
+| `legal-dsl-interop` | legalis-interop | Catala, L4, Stipula DSL conversion |
+| `multilingual-statute` | legalis-i18n | Multi-language display with citation formatting |
+
 ## Quick Start
 
 ### Prerequisites
