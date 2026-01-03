@@ -1,0 +1,19 @@
+[package]
+name = "private-international-law"
+version = "0.1.0"
+edition = "2021"
+description = "Example: Private International Law / Conflict of Laws using Legalis-RS"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-dsl = { path = "../../crates/legalis-dsl" }
+legalis-verifier = { path = "../../crates/legalis-verifier" }
+legalis-sim = { path = "../../crates/legalis-sim" }
+legalis-viz = { path = "../../crates/legalis-viz" }
+legalis-audit = { path = "../../crates/legalis-audit" }
+
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"
+uuid = "1"

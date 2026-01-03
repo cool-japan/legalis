@@ -34,6 +34,23 @@ members = [
     "examples/welfare-benefits",
     "examples/minpo-709-tort",
     "examples/comparative-tort-law",
+    "examples/jp-drone-regulation",
+    # International Examples
+    "examples/eu-gdpr-compliance",
+    "examples/uk-employment-law",
+    "examples/brazil-consumer-protection",
+    "examples/india-rti-act",
+    "examples/singapore-business",
+    "examples/australia-immigration",
+    "examples/canada-healthcare",
+    "examples/korea-labor-law",
+    "examples/mexico-tax-law",
+    "examples/thailand-business",
+    # Advanced/Research Examples
+    "examples/soviet-law-history",
+    "examples/private-international-law",
+    "examples/laos-civil-code",
+    "examples/religious-legal-systems",
 ]
 
 [workspace.package]

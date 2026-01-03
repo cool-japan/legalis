@@ -3,7 +3,7 @@
 //! This module provides functionality for automatically extracting semantic relations
 //! from legal text and converting them into RDF triples.
 
-use crate::{LodError, LodResult, RdfValue, Triple};
+use crate::{RdfValue, Triple};
 use std::collections::HashMap;
 
 /// Represents a candidate relation extracted from text.

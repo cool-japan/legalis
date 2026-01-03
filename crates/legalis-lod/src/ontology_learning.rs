@@ -4,7 +4,7 @@
 //! structures (classes, properties, hierarchies) from legal text.
 
 use crate::{RdfValue, Triple};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// A learned ontology class.
 #[derive(Debug, Clone, PartialEq)]

@@ -15,6 +15,7 @@ chrono.workspace = true
 rayon = "1.10"
 rhai = { version = "1.19", features = ["serde", "sync"] }
 lru = "0.12"
+uuid = { version = "1.11", features = ["v4", "serde"] }
 
 [dev-dependencies]
 criterion = "0.5"

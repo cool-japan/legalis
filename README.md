@@ -122,10 +122,37 @@ legalis-rs/
 | `jp` | Japanese legal system implementation with localization support |
 
 ### Examples
+
+#### Japan Examples
 | Example | Description |
 |---------|-------------|
 | `jp-constitution-3d` | 3D visualization of the Japanese Constitution demonstrating multi-dimensional legal relationships |
 | `welfare-benefits` | Welfare benefits eligibility determination system showcasing rule-based processing |
+| `minpo-709-tort` | Japanese Civil Code Article 709 tort simulation |
+| `comparative-tort-law` | Comparative tort law analysis across Japan, Germany, France, and USA |
+| `jp-drone-regulation` | Aviation Act drone regulations: registration, flight categories, Level 4 |
+
+#### International Examples
+| Example | Country | Description |
+|---------|---------|-------------|
+| `eu-gdpr-compliance` | EU | GDPR data protection compliance checker (Articles 6-49) |
+| `uk-employment-law` | UK | Employment Rights Act 1996, Working Time Regulations, Equality Act 2010 |
+| `brazil-consumer-protection` | Brazil | Consumer Defense Code (CDC Lei 8.078/1990) |
+| `india-rti-act` | India | Right to Information Act 2005 transparency law |
+| `singapore-business` | Singapore | Companies Act, PDPA, Employment Act compliance |
+| `australia-immigration` | Australia | Migration Act 1958 visa eligibility (189, 190, 500, etc.) |
+| `canada-healthcare` | Canada | Canada Health Act and provincial health plans (OHIP, MSP, RAMQ) |
+| `korea-labor-law` | South Korea | Labor Standards Act (근로기준법) worker protections |
+| `mexico-tax-law` | Mexico | Codigo Fiscal de la Federacion (ISR, IVA, IEPS) |
+| `thailand-business` | Thailand | Foreign Business Act, BOI Investment Promotion |
+
+#### Advanced/Research Examples
+| Example | Focus | Description |
+|---------|-------|-------------|
+| `soviet-law-history` | Historical | USSR 1922-1991 legal system reconstruction for basic research |
+| `private-international-law` | PIL | Conflict of Laws: Japan PIL, Rome I/II, Hague Conventions |
+| `laos-civil-code` | Soft ODA | Laos Civil Code 2020 - Japan's legal technical assistance case study |
+| `religious-legal-systems` | Comparative | Canon Law, Islamic Finance, Jewish/Hindu Personal Law (academic) |
 
 ## Quick Start
 
