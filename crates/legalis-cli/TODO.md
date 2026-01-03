@@ -4,7 +4,7 @@
 
 Version: 0.2.0 | Status: Stable | Tests: Passing | Warnings: 0
 
-All v0.1.1 through v0.1.5 roadmap features are complete. Plugin ecosystem (v0.1.6+) and AI-powered features (v0.2.0+) are planned for future releases.
+All v0.1.1 through v0.1.9 roadmap features are complete. AI-powered features (v0.2.0+) are planned for future releases.
 
 ---
 
@@ -145,32 +145,32 @@ All v0.1.1 through v0.1.5 roadmap features are complete. Plugin ecosystem (v0.1.
 - [x] Add `registry login/logout` - authentication
 
 ### Plugin System (v0.1.6)
-- [ ] Add plugin discovery and loading
-- [ ] Add plugin manifest format
-- [ ] Add plugin sandboxing
-- [ ] Add built-in plugin manager commands
-- [ ] Add plugin hook points (pre-parse, post-verify, etc.)
+- [x] Add plugin discovery and loading
+- [x] Add plugin manifest format
+- [x] Add plugin sandboxing
+- [x] Add built-in plugin manager commands
+- [x] Add plugin hook points (pre-parse, post-verify, etc.)
 
 ### Output Enhancements (v0.1.7)
-- [ ] Add `--theme` flag for color schemes
-- [ ] Add `--no-emoji` flag for terminals without emoji
-- [ ] Add `--width` flag for output width control
-- [ ] Add pager integration for long outputs
-- [ ] Add structured logging output mode
+- [x] Add `--theme` flag for color schemes
+- [x] Add `--no-emoji` flag for terminals without emoji
+- [x] Add `--width` flag for output width control
+- [x] Add pager integration for long outputs
+- [x] Add structured logging output mode
 
 ### Configuration (v0.1.8)
-- [ ] Add profile support (dev, staging, prod)
-- [ ] Add remote configuration sources
-- [ ] Add configuration validation command
-- [ ] Add configuration diff between profiles
-- [ ] Add environment-specific overrides
+- [x] Add profile support (dev, staging, prod)
+- [x] Add remote configuration sources
+- [x] Add configuration validation command
+- [x] Add configuration diff between profiles
+- [x] Add environment-specific overrides
 
 ### Scripting (v0.1.9)
-- [ ] Add Lua scripting for custom commands
-- [ ] Add script execution with sandbox
-- [ ] Add built-in script library
-- [ ] Add script debugging support
-- [ ] Add script package manager
+- [x] Add Lua scripting for custom commands
+- [x] Add script execution with sandbox
+- [x] Add built-in script library
+- [x] Add script debugging support
+- [x] Add script package manager
 
 ## Roadmap for 0.2.0 Series
 

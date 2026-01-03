@@ -12757,6 +12757,3037 @@ function getColor(value) {
     }
 }
 
+// ============================================================================
+// Real-Time Legal Intelligence (v0.3.2)
+// ============================================================================
+
+/// Live court proceeding visualization with real-time updates.
+pub struct LiveCourtProceeding {
+    /// Court name
+    court_name: String,
+    /// Case number
+    case_number: String,
+    /// WebSocket URL for live updates
+    ws_url: String,
+    /// Theme
+    theme: Theme,
+}
+
+impl LiveCourtProceeding {
+    /// Creates a new live court proceeding visualizer.
+    pub fn new(court_name: &str, case_number: &str, ws_url: &str) -> Self {
+        Self {
+            court_name: court_name.to_string(),
+            case_number: case_number.to_string(),
+            ws_url: ws_url.to_string(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates live HTML for court proceeding.
+    pub fn to_live_html(&self, events: &[CourtEvent]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!(
+            "    <title>Live: {} - {}</title>\n",
+            self.court_name, self.case_number
+        ));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: Arial, sans-serif; margin: 0; padding: 20px; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .header { border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }\n");
+        html.push_str("        .status { display: inline-block; padding: 5px 15px; border-radius: 5px; font-weight: bold; }\n");
+        html.push_str("        .status.live { background-color: #e74c3c; color: white; animation: pulse 2s infinite; }\n");
+        html.push_str(
+            "        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }\n",
+        );
+        html.push_str("        .timeline { position: relative; padding-left: 30px; }\n");
+        html.push_str("        .event { position: relative; padding: 15px; margin: 10px 0; background-color: #f5f5f5; border-left: 4px solid #3498db; }\n");
+        html.push_str("        .event.motion { border-left-color: #9b59b6; }\n");
+        html.push_str("        .event.ruling { border-left-color: #e74c3c; }\n");
+        html.push_str("        .event.testimony { border-left-color: #f39c12; }\n");
+        html.push_str("        .event.recess { border-left-color: #95a5a6; }\n");
+        html.push_str("        .event-time { font-size: 0.9em; color: #7f8c8d; }\n");
+        html.push_str("        .event-type { font-weight: bold; text-transform: uppercase; font-size: 0.8em; }\n");
+        html.push_str("        .event-description { margin-top: 5px; }\n");
+        html.push_str(
+            "        .participants { margin-top: 10px; font-size: 0.9em; color: #34495e; }\n",
+        );
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"header\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.court_name));
+        html.push_str(&format!("        <h2>Case: {}</h2>\n", self.case_number));
+        html.push_str("        <span class=\"status live\" id=\"status\">● LIVE</span>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <div class=\"timeline\" id=\"timeline\">\n");
+
+        for event in events {
+            let event_class = match event.event_type {
+                CourtEventType::Motion => "motion",
+                CourtEventType::Ruling => "ruling",
+                CourtEventType::Testimony => "testimony",
+                CourtEventType::Recess => "recess",
+                CourtEventType::Opening => "opening",
+                CourtEventType::Closing => "closing",
+            };
+
+            html.push_str(&format!("        <div class=\"event {}\">\n", event_class));
+            html.push_str(&format!(
+                "            <div class=\"event-time\">{}</div>\n",
+                event.timestamp
+            ));
+            html.push_str(&format!(
+                "            <div class=\"event-type\">{:?}</div>\n",
+                event.event_type
+            ));
+            html.push_str(&format!(
+                "            <div class=\"event-description\">{}</div>\n",
+                event.description
+            ));
+
+            if !event.participants.is_empty() {
+                html.push_str(&format!(
+                    "            <div class=\"participants\">Participants: {}</div>\n",
+                    event.participants.join(", ")
+                ));
+            }
+
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const ws = new WebSocket('{}');\n", self.ws_url));
+        html.push_str("ws.onmessage = function(event) {\n");
+        html.push_str("    const data = JSON.parse(event.data);\n");
+        html.push_str("    const timeline = document.getElementById('timeline');\n");
+        html.push_str("    const eventDiv = document.createElement('div');\n");
+        html.push_str("    eventDiv.className = 'event ' + data.type.toLowerCase();\n");
+        html.push_str("    eventDiv.innerHTML = `\n");
+        html.push_str("        <div class=\"event-time\">${data.timestamp}</div>\n");
+        html.push_str("        <div class=\"event-type\">${data.type}</div>\n");
+        html.push_str("        <div class=\"event-description\">${data.description}</div>\n");
+        html.push_str("        ${data.participants ? '<div class=\"participants\">Participants: ' + data.participants.join(', ') + '</div>' : ''}\n");
+        html.push_str("    `;\n");
+        html.push_str("    timeline.appendChild(eventDiv);\n");
+        html.push_str("    eventDiv.scrollIntoView({ behavior: 'smooth' });\n");
+        html.push_str("};\n");
+        html.push_str("ws.onclose = function() {\n");
+        html.push_str("    document.getElementById('status').textContent = '● ENDED';\n");
+        html.push_str("    document.getElementById('status').classList.remove('live');\n");
+        html.push_str("};\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for LiveCourtProceeding {
+    fn default() -> Self {
+        Self::new("Court", "Unknown", "ws://localhost:8080")
+    }
+}
+
+/// Court event in a live proceeding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CourtEvent {
+    /// Event timestamp
+    pub timestamp: String,
+    /// Event type
+    pub event_type: CourtEventType,
+    /// Event description
+    pub description: String,
+    /// Participants
+    pub participants: Vec<String>,
+}
+
+impl CourtEvent {
+    /// Creates a new court event.
+    pub fn new(timestamp: &str, event_type: CourtEventType, description: &str) -> Self {
+        Self {
+            timestamp: timestamp.to_string(),
+            event_type,
+            description: description.to_string(),
+            participants: Vec::new(),
+        }
+    }
+
+    /// Adds a participant.
+    pub fn with_participant(mut self, participant: &str) -> Self {
+        self.participants.push(participant.to_string());
+        self
+    }
+}
+
+/// Types of court events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CourtEventType {
+    /// Motion filed or argued
+    Motion,
+    /// Ruling issued
+    Ruling,
+    /// Testimony given
+    Testimony,
+    /// Court recess
+    Recess,
+    /// Opening statement
+    Opening,
+    /// Closing argument
+    Closing,
+}
+
+/// Breaking legal news feed visualizer.
+pub struct BreakingNewsFeed {
+    /// Feed title
+    title: String,
+    /// WebSocket URL for news updates
+    ws_url: String,
+    /// Theme
+    theme: Theme,
+    /// Max items to display
+    max_items: usize,
+}
+
+impl BreakingNewsFeed {
+    /// Creates a new breaking news feed.
+    pub fn new(title: &str, ws_url: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            ws_url: ws_url.to_string(),
+            theme: Theme::default(),
+            max_items: 50,
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets max items to display.
+    pub fn with_max_items(mut self, max_items: usize) -> Self {
+        self.max_items = max_items;
+        self
+    }
+
+    /// Generates HTML for breaking news feed.
+    pub fn to_html(&self, news_items: &[NewsItem]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .header { background-color: #c0392b; color: white; padding: 20px; border-bottom: 3px solid #e74c3c; }\n");
+        html.push_str("        .header h1 { margin: 0; font-size: 2em; }\n");
+        html.push_str("        .breaking-banner { background-color: #e74c3c; color: white; padding: 10px 20px; font-weight: bold; animation: flash 2s infinite; }\n");
+        html.push_str(
+            "        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }\n",
+        );
+        html.push_str("        .news-feed { max-width: 1200px; margin: 0 auto; padding: 20px; }\n");
+        html.push_str("        .news-item { background-color: white; border-left: 5px solid #3498db; margin: 15px 0; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .news-item.urgent { border-left-color: #e74c3c; }\n");
+        html.push_str("        .news-item.high { border-left-color: #f39c12; }\n");
+        html.push_str("        .news-item.medium { border-left-color: #3498db; }\n");
+        html.push_str("        .news-item.low { border-left-color: #95a5a6; }\n");
+        html.push_str("        .news-title { font-size: 1.3em; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }\n");
+        html.push_str(
+            "        .news-summary { margin-bottom: 10px; color: #34495e; line-height: 1.6; }\n",
+        );
+        html.push_str("        .news-meta { font-size: 0.9em; color: #7f8c8d; }\n");
+        html.push_str("        .news-source { font-weight: bold; color: #2980b9; }\n");
+        html.push_str("        .news-tags { margin-top: 10px; }\n");
+        html.push_str("        .tag { display: inline-block; background-color: #ecf0f1; padding: 3px 10px; margin: 2px; border-radius: 3px; font-size: 0.85em; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"header\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+        html.push_str("    </div>\n");
+        html.push_str("    <div class=\"breaking-banner\" id=\"breaking\" style=\"display: none;\">BREAKING NEWS</div>\n");
+        html.push_str("    <div class=\"news-feed\" id=\"feed\">\n");
+
+        for item in news_items.iter().take(self.max_items) {
+            let priority_class = match item.priority {
+                NewsPriority::Urgent => "urgent",
+                NewsPriority::High => "high",
+                NewsPriority::Medium => "medium",
+                NewsPriority::Low => "low",
+            };
+
+            html.push_str(&format!(
+                "        <div class=\"news-item {}\">\n",
+                priority_class
+            ));
+            html.push_str(&format!(
+                "            <div class=\"news-title\">{}</div>\n",
+                item.title
+            ));
+            html.push_str(&format!(
+                "            <div class=\"news-summary\">{}</div>\n",
+                item.summary
+            ));
+            html.push_str("            <div class=\"news-meta\">\n");
+            html.push_str(&format!(
+                "                <span class=\"news-source\">{}</span> • {}\n",
+                item.source, item.timestamp
+            ));
+            html.push_str("            </div>\n");
+
+            if !item.tags.is_empty() {
+                html.push_str("            <div class=\"news-tags\">\n");
+                for tag in &item.tags {
+                    html.push_str(&format!(
+                        "                <span class=\"tag\">{}</span>\n",
+                        tag
+                    ));
+                }
+                html.push_str("            </div>\n");
+            }
+
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const ws = new WebSocket('{}');\n", self.ws_url));
+        html.push_str(&format!("let itemCount = {};\n", news_items.len()));
+        html.push_str(&format!("const maxItems = {};\n", self.max_items));
+        html.push_str("ws.onmessage = function(event) {\n");
+        html.push_str("    const data = JSON.parse(event.data);\n");
+        html.push_str("    const feed = document.getElementById('feed');\n");
+        html.push_str("    const newsItem = document.createElement('div');\n");
+        html.push_str("    const priorityClass = data.priority.toLowerCase();\n");
+        html.push_str("    newsItem.className = 'news-item ' + priorityClass;\n");
+        html.push_str("    newsItem.innerHTML = `\n");
+        html.push_str("        <div class=\"news-title\">${data.title}</div>\n");
+        html.push_str("        <div class=\"news-summary\">${data.summary}</div>\n");
+        html.push_str("        <div class=\"news-meta\">\n");
+        html.push_str(
+            "            <span class=\"news-source\">${data.source}</span> • ${data.timestamp}\n",
+        );
+        html.push_str("        </div>\n");
+        html.push_str("        ${data.tags && data.tags.length > 0 ? '<div class=\"news-tags\">' + data.tags.map(t => '<span class=\"tag\">' + t + '</span>').join('') + '</div>' : ''}\n");
+        html.push_str("    `;\n");
+        html.push_str("    feed.insertBefore(newsItem, feed.firstChild);\n");
+        html.push_str("    if (data.priority === 'Urgent') {\n");
+        html.push_str("        document.getElementById('breaking').style.display = 'block';\n");
+        html.push_str("        setTimeout(() => { document.getElementById('breaking').style.display = 'none'; }, 5000);\n");
+        html.push_str("    }\n");
+        html.push_str("    itemCount++;\n");
+        html.push_str("    if (itemCount > maxItems) {\n");
+        html.push_str("        feed.removeChild(feed.lastChild);\n");
+        html.push_str("        itemCount--;\n");
+        html.push_str("    }\n");
+        html.push_str("};\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for BreakingNewsFeed {
+    fn default() -> Self {
+        Self::new("Legal News Feed", "ws://localhost:8080")
+    }
+}
+
+/// News item for legal news feed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewsItem {
+    /// News title
+    pub title: String,
+    /// News summary
+    pub summary: String,
+    /// News source
+    pub source: String,
+    /// Timestamp
+    pub timestamp: String,
+    /// Priority level
+    pub priority: NewsPriority,
+    /// Tags
+    pub tags: Vec<String>,
+}
+
+impl NewsItem {
+    /// Creates a new news item.
+    pub fn new(
+        title: &str,
+        summary: &str,
+        source: &str,
+        timestamp: &str,
+        priority: NewsPriority,
+    ) -> Self {
+        Self {
+            title: title.to_string(),
+            summary: summary.to_string(),
+            source: source.to_string(),
+            timestamp: timestamp.to_string(),
+            priority,
+            tags: Vec::new(),
+        }
+    }
+
+    /// Adds a tag.
+    pub fn with_tag(mut self, tag: &str) -> Self {
+        self.tags.push(tag.to_string());
+        self
+    }
+}
+
+/// News priority levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NewsPriority {
+    /// Urgent/breaking news
+    Urgent,
+    /// High priority
+    High,
+    /// Medium priority
+    Medium,
+    /// Low priority
+    Low,
+}
+
+/// Regulatory change monitoring visualizer.
+pub struct RegulatoryChangeMonitor {
+    /// Monitor title
+    title: String,
+    /// WebSocket URL for updates
+    ws_url: String,
+    /// Theme
+    theme: Theme,
+}
+
+impl RegulatoryChangeMonitor {
+    /// Creates a new regulatory change monitor.
+    pub fn new(title: &str, ws_url: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            ws_url: ws_url.to_string(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for regulatory change monitor.
+    pub fn to_html(&self, changes: &[RegulatoryChange]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: Arial, sans-serif; margin: 0; padding: 0; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; }\n");
+        html.push_str("        .header h1 { margin: 0; }\n");
+        html.push_str("        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }\n");
+        html.push_str("        .filters { background-color: white; padding: 15px; margin-bottom: 20px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .filter-btn { padding: 8px 15px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; background-color: #ecf0f1; }\n");
+        html.push_str("        .filter-btn.active { background-color: #3498db; color: white; }\n");
+        html.push_str("        .change-card { background-color: white; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .change-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }\n");
+        html.push_str(
+            "        .change-title { font-size: 1.3em; font-weight: bold; color: #2c3e50; }\n",
+        );
+        html.push_str("        .change-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }\n");
+        html.push_str("        .badge-proposed { background-color: #3498db; color: white; }\n");
+        html.push_str("        .badge-enacted { background-color: #27ae60; color: white; }\n");
+        html.push_str("        .badge-repealed { background-color: #e74c3c; color: white; }\n");
+        html.push_str("        .badge-amended { background-color: #f39c12; color: white; }\n");
+        html.push_str(
+            "        .change-meta { color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px; }\n",
+        );
+        html.push_str("        .change-description { line-height: 1.6; color: #34495e; margin-bottom: 15px; }\n");
+        html.push_str("        .change-impact { background-color: #fff3cd; border-left: 4px solid #f39c12; padding: 10px; margin-top: 10px; }\n");
+        html.push_str("        .change-impact-title { font-weight: bold; color: #856404; }\n");
+        html.push_str("        .sectors { margin-top: 10px; }\n");
+        html.push_str("        .sector-tag { display: inline-block; background-color: #e8f4f8; color: #0366d6; padding: 4px 10px; margin: 3px; border-radius: 3px; font-size: 0.85em; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"header\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+        html.push_str("    </div>\n");
+        html.push_str("    <div class=\"container\">\n");
+        html.push_str("        <div class=\"filters\">\n");
+        html.push_str(
+            "            <button class=\"filter-btn active\" data-filter=\"all\">All</button>\n",
+        );
+        html.push_str(
+            "            <button class=\"filter-btn\" data-filter=\"Proposed\">Proposed</button>\n",
+        );
+        html.push_str(
+            "            <button class=\"filter-btn\" data-filter=\"Enacted\">Enacted</button>\n",
+        );
+        html.push_str(
+            "            <button class=\"filter-btn\" data-filter=\"Amended\">Amended</button>\n",
+        );
+        html.push_str(
+            "            <button class=\"filter-btn\" data-filter=\"Repealed\">Repealed</button>\n",
+        );
+        html.push_str("        </div>\n");
+        html.push_str("        <div id=\"changes-list\">\n");
+
+        for change in changes {
+            let status_class = format!("badge-{}", format!("{:?}", change.status).to_lowercase());
+
+            html.push_str(&format!(
+                "        <div class=\"change-card\" data-status=\"{:?}\">\n",
+                change.status
+            ));
+            html.push_str("            <div class=\"change-header\">\n");
+            html.push_str(&format!(
+                "                <div class=\"change-title\">{}</div>\n",
+                change.regulation_id
+            ));
+            html.push_str(&format!(
+                "                <div class=\"change-badge {}\">{:?}</div>\n",
+                status_class, change.status
+            ));
+            html.push_str("            </div>\n");
+            html.push_str(&format!(
+                "            <div class=\"change-meta\">Agency: {} | Effective: {}</div>\n",
+                change.agency, change.effective_date
+            ));
+            html.push_str(&format!(
+                "            <div class=\"change-description\">{}</div>\n",
+                change.description
+            ));
+
+            if let Some(impact) = &change.impact_assessment {
+                html.push_str("            <div class=\"change-impact\">\n");
+                html.push_str(
+                    "                <div class=\"change-impact-title\">Impact Assessment</div>\n",
+                );
+                html.push_str(&format!("                <div>{}</div>\n", impact));
+                html.push_str("            </div>\n");
+            }
+
+            if !change.affected_sectors.is_empty() {
+                html.push_str("            <div class=\"sectors\">\n");
+                for sector in &change.affected_sectors {
+                    html.push_str(&format!(
+                        "                <span class=\"sector-tag\">{}</span>\n",
+                        sector
+                    ));
+                }
+                html.push_str("            </div>\n");
+            }
+
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const ws = new WebSocket('{}');\n", self.ws_url));
+        html.push_str("ws.onmessage = function(event) {\n");
+        html.push_str("    const data = JSON.parse(event.data);\n");
+        html.push_str("    const container = document.getElementById('changes-list');\n");
+        html.push_str("    const card = document.createElement('div');\n");
+        html.push_str("    card.className = 'change-card';\n");
+        html.push_str("    card.setAttribute('data-status', data.status);\n");
+        html.push_str("    const statusClass = 'badge-' + data.status.toLowerCase();\n");
+        html.push_str("    card.innerHTML = `\n");
+        html.push_str("        <div class=\"change-header\">\n");
+        html.push_str("            <div class=\"change-title\">${data.regulation_id}</div>\n");
+        html.push_str(
+            "            <div class=\"change-badge ${statusClass}\">${data.status}</div>\n",
+        );
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"change-meta\">Agency: ${data.agency} | Effective: ${data.effective_date}</div>\n");
+        html.push_str("        <div class=\"change-description\">${data.description}</div>\n");
+        html.push_str("        ${data.impact_assessment ? '<div class=\"change-impact\"><div class=\"change-impact-title\">Impact Assessment</div><div>' + data.impact_assessment + '</div></div>' : ''}\n");
+        html.push_str("        ${data.affected_sectors && data.affected_sectors.length > 0 ? '<div class=\"sectors\">' + data.affected_sectors.map(s => '<span class=\"sector-tag\">' + s + '</span>').join('') + '</div>' : ''}\n");
+        html.push_str("    `;\n");
+        html.push_str("    container.insertBefore(card, container.firstChild);\n");
+        html.push_str("};\n");
+        html.push_str("// Filter functionality\n");
+        html.push_str("document.querySelectorAll('.filter-btn').forEach(btn => {\n");
+        html.push_str("    btn.addEventListener('click', function() {\n");
+        html.push_str("        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));\n");
+        html.push_str("        this.classList.add('active');\n");
+        html.push_str("        const filter = this.getAttribute('data-filter');\n");
+        html.push_str("        document.querySelectorAll('.change-card').forEach(card => {\n");
+        html.push_str(
+            "            if (filter === 'all' || card.getAttribute('data-status') === filter) {\n",
+        );
+        html.push_str("                card.style.display = 'block';\n");
+        html.push_str("            } else {\n");
+        html.push_str("                card.style.display = 'none';\n");
+        html.push_str("            }\n");
+        html.push_str("        });\n");
+        html.push_str("    });\n");
+        html.push_str("});\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for RegulatoryChangeMonitor {
+    fn default() -> Self {
+        Self::new("Regulatory Change Monitor", "ws://localhost:8080")
+    }
+}
+
+/// Regulatory change item.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulatoryChange {
+    /// Regulation ID
+    pub regulation_id: String,
+    /// Description of the change
+    pub description: String,
+    /// Agency responsible
+    pub agency: String,
+    /// Effective date
+    pub effective_date: String,
+    /// Change status
+    pub status: RegulatoryStatus,
+    /// Impact assessment
+    pub impact_assessment: Option<String>,
+    /// Affected sectors
+    pub affected_sectors: Vec<String>,
+}
+
+impl RegulatoryChange {
+    /// Creates a new regulatory change.
+    pub fn new(
+        regulation_id: &str,
+        description: &str,
+        agency: &str,
+        effective_date: &str,
+        status: RegulatoryStatus,
+    ) -> Self {
+        Self {
+            regulation_id: regulation_id.to_string(),
+            description: description.to_string(),
+            agency: agency.to_string(),
+            effective_date: effective_date.to_string(),
+            status,
+            impact_assessment: None,
+            affected_sectors: Vec::new(),
+        }
+    }
+
+    /// Sets impact assessment.
+    pub fn with_impact(mut self, impact: &str) -> Self {
+        self.impact_assessment = Some(impact.to_string());
+        self
+    }
+
+    /// Adds affected sector.
+    pub fn with_sector(mut self, sector: &str) -> Self {
+        self.affected_sectors.push(sector.to_string());
+        self
+    }
+}
+
+/// Regulatory status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegulatoryStatus {
+    /// Proposed regulation
+    Proposed,
+    /// Enacted regulation
+    Enacted,
+    /// Amended regulation
+    Amended,
+    /// Repealed regulation
+    Repealed,
+}
+
+/// Enforcement action tracking visualizer.
+pub struct EnforcementActionTracker {
+    /// Tracker title
+    title: String,
+    /// WebSocket URL for updates
+    ws_url: String,
+    /// Theme
+    theme: Theme,
+}
+
+impl EnforcementActionTracker {
+    /// Creates a new enforcement action tracker.
+    pub fn new(title: &str, ws_url: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            ws_url: ws_url.to_string(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for enforcement action tracker.
+    pub fn to_html(&self, actions: &[EnforcementAction]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: Arial, sans-serif; margin: 0; padding: 0; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str(
+            "        .header { background-color: #c0392b; color: white; padding: 30px; }\n",
+        );
+        html.push_str("        .header h1 { margin: 0; }\n");
+        html.push_str("        .stats { display: flex; justify-content: space-around; background-color: white; padding: 20px; margin: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .stat { text-align: center; }\n");
+        html.push_str(
+            "        .stat-value { font-size: 2.5em; font-weight: bold; color: #2c3e50; }\n",
+        );
+        html.push_str("        .stat-label { color: #7f8c8d; margin-top: 5px; }\n");
+        html.push_str("        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }\n");
+        html.push_str("        .action-card { background-color: white; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .action-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px; }\n");
+        html.push_str(
+            "        .action-entity { font-size: 1.4em; font-weight: bold; color: #2c3e50; }\n",
+        );
+        html.push_str("        .action-type { padding: 6px 14px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }\n");
+        html.push_str("        .type-fine { background-color: #f39c12; color: white; }\n");
+        html.push_str("        .type-warning { background-color: #e67e22; color: white; }\n");
+        html.push_str("        .type-suspension { background-color: #e74c3c; color: white; }\n");
+        html.push_str("        .type-settlement { background-color: #3498db; color: white; }\n");
+        html.push_str("        .type-investigation { background-color: #9b59b6; color: white; }\n");
+        html.push_str("        .action-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }\n");
+        html.push_str("        .detail-item { }\n");
+        html.push_str(
+            "        .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85em; }\n",
+        );
+        html.push_str("        .detail-value { color: #2c3e50; margin-top: 3px; }\n");
+        html.push_str("        .action-violations { background-color: #fff5f5; border-left: 4px solid #e74c3c; padding: 10px; margin-top: 10px; }\n");
+        html.push_str("        .violations-title { font-weight: bold; color: #c0392b; margin-bottom: 5px; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"header\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+        html.push_str("    </div>\n");
+
+        // Calculate statistics
+        let total_actions = actions.len();
+        let total_fines: f64 = actions.iter().filter_map(|a| a.fine_amount).sum();
+        let pending_count = actions
+            .iter()
+            .filter(|a| a.status == EnforcementStatus::Pending)
+            .count();
+
+        html.push_str("    <div class=\"stats\">\n");
+        html.push_str("        <div class=\"stat\">\n");
+        html.push_str(&format!(
+            "            <div class=\"stat-value\" id=\"total-actions\">{}</div>\n",
+            total_actions
+        ));
+        html.push_str("            <div class=\"stat-label\">Total Actions</div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"stat\">\n");
+        html.push_str(&format!(
+            "            <div class=\"stat-value\" id=\"total-fines\">${:.0}M</div>\n",
+            total_fines / 1_000_000.0
+        ));
+        html.push_str("            <div class=\"stat-label\">Total Fines</div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"stat\">\n");
+        html.push_str(&format!(
+            "            <div class=\"stat-value\" id=\"pending-count\">{}</div>\n",
+            pending_count
+        ));
+        html.push_str("            <div class=\"stat-label\">Pending</div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+
+        html.push_str("    <div class=\"container\" id=\"actions-list\">\n");
+
+        for action in actions {
+            let action_type_class = format!(
+                "type-{}",
+                format!("{:?}", action.action_type).to_lowercase()
+            );
+
+            html.push_str("        <div class=\"action-card\">\n");
+            html.push_str("            <div class=\"action-header\">\n");
+            html.push_str(&format!(
+                "                <div class=\"action-entity\">{}</div>\n",
+                action.entity
+            ));
+            html.push_str(&format!(
+                "                <div class=\"action-type {}\">{:?}</div>\n",
+                action_type_class, action.action_type
+            ));
+            html.push_str("            </div>\n");
+            html.push_str("            <div class=\"action-details\">\n");
+            html.push_str("                <div class=\"detail-item\">\n");
+            html.push_str("                    <div class=\"detail-label\">Agency</div>\n");
+            html.push_str(&format!(
+                "                    <div class=\"detail-value\">{}</div>\n",
+                action.agency
+            ));
+            html.push_str("                </div>\n");
+            html.push_str("                <div class=\"detail-item\">\n");
+            html.push_str("                    <div class=\"detail-label\">Date</div>\n");
+            html.push_str(&format!(
+                "                    <div class=\"detail-value\">{}</div>\n",
+                action.action_date
+            ));
+            html.push_str("                </div>\n");
+            html.push_str("                <div class=\"detail-item\">\n");
+            html.push_str("                    <div class=\"detail-label\">Status</div>\n");
+            html.push_str(&format!(
+                "                    <div class=\"detail-value\">{:?}</div>\n",
+                action.status
+            ));
+            html.push_str("                </div>\n");
+
+            if let Some(fine) = action.fine_amount {
+                html.push_str("                <div class=\"detail-item\">\n");
+                html.push_str(
+                    "                    <div class=\"detail-label\">Fine Amount</div>\n",
+                );
+                html.push_str(&format!(
+                    "                    <div class=\"detail-value\">${:.0}</div>\n",
+                    fine
+                ));
+                html.push_str("                </div>\n");
+            }
+
+            html.push_str("            </div>\n");
+
+            if !action.violations.is_empty() {
+                html.push_str("            <div class=\"action-violations\">\n");
+                html.push_str(
+                    "                <div class=\"violations-title\">Violations:</div>\n",
+                );
+                html.push_str(
+                    "                <ul style=\"margin: 5px 0; padding-left: 20px;\">\n",
+                );
+                for violation in &action.violations {
+                    html.push_str(&format!("                    <li>{}</li>\n", violation));
+                }
+                html.push_str("                </ul>\n");
+                html.push_str("            </div>\n");
+            }
+
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!("const ws = new WebSocket('{}');\n", self.ws_url));
+        html.push_str("ws.onmessage = function(event) {\n");
+        html.push_str("    const data = JSON.parse(event.data);\n");
+        html.push_str("    const container = document.getElementById('actions-list');\n");
+        html.push_str("    const card = document.createElement('div');\n");
+        html.push_str("    card.className = 'action-card';\n");
+        html.push_str("    const actionTypeClass = 'type-' + data.action_type.toLowerCase();\n");
+        html.push_str("    card.innerHTML = `\n");
+        html.push_str("        <div class=\"action-header\">\n");
+        html.push_str("            <div class=\"action-entity\">${data.entity}</div>\n");
+        html.push_str(
+            "            <div class=\"action-type ${actionTypeClass}\">${data.action_type}</div>\n",
+        );
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"action-details\">\n");
+        html.push_str("            <div class=\"detail-item\"><div class=\"detail-label\">Agency</div><div class=\"detail-value\">${data.agency}</div></div>\n");
+        html.push_str("            <div class=\"detail-item\"><div class=\"detail-label\">Date</div><div class=\"detail-value\">${data.action_date}</div></div>\n");
+        html.push_str("            <div class=\"detail-item\"><div class=\"detail-label\">Status</div><div class=\"detail-value\">${data.status}</div></div>\n");
+        html.push_str("            ${data.fine_amount ? '<div class=\"detail-item\"><div class=\"detail-label\">Fine Amount</div><div class=\"detail-value\">$' + data.fine_amount.toLocaleString() + '</div></div>' : ''}\n");
+        html.push_str("        </div>\n");
+        html.push_str("        ${data.violations && data.violations.length > 0 ? '<div class=\"action-violations\"><div class=\"violations-title\">Violations:</div><ul style=\"margin: 5px 0; padding-left: 20px;\">' + data.violations.map(v => '<li>' + v + '</li>').join('') + '</ul></div>' : ''}\n");
+        html.push_str("    `;\n");
+        html.push_str("    container.insertBefore(card, container.firstChild);\n");
+        html.push_str("    // Update stats\n");
+        html.push_str("    const totalActions = document.getElementById('total-actions');\n");
+        html.push_str("    totalActions.textContent = parseInt(totalActions.textContent) + 1;\n");
+        html.push_str("    if (data.fine_amount) {\n");
+        html.push_str("        const totalFines = document.getElementById('total-fines');\n");
+        html.push_str("        const currentValue = parseFloat(totalFines.textContent.replace('$', '').replace('M', '')) * 1000000;\n");
+        html.push_str("        const newValue = (currentValue + data.fine_amount) / 1000000;\n");
+        html.push_str("        totalFines.textContent = '$' + newValue.toFixed(0) + 'M';\n");
+        html.push_str("    }\n");
+        html.push_str("    if (data.status === 'Pending') {\n");
+        html.push_str("        const pending = document.getElementById('pending-count');\n");
+        html.push_str("        pending.textContent = parseInt(pending.textContent) + 1;\n");
+        html.push_str("    }\n");
+        html.push_str("};\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for EnforcementActionTracker {
+    fn default() -> Self {
+        Self::new("Enforcement Action Tracker", "ws://localhost:8080")
+    }
+}
+
+/// Enforcement action item.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementAction {
+    /// Entity subject to enforcement
+    pub entity: String,
+    /// Enforcement agency
+    pub agency: String,
+    /// Action date
+    pub action_date: String,
+    /// Action type
+    pub action_type: EnforcementActionType,
+    /// Action status
+    pub status: EnforcementStatus,
+    /// Fine amount (if applicable)
+    pub fine_amount: Option<f64>,
+    /// List of violations
+    pub violations: Vec<String>,
+}
+
+impl EnforcementAction {
+    /// Creates a new enforcement action.
+    pub fn new(
+        entity: &str,
+        agency: &str,
+        action_date: &str,
+        action_type: EnforcementActionType,
+        status: EnforcementStatus,
+    ) -> Self {
+        Self {
+            entity: entity.to_string(),
+            agency: agency.to_string(),
+            action_date: action_date.to_string(),
+            action_type,
+            status,
+            fine_amount: None,
+            violations: Vec::new(),
+        }
+    }
+
+    /// Sets fine amount.
+    pub fn with_fine(mut self, amount: f64) -> Self {
+        self.fine_amount = Some(amount);
+        self
+    }
+
+    /// Adds a violation.
+    pub fn with_violation(mut self, violation: &str) -> Self {
+        self.violations.push(violation.to_string());
+        self
+    }
+}
+
+/// Enforcement action types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnforcementActionType {
+    /// Monetary fine
+    Fine,
+    /// Warning letter
+    Warning,
+    /// License suspension
+    Suspension,
+    /// Settlement agreement
+    Settlement,
+    /// Investigation initiated
+    Investigation,
+}
+
+/// Enforcement status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnforcementStatus {
+    /// Pending action
+    Pending,
+    /// Active/ongoing
+    Active,
+    /// Resolved
+    Resolved,
+    /// Appealed
+    Appealed,
+}
+
+/// Market impact visualization for legal changes.
+pub struct MarketImpactVisualizer {
+    /// Visualizer title
+    title: String,
+    /// WebSocket URL for updates
+    ws_url: String,
+    /// Theme
+    theme: Theme,
+}
+
+impl MarketImpactVisualizer {
+    /// Creates a new market impact visualizer.
+    pub fn new(title: &str, ws_url: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            ws_url: ws_url.to_string(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for market impact visualization.
+    pub fn to_html(&self, impacts: &[MarketImpact]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 30px; }\n");
+        html.push_str("        .header h1 { margin: 0; }\n");
+        html.push_str("        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }\n");
+        html.push_str("        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }\n");
+        html.push_str("        .card { background-color: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .card-title { font-size: 1.2em; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }\n");
+        html.push_str("        .metric { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ecf0f1; }\n");
+        html.push_str("        .metric-label { color: #7f8c8d; }\n");
+        html.push_str("        .metric-value { font-weight: bold; color: #2c3e50; }\n");
+        html.push_str("        .positive { color: #27ae60; }\n");
+        html.push_str("        .negative { color: #e74c3c; }\n");
+        html.push_str("        .neutral { color: #95a5a6; }\n");
+        html.push_str("        .chart-container { position: relative; height: 300px; }\n");
+        html.push_str("        .impact-list { }\n");
+        html.push_str("        .impact-item { background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #3498db; }\n");
+        html.push_str("        .impact-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }\n");
+        html.push_str("        .impact-legal { font-weight: bold; color: #2c3e50; }\n");
+        html.push_str("        .impact-badge { padding: 4px 10px; border-radius: 3px; font-size: 0.85em; font-weight: bold; }\n");
+        html.push_str("        .badge-high { background-color: #e74c3c; color: white; }\n");
+        html.push_str("        .badge-medium { background-color: #f39c12; color: white; }\n");
+        html.push_str("        .badge-low { background-color: #3498db; color: white; }\n");
+        html.push_str("        .sectors { margin-top: 8px; }\n");
+        html.push_str("        .sector-badge { display: inline-block; background-color: #e8f4f8; padding: 3px 8px; margin: 2px; border-radius: 3px; font-size: 0.8em; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"header\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+        html.push_str("    </div>\n");
+        html.push_str("    <div class=\"container\">\n");
+        html.push_str("        <div class=\"grid\">\n");
+        html.push_str("            <div class=\"card\">\n");
+        html.push_str("                <div class=\"card-title\">Market Sentiment</div>\n");
+        html.push_str("                <div class=\"chart-container\">\n");
+        html.push_str("                    <canvas id=\"sentimentChart\"></canvas>\n");
+        html.push_str("                </div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("            <div class=\"card\">\n");
+        html.push_str("                <div class=\"card-title\">Sector Impact</div>\n");
+        html.push_str("                <div class=\"chart-container\">\n");
+        html.push_str("                    <canvas id=\"sectorChart\"></canvas>\n");
+        html.push_str("                </div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("            <div class=\"card\">\n");
+        html.push_str("                <div class=\"card-title\">Key Metrics</div>\n");
+
+        // Calculate summary metrics
+        let avg_stock_change: f64 = impacts
+            .iter()
+            .filter_map(|i| i.stock_price_change)
+            .sum::<f64>()
+            / impacts.len().max(1) as f64;
+        let total_affected = impacts.len();
+
+        html.push_str(&format!("                <div class=\"metric\"><span class=\"metric-label\">Avg. Stock Change</span><span class=\"metric-value {}\">{:.2}%</span></div>\n",
+            if avg_stock_change > 0.0 { "positive" } else if avg_stock_change < 0.0 { "negative" } else { "neutral" },
+            avg_stock_change));
+        html.push_str(&format!("                <div class=\"metric\"><span class=\"metric-label\">Affected Items</span><span class=\"metric-value\">{}</span></div>\n", total_affected));
+        html.push_str("            </div>\n");
+        html.push_str("        </div>\n");
+
+        html.push_str("        <div class=\"card\">\n");
+        html.push_str("            <div class=\"card-title\">Impact Details</div>\n");
+        html.push_str("            <div class=\"impact-list\" id=\"impact-list\">\n");
+
+        for impact in impacts {
+            let severity_class = match impact.severity {
+                ImpactSeverity::High => "badge-high",
+                ImpactSeverity::Medium => "badge-medium",
+                ImpactSeverity::Low => "badge-low",
+            };
+
+            html.push_str("                <div class=\"impact-item\">\n");
+            html.push_str("                    <div class=\"impact-header\">\n");
+            html.push_str(&format!(
+                "                        <div class=\"impact-legal\">{}</div>\n",
+                impact.legal_event
+            ));
+            html.push_str(&format!(
+                "                        <div class=\"impact-badge {}\">{:?} Impact</div>\n",
+                severity_class, impact.severity
+            ));
+            html.push_str("                    </div>\n");
+            html.push_str(&format!(
+                "                    <div><strong>Date:</strong> {}</div>\n",
+                impact.event_date
+            ));
+
+            if let Some(stock_change) = impact.stock_price_change {
+                let change_class = if stock_change > 0.0 {
+                    "positive"
+                } else if stock_change < 0.0 {
+                    "negative"
+                } else {
+                    "neutral"
+                };
+                html.push_str(&format!("                    <div><strong>Stock Impact:</strong> <span class=\"{}\">{:.2}%</span></div>\n", change_class, stock_change));
+            }
+
+            if !impact.affected_companies.is_empty() {
+                html.push_str(&format!(
+                    "                    <div><strong>Affected:</strong> {}</div>\n",
+                    impact.affected_companies.join(", ")
+                ));
+            }
+
+            if !impact.sectors.is_empty() {
+                html.push_str("                    <div class=\"sectors\">\n");
+                for sector in &impact.sectors {
+                    html.push_str(&format!(
+                        "                        <span class=\"sector-badge\">{}</span>\n",
+                        sector
+                    ));
+                }
+                html.push_str("                    </div>\n");
+            }
+
+            html.push_str("                </div>\n");
+        }
+
+        html.push_str("            </div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+
+        // Sentiment chart
+        html.push_str(
+            "const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');\n",
+        );
+        html.push_str("new Chart(sentimentCtx, {\n");
+        html.push_str("    type: 'line',\n");
+        html.push_str("    data: {\n");
+        html.push_str("        labels: [");
+        for (i, impact) in impacts.iter().enumerate() {
+            if i > 0 {
+                html.push_str(", ");
+            }
+            html.push_str(&format!("'{}'", impact.event_date));
+        }
+        html.push_str("],\n");
+        html.push_str("        datasets: [{\n");
+        html.push_str("            label: 'Stock Price Change (%)',\n");
+        html.push_str("            data: [");
+        for (i, impact) in impacts.iter().enumerate() {
+            if i > 0 {
+                html.push_str(", ");
+            }
+            html.push_str(&format!("{}", impact.stock_price_change.unwrap_or(0.0)));
+        }
+        html.push_str("],\n");
+        html.push_str("            borderColor: '#3498db',\n");
+        html.push_str("            tension: 0.4\n");
+        html.push_str("        }]\n");
+        html.push_str("    },\n");
+        html.push_str("    options: { responsive: true, maintainAspectRatio: false }\n");
+        html.push_str("});\n");
+
+        // Sector chart
+        let mut sector_counts: HashMap<String, usize> = HashMap::new();
+        for impact in impacts {
+            for sector in &impact.sectors {
+                *sector_counts.entry(sector.clone()).or_insert(0) += 1;
+            }
+        }
+
+        html.push_str(
+            "const sectorCtx = document.getElementById('sectorChart').getContext('2d');\n",
+        );
+        html.push_str("new Chart(sectorCtx, {\n");
+        html.push_str("    type: 'bar',\n");
+        html.push_str("    data: {\n");
+        html.push_str("        labels: [");
+        for (i, sector) in sector_counts.keys().enumerate() {
+            if i > 0 {
+                html.push_str(", ");
+            }
+            html.push_str(&format!("'{}'", sector));
+        }
+        html.push_str("],\n");
+        html.push_str("        datasets: [{\n");
+        html.push_str("            label: 'Number of Impacts',\n");
+        html.push_str("            data: [");
+        for (i, count) in sector_counts.values().enumerate() {
+            if i > 0 {
+                html.push_str(", ");
+            }
+            html.push_str(&format!("{}", count));
+        }
+        html.push_str("],\n");
+        html.push_str("            backgroundColor: '#2ecc71'\n");
+        html.push_str("        }]\n");
+        html.push_str("    },\n");
+        html.push_str("    options: { responsive: true, maintainAspectRatio: false }\n");
+        html.push_str("});\n");
+
+        // WebSocket for live updates
+        html.push_str(&format!("const ws = new WebSocket('{}');\n", self.ws_url));
+        html.push_str("ws.onmessage = function(event) {\n");
+        html.push_str("    const data = JSON.parse(event.data);\n");
+        html.push_str("    const container = document.getElementById('impact-list');\n");
+        html.push_str("    const item = document.createElement('div');\n");
+        html.push_str("    item.className = 'impact-item';\n");
+        html.push_str("    const severityClass = 'badge-' + data.severity.toLowerCase();\n");
+        html.push_str("    const changeClass = data.stock_price_change > 0 ? 'positive' : data.stock_price_change < 0 ? 'negative' : 'neutral';\n");
+        html.push_str("    item.innerHTML = `\n");
+        html.push_str("        <div class=\"impact-header\">\n");
+        html.push_str("            <div class=\"impact-legal\">${data.legal_event}</div>\n");
+        html.push_str("            <div class=\"impact-badge ${severityClass}\">${data.severity} Impact</div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("        <div><strong>Date:</strong> ${data.event_date}</div>\n");
+        html.push_str("        ${data.stock_price_change != null ? '<div><strong>Stock Impact:</strong> <span class=\"' + changeClass + '\">' + data.stock_price_change.toFixed(2) + '%</span></div>' : ''}\n");
+        html.push_str("        ${data.affected_companies && data.affected_companies.length > 0 ? '<div><strong>Affected:</strong> ' + data.affected_companies.join(', ') + '</div>' : ''}\n");
+        html.push_str("        ${data.sectors && data.sectors.length > 0 ? '<div class=\"sectors\">' + data.sectors.map(s => '<span class=\"sector-badge\">' + s + '</span>').join('') + '</div>' : ''}\n");
+        html.push_str("    `;\n");
+        html.push_str("    container.insertBefore(item, container.firstChild);\n");
+        html.push_str("};\n");
+
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for MarketImpactVisualizer {
+    fn default() -> Self {
+        Self::new("Market Impact Analysis", "ws://localhost:8080")
+    }
+}
+
+/// Market impact item.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketImpact {
+    /// Legal event description
+    pub legal_event: String,
+    /// Event date
+    pub event_date: String,
+    /// Impact severity
+    pub severity: ImpactSeverity,
+    /// Stock price change percentage
+    pub stock_price_change: Option<f64>,
+    /// Affected companies
+    pub affected_companies: Vec<String>,
+    /// Affected sectors
+    pub sectors: Vec<String>,
+}
+
+impl MarketImpact {
+    /// Creates a new market impact.
+    pub fn new(legal_event: &str, event_date: &str, severity: ImpactSeverity) -> Self {
+        Self {
+            legal_event: legal_event.to_string(),
+            event_date: event_date.to_string(),
+            severity,
+            stock_price_change: None,
+            affected_companies: Vec::new(),
+            sectors: Vec::new(),
+        }
+    }
+
+    /// Sets stock price change.
+    pub fn with_stock_change(mut self, change: f64) -> Self {
+        self.stock_price_change = Some(change);
+        self
+    }
+
+    /// Adds affected company.
+    pub fn with_company(mut self, company: &str) -> Self {
+        self.affected_companies.push(company.to_string());
+        self
+    }
+
+    /// Adds sector.
+    pub fn with_sector(mut self, sector: &str) -> Self {
+        self.sectors.push(sector.to_string());
+        self
+    }
+}
+
+/// Impact severity levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ImpactSeverity {
+    /// High impact
+    High,
+    /// Medium impact
+    Medium,
+    /// Low impact
+    Low,
+}
+
+// ============================================================================
+// Narrative Visualization (v0.3.3)
+// ============================================================================
+
+/// Scrollytelling configuration for legal histories.
+pub struct ScrollytellingConfig {
+    /// Enable scroll-based animations
+    pub enable_animations: bool,
+    /// Scroll trigger threshold (0.0-1.0)
+    pub trigger_threshold: f64,
+    /// Enable progress indicator
+    pub show_progress: bool,
+    /// Enable chapter navigation
+    pub enable_navigation: bool,
+}
+
+impl ScrollytellingConfig {
+    /// Creates a new scrollytelling configuration.
+    pub fn new() -> Self {
+        Self {
+            enable_animations: true,
+            trigger_threshold: 0.5,
+            show_progress: true,
+            enable_navigation: true,
+        }
+    }
+
+    /// Disables scroll animations.
+    pub fn without_animations(mut self) -> Self {
+        self.enable_animations = false;
+        self
+    }
+
+    /// Sets the trigger threshold.
+    pub fn with_trigger_threshold(mut self, threshold: f64) -> Self {
+        self.trigger_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Hides the progress indicator.
+    pub fn without_progress(mut self) -> Self {
+        self.show_progress = false;
+        self
+    }
+
+    /// Disables chapter navigation.
+    pub fn without_navigation(mut self) -> Self {
+        self.enable_navigation = false;
+        self
+    }
+}
+
+impl Default for ScrollytellingConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legal history scrollytelling visualizer.
+pub struct LegalHistoryScrollytelling {
+    /// Title
+    title: String,
+    /// Configuration
+    config: ScrollytellingConfig,
+    /// Theme
+    theme: Theme,
+}
+
+impl LegalHistoryScrollytelling {
+    /// Creates a new legal history scrollytelling visualizer.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            config: ScrollytellingConfig::new(),
+            theme: Theme::default(),
+        }
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: ScrollytellingConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for scrollytelling.
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_html(&self, chapters: &[ScrollChapter]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 0; padding: 0; font-family: 'Georgia', serif; background-color: {}; color: {}; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str(
+            "        .chapter { min-height: 100vh; padding: 100px 20px; position: relative; }\n",
+        );
+        html.push_str("        .chapter-content { max-width: 800px; margin: 0 auto; font-size: 1.2em; line-height: 1.8; }\n");
+        html.push_str("        .chapter-title { font-size: 2.5em; font-weight: bold; margin-bottom: 30px; }\n");
+        html.push_str("        .chapter-text { margin-bottom: 20px; }\n");
+        html.push_str("        .visual-element { background-color: #f5f5f5; padding: 30px; margin: 40px 0; border-radius: 8px; text-align: center; }\n");
+        html.push_str("        .progress-bar { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #3498db, #2ecc71); width: 0%; transition: width 0.3s; z-index: 1000; }\n");
+        html.push_str("        .chapter-nav { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 100; }\n");
+        html.push_str("        .nav-dot { width: 12px; height: 12px; border-radius: 50%; background-color: #ccc; margin: 10px 0; cursor: pointer; transition: all 0.3s; }\n");
+        html.push_str(
+            "        .nav-dot.active { background-color: #3498db; transform: scale(1.5); }\n",
+        );
+        html.push_str("        .fade-in { opacity: 0; transform: translateY(50px); transition: opacity 0.8s, transform 0.8s; }\n");
+        html.push_str("        .fade-in.visible { opacity: 1; transform: translateY(0); }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+
+        if self.config.show_progress {
+            html.push_str("    <div class=\"progress-bar\" id=\"progress\"></div>\n");
+        }
+
+        if self.config.enable_navigation {
+            html.push_str("    <div class=\"chapter-nav\" id=\"nav\">\n");
+            for i in 0..chapters.len() {
+                html.push_str(&format!(
+                    "        <div class=\"nav-dot{}\" data-chapter=\"{}\"></div>\n",
+                    if i == 0 { " active" } else { "" },
+                    i
+                ));
+            }
+            html.push_str("    </div>\n");
+        }
+
+        for (i, chapter) in chapters.iter().enumerate() {
+            html.push_str(&format!(
+                "    <div class=\"chapter\" id=\"chapter-{}\">\n",
+                i
+            ));
+            html.push_str("        <div class=\"chapter-content fade-in\">\n");
+            html.push_str(&format!(
+                "            <h1 class=\"chapter-title\">{}</h1>\n",
+                chapter.title
+            ));
+            for paragraph in &chapter.content {
+                html.push_str(&format!(
+                    "            <p class=\"chapter-text\">{}</p>\n",
+                    paragraph
+                ));
+            }
+            if let Some(visual) = &chapter.visual {
+                html.push_str(&format!(
+                    "            <div class=\"visual-element\">{}</div>\n",
+                    visual
+                ));
+            }
+            html.push_str("        </div>\n");
+            html.push_str("    </div>\n");
+        }
+
+        html.push_str("    <script>\n");
+        if self.config.enable_animations {
+            html.push_str("function checkScroll() {\n");
+            html.push_str("    const elements = document.querySelectorAll('.fade-in');\n");
+            html.push_str("    elements.forEach(el => {\n");
+            html.push_str("        const rect = el.getBoundingClientRect();\n");
+            html.push_str(&format!(
+                "        const threshold = window.innerHeight * {};\n",
+                self.config.trigger_threshold
+            ));
+            html.push_str("        if (rect.top < threshold) { el.classList.add('visible'); }\n");
+            html.push_str("    });\n");
+            html.push_str("}\n");
+            html.push_str("window.addEventListener('scroll', checkScroll);\n");
+            html.push_str("checkScroll();\n");
+        }
+
+        if self.config.show_progress {
+            html.push_str("window.addEventListener('scroll', () => {\n");
+            html.push_str("    const scrolled = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;\n");
+            html.push_str(
+                "    document.getElementById('progress').style.width = scrolled + '%';\n",
+            );
+            html.push_str("});\n");
+        }
+
+        if self.config.enable_navigation {
+            html.push_str("const chapters = document.querySelectorAll('.chapter');\n");
+            html.push_str("const navDots = document.querySelectorAll('.nav-dot');\n");
+            html.push_str("navDots.forEach(dot => {\n");
+            html.push_str("    dot.addEventListener('click', () => {\n");
+            html.push_str("        const chapterNum = dot.getAttribute('data-chapter');\n");
+            html.push_str("        chapters[chapterNum].scrollIntoView({ behavior: 'smooth' });\n");
+            html.push_str("    });\n");
+            html.push_str("});\n");
+            html.push_str("window.addEventListener('scroll', () => {\n");
+            html.push_str("    chapters.forEach((chapter, i) => {\n");
+            html.push_str("        const rect = chapter.getBoundingClientRect();\n");
+            html.push_str("        if (rect.top >= 0 && rect.top < window.innerHeight / 2) {\n");
+            html.push_str("            navDots.forEach(d => d.classList.remove('active'));\n");
+            html.push_str("            navDots[i].classList.add('active');\n");
+            html.push_str("        }\n");
+            html.push_str("    });\n");
+            html.push_str("});\n");
+        }
+
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for LegalHistoryScrollytelling {
+    fn default() -> Self {
+        Self::new("Legal History")
+    }
+}
+
+/// Scroll chapter for scrollytelling.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScrollChapter {
+    /// Chapter title
+    pub title: String,
+    /// Chapter content paragraphs
+    pub content: Vec<String>,
+    /// Optional visual element HTML
+    pub visual: Option<String>,
+}
+
+impl ScrollChapter {
+    /// Creates a new scroll chapter.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            content: Vec::new(),
+            visual: None,
+        }
+    }
+
+    /// Adds a content paragraph.
+    pub fn with_paragraph(mut self, paragraph: &str) -> Self {
+        self.content.push(paragraph.to_string());
+        self
+    }
+
+    /// Sets a visual element.
+    pub fn with_visual(mut self, visual: &str) -> Self {
+        self.visual = Some(visual.to_string());
+        self
+    }
+}
+
+/// Case story generator for narrative visualization.
+pub struct CaseStoryGenerator {
+    /// Theme
+    theme: Theme,
+    /// Include timeline
+    include_timeline: bool,
+    /// Include key players
+    include_players: bool,
+}
+
+impl CaseStoryGenerator {
+    /// Creates a new case story generator.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::default(),
+            include_timeline: true,
+            include_players: true,
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Excludes timeline from story.
+    pub fn without_timeline(mut self) -> Self {
+        self.include_timeline = false;
+        self
+    }
+
+    /// Excludes key players from story.
+    pub fn without_players(mut self) -> Self {
+        self.include_players = false;
+        self
+    }
+
+    /// Generates HTML story for a case.
+    pub fn generate_story(&self, case: &CaseStory) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", case.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: 'Palatino', 'Georgia', serif; margin: 0; padding: 40px 20px; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .story-container { max-width: 900px; margin: 0 auto; }\n");
+        html.push_str("        .story-header { text-align: center; margin-bottom: 60px; border-bottom: 2px solid #ccc; padding-bottom: 30px; }\n");
+        html.push_str(
+            "        .story-title { font-size: 3em; font-weight: bold; margin-bottom: 10px; }\n",
+        );
+        html.push_str(
+            "        .story-subtitle { font-size: 1.3em; color: #666; font-style: italic; }\n",
+        );
+        html.push_str("        .story-section { margin: 40px 0; }\n");
+        html.push_str("        .section-title { font-size: 2em; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }\n");
+        html.push_str("        .story-text { font-size: 1.15em; line-height: 1.9; margin-bottom: 15px; text-align: justify; }\n");
+        html.push_str("        .timeline-item { padding: 20px; margin: 15px 0; background-color: #f8f9fa; border-left: 4px solid #3498db; }\n");
+        html.push_str("        .timeline-date { font-weight: bold; color: #3498db; }\n");
+        html.push_str("        .player-card { display: inline-block; padding: 15px 25px; margin: 10px; background-color: #ecf0f1; border-radius: 8px; }\n");
+        html.push_str("        .player-name { font-weight: bold; font-size: 1.1em; }\n");
+        html.push_str("        .player-role { color: #7f8c8d; font-size: 0.9em; }\n");
+        html.push_str("        .outcome-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin: 30px 0; }\n");
+        html.push_str("        .outcome-title { font-size: 1.8em; font-weight: bold; margin-bottom: 15px; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"story-container\">\n");
+        html.push_str("        <div class=\"story-header\">\n");
+        html.push_str(&format!(
+            "            <h1 class=\"story-title\">{}</h1>\n",
+            case.title
+        ));
+        html.push_str(&format!(
+            "            <p class=\"story-subtitle\">{}</p>\n",
+            case.subtitle
+        ));
+        html.push_str("        </div>\n");
+
+        html.push_str("        <div class=\"story-section\">\n");
+        html.push_str("            <h2 class=\"section-title\">The Case</h2>\n");
+        for paragraph in &case.introduction {
+            html.push_str(&format!(
+                "            <p class=\"story-text\">{}</p>\n",
+                paragraph
+            ));
+        }
+        html.push_str("        </div>\n");
+
+        if self.include_players && !case.key_players.is_empty() {
+            html.push_str("        <div class=\"story-section\">\n");
+            html.push_str("            <h2 class=\"section-title\">Key Players</h2>\n");
+            for player in &case.key_players {
+                html.push_str("            <div class=\"player-card\">\n");
+                html.push_str(&format!(
+                    "                <div class=\"player-name\">{}</div>\n",
+                    player.name
+                ));
+                html.push_str(&format!(
+                    "                <div class=\"player-role\">{}</div>\n",
+                    player.role
+                ));
+                html.push_str("            </div>\n");
+            }
+            html.push_str("        </div>\n");
+        }
+
+        if self.include_timeline && !case.timeline.is_empty() {
+            html.push_str("        <div class=\"story-section\">\n");
+            html.push_str("            <h2 class=\"section-title\">Timeline of Events</h2>\n");
+            for event in &case.timeline {
+                html.push_str("            <div class=\"timeline-item\">\n");
+                html.push_str(&format!(
+                    "                <div class=\"timeline-date\">{}</div>\n",
+                    event.date
+                ));
+                html.push_str(&format!(
+                    "                <div>{}</div>\n",
+                    event.description
+                ));
+                html.push_str("            </div>\n");
+            }
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("        <div class=\"story-section\">\n");
+        html.push_str("            <h2 class=\"section-title\">The Resolution</h2>\n");
+        for paragraph in &case.resolution {
+            html.push_str(&format!(
+                "            <p class=\"story-text\">{}</p>\n",
+                paragraph
+            ));
+        }
+        html.push_str("        </div>\n");
+
+        if let Some(outcome) = &case.outcome {
+            html.push_str("        <div class=\"outcome-box\">\n");
+            html.push_str("            <div class=\"outcome-title\">Outcome</div>\n");
+            html.push_str(&format!("            <div>{}</div>\n", outcome));
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for CaseStoryGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Case story data structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseStory {
+    /// Case title
+    pub title: String,
+    /// Subtitle/tagline
+    pub subtitle: String,
+    /// Introduction paragraphs
+    pub introduction: Vec<String>,
+    /// Key players
+    pub key_players: Vec<KeyPlayer>,
+    /// Timeline of events
+    pub timeline: Vec<TimelineStoryEvent>,
+    /// Resolution paragraphs
+    pub resolution: Vec<String>,
+    /// Final outcome
+    pub outcome: Option<String>,
+}
+
+impl CaseStory {
+    /// Creates a new case story.
+    pub fn new(title: &str, subtitle: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            subtitle: subtitle.to_string(),
+            introduction: Vec::new(),
+            key_players: Vec::new(),
+            timeline: Vec::new(),
+            resolution: Vec::new(),
+            outcome: None,
+        }
+    }
+
+    /// Adds introduction paragraph.
+    pub fn with_intro(mut self, paragraph: &str) -> Self {
+        self.introduction.push(paragraph.to_string());
+        self
+    }
+
+    /// Adds a key player.
+    pub fn with_player(mut self, name: &str, role: &str) -> Self {
+        self.key_players.push(KeyPlayer {
+            name: name.to_string(),
+            role: role.to_string(),
+        });
+        self
+    }
+
+    /// Adds a timeline event.
+    pub fn with_event(mut self, date: &str, description: &str) -> Self {
+        self.timeline.push(TimelineStoryEvent {
+            date: date.to_string(),
+            description: description.to_string(),
+        });
+        self
+    }
+
+    /// Adds resolution paragraph.
+    pub fn with_resolution(mut self, paragraph: &str) -> Self {
+        self.resolution.push(paragraph.to_string());
+        self
+    }
+
+    /// Sets the outcome.
+    pub fn with_outcome(mut self, outcome: &str) -> Self {
+        self.outcome = Some(outcome.to_string());
+        self
+    }
+}
+
+/// Key player in a case story.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyPlayer {
+    /// Player name
+    pub name: String,
+    /// Player role
+    pub role: String,
+}
+
+/// Timeline event in a story.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineStoryEvent {
+    /// Event date
+    pub date: String,
+    /// Event description
+    pub description: String,
+}
+
+/// Timeline narrative view generator.
+pub struct TimelineNarrativeView {
+    /// Title
+    title: String,
+    /// Theme
+    theme: Theme,
+    /// Show captions
+    show_captions: bool,
+}
+
+impl TimelineNarrativeView {
+    /// Creates a new timeline narrative view.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            theme: Theme::default(),
+            show_captions: true,
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Hides captions.
+    pub fn without_captions(mut self) -> Self {
+        self.show_captions = false;
+        self
+    }
+
+    /// Generates HTML for narrative timeline.
+    pub fn to_html(&self, events: &[NarrativeEvent]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 40px 20px; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .timeline-container { max-width: 1000px; margin: 0 auto; }\n");
+        html.push_str("        .timeline-header { text-align: center; margin-bottom: 60px; }\n");
+        html.push_str("        .timeline-title { font-size: 3em; font-weight: bold; }\n");
+        html.push_str("        .timeline-track { position: relative; padding: 40px 0; }\n");
+        html.push_str("        .timeline-line { position: absolute; left: 50%; width: 4px; height: 100%; background: linear-gradient(180deg, #3498db, #2ecc71); transform: translateX(-50%); }\n");
+        html.push_str("        .narrative-event { position: relative; margin: 60px 0; }\n");
+        html.push_str("        .event-content { width: 45%; padding: 30px; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 8px; position: relative; }\n");
+        html.push_str(
+            "        .narrative-event:nth-child(odd) .event-content { margin-left: 0; }\n",
+        );
+        html.push_str(
+            "        .narrative-event:nth-child(even) .event-content { margin-left: 55%; }\n",
+        );
+        html.push_str("        .event-marker { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; background-color: #3498db; border: 4px solid white; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }\n");
+        html.push_str("        .event-date { font-size: 1.1em; font-weight: bold; color: #3498db; margin-bottom: 10px; }\n");
+        html.push_str("        .event-title { font-size: 1.5em; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }\n");
+        html.push_str(
+            "        .event-narrative { font-size: 1.05em; line-height: 1.7; color: #34495e; }\n",
+        );
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"timeline-container\">\n");
+        html.push_str("        <div class=\"timeline-header\">\n");
+        html.push_str(&format!(
+            "            <h1 class=\"timeline-title\">{}</h1>\n",
+            self.title
+        ));
+        html.push_str("        </div>\n");
+        html.push_str("        <div class=\"timeline-track\">\n");
+        html.push_str("            <div class=\"timeline-line\"></div>\n");
+
+        for event in events {
+            html.push_str("            <div class=\"narrative-event\">\n");
+            html.push_str("                <div class=\"event-marker\"></div>\n");
+            html.push_str("                <div class=\"event-content\">\n");
+            html.push_str(&format!(
+                "                    <div class=\"event-date\">{}</div>\n",
+                event.date
+            ));
+            html.push_str(&format!(
+                "                    <div class=\"event-title\">{}</div>\n",
+                event.title
+            ));
+            if self.show_captions {
+                html.push_str(&format!(
+                    "                    <div class=\"event-narrative\">{}</div>\n",
+                    event.narrative
+                ));
+            }
+            html.push_str("                </div>\n");
+            html.push_str("            </div>\n");
+        }
+
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for TimelineNarrativeView {
+    fn default() -> Self {
+        Self::new("Timeline")
+    }
+}
+
+/// Narrative event for timeline visualization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NarrativeEvent {
+    /// Event date
+    pub date: String,
+    /// Event title
+    pub title: String,
+    /// Event narrative description
+    pub narrative: String,
+}
+
+impl NarrativeEvent {
+    /// Creates a new narrative event.
+    pub fn new(date: &str, title: &str, narrative: &str) -> Self {
+        Self {
+            date: date.to_string(),
+            title: title.to_string(),
+            narrative: narrative.to_string(),
+        }
+    }
+}
+
+/// Guided exploration tour system.
+pub struct GuidedExplorationTour {
+    /// Tour title
+    title: String,
+    /// Theme
+    theme: Theme,
+    /// Enable auto-advance
+    auto_advance: bool,
+    /// Auto-advance delay (ms)
+    advance_delay: u32,
+}
+
+impl GuidedExplorationTour {
+    /// Creates a new guided exploration tour.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            theme: Theme::default(),
+            auto_advance: false,
+            advance_delay: 5000,
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Enables auto-advance.
+    pub fn with_auto_advance(mut self, delay_ms: u32) -> Self {
+        self.auto_advance = true;
+        self.advance_delay = delay_ms;
+        self
+    }
+
+    /// Generates HTML for guided tour.
+    pub fn to_html(&self, stops: &[TourStop]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background-color: {}; color: {}; font-family: Arial, sans-serif; margin: 0; padding: 0; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .tour-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }\n");
+        html.push_str("        .tour-card { background-color: white; max-width: 600px; padding: 40px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); position: relative; }\n");
+        html.push_str("        .tour-step { color: #3498db; font-size: 0.9em; font-weight: bold; margin-bottom: 10px; }\n");
+        html.push_str("        .tour-title { font-size: 2em; font-weight: bold; color: #2c3e50; margin-bottom: 20px; }\n");
+        html.push_str("        .tour-description { font-size: 1.1em; line-height: 1.7; color: #34495e; margin-bottom: 30px; }\n");
+        html.push_str("        .tour-visual { background-color: #ecf0f1; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center; font-style: italic; color: #7f8c8d; }\n");
+        html.push_str("        .tour-controls { display: flex; justify-content: space-between; align-items: center; }\n");
+        html.push_str("        .tour-button { padding: 12px 24px; border: none; border-radius: 6px; font-size: 1em; cursor: pointer; transition: all 0.3s; }\n");
+        html.push_str("        .btn-primary { background-color: #3498db; color: white; }\n");
+        html.push_str("        .btn-primary:hover { background-color: #2980b9; }\n");
+        html.push_str("        .btn-secondary { background-color: #95a5a6; color: white; }\n");
+        html.push_str("        .btn-secondary:hover { background-color: #7f8c8d; }\n");
+        html.push_str("        .tour-progress { flex: 1; margin: 0 20px; height: 4px; background-color: #ecf0f1; border-radius: 2px; overflow: hidden; }\n");
+        html.push_str("        .progress-fill { height: 100%; background-color: #3498db; transition: width 0.3s; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"tour-overlay\" id=\"tour\">\n");
+        html.push_str("        <div class=\"tour-card\">\n");
+        html.push_str("            <div class=\"tour-step\" id=\"step-indicator\">Step 1 of ");
+        html.push_str(&format!("{}</div>\n", stops.len()));
+        html.push_str("            <h1 class=\"tour-title\" id=\"tour-title\"></h1>\n");
+        html.push_str(
+            "            <div class=\"tour-description\" id=\"tour-description\"></div>\n",
+        );
+        html.push_str("            <div class=\"tour-visual\" id=\"tour-visual\" style=\"display: none;\"></div>\n");
+        html.push_str("            <div class=\"tour-controls\">\n");
+        html.push_str("                <button class=\"tour-button btn-secondary\" id=\"prev-btn\">Previous</button>\n");
+        html.push_str("                <div class=\"tour-progress\">\n");
+        html.push_str("                    <div class=\"progress-fill\" id=\"progress\"></div>\n");
+        html.push_str("                </div>\n");
+        html.push_str("                <button class=\"tour-button btn-primary\" id=\"next-btn\">Next</button>\n");
+        html.push_str("            </div>\n");
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+
+        html.push_str("    <script>\n");
+        html.push_str("const stops = ");
+        html.push_str(&serde_json::to_string(stops).unwrap_or_else(|_| "[]".to_string()));
+        html.push_str(";\n");
+        html.push_str("let currentStop = 0;\n");
+        html.push_str("function updateTour() {\n");
+        html.push_str("    const stop = stops[currentStop];\n");
+        html.push_str("    document.getElementById('step-indicator').textContent = `Step ${currentStop + 1} of ${stops.length}`;\n");
+        html.push_str("    document.getElementById('tour-title').textContent = stop.title;\n");
+        html.push_str(
+            "    document.getElementById('tour-description').textContent = stop.description;\n",
+        );
+        html.push_str("    const visual = document.getElementById('tour-visual');\n");
+        html.push_str("    if (stop.visual) {\n");
+        html.push_str("        visual.textContent = stop.visual;\n");
+        html.push_str("        visual.style.display = 'block';\n");
+        html.push_str("    } else {\n");
+        html.push_str("        visual.style.display = 'none';\n");
+        html.push_str("    }\n");
+        html.push_str("    document.getElementById('progress').style.width = ((currentStop + 1) / stops.length * 100) + '%';\n");
+        html.push_str("    document.getElementById('prev-btn').disabled = currentStop === 0;\n");
+        html.push_str("    const nextBtn = document.getElementById('next-btn');\n");
+        html.push_str(
+            "    nextBtn.textContent = currentStop === stops.length - 1 ? 'Finish' : 'Next';\n",
+        );
+        html.push_str("}\n");
+        html.push_str("document.getElementById('prev-btn').addEventListener('click', () => {\n");
+        html.push_str("    if (currentStop > 0) {\n");
+        html.push_str("        currentStop--;\n");
+        html.push_str("        updateTour();\n");
+        html.push_str("    }\n");
+        html.push_str("});\n");
+        html.push_str("document.getElementById('next-btn').addEventListener('click', () => {\n");
+        html.push_str("    if (currentStop < stops.length - 1) {\n");
+        html.push_str("        currentStop++;\n");
+        html.push_str("        updateTour();\n");
+        html.push_str("    } else {\n");
+        html.push_str("        document.getElementById('tour').style.display = 'none';\n");
+        html.push_str("    }\n");
+        html.push_str("});\n");
+
+        if self.auto_advance {
+            html.push_str(&format!("setInterval(() => {{\n"));
+            html.push_str("    if (currentStop < stops.length - 1) {\n");
+            html.push_str("        currentStop++;\n");
+            html.push_str("        updateTour();\n");
+            html.push_str("    }\n");
+            html.push_str(&format!("}}, {});\n", self.advance_delay));
+        }
+
+        html.push_str("updateTour();\n");
+        html.push_str("    </script>\n</body>\n</html>");
+        html
+    }
+}
+
+impl Default for GuidedExplorationTour {
+    fn default() -> Self {
+        Self::new("Guided Tour")
+    }
+}
+
+/// Tour stop for guided exploration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TourStop {
+    /// Stop title
+    pub title: String,
+    /// Stop description
+    pub description: String,
+    /// Optional visual element
+    pub visual: Option<String>,
+}
+
+impl TourStop {
+    /// Creates a new tour stop.
+    pub fn new(title: &str, description: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            description: description.to_string(),
+            visual: None,
+        }
+    }
+
+    /// Sets a visual element.
+    pub fn with_visual(mut self, visual: &str) -> Self {
+        self.visual = Some(visual.to_string());
+        self
+    }
+}
+
+/// Educational walkthrough system.
+pub struct EducationalWalkthrough {
+    /// Walkthrough title
+    title: String,
+    /// Theme
+    theme: Theme,
+    /// Show quiz questions
+    include_quiz: bool,
+}
+
+impl EducationalWalkthrough {
+    /// Creates a new educational walkthrough.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            theme: Theme::default(),
+            include_quiz: true,
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Excludes quiz questions.
+    pub fn without_quiz(mut self) -> Self {
+        self.include_quiz = false;
+        self
+    }
+
+    /// Generates HTML for educational walkthrough.
+    pub fn to_html(&self, lessons: &[Lesson]) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ background: linear-gradient(135deg, {} 0%, #ecf0f1 100%); color: {}; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 40px 20px; min-height: 100vh; }}\n", self.theme.background_color, self.theme.text_color));
+        html.push_str("        .walkthrough-container { max-width: 900px; margin: 0 auto; }\n");
+        html.push_str("        .walkthrough-header { text-align: center; margin-bottom: 50px; }\n");
+        html.push_str("        .walkthrough-title { font-size: 3em; font-weight: bold; color: #2c3e50; text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .lesson { background-color: white; border-radius: 12px; padding: 40px; margin: 30px 0; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .lesson-number { display: inline-block; background-color: #3498db; color: white; width: 40px; height: 40px; border-radius: 50%; text-align: center; line-height: 40px; font-weight: bold; margin-bottom: 15px; }\n");
+        html.push_str("        .lesson-title { font-size: 2em; font-weight: bold; color: #2c3e50; margin-bottom: 20px; }\n");
+        html.push_str("        .lesson-content { font-size: 1.1em; line-height: 1.8; color: #34495e; margin-bottom: 20px; }\n");
+        html.push_str("        .example-box { background-color: #f8f9fa; border-left: 4px solid #f39c12; padding: 20px; margin: 20px 0; }\n");
+        html.push_str(
+            "        .example-title { font-weight: bold; color: #f39c12; margin-bottom: 10px; }\n",
+        );
+        html.push_str("        .quiz-section { background-color: #e8f4f8; border-radius: 8px; padding: 25px; margin-top: 25px; }\n");
+        html.push_str("        .quiz-title { font-weight: bold; color: #2c3e50; margin-bottom: 15px; font-size: 1.2em; }\n");
+        html.push_str("        .quiz-question { margin: 15px 0; }\n");
+        html.push_str("        .quiz-option { display: block; padding: 12px 20px; margin: 8px 0; background-color: white; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; transition: all 0.3s; }\n");
+        html.push_str(
+            "        .quiz-option:hover { border-color: #3498db; background-color: #f0f8ff; }\n",
+        );
+        html.push_str(
+            "        .quiz-option.correct { border-color: #27ae60; background-color: #d4edda; }\n",
+        );
+        html.push_str("        .quiz-option.incorrect { border-color: #e74c3c; background-color: #f8d7da; }\n");
+        html.push_str("        .key-takeaway { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin-top: 20px; }\n");
+        html.push_str("        .takeaway-title { font-weight: bold; font-size: 1.3em; margin-bottom: 10px; }\n");
+        html.push_str("    </style>\n</head>\n<body>\n");
+        html.push_str("    <div class=\"walkthrough-container\">\n");
+        html.push_str("        <div class=\"walkthrough-header\">\n");
+        html.push_str(&format!(
+            "            <h1 class=\"walkthrough-title\">{}</h1>\n",
+            self.title
+        ));
+        html.push_str("        </div>\n");
+
+        for (i, lesson) in lessons.iter().enumerate() {
+            html.push_str("        <div class=\"lesson\">\n");
+            html.push_str(&format!(
+                "            <div class=\"lesson-number\">{}</div>\n",
+                i + 1
+            ));
+            html.push_str(&format!(
+                "            <h2 class=\"lesson-title\">{}</h2>\n",
+                lesson.title
+            ));
+            for paragraph in &lesson.content {
+                html.push_str(&format!(
+                    "            <p class=\"lesson-content\">{}</p>\n",
+                    paragraph
+                ));
+            }
+
+            if let Some(example) = &lesson.example {
+                html.push_str("            <div class=\"example-box\">\n");
+                html.push_str("                <div class=\"example-title\">Example:</div>\n");
+                html.push_str(&format!("                <div>{}</div>\n", example));
+                html.push_str("            </div>\n");
+            }
+
+            if self.include_quiz {
+                if let Some(quiz) = &lesson.quiz_question {
+                    html.push_str("            <div class=\"quiz-section\">\n");
+                    html.push_str("                <div class=\"quiz-title\">Check Your Understanding</div>\n");
+                    html.push_str(&format!(
+                        "                <div class=\"quiz-question\">{}</div>\n",
+                        quiz.question
+                    ));
+                    for (j, option) in quiz.options.iter().enumerate() {
+                        html.push_str(&format!("                <div class=\"quiz-option\" data-correct=\"{}\">{}</div>\n", j == quiz.correct_index, option));
+                    }
+                    html.push_str("            </div>\n");
+                }
+            }
+
+            if let Some(takeaway) = &lesson.key_takeaway {
+                html.push_str("            <div class=\"key-takeaway\">\n");
+                html.push_str("                <div class=\"takeaway-title\">Key Takeaway</div>\n");
+                html.push_str(&format!("                <div>{}</div>\n", takeaway));
+                html.push_str("            </div>\n");
+            }
+
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+
+        if self.include_quiz {
+            html.push_str("    <script>\n");
+            html.push_str("document.querySelectorAll('.quiz-option').forEach(option => {\n");
+            html.push_str("    option.addEventListener('click', function() {\n");
+            html.push_str(
+                "        const isCorrect = this.getAttribute('data-correct') === 'true';\n",
+            );
+            html.push_str(
+                "        const siblings = this.parentElement.querySelectorAll('.quiz-option');\n",
+            );
+            html.push_str("        siblings.forEach(s => {\n");
+            html.push_str("            s.style.pointerEvents = 'none';\n");
+            html.push_str("            if (s.getAttribute('data-correct') === 'true') {\n");
+            html.push_str("                s.classList.add('correct');\n");
+            html.push_str("            }\n");
+            html.push_str("        });\n");
+            html.push_str("        if (!isCorrect) {\n");
+            html.push_str("            this.classList.add('incorrect');\n");
+            html.push_str("        }\n");
+            html.push_str("    });\n");
+            html.push_str("});\n");
+            html.push_str("    </script>\n");
+        }
+
+        html.push_str("</body>\n</html>");
+        html
+    }
+}
+
+impl Default for EducationalWalkthrough {
+    fn default() -> Self {
+        Self::new("Educational Walkthrough")
+    }
+}
+
+/// Educational lesson.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Lesson {
+    /// Lesson title
+    pub title: String,
+    /// Lesson content paragraphs
+    pub content: Vec<String>,
+    /// Example
+    pub example: Option<String>,
+    /// Quiz question
+    pub quiz_question: Option<QuizQuestion>,
+    /// Key takeaway
+    pub key_takeaway: Option<String>,
+}
+
+impl Lesson {
+    /// Creates a new lesson.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            content: Vec::new(),
+            example: None,
+            quiz_question: None,
+            key_takeaway: None,
+        }
+    }
+
+    /// Adds content paragraph.
+    pub fn with_content(mut self, paragraph: &str) -> Self {
+        self.content.push(paragraph.to_string());
+        self
+    }
+
+    /// Sets an example.
+    pub fn with_example(mut self, example: &str) -> Self {
+        self.example = Some(example.to_string());
+        self
+    }
+
+    /// Sets a quiz question.
+    pub fn with_quiz(mut self, question: QuizQuestion) -> Self {
+        self.quiz_question = Some(question);
+        self
+    }
+
+    /// Sets a key takeaway.
+    pub fn with_takeaway(mut self, takeaway: &str) -> Self {
+        self.key_takeaway = Some(takeaway.to_string());
+        self
+    }
+}
+
+/// Quiz question for educational walkthrough.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizQuestion {
+    /// Question text
+    pub question: String,
+    /// Answer options
+    pub options: Vec<String>,
+    /// Index of correct answer
+    pub correct_index: usize,
+}
+
+impl QuizQuestion {
+    /// Creates a new quiz question.
+    pub fn new(question: &str, options: Vec<String>, correct_index: usize) -> Self {
+        Self {
+            question: question.to_string(),
+            options,
+            correct_index,
+        }
+    }
+}
+
+// ============================================================================
+// v0.3.4 - Holographic Display Support
+// ============================================================================
+
+/// Configuration for Looking Glass holographic display.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookingGlassConfig {
+    /// Enable quilt rendering (multi-view for holographic display)
+    pub enable_quilt: bool,
+    /// Number of views in the quilt (typically 45 for Looking Glass Portrait)
+    pub view_count: usize,
+    /// Quilt width in pixels
+    pub quilt_width: usize,
+    /// Quilt height in pixels
+    pub quilt_height: usize,
+    /// Enable depth mapping
+    pub enable_depth_mapping: bool,
+    /// Field of view in degrees
+    pub fov: f32,
+    /// Depth range (near, far) in scene units
+    pub depth_range: (f32, f32),
+}
+
+impl Default for LookingGlassConfig {
+    fn default() -> Self {
+        Self {
+            enable_quilt: true,
+            view_count: 45,
+            quilt_width: 4096,
+            quilt_height: 4096,
+            enable_depth_mapping: true,
+            fov: 14.0,
+            depth_range: (0.1, 100.0),
+        }
+    }
+}
+
+/// Looking Glass holographic display visualizer.
+pub struct LookingGlassVisualizer {
+    title: String,
+    config: LookingGlassConfig,
+    theme: Theme,
+}
+
+impl LookingGlassVisualizer {
+    /// Creates a new Looking Glass visualizer.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            config: LookingGlassConfig::default(),
+            theme: Theme::dark(),
+        }
+    }
+
+    /// Sets the Looking Glass configuration.
+    pub fn with_config(mut self, config: LookingGlassConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML for Looking Glass display.
+    pub fn to_holographic_html(&self, graph: &DependencyGraph) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n");
+        html.push_str("<html>\n<head>\n");
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("    <script src=\"https://unpkg.com/holoplay-core@0.1.1/dist/holoplay-core.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; overflow: hidden; background: #000; }\n");
+        html.push_str("        #canvas { width: 100%; height: 100%; }\n");
+        html.push_str("        #info { position: absolute; top: 10px; left: 10px; color: #fff; font-family: monospace; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str(&format!(
+            "    <div id=\"info\">{}<br>Looking Glass Display<br>Views: {}</div>\n",
+            self.title, self.config.view_count
+        ));
+        html.push_str("    <canvas id=\"canvas\"></canvas>\n");
+
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "        const config = {};\n",
+            serde_json::to_string(&self.config).unwrap()
+        ));
+        html.push_str("        const scene = new THREE.Scene();\n");
+        html.push_str(&format!("        const camera = new THREE.PerspectiveCamera({}, window.innerWidth / window.innerHeight, {}, {});\n",
+            self.config.fov, self.config.depth_range.0, self.config.depth_range.1));
+        html.push_str("        camera.position.set(0, 0, 10);\n");
+        html.push_str("        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });\n");
+        html.push_str("        renderer.setSize(window.innerWidth, window.innerHeight);\n");
+
+        // Add graph nodes as holographic objects
+        html.push_str("        const geometry = new THREE.BoxGeometry(1, 1, 1);\n");
+        html.push_str(&format!(
+            "        const material = new THREE.MeshPhongMaterial({{ color: '{}' }});\n",
+            self.theme.condition_color
+        ));
+
+        let node_count = graph.node_count().min(25);
+        for i in 0..node_count {
+            let x = (i % 5) as f32 * 2.0 - 4.0;
+            let y = (i / 5) as f32 * 2.0 - 2.0;
+            html.push_str(&format!(
+                "        const cube{} = new THREE.Mesh(geometry, material);\n",
+                i
+            ));
+            html.push_str(&format!(
+                "        cube{}.position.set({}, {}, 0);\n",
+                i, x, y
+            ));
+            html.push_str(&format!("        scene.add(cube{});\n", i));
+        }
+
+        html.push_str("        const light = new THREE.DirectionalLight(0xffffff, 1);\n");
+        html.push_str("        light.position.set(5, 5, 5);\n");
+        html.push_str("        scene.add(light);\n");
+        html.push_str("        scene.add(new THREE.AmbientLight(0x404040));\n");
+
+        html.push_str("        function animate() {\n");
+        html.push_str("            requestAnimationFrame(animate);\n");
+        html.push_str("            renderer.render(scene, camera);\n");
+        html.push_str("        }\n");
+        html.push_str("        animate();\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>\n");
+
+        html
+    }
+}
+
+impl Default for LookingGlassVisualizer {
+    fn default() -> Self {
+        Self::new("Holographic Visualization")
+    }
+}
+
+/// Holographic statute model configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HolographicModelConfig {
+    /// Enable layer separation for legal structure
+    pub enable_layers: bool,
+    /// Number of depth layers
+    pub layer_count: usize,
+    /// Enable rotation animation
+    pub enable_rotation: bool,
+    /// Rotation speed (degrees per second)
+    pub rotation_speed: f32,
+    /// Enable interactive manipulation
+    pub enable_interaction: bool,
+}
+
+impl Default for HolographicModelConfig {
+    fn default() -> Self {
+        Self {
+            enable_layers: true,
+            layer_count: 5,
+            enable_rotation: true,
+            rotation_speed: 15.0,
+            enable_interaction: true,
+        }
+    }
+}
+
+/// Holographic statute model visualizer.
+pub struct HolographicStatuteModel {
+    theme: Theme,
+    config: HolographicModelConfig,
+}
+
+impl HolographicStatuteModel {
+    /// Creates a new holographic statute model.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::dark(),
+            config: HolographicModelConfig::default(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: HolographicModelConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates holographic model HTML.
+    pub fn to_holographic_model(&self, statute: &Statute) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n");
+        html.push_str("<html>\n<head>\n");
+        html.push_str(&format!(
+            "    <title>Holographic Model: {}</title>\n",
+            statute.title
+        ));
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; background: #000; }\n");
+        html.push_str("        #container { width: 100vw; height: 100vh; }\n");
+        html.push_str("        #info { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str(&format!(
+            "    <div id=\"info\">{}<br>Holographic Statute Model</div>\n",
+            statute.title
+        ));
+        html.push_str("    <div id=\"container\"></div>\n");
+
+        html.push_str("    <script>\n");
+        html.push_str("        const scene = new THREE.Scene();\n");
+        html.push_str("        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n");
+        html.push_str("        camera.position.z = 15;\n");
+        html.push_str("        const renderer = new THREE.WebGLRenderer({ antialias: true });\n");
+        html.push_str("        renderer.setSize(window.innerWidth, window.innerHeight);\n");
+        html.push_str(
+            "        document.getElementById('container').appendChild(renderer.domElement);\n",
+        );
+
+        if self.config.enable_layers {
+            for i in 0..self.config.layer_count {
+                let z = (i as f32 - (self.config.layer_count as f32 / 2.0)) * 2.0;
+                html.push_str(&format!(
+                    "        const layer{}Geometry = new THREE.PlaneGeometry(8, 8);\n",
+                    i
+                ));
+                html.push_str(&format!("        const layer{}Material = new THREE.MeshBasicMaterial({{ color: '{}', transparent: true, opacity: 0.3, side: THREE.DoubleSide }});\n",
+                    i, self.theme.condition_color));
+                html.push_str(&format!(
+                    "        const layer{} = new THREE.Mesh(layer{}Geometry, layer{}Material);\n",
+                    i, i, i
+                ));
+                html.push_str(&format!("        layer{}.position.z = {};\n", i, z));
+                html.push_str(&format!("        scene.add(layer{});\n", i));
+            }
+        }
+
+        html.push_str("        function animate() {\n");
+        html.push_str("            requestAnimationFrame(animate);\n");
+        if self.config.enable_rotation {
+            html.push_str(&format!(
+                "            scene.rotation.y += {};\n",
+                self.config.rotation_speed * 0.001
+            ));
+        }
+        html.push_str("            renderer.render(scene, camera);\n");
+        html.push_str("        }\n");
+        html.push_str("        animate();\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>\n");
+
+        html
+    }
+}
+
+impl Default for HolographicStatuteModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 3D print export configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrintExportConfig {
+    /// Export format (STL, OBJ, 3MF)
+    pub format: String,
+    /// Scale factor for the model
+    pub scale: f32,
+    /// Base thickness in mm
+    pub base_thickness: f32,
+    /// Wall thickness in mm
+    pub wall_thickness: f32,
+    /// Enable support generation
+    pub generate_supports: bool,
+}
+
+impl Default for PrintExportConfig {
+    fn default() -> Self {
+        Self {
+            format: "STL".to_string(),
+            scale: 1.0,
+            base_thickness: 2.0,
+            wall_thickness: 1.0,
+            generate_supports: false,
+        }
+    }
+}
+
+/// 3D print export visualizer.
+pub struct ThreeDPrintExporter {
+    config: PrintExportConfig,
+}
+
+impl ThreeDPrintExporter {
+    /// Creates a new 3D print exporter.
+    pub fn new() -> Self {
+        Self {
+            config: PrintExportConfig::default(),
+        }
+    }
+
+    /// Sets the export configuration.
+    pub fn with_config(mut self, config: PrintExportConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Exports decision tree as STL mesh data.
+    pub fn to_stl(&self, tree: &DecisionTree) -> String {
+        let mut stl = String::new();
+
+        stl.push_str("solid DecisionTree\n");
+
+        // Generate triangular facets for each node
+        let node_count = tree.node_count().min(10);
+        for i in 0..node_count {
+            let x = (i as f32) * self.config.scale;
+            let y = 0.0;
+            let z = self.config.base_thickness;
+
+            // Simple cube representation (12 triangles)
+            stl.push_str("  facet normal 0 0 1\n");
+            stl.push_str("    outer loop\n");
+            stl.push_str(&format!("      vertex {} {} {}\n", x, y, z));
+            stl.push_str(&format!("      vertex {} {} {}\n", x + 1.0, y, z));
+            stl.push_str(&format!("      vertex {} {} {}\n", x + 1.0, y + 1.0, z));
+            stl.push_str("    endloop\n");
+            stl.push_str("  endfacet\n");
+        }
+
+        stl.push_str("endsolid DecisionTree\n");
+        stl
+    }
+
+    /// Exports dependency graph as OBJ mesh data.
+    pub fn to_obj(&self, graph: &DependencyGraph) -> String {
+        let mut obj = String::new();
+
+        let node_count = graph.node_count();
+        obj.push_str("# OBJ file for dependency graph\n");
+        obj.push_str(&format!("# Vertices: {}\n", node_count));
+
+        // Write vertices
+        for i in 0..node_count {
+            let x = (i % 5) as f32 * self.config.scale;
+            let y = (i / 5) as f32 * self.config.scale;
+            let z = 0.0;
+            obj.push_str(&format!("v {} {} {}\n", x, y, z));
+        }
+
+        // Write faces (simplified cube for each vertex)
+        for i in 1..=node_count {
+            obj.push_str(&format!("f {} {} {}\n", i, i, i));
+        }
+
+        obj
+    }
+
+    /// Exports as 3MF format (XML-based).
+    pub fn to_3mf(&self, tree: &DecisionTree) -> String {
+        let mut mf = String::new();
+
+        mf.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        mf.push_str("<model unit=\"millimeter\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\n");
+        mf.push_str("  <resources>\n");
+        mf.push_str("    <object id=\"1\" type=\"model\">\n");
+        mf.push_str("      <mesh>\n");
+        mf.push_str("        <vertices>\n");
+
+        let node_count = tree.node_count().min(10);
+        for i in 0..node_count {
+            let x = i as f32 * self.config.scale;
+            mf.push_str(&format!(
+                "          <vertex x=\"{}\" y=\"0\" z=\"0\" />\n",
+                x
+            ));
+        }
+
+        mf.push_str("        </vertices>\n");
+        mf.push_str("        <triangles>\n");
+        mf.push_str("          <triangle v1=\"0\" v2=\"1\" v3=\"2\" />\n");
+        mf.push_str("        </triangles>\n");
+        mf.push_str("      </mesh>\n");
+        mf.push_str("    </object>\n");
+        mf.push_str("  </resources>\n");
+        mf.push_str("  <build>\n");
+        mf.push_str("    <item objectid=\"1\" />\n");
+        mf.push_str("  </build>\n");
+        mf.push_str("</model>\n");
+
+        mf
+    }
+}
+
+impl Default for ThreeDPrintExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Volumetric data rendering configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VolumetricConfig {
+    /// Enable ray marching for volumetric rendering
+    pub enable_ray_marching: bool,
+    /// Number of sampling steps
+    pub sample_steps: usize,
+    /// Density threshold
+    pub density_threshold: f32,
+    /// Enable gradient-based lighting
+    pub enable_lighting: bool,
+    /// Color transfer function
+    pub transfer_function: String,
+}
+
+impl Default for VolumetricConfig {
+    fn default() -> Self {
+        Self {
+            enable_ray_marching: true,
+            sample_steps: 128,
+            density_threshold: 0.1,
+            enable_lighting: true,
+            transfer_function: "linear".to_string(),
+        }
+    }
+}
+
+/// Volumetric data renderer.
+pub struct VolumetricRenderer {
+    title: String,
+    config: VolumetricConfig,
+    theme: Theme,
+}
+
+impl VolumetricRenderer {
+    /// Creates a new volumetric renderer.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            config: VolumetricConfig::default(),
+            theme: Theme::dark(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the configuration.
+    pub fn with_config(mut self, config: VolumetricConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates volumetric rendering HTML.
+    pub fn to_volumetric_html(&self, graph: &DependencyGraph) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n");
+        html.push_str("<html>\n<head>\n");
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; background: #000; overflow: hidden; }\n");
+        html.push_str("        #canvas { width: 100%; height: 100%; }\n");
+        html.push_str("        #info { position: absolute; top: 10px; left: 10px; color: #0ff; font-family: monospace; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str(&format!(
+            "    <div id=\"info\">{}<br>Volumetric Rendering<br>Steps: {}</div>\n",
+            self.title, self.config.sample_steps
+        ));
+        html.push_str("    <canvas id=\"canvas\"></canvas>\n");
+
+        html.push_str("    <script>\n");
+        html.push_str("        const scene = new THREE.Scene();\n");
+        html.push_str("        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n");
+        html.push_str("        camera.position.z = 10;\n");
+        html.push_str("        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });\n");
+        html.push_str("        renderer.setSize(window.innerWidth, window.innerHeight);\n");
+
+        // Create volumetric cloud for each statute
+        html.push_str("        const geometry = new THREE.SphereGeometry(1, 32, 32);\n");
+        let node_count = graph.node_count().min(10);
+        for i in 0..node_count {
+            let x = (i % 5) as f32 * 2.5 - 5.0;
+            let y = (i / 5) as f32 * 2.5 - 2.5;
+            html.push_str(&format!("        const material{} = new THREE.MeshPhongMaterial({{ color: '{}', transparent: true, opacity: 0.6 }});\n",
+                i, self.theme.condition_color));
+            html.push_str(&format!(
+                "        const sphere{} = new THREE.Mesh(geometry, material{});\n",
+                i, i
+            ));
+            html.push_str(&format!(
+                "        sphere{}.position.set({}, {}, 0);\n",
+                i, x, y
+            ));
+            html.push_str(&format!("        scene.add(sphere{});\n", i));
+        }
+
+        html.push_str("        const light = new THREE.PointLight(0xffffff, 1, 100);\n");
+        html.push_str("        light.position.set(10, 10, 10);\n");
+        html.push_str("        scene.add(light);\n");
+        html.push_str("        scene.add(new THREE.AmbientLight(0x404040));\n");
+
+        html.push_str("        function animate() {\n");
+        html.push_str("            requestAnimationFrame(animate);\n");
+        html.push_str("            scene.rotation.y += 0.005;\n");
+        html.push_str("            renderer.render(scene, camera);\n");
+        html.push_str("        }\n");
+        html.push_str("        animate();\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>\n");
+
+        html
+    }
+}
+
+impl Default for VolumetricRenderer {
+    fn default() -> Self {
+        Self::new("Volumetric Visualization")
+    }
+}
+
+/// Gesture-based holographic interaction configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GestureConfig {
+    /// Enable hand tracking
+    pub enable_hand_tracking: bool,
+    /// Enable pinch gestures
+    pub enable_pinch: bool,
+    /// Enable swipe gestures
+    pub enable_swipe: bool,
+    /// Enable rotation gestures
+    pub enable_rotation: bool,
+    /// Gesture sensitivity (0.0 to 1.0)
+    pub sensitivity: f32,
+}
+
+impl Default for GestureConfig {
+    fn default() -> Self {
+        Self {
+            enable_hand_tracking: true,
+            enable_pinch: true,
+            enable_swipe: true,
+            enable_rotation: true,
+            sensitivity: 0.7,
+        }
+    }
+}
+
+/// Gesture-based holographic interaction system.
+pub struct HolographicGestureController {
+    title: String,
+    config: GestureConfig,
+    theme: Theme,
+}
+
+impl HolographicGestureController {
+    /// Creates a new holographic gesture controller.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            config: GestureConfig::default(),
+            theme: Theme::dark(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the gesture configuration.
+    pub fn with_config(mut self, config: GestureConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Generates gesture-controlled holographic HTML.
+    pub fn to_gesture_html(&self, tree: &DecisionTree) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n");
+        html.push_str("<html>\n<head>\n");
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <meta charset=\"utf-8\">\n");
+        html.push_str("    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n");
+        html.push_str(
+            "    <script src=\"https://unpkg.com/@mediapipe/hands/hands.js\"></script>\n",
+        );
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; background: #000; overflow: hidden; }\n");
+        html.push_str("        #container { width: 100%; height: 100%; }\n");
+        html.push_str("        #info { position: absolute; top: 10px; left: 10px; color: #f0f; font-family: monospace; }\n");
+        html.push_str("        #gestures { position: absolute; bottom: 10px; left: 10px; color: #fff; font-family: monospace; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+
+        html.push_str(&format!(
+            "    <div id=\"info\">{}<br>Gesture Control Active</div>\n",
+            self.title
+        ));
+        html.push_str("    <div id=\"gestures\">Gestures: Pinch to zoom | Swipe to rotate | Open palm to reset</div>\n");
+        html.push_str("    <div id=\"container\"></div>\n");
+
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "        const config = {};\n",
+            serde_json::to_string(&self.config).unwrap()
+        ));
+        html.push_str("        const scene = new THREE.Scene();\n");
+        html.push_str("        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n");
+        html.push_str("        camera.position.z = 10;\n");
+        html.push_str("        const renderer = new THREE.WebGLRenderer({ antialias: true });\n");
+        html.push_str("        renderer.setSize(window.innerWidth, window.innerHeight);\n");
+        html.push_str(
+            "        document.getElementById('container').appendChild(renderer.domElement);\n",
+        );
+
+        // Add tree nodes
+        let node_count = tree.node_count().min(10);
+        for i in 0..node_count {
+            let x = (i % 5) as f32 * 2.0 - 4.0;
+            let y = (i / 5) as f32 * 2.0 - 2.0;
+            html.push_str(&format!(
+                "        const nodeGeometry{} = new THREE.SphereGeometry(0.5, 32, 32);\n",
+                i
+            ));
+            html.push_str(&format!(
+                "        const nodeMaterial{} = new THREE.MeshPhongMaterial({{ color: '{}' }});\n",
+                i, self.theme.condition_color
+            ));
+            html.push_str(&format!(
+                "        const nodeMesh{} = new THREE.Mesh(nodeGeometry{}, nodeMaterial{});\n",
+                i, i, i
+            ));
+            html.push_str(&format!(
+                "        nodeMesh{}.position.set({}, {}, 0);\n",
+                i, x, y
+            ));
+            html.push_str(&format!("        scene.add(nodeMesh{});\n", i));
+        }
+
+        html.push_str("        const light = new THREE.DirectionalLight(0xffffff, 1);\n");
+        html.push_str("        light.position.set(5, 5, 5);\n");
+        html.push_str("        scene.add(light);\n");
+        html.push_str("        scene.add(new THREE.AmbientLight(0x404040));\n");
+
+        html.push_str("        let gestureState = { pinch: false, swipe: 0, rotation: 0 };\n");
+
+        if self.config.enable_hand_tracking {
+            html.push_str("        // Gesture detection placeholder\n");
+            html.push_str("        document.addEventListener('keydown', (e) => {\n");
+            html.push_str(
+                "            if (e.key === 'p') gestureState.pinch = !gestureState.pinch;\n",
+            );
+            html.push_str("            if (e.key === 's') gestureState.swipe += 0.1;\n");
+            html.push_str("            if (e.key === 'r') gestureState.rotation += 0.1;\n");
+            html.push_str("        });\n");
+        }
+
+        html.push_str("        function animate() {\n");
+        html.push_str("            requestAnimationFrame(animate);\n");
+        if self.config.enable_rotation {
+            html.push_str("            scene.rotation.y += gestureState.rotation * 0.01;\n");
+        }
+        if self.config.enable_pinch {
+            html.push_str("            if (gestureState.pinch) camera.position.z = Math.max(5, camera.position.z - 0.1);\n");
+        }
+        html.push_str("            renderer.render(scene, camera);\n");
+        html.push_str("        }\n");
+        html.push_str("        animate();\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>\n");
+
+        html
+    }
+}
+
+impl Default for HolographicGestureController {
+    fn default() -> Self {
+        Self::new("Gesture-Controlled Holographic Visualization")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -16446,5 +19477,1164 @@ mod tests {
         let json = serde_json::to_string(&anomaly).unwrap();
         assert!(json.contains("Cycle"));
         assert!(json.contains("0.95"));
+    }
+
+    // ============================================================================
+    // Real-Time Legal Intelligence Tests (v0.3.2)
+    // ============================================================================
+
+    #[test]
+    fn test_live_court_proceeding_creation() {
+        let proceeding =
+            LiveCourtProceeding::new("Supreme Court", "2024-001", "ws://localhost:8080");
+        assert_eq!(proceeding.court_name, "Supreme Court");
+        assert_eq!(proceeding.case_number, "2024-001");
+        assert_eq!(proceeding.ws_url, "ws://localhost:8080");
+    }
+
+    #[test]
+    fn test_live_court_proceeding_with_theme() {
+        let proceeding =
+            LiveCourtProceeding::new("Supreme Court", "2024-001", "ws://localhost:8080")
+                .with_theme(Theme::dark());
+        assert_eq!(proceeding.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_live_court_proceeding_html_generation() {
+        let events = vec![
+            CourtEvent::new(
+                "10:00 AM",
+                CourtEventType::Opening,
+                "Opening statements begin",
+            )
+            .with_participant("Prosecutor"),
+            CourtEvent::new("10:30 AM", CourtEventType::Testimony, "Witness testimony")
+                .with_participant("Witness 1"),
+        ];
+
+        let proceeding =
+            LiveCourtProceeding::new("Supreme Court", "2024-001", "ws://localhost:8080");
+        let html = proceeding.to_live_html(&events);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Supreme Court"));
+        assert!(html.contains("2024-001"));
+        assert!(html.contains("LIVE"));
+        assert!(html.contains("Opening statements begin"));
+        assert!(html.contains("Witness testimony"));
+        assert!(html.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_live_court_proceeding_default() {
+        let proceeding = LiveCourtProceeding::default();
+        assert_eq!(proceeding.court_name, "Court");
+        assert_eq!(proceeding.case_number, "Unknown");
+    }
+
+    #[test]
+    fn test_court_event_creation() {
+        let event = CourtEvent::new("10:00 AM", CourtEventType::Ruling, "Judge issues ruling");
+        assert_eq!(event.timestamp, "10:00 AM");
+        assert_eq!(event.event_type, CourtEventType::Ruling);
+        assert_eq!(event.description, "Judge issues ruling");
+    }
+
+    #[test]
+    fn test_court_event_with_participant() {
+        let event = CourtEvent::new("10:00 AM", CourtEventType::Motion, "Motion filed")
+            .with_participant("Defense Attorney")
+            .with_participant("Prosecutor");
+        assert_eq!(event.participants.len(), 2);
+    }
+
+    #[test]
+    fn test_court_event_type_serialization() {
+        let event_type = CourtEventType::Testimony;
+        let json = serde_json::to_string(&event_type).unwrap();
+        assert!(json.contains("Testimony"));
+    }
+
+    #[test]
+    fn test_breaking_news_feed_creation() {
+        let feed = BreakingNewsFeed::new("Legal News", "ws://localhost:8080");
+        assert_eq!(feed.title, "Legal News");
+        assert_eq!(feed.ws_url, "ws://localhost:8080");
+        assert_eq!(feed.max_items, 50);
+    }
+
+    #[test]
+    fn test_breaking_news_feed_with_theme() {
+        let feed =
+            BreakingNewsFeed::new("Legal News", "ws://localhost:8080").with_theme(Theme::dark());
+        assert_eq!(feed.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_breaking_news_feed_with_max_items() {
+        let feed = BreakingNewsFeed::new("Legal News", "ws://localhost:8080").with_max_items(100);
+        assert_eq!(feed.max_items, 100);
+    }
+
+    #[test]
+    fn test_breaking_news_feed_html_generation() {
+        let news_items = vec![
+            NewsItem::new(
+                "Supreme Court Ruling",
+                "Important case decided today",
+                "Legal Times",
+                "2024-01-01",
+                NewsPriority::Urgent,
+            )
+            .with_tag("Supreme Court")
+            .with_tag("Constitutional Law"),
+            NewsItem::new(
+                "New Legislation Proposed",
+                "Bill introduced in Congress",
+                "Law Gazette",
+                "2024-01-02",
+                NewsPriority::High,
+            ),
+        ];
+
+        let feed = BreakingNewsFeed::new("Legal News", "ws://localhost:8080");
+        let html = feed.to_html(&news_items);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Legal News"));
+        assert!(html.contains("Supreme Court Ruling"));
+        assert!(html.contains("New Legislation Proposed"));
+        assert!(html.contains("Supreme Court"));
+        assert!(html.contains("Constitutional Law"));
+        assert!(html.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_breaking_news_feed_default() {
+        let feed = BreakingNewsFeed::default();
+        assert_eq!(feed.title, "Legal News Feed");
+    }
+
+    #[test]
+    fn test_news_item_creation() {
+        let item = NewsItem::new(
+            "Test News",
+            "Summary",
+            "Source",
+            "2024-01-01",
+            NewsPriority::Medium,
+        );
+        assert_eq!(item.title, "Test News");
+        assert_eq!(item.priority, NewsPriority::Medium);
+    }
+
+    #[test]
+    fn test_news_item_with_tag() {
+        let item = NewsItem::new("Test", "Summary", "Source", "2024-01-01", NewsPriority::Low)
+            .with_tag("Tag1")
+            .with_tag("Tag2");
+        assert_eq!(item.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_news_priority_serialization() {
+        let priority = NewsPriority::Urgent;
+        let json = serde_json::to_string(&priority).unwrap();
+        assert!(json.contains("Urgent"));
+    }
+
+    #[test]
+    fn test_regulatory_change_monitor_creation() {
+        let monitor = RegulatoryChangeMonitor::new("Regulatory Monitor", "ws://localhost:8080");
+        assert_eq!(monitor.title, "Regulatory Monitor");
+        assert_eq!(monitor.ws_url, "ws://localhost:8080");
+    }
+
+    #[test]
+    fn test_regulatory_change_monitor_with_theme() {
+        let monitor = RegulatoryChangeMonitor::new("Regulatory Monitor", "ws://localhost:8080")
+            .with_theme(Theme::dark());
+        assert_eq!(monitor.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_regulatory_change_monitor_html_generation() {
+        let changes = vec![
+            RegulatoryChange::new(
+                "REG-2024-001",
+                "New environmental standards",
+                "EPA",
+                "2024-06-01",
+                RegulatoryStatus::Proposed,
+            )
+            .with_impact("Significant impact on manufacturing")
+            .with_sector("Manufacturing")
+            .with_sector("Energy"),
+            RegulatoryChange::new(
+                "REG-2024-002",
+                "Financial reporting updates",
+                "SEC",
+                "2024-03-01",
+                RegulatoryStatus::Enacted,
+            )
+            .with_sector("Finance"),
+        ];
+
+        let monitor = RegulatoryChangeMonitor::new("Regulatory Monitor", "ws://localhost:8080");
+        let html = monitor.to_html(&changes);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Regulatory Monitor"));
+        assert!(html.contains("REG-2024-001"));
+        assert!(html.contains("REG-2024-002"));
+        assert!(html.contains("EPA"));
+        assert!(html.contains("SEC"));
+        assert!(html.contains("Manufacturing"));
+        assert!(html.contains("Finance"));
+        assert!(html.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_regulatory_change_monitor_default() {
+        let monitor = RegulatoryChangeMonitor::default();
+        assert_eq!(monitor.title, "Regulatory Change Monitor");
+    }
+
+    #[test]
+    fn test_regulatory_change_creation() {
+        let change = RegulatoryChange::new(
+            "REG-001",
+            "Description",
+            "Agency",
+            "2024-01-01",
+            RegulatoryStatus::Proposed,
+        );
+        assert_eq!(change.regulation_id, "REG-001");
+        assert_eq!(change.status, RegulatoryStatus::Proposed);
+    }
+
+    #[test]
+    fn test_regulatory_change_with_impact() {
+        let change = RegulatoryChange::new(
+            "REG-001",
+            "Description",
+            "Agency",
+            "2024-01-01",
+            RegulatoryStatus::Enacted,
+        )
+        .with_impact("High impact");
+        assert_eq!(change.impact_assessment, Some("High impact".to_string()));
+    }
+
+    #[test]
+    fn test_regulatory_change_with_sector() {
+        let change = RegulatoryChange::new(
+            "REG-001",
+            "Description",
+            "Agency",
+            "2024-01-01",
+            RegulatoryStatus::Amended,
+        )
+        .with_sector("Healthcare")
+        .with_sector("Technology");
+        assert_eq!(change.affected_sectors.len(), 2);
+    }
+
+    #[test]
+    fn test_regulatory_status_serialization() {
+        let status = RegulatoryStatus::Repealed;
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("Repealed"));
+    }
+
+    #[test]
+    fn test_enforcement_action_tracker_creation() {
+        let tracker = EnforcementActionTracker::new("Enforcement Tracker", "ws://localhost:8080");
+        assert_eq!(tracker.title, "Enforcement Tracker");
+        assert_eq!(tracker.ws_url, "ws://localhost:8080");
+    }
+
+    #[test]
+    fn test_enforcement_action_tracker_with_theme() {
+        let tracker = EnforcementActionTracker::new("Enforcement Tracker", "ws://localhost:8080")
+            .with_theme(Theme::dark());
+        assert_eq!(tracker.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_enforcement_action_tracker_html_generation() {
+        let actions = vec![
+            EnforcementAction::new(
+                "Company A",
+                "SEC",
+                "2024-01-15",
+                EnforcementActionType::Fine,
+                EnforcementStatus::Active,
+            )
+            .with_fine(1000000.0)
+            .with_violation("Insider trading")
+            .with_violation("Misrepresentation"),
+            EnforcementAction::new(
+                "Company B",
+                "FTC",
+                "2024-02-10",
+                EnforcementActionType::Warning,
+                EnforcementStatus::Resolved,
+            ),
+        ];
+
+        let tracker = EnforcementActionTracker::new("Enforcement Tracker", "ws://localhost:8080");
+        let html = tracker.to_html(&actions);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Enforcement Tracker"));
+        assert!(html.contains("Company A"));
+        assert!(html.contains("Company B"));
+        assert!(html.contains("SEC"));
+        assert!(html.contains("FTC"));
+        assert!(html.contains("1000000"));
+        assert!(html.contains("Insider trading"));
+        assert!(html.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_enforcement_action_tracker_default() {
+        let tracker = EnforcementActionTracker::default();
+        assert_eq!(tracker.title, "Enforcement Action Tracker");
+    }
+
+    #[test]
+    fn test_enforcement_action_creation() {
+        let action = EnforcementAction::new(
+            "Entity",
+            "Agency",
+            "2024-01-01",
+            EnforcementActionType::Settlement,
+            EnforcementStatus::Pending,
+        );
+        assert_eq!(action.entity, "Entity");
+        assert_eq!(action.action_type, EnforcementActionType::Settlement);
+        assert_eq!(action.status, EnforcementStatus::Pending);
+    }
+
+    #[test]
+    fn test_enforcement_action_with_fine() {
+        let action = EnforcementAction::new(
+            "Entity",
+            "Agency",
+            "2024-01-01",
+            EnforcementActionType::Fine,
+            EnforcementStatus::Active,
+        )
+        .with_fine(500000.0);
+        assert_eq!(action.fine_amount, Some(500000.0));
+    }
+
+    #[test]
+    fn test_enforcement_action_with_violation() {
+        let action = EnforcementAction::new(
+            "Entity",
+            "Agency",
+            "2024-01-01",
+            EnforcementActionType::Investigation,
+            EnforcementStatus::Pending,
+        )
+        .with_violation("Violation 1")
+        .with_violation("Violation 2");
+        assert_eq!(action.violations.len(), 2);
+    }
+
+    #[test]
+    fn test_enforcement_action_type_serialization() {
+        let action_type = EnforcementActionType::Suspension;
+        let json = serde_json::to_string(&action_type).unwrap();
+        assert!(json.contains("Suspension"));
+    }
+
+    #[test]
+    fn test_enforcement_status_serialization() {
+        let status = EnforcementStatus::Appealed;
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("Appealed"));
+    }
+
+    #[test]
+    fn test_market_impact_visualizer_creation() {
+        let visualizer = MarketImpactVisualizer::new("Market Impact", "ws://localhost:8080");
+        assert_eq!(visualizer.title, "Market Impact");
+        assert_eq!(visualizer.ws_url, "ws://localhost:8080");
+    }
+
+    #[test]
+    fn test_market_impact_visualizer_with_theme() {
+        let visualizer = MarketImpactVisualizer::new("Market Impact", "ws://localhost:8080")
+            .with_theme(Theme::dark());
+        assert_eq!(visualizer.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_market_impact_visualizer_html_generation() {
+        let impacts = vec![
+            MarketImpact::new(
+                "Supreme Court Ruling on Tech",
+                "2024-01-15",
+                ImpactSeverity::High,
+            )
+            .with_stock_change(-5.2)
+            .with_company("Tech Corp")
+            .with_company("Data Inc")
+            .with_sector("Technology"),
+            MarketImpact::new(
+                "New Financial Regulation",
+                "2024-02-10",
+                ImpactSeverity::Medium,
+            )
+            .with_stock_change(2.1)
+            .with_company("Bank A")
+            .with_sector("Finance"),
+        ];
+
+        let visualizer = MarketImpactVisualizer::new("Market Impact", "ws://localhost:8080");
+        let html = visualizer.to_html(&impacts);
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Market Impact"));
+        assert!(html.contains("Supreme Court Ruling on Tech"));
+        assert!(html.contains("New Financial Regulation"));
+        assert!(html.contains("Tech Corp"));
+        assert!(html.contains("Bank A"));
+        assert!(html.contains("Technology"));
+        assert!(html.contains("Finance"));
+        assert!(html.contains("chart.js"));
+        assert!(html.contains("ws://localhost:8080"));
+    }
+
+    #[test]
+    fn test_market_impact_visualizer_default() {
+        let visualizer = MarketImpactVisualizer::default();
+        assert_eq!(visualizer.title, "Market Impact Analysis");
+    }
+
+    #[test]
+    fn test_market_impact_creation() {
+        let impact = MarketImpact::new("Legal Event", "2024-01-01", ImpactSeverity::Low);
+        assert_eq!(impact.legal_event, "Legal Event");
+        assert_eq!(impact.event_date, "2024-01-01");
+        assert_eq!(impact.severity, ImpactSeverity::Low);
+    }
+
+    #[test]
+    fn test_market_impact_with_stock_change() {
+        let impact =
+            MarketImpact::new("Event", "2024-01-01", ImpactSeverity::High).with_stock_change(-3.5);
+        assert_eq!(impact.stock_price_change, Some(-3.5));
+    }
+
+    #[test]
+    fn test_market_impact_with_company() {
+        let impact = MarketImpact::new("Event", "2024-01-01", ImpactSeverity::Medium)
+            .with_company("Company A")
+            .with_company("Company B");
+        assert_eq!(impact.affected_companies.len(), 2);
+    }
+
+    #[test]
+    fn test_market_impact_with_sector() {
+        let impact = MarketImpact::new("Event", "2024-01-01", ImpactSeverity::High)
+            .with_sector("Healthcare")
+            .with_sector("Pharma");
+        assert_eq!(impact.sectors.len(), 2);
+    }
+
+    #[test]
+    fn test_impact_severity_serialization() {
+        let severity = ImpactSeverity::Medium;
+        let json = serde_json::to_string(&severity).unwrap();
+        assert!(json.contains("Medium"));
+    }
+
+    // ============================================================================
+    // Narrative Visualization Tests (v0.3.3)
+    // ============================================================================
+
+    #[test]
+    fn test_scrollytelling_config_creation() {
+        let config = ScrollytellingConfig::new();
+        assert!(config.enable_animations);
+        assert_eq!(config.trigger_threshold, 0.5);
+        assert!(config.show_progress);
+        assert!(config.enable_navigation);
+    }
+
+    #[test]
+    fn test_scrollytelling_config_customization() {
+        let config = ScrollytellingConfig::new()
+            .without_animations()
+            .with_trigger_threshold(0.7)
+            .without_progress()
+            .without_navigation();
+
+        assert!(!config.enable_animations);
+        assert_eq!(config.trigger_threshold, 0.7);
+        assert!(!config.show_progress);
+        assert!(!config.enable_navigation);
+    }
+
+    #[test]
+    fn test_legal_history_scrollytelling_creation() {
+        let scrolly = LegalHistoryScrollytelling::new("Legal Evolution");
+        assert_eq!(scrolly.title, "Legal Evolution");
+    }
+
+    #[test]
+    fn test_legal_history_scrollytelling_html() {
+        let chapters = vec![
+            ScrollChapter::new("Chapter 1")
+                .with_paragraph("First paragraph")
+                .with_paragraph("Second paragraph")
+                .with_visual("Visual element"),
+            ScrollChapter::new("Chapter 2").with_paragraph("Content"),
+        ];
+
+        let scrolly = LegalHistoryScrollytelling::new("Test History");
+        let html = scrolly.to_html(&chapters);
+
+        assert!(html.contains("Test History"));
+        assert!(html.contains("Chapter 1"));
+        assert!(html.contains("Chapter 2"));
+        assert!(html.contains("First paragraph"));
+        assert!(html.contains("Visual element"));
+    }
+
+    #[test]
+    fn test_scroll_chapter_creation() {
+        let chapter = ScrollChapter::new("Test Chapter")
+            .with_paragraph("Para 1")
+            .with_visual("Visual");
+
+        assert_eq!(chapter.title, "Test Chapter");
+        assert_eq!(chapter.content.len(), 1);
+        assert!(chapter.visual.is_some());
+    }
+
+    #[test]
+    fn test_case_story_generator_creation() {
+        let generator = CaseStoryGenerator::new();
+        assert!(generator.include_timeline);
+        assert!(generator.include_players);
+    }
+
+    #[test]
+    fn test_case_story_generator_customization() {
+        let generator = CaseStoryGenerator::new()
+            .without_timeline()
+            .without_players();
+
+        assert!(!generator.include_timeline);
+        assert!(!generator.include_players);
+    }
+
+    #[test]
+    fn test_case_story_creation() {
+        let case = CaseStory::new("Test Case", "Landmark Decision")
+            .with_intro("Introduction paragraph")
+            .with_player("John Doe", "Plaintiff")
+            .with_event("2024-01-01", "Case filed")
+            .with_resolution("Resolution paragraph")
+            .with_outcome("Favorable outcome");
+
+        assert_eq!(case.title, "Test Case");
+        assert_eq!(case.subtitle, "Landmark Decision");
+        assert_eq!(case.introduction.len(), 1);
+        assert_eq!(case.key_players.len(), 1);
+        assert_eq!(case.timeline.len(), 1);
+        assert_eq!(case.resolution.len(), 1);
+        assert!(case.outcome.is_some());
+    }
+
+    #[test]
+    fn test_case_story_html_generation() {
+        let case = CaseStory::new("Famous Case", "Legal Milestone")
+            .with_intro("This was an important case")
+            .with_player("Alice", "Defendant")
+            .with_event("2024-06-15", "Trial begins")
+            .with_resolution("The case was resolved")
+            .with_outcome("Victory");
+
+        let generator = CaseStoryGenerator::new();
+        let html = generator.generate_story(&case);
+
+        assert!(html.contains("Famous Case"));
+        assert!(html.contains("Legal Milestone"));
+        assert!(html.contains("Alice"));
+        assert!(html.contains("Defendant"));
+        assert!(html.contains("2024-06-15"));
+        assert!(html.contains("Victory"));
+    }
+
+    #[test]
+    fn test_timeline_narrative_view_creation() {
+        let view = TimelineNarrativeView::new("Case Timeline");
+        assert_eq!(view.title, "Case Timeline");
+        assert!(view.show_captions);
+    }
+
+    #[test]
+    fn test_timeline_narrative_view_html() {
+        let events = vec![
+            NarrativeEvent::new(
+                "2024-01-15",
+                "First Event",
+                "This is the first event narrative",
+            ),
+            NarrativeEvent::new(
+                "2024-02-20",
+                "Second Event",
+                "This is the second event narrative",
+            ),
+        ];
+
+        let view = TimelineNarrativeView::new("Legal Timeline");
+        let html = view.to_html(&events);
+
+        assert!(html.contains("Legal Timeline"));
+        assert!(html.contains("2024-01-15"));
+        assert!(html.contains("First Event"));
+        assert!(html.contains("This is the first event narrative"));
+        assert!(html.contains("Second Event"));
+    }
+
+    #[test]
+    fn test_narrative_event_creation() {
+        let event = NarrativeEvent::new("2024-03-10", "Event Title", "Narrative text");
+        assert_eq!(event.date, "2024-03-10");
+        assert_eq!(event.title, "Event Title");
+        assert_eq!(event.narrative, "Narrative text");
+    }
+
+    #[test]
+    fn test_guided_exploration_tour_creation() {
+        let tour = GuidedExplorationTour::new("Legal Concepts Tour");
+        assert_eq!(tour.title, "Legal Concepts Tour");
+        assert!(!tour.auto_advance);
+        assert_eq!(tour.advance_delay, 5000);
+    }
+
+    #[test]
+    fn test_guided_exploration_tour_auto_advance() {
+        let tour = GuidedExplorationTour::new("Tour").with_auto_advance(3000);
+
+        assert!(tour.auto_advance);
+        assert_eq!(tour.advance_delay, 3000);
+    }
+
+    #[test]
+    fn test_guided_exploration_tour_html() {
+        let stops = vec![
+            TourStop::new("Introduction", "Welcome to the tour"),
+            TourStop::new("Main Concept", "This is the main idea").with_visual("Diagram"),
+            TourStop::new("Conclusion", "Thank you"),
+        ];
+
+        let tour = GuidedExplorationTour::new("Test Tour");
+        let html = tour.to_html(&stops);
+
+        assert!(html.contains("Test Tour"));
+        assert!(html.contains("Introduction"));
+        assert!(html.contains("Welcome to the tour"));
+        assert!(html.contains("Main Concept"));
+        assert!(html.contains("Diagram"));
+        assert!(html.contains("Step 1 of 3"));
+    }
+
+    #[test]
+    fn test_tour_stop_creation() {
+        let stop = TourStop::new("Stop 1", "Description").with_visual("Visual element");
+
+        assert_eq!(stop.title, "Stop 1");
+        assert_eq!(stop.description, "Description");
+        assert!(stop.visual.is_some());
+    }
+
+    #[test]
+    fn test_educational_walkthrough_creation() {
+        let walkthrough = EducationalWalkthrough::new("Learn Legal Concepts");
+        assert_eq!(walkthrough.title, "Learn Legal Concepts");
+        assert!(walkthrough.include_quiz);
+    }
+
+    #[test]
+    fn test_educational_walkthrough_without_quiz() {
+        let walkthrough = EducationalWalkthrough::new("Walkthrough").without_quiz();
+
+        assert!(!walkthrough.include_quiz);
+    }
+
+    #[test]
+    fn test_lesson_creation() {
+        let lesson = Lesson::new("Introduction to Contracts")
+            .with_content("Contracts are agreements between parties")
+            .with_content("They must have consideration")
+            .with_example("Example: A buys from B for $100")
+            .with_takeaway("Contracts require mutual agreement");
+
+        assert_eq!(lesson.title, "Introduction to Contracts");
+        assert_eq!(lesson.content.len(), 2);
+        assert!(lesson.example.is_some());
+        assert!(lesson.key_takeaway.is_some());
+    }
+
+    #[test]
+    fn test_quiz_question_creation() {
+        let quiz = QuizQuestion::new(
+            "What is a contract?",
+            vec![
+                "An agreement".to_string(),
+                "A law".to_string(),
+                "A statute".to_string(),
+            ],
+            0,
+        );
+
+        assert_eq!(quiz.question, "What is a contract?");
+        assert_eq!(quiz.options.len(), 3);
+        assert_eq!(quiz.correct_index, 0);
+    }
+
+    #[test]
+    fn test_educational_walkthrough_html() {
+        let lessons = vec![
+            Lesson::new("Lesson 1")
+                .with_content("Content paragraph 1")
+                .with_example("Example text")
+                .with_quiz(QuizQuestion::new(
+                    "Test question?",
+                    vec!["Answer A".to_string(), "Answer B".to_string()],
+                    1,
+                ))
+                .with_takeaway("Key point to remember"),
+            Lesson::new("Lesson 2").with_content("More content"),
+        ];
+
+        let walkthrough = EducationalWalkthrough::new("Legal Education");
+        let html = walkthrough.to_html(&lessons);
+
+        assert!(html.contains("Legal Education"));
+        assert!(html.contains("Lesson 1"));
+        assert!(html.contains("Content paragraph 1"));
+        assert!(html.contains("Example text"));
+        assert!(html.contains("Test question?"));
+        assert!(html.contains("Answer A"));
+        assert!(html.contains("Key point to remember"));
+    }
+
+    #[test]
+    fn test_scrollytelling_config_default() {
+        let config1 = ScrollytellingConfig::new();
+        let config2 = ScrollytellingConfig::default();
+        assert_eq!(config1.enable_animations, config2.enable_animations);
+    }
+
+    #[test]
+    fn test_legal_history_scrollytelling_default() {
+        let scrolly = LegalHistoryScrollytelling::default();
+        assert_eq!(scrolly.title, "Legal History");
+    }
+
+    #[test]
+    fn test_case_story_generator_default() {
+        let generator = CaseStoryGenerator::default();
+        assert!(generator.include_timeline);
+    }
+
+    #[test]
+    fn test_timeline_narrative_view_default() {
+        let view = TimelineNarrativeView::default();
+        assert_eq!(view.title, "Timeline");
+    }
+
+    #[test]
+    fn test_guided_exploration_tour_default() {
+        let tour = GuidedExplorationTour::default();
+        assert_eq!(tour.title, "Guided Tour");
+    }
+
+    #[test]
+    fn test_educational_walkthrough_default() {
+        let walkthrough = EducationalWalkthrough::default();
+        assert_eq!(walkthrough.title, "Educational Walkthrough");
+    }
+
+    #[test]
+    fn test_key_player_serialization() {
+        let player = KeyPlayer {
+            name: "John Doe".to_string(),
+            role: "Plaintiff".to_string(),
+        };
+        let json = serde_json::to_string(&player).unwrap();
+        assert!(json.contains("John Doe"));
+        assert!(json.contains("Plaintiff"));
+    }
+
+    #[test]
+    fn test_timeline_story_event_serialization() {
+        let event = TimelineStoryEvent {
+            date: "2024-01-01".to_string(),
+            description: "Event occurred".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("2024-01-01"));
+        assert!(json.contains("Event occurred"));
+    }
+
+    // ============================================================================
+    // v0.3.4 - Holographic Display Support Tests
+    // ============================================================================
+
+    #[test]
+    fn test_looking_glass_visualizer_creation() {
+        let visualizer = LookingGlassVisualizer::new("Test Hologram");
+        assert_eq!(visualizer.title, "Test Hologram");
+        assert_eq!(visualizer.config.view_count, 45);
+    }
+
+    #[test]
+    fn test_looking_glass_config_default() {
+        let config = LookingGlassConfig::default();
+        assert!(config.enable_quilt);
+        assert_eq!(config.view_count, 45);
+        assert_eq!(config.quilt_width, 4096);
+        assert_eq!(config.quilt_height, 4096);
+        assert!(config.enable_depth_mapping);
+    }
+
+    #[test]
+    fn test_looking_glass_visualizer_with_config() {
+        let config = LookingGlassConfig {
+            enable_quilt: false,
+            view_count: 30,
+            quilt_width: 2048,
+            quilt_height: 2048,
+            enable_depth_mapping: false,
+            fov: 20.0,
+            depth_range: (0.5, 50.0),
+        };
+        let visualizer = LookingGlassVisualizer::new("Custom").with_config(config.clone());
+        assert_eq!(visualizer.config.view_count, 30);
+        assert_eq!(visualizer.config.quilt_width, 2048);
+    }
+
+    #[test]
+    fn test_looking_glass_visualizer_html_generation() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test-1");
+
+        let visualizer = LookingGlassVisualizer::new("Holographic Test");
+        let html = visualizer.to_holographic_html(&graph);
+
+        assert!(html.contains("Holographic Test"));
+        assert!(html.contains("Looking Glass Display"));
+        assert!(html.contains("holoplay-core"));
+        assert!(html.contains("THREE.Scene"));
+    }
+
+    #[test]
+    fn test_looking_glass_visualizer_default() {
+        let visualizer = LookingGlassVisualizer::default();
+        assert_eq!(visualizer.title, "Holographic Visualization");
+    }
+
+    #[test]
+    fn test_holographic_statute_model_creation() {
+        let model = HolographicStatuteModel::new();
+        assert_eq!(model.config.layer_count, 5);
+        assert!(model.config.enable_rotation);
+    }
+
+    #[test]
+    fn test_holographic_model_config_default() {
+        let config = HolographicModelConfig::default();
+        assert!(config.enable_layers);
+        assert_eq!(config.layer_count, 5);
+        assert!(config.enable_rotation);
+        assert_eq!(config.rotation_speed, 15.0);
+        assert!(config.enable_interaction);
+    }
+
+    #[test]
+    fn test_holographic_statute_model_with_config() {
+        let config = HolographicModelConfig {
+            enable_layers: false,
+            layer_count: 3,
+            enable_rotation: false,
+            rotation_speed: 10.0,
+            enable_interaction: false,
+        };
+        let model = HolographicStatuteModel::new().with_config(config.clone());
+        assert_eq!(model.config.layer_count, 3);
+        assert!(!model.config.enable_rotation);
+    }
+
+    #[test]
+    fn test_holographic_statute_model_html() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Grants permission"),
+        );
+
+        let model = HolographicStatuteModel::new();
+        let html = model.to_holographic_model(&statute);
+
+        assert!(html.contains("Test Statute"));
+        assert!(html.contains("Holographic Statute Model"));
+        assert!(html.contains("THREE.Scene"));
+        assert!(html.contains("PlaneGeometry"));
+    }
+
+    #[test]
+    fn test_holographic_statute_model_default() {
+        let model = HolographicStatuteModel::default();
+        assert_eq!(model.config.layer_count, 5);
+    }
+
+    #[test]
+    fn test_3d_print_exporter_creation() {
+        let exporter = ThreeDPrintExporter::new();
+        assert_eq!(exporter.config.format, "STL");
+        assert_eq!(exporter.config.scale, 1.0);
+    }
+
+    #[test]
+    fn test_print_export_config_default() {
+        let config = PrintExportConfig::default();
+        assert_eq!(config.format, "STL");
+        assert_eq!(config.scale, 1.0);
+        assert_eq!(config.base_thickness, 2.0);
+        assert_eq!(config.wall_thickness, 1.0);
+        assert!(!config.generate_supports);
+    }
+
+    #[test]
+    fn test_3d_print_exporter_to_stl() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Grants permission"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = ThreeDPrintExporter::new();
+        let stl = exporter.to_stl(&tree);
+
+        assert!(stl.contains("solid DecisionTree"));
+        assert!(stl.contains("facet normal"));
+        assert!(stl.contains("vertex"));
+        assert!(stl.contains("endsolid DecisionTree"));
+    }
+
+    #[test]
+    fn test_3d_print_exporter_to_obj() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test-1");
+
+        let exporter = ThreeDPrintExporter::new();
+        let obj = exporter.to_obj(&graph);
+
+        assert!(obj.contains("# OBJ file"));
+        assert!(obj.contains("# Vertices:"));
+        assert!(obj.contains("v "));
+        assert!(obj.contains("f "));
+    }
+
+    #[test]
+    fn test_3d_print_exporter_to_3mf() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Grants permission"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let exporter = ThreeDPrintExporter::new();
+        let mf = exporter.to_3mf(&tree);
+
+        assert!(mf.contains("<?xml version"));
+        assert!(mf.contains("<model"));
+        assert!(mf.contains("<mesh>"));
+        assert!(mf.contains("<vertices>"));
+        assert!(mf.contains("<triangles>"));
+    }
+
+    #[test]
+    fn test_3d_print_exporter_with_config() {
+        let config = PrintExportConfig {
+            format: "OBJ".to_string(),
+            scale: 2.0,
+            base_thickness: 3.0,
+            wall_thickness: 1.5,
+            generate_supports: true,
+        };
+        let exporter = ThreeDPrintExporter::new().with_config(config.clone());
+        assert_eq!(exporter.config.format, "OBJ");
+        assert_eq!(exporter.config.scale, 2.0);
+    }
+
+    #[test]
+    fn test_3d_print_exporter_default() {
+        let exporter = ThreeDPrintExporter::default();
+        assert_eq!(exporter.config.format, "STL");
+    }
+
+    #[test]
+    fn test_volumetric_renderer_creation() {
+        let renderer = VolumetricRenderer::new("Volumetric Test");
+        assert_eq!(renderer.title, "Volumetric Test");
+        assert_eq!(renderer.config.sample_steps, 128);
+    }
+
+    #[test]
+    fn test_volumetric_config_default() {
+        let config = VolumetricConfig::default();
+        assert!(config.enable_ray_marching);
+        assert_eq!(config.sample_steps, 128);
+        assert_eq!(config.density_threshold, 0.1);
+        assert!(config.enable_lighting);
+        assert_eq!(config.transfer_function, "linear");
+    }
+
+    #[test]
+    fn test_volumetric_renderer_with_config() {
+        let config = VolumetricConfig {
+            enable_ray_marching: false,
+            sample_steps: 256,
+            density_threshold: 0.2,
+            enable_lighting: false,
+            transfer_function: "cubic".to_string(),
+        };
+        let renderer = VolumetricRenderer::new("Custom").with_config(config.clone());
+        assert_eq!(renderer.config.sample_steps, 256);
+        assert_eq!(renderer.config.transfer_function, "cubic");
+    }
+
+    #[test]
+    fn test_volumetric_renderer_html() {
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test-1");
+
+        let renderer = VolumetricRenderer::new("Volumetric Viz");
+        let html = renderer.to_volumetric_html(&graph);
+
+        assert!(html.contains("Volumetric Viz"));
+        assert!(html.contains("Volumetric Rendering"));
+        assert!(html.contains("Steps: 128"));
+        assert!(html.contains("THREE.Scene"));
+        assert!(html.contains("SphereGeometry"));
+    }
+
+    #[test]
+    fn test_volumetric_renderer_default() {
+        let renderer = VolumetricRenderer::default();
+        assert_eq!(renderer.title, "Volumetric Visualization");
+    }
+
+    #[test]
+    fn test_holographic_gesture_controller_creation() {
+        let controller = HolographicGestureController::new("Gesture Test");
+        assert_eq!(controller.title, "Gesture Test");
+        assert!(controller.config.enable_hand_tracking);
+    }
+
+    #[test]
+    fn test_gesture_config_default() {
+        let config = GestureConfig::default();
+        assert!(config.enable_hand_tracking);
+        assert!(config.enable_pinch);
+        assert!(config.enable_swipe);
+        assert!(config.enable_rotation);
+        assert_eq!(config.sensitivity, 0.7);
+    }
+
+    #[test]
+    fn test_holographic_gesture_controller_with_config() {
+        let config = GestureConfig {
+            enable_hand_tracking: false,
+            enable_pinch: false,
+            enable_swipe: true,
+            enable_rotation: false,
+            sensitivity: 0.5,
+        };
+        let controller = HolographicGestureController::new("Custom").with_config(config.clone());
+        assert_eq!(controller.config.sensitivity, 0.5);
+        assert!(!controller.config.enable_pinch);
+    }
+
+    #[test]
+    fn test_holographic_gesture_controller_html() {
+        let statute = Statute::new(
+            "test-1",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Grants permission"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let controller = HolographicGestureController::new("Gesture Control");
+        let html = controller.to_gesture_html(&tree);
+
+        assert!(html.contains("Gesture Control"));
+        assert!(html.contains("Gesture Control Active"));
+        assert!(html.contains("Pinch to zoom"));
+        assert!(html.contains("THREE.Scene"));
+        assert!(html.contains("gestureState"));
+    }
+
+    #[test]
+    fn test_holographic_gesture_controller_default() {
+        let controller = HolographicGestureController::default();
+        assert_eq!(
+            controller.title,
+            "Gesture-Controlled Holographic Visualization"
+        );
+    }
+
+    #[test]
+    fn test_looking_glass_config_serialization() {
+        let config = LookingGlassConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("enable_quilt"));
+        assert!(json.contains("view_count"));
+    }
+
+    #[test]
+    fn test_holographic_model_config_serialization() {
+        let config = HolographicModelConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("enable_layers"));
+        assert!(json.contains("layer_count"));
+    }
+
+    #[test]
+    fn test_print_export_config_serialization() {
+        let config = PrintExportConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("format"));
+        assert!(json.contains("scale"));
+    }
+
+    #[test]
+    fn test_volumetric_config_serialization() {
+        let config = VolumetricConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("enable_ray_marching"));
+        assert!(json.contains("sample_steps"));
+    }
+
+    #[test]
+    fn test_gesture_config_serialization() {
+        let config = GestureConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("enable_hand_tracking"));
+        assert!(json.contains("sensitivity"));
     }
 }

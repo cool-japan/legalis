@@ -16,7 +16,7 @@ use legalis_porting::{CompatibilityReport, PortedStatute, PortingEngine, Porting
 use legalis_verifier::StatuteVerifier;
 use legalis_viz::DecisionTree;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Handles the parse command.
 pub fn handle_parse(input: &str, output: Option<&str>, format: &OutputFormat) -> Result<()> {
@@ -4602,4 +4602,882 @@ pub fn handle_registry_logout(registry: Option<&str>, all: bool) -> Result<()> {
     println!("\n{} Logged out successfully!", "✓".green().bold());
 
     Ok(())
+}
+
+/// Handles the plugin install command.
+pub fn handle_plugin_install(source: &str, force: bool) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    println!("{}", "Installing plugin...".cyan().bold());
+    println!("  Source: {}", source.yellow());
+
+    let source_path = Path::new(source);
+    if !source_path.exists() {
+        anyhow::bail!("Plugin source path does not exist: {}", source);
+    }
+
+    let mut manager = PluginManager::new()?;
+    manager.install_plugin(source_path, force)?;
+
+    println!("\n{} Plugin installed successfully!", "✓".green().bold());
+    println!("{}", "Plugin is now enabled and ready to use.".dimmed());
+
+    Ok(())
+}
+
+/// Handles the plugin uninstall command.
+pub fn handle_plugin_uninstall(name: &str, yes: bool) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    if !yes {
+        print!(
+            "Are you sure you want to uninstall plugin '{}'? [y/N]: ",
+            name
+        );
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    println!("{}", "Uninstalling plugin...".cyan().bold());
+    println!("  Plugin: {}", name.yellow());
+
+    let mut manager = PluginManager::new()?;
+    manager.uninstall_plugin(name)?;
+
+    println!("\n{} Plugin uninstalled successfully!", "✓".green().bold());
+
+    Ok(())
+}
+
+/// Handles the plugin list command.
+pub fn handle_plugin_list(
+    verbose: bool,
+    plugin_type: Option<&crate::plugin::PluginType>,
+) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    let mut plugins: Vec<_> = manager.list_plugins();
+
+    // Filter by type if specified
+    if let Some(ptype) = plugin_type {
+        plugins.retain(|p| &p.plugin_type == ptype);
+    }
+
+    if plugins.is_empty() {
+        println!("{}", "No plugins installed.".dimmed());
+        println!("\nTo install a plugin, run:");
+        println!("  {}", "legalis plugin install --source <path>".bold());
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        format!("Installed Plugins ({})", plugins.len())
+            .bold()
+            .cyan()
+    );
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+
+    if verbose {
+        for plugin in plugins {
+            let status = if manager.is_enabled(&plugin.name) {
+                "enabled".green()
+            } else {
+                "disabled".red()
+            };
+
+            println!("{} {} [{}]", "●".cyan(), plugin.name.bold(), status);
+            println!("  Version: {}", plugin.version.dimmed());
+            println!("  Type: {:?}", plugin.plugin_type);
+            println!("  Author: {}", plugin.author.dimmed());
+            println!("  Description: {}", plugin.description);
+            if !plugin.commands.is_empty() {
+                println!("  Commands: {}", plugin.commands.join(", ").yellow());
+            }
+            if !plugin.hooks.is_empty() {
+                println!("  Hooks: {}", plugin.hooks.join(", ").yellow());
+            }
+            println!();
+        }
+    } else {
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_header(vec![
+                Cell::new("Name").fg(Color::Cyan),
+                Cell::new("Version").fg(Color::Cyan),
+                Cell::new("Type").fg(Color::Cyan),
+                Cell::new("Status").fg(Color::Cyan),
+                Cell::new("Description").fg(Color::Cyan),
+            ]);
+
+        for plugin in plugins {
+            let status = if manager.is_enabled(&plugin.name) {
+                Cell::new("enabled").fg(Color::Green)
+            } else {
+                Cell::new("disabled").fg(Color::Red)
+            };
+
+            table.add_row(vec![
+                Cell::new(&plugin.name),
+                Cell::new(&plugin.version),
+                Cell::new(format!("{:?}", plugin.plugin_type)),
+                status,
+                Cell::new(&plugin.description),
+            ]);
+        }
+
+        println!("{table}");
+    }
+
+    Ok(())
+}
+
+/// Handles the plugin info command.
+pub fn handle_plugin_info(name: &str) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    let plugin = manager
+        .get_plugin(name)
+        .ok_or_else(|| anyhow::anyhow!("Plugin '{}' is not installed", name))?;
+
+    let status = if manager.is_enabled(name) {
+        "enabled".green()
+    } else {
+        "disabled".red()
+    };
+
+    println!("{}", "Plugin Information".bold().cyan());
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+    println!("  {}: {}", "Name".bold(), plugin.name);
+    println!("  {}: {}", "Version".bold(), plugin.version);
+    println!("  {}: {}", "Author".bold(), plugin.author);
+    println!("  {}: {:?}", "Type".bold(), plugin.plugin_type);
+    println!("  {}: {}", "Status".bold(), status);
+    println!("  {}: {}", "Description".bold(), plugin.description);
+    println!("  {}: {}", "Entry Point".bold(), plugin.entry_point);
+
+    if let Some(ref min_ver) = plugin.min_legalis_version {
+        println!("  {}: {}", "Min Legalis Version".bold(), min_ver);
+    }
+
+    if !plugin.commands.is_empty() {
+        println!("\n  {}:", "Commands".bold().yellow());
+        for cmd in &plugin.commands {
+            println!("    - {}", cmd);
+        }
+    }
+
+    if !plugin.hooks.is_empty() {
+        println!("\n  {}:", "Hooks".bold().yellow());
+        for hook in &plugin.hooks {
+            println!("    - {}", hook);
+        }
+    }
+
+    println!();
+
+    Ok(())
+}
+
+/// Handles the plugin enable command.
+pub fn handle_plugin_enable(name: &str) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    if manager.is_enabled(name) {
+        println!(
+            "{}",
+            format!("Plugin '{}' is already enabled.", name)
+                .yellow()
+                .bold()
+        );
+        return Ok(());
+    }
+
+    manager.enable_plugin(name)?;
+
+    println!(
+        "{}",
+        format!("✓ Plugin '{}' enabled successfully!", name)
+            .green()
+            .bold()
+    );
+
+    Ok(())
+}
+
+/// Handles the plugin disable command.
+pub fn handle_plugin_disable(name: &str) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    if !manager.is_enabled(name) {
+        println!(
+            "{}",
+            format!("Plugin '{}' is already disabled.", name)
+                .yellow()
+                .bold()
+        );
+        return Ok(());
+    }
+
+    manager.disable_plugin(name)?;
+
+    println!(
+        "{}",
+        format!("✓ Plugin '{}' disabled successfully!", name)
+            .green()
+            .bold()
+    );
+
+    Ok(())
+}
+
+/// Handles the plugin update command.
+#[allow(dead_code)]
+pub fn handle_plugin_update(_name: Option<&str>) -> Result<()> {
+    use colored::Colorize;
+
+    println!(
+        "{}",
+        "Plugin update functionality coming soon!".yellow().bold()
+    );
+    println!("This will check for and install plugin updates from their sources.");
+
+    Ok(())
+}
+
+/// Handles the config validate command.
+pub fn handle_config_validate(config_path: Option<&str>, verbose: bool) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    println!("{}", "Validating configuration...".cyan().bold());
+
+    let config = if let Some(path) = config_path {
+        println!("  Config file: {}", path.yellow());
+        Config::from_file(Path::new(path))?
+    } else {
+        println!("{}", "  Using current configuration".dimmed());
+        Config::load()
+    };
+
+    let warnings = config.validate()?;
+
+    if warnings.is_empty() {
+        println!("\n{} Configuration is valid!", "✓".green().bold());
+
+        if verbose {
+            println!("\n{}", "Configuration summary:".bold());
+            println!("  Jurisdiction: {:?}", config.jurisdiction);
+            println!("  Output format: {}", config.output.format);
+            println!("  Colored output: {}", config.output.colored);
+            println!("  Verification strict: {}", config.verification.strict);
+
+            if let Some(ref profile) = config.active_profile {
+                println!("  Active profile: {}", profile.yellow());
+            }
+        }
+    } else {
+        println!("\n{} Configuration has warnings:", "⚠".yellow().bold());
+        for warning in &warnings {
+            println!("  • {}", warning.yellow());
+        }
+    }
+
+    Ok(())
+}
+
+/// Handles the config diff command.
+pub fn handle_config_diff(config1: &str, config2: &str, as_profile: bool) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    println!("{}", "Comparing configurations...".cyan().bold());
+
+    let cfg1 = Config::from_file(Path::new(config1))?;
+
+    let cfg2 = if as_profile {
+        println!(
+            "  Comparing {} with profile '{}'",
+            config1.yellow(),
+            config2.yellow()
+        );
+        cfg1.with_profile(config2)?
+    } else {
+        println!("  Comparing {} with {}", config1.yellow(), config2.yellow());
+        Config::from_file(Path::new(config2))?
+    };
+
+    let diff = cfg1.diff(&cfg2);
+
+    println!("\n{}", "Configuration differences:".bold());
+    println!("{}", diff);
+
+    Ok(())
+}
+
+/// Handles the config profiles command.
+pub fn handle_config_profiles(config_path: Option<&str>) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    let config = if let Some(path) = config_path {
+        Config::from_file(Path::new(path))?
+    } else {
+        Config::load()
+    };
+
+    let profiles = config.list_profiles();
+
+    if profiles.is_empty() {
+        println!("{}", "No profiles defined.".dimmed());
+        println!("\nTo add a profile, edit your configuration file and add:");
+        let example = r#"
+[profiles.dev]
+jurisdiction = "JP"
+
+[profiles.prod]
+jurisdiction = "US"
+"#;
+        println!("{}", example.dimmed());
+        return Ok(());
+    }
+
+    println!("{}", "Available Profiles:".bold().cyan());
+    println!("{}", "=".repeat(50).dimmed());
+
+    for profile_name in profiles {
+        let is_active = config
+            .get_active_profile()
+            .map_or(false, |ap| ap == profile_name);
+
+        let marker = if is_active {
+            "●".green()
+        } else {
+            "○".dimmed()
+        };
+
+        let name_display = if is_active {
+            profile_name.green().bold()
+        } else {
+            profile_name.normal()
+        };
+
+        println!("{} {}", marker, name_display);
+
+        // Show profile details if we have access
+        if let Some(profile) = config.profiles.get(profile_name) {
+            if let Some(ref jur) = profile.jurisdiction {
+                println!("    Jurisdiction: {}", jur.yellow());
+            }
+            if !profile.env.is_empty() {
+                println!("    Environment vars: {}", profile.env.len());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handles the config activate command.
+pub fn handle_config_activate(profile: &str, config_path: Option<&str>) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    let config_file = if let Some(path) = config_path {
+        PathBuf::from(path)
+    } else {
+        Path::new("legalis.toml").to_path_buf()
+    };
+
+    let mut config = if config_file.exists() {
+        Config::from_file(&config_file)?
+    } else {
+        anyhow::bail!("Configuration file not found: {}", config_file.display());
+    };
+
+    config.set_active_profile(profile.to_string())?;
+    config.save(&config_file)?;
+
+    println!(
+        "{}",
+        format!("✓ Activated profile '{}'", profile).green().bold()
+    );
+    println!(
+        "  Config file: {}",
+        config_file.display().to_string().yellow()
+    );
+
+    Ok(())
+}
+
+/// Handles the config show command.
+pub fn handle_config_show(
+    config_path: Option<&str>,
+    profile: Option<&str>,
+    format: &crate::ConfigShowFormat,
+) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    let mut config = if let Some(path) = config_path {
+        Config::from_file(Path::new(path))?
+    } else {
+        Config::load()
+    };
+
+    // Apply profile if specified
+    if let Some(profile_name) = profile {
+        println!(
+            "{}",
+            format!("Showing configuration with profile '{}'", profile_name)
+                .cyan()
+                .bold()
+        );
+        config = config.with_profile(profile_name)?;
+    } else {
+        println!("{}", "Current Configuration:".cyan().bold());
+    }
+
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+
+    let output = match format {
+        crate::ConfigShowFormat::Toml => toml::to_string_pretty(&config)?,
+        crate::ConfigShowFormat::Json => serde_json::to_string_pretty(&config)?,
+        crate::ConfigShowFormat::Yaml => serde_yaml::to_string(&config)?,
+    };
+
+    println!("{}", output);
+
+    Ok(())
+}
+
+/// Handles the config init command.
+pub fn handle_config_init(force: bool) -> Result<()> {
+    use crate::config::Config;
+    use colored::Colorize;
+
+    let config_file = Config::init_user_config()?;
+
+    if config_file.exists() && !force {
+        println!("{}", "Configuration file already exists!".yellow().bold());
+        println!("  Location: {}", config_file.display().to_string().yellow());
+        println!("\nUse --force to overwrite.");
+        return Ok(());
+    }
+
+    println!("{}", "✓ User configuration initialized!".green().bold());
+    println!("  Location: {}", config_file.display().to_string().yellow());
+    println!("\nYou can now edit this file to customize your settings.");
+
+    Ok(())
+}
+
+/// Handles the script run command.
+pub fn handle_script_run(script: &str, args: &[String], _debug: bool) -> Result<()> {
+    use crate::scripting::{ScriptContext, ScriptManager};
+    use colored::Colorize;
+    use std::collections::HashMap;
+
+    println!("{}", "Executing script...".cyan().bold());
+    println!("  Script: {}", script.yellow());
+
+    let mut manager = ScriptManager::new()?;
+    manager.discover_scripts()?;
+
+    let context = ScriptContext {
+        args: args.to_vec(),
+        env: HashMap::new(),
+        cwd: std::env::current_dir()?,
+    };
+
+    let result = if Path::new(script).exists() {
+        // Execute script file directly
+        let script_content = fs::read_to_string(script)?;
+        let permissions = crate::scripting::ScriptPermissions::default();
+        manager.execute_lua_script(&script_content, context, &permissions)?
+    } else {
+        // Execute installed script by name
+        manager.execute_script(script, context)?
+    };
+
+    if !result.stdout.is_empty() {
+        println!("\n{}", "Output:".bold());
+        println!("{}", result.stdout);
+    }
+
+    if !result.stderr.is_empty() {
+        eprintln!("\n{}", "Errors:".red().bold());
+        eprintln!("{}", result.stderr);
+    }
+
+    println!(
+        "\n{} Execution completed in {}ms",
+        if result.exit_code == 0 {
+            "✓".green()
+        } else {
+            "✗".red()
+        },
+        result.execution_time_ms
+    );
+
+    if result.exit_code != 0 {
+        std::process::exit(result.exit_code);
+    }
+
+    Ok(())
+}
+
+/// Handles the script list command.
+pub fn handle_script_list(verbose: bool) -> Result<()> {
+    use crate::scripting::ScriptManager;
+    use colored::Colorize;
+
+    let mut manager = ScriptManager::new()?;
+    manager.discover_scripts()?;
+
+    let scripts = manager.list_scripts();
+
+    if scripts.is_empty() {
+        println!("{}", "No scripts installed.".dimmed());
+        println!("\nTo install a script, run:");
+        println!("  {}", "legalis script install --source <path>".bold());
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        format!("Installed Scripts ({})", scripts.len())
+            .bold()
+            .cyan()
+    );
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+
+    for script in scripts {
+        println!("{} {}", "●".cyan(), script.name.bold());
+        println!("  Version: {}", script.version.dimmed());
+        println!("  Author: {}", script.author.dimmed());
+        println!("  Description: {}", script.description);
+
+        if verbose {
+            println!("  Main file: {}", script.main.yellow());
+            if let Some(ref req) = script.requires {
+                println!("  Requires: {}", req);
+            }
+            if !script.dependencies.is_empty() {
+                println!("  Dependencies: {}", script.dependencies.join(", "));
+            }
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Handles the script info command.
+pub fn handle_script_info(name: &str) -> Result<()> {
+    use crate::scripting::ScriptManager;
+    use colored::Colorize;
+
+    let mut manager = ScriptManager::new()?;
+    manager.discover_scripts()?;
+
+    let script = manager
+        .get_script(name)
+        .ok_or_else(|| anyhow::anyhow!("Script '{}' not found", name))?;
+
+    println!("{}", "Script Information".bold().cyan());
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+    println!("  {}: {}", "Name".bold(), script.name);
+    println!("  {}: {}", "Version".bold(), script.version);
+    println!("  {}: {}", "Author".bold(), script.author);
+    println!("  {}: {}", "Description".bold(), script.description);
+    println!("  {}: {}", "Main file".bold(), script.main);
+
+    if let Some(ref req) = script.requires {
+        println!("  {}: {}", "Requires".bold(), req);
+    }
+
+    if !script.dependencies.is_empty() {
+        println!("\n  {}:", "Dependencies".bold().yellow());
+        for dep in &script.dependencies {
+            println!("    - {}", dep);
+        }
+    }
+
+    println!("\n  {}:", "Permissions".bold().yellow());
+    println!(
+        "    Filesystem: {}",
+        if script.permissions.filesystem {
+            "✓".green()
+        } else {
+            "✗".red()
+        }
+    );
+    println!(
+        "    Network: {}",
+        if script.permissions.network {
+            "✓".green()
+        } else {
+            "✗".red()
+        }
+    );
+    println!(
+        "    Process: {}",
+        if script.permissions.process {
+            "✓".green()
+        } else {
+            "✗".red()
+        }
+    );
+    println!(
+        "    Environment: {}",
+        if script.permissions.env {
+            "✓".green()
+        } else {
+            "✗".red()
+        }
+    );
+    println!("    Timeout: {}s", script.permissions.timeout);
+    println!("    Memory limit: {}MB", script.permissions.memory_limit);
+
+    println!();
+
+    Ok(())
+}
+
+/// Handles the script install command.
+pub fn handle_script_install(source: &str) -> Result<()> {
+    use crate::scripting::ScriptManager;
+    use colored::Colorize;
+
+    println!("{}", "Installing script...".cyan().bold());
+    println!("  Source: {}", source.yellow());
+
+    let source_path = Path::new(source);
+    if !source_path.exists() {
+        anyhow::bail!("Script source path does not exist: {}", source);
+    }
+
+    let mut manager = ScriptManager::new()?;
+    manager.install_script(source_path)?;
+
+    println!("\n{} Script installed successfully!", "✓".green().bold());
+
+    Ok(())
+}
+
+/// Handles the script uninstall command.
+pub fn handle_script_uninstall(name: &str, yes: bool) -> Result<()> {
+    use crate::scripting::ScriptManager;
+    use colored::Colorize;
+
+    if !yes {
+        print!(
+            "Are you sure you want to uninstall script '{}'? [y/N]: ",
+            name
+        );
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    println!("{}", "Uninstalling script...".cyan().bold());
+    println!("  Script: {}", name.yellow());
+
+    let mut manager = ScriptManager::new()?;
+    manager.discover_scripts()?;
+    manager.uninstall_script(name)?;
+
+    println!("\n{} Script uninstalled successfully!", "✓".green().bold());
+
+    Ok(())
+}
+
+/// Handles the script new command.
+pub fn handle_script_new(
+    name: &str,
+    template: &crate::ScriptTemplate,
+    output: Option<&str>,
+) -> Result<()> {
+    use colored::Colorize;
+
+    let output_dir = output.unwrap_or(".");
+    let script_dir = Path::new(output_dir).join(name);
+
+    if script_dir.exists() {
+        anyhow::bail!("Script directory already exists: {}", script_dir.display());
+    }
+
+    fs::create_dir_all(&script_dir)?;
+
+    // Create script.toml manifest
+    let manifest_content = format!(
+        r#"name = "{}"
+version = "0.1.0"
+description = "A new Legalis script"
+author = "Your Name"
+main = "main.lua"
+
+[permissions]
+filesystem = false
+network = false
+process = false
+env = false
+timeout = 30
+memory_limit = 100
+"#,
+        name
+    );
+
+    fs::write(script_dir.join("script.toml"), manifest_content)?;
+
+    // Create main.lua script
+    let script_content = match template {
+        crate::ScriptTemplate::Basic => {
+            r#"-- Basic Legalis Script
+print("Hello from", args[1] or "Legalis")
+print("Arguments:", table.concat(args, ", "))
+"#
+        }
+        crate::ScriptTemplate::Batch => {
+            r#"-- Batch Processing Script
+print("Batch processing script")
+print("Processing", #args, "items...")
+
+for i, item in ipairs(args) do
+    print("Processing item", i, ":", item)
+end
+
+print("Batch processing complete!")
+"#
+        }
+        crate::ScriptTemplate::Report => {
+            r#"-- Report Generation Script
+print("=== Legalis Report ===")
+print("Generated at:", os.date())
+print("Working directory:", cwd)
+print()
+print("Arguments provided:", #args)
+for i, arg in ipairs(args) do
+    print("  " .. i .. ". " .. arg)
+end
+print()
+print("=== End of Report ===")
+"#
+        }
+        crate::ScriptTemplate::Transform => {
+            r#"-- Data Transformation Script
+print("Data transformation script")
+print("Input:", args[1] or "none")
+print("Output:", args[2] or "none")
+print()
+print("Transformation complete!")
+"#
+        }
+    };
+
+    fs::write(script_dir.join("main.lua"), script_content)?;
+
+    println!("{}", "✓ Script created successfully!".green().bold());
+    println!("  Location: {}", script_dir.display().to_string().yellow());
+    println!("\n{}", "Next steps:".cyan());
+    println!("  1. Edit the script.toml to configure permissions");
+    println!("  2. Edit main.lua to implement your script logic");
+    println!(
+        "  3. Run {} to test",
+        format!("legalis script run --script {}/main.lua", name).bold()
+    );
+
+    Ok(())
+}
+
+/// Handles the script builtin command.
+pub fn handle_script_builtin(show_code: bool) -> Result<()> {
+    use crate::scripting::ScriptManager;
+    use colored::Colorize;
+
+    let scripts = ScriptManager::get_builtin_scripts();
+
+    println!("{}", "Built-in Scripts Library".bold().cyan());
+    println!("{}", "=".repeat(50).dimmed());
+    println!();
+
+    for script in scripts {
+        println!("{} {}", "●".cyan(), script.name.bold());
+        println!("  {}", script.description);
+
+        if show_code {
+            println!("\n{}", "  Code:".dimmed());
+            for line in script.code.lines() {
+                println!("    {}", line.dimmed());
+            }
+        }
+        println!();
+    }
+
+    if !show_code {
+        println!("{}", "Use --show-code to display script code".dimmed());
+    }
+
+    Ok(())
+}
+
+/// Handles the script validate command.
+pub fn handle_script_validate(script: &str) -> Result<()> {
+    use colored::Colorize;
+    use mlua::Lua;
+
+    println!("{}", "Validating script...".cyan().bold());
+    println!("  Script: {}", script.yellow());
+
+    let script_content = fs::read_to_string(script)
+        .with_context(|| format!("Failed to read script file: {}", script))?;
+
+    let lua = Lua::new();
+
+    match lua.load(&script_content).exec() {
+        Ok(_) => {
+            println!("\n{} Script is valid!", "✓".green().bold());
+            Ok(())
+        }
+        Err(e) => {
+            println!("\n{} Script validation failed:", "✗".red().bold());
+            println!("{}", format!("  {}", e).red());
+            anyhow::bail!("Script validation failed")
+        }
+    }
 }

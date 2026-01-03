@@ -616,7 +616,7 @@ mod tests {
         analyzer.train(&training).unwrap();
 
         // Test data with high volume
-        let test: Vec<_> = (0..200).map(|i| create_test_record(0, false)).collect();
+        let test: Vec<_> = (0..200).map(|_| create_test_record(0, false)).collect();
 
         let predictions = analyzer.predict_violations(&test).unwrap();
 

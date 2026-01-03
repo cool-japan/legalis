@@ -313,6 +313,12 @@ pub mod temporal;
 // Legal Document Processing (v0.2.4)
 pub mod document_processing;
 
+// Probabilistic Legal Reasoning (v0.2.5)
+pub mod probabilistic;
+
+// Multi-Jurisdictional Support (v0.2.6)
+pub mod multi_jurisdictional;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;

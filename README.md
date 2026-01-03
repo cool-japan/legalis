@@ -312,6 +312,31 @@ This enables integration with knowledge graphs and semantic web systems, allowin
 3. **Explicit Discretion Markers**: The type system enforces acknowledgment of human judgment requirements
 4. **SMT Solver Integration**: Planned Z3 integration for formal verification of legal consistency
 
+## Documentation
+
+Detailed technical papers are available in multiple languages:
+
+| Language | Document |
+|----------|----------|
+| 日本語 (Japanese) | [PAPER-JA.md](docs/PAPER-JA.md) |
+| English | [PAPER-EN.md](docs/PAPER-EN.md) |
+| Français (French) | [PAPER-FR.md](docs/PAPER-FR.md) |
+| Deutsch (German) | [PAPER-DE.md](docs/PAPER-DE.md) |
+| 中文 (Chinese) | [PAPER-ZH.md](docs/PAPER-ZH.md) |
+| ไทย (Thai) | [PAPER-TH.md](docs/PAPER-TH.md) |
+| ລາວ (Lao) | [PAPER-LO.md](docs/PAPER-LO.md) |
+| Tiếng Việt (Vietnamese) | [PAPER-VI.md](docs/PAPER-VI.md) |
+| Bahasa Indonesia | [PAPER-ID.md](docs/PAPER-ID.md) |
+| Bahasa Melayu (Malay) | [PAPER-MS.md](docs/PAPER-MS.md) |
+| العربية (Arabic) | [PAPER-AR.md](docs/PAPER-AR.md) |
+| தமிழ் (Tamil) | [PAPER-TA.md](docs/PAPER-TA.md) |
+| Eesti (Estonian) | [PAPER-ET.md](docs/PAPER-ET.md) |
+| हिन्दी (Hindi) | [PAPER-HI.md](docs/PAPER-HI.md) |
+| Español (Spanish) | [PAPER-ES.md](docs/PAPER-ES.md) |
+| Português (Portuguese) | [PAPER-PT.md](docs/PAPER-PT.md) |
+
+These papers provide comprehensive coverage of the system architecture, core technologies, design philosophy, and case studies.
+
 ## License
 
 Licensed under either of:

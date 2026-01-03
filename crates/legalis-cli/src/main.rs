@@ -533,6 +533,104 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Plugin { operation } => {
+            use legalis_cli::PluginOperation;
+            match operation {
+                PluginOperation::Install { source, force } => {
+                    commands::handle_plugin_install(source, *force)?;
+                }
+                PluginOperation::Uninstall { name, yes } => {
+                    commands::handle_plugin_uninstall(name, *yes)?;
+                }
+                PluginOperation::List {
+                    verbose,
+                    plugin_type,
+                } => {
+                    let ptype = plugin_type.as_ref().map(|pt| pt.clone().into());
+                    commands::handle_plugin_list(*verbose, ptype.as_ref())?;
+                }
+                PluginOperation::Info { name } => {
+                    commands::handle_plugin_info(name)?;
+                }
+                PluginOperation::Enable { name } => {
+                    commands::handle_plugin_enable(name)?;
+                }
+                PluginOperation::Disable { name } => {
+                    commands::handle_plugin_disable(name)?;
+                }
+                PluginOperation::Update { name } => {
+                    commands::handle_plugin_update(name.as_deref())?;
+                }
+            }
+        }
+        Commands::Config { operation } => {
+            use legalis_cli::ConfigOperation;
+            match operation {
+                ConfigOperation::Validate { config, verbose } => {
+                    commands::handle_config_validate(config.as_deref(), *verbose)?;
+                }
+                ConfigOperation::Diff {
+                    config1,
+                    config2,
+                    profile,
+                } => {
+                    commands::handle_config_diff(config1, config2, *profile)?;
+                }
+                ConfigOperation::Profiles { config } => {
+                    commands::handle_config_profiles(config.as_deref())?;
+                }
+                ConfigOperation::Activate { profile, config } => {
+                    commands::handle_config_activate(profile, config.as_deref())?;
+                }
+                ConfigOperation::Show {
+                    config,
+                    profile,
+                    format,
+                } => {
+                    commands::handle_config_show(config.as_deref(), profile.as_deref(), format)?;
+                }
+                ConfigOperation::Init { force } => {
+                    commands::handle_config_init(*force)?;
+                }
+            }
+        }
+        Commands::Script { operation } => {
+            use legalis_cli::ScriptOperation;
+            match operation {
+                ScriptOperation::Run {
+                    script,
+                    args,
+                    debug,
+                } => {
+                    commands::handle_script_run(script, args, *debug)?;
+                }
+                ScriptOperation::List { verbose } => {
+                    commands::handle_script_list(*verbose)?;
+                }
+                ScriptOperation::Info { name } => {
+                    commands::handle_script_info(name)?;
+                }
+                ScriptOperation::Install { source } => {
+                    commands::handle_script_install(source)?;
+                }
+                ScriptOperation::Uninstall { name, yes } => {
+                    commands::handle_script_uninstall(name, *yes)?;
+                }
+                ScriptOperation::New {
+                    name,
+                    template,
+                    output,
+                } => {
+                    commands::handle_script_new(name, template, output.as_deref())?;
+                }
+                ScriptOperation::Builtin { show_code } => {
+                    commands::handle_script_builtin(*show_code)?;
+                }
+                ScriptOperation::Validate { script } => {
+                    commands::handle_script_validate(script)?;
+                }
+            }
+        }
     }
 
     Ok(())

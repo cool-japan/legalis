@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.3.3 | Status: Stable | Tests: Passing (485 tests) | Warnings: 0
+Version: 0.3.5 | Status: Stable | Tests: Passing (642 tests) | Warnings: 0
 
-All v0.1.x through v0.3.3 features complete. RDF serialization (Turtle, N-Triples, RDF/XML, JSON-LD), SPARQL endpoint, ELI/Dublin Core/SKOS ontologies, external integrations (EUR-Lex, legislation.gov.uk, Wikidata, DBpedia), knowledge graph reasoning, graph algorithms, IPLD support, content-addressed storage, DID integration, verifiable credentials, blockchain-anchored provenance, streaming SPARQL processing, continuous query evaluation, real-time graph updates, incremental materialization, and pub/sub messaging all complete.
+All v0.1.x through v0.3.5 features complete. RDF serialization (Turtle, N-Triples, RDF/XML, JSON-LD), SPARQL endpoint, ELI/Dublin Core/SKOS ontologies, external integrations (EUR-Lex, legislation.gov.uk, Wikidata, DBpedia), knowledge graph reasoning, graph algorithms, IPLD support, content-addressed storage, DID integration, verifiable credentials, blockchain-anchored provenance, streaming SPARQL processing, continuous query evaluation, real-time graph updates, incremental materialization, pub/sub messaging, AI-enhanced knowledge graphs (automatic relation extraction, knowledge graph completion, entity linking with LLMs, ontology learning from text, embedding-based link prediction), multi-modal legal knowledge (image-to-RDF extraction, audio/video annotation, document layout knowledge graphs, multi-modal entity alignment, cross-modal reasoning) all complete.
 
 ---
 
@@ -197,18 +197,18 @@ All v0.1.x through v0.3.3 features complete. RDF serialization (Turtle, N-Triple
 - [x] Add pub/sub for knowledge changes
 
 ### AI-Enhanced Knowledge Graphs (v0.3.4)
-- [ ] Add automatic relation extraction
-- [ ] Implement knowledge graph completion
-- [ ] Add entity linking with LLMs
-- [ ] Create ontology learning from text
-- [ ] Add embedding-based link prediction
+- [x] Add automatic relation extraction
+- [x] Implement knowledge graph completion
+- [x] Add entity linking with LLMs
+- [x] Create ontology learning from text
+- [x] Add embedding-based link prediction
 
 ### Multi-Modal Legal Knowledge (v0.3.5)
-- [ ] Add image-to-RDF extraction
-- [ ] Implement audio/video annotation
-- [ ] Add document layout to knowledge graph
-- [ ] Create multi-modal entity alignment
-- [ ] Add cross-modal reasoning
+- [x] Add image-to-RDF extraction
+- [x] Implement audio/video annotation
+- [x] Add document layout to knowledge graph
+- [x] Create multi-modal entity alignment
+- [x] Add cross-modal reasoning
 
 ### Geospatial Legal Data (v0.3.6)
 - [ ] Add GeoSPARQL 1.1 support

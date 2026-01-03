@@ -91,7 +91,7 @@ pub enum WsClientMessage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WsServerMessage {
     /// Notification event
-    Notification(WsNotification),
+    Notification(Box<WsNotification>),
     /// Pong response
     Pong,
     /// Subscription confirmation
@@ -179,7 +179,7 @@ async fn handle_socket(socket: WebSocket, user: AuthUser, state: Arc<AppState>) 
                         continue;
                     }
 
-                    let msg = WsServerMessage::Notification(notification);
+                    let msg = WsServerMessage::Notification(Box::new(notification));
                     let json = match serde_json::to_string(&msg) {
                         Ok(json) => json,
                         Err(e) => {

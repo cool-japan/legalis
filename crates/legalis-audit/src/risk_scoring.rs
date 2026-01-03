@@ -755,7 +755,11 @@ mod tests {
 
     #[test]
     fn test_risk_level_categorization() {
-        let mut scorer = RiskScorer::new();
+        // Use custom config with lower thresholds so override risk alone can trigger Medium
+        let mut config = RiskScoringConfig::default();
+        config.medium_risk_threshold = 0.2;
+        config.high_risk_threshold = 0.5;
+        let mut scorer = RiskScorer::with_config(config);
 
         let baseline_records: Vec<_> = (0..100).map(|i| create_test_record(i, false)).collect();
         scorer.establish_baseline(&baseline_records).unwrap();
@@ -765,7 +769,7 @@ mod tests {
         let assessment = scorer.assess_risk(&low_risk_records).unwrap();
         assert_eq!(assessment.risk_level, RiskLevel::Low);
 
-        // High risk (many overrides)
+        // High risk (many overrides - 100% override rate with 0% baseline triggers max override score)
         let high_risk_records: Vec<_> = (0..10).map(|i| create_test_record(i, true)).collect();
         let assessment = scorer.assess_risk(&high_risk_records).unwrap();
         assert!(matches!(

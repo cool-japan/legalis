@@ -2,7 +2,7 @@
 
 ## Status Summary
 
-Version: 0.2.0 | Status: Stable | Tests: Passing | Warnings: 0
+Version: 0.2.0 | Status: Stable | Tests: 425 Passing | Warnings: 0
 
 All v0.1.1-v0.1.3 features complete (Grammar Extensions, Advanced Parsing, Type System). Module system (v0.1.4+) and LSP enhancements planned for future releases.
 
@@ -257,33 +257,33 @@ All v0.1.1-v0.1.3 features complete (Grammar Extensions, Advanced Parsing, Type 
 - [x] Parser implementation for visibility modifiers (`PUBLIC STATUTE` / `PRIVATE STATUTE`)
 - [x] Core library builds successfully with all module system features
 
-### Macro System (v0.1.5)
-- [ ] Add macro definition syntax `MACRO benefit_eligibility($age, $income)`
-- [ ] Add macro expansion with hygiene
-- [ ] Add variadic macro parameters
-- [ ] Add conditional macro expansion `#IF`, `#ELSE`
-- [ ] Add built-in macros for common patterns
+### Macro System (v0.1.5) ✅ COMPLETE
+- [x] Add macro definition syntax `MACRO benefit_eligibility($age, $income)`
+- [x] Add macro expansion with hygiene
+- [x] Add variadic macro parameters
+- [x] Add conditional macro expansion `#IF`, `#ELSE`
+- [x] Add built-in macros for common patterns
 
-### Error Recovery (v0.1.6)
-- [ ] Add panic mode recovery for syntax errors
-- [ ] Add missing delimiter insertion
-- [ ] Add typo correction with Levenshtein distance
-- [ ] Add contextual error messages based on parser state
-- [ ] Add multi-error reporting per parse
+### Error Recovery (v0.1.6) ✅ COMPLETE
+- [x] Add panic mode recovery for syntax errors
+- [x] Add missing delimiter insertion
+- [x] Add typo correction with Levenshtein distance
+- [x] Add contextual error messages based on parser state
+- [x] Add multi-error reporting per parse
 
-### LSP Enhancements (v0.1.7)
-- [ ] Add semantic tokens for syntax highlighting
-- [ ] Add inlay hints for inferred types
-- [ ] Add code lens for statute references count
-- [ ] Add signature help for condition constructors
-- [ ] Add document symbols hierarchy
+### LSP Enhancements (v0.1.7) ✅ COMPLETE
+- [x] Add semantic tokens for syntax highlighting
+- [x] Add inlay hints for inferred types
+- [x] Add code lens for statute references count
+- [x] Add signature help for condition constructors
+- [x] Add document symbols hierarchy
 
-### Optimization (v0.1.8)
-- [ ] Add condition hoisting (move invariant conditions up)
-- [ ] Add common subexpression elimination
-- [ ] Add dead condition elimination
-- [ ] Add condition reordering for short-circuit optimization
-- [ ] Add constant folding for static expressions
+### Optimization (v0.1.8) ✅ COMPLETE
+- [x] Add condition hoisting (move invariant conditions up)
+- [x] Add common subexpression elimination
+- [x] Add dead condition elimination
+- [x] Add condition reordering for short-circuit optimization
+- [x] Add constant folding for static expressions
 
 ### Code Generation Targets (v0.1.9)
 - [ ] Add TypeScript/JavaScript generator

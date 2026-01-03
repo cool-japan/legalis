@@ -169,44 +169,60 @@ impl DecisionClusterer {
     fn initialize_centers(&self, features: &[RecordFeatures]) -> Vec<Vec<f64>> {
         use rand::Rng;
         use rand::prelude::IndexedRandom;
+        use std::collections::HashSet;
 
         let mut rng = rand::rng();
         let mut centers = Vec::new();
+        let mut used_indices = HashSet::new();
 
         // Choose first center randomly
-        if let Some(first) = features.choose(&mut rng) {
-            centers.push(first.features.clone());
+        if !features.is_empty() {
+            let idx = rng.random_range(0..features.len());
+            centers.push(features[idx].features.clone());
+            used_indices.insert(idx);
         }
 
         // Choose remaining centers with probability proportional to distance
-        while centers.len() < self.k && centers.len() < features.len() {
-            let mut distances: Vec<f64> = features
+        while centers.len() < self.k && used_indices.len() < features.len() {
+            let distances: Vec<f64> = features
                 .iter()
-                .map(|f| {
-                    centers
-                        .iter()
-                        .map(|c| f.distance_to(c))
-                        .min_by(|a, b| a.partial_cmp(b).unwrap())
-                        .unwrap_or(0.0)
-                        .powi(2)
+                .enumerate()
+                .map(|(i, f)| {
+                    if used_indices.contains(&i) {
+                        0.0
+                    } else {
+                        centers
+                            .iter()
+                            .map(|c| f.distance_to(c))
+                            .min_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap_or(0.0)
+                            .powi(2)
+                    }
                 })
                 .collect();
 
             // Normalize to probabilities
             let sum: f64 = distances.iter().sum();
             if sum > 0.0 {
-                for d in &mut distances {
-                    *d /= sum;
+                let r: f64 = rng.random::<f64>() * sum;
+                let mut cumsum = 0.0;
+                for (i, &d) in distances.iter().enumerate() {
+                    cumsum += d;
+                    if r <= cumsum {
+                        centers.push(features[i].features.clone());
+                        used_indices.insert(i);
+                        break;
+                    }
                 }
-            }
-
-            // Choose next center
-            let r: f64 = rng.random();
-            let mut cumsum = 0.0;
-            for (i, &p) in distances.iter().enumerate() {
-                cumsum += p;
-                if r <= cumsum {
-                    centers.push(features[i].features.clone());
+            } else {
+                // All remaining features have zero distance - pick any unused one
+                let unused: Vec<usize> = (0..features.len())
+                    .filter(|i| !used_indices.contains(i))
+                    .collect();
+                if let Some(&idx) = unused.choose(&mut rng) {
+                    centers.push(features[idx].features.clone());
+                    used_indices.insert(idx);
+                } else {
                     break;
                 }
             }

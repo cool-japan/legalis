@@ -129,7 +129,7 @@ impl SearchIndex {
         for token in tokens {
             self.term_to_statutes
                 .entry(token)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(statute.id.clone());
         }
     }

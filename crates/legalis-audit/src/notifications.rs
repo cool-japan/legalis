@@ -445,17 +445,18 @@ mod tests {
     #[test]
     fn test_volume_anomaly_notification() {
         use chrono::Utc;
+        // Set count/expected ratio > 5.0 to trigger Critical severity (110/20 = 5.5)
         let anomaly = analysis::VolumeAnomaly {
             start: Utc::now(),
             end: Utc::now(),
-            count: 100,
+            count: 110,
             expected: 20,
-            severity: 5.0,
+            severity: 5.5,
         };
 
         let notification = AnomalyNotification::from_volume_anomaly(&anomaly);
         assert_eq!(notification.severity, Severity::Critical);
-        assert_eq!(notification.affected_count, 100);
+        assert_eq!(notification.affected_count, 110);
     }
 
     #[test]

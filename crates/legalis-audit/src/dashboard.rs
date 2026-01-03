@@ -536,7 +536,7 @@ impl LiveDashboard {
             avg_processing_time_ms: avg,
             p95_processing_time_ms: p95,
             p99_processing_time_ms: p99,
-            memory_usage_bytes: std::mem::size_of_val(&*state),
+            memory_usage_bytes: std::mem::size_of_val(state),
             cache_hit_rate: 0.0, // Placeholder
         }
     }

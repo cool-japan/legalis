@@ -89,6 +89,7 @@
 pub mod aggregate;
 pub mod analysis;
 pub mod archival;
+pub mod async_batch;
 pub mod batch;
 pub mod behavioral;
 pub mod bias;

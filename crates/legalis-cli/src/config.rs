@@ -36,6 +36,38 @@ pub struct Config {
     /// Command aliases (alias -> full command)
     #[serde(default)]
     pub aliases: HashMap<String, String>,
+
+    /// Configuration profiles (dev, staging, prod, custom)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub profiles: HashMap<String, ProfileConfig>,
+
+    /// Active profile name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<String>,
+}
+
+/// Profile-specific configuration overrides.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileConfig {
+    /// Jurisdiction override for this profile
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jurisdiction: Option<String>,
+
+    /// Verification settings override
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<VerificationConfig>,
+
+    /// Output settings override
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<OutputConfig>,
+
+    /// Linting settings override
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint: Option<LintConfig>,
+
+    /// Additional environment-specific variables
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
 }
 
 /// Verification configuration.
@@ -185,6 +217,12 @@ impl Config {
                 aliases.extend(self.aliases);
                 aliases
             },
+            profiles: {
+                let mut profiles = parent.profiles;
+                profiles.extend(self.profiles);
+                profiles
+            },
+            active_profile: self.active_profile.or(parent.active_profile),
         }
     }
 
@@ -319,6 +357,152 @@ impl Config {
             true
         } else {
             false
+        }
+    }
+
+    /// Apply a profile to this configuration.
+    /// Returns a new Config with profile settings applied.
+    pub fn with_profile(&self, profile_name: &str) -> Result<Self> {
+        let profile = self
+            .profiles
+            .get(profile_name)
+            .ok_or_else(|| anyhow::anyhow!("Profile '{}' not found", profile_name))?;
+
+        let mut config = self.clone();
+
+        // Apply profile overrides
+        if let Some(ref jur) = profile.jurisdiction {
+            config.jurisdiction = Some(jur.clone());
+        }
+
+        if let Some(ref ver) = profile.verification {
+            config.verification = ver.clone();
+        }
+
+        if let Some(ref out) = profile.output {
+            config.output = out.clone();
+        }
+
+        if let Some(ref lint) = profile.lint {
+            config.lint = lint.clone();
+        }
+
+        config.active_profile = Some(profile_name.to_string());
+
+        Ok(config)
+    }
+
+    /// Add a new profile to the configuration.
+    pub fn add_profile(&mut self, name: String, profile: ProfileConfig) {
+        self.profiles.insert(name, profile);
+    }
+
+    /// Remove a profile from the configuration.
+    pub fn remove_profile(&mut self, name: &str) -> Result<()> {
+        if self.profiles.remove(name).is_none() {
+            anyhow::bail!("Profile '{}' not found", name);
+        }
+        Ok(())
+    }
+
+    /// List all available profiles.
+    pub fn list_profiles(&self) -> Vec<&String> {
+        self.profiles.keys().collect()
+    }
+
+    /// Get the active profile name.
+    pub fn get_active_profile(&self) -> Option<&String> {
+        self.active_profile.as_ref()
+    }
+
+    /// Set the active profile.
+    pub fn set_active_profile(&mut self, profile_name: String) -> Result<()> {
+        if !self.profiles.contains_key(&profile_name) {
+            anyhow::bail!("Profile '{}' not found", profile_name);
+        }
+        self.active_profile = Some(profile_name);
+        Ok(())
+    }
+
+    /// Validate configuration.
+    pub fn validate(&self) -> Result<Vec<String>> {
+        let mut warnings = Vec::new();
+
+        // Check if active profile exists
+        if let Some(ref profile_name) = self.active_profile {
+            if !self.profiles.contains_key(profile_name) {
+                warnings.push(format!("Active profile '{}' is not defined", profile_name));
+            }
+        }
+
+        // Check for circular parent references
+        if self.parent.is_some() {
+            warnings.push("Parent config inheritance should be validated separately".to_string());
+        }
+
+        // Validate output directory exists or can be created
+        let output_path = Path::new(&self.output.directory);
+        if !output_path.exists() {
+            warnings.push(format!(
+                "Output directory does not exist: {}",
+                self.output.directory
+            ));
+        }
+
+        Ok(warnings)
+    }
+
+    /// Compare this configuration with another.
+    /// Returns a string describing the differences.
+    pub fn diff(&self, other: &Config) -> String {
+        let mut diffs = Vec::new();
+
+        if self.jurisdiction != other.jurisdiction {
+            diffs.push(format!(
+                "jurisdiction: {:?} -> {:?}",
+                self.jurisdiction, other.jurisdiction
+            ));
+        }
+
+        if self.verification.strict != other.verification.strict {
+            diffs.push(format!(
+                "verification.strict: {} -> {}",
+                self.verification.strict, other.verification.strict
+            ));
+        }
+
+        if self.output.format != other.output.format {
+            diffs.push(format!(
+                "output.format: {} -> {}",
+                self.output.format, other.output.format
+            ));
+        }
+
+        if self.output.colored != other.output.colored {
+            diffs.push(format!(
+                "output.colored: {} -> {}",
+                self.output.colored, other.output.colored
+            ));
+        }
+
+        if self.lint.strict != other.lint.strict {
+            diffs.push(format!(
+                "lint.strict: {} -> {}",
+                self.lint.strict, other.lint.strict
+            ));
+        }
+
+        if self.active_profile != other.active_profile {
+            diffs.push(format!(
+                "active_profile: {:?} -> {:?}",
+                self.active_profile, other.active_profile
+            ));
+        }
+
+        if diffs.is_empty() {
+            "No differences found.".to_string()
+        } else {
+            diffs.join("\n")
         }
     }
 }

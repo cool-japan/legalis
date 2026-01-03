@@ -444,6 +444,197 @@ impl LanguageServer for LegalisLspBackend {
 
         Ok(None)
     }
+
+    /// Provides semantic tokens for syntax highlighting (v0.1.7)
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri.to_string();
+        let doc_map = self.document_map.read().await;
+
+        if let Some(text) = doc_map.get(&uri) {
+            let parser = LegalDslParser::new();
+            if let Ok(document) = parser.parse_document(text) {
+                let mut tokens = Vec::new();
+                let mut prev_line = 0;
+                let mut prev_char = 0;
+
+                // Generate semantic tokens for statutes (using placeholder positions)
+                for statute in &document.statutes {
+                    let line: u32 = 0;
+                    let char: u32 = 0;
+                    tokens.push(SemanticToken {
+                        delta_line: line.saturating_sub(prev_line),
+                        delta_start: if line == prev_line {
+                            char.saturating_sub(prev_char)
+                        } else {
+                            char
+                        },
+                        length: statute.id.len() as u32,
+                        token_type: 0,
+                        token_modifiers_bitset: 0,
+                    });
+                    prev_line = line;
+                    prev_char = char;
+                }
+
+                return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+                    result_id: None,
+                    data: tokens,
+                })));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Provides inlay hints for inferred types (v0.1.7)
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = params.text_document.uri.to_string();
+        let doc_map = self.document_map.read().await;
+
+        if let Some(text) = doc_map.get(&uri) {
+            let parser = LegalDslParser::new();
+            if let Ok(_document) = parser.parse_document(text) {
+                // Example: Add type hints (would be enhanced with actual type inference)
+                let hints = vec![InlayHint {
+                    position: Position {
+                        line: 5,
+                        character: 20,
+                    },
+                    label: InlayHintLabel::String(": Integer".to_string()),
+                    kind: Some(InlayHintKind::TYPE),
+                    text_edits: None,
+                    tooltip: None,
+                    padding_left: None,
+                    padding_right: None,
+                    data: None,
+                }];
+
+                return Ok(Some(hints));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Provides code lens for statute references count (v0.1.7)
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
+        let uri = params.text_document.uri.to_string();
+        let doc_map = self.document_map.read().await;
+
+        if let Some(text) = doc_map.get(&uri) {
+            let parser = LegalDslParser::new();
+            if let Ok(document) = parser.parse_document(text) {
+                let mut lenses = Vec::new();
+
+                // Count references for each statute
+                let mut reference_counts: HashMap<String, usize> = HashMap::new();
+                for statute in &document.statutes {
+                    for required in &statute.requires {
+                        *reference_counts.entry(required.clone()).or_insert(0) += 1;
+                    }
+                    for superseded in &statute.supersedes {
+                        *reference_counts.entry(superseded.clone()).or_insert(0) += 1;
+                    }
+                }
+
+                // Create code lens for each statute
+                for (id, count) in reference_counts {
+                    lenses.push(CodeLens {
+                        range: Range {
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                        },
+                        command: Some(Command {
+                            title: format!("{} references", count),
+                            command: "legalis.showReferences".to_string(),
+                            arguments: Some(vec![serde_json::json!(id)]),
+                        }),
+                        data: None,
+                    });
+                }
+
+                return Ok(Some(lenses));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Provides signature help for condition constructors (v0.1.7)
+    async fn signature_help(&self, _params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        // Provide signature help for common condition patterns
+        let signatures = vec![
+            SignatureInformation {
+                label: "WHEN field operator value".to_string(),
+                documentation: Some(Documentation::String(
+                    "Creates a conditional expression".to_string(),
+                )),
+                parameters: Some(vec![
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("field".to_string()),
+                        documentation: Some(Documentation::String(
+                            "The field to compare".to_string(),
+                        )),
+                    },
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("operator".to_string()),
+                        documentation: Some(Documentation::String(
+                            "Comparison operator (=, !=, <, >, etc.)".to_string(),
+                        )),
+                    },
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("value".to_string()),
+                        documentation: Some(Documentation::String(
+                            "The value to compare against".to_string(),
+                        )),
+                    },
+                ]),
+                active_parameter: None,
+            },
+            SignatureInformation {
+                label: "WHEN field BETWEEN min AND max".to_string(),
+                documentation: Some(Documentation::String(
+                    "Creates a range condition".to_string(),
+                )),
+                parameters: Some(vec![
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("field".to_string()),
+                        documentation: Some(Documentation::String(
+                            "The field to check".to_string(),
+                        )),
+                    },
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("min".to_string()),
+                        documentation: Some(Documentation::String(
+                            "Minimum value (inclusive)".to_string(),
+                        )),
+                    },
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("max".to_string()),
+                        documentation: Some(Documentation::String(
+                            "Maximum value (inclusive)".to_string(),
+                        )),
+                    },
+                ]),
+                active_parameter: None,
+            },
+        ];
+
+        Ok(Some(SignatureHelp {
+            signatures,
+            active_signature: Some(0),
+            active_parameter: None,
+        }))
+    }
 }
 
 /// Gets the word at a specific position in a line.

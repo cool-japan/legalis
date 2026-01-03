@@ -101,6 +101,20 @@
 //! - Simulation pause/resume/rewind
 //! - Breakpoint debugging
 //!
+//! ## Synthetic Data Generation (v0.2.4)
+//! - GAN-based entity generation
+//! - Privacy-preserving synthetic populations (differential privacy)
+//! - Demographic-consistent data synthesis
+//! - Realistic income/wealth distributions (log-normal, Pareto, exponential)
+//! - Geographic-aware population generation with clustering
+//!
+//! ## Economic Simulation Extensions (v0.2.5)
+//! - DSGE (Dynamic Stochastic General Equilibrium) models
+//! - Input-output economic modeling (Leontief matrices)
+//! - Financial contagion simulation with network effects
+//! - Market microstructure modeling (order books, market depth)
+//! - Behavioral economics (prospect theory, hyperbolic discounting, anchoring)
+//!
 //! ## Integration & API (2025-Q4)
 //! - Simulation-as-a-Service API with job queuing
 //! - Persistent result storage with file-based backend
@@ -127,6 +141,7 @@ mod demographic_modeling;
 mod distributed;
 mod domain_models;
 mod economic;
+mod economic_extensions;
 mod engine;
 mod error;
 mod event_driven;
@@ -149,6 +164,7 @@ mod relationships;
 mod risk;
 mod scenarios;
 mod stress_tests;
+mod synthetic_data;
 mod temporal;
 mod utils;
 mod validation;
@@ -166,6 +182,7 @@ pub use demographic_modeling::*;
 pub use distributed::*;
 pub use domain_models::*;
 pub use economic::*;
+pub use economic_extensions::*;
 pub use engine::*;
 pub use error::*;
 pub use event_driven::*;
@@ -187,6 +204,7 @@ pub use realtime::*;
 pub use relationships::*;
 pub use risk::*;
 pub use scenarios::*;
+pub use synthetic_data::*;
 pub use temporal::*;
 pub use utils::*;
 pub use validation::*;

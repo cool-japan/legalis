@@ -17,6 +17,8 @@ pub mod parallel;
 pub mod plugin;
 pub mod profile;
 pub mod progress;
+pub mod scripting;
+pub mod theme;
 pub mod tutorial;
 
 use clap::{CommandFactory, Parser, Subcommand};
@@ -48,6 +50,26 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
+    /// Color theme (default, dark, light, monokai, solarized)
+    #[arg(long, default_value = "default")]
+    pub theme: ColorTheme,
+
+    /// Disable emoji in output
+    #[arg(long)]
+    pub no_emoji: bool,
+
+    /// Terminal width for output formatting (auto-detected if not specified)
+    #[arg(long)]
+    pub width: Option<usize>,
+
+    /// Enable pager for long outputs
+    #[arg(long)]
+    pub pager: bool,
+
+    /// Structured logging mode (json, logfmt)
+    #[arg(long)]
+    pub log_format: Option<LogFormat>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -63,6 +85,35 @@ pub enum OutputFormat {
     Table,
     Csv,
     Html,
+}
+
+/// Color theme options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ColorTheme {
+    /// Default color scheme
+    #[default]
+    Default,
+    /// Dark background optimized
+    Dark,
+    /// Light background optimized
+    Light,
+    /// Monokai color scheme
+    Monokai,
+    /// Solarized color scheme
+    Solarized,
+    /// No colors (plain text)
+    None,
+}
+
+/// Structured logging format options.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum LogFormat {
+    /// JSON structured logging
+    Json,
+    /// Logfmt key=value format
+    Logfmt,
+    /// Compact format for machines
+    Compact,
 }
 
 /// Available commands.
@@ -771,6 +822,27 @@ pub enum Commands {
         #[command(subcommand)]
         operation: RegistryOperation,
     },
+
+    /// Plugin management (install, uninstall, list, enable, disable)
+    Plugin {
+        /// Plugin operation to perform
+        #[command(subcommand)]
+        operation: PluginOperation,
+    },
+
+    /// Configuration management (validate, diff, profiles)
+    Config {
+        /// Config operation to perform
+        #[command(subcommand)]
+        operation: ConfigOperation,
+    },
+
+    /// Script management and execution (Lua scripting)
+    Script {
+        /// Script operation to perform
+        #[command(subcommand)]
+        operation: ScriptOperation,
+    },
 }
 
 /// Batch operation types.
@@ -1009,6 +1081,274 @@ pub enum RegistryOperation {
         #[arg(long)]
         all: bool,
     },
+}
+
+/// Plugin operation types.
+#[derive(Subcommand)]
+pub enum PluginOperation {
+    /// Install a plugin from a directory or archive
+    Install {
+        /// Plugin source directory or archive path
+        #[arg(short, long)]
+        source: String,
+
+        /// Force reinstall if already installed
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Uninstall a plugin by name
+    Uninstall {
+        /// Plugin name to uninstall
+        #[arg(short, long)]
+        name: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// List all installed plugins
+    List {
+        /// Show detailed plugin information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Filter by plugin type (command, hook, formatter, linter, extension)
+        #[arg(short, long)]
+        plugin_type: Option<PluginTypeFilter>,
+    },
+
+    /// Show detailed information about a plugin
+    Info {
+        /// Plugin name
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Enable a plugin
+    Enable {
+        /// Plugin name to enable
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Disable a plugin
+    Disable {
+        /// Plugin name to disable
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Update a plugin to the latest version
+    Update {
+        /// Plugin name to update (updates all if not specified)
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+}
+
+/// Plugin type filter options.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum PluginTypeFilter {
+    /// Command plugins
+    Command,
+    /// Hook plugins
+    Hook,
+    /// Formatter plugins
+    Formatter,
+    /// Linter plugins
+    Linter,
+    /// Extension plugins
+    Extension,
+}
+
+impl From<PluginTypeFilter> for plugin::PluginType {
+    fn from(f: PluginTypeFilter) -> Self {
+        match f {
+            PluginTypeFilter::Command => plugin::PluginType::Command,
+            PluginTypeFilter::Hook => plugin::PluginType::Hook,
+            PluginTypeFilter::Formatter => plugin::PluginType::Formatter,
+            PluginTypeFilter::Linter => plugin::PluginType::Linter,
+            PluginTypeFilter::Extension => plugin::PluginType::Extension,
+        }
+    }
+}
+
+/// Config operation types.
+#[derive(Subcommand)]
+pub enum ConfigOperation {
+    /// Validate the current configuration
+    Validate {
+        /// Configuration file path (defaults to current config)
+        #[arg(short, long)]
+        config: Option<String>,
+
+        /// Show detailed validation information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show differences between two configurations
+    Diff {
+        /// First configuration file
+        #[arg(short, long)]
+        config1: String,
+
+        /// Second configuration file or profile name
+        #[arg(short = '2', long)]
+        config2: String,
+
+        /// Treat config2 as a profile name instead of a file
+        #[arg(long)]
+        profile: bool,
+    },
+
+    /// List all available profiles
+    Profiles {
+        /// Configuration file path (defaults to current config)
+        #[arg(short, long)]
+        config: Option<String>,
+    },
+
+    /// Activate a profile
+    Activate {
+        /// Profile name to activate
+        #[arg(short, long)]
+        profile: String,
+
+        /// Configuration file to update
+        #[arg(short, long)]
+        config: Option<String>,
+    },
+
+    /// Show the current configuration
+    Show {
+        /// Configuration file path (defaults to current config)
+        #[arg(short, long)]
+        config: Option<String>,
+
+        /// Apply a profile before showing
+        #[arg(short, long)]
+        profile: Option<String>,
+
+        /// Output format (toml, json, yaml)
+        #[arg(short, long, default_value = "toml")]
+        format: ConfigShowFormat,
+    },
+
+    /// Initialize user-level configuration
+    Init {
+        /// Force overwrite existing configuration
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+/// Config show format options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ConfigShowFormat {
+    /// TOML format
+    #[default]
+    Toml,
+    /// JSON format
+    Json,
+    /// YAML format
+    Yaml,
+}
+
+/// Script operation types.
+#[derive(Subcommand)]
+pub enum ScriptOperation {
+    /// Execute a Lua script
+    Run {
+        /// Script name or path to script file
+        #[arg(short, long)]
+        script: String,
+
+        /// Arguments to pass to the script
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// Enable debug mode
+        #[arg(short, long)]
+        debug: bool,
+    },
+
+    /// List all available scripts
+    List {
+        /// Show detailed script information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show information about a script
+    Info {
+        /// Script name
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Install a script from a directory
+    Install {
+        /// Script source directory
+        #[arg(short, long)]
+        source: String,
+    },
+
+    /// Uninstall a script
+    Uninstall {
+        /// Script name to uninstall
+        #[arg(short, long)]
+        name: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Create a new script from a template
+    New {
+        /// Script name
+        #[arg(short, long)]
+        name: String,
+
+        /// Script template type
+        #[arg(short, long, default_value = "basic")]
+        template: ScriptTemplate,
+
+        /// Output directory (defaults to current directory)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// List built-in script library
+    Builtin {
+        /// Show script code
+        #[arg(short, long)]
+        show_code: bool,
+    },
+
+    /// Validate a script without executing it
+    Validate {
+        /// Script file path
+        #[arg(short, long)]
+        script: String,
+    },
+}
+
+/// Script template options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ScriptTemplate {
+    /// Basic script template
+    #[default]
+    Basic,
+    /// Batch processing template
+    Batch,
+    /// Report generation template
+    Report,
+    /// Data transformation template
+    Transform,
 }
 
 /// Tutorial topic argument for CLI.

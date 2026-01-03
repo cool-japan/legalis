@@ -107,7 +107,7 @@ impl ConsistencyChecker {
         // Check if required statutes are superseded
         for statute in &doc.statutes {
             for required in &statute.requires {
-                if self.statute_map.get(required).is_some() {
+                if self.statute_map.contains_key(required) {
                     // Check if any statute supersedes this required one
                     for other in &doc.statutes {
                         if other.supersedes.contains(required) {
@@ -212,8 +212,8 @@ impl ConsistencyChecker {
     /// Checks two statutes for contradictory conditions
     fn check_condition_contradiction(&mut self, s1: &StatuteNode, s2: &StatuteNode) {
         // Extract field comparisons from both statutes
-        let fields1 = self.extract_field_conditions(&s1.conditions);
-        let fields2 = self.extract_field_conditions(&s2.conditions);
+        let fields1 = extract_field_conditions(&s1.conditions);
+        let fields2 = extract_field_conditions(&s2.conditions);
 
         // Check for contradictions
         for (field, (op1, val1)) in &fields1 {
@@ -236,35 +236,6 @@ impl ConsistencyChecker {
                 }
             }
         }
-    }
-
-    /// Extracts field conditions from a list of conditions
-    fn extract_field_conditions(
-        &self,
-        conditions: &[ConditionNode],
-    ) -> HashMap<String, (String, ConditionValue)> {
-        let mut result = HashMap::new();
-
-        for condition in conditions {
-            match condition {
-                ConditionNode::Comparison {
-                    field,
-                    operator,
-                    value,
-                } => {
-                    result.insert(field.clone(), (operator.clone(), value.clone()));
-                }
-                ConditionNode::And(left, right) => {
-                    let left_fields = self.extract_field_conditions(&[*left.clone()]);
-                    let right_fields = self.extract_field_conditions(&[*right.clone()]);
-                    result.extend(left_fields);
-                    result.extend(right_fields);
-                }
-                _ => {}
-            }
-        }
-
-        result
     }
 
     /// Checks if two conditions are contradictory
@@ -389,6 +360,34 @@ impl Default for ConsistencyChecker {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Extracts field conditions from a list of conditions (standalone helper function)
+fn extract_field_conditions(
+    conditions: &[ConditionNode],
+) -> HashMap<String, (String, ConditionValue)> {
+    let mut result = HashMap::new();
+
+    for condition in conditions {
+        match condition {
+            ConditionNode::Comparison {
+                field,
+                operator,
+                value,
+            } => {
+                result.insert(field.clone(), (operator.clone(), value.clone()));
+            }
+            ConditionNode::And(left, right) => {
+                let left_fields = extract_field_conditions(&[*left.clone()]);
+                let right_fields = extract_field_conditions(&[*right.clone()]);
+                result.extend(left_fields);
+                result.extend(right_fields);
+            }
+            _ => {}
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]

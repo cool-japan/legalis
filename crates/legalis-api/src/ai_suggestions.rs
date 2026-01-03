@@ -178,7 +178,7 @@ mod tests {
 
         assert!(!response.suggestions.is_empty());
         assert_eq!(response.query, "contract");
-        assert!(response.processing_time_ms >= 0);
+        // processing_time_ms is u64, always >= 0, so no need to check
     }
 
     #[test]

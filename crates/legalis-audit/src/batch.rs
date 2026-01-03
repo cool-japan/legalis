@@ -250,7 +250,10 @@ mod tests {
     #[tokio::test]
     async fn test_batch_writer_multiple_records() {
         let storage = Box::new(MemoryStorage::new());
-        let config = BatchConfig::new().with_max_batch_size(5);
+        // Use shorter batch delay to speed up test
+        let config = BatchConfig::new()
+            .with_max_batch_size(5)
+            .with_max_batch_delay(Duration::from_millis(100));
         let writer = BatchWriter::new(storage, config);
 
         for _ in 0..10 {

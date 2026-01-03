@@ -152,9 +152,9 @@ pub async fn version_headers_middleware(
     }
 
     // Add Link header for version discovery
-    if let Ok(link_value) = HeaderValue::from_str(&format!(
-        "</api/v1>; rel=\"version\", </api/v2>; rel=\"version\""
-    )) {
+    if let Ok(link_value) =
+        HeaderValue::from_str("</api/v1>; rel=\"version\", </api/v2>; rel=\"version\"")
+    {
         response.headers_mut().insert(header::LINK, link_value);
     }
 

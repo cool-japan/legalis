@@ -112,13 +112,7 @@ impl EditOperation {
                     ..
                 },
             ) => {
-                let new_pos = if *p2 <= *p1 {
-                    p1 + c2.len()
-                } else if *p2 < *p1 + *l1 {
-                    *p1
-                } else {
-                    *p1
-                };
+                let new_pos = if *p2 <= *p1 { p1 + c2.len() } else { *p1 };
                 EditOperation::Delete {
                     position: new_pos,
                     length: *l1,

@@ -6,9 +6,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Import kind for different import styles.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum ImportKind {
     /// Simple import: IMPORT "path"
+    #[default]
     Simple,
     /// Wildcard import: IMPORT path.*
     Wildcard,
@@ -16,25 +17,14 @@ pub enum ImportKind {
     Selective(Vec<String>),
 }
 
-impl Default for ImportKind {
-    fn default() -> Self {
-        ImportKind::Simple
-    }
-}
-
 /// Visibility modifier for statutes and other declarations.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum Visibility {
     /// Public (exported, can be imported by other modules)
     Public,
     /// Private (internal to the module, not exported)
+    #[default]
     Private,
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Private
-    }
 }
 
 /// AST node for a namespace declaration.

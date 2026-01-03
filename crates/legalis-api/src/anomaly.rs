@@ -239,39 +239,39 @@ impl AnomalyDetector {
 
         // Check for anomalies
         let config = self.config.read().await;
-        if time_series.points.len() >= config.min_observations {
-            if time_series.is_anomaly(value, config.threshold) {
-                let z_score = time_series.z_score(value);
-                let baseline = time_series.mean();
+        if time_series.points.len() >= config.min_observations
+            && time_series.is_anomaly(value, config.threshold)
+        {
+            let z_score = time_series.z_score(value);
+            let baseline = time_series.mean();
 
-                let severity = if z_score > 5.0 {
-                    AnomalySeverity::Critical
-                } else if z_score > 4.0 {
-                    AnomalySeverity::High
-                } else if z_score > 3.5 {
-                    AnomalySeverity::Medium
-                } else {
-                    AnomalySeverity::Low
-                };
+            let severity = if z_score > 5.0 {
+                AnomalySeverity::Critical
+            } else if z_score > 4.0 {
+                AnomalySeverity::High
+            } else if z_score > 3.5 {
+                AnomalySeverity::Medium
+            } else {
+                AnomalySeverity::Low
+            };
 
-                let anomaly = Anomaly {
-                    anomaly_type: AnomalyType::PatternAnomaly,
-                    severity,
-                    description: format!(
-                        "Unusual value for {}: {:.2} (baseline: {:.2}, {:.1}σ)",
-                        metric_name, value, baseline, z_score
-                    ),
-                    resource: metric_name,
-                    value,
-                    baseline,
-                    std_deviations: z_score,
-                    detected_at: Utc::now(),
-                    metadata: None,
-                };
+            let anomaly = Anomaly {
+                anomaly_type: AnomalyType::PatternAnomaly,
+                severity,
+                description: format!(
+                    "Unusual value for {}: {:.2} (baseline: {:.2}, {:.1}σ)",
+                    metric_name, value, baseline, z_score
+                ),
+                resource: metric_name,
+                value,
+                baseline,
+                std_deviations: z_score,
+                detected_at: Utc::now(),
+                metadata: None,
+            };
 
-                drop(config);
-                self.record_anomaly(anomaly).await;
-            }
+            drop(config);
+            self.record_anomaly(anomaly).await;
         }
     }
 

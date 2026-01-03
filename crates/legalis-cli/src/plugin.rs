@@ -112,10 +112,26 @@ impl PluginHook {
     }
 }
 
+/// Plugin state configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PluginState {
+    enabled_plugins: Vec<String>,
+}
+
+impl Default for PluginState {
+    fn default() -> Self {
+        Self {
+            enabled_plugins: Vec::new(),
+        }
+    }
+}
+
 /// Plugin manager for discovering and loading plugins.
 pub struct PluginManager {
     plugin_dir: PathBuf,
     plugins: HashMap<String, PluginManifest>,
+    state: PluginState,
+    state_file: PathBuf,
 }
 
 impl PluginManager {
@@ -132,9 +148,19 @@ impl PluginManager {
             })?;
         }
 
+        let state_file = plugin_dir.join("state.toml");
+        let state = if state_file.exists() {
+            let content = fs::read_to_string(&state_file)?;
+            toml::from_str(&content).unwrap_or_default()
+        } else {
+            PluginState::default()
+        };
+
         Ok(Self {
             plugin_dir,
             plugins: HashMap::new(),
+            state,
+            state_file,
         })
     }
 
@@ -232,7 +258,7 @@ impl PluginManager {
     }
 
     /// Install a plugin from a directory.
-    pub fn install_plugin(&mut self, source_dir: &Path) -> Result<()> {
+    pub fn install_plugin(&mut self, source_dir: &Path, force: bool) -> Result<()> {
         let manifest_path = source_dir.join("plugin.toml");
 
         if !manifest_path.exists() {
@@ -244,13 +270,28 @@ impl PluginManager {
         let target_dir = self.plugin_dir.join(&manifest.name);
 
         if target_dir.exists() {
-            anyhow::bail!("Plugin {} is already installed", manifest.name);
+            if !force {
+                anyhow::bail!(
+                    "Plugin {} is already installed. Use --force to reinstall",
+                    manifest.name
+                );
+            }
+            // Remove existing plugin if force is true
+            fs::remove_dir_all(&target_dir)?;
+            self.plugins.remove(&manifest.name);
         }
 
         // Copy plugin directory to plugins folder
         copy_dir_all(source_dir, &target_dir)?;
 
-        self.plugins.insert(manifest.name.clone(), manifest);
+        let plugin_name = manifest.name.clone();
+        self.plugins.insert(plugin_name.clone(), manifest);
+
+        // Auto-enable newly installed plugin
+        if !self.is_enabled(&plugin_name) {
+            self.state.enabled_plugins.push(plugin_name);
+            self.save_state()?;
+        }
 
         Ok(())
     }
@@ -274,12 +315,117 @@ impl PluginManager {
 
         self.plugins.remove(name);
 
+        // Remove from enabled list
+        self.state.enabled_plugins.retain(|n| n != name);
+        self.save_state()?;
+
         Ok(())
     }
 
     /// Get plugin count.
     pub fn plugin_count(&self) -> usize {
         self.plugins.len()
+    }
+
+    /// Check if a plugin is enabled.
+    pub fn is_enabled(&self, name: &str) -> bool {
+        self.state.enabled_plugins.contains(&name.to_string())
+    }
+
+    /// Enable a plugin.
+    pub fn enable_plugin(&mut self, name: &str) -> Result<()> {
+        if !self.plugins.contains_key(name) {
+            anyhow::bail!("Plugin {} is not installed", name);
+        }
+
+        if !self.is_enabled(name) {
+            self.state.enabled_plugins.push(name.to_string());
+            self.save_state()?;
+        }
+
+        Ok(())
+    }
+
+    /// Disable a plugin.
+    pub fn disable_plugin(&mut self, name: &str) -> Result<()> {
+        if !self.plugins.contains_key(name) {
+            anyhow::bail!("Plugin {} is not installed", name);
+        }
+
+        self.state.enabled_plugins.retain(|n| n != name);
+        self.save_state()?;
+
+        Ok(())
+    }
+
+    /// Save plugin state to disk.
+    fn save_state(&self) -> Result<()> {
+        let content = toml::to_string_pretty(&self.state)?;
+        fs::write(&self.state_file, content).with_context(|| {
+            format!("Failed to save plugin state: {}", self.state_file.display())
+        })?;
+        Ok(())
+    }
+
+    /// Get all enabled plugins.
+    pub fn get_enabled_plugins(&self) -> Vec<&PluginManifest> {
+        self.plugins
+            .iter()
+            .filter(|(name, _)| self.is_enabled(name))
+            .map(|(_, manifest)| manifest)
+            .collect()
+    }
+
+    /// Execute a plugin hook with given data.
+    pub fn execute_hook(&self, hook: &PluginHook, data: &str) -> Result<Vec<String>> {
+        let plugins = self.get_hook_plugins(hook);
+        let mut results = Vec::new();
+
+        for plugin in plugins {
+            if !self.is_enabled(&plugin.name) {
+                continue;
+            }
+
+            let result = self.execute_plugin(plugin, data)?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Execute a plugin with input data.
+    fn execute_plugin(&self, plugin: &PluginManifest, input: &str) -> Result<String> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let plugin_path = self.plugin_dir.join(&plugin.name).join(&plugin.entry_point);
+
+        if !plugin_path.exists() {
+            anyhow::bail!("Plugin entry point not found: {}", plugin_path.display());
+        }
+
+        // Execute plugin in a sandboxed subprocess
+        let mut child = Command::new(&plugin_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("Failed to execute plugin: {}", plugin.name))?;
+
+        // Write input to stdin
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(input.as_bytes())?;
+        }
+
+        // Wait for plugin to complete and collect output
+        let output = child.wait_with_output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Plugin {} failed: {}", plugin.name, stderr);
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
 

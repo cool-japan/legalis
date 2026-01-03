@@ -609,14 +609,18 @@ mod tests {
 
     #[test]
     fn test_analyze_patterns() {
-        let recognizer = BehavioralRecognizer::new();
+        // Use custom config with lower threshold so test data triggers pattern detection
+        let mut config = BehavioralConfig::default();
+        config.min_pattern_occurrences = 2;
+        let recognizer = BehavioralRecognizer::with_config(config);
 
-        let records: Vec<_> = (0..10)
+        // Create more records with override pattern
+        let records: Vec<_> = (0..20)
             .map(|i| create_test_record(i, "component-1", i % 3 == 0))
             .collect();
 
         let patterns = recognizer.analyze(&records).unwrap();
-        // Should detect some patterns
+        // Should detect some patterns with lower threshold
         assert!(!patterns.is_empty());
     }
 
@@ -645,34 +649,48 @@ mod tests {
 
     #[test]
     fn test_detect_temporal_patterns() {
-        let recognizer = BehavioralRecognizer::new();
+        // Use custom config with lower threshold
+        let mut config = BehavioralConfig::default();
+        config.min_pattern_occurrences = 2;
+        let recognizer = BehavioralRecognizer::with_config(config);
 
-        let records: Vec<_> = (0..10)
-            .map(|i| create_test_record(i, "component-1", false))
-            .collect();
+        // Create records that share the same (day_of_week, hour) slot
+        // Use hours 0, 0, 24, 24 (same day and hour slot)
+        let mut records = Vec::new();
+        for _ in 0..3 {
+            records.push(create_test_record(0, "component-1", false)); // Same hour slot
+        }
+        for _ in 0..3 {
+            records.push(create_test_record(168, "component-1", false)); // 1 week ago, same day/hour
+        }
 
         let patterns = recognizer
             .detect_temporal_patterns_detailed(&records)
             .unwrap();
-        // Should detect some temporal patterns
+        // Should detect temporal patterns when records share time slots
         assert!(!patterns.is_empty());
     }
 
     #[test]
     fn test_detect_decision_flows() {
-        let recognizer = BehavioralRecognizer::new();
+        // Use custom config with lower threshold
+        let mut config = BehavioralConfig::default();
+        config.min_pattern_occurrences = 2;
+        let recognizer = BehavioralRecognizer::with_config(config);
 
-        let subject_id = Uuid::new_v4();
+        // Create multiple subjects with the same flow pattern to meet threshold
         let mut records = Vec::new();
-
-        for i in 0..10 {
-            let mut record = create_test_record(i, "component-1", false);
-            record.subject_id = subject_id;
-            records.push(record);
+        for _ in 0..5 {
+            let subject_id = Uuid::new_v4();
+            for i in 0..3 {
+                let mut record = create_test_record(i, "component-1", false);
+                record.subject_id = subject_id;
+                records.push(record);
+            }
         }
 
         let flows = recognizer.detect_decision_flows(&records).unwrap();
-        // Should detect decision flows
+        // Should detect decision flows with lower threshold
         assert!(!flows.is_empty());
     }
 

@@ -43,56 +43,50 @@ pub struct SecurityHeaders;
 impl SecurityHeaders {
     /// Checks for required security headers
     pub fn check_response_headers(headers: &HeaderMap) -> Vec<SecurityCheckResult> {
-        let mut results = Vec::new();
-
-        // Check for X-Content-Type-Options
-        results.push(Self::check_header(
-            headers,
-            "X-Content-Type-Options",
-            "nosniff",
-            SecuritySeverity::Medium,
-            "X-Content-Type-Options header missing or incorrect",
-            "Add 'X-Content-Type-Options: nosniff' header to prevent MIME type sniffing",
-        ));
-
-        // Check for X-Frame-Options
-        results.push(Self::check_header_exists(
-            headers,
-            "X-Frame-Options",
-            SecuritySeverity::High,
-            "X-Frame-Options header missing",
-            "Add 'X-Frame-Options: DENY' or 'SAMEORIGIN' to prevent clickjacking",
-        ));
-
-        // Check for Strict-Transport-Security
-        results.push(Self::check_header_exists(
-            headers,
-            "Strict-Transport-Security",
-            SecuritySeverity::High,
-            "Strict-Transport-Security header missing",
-            "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' for HTTPS",
-        ));
-
-        // Check for Content-Security-Policy
-        results.push(Self::check_header_exists(
-            headers,
-            "Content-Security-Policy",
-            SecuritySeverity::Medium,
-            "Content-Security-Policy header missing",
-            "Add Content-Security-Policy header to prevent XSS and injection attacks",
-        ));
-
-        // Check for X-XSS-Protection (deprecated but still useful for older browsers)
-        results.push(Self::check_header(
-            headers,
-            "X-XSS-Protection",
-            "1; mode=block",
-            SecuritySeverity::Low,
-            "X-XSS-Protection header missing or incorrect",
-            "Add 'X-XSS-Protection: 1; mode=block' for older browser protection",
-        ));
-
-        results
+        vec![
+            // Check for X-Content-Type-Options
+            Self::check_header(
+                headers,
+                "X-Content-Type-Options",
+                "nosniff",
+                SecuritySeverity::Medium,
+                "X-Content-Type-Options header missing or incorrect",
+                "Add 'X-Content-Type-Options: nosniff' header to prevent MIME type sniffing",
+            ),
+            // Check for X-Frame-Options
+            Self::check_header_exists(
+                headers,
+                "X-Frame-Options",
+                SecuritySeverity::High,
+                "X-Frame-Options header missing",
+                "Add 'X-Frame-Options: DENY' or 'SAMEORIGIN' to prevent clickjacking",
+            ),
+            // Check for Strict-Transport-Security
+            Self::check_header_exists(
+                headers,
+                "Strict-Transport-Security",
+                SecuritySeverity::High,
+                "Strict-Transport-Security header missing",
+                "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' for HTTPS",
+            ),
+            // Check for Content-Security-Policy
+            Self::check_header_exists(
+                headers,
+                "Content-Security-Policy",
+                SecuritySeverity::Medium,
+                "Content-Security-Policy header missing",
+                "Add Content-Security-Policy header to prevent XSS and injection attacks",
+            ),
+            // Check for X-XSS-Protection (deprecated but still useful for older browsers)
+            Self::check_header(
+                headers,
+                "X-XSS-Protection",
+                "1; mode=block",
+                SecuritySeverity::Low,
+                "X-XSS-Protection header missing or incorrect",
+                "Add 'X-XSS-Protection: 1; mode=block' for older browser protection",
+            ),
+        ]
     }
 
     fn check_header(

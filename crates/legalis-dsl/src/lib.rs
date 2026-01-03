@@ -75,6 +75,7 @@ pub mod consistency;
 pub mod dataflow;
 pub mod diff;
 pub mod docgen;
+pub mod error_recovery;
 pub mod grammar_doc;
 pub mod graph;
 pub mod heredoc;
@@ -83,9 +84,11 @@ pub mod import_resolver;
 pub mod incremental;
 pub mod interpolation;
 pub mod lsp;
+pub mod macros;
 pub mod metadata;
 pub mod module_system;
 pub mod numeric;
+pub mod optimizer;
 mod parser;
 mod printer;
 pub mod profiler;
@@ -997,16 +1000,14 @@ impl LegalDslParser {
         // Check for wildcard import: path.*
         if is_ident && matches!(iter.peek(), Some(Token::Dot)) {
             iter.next(); // consume .
-            match iter.peek() {
-                Some(Token::Star) => {
-                    iter.next(); // consume *
-                    return Ok(ast::ImportNode {
-                        path: path_part,
-                        alias: None,
-                        kind: crate::module_system::ImportKind::Wildcard,
-                    });
-                }
-                _ => {} // Not a wildcard, continue as simple import
+            // Not a wildcard, continue as simple import
+            if let Some(Token::Star) = iter.peek() {
+                iter.next(); // consume *
+                return Ok(ast::ImportNode {
+                    path: path_part,
+                    alias: None,
+                    kind: crate::module_system::ImportKind::Wildcard,
+                });
             }
         }
 

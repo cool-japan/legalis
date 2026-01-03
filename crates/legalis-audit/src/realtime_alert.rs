@@ -136,12 +136,15 @@ pub enum RuleCondition {
     Custom { description: String },
 }
 
+/// Alert history type.
+type AlertHistory = Arc<RwLock<Vec<(DateTime<Utc>, AlertType)>>>;
+
 /// Real-time alert manager.
 pub struct AlertManager {
     config: AlertConfig,
     rules: Arc<RwLock<Vec<AlertRule>>>,
     active_alerts: Arc<RwLock<Vec<Alert>>>,
-    alert_history: Arc<RwLock<Vec<(DateTime<Utc>, AlertType)>>>,
+    alert_history: AlertHistory,
 }
 
 impl AlertManager {
@@ -556,21 +559,22 @@ mod tests {
     fn test_get_active_alerts() {
         let manager = AlertManager::new();
 
+        // Use OverrideRateThreshold instead of VolumeThreshold
+        // since VolumeThreshold requires time spread between records
         let rule = AlertRule {
             id: "test-rule".to_string(),
             name: "Test Rule".to_string(),
             enabled: true,
-            alert_type: AlertType::VolumeAnomaly,
+            alert_type: AlertType::HighOverrideRate,
             severity: AlertSeverity::Medium,
-            condition: RuleCondition::VolumeThreshold {
-                decisions_per_minute: 5.0,
-            },
+            condition: RuleCondition::OverrideRateThreshold { threshold: 20.0 },
             channels: vec![AlertChannel::Log],
         };
 
         manager.add_rule(rule);
 
-        let records: Vec<_> = (0..100).map(|i| create_test_record(0, false)).collect();
+        // Create records with >20% override rate (50 overrides out of 100 = 50%)
+        let records: Vec<_> = (0..100).map(|i| create_test_record(0, i < 50)).collect();
 
         manager.evaluate(&records).unwrap();
 
