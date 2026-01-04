@@ -822,7 +822,7 @@ impl StatuteHarmonizer {
                 for statute_b in b {
                     // Simple conflict detection: same title but different effect types
                     if statute_a.title.to_lowercase().contains(
-                        &statute_b
+                        statute_b
                             .title
                             .to_lowercase()
                             .split_whitespace()

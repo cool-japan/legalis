@@ -186,6 +186,12 @@ impl EnhancedConverter {
             | LegalFormat::RegML
             | LegalFormat::MiFID2
             | LegalFormat::Basel3 => false,
+            // Enterprise formats - JSON-based, no normalization
+            LegalFormat::SapLegal
+            | LegalFormat::SalesforceContract
+            | LegalFormat::DocuSign
+            | LegalFormat::MsWordLegal
+            | LegalFormat::PdfLegal => false,
         }
     }
 

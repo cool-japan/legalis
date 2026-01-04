@@ -23,3 +23,6 @@ Thumbs.db
 
 # Other
 Cargo.lock
+
+# Proto
+crates/legalis-api/proto/

@@ -16193,6 +16193,720 @@ impl Default for CrossJurisdictionalComparison {
     }
 }
 
+// ============================================================================
+// Semantic Legal Network (v0.4.1)
+// ============================================================================
+
+/// Represents a legal concept in the semantic network.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LegalConcept {
+    /// Unique identifier
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Concept description
+    pub description: String,
+    /// Category (e.g., "rights", "obligations", "procedures")
+    pub category: String,
+    /// Related statute IDs
+    pub statute_ids: Vec<String>,
+    /// Additional metadata
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+impl LegalConcept {
+    /// Creates a new legal concept.
+    pub fn new(id: &str, name: &str, description: &str, category: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            category: category.to_string(),
+            statute_ids: Vec::new(),
+            metadata: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Adds a statute reference.
+    pub fn add_statute(&mut self, statute_id: &str) {
+        self.statute_ids.push(statute_id.to_string());
+    }
+
+    /// Adds metadata.
+    pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
+        self.metadata.insert(key.to_string(), value.to_string());
+        self
+    }
+}
+
+/// Types of relationships between legal concepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ConceptRelationType {
+    /// Concept A is a type of Concept B (inheritance)
+    IsA,
+    /// Concept A is part of Concept B (composition)
+    PartOf,
+    /// Concept A requires Concept B (dependency)
+    Requires,
+    /// Concept A conflicts with Concept B (mutual exclusion)
+    ConflictsWith,
+    /// Concept A enables Concept B (enablement)
+    Enables,
+    /// Concept A is related to Concept B (general association)
+    RelatedTo,
+    /// Concept A supersedes Concept B (replacement)
+    Supersedes,
+    /// Concept A implements Concept B (implementation)
+    Implements,
+}
+
+impl ConceptRelationType {
+    /// Returns a human-readable label for the relation type.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::IsA => "is a",
+            Self::PartOf => "part of",
+            Self::Requires => "requires",
+            Self::ConflictsWith => "conflicts with",
+            Self::Enables => "enables",
+            Self::RelatedTo => "related to",
+            Self::Supersedes => "supersedes",
+            Self::Implements => "implements",
+        }
+    }
+
+    /// Returns a color for visualizing the relation type.
+    pub fn color(&self) -> &'static str {
+        match self {
+            Self::IsA => "#3498db",           // Blue - inheritance
+            Self::PartOf => "#2ecc71",        // Green - composition
+            Self::Requires => "#e74c3c",      // Red - dependency
+            Self::ConflictsWith => "#c0392b", // Dark red - conflict
+            Self::Enables => "#f39c12",       // Orange - enablement
+            Self::RelatedTo => "#95a5a6",     // Gray - general
+            Self::Supersedes => "#9b59b6",    // Purple - replacement
+            Self::Implements => "#16a085",    // Teal - implementation
+        }
+    }
+}
+
+/// Relationship between two legal concepts.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConceptRelationship {
+    /// Source concept ID
+    pub from_id: String,
+    /// Target concept ID
+    pub to_id: String,
+    /// Type of relationship
+    pub relation_type: ConceptRelationType,
+    /// Optional description
+    pub description: String,
+    /// Strength/confidence (0.0 to 1.0)
+    pub strength: f64,
+}
+
+impl ConceptRelationship {
+    /// Creates a new concept relationship.
+    pub fn new(from_id: &str, to_id: &str, relation_type: ConceptRelationType) -> Self {
+        Self {
+            from_id: from_id.to_string(),
+            to_id: to_id.to_string(),
+            relation_type,
+            description: String::new(),
+            strength: 1.0,
+        }
+    }
+
+    /// Sets the description.
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.description = description.to_string();
+        self
+    }
+
+    /// Sets the strength (clamped to 0.0-1.0).
+    pub fn with_strength(mut self, strength: f64) -> Self {
+        self.strength = strength.clamp(0.0, 1.0);
+        self
+    }
+}
+
+/// Graph of legal concepts and their relationships.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ConceptRelationshipGraph {
+    /// Title of the graph
+    pub title: String,
+    /// Legal concepts in the graph
+    pub concepts: Vec<LegalConcept>,
+    /// Relationships between concepts
+    pub relationships: Vec<ConceptRelationship>,
+    /// Theme for visualization
+    pub theme: Theme,
+}
+
+impl ConceptRelationshipGraph {
+    /// Creates a new concept relationship graph.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            concepts: Vec::new(),
+            relationships: Vec::new(),
+            theme: Theme::light(),
+        }
+    }
+
+    /// Adds a concept to the graph.
+    pub fn add_concept(&mut self, concept: LegalConcept) {
+        self.concepts.push(concept);
+    }
+
+    /// Adds a relationship to the graph.
+    pub fn add_relationship(&mut self, relationship: ConceptRelationship) {
+        self.relationships.push(relationship);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML visualization using D3.js force-directed graph.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 0; padding: 0; overflow: hidden; }\n");
+        html.push_str(&format!(
+            "        body {{ background-color: {}; }}\n",
+            self.theme.background_color
+        ));
+        html.push_str("        #graph { width: 100vw; height: 100vh; }\n");
+        html.push_str("        .node { cursor: pointer; }\n");
+        html.push_str("        .node circle { stroke: #fff; stroke-width: 2px; }\n");
+        html.push_str("        .node text { font: 12px sans-serif; pointer-events: none; }\n");
+        html.push_str(&format!(
+            "        .node text {{ fill: {}; }}\n",
+            self.theme.text_color
+        ));
+        html.push_str("        .link { stroke-opacity: 0.6; fill: none; }\n");
+        html.push_str("        .link-label { font: 10px sans-serif; pointer-events: none; }\n");
+        html.push_str(&format!(
+            "        .link-label {{ fill: {}; }}\n",
+            self.theme.text_color
+        ));
+        html.push_str("        .tooltip { position: absolute; padding: 8px; background: rgba(0,0,0,0.8); color: #fff; border-radius: 4px; pointer-events: none; opacity: 0; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str("    <div id=\"graph\"></div>\n");
+        html.push_str("    <div class=\"tooltip\" id=\"tooltip\"></div>\n");
+        html.push_str("    <script>\n");
+
+        // Generate nodes data
+        html.push_str("        const nodes = [\n");
+        for concept in &self.concepts {
+            html.push_str(&format!(
+                "            {{ id: '{}', name: '{}', category: '{}', description: '{}' }},\n",
+                concept.id, concept.name, concept.category, concept.description
+            ));
+        }
+        html.push_str("        ];\n\n");
+
+        // Generate links data
+        html.push_str("        const links = [\n");
+        for rel in &self.relationships {
+            html.push_str(&format!(
+                "            {{ source: '{}', target: '{}', type: '{}', color: '{}', strength: {} }},\n",
+                rel.from_id, rel.to_id, rel.relation_type.label(), rel.relation_type.color(), rel.strength
+            ));
+        }
+        html.push_str("        ];\n\n");
+
+        // D3.js visualization code
+        html.push_str("        const width = window.innerWidth;\n");
+        html.push_str("        const height = window.innerHeight;\n\n");
+        html.push_str("        const svg = d3.select('#graph').append('svg')\n");
+        html.push_str("            .attr('width', width)\n");
+        html.push_str("            .attr('height', height);\n\n");
+        html.push_str("        const simulation = d3.forceSimulation(nodes)\n");
+        html.push_str(
+            "            .force('link', d3.forceLink(links).id(d => d.id).distance(150))\n",
+        );
+        html.push_str("            .force('charge', d3.forceManyBody().strength(-300))\n");
+        html.push_str("            .force('center', d3.forceCenter(width / 2, height / 2));\n\n");
+        html.push_str("        const link = svg.append('g')\n");
+        html.push_str("            .selectAll('line')\n");
+        html.push_str("            .data(links)\n");
+        html.push_str("            .enter().append('line')\n");
+        html.push_str("            .attr('class', 'link')\n");
+        html.push_str("            .attr('stroke', d => d.color)\n");
+        html.push_str("            .attr('stroke-width', d => d.strength * 2);\n\n");
+        html.push_str("        const linkLabel = svg.append('g')\n");
+        html.push_str("            .selectAll('text')\n");
+        html.push_str("            .data(links)\n");
+        html.push_str("            .enter().append('text')\n");
+        html.push_str("            .attr('class', 'link-label')\n");
+        html.push_str("            .text(d => d.type);\n\n");
+        html.push_str("        const node = svg.append('g')\n");
+        html.push_str("            .selectAll('g')\n");
+        html.push_str("            .data(nodes)\n");
+        html.push_str("            .enter().append('g')\n");
+        html.push_str("            .attr('class', 'node')\n");
+        html.push_str("            .call(d3.drag()\n");
+        html.push_str("                .on('start', dragstarted)\n");
+        html.push_str("                .on('drag', dragged)\n");
+        html.push_str("                .on('end', dragended));\n\n");
+        html.push_str("        node.append('circle')\n");
+        html.push_str("            .attr('r', 10)\n");
+        html.push_str("            .attr('fill', '#3498db');\n\n");
+        html.push_str("        node.append('text')\n");
+        html.push_str("            .attr('dx', 12)\n");
+        html.push_str("            .attr('dy', '.35em')\n");
+        html.push_str("            .text(d => d.name);\n\n");
+        html.push_str("        const tooltip = d3.select('#tooltip');\n");
+        html.push_str("        node.on('mouseover', function(event, d) {\n");
+        html.push_str("            tooltip.transition().duration(200).style('opacity', 1);\n");
+        html.push_str("            tooltip.html(`<strong>${d.name}</strong><br/>${d.category}<br/>${d.description}`)\n");
+        html.push_str("                .style('left', (event.pageX + 10) + 'px')\n");
+        html.push_str("                .style('top', (event.pageY - 10) + 'px');\n");
+        html.push_str("        }).on('mouseout', function() {\n");
+        html.push_str("            tooltip.transition().duration(500).style('opacity', 0);\n");
+        html.push_str("        });\n\n");
+        html.push_str("        simulation.on('tick', () => {\n");
+        html.push_str("            link.attr('x1', d => d.source.x)\n");
+        html.push_str("                .attr('y1', d => d.source.y)\n");
+        html.push_str("                .attr('x2', d => d.target.x)\n");
+        html.push_str("                .attr('y2', d => d.target.y);\n");
+        html.push_str("            linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)\n");
+        html.push_str("                .attr('y', d => (d.source.y + d.target.y) / 2);\n");
+        html.push_str("            node.attr('transform', d => `translate(${d.x},${d.y})`);\n");
+        html.push_str("        });\n\n");
+        html.push_str("        function dragstarted(event) {\n");
+        html.push_str("            if (!event.active) simulation.alphaTarget(0.3).restart();\n");
+        html.push_str("            event.subject.fx = event.subject.x;\n");
+        html.push_str("            event.subject.fy = event.subject.y;\n");
+        html.push_str("        }\n");
+        html.push_str("        function dragged(event) {\n");
+        html.push_str("            event.subject.fx = event.x;\n");
+        html.push_str("            event.subject.fy = event.y;\n");
+        html.push_str("        }\n");
+        html.push_str("        function dragended(event) {\n");
+        html.push_str("            if (!event.active) simulation.alphaTarget(0);\n");
+        html.push_str("            event.subject.fx = null;\n");
+        html.push_str("            event.subject.fy = null;\n");
+        html.push_str("        }\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    /// Generates Mermaid diagram format.
+    pub fn to_mermaid(&self) -> String {
+        let mut diagram = String::new();
+        diagram.push_str("graph TD\n");
+
+        // Add nodes
+        for concept in &self.concepts {
+            diagram.push_str(&format!("    {}[\"{}\"]\n", concept.id, concept.name));
+        }
+
+        // Add relationships
+        for rel in &self.relationships {
+            diagram.push_str(&format!(
+                "    {} -->|{}| {}\n",
+                rel.from_id,
+                rel.relation_type.label(),
+                rel.to_id
+            ));
+        }
+
+        diagram
+    }
+}
+
+/// Maps statutes to legal concepts.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatuteConceptMapping {
+    /// Statute ID
+    pub statute_id: String,
+    /// Statute name
+    pub statute_name: String,
+    /// Mapped concept IDs
+    pub concept_ids: Vec<String>,
+    /// Confidence scores for each mapping (0.0 to 1.0)
+    pub confidence_scores: std::collections::HashMap<String, f64>,
+}
+
+impl StatuteConceptMapping {
+    /// Creates a new statute-to-concept mapping.
+    pub fn new(statute_id: &str, statute_name: &str) -> Self {
+        Self {
+            statute_id: statute_id.to_string(),
+            statute_name: statute_name.to_string(),
+            concept_ids: Vec::new(),
+            confidence_scores: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Adds a concept mapping with confidence score.
+    pub fn add_concept(&mut self, concept_id: &str, confidence: f64) {
+        self.concept_ids.push(concept_id.to_string());
+        self.confidence_scores
+            .insert(concept_id.to_string(), confidence.clamp(0.0, 1.0));
+    }
+
+    /// Gets the confidence score for a concept.
+    pub fn confidence(&self, concept_id: &str) -> f64 {
+        self.confidence_scores
+            .get(concept_id)
+            .copied()
+            .unwrap_or(0.0)
+    }
+}
+
+/// Visualizes legal ontologies and taxonomies.
+#[derive(Debug, Clone)]
+pub struct OntologyBasedVisualizer {
+    /// Theme for visualization
+    pub theme: Theme,
+}
+
+impl OntologyBasedVisualizer {
+    /// Creates a new ontology-based visualizer.
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML visualization of a concept graph as an ontology.
+    pub fn to_html(&self, graph: &ConceptRelationshipGraph) -> String {
+        // Delegate to the graph's HTML generation with theme override
+        let mut graph_clone = graph.clone();
+        graph_clone.theme = self.theme.clone();
+
+        let mut html = graph_clone.to_html();
+
+        // Add ontology-specific styling
+        html = html.replace(
+            "</style>",
+            "        .ontology-layer { opacity: 0.9; }\n        .ontology-root { font-weight: bold; }\n    </style>"
+        );
+
+        html
+    }
+
+    /// Generates ontology tree visualization in HTML.
+    pub fn to_tree_html(&self, graph: &ConceptRelationshipGraph) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!(
+            "    <title>{} - Ontology Tree</title>\n",
+            graph.title
+        ));
+        html.push_str("    <style>\n");
+        html.push_str("        body { margin: 20px; font-family: Arial, sans-serif; }\n");
+        html.push_str(&format!(
+            "        body {{ background-color: {}; color: {}; }}\n",
+            self.theme.background_color, self.theme.text_color
+        ));
+        html.push_str("        .tree { list-style: none; padding-left: 20px; }\n");
+        html.push_str(
+            "        .tree-node { margin: 5px 0; padding: 5px; border-left: 2px solid #ccc; }\n",
+        );
+        html.push_str("        .tree-node:hover { background-color: rgba(52, 152, 219, 0.1); }\n");
+        html.push_str("        .concept-name { font-weight: bold; color: #3498db; }\n");
+        html.push_str("        .concept-category { color: #7f8c8d; font-size: 0.9em; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str(&format!("    <h1>{}</h1>\n", graph.title));
+        html.push_str("    <ul class=\"tree\">\n");
+
+        // Build tree structure (simplified - shows all concepts)
+        for concept in &graph.concepts {
+            html.push_str("        <li class=\"tree-node\">\n");
+            html.push_str(&format!(
+                "            <span class=\"concept-name\">{}</span>\n",
+                concept.name
+            ));
+            html.push_str(&format!(
+                "            <span class=\"concept-category\"> [{}]</span>\n",
+                concept.category
+            ));
+            html.push_str(&format!("            <div>{}</div>\n", concept.description));
+            html.push_str("        </li>\n");
+        }
+
+        html.push_str("    </ul>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+}
+
+impl Default for OntologyBasedVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Highlights semantic search results in visualizations.
+#[derive(Debug, Clone)]
+pub struct SemanticSearchHighlighter {
+    /// Search query
+    pub query: String,
+    /// Matching concept IDs
+    pub matches: Vec<String>,
+    /// Relevance scores (0.0 to 1.0)
+    pub relevance_scores: std::collections::HashMap<String, f64>,
+    /// Highlight color
+    pub highlight_color: String,
+}
+
+impl SemanticSearchHighlighter {
+    /// Creates a new semantic search highlighter.
+    pub fn new(query: &str) -> Self {
+        Self {
+            query: query.to_string(),
+            matches: Vec::new(),
+            relevance_scores: std::collections::HashMap::new(),
+            highlight_color: "#ffeb3b".to_string(),
+        }
+    }
+
+    /// Performs semantic search on a concept graph.
+    pub fn search(&mut self, graph: &ConceptRelationshipGraph) {
+        self.matches.clear();
+        self.relevance_scores.clear();
+
+        let query_lower = self.query.to_lowercase();
+
+        for concept in &graph.concepts {
+            let name_lower = concept.name.to_lowercase();
+            let desc_lower = concept.description.to_lowercase();
+            let cat_lower = concept.category.to_lowercase();
+
+            // Simple relevance scoring
+            let mut score: f64 = 0.0;
+
+            if name_lower.contains(&query_lower) {
+                score += 1.0;
+            }
+            if desc_lower.contains(&query_lower) {
+                score += 0.5;
+            }
+            if cat_lower.contains(&query_lower) {
+                score += 0.3;
+            }
+
+            if score > 0.0 {
+                self.matches.push(concept.id.clone());
+                self.relevance_scores
+                    .insert(concept.id.clone(), score.min(1.0));
+            }
+        }
+    }
+
+    /// Sets the highlight color.
+    pub fn with_color(mut self, color: &str) -> Self {
+        self.highlight_color = color.to_string();
+        self
+    }
+
+    /// Generates highlighted HTML visualization.
+    pub fn to_highlighted_html(&self, graph: &ConceptRelationshipGraph) -> String {
+        let base_html = graph.to_html();
+
+        // Inject highlighting JavaScript
+        let highlight_script = format!(
+            r#"
+        <script>
+            const highlights = {};
+            setTimeout(() => {{
+                d3.selectAll('.node circle')
+                    .attr('fill', d => highlights[d.id] ? '{}' : '#3498db')
+                    .attr('r', d => highlights[d.id] ? 15 : 10);
+            }}, 500);
+        </script>
+        "#,
+            serde_json::to_string(&self.matches).unwrap(),
+            self.highlight_color
+        );
+
+        base_html.replace("</body>", &format!("{}</body>", highlight_script))
+    }
+}
+
+/// Visualizes concept hierarchies as trees.
+#[derive(Debug, Clone)]
+pub struct ConceptHierarchyTree {
+    /// Root concept
+    pub root: LegalConcept,
+    /// Child hierarchies
+    pub children: Vec<ConceptHierarchyTree>,
+    /// Theme for visualization
+    pub theme: Theme,
+}
+
+impl ConceptHierarchyTree {
+    /// Creates a new concept hierarchy tree.
+    pub fn new(root: LegalConcept) -> Self {
+        Self {
+            root,
+            children: Vec::new(),
+            theme: Theme::light(),
+        }
+    }
+
+    /// Adds a child concept.
+    pub fn add_child(&mut self, child: ConceptHierarchyTree) {
+        self.children.push(child);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme.clone();
+        for child in &mut self.children {
+            child.theme = theme.clone();
+        }
+        self
+    }
+
+    /// Builds a hierarchy from a concept graph (based on IsA relationships).
+    pub fn from_graph(graph: &ConceptRelationshipGraph, root_id: &str) -> Option<Self> {
+        let root_concept = graph.concepts.iter().find(|c| c.id == root_id)?;
+
+        let mut tree = Self::new(root_concept.clone());
+
+        // Find all IsA relationships where this concept is the parent
+        for rel in &graph.relationships {
+            if rel.to_id == root_id && rel.relation_type == ConceptRelationType::IsA {
+                if let Some(child_tree) = Self::from_graph(graph, &rel.from_id) {
+                    tree.add_child(child_tree);
+                }
+            }
+        }
+
+        Some(tree)
+    }
+
+    /// Generates HTML tree visualization.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!(
+            "    <title>Concept Hierarchy: {}</title>\n",
+            self.root.name
+        ));
+        html.push_str("    <style>\n");
+        html.push_str(
+            "        body { margin: 20px; font-family: 'Segoe UI', Arial, sans-serif; }\n",
+        );
+        html.push_str(&format!(
+            "        body {{ background-color: {}; color: {}; }}\n",
+            self.theme.background_color, self.theme.text_color
+        ));
+        html.push_str("        .hierarchy { list-style: none; padding-left: 30px; }\n");
+        html.push_str("        .hierarchy > li { margin: 10px 0; }\n");
+        html.push_str("        .concept-box { \n");
+        html.push_str("            padding: 10px; \n");
+        html.push_str("            border: 2px solid #3498db; \n");
+        html.push_str("            border-radius: 5px; \n");
+        html.push_str("            display: inline-block; \n");
+        html.push_str("            margin: 5px 0;\n");
+        html.push_str("            background-color: rgba(52, 152, 219, 0.1);\n");
+        html.push_str("        }\n");
+        html.push_str(
+            "        .concept-name { font-weight: bold; font-size: 1.1em; color: #2980b9; }\n",
+        );
+        html.push_str(
+            "        .concept-category { color: #7f8c8d; font-size: 0.9em; margin-left: 10px; }\n",
+        );
+        html.push_str("        .concept-description { margin-top: 5px; font-size: 0.95em; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str("    <h1>Concept Hierarchy</h1>\n");
+        html.push_str("    <ul class=\"hierarchy\">\n");
+
+        self.render_node(&mut html);
+
+        html.push_str("    </ul>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    #[allow(dead_code)]
+    fn render_node(&self, html: &mut String) {
+        html.push_str("        <li>\n");
+        html.push_str("            <div class=\"concept-box\">\n");
+        html.push_str(&format!(
+            "                <span class=\"concept-name\">{}</span>\n",
+            self.root.name
+        ));
+        html.push_str(&format!(
+            "                <span class=\"concept-category\">[{}]</span>\n",
+            self.root.category
+        ));
+        html.push_str(&format!(
+            "                <div class=\"concept-description\">{}</div>\n",
+            self.root.description
+        ));
+        html.push_str("            </div>\n");
+
+        if !self.children.is_empty() {
+            html.push_str("            <ul class=\"hierarchy\">\n");
+            for child in &self.children {
+                child.render_node(html);
+            }
+            html.push_str("            </ul>\n");
+        }
+
+        html.push_str("        </li>\n");
+    }
+
+    /// Generates Mermaid diagram format.
+    pub fn to_mermaid(&self) -> String {
+        let mut diagram = String::new();
+        diagram.push_str("graph TD\n");
+        self.render_mermaid_node(&mut diagram);
+        diagram
+    }
+
+    #[allow(dead_code)]
+    fn render_mermaid_node(&self, diagram: &mut String) {
+        diagram.push_str(&format!("    {}[\"{}\"]\n", self.root.id, self.root.name));
+
+        for child in &self.children {
+            diagram.push_str(&format!("    {} --> {}\n", self.root.id, child.root.id));
+            child.render_mermaid_node(diagram);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -21399,5 +22113,410 @@ mod tests {
         assert!(json.contains("18"));
         assert!(json.contains("20"));
         assert!(json.contains("0.7"));
+    }
+
+    // ========================================================================
+    // Tests for Semantic Legal Network (v0.4.1)
+    // ========================================================================
+
+    #[test]
+    fn test_legal_concept_creation() {
+        let concept = LegalConcept::new("c1", "Privacy Right", "Right to privacy", "rights");
+        assert_eq!(concept.id, "c1");
+        assert_eq!(concept.name, "Privacy Right");
+        assert_eq!(concept.description, "Right to privacy");
+        assert_eq!(concept.category, "rights");
+        assert!(concept.statute_ids.is_empty());
+        assert!(concept.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_legal_concept_add_statute() {
+        let mut concept = LegalConcept::new("c1", "Privacy", "Privacy rights", "rights");
+        concept.add_statute("s1");
+        concept.add_statute("s2");
+        assert_eq!(concept.statute_ids.len(), 2);
+        assert_eq!(concept.statute_ids[0], "s1");
+        assert_eq!(concept.statute_ids[1], "s2");
+    }
+
+    #[test]
+    fn test_legal_concept_with_metadata() {
+        let concept = LegalConcept::new("c1", "Privacy", "Privacy rights", "rights")
+            .with_metadata("jurisdiction", "US")
+            .with_metadata("enacted", "2020");
+        assert_eq!(concept.metadata.len(), 2);
+        assert_eq!(
+            concept.metadata.get("jurisdiction"),
+            Some(&"US".to_string())
+        );
+        assert_eq!(concept.metadata.get("enacted"), Some(&"2020".to_string()));
+    }
+
+    #[test]
+    fn test_concept_relation_type_label() {
+        assert_eq!(ConceptRelationType::IsA.label(), "is a");
+        assert_eq!(ConceptRelationType::PartOf.label(), "part of");
+        assert_eq!(ConceptRelationType::Requires.label(), "requires");
+        assert_eq!(ConceptRelationType::ConflictsWith.label(), "conflicts with");
+        assert_eq!(ConceptRelationType::Enables.label(), "enables");
+        assert_eq!(ConceptRelationType::RelatedTo.label(), "related to");
+        assert_eq!(ConceptRelationType::Supersedes.label(), "supersedes");
+        assert_eq!(ConceptRelationType::Implements.label(), "implements");
+    }
+
+    #[test]
+    fn test_concept_relation_type_color() {
+        assert_eq!(ConceptRelationType::IsA.color(), "#3498db");
+        assert_eq!(ConceptRelationType::PartOf.color(), "#2ecc71");
+        assert_eq!(ConceptRelationType::Requires.color(), "#e74c3c");
+        assert_eq!(ConceptRelationType::ConflictsWith.color(), "#c0392b");
+    }
+
+    #[test]
+    fn test_concept_relationship_creation() {
+        let rel = ConceptRelationship::new("c1", "c2", ConceptRelationType::IsA);
+        assert_eq!(rel.from_id, "c1");
+        assert_eq!(rel.to_id, "c2");
+        assert_eq!(rel.relation_type, ConceptRelationType::IsA);
+        assert_eq!(rel.strength, 1.0);
+        assert!(rel.description.is_empty());
+    }
+
+    #[test]
+    fn test_concept_relationship_with_description() {
+        let rel = ConceptRelationship::new("c1", "c2", ConceptRelationType::Requires)
+            .with_description("Requires for validity");
+        assert_eq!(rel.description, "Requires for validity");
+    }
+
+    #[test]
+    fn test_concept_relationship_with_strength() {
+        let rel =
+            ConceptRelationship::new("c1", "c2", ConceptRelationType::RelatedTo).with_strength(0.7);
+        assert_eq!(rel.strength, 0.7);
+
+        // Test clamping
+        let rel_high =
+            ConceptRelationship::new("c1", "c2", ConceptRelationType::IsA).with_strength(1.5);
+        assert_eq!(rel_high.strength, 1.0);
+
+        let rel_low =
+            ConceptRelationship::new("c1", "c2", ConceptRelationType::IsA).with_strength(-0.5);
+        assert_eq!(rel_low.strength, 0.0);
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_creation() {
+        let graph = ConceptRelationshipGraph::new("Legal Concepts");
+        assert_eq!(graph.title, "Legal Concepts");
+        assert!(graph.concepts.is_empty());
+        assert!(graph.relationships.is_empty());
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_add_concept() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let concept = LegalConcept::new("c1", "Privacy", "Privacy rights", "rights");
+        graph.add_concept(concept);
+        assert_eq!(graph.concepts.len(), 1);
+        assert_eq!(graph.concepts[0].id, "c1");
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_add_relationship() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let rel = ConceptRelationship::new("c1", "c2", ConceptRelationType::IsA);
+        graph.add_relationship(rel);
+        assert_eq!(graph.relationships.len(), 1);
+        assert_eq!(graph.relationships[0].from_id, "c1");
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_html() {
+        let mut graph = ConceptRelationshipGraph::new("Legal Network");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy rights", "rights");
+        let c2 = LegalConcept::new("c2", "Data Protection", "Data protection laws", "rights");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_relationship(ConceptRelationship::new(
+            "c1",
+            "c2",
+            ConceptRelationType::RelatedTo,
+        ));
+
+        let html = graph.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Legal Network"));
+        assert!(html.contains("Privacy"));
+        assert!(html.contains("Data Protection"));
+        assert!(html.contains("d3js.org"));
+        assert!(html.contains("forceSimulation"));
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_mermaid() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy rights", "rights");
+        let c2 = LegalConcept::new("c2", "Security", "Security measures", "obligations");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_relationship(ConceptRelationship::new(
+            "c1",
+            "c2",
+            ConceptRelationType::Requires,
+        ));
+
+        let mermaid = graph.to_mermaid();
+        assert!(mermaid.contains("graph TD"));
+        assert!(mermaid.contains("c1[\"Privacy\"]"));
+        assert!(mermaid.contains("c2[\"Security\"]"));
+        assert!(mermaid.contains("c1 -->|requires| c2"));
+    }
+
+    #[test]
+    fn test_statute_concept_mapping_creation() {
+        let mapping = StatuteConceptMapping::new("s1", "GDPR Article 5");
+        assert_eq!(mapping.statute_id, "s1");
+        assert_eq!(mapping.statute_name, "GDPR Article 5");
+        assert!(mapping.concept_ids.is_empty());
+        assert!(mapping.confidence_scores.is_empty());
+    }
+
+    #[test]
+    fn test_statute_concept_mapping_add_concept() {
+        let mut mapping = StatuteConceptMapping::new("s1", "Privacy Act");
+        mapping.add_concept("c1", 0.9);
+        mapping.add_concept("c2", 0.7);
+        assert_eq!(mapping.concept_ids.len(), 2);
+        assert_eq!(mapping.concept_ids[0], "c1");
+        assert_eq!(mapping.confidence("c1"), 0.9);
+        assert_eq!(mapping.confidence("c2"), 0.7);
+        assert_eq!(mapping.confidence("c3"), 0.0);
+    }
+
+    #[test]
+    fn test_statute_concept_mapping_confidence_clamping() {
+        let mut mapping = StatuteConceptMapping::new("s1", "Test");
+        mapping.add_concept("c1", 1.5); // Should clamp to 1.0
+        mapping.add_concept("c2", -0.5); // Should clamp to 0.0
+        assert_eq!(mapping.confidence("c1"), 1.0);
+        assert_eq!(mapping.confidence("c2"), 0.0);
+    }
+
+    #[test]
+    fn test_ontology_based_visualizer_creation() {
+        let viz = OntologyBasedVisualizer::new();
+        assert_eq!(viz.theme.background_color, "#ffffff");
+    }
+
+    #[test]
+    fn test_ontology_based_visualizer_with_theme() {
+        let viz = OntologyBasedVisualizer::new().with_theme(Theme::dark());
+        assert_eq!(viz.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_ontology_based_visualizer_html() {
+        let viz = OntologyBasedVisualizer::new();
+        let mut graph = ConceptRelationshipGraph::new("Ontology");
+        let c1 = LegalConcept::new("c1", "Legal Right", "A legal right", "rights");
+        graph.add_concept(c1);
+
+        let html = viz.to_html(&graph);
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Ontology"));
+        assert!(html.contains("ontology-layer"));
+        assert!(html.contains("ontology-root"));
+    }
+
+    #[test]
+    fn test_ontology_based_visualizer_tree_html() {
+        let viz = OntologyBasedVisualizer::new();
+        let mut graph = ConceptRelationshipGraph::new("Test Ontology");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        graph.add_concept(c1);
+
+        let html = viz.to_tree_html(&graph);
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Test Ontology"));
+        assert!(html.contains("Privacy"));
+        assert!(html.contains("tree-node"));
+    }
+
+    #[test]
+    fn test_semantic_search_highlighter_creation() {
+        let highlighter = SemanticSearchHighlighter::new("privacy");
+        assert_eq!(highlighter.query, "privacy");
+        assert!(highlighter.matches.is_empty());
+        assert_eq!(highlighter.highlight_color, "#ffeb3b");
+    }
+
+    #[test]
+    fn test_semantic_search_highlighter_with_color() {
+        let highlighter = SemanticSearchHighlighter::new("test").with_color("#ff0000");
+        assert_eq!(highlighter.highlight_color, "#ff0000");
+    }
+
+    #[test]
+    fn test_semantic_search_highlighter_search() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy Right", "Protects privacy", "rights");
+        let c2 = LegalConcept::new("c2", "Data Security", "Ensures security", "obligations");
+        let c3 = LegalConcept::new("c3", "Privacy Policy", "Privacy guidelines", "procedures");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_concept(c3);
+
+        let mut highlighter = SemanticSearchHighlighter::new("privacy");
+        highlighter.search(&graph);
+
+        assert_eq!(highlighter.matches.len(), 2); // c1 and c3
+        assert!(highlighter.matches.contains(&"c1".to_string()));
+        assert!(highlighter.matches.contains(&"c3".to_string()));
+        assert!(!highlighter.matches.contains(&"c2".to_string()));
+    }
+
+    #[test]
+    fn test_semantic_search_highlighter_relevance_scoring() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy", "About privacy", "rights");
+        graph.add_concept(c1);
+
+        let mut highlighter = SemanticSearchHighlighter::new("privacy");
+        highlighter.search(&graph);
+
+        // Should match in name (1.0) and description (0.5) = 1.5, clamped to 1.0
+        assert_eq!(highlighter.relevance_scores.get("c1"), Some(&1.0));
+    }
+
+    #[test]
+    fn test_semantic_search_highlighter_highlighted_html() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        graph.add_concept(c1);
+
+        let mut highlighter = SemanticSearchHighlighter::new("privacy");
+        highlighter.search(&graph);
+
+        let html = highlighter.to_highlighted_html(&graph);
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("highlights"));
+        assert!(html.contains("#ffeb3b")); // Default highlight color
+    }
+
+    #[test]
+    fn test_concept_hierarchy_tree_creation() {
+        let concept = LegalConcept::new("c1", "Legal Right", "A legal right", "rights");
+        let tree = ConceptHierarchyTree::new(concept);
+        assert_eq!(tree.root.id, "c1");
+        assert_eq!(tree.root.name, "Legal Right");
+        assert!(tree.children.is_empty());
+    }
+
+    #[test]
+    fn test_concept_hierarchy_tree_add_child() {
+        let root = LegalConcept::new("c1", "Right", "General right", "rights");
+        let mut tree = ConceptHierarchyTree::new(root);
+
+        let child_concept = LegalConcept::new("c2", "Privacy Right", "Privacy right", "rights");
+        let child_tree = ConceptHierarchyTree::new(child_concept);
+
+        tree.add_child(child_tree);
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].root.id, "c2");
+    }
+
+    #[test]
+    fn test_concept_hierarchy_tree_from_graph() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Right", "General right", "rights");
+        let c2 = LegalConcept::new("c2", "Privacy Right", "Privacy right", "rights");
+        let c3 = LegalConcept::new("c3", "Data Privacy", "Data privacy", "rights");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_concept(c3);
+
+        // c2 is a c1, c3 is a c2
+        graph.add_relationship(ConceptRelationship::new(
+            "c2",
+            "c1",
+            ConceptRelationType::IsA,
+        ));
+        graph.add_relationship(ConceptRelationship::new(
+            "c3",
+            "c2",
+            ConceptRelationType::IsA,
+        ));
+
+        let tree = ConceptHierarchyTree::from_graph(&graph, "c1").unwrap();
+        assert_eq!(tree.root.id, "c1");
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].root.id, "c2");
+        assert_eq!(tree.children[0].children.len(), 1);
+        assert_eq!(tree.children[0].children[0].root.id, "c3");
+    }
+
+    #[test]
+    fn test_concept_hierarchy_tree_html() {
+        let concept = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        let tree = ConceptHierarchyTree::new(concept);
+
+        let html = tree.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Concept Hierarchy"));
+        assert!(html.contains("Privacy"));
+        assert!(html.contains("concept-box"));
+        assert!(html.contains("concept-name"));
+    }
+
+    #[test]
+    fn test_concept_hierarchy_tree_mermaid() {
+        let root = LegalConcept::new("c1", "Right", "General right", "rights");
+        let mut tree = ConceptHierarchyTree::new(root);
+
+        let child = LegalConcept::new("c2", "Privacy Right", "Privacy right", "rights");
+        let child_tree = ConceptHierarchyTree::new(child);
+        tree.add_child(child_tree);
+
+        let mermaid = tree.to_mermaid();
+        assert!(mermaid.contains("graph TD"));
+        assert!(mermaid.contains("c1[\"Right\"]"));
+        assert!(mermaid.contains("c2[\"Privacy Right\"]"));
+        assert!(mermaid.contains("c1 --> c2"));
+    }
+
+    #[test]
+    fn test_legal_concept_serialization() {
+        let concept = LegalConcept::new("c1", "Privacy", "Privacy right", "rights")
+            .with_metadata("jurisdiction", "US");
+
+        let json = serde_json::to_string(&concept).unwrap();
+        assert!(json.contains("c1"));
+        assert!(json.contains("Privacy"));
+        assert!(json.contains("rights"));
+        assert!(json.contains("jurisdiction"));
+    }
+
+    #[test]
+    fn test_concept_relationship_serialization() {
+        let rel = ConceptRelationship::new("c1", "c2", ConceptRelationType::IsA).with_strength(0.8);
+
+        let json = serde_json::to_string(&rel).unwrap();
+        assert!(json.contains("c1"));
+        assert!(json.contains("c2"));
+        assert!(json.contains("0.8"));
+    }
+
+    #[test]
+    fn test_concept_relationship_graph_serialization() {
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        graph.add_concept(c1);
+
+        let json = serde_json::to_string(&graph).unwrap();
+        assert!(json.contains("Test"));
+        assert!(json.contains("c1"));
+        assert!(json.contains("Privacy"));
     }
 }

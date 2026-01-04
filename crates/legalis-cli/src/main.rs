@@ -631,6 +631,113 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Ai { operation } => {
+            use legalis_cli::AiOperation;
+            match operation {
+                AiOperation::Parse { input } => {
+                    commands::handle_ai_parse(input)?;
+                }
+                AiOperation::Intent { query } => {
+                    commands::handle_ai_intent(query)?;
+                }
+                AiOperation::Assist { query } => {
+                    commands::handle_ai_help(query)?;
+                }
+                AiOperation::Suggest { previous } => {
+                    commands::handle_ai_suggest(previous.as_deref())?;
+                }
+                AiOperation::Complete { input } => {
+                    commands::handle_ai_complete(input)?;
+                }
+            }
+        }
+        Commands::Dashboard { vim_keys, no_mouse } => {
+            commands::handle_dashboard(*vim_keys, *no_mouse)?;
+        }
+        Commands::Workflow { operation } => {
+            use legalis_cli::WorkflowOperation;
+            match operation {
+                WorkflowOperation::Run {
+                    file,
+                    vars,
+                    dry_run,
+                    continue_on_error,
+                } => {
+                    commands::handle_workflow_run(file, vars, *dry_run, *continue_on_error)?;
+                }
+                WorkflowOperation::ListTemplates { verbose } => {
+                    commands::handle_workflow_list_templates(*verbose)?;
+                }
+                WorkflowOperation::New {
+                    template,
+                    output,
+                    vars,
+                } => {
+                    commands::handle_workflow_new(template, output, vars)?;
+                }
+                WorkflowOperation::Validate { file, verbose } => {
+                    commands::handle_workflow_validate(file, *verbose)?;
+                }
+                WorkflowOperation::Info { file } => {
+                    commands::handle_workflow_info(file)?;
+                }
+            }
+        }
+        Commands::Cloud { operation } => {
+            use legalis_cli::CloudOperation;
+            match operation {
+                CloudOperation::Status => {
+                    commands::handle_cloud_status()?;
+                }
+                CloudOperation::Aws {
+                    args,
+                    profile,
+                    region,
+                } => {
+                    commands::handle_cloud_aws(args, profile.as_deref(), region.as_deref())?;
+                }
+                CloudOperation::Azure { args, subscription } => {
+                    commands::handle_cloud_azure(args, subscription.as_deref())?;
+                }
+                CloudOperation::Gcp {
+                    args,
+                    project,
+                    zone,
+                } => {
+                    commands::handle_cloud_gcp(args, project.as_deref(), zone.as_deref())?;
+                }
+                CloudOperation::Provision {
+                    file,
+                    provider,
+                    dry_run,
+                } => {
+                    let cloud_provider = provider.clone().into();
+                    commands::handle_cloud_provision(file, &cloud_provider, *dry_run)?;
+                }
+                CloudOperation::List {
+                    provider,
+                    resource_type,
+                    profile,
+                    region,
+                    subscription,
+                    project,
+                } => {
+                    let cloud_provider = provider.clone().into();
+                    commands::handle_cloud_list(
+                        &cloud_provider,
+                        resource_type,
+                        profile.as_deref(),
+                        region.as_deref(),
+                        subscription.as_deref(),
+                        project.as_deref(),
+                    )?;
+                }
+                CloudOperation::Configure { provider, config } => {
+                    let cloud_provider = provider.clone().into();
+                    commands::handle_cloud_configure(&cloud_provider, config)?;
+                }
+            }
+        }
     }
 
     Ok(())

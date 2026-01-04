@@ -115,6 +115,20 @@
 //! - Market microstructure modeling (order books, market depth)
 //! - Behavioral economics (prospect theory, hyperbolic discounting, anchoring)
 //!
+//! ## Healthcare Simulation (v0.2.6)
+//! - Epidemiological models (SIR, SEIR)
+//! - Healthcare capacity simulation with facilities and resources
+//! - Vaccine distribution optimization with multiple strategies
+//! - Health policy impact analysis (lockdowns, mask mandates, social distancing)
+//! - Social determinants of health modeling
+//!
+//! ## Environmental Simulation (v0.2.7)
+//! - Climate impact modeling with IPCC scenarios
+//! - Natural disaster simulations (hurricanes, earthquakes, floods, wildfires, etc.)
+//! - Resource scarcity modeling (water, food, energy, minerals, land)
+//! - Environmental policy simulation (Paris Agreement, Net Zero, Green New Deal)
+//! - Carbon footprint tracking for individuals and populations
+//!
 //! ## Integration & API (2025-Q4)
 //! - Simulation-as-a-Service API with job queuing
 //! - Persistent result storage with file-based backend
@@ -143,10 +157,12 @@ mod domain_models;
 mod economic;
 mod economic_extensions;
 mod engine;
+mod environmental;
 mod error;
 mod event_driven;
 mod forecasting;
 mod gpu;
+mod healthcare;
 mod impact;
 mod incremental;
 mod metrics;
@@ -184,10 +200,12 @@ pub use domain_models::*;
 pub use economic::*;
 pub use economic_extensions::*;
 pub use engine::*;
+pub use environmental::*;
 pub use error::*;
 pub use event_driven::*;
 pub use forecasting::*;
 pub use gpu::*;
+pub use healthcare::*;
 pub use impact::*;
 pub use incremental::*;
 pub use metrics::*;

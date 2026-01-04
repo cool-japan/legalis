@@ -75,6 +75,11 @@ impl FormatCoverage {
             LegalFormat::RegML => Self::analyze_regml(),
             LegalFormat::MiFID2 => Self::analyze_mifid2(),
             LegalFormat::Basel3 => Self::analyze_basel3(),
+            LegalFormat::SapLegal => Self::analyze_saplegal(),
+            LegalFormat::SalesforceContract => Self::analyze_salesforce_contract(),
+            LegalFormat::DocuSign => Self::analyze_docusign(),
+            LegalFormat::MsWordLegal => Self::analyze_msword_legal(),
+            LegalFormat::PdfLegal => Self::analyze_pdf_legal(),
         }
     }
 
@@ -550,6 +555,86 @@ impl FormatCoverage {
             "Ratio calculations".to_string(),
         ];
         let unsupported = vec!["Advanced risk metrics".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_saplegal() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Legal obligations".to_string(),
+            "Contract clauses".to_string(),
+            "Trigger conditions".to_string(),
+            "Document metadata".to_string(),
+            "Responsible parties".to_string(),
+        ];
+        let unsupported = vec![
+            "SAP-specific workflow integration".to_string(),
+            "Advanced approval processes".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_salesforce_contract() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Contract terms".to_string(),
+            "Contract clauses".to_string(),
+            "Obligations and parties".to_string(),
+            "Due dates and penalties".to_string(),
+            "Contract metadata".to_string(),
+        ];
+        let unsupported = vec![
+            "Salesforce CPQ pricing rules".to_string(),
+            "Approval workflow configuration".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_docusign() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Envelope structure".to_string(),
+            "Signer recipients".to_string(),
+            "Signing obligations".to_string(),
+            "Routing order".to_string(),
+            "Document metadata".to_string(),
+        ];
+        let unsupported = vec![
+            "Form field data".to_string(),
+            "Embedded signing workflows".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_msword_legal() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Document sections and clauses".to_string(),
+            "Clause library management".to_string(),
+            "Field definitions".to_string(),
+            "Conditional logic".to_string(),
+            "Document metadata".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex Word formatting".to_string(),
+            "Macro integration".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_pdf_legal() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "PDF annotations and comments".to_string(),
+            "Form fields and signatures".to_string(),
+            "Legal categories and classifications".to_string(),
+            "Document metadata".to_string(),
+            "Legal stamps and watermarks".to_string(),
+        ];
+        let unsupported = vec![
+            "Advanced PDF features".to_string(),
+            "Digital signature validation".to_string(),
+        ];
         let partial = HashMap::new();
         (supported, unsupported, partial)
     }

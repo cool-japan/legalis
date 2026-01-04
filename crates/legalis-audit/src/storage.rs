@@ -9,6 +9,7 @@ pub mod cached;
 pub mod encrypted;
 pub mod jsonl;
 pub mod memory;
+pub mod partition_tolerant;
 pub mod partitioned;
 pub mod postgres;
 pub mod s3;

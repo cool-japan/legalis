@@ -35,6 +35,7 @@ pub mod coverage;
 pub mod creative_commons;
 pub mod dmn;
 pub mod dms;
+pub mod docusign;
 #[cfg(test)]
 mod edge_cases_tests;
 pub mod enhanced;
@@ -55,14 +56,18 @@ pub mod metalex;
 pub mod metrics;
 pub mod mifid2;
 pub mod mpeg21_rel;
+pub mod msword_legal;
 pub mod niem;
 pub mod openlaw;
 pub mod optimizations;
+pub mod pdf_legal;
 pub mod performance;
 pub mod quality;
 pub mod regml;
 pub mod rest_api;
 pub mod ruleml;
+pub mod salesforce_contract;
+pub mod sap_legal;
 pub mod sbvr;
 pub mod schema;
 pub mod spdx;
@@ -169,6 +174,16 @@ pub enum LegalFormat {
     MiFID2,
     /// Basel III - International regulatory framework for banks
     Basel3,
+    /// SAP Legal Module - Enterprise legal management system
+    SapLegal,
+    /// Salesforce Contract - Salesforce CPQ contract management
+    SalesforceContract,
+    /// DocuSign - Electronic signature and digital transaction platform
+    DocuSign,
+    /// MS Word Legal - Microsoft Word legal add-in format
+    MsWordLegal,
+    /// PDF Legal - Adobe PDF legal annotations and form fields
+    PdfLegal,
 }
 
 impl LegalFormat {
@@ -205,6 +220,11 @@ impl LegalFormat {
             LegalFormat::RegML => "xml",
             LegalFormat::MiFID2 => "json",
             LegalFormat::Basel3 => "json",
+            LegalFormat::SapLegal => "json",
+            LegalFormat::SalesforceContract => "json",
+            LegalFormat::DocuSign => "json",
+            LegalFormat::MsWordLegal => "json",
+            LegalFormat::PdfLegal => "json",
         }
     }
 
@@ -235,6 +255,13 @@ impl LegalFormat {
             "regml" | "regml.xml" => Some(LegalFormat::RegML),
             "mifid2" | "mifid2.json" => Some(LegalFormat::MiFID2),
             "basel3" | "basel3.json" => Some(LegalFormat::Basel3),
+            "saplegal" | "sap.json" | "sap-legal.json" => Some(LegalFormat::SapLegal),
+            "salesforce" | "sfdc.json" | "salesforce-contract.json" => {
+                Some(LegalFormat::SalesforceContract)
+            }
+            "docusign" | "docusign.json" | "envelope.json" => Some(LegalFormat::DocuSign),
+            "msword" | "word-legal.json" | "msword-legal.json" => Some(LegalFormat::MsWordLegal),
+            "pdf-legal" | "pdf-annotations.json" | "pdf-legal.json" => Some(LegalFormat::PdfLegal),
             _ => None,
         }
     }
@@ -362,6 +389,11 @@ impl LegalConverter {
                 Box::new(regml::RegMLImporter::new()),
                 Box::new(mifid2::MiFID2Importer::new()),
                 Box::new(basel3::Basel3Importer::new()),
+                Box::new(sap_legal::SapLegalImporter::new()),
+                Box::new(salesforce_contract::SalesforceContractImporter::new()),
+                Box::new(docusign::DocuSignImporter::new()),
+                Box::new(msword_legal::MsWordLegalImporter::new()),
+                Box::new(pdf_legal::PdfLegalImporter::new()),
             ],
             exporters: vec![
                 Box::new(catala::CatalaExporter::new()),
@@ -393,6 +425,11 @@ impl LegalConverter {
                 Box::new(regml::RegMLExporter::new()),
                 Box::new(mifid2::MiFID2Exporter::new()),
                 Box::new(basel3::Basel3Exporter::new()),
+                Box::new(sap_legal::SapLegalExporter::new()),
+                Box::new(salesforce_contract::SalesforceContractExporter::new()),
+                Box::new(docusign::DocuSignExporter::new()),
+                Box::new(msword_legal::MsWordLegalExporter::new()),
+                Box::new(pdf_legal::PdfLegalExporter::new()),
             ],
             cache: None,
         }

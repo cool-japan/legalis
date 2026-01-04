@@ -412,8 +412,7 @@ impl PatternBasedExtractor {
 
     fn normalize_uri(&self, text: &str) -> String {
         text.replace(' ', "_")
-            .replace('"', "")
-            .replace('\'', "")
+            .replace(['"', '\''], "")
             .to_lowercase()
     }
 }

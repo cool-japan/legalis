@@ -2,7 +2,7 @@
 
 ## Status Summary
 
-Version: 0.2.0 | Status: Stable | Tests: 425 Passing | Warnings: 0
+Version: 0.2.0 | Status: Stable | Tests: 433 Passing | Warnings: 0
 
 All v0.1.1-v0.1.3 features complete (Grammar Extensions, Advanced Parsing, Type System). Module system (v0.1.4+) and LSP enhancements planned for future releases.
 
@@ -285,21 +285,21 @@ All v0.1.1-v0.1.3 features complete (Grammar Extensions, Advanced Parsing, Type 
 - [x] Add condition reordering for short-circuit optimization
 - [x] Add constant folding for static expressions
 
-### Code Generation Targets (v0.1.9)
-- [ ] Add TypeScript/JavaScript generator
-- [ ] Add Go generator
-- [ ] Add Rust generator (for embedding)
-- [ ] Add Java generator
-- [ ] Add C# generator
+### Code Generation Targets (v0.1.9) ✅ COMPLETE
+- [x] Add TypeScript/JavaScript generator
+- [x] Add Go generator
+- [x] Add Rust generator (for embedding)
+- [x] Add Java generator
+- [x] Add C# generator
 
 ## Roadmap for 0.2.0 Series
 
-### Language Server Protocol 2.0 (v0.2.0)
-- [ ] Add workspace symbol search across multiple files
-- [ ] Add call hierarchy for statute references
-- [ ] Add type hierarchy for condition inheritance
-- [ ] Add linked editing ranges for rename refactoring
-- [ ] Add selection range providers for smart selection
+### Language Server Protocol 2.0 (v0.2.0) ✅ COMPLETE
+- [x] Add workspace symbol search across multiple files
+- [x] Add call hierarchy for statute references
+- [x] Add type hierarchy for condition inheritance
+- [x] Add linked editing ranges for rename refactoring
+- [x] Add selection range providers for smart selection
 
 ### AI-Assisted Authoring (v0.2.1)
 - [ ] Add LLM-powered statute completion

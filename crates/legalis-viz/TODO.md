@@ -2,7 +2,7 @@
 
 ## Status Summary
 
-Version: 0.2.0 | Status: Stable | Tests: Passing (420 tests) | Warnings: 0
+Version: 0.2.0 | Status: Stable | Tests: Passing (453 tests) | Warnings: 0
 
 All v0.1.x, v0.2.x, v0.3.0, v0.3.1, v0.3.2, v0.3.3, and v0.3.4 series features complete. Includes Mermaid, GraphViz, D3.js, PlantUML, 3D/WebGL visualization, accessibility (WCAG 2.1 AA), framework wrappers (React, Vue, Angular), mobile/PWA support, analytics dashboards, geographic visualization, **VR statute exploration**, **AR legal document overlay**, **360° panoramic timeline viewing** with spatial audio and haptic feedback, **AI-powered automatic visualization selection**, **AI-generated annotations**, **natural language queries**, **smart data highlighting**, **anomaly detection**, **live court proceeding visualization**, **breaking legal news feeds**, **regulatory change monitoring**, **enforcement action tracking**, **market impact visualization**, **legal history scrollytelling**, **case story generation**, **timeline narrative views**, **guided exploration tours**, **educational walkthroughs**, **Looking Glass holographic display**, **holographic statute models**, **3D print export (STL/OBJ/3MF)**, **volumetric data rendering**, and **gesture-based holographic interaction**.
 
@@ -1797,11 +1797,11 @@ Features:
 - [x] Add jurisdictional heatmap overlays
 
 ### Semantic Legal Network (v0.4.1)
-- [ ] Add legal concept relationship graphs
-- [ ] Implement statute-to-concept mapping
-- [ ] Add ontology-based visualization
-- [ ] Create semantic search highlighting
-- [ ] Add concept hierarchy trees
+- [x] Add legal concept relationship graphs
+- [x] Implement statute-to-concept mapping
+- [x] Add ontology-based visualization
+- [x] Create semantic search highlighting
+- [x] Add concept hierarchy trees
 
 ### Temporal Legal Analytics (v0.4.2)
 - [ ] Add time-series visualization for statute changes
@@ -2022,3 +2022,212 @@ Research and present comparative law studies with visual evidence.
 
 **Policy Development**:
 Inform policy decisions by comparing approaches from different jurisdictions.
+
+## New Features Documentation (v0.4.1)
+
+### Semantic Legal Network
+
+Visualize legal concepts and their relationships in semantic networks using ontologies, taxonomies, and concept graphs.
+
+#### Legal Concept Relationship Graphs
+
+Create interactive graphs of legal concepts with typed relationships:
+
+```rust
+use legalis_viz::{
+    LegalConcept, ConceptRelationship, ConceptRelationshipGraph, ConceptRelationType
+};
+
+// Create a concept graph
+let mut graph = ConceptRelationshipGraph::new("Legal Rights Network");
+
+// Add legal concepts
+let privacy = LegalConcept::new(
+    "privacy-right",
+    "Privacy Right",
+    "Fundamental right to privacy",
+    "rights"
+).with_metadata("jurisdiction", "EU");
+
+let data_protection = LegalConcept::new(
+    "data-protection",
+    "Data Protection",
+    "Protection of personal data",
+    "rights"
+).with_metadata("enacted", "2018");
+
+graph.add_concept(privacy);
+graph.add_concept(data_protection);
+
+// Add relationships
+let relationship = ConceptRelationship::new(
+    "privacy-right",
+    "data-protection",
+    ConceptRelationType::IsA
+)
+.with_description("Privacy is a type of data protection right")
+.with_strength(0.9);
+
+graph.add_relationship(relationship);
+
+// Generate visualizations
+let html = graph.to_html();           // Interactive D3.js force-directed graph
+let mermaid = graph.to_mermaid();     // Mermaid diagram
+```
+
+**Relationship Types:**
+- `IsA` - Inheritance/type hierarchy (blue)
+- `PartOf` - Composition/containment (green)
+- `Requires` - Dependency (red)
+- `ConflictsWith` - Mutual exclusion (dark red)
+- `Enables` - Enablement (orange)
+- `RelatedTo` - General association (gray)
+- `Supersedes` - Replacement (purple)
+- `Implements` - Implementation (teal)
+
+**Features:**
+- Interactive D3.js force-directed graph with drag support
+- Color-coded relationships by type
+- Node tooltips with concept details
+- Strength/confidence scoring (0.0-1.0)
+- Theme customization
+- Export to HTML and Mermaid formats
+
+#### Statute-to-Concept Mapping
+
+Map statutes to legal concepts with confidence scores:
+
+```rust
+use legalis_viz::StatuteConceptMapping;
+
+let mut mapping = StatuteConceptMapping::new(
+    "gdpr-art-5",
+    "GDPR Article 5 - Principles relating to processing"
+);
+
+// Add concept mappings with confidence scores
+mapping.add_concept("data-minimization", 1.0);
+mapping.add_concept("privacy-by-design", 0.9);
+mapping.add_concept("transparency", 0.85);
+
+// Query confidence scores
+let confidence = mapping.confidence("privacy-by-design"); // Returns 0.9
+```
+
+**Features:**
+- Map multiple concepts to each statute
+- Confidence/relevance scoring (0.0-1.0)
+- Automatic clamping of scores
+- JSON serialization support
+
+#### Ontology-Based Visualization
+
+Visualize legal ontologies and taxonomies:
+
+```rust
+use legalis_viz::{OntologyBasedVisualizer, ConceptRelationshipGraph};
+
+let visualizer = OntologyBasedVisualizer::new()
+    .with_theme(Theme::dark());
+
+// Visualize as interactive graph
+let html = visualizer.to_html(&concept_graph);
+
+// Visualize as tree structure
+let tree_html = visualizer.to_tree_html(&concept_graph);
+```
+
+**Features:**
+- Ontology-specific styling (layered, hierarchical)
+- Tree and graph view options
+- Theme customization
+- Hierarchical organization
+- Category grouping
+
+#### Semantic Search and Highlighting
+
+Search concepts semantically and highlight results:
+
+```rust
+use legalis_viz::SemanticSearchHighlighter;
+
+let mut highlighter = SemanticSearchHighlighter::new("privacy")
+    .with_color("#ffeb3b");
+
+// Search the concept graph
+highlighter.search(&concept_graph);
+
+// Get matches and relevance scores
+for concept_id in &highlighter.matches {
+    let relevance = highlighter.relevance_scores.get(concept_id).unwrap();
+    println!("Concept {} matched with relevance {}", concept_id, relevance);
+}
+
+// Generate highlighted visualization
+let html = highlighter.to_highlighted_html(&concept_graph);
+```
+
+**Relevance Scoring:**
+- Name match: 1.0 points
+- Description match: 0.5 points
+- Category match: 0.3 points
+- Total score clamped to 1.0
+
+**Features:**
+- Case-insensitive search
+- Multi-field matching (name, description, category)
+- Relevance scoring and ranking
+- Visual highlighting in HTML output
+- Customizable highlight colors
+
+#### Concept Hierarchy Trees
+
+Visualize concept hierarchies based on IsA relationships:
+
+```rust
+use legalis_viz::{ConceptHierarchyTree, LegalConcept};
+
+// Build hierarchy from graph
+let tree = ConceptHierarchyTree::from_graph(&concept_graph, "root-concept-id")
+    .unwrap()
+    .with_theme(Theme::colorblind_friendly());
+
+// Or build manually
+let root = LegalConcept::new("legal-right", "Legal Right", "General right", "rights");
+let mut tree = ConceptHierarchyTree::new(root);
+
+let child = LegalConcept::new("privacy-right", "Privacy Right", "Privacy rights", "rights");
+let child_tree = ConceptHierarchyTree::new(child);
+tree.add_child(child_tree);
+
+// Generate visualizations
+let html = tree.to_html();           // Hierarchical HTML tree
+let mermaid = tree.to_mermaid();     // Mermaid diagram
+```
+
+**Features:**
+- Automatic hierarchy building from IsA relationships
+- Recursive tree traversal
+- HTML tree with collapsible nodes
+- Mermaid diagram export
+- Theme support throughout hierarchy
+
+#### Use Cases
+
+**Legal Research:**
+Explore relationships between legal concepts and understand how they connect.
+
+**Ontology Development:**
+Build and visualize legal ontologies for knowledge management systems.
+
+**Concept Discovery:**
+Search for related concepts and understand semantic relationships.
+
+**Educational Tools:**
+Teach legal concepts and their relationships visually.
+
+**Knowledge Graphs:**
+Build legal knowledge graphs for AI/ML applications.
+
+**Compliance Mapping:**
+Map regulations to legal concepts for compliance analysis.

@@ -635,6 +635,462 @@ impl LanguageServer for LegalisLspBackend {
             active_parameter: None,
         }))
     }
+
+    /// Workspace symbol search across multiple files.
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let query = params.query.to_lowercase();
+        let mut symbols = Vec::new();
+
+        // Search through all documents in the workspace
+        let documents = self.document_map.read().await;
+        for (uri_str, text) in documents.iter() {
+            let parser = LegalDslParser::new();
+            if let Ok(doc) = parser.parse_document(text) {
+                for statute in &doc.statutes {
+                    // Match statute ID or title
+                    if statute.id.to_lowercase().contains(&query)
+                        || statute.title.to_lowercase().contains(&query)
+                    {
+                        #[allow(deprecated)]
+                        symbols.push(SymbolInformation {
+                            name: statute.id.clone(),
+                            kind: SymbolKind::FUNCTION,
+                            tags: None,
+                            deprecated: None,
+                            location: Location {
+                                uri: Url::parse(uri_str)
+                                    .unwrap_or_else(|_| Url::parse("file:///").unwrap()),
+                                range: Range {
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: statute.id.len() as u32,
+                                    },
+                                },
+                            },
+                            container_name: Some(statute.title.clone()),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(if symbols.is_empty() {
+            None
+        } else {
+            Some(symbols)
+        })
+    }
+
+    /// Prepare call hierarchy for statute references.
+    async fn prepare_call_hierarchy(
+        &self,
+        params: CallHierarchyPrepareParams,
+    ) -> Result<Option<Vec<CallHierarchyItem>>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let documents = self.document_map.read().await;
+        if let Some(text) = documents.get(uri.as_str()) {
+            let parser = LegalDslParser::new();
+            if let Ok(doc) = parser.parse_document(text) {
+                // Find statute at position
+                for statute in &doc.statutes {
+                    let item = CallHierarchyItem {
+                        name: statute.id.clone(),
+                        kind: SymbolKind::FUNCTION,
+                        tags: None,
+                        detail: Some(statute.title.clone()),
+                        uri: uri.clone(),
+                        range: Range {
+                            start: position,
+                            end: Position {
+                                line: position.line,
+                                character: position.character + statute.id.len() as u32,
+                            },
+                        },
+                        selection_range: Range {
+                            start: position,
+                            end: Position {
+                                line: position.line,
+                                character: position.character + statute.id.len() as u32,
+                            },
+                        },
+                        data: None,
+                    };
+                    return Ok(Some(vec![item]));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Find incoming calls (who references this statute).
+    async fn incoming_calls(
+        &self,
+        params: CallHierarchyIncomingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyIncomingCall>>> {
+        let target_name = params.item.name;
+        let mut calls = Vec::new();
+
+        let documents = self.document_map.read().await;
+        for (uri_str, text) in documents.iter() {
+            let parser = LegalDslParser::new();
+            if let Ok(doc) = parser.parse_document(text) {
+                for statute in &doc.statutes {
+                    // Check if this statute requires or supersedes the target
+                    if statute.requires.contains(&target_name)
+                        || statute.supersedes.contains(&target_name)
+                    {
+                        let from_item = CallHierarchyItem {
+                            name: statute.id.clone(),
+                            kind: SymbolKind::FUNCTION,
+                            tags: None,
+                            detail: Some(statute.title.clone()),
+                            uri: Url::parse(uri_str)
+                                .unwrap_or_else(|_| Url::parse("file:///").unwrap()),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: statute.id.len() as u32,
+                                },
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: statute.id.len() as u32,
+                                },
+                            },
+                            data: None,
+                        };
+
+                        calls.push(CallHierarchyIncomingCall {
+                            from: from_item,
+                            from_ranges: vec![Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: statute.id.len() as u32,
+                                },
+                            }],
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(if calls.is_empty() { None } else { Some(calls) })
+    }
+
+    /// Find outgoing calls (what does this statute reference).
+    async fn outgoing_calls(
+        &self,
+        params: CallHierarchyOutgoingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyOutgoingCall>>> {
+        let source_name = params.item.name;
+        let uri = params.item.uri;
+        let mut calls = Vec::new();
+
+        let documents = self.document_map.read().await;
+        if let Some(text) = documents.get(uri.as_str()) {
+            let parser = LegalDslParser::new();
+            if let Ok(doc) = parser.parse_document(text) {
+                // Find the source statute
+                if let Some(statute) = doc.statutes.iter().find(|s| s.id == source_name) {
+                    // Add requires references
+                    for req in &statute.requires {
+                        let to_item = CallHierarchyItem {
+                            name: req.clone(),
+                            kind: SymbolKind::FUNCTION,
+                            tags: None,
+                            detail: Some("Required statute".to_string()),
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: req.len() as u32,
+                                },
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: req.len() as u32,
+                                },
+                            },
+                            data: None,
+                        };
+
+                        calls.push(CallHierarchyOutgoingCall {
+                            to: to_item,
+                            from_ranges: vec![Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: req.len() as u32,
+                                },
+                            }],
+                        });
+                    }
+
+                    // Add supersedes references
+                    for sup in &statute.supersedes {
+                        let to_item = CallHierarchyItem {
+                            name: sup.clone(),
+                            kind: SymbolKind::FUNCTION,
+                            tags: None,
+                            detail: Some("Superseded statute".to_string()),
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: sup.len() as u32,
+                                },
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: sup.len() as u32,
+                                },
+                            },
+                            data: None,
+                        };
+
+                        calls.push(CallHierarchyOutgoingCall {
+                            to: to_item,
+                            from_ranges: vec![Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: sup.len() as u32,
+                                },
+                            }],
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(if calls.is_empty() { None } else { Some(calls) })
+    }
+
+    /// Prepare type hierarchy for condition types.
+    async fn prepare_type_hierarchy(
+        &self,
+        params: TypeHierarchyPrepareParams,
+    ) -> Result<Option<Vec<TypeHierarchyItem>>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let documents = self.document_map.read().await;
+        if let Some(text) = documents.get(uri.as_str()) {
+            let lines: Vec<&str> = text.lines().collect();
+            if let Some(line) = lines.get(position.line as usize) {
+                // Simple type detection based on keywords
+                let type_name = if line.contains("Comparison") {
+                    "ComparisonCondition"
+                } else if line.contains("BETWEEN") {
+                    "RangeCondition"
+                } else if line.contains("IN") {
+                    "SetCondition"
+                } else if line.contains("HAS") {
+                    "AttributeCondition"
+                } else {
+                    "Condition"
+                };
+
+                let item = TypeHierarchyItem {
+                    name: type_name.to_string(),
+                    kind: SymbolKind::CLASS,
+                    tags: None,
+                    detail: Some("Condition type".to_string()),
+                    uri: uri.clone(),
+                    range: Range {
+                        start: position,
+                        end: Position {
+                            line: position.line,
+                            character: position.character + type_name.len() as u32,
+                        },
+                    },
+                    selection_range: Range {
+                        start: position,
+                        end: Position {
+                            line: position.line,
+                            character: position.character + type_name.len() as u32,
+                        },
+                    },
+                    data: None,
+                };
+
+                return Ok(Some(vec![item]));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Provide linked editing ranges for rename refactoring.
+    async fn linked_editing_range(
+        &self,
+        params: LinkedEditingRangeParams,
+    ) -> Result<Option<LinkedEditingRanges>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let documents = self.document_map.read().await;
+        if let Some(text) = documents.get(uri.as_str()) {
+            let lines: Vec<&str> = text.lines().collect();
+            if let Some(line) = lines.get(position.line as usize) {
+                let word = get_word_at_position(line, position.character as usize);
+
+                if !word.is_empty() {
+                    let mut ranges = Vec::new();
+
+                    // Find all occurrences of the word in the document
+                    for (line_idx, line_text) in lines.iter().enumerate() {
+                        let mut start_pos = 0;
+                        while let Some(pos) = line_text[start_pos..].find(word.as_str()) {
+                            let actual_pos = start_pos + pos;
+                            ranges.push(Range {
+                                start: Position {
+                                    line: line_idx as u32,
+                                    character: actual_pos as u32,
+                                },
+                                end: Position {
+                                    line: line_idx as u32,
+                                    character: (actual_pos + word.len()) as u32,
+                                },
+                            });
+                            start_pos = actual_pos + word.len();
+                        }
+                    }
+
+                    if !ranges.is_empty() {
+                        return Ok(Some(LinkedEditingRanges {
+                            ranges,
+                            word_pattern: None,
+                        }));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Provide selection ranges for smart selection.
+    async fn selection_range(
+        &self,
+        params: SelectionRangeParams,
+    ) -> Result<Option<Vec<SelectionRange>>> {
+        let uri = params.text_document.uri;
+        let mut selection_ranges = Vec::new();
+
+        let documents = self.document_map.read().await;
+        if let Some(text) = documents.get(uri.as_str()) {
+            let lines: Vec<&str> = text.lines().collect();
+
+            for position in params.positions {
+                if let Some(line) = lines.get(position.line as usize) {
+                    // Build selection hierarchy: word -> line -> block -> document
+                    let word = get_word_at_position(line, position.character as usize);
+                    let word_start = line.find(word.as_str()).unwrap_or(0);
+
+                    // Document level (outermost)
+                    let document_range = SelectionRange {
+                        range: Range {
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: lines.len().saturating_sub(1) as u32,
+                                character: lines.last().map_or(0, |l| l.len()) as u32,
+                            },
+                        },
+                        parent: None,
+                    };
+
+                    // Line level
+                    let line_range = SelectionRange {
+                        range: Range {
+                            start: Position {
+                                line: position.line,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: position.line,
+                                character: line.len() as u32,
+                            },
+                        },
+                        parent: Some(Box::new(document_range)),
+                    };
+
+                    // Word level (innermost)
+                    let word_range = SelectionRange {
+                        range: Range {
+                            start: Position {
+                                line: position.line,
+                                character: word_start as u32,
+                            },
+                            end: Position {
+                                line: position.line,
+                                character: (word_start + word.len()) as u32,
+                            },
+                        },
+                        parent: Some(Box::new(line_range)),
+                    };
+
+                    selection_ranges.push(word_range);
+                }
+            }
+        }
+
+        Ok(if selection_ranges.is_empty() {
+            None
+        } else {
+            Some(selection_ranges)
+        })
+    }
 }
 
 /// Gets the word at a specific position in a line.

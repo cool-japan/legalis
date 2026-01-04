@@ -381,6 +381,7 @@ mod tests {
             }
         }
 
+        #[allow(dead_code)]
         fn update_count(&self) -> usize {
             self.updates.lock().unwrap().len()
         }
@@ -422,7 +423,7 @@ mod tests {
     fn test_publisher_publish() {
         let mut publisher = UpdatePublisher::new();
         let subscriber = Arc::new(TestSubscriber::new());
-        let subscriber_clone = subscriber.clone();
+        let _subscriber_clone = subscriber.clone();
 
         publisher.subscribe("sub1", Box::new(TestSubscriber::new()));
 

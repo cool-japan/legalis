@@ -22087,6 +22087,1816 @@ impl Default for QualityEstimator {
     }
 }
 
+// ============================================================================
+// v0.3.1: Real-Time Interpretation
+// ============================================================================
+
+/// Audio quality level for speech recognition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AudioQuality {
+    /// Low quality (8kHz, telephony).
+    Low,
+    /// Medium quality (16kHz, standard recording).
+    Medium,
+    /// High quality (44.1kHz, professional recording).
+    High,
+    /// Studio quality (48kHz+, court recording systems).
+    Studio,
+}
+
+impl std::fmt::Display for AudioQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AudioQuality::Low => write!(f, "Low (8kHz)"),
+            AudioQuality::Medium => write!(f, "Medium (16kHz)"),
+            AudioQuality::High => write!(f, "High (44.1kHz)"),
+            AudioQuality::Studio => write!(f, "Studio (48kHz+)"),
+        }
+    }
+}
+
+/// Transcription segment with timing information.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptionSegment {
+    /// The transcribed text for this segment.
+    pub text: String,
+    /// Start time in milliseconds from recording start.
+    pub start_ms: u64,
+    /// End time in milliseconds from recording start.
+    pub end_ms: u64,
+    /// Speaker identifier (if available).
+    pub speaker: Option<String>,
+    /// Confidence score (0.0 to 1.0).
+    pub confidence: f64,
+    /// Detected language locale.
+    pub locale: Locale,
+}
+
+impl TranscriptionSegment {
+    /// Creates a new transcription segment.
+    pub fn new(text: impl Into<String>, start_ms: u64, end_ms: u64, locale: Locale) -> Self {
+        Self {
+            text: text.into(),
+            start_ms,
+            end_ms,
+            speaker: None,
+            confidence: 1.0,
+            locale,
+        }
+    }
+
+    /// Sets the speaker identifier.
+    pub fn with_speaker(mut self, speaker: impl Into<String>) -> Self {
+        self.speaker = Some(speaker.into());
+        self
+    }
+
+    /// Sets the confidence score.
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.confidence = confidence.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Returns the duration of this segment in milliseconds.
+    pub fn duration_ms(&self) -> u64 {
+        self.end_ms.saturating_sub(self.start_ms)
+    }
+
+    /// Formats the segment with timestamp.
+    pub fn format_with_timestamp(&self) -> String {
+        let start_sec = self.start_ms / 1000;
+        let end_sec = self.end_ms / 1000;
+        let speaker_label = self.speaker.as_deref().unwrap_or("Unknown");
+
+        format!(
+            "[{:02}:{:02} - {:02}:{:02}] {}: {}",
+            start_sec / 60,
+            start_sec % 60,
+            end_sec / 60,
+            end_sec % 60,
+            speaker_label,
+            self.text
+        )
+    }
+}
+
+/// Legal domain specialization for speech recognition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LegalSpeechDomain {
+    /// Court proceedings and trials.
+    CourtProceedings,
+    /// Legal depositions and testimonies.
+    Depositions,
+    /// Legal consultations and advice sessions.
+    Consultations,
+    /// Contract negotiations.
+    ContractNegotiations,
+    /// Arbitration and mediation proceedings.
+    ArbitrationMediation,
+    /// General legal speech.
+    General,
+}
+
+impl std::fmt::Display for LegalSpeechDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LegalSpeechDomain::CourtProceedings => write!(f, "Court Proceedings"),
+            LegalSpeechDomain::Depositions => write!(f, "Depositions"),
+            LegalSpeechDomain::Consultations => write!(f, "Legal Consultations"),
+            LegalSpeechDomain::ContractNegotiations => write!(f, "Contract Negotiations"),
+            LegalSpeechDomain::ArbitrationMediation => write!(f, "Arbitration/Mediation"),
+            LegalSpeechDomain::General => write!(f, "General Legal"),
+        }
+    }
+}
+
+/// Speech-to-text legal transcription engine.
+#[derive(Debug, Clone)]
+pub struct LegalSpeechTranscriber {
+    /// The locale for transcription.
+    pub locale: Locale,
+    /// Audio quality expectation.
+    pub audio_quality: AudioQuality,
+    /// Legal domain specialization.
+    pub domain: LegalSpeechDomain,
+    /// Whether to enable speaker diarization.
+    pub speaker_diarization: bool,
+    /// Whether to use legal vocabulary boost.
+    pub legal_vocabulary_boost: bool,
+    /// Legal dictionary for vocabulary boosting.
+    pub dictionary: Option<LegalDictionary>,
+}
+
+impl LegalSpeechTranscriber {
+    /// Creates a new legal speech transcriber.
+    pub fn new(locale: Locale, domain: LegalSpeechDomain) -> Self {
+        Self {
+            locale,
+            audio_quality: AudioQuality::Medium,
+            domain,
+            speaker_diarization: false,
+            legal_vocabulary_boost: false,
+            dictionary: None,
+        }
+    }
+
+    /// Creates a transcriber for court proceedings.
+    pub fn for_court_proceedings(locale: Locale) -> Self {
+        Self::new(locale, LegalSpeechDomain::CourtProceedings)
+            .with_speaker_diarization(true)
+            .with_audio_quality(AudioQuality::Studio)
+            .with_legal_vocabulary_boost(true)
+    }
+
+    /// Creates a transcriber for depositions.
+    pub fn for_depositions(locale: Locale) -> Self {
+        Self::new(locale, LegalSpeechDomain::Depositions)
+            .with_speaker_diarization(true)
+            .with_audio_quality(AudioQuality::High)
+            .with_legal_vocabulary_boost(true)
+    }
+
+    /// Sets the audio quality.
+    pub fn with_audio_quality(mut self, quality: AudioQuality) -> Self {
+        self.audio_quality = quality;
+        self
+    }
+
+    /// Enables speaker diarization.
+    pub fn with_speaker_diarization(mut self, enable: bool) -> Self {
+        self.speaker_diarization = enable;
+        self
+    }
+
+    /// Enables legal vocabulary boosting.
+    pub fn with_legal_vocabulary_boost(mut self, enable: bool) -> Self {
+        self.legal_vocabulary_boost = enable;
+        self
+    }
+
+    /// Sets the legal dictionary for vocabulary boosting.
+    pub fn with_dictionary(mut self, dictionary: LegalDictionary) -> Self {
+        self.dictionary = Some(dictionary);
+        self
+    }
+
+    /// Transcribes audio (placeholder - would integrate with actual ASR engine).
+    /// In production, this would call services like Google Speech-to-Text,
+    /// Azure Speech Services, or custom models.
+    pub fn transcribe(&self, _audio_data: &[u8]) -> Vec<TranscriptionSegment> {
+        // Placeholder implementation
+        // In real implementation, would:
+        // 1. Send audio to ASR service
+        // 2. Apply legal vocabulary boosting if enabled
+        // 3. Perform speaker diarization if enabled
+        // 4. Return timestamped segments
+        vec![]
+    }
+
+    /// Transcribes a single utterance and returns text with confidence.
+    pub fn transcribe_utterance(&self, _audio_data: &[u8]) -> (String, f64) {
+        // Placeholder implementation
+        ("".to_string(), 0.0)
+    }
+
+    /// Gets legal vocabulary hints for the transcription engine.
+    pub fn get_vocabulary_hints(&self) -> Vec<String> {
+        let mut hints = Vec::new();
+
+        if self.legal_vocabulary_boost {
+            if let Some(ref dict) = self.dictionary {
+                // Extract all terms from dictionary as vocabulary hints
+                for (key, _value) in &dict.translations {
+                    hints.push(key.clone());
+                }
+
+                // Add abbreviations
+                for (_term, abbrev) in &dict.abbreviations {
+                    hints.push(abbrev.clone());
+                }
+            }
+
+            // Add domain-specific common terms
+            match self.domain {
+                LegalSpeechDomain::CourtProceedings => {
+                    hints.extend(vec![
+                        "Your Honor".to_string(),
+                        "objection".to_string(),
+                        "sustained".to_string(),
+                        "overruled".to_string(),
+                        "counsel".to_string(),
+                        "witness".to_string(),
+                        "testimony".to_string(),
+                        "evidence".to_string(),
+                    ]);
+                }
+                LegalSpeechDomain::Depositions => {
+                    hints.extend(vec![
+                        "deposition".to_string(),
+                        "reporter".to_string(),
+                        "exhibit".to_string(),
+                        "marked".to_string(),
+                    ]);
+                }
+                LegalSpeechDomain::ContractNegotiations => {
+                    hints.extend(vec![
+                        "clause".to_string(),
+                        "provision".to_string(),
+                        "amendment".to_string(),
+                        "consideration".to_string(),
+                    ]);
+                }
+                _ => {}
+            }
+        }
+
+        hints
+    }
+}
+
+/// Interpretation mode for real-time translation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InterpretationMode {
+    /// Consecutive interpretation (speaker pauses for interpretation).
+    Consecutive,
+    /// Simultaneous interpretation (interpreter speaks concurrently).
+    Simultaneous,
+    /// Whispered interpretation (chuchotage).
+    Whispered,
+}
+
+impl std::fmt::Display for InterpretationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InterpretationMode::Consecutive => write!(f, "Consecutive"),
+            InterpretationMode::Simultaneous => write!(f, "Simultaneous"),
+            InterpretationMode::Whispered => write!(f, "Whispered (Chuchotage)"),
+        }
+    }
+}
+
+/// Interpreted segment with source and target text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InterpretedSegment {
+    /// Original source segment.
+    pub source_segment: TranscriptionSegment,
+    /// Interpreted text in target language.
+    pub target_text: String,
+    /// Target language locale.
+    pub target_locale: Locale,
+    /// Interpretation confidence (0.0 to 1.0).
+    pub interpretation_confidence: f64,
+    /// Delay in milliseconds (for simultaneous interpretation).
+    pub delay_ms: u64,
+}
+
+impl InterpretedSegment {
+    /// Creates a new interpreted segment.
+    pub fn new(
+        source_segment: TranscriptionSegment,
+        target_text: impl Into<String>,
+        target_locale: Locale,
+    ) -> Self {
+        Self {
+            source_segment,
+            target_text: target_text.into(),
+            target_locale,
+            interpretation_confidence: 1.0,
+            delay_ms: 0,
+        }
+    }
+
+    /// Sets the interpretation confidence.
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.interpretation_confidence = confidence.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets the interpretation delay.
+    pub fn with_delay_ms(mut self, delay_ms: u64) -> Self {
+        self.delay_ms = delay_ms;
+        self
+    }
+
+    /// Formats the interpreted segment for display.
+    pub fn format_bilingual(&self) -> String {
+        format!(
+            "[{}] {}\n[{}] {}",
+            self.source_segment.locale.tag(),
+            self.source_segment.text,
+            self.target_locale.tag(),
+            self.target_text
+        )
+    }
+}
+
+/// Simultaneous interpretation engine with streaming support.
+#[derive(Debug, Clone)]
+pub struct SimultaneousInterpreter {
+    /// Source language locale.
+    pub source_locale: Locale,
+    /// Target language locale.
+    pub target_locale: Locale,
+    /// Interpretation mode.
+    pub mode: InterpretationMode,
+    /// Legal domain for terminology.
+    pub domain: LegalSpeechDomain,
+    /// Source language transcriber.
+    pub transcriber: LegalSpeechTranscriber,
+    /// Translation manager for legal terms.
+    pub translation_manager: Option<Arc<TranslationManager>>,
+    /// Maximum acceptable delay in milliseconds (for simultaneous mode).
+    pub max_delay_ms: u64,
+}
+
+impl SimultaneousInterpreter {
+    /// Creates a new simultaneous interpreter.
+    pub fn new(source_locale: Locale, target_locale: Locale, domain: LegalSpeechDomain) -> Self {
+        Self {
+            transcriber: LegalSpeechTranscriber::new(source_locale.clone(), domain),
+            source_locale,
+            target_locale,
+            mode: InterpretationMode::Simultaneous,
+            domain,
+            translation_manager: None,
+            max_delay_ms: 3000, // 3 seconds default
+        }
+    }
+
+    /// Creates a simultaneous interpreter for court proceedings.
+    pub fn for_court_proceedings(source_locale: Locale, target_locale: Locale) -> Self {
+        let mut interpreter = Self::new(
+            source_locale.clone(),
+            target_locale,
+            LegalSpeechDomain::CourtProceedings,
+        );
+        interpreter.transcriber = LegalSpeechTranscriber::for_court_proceedings(source_locale);
+        interpreter
+    }
+
+    /// Sets the interpretation mode.
+    pub fn with_mode(mut self, mode: InterpretationMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Sets the translation manager.
+    pub fn with_translation_manager(mut self, manager: Arc<TranslationManager>) -> Self {
+        self.translation_manager = Some(manager);
+        self
+    }
+
+    /// Sets the maximum acceptable delay.
+    pub fn with_max_delay(mut self, max_delay_ms: u64) -> Self {
+        self.max_delay_ms = max_delay_ms;
+        self
+    }
+
+    /// Interprets a transcription segment in real-time.
+    pub fn interpret_segment(&self, segment: TranscriptionSegment) -> InterpretedSegment {
+        // Calculate interpretation delay based on mode
+        let delay_ms = match self.mode {
+            InterpretationMode::Simultaneous => {
+                // Simultaneous interpretation has minimal delay
+                200 // 200ms typical EVS (Ear-Voice Span)
+            }
+            InterpretationMode::Consecutive => {
+                // Consecutive waits for speaker to finish
+                0
+            }
+            InterpretationMode::Whispered => {
+                // Whispered is near-simultaneous
+                300
+            }
+        };
+
+        // Translate the segment text
+        let target_text = if let Some(ref tm) = self.translation_manager {
+            tm.translate(&segment.text, &self.target_locale)
+                .unwrap_or_else(|_| segment.text.clone())
+        } else {
+            // Placeholder translation (in production, would use MT engine)
+            segment.text.clone()
+        };
+
+        // Calculate combined confidence (transcription × translation)
+        let combined_confidence = segment.confidence * 0.9; // Assume 90% translation confidence
+
+        InterpretedSegment::new(segment, target_text, self.target_locale.clone())
+            .with_confidence(combined_confidence)
+            .with_delay_ms(delay_ms)
+    }
+
+    /// Processes streaming audio and returns interpreted segments.
+    pub fn interpret_stream(&self, audio_chunks: &[&[u8]]) -> Vec<InterpretedSegment> {
+        let mut interpreted_segments = Vec::new();
+
+        for chunk in audio_chunks {
+            let segments = self.transcriber.transcribe(chunk);
+            for segment in segments {
+                let interpreted = self.interpret_segment(segment);
+                interpreted_segments.push(interpreted);
+            }
+        }
+
+        interpreted_segments
+    }
+}
+
+/// Court proceeding participant role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CourtParticipantRole {
+    /// Judge or magistrate.
+    Judge,
+    /// Prosecutor or district attorney.
+    Prosecutor,
+    /// Defense attorney.
+    DefenseAttorney,
+    /// Plaintiff's attorney.
+    PlaintiffAttorney,
+    /// Defendant's attorney.
+    DefendantAttorney,
+    /// Witness.
+    Witness,
+    /// Defendant.
+    Defendant,
+    /// Plaintiff.
+    Plaintiff,
+    /// Court reporter.
+    CourtReporter,
+    /// Interpreter.
+    Interpreter,
+    /// Jury member.
+    Juror,
+}
+
+impl std::fmt::Display for CourtParticipantRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CourtParticipantRole::Judge => write!(f, "Judge"),
+            CourtParticipantRole::Prosecutor => write!(f, "Prosecutor"),
+            CourtParticipantRole::DefenseAttorney => write!(f, "Defense Attorney"),
+            CourtParticipantRole::PlaintiffAttorney => write!(f, "Plaintiff's Attorney"),
+            CourtParticipantRole::DefendantAttorney => write!(f, "Defendant's Attorney"),
+            CourtParticipantRole::Witness => write!(f, "Witness"),
+            CourtParticipantRole::Defendant => write!(f, "Defendant"),
+            CourtParticipantRole::Plaintiff => write!(f, "Plaintiff"),
+            CourtParticipantRole::CourtReporter => write!(f, "Court Reporter"),
+            CourtParticipantRole::Interpreter => write!(f, "Interpreter"),
+            CourtParticipantRole::Juror => write!(f, "Juror"),
+        }
+    }
+}
+
+/// Court proceeding participant with language preference.
+#[derive(Debug, Clone)]
+pub struct CourtParticipant {
+    /// Participant name.
+    pub name: String,
+    /// Role in the proceeding.
+    pub role: CourtParticipantRole,
+    /// Primary language locale.
+    pub primary_language: Locale,
+    /// Whether interpretation is required.
+    pub requires_interpretation: bool,
+}
+
+impl CourtParticipant {
+    /// Creates a new court participant.
+    pub fn new(
+        name: impl Into<String>,
+        role: CourtParticipantRole,
+        primary_language: Locale,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            role,
+            primary_language,
+            requires_interpretation: false,
+        }
+    }
+
+    /// Marks this participant as requiring interpretation.
+    pub fn requires_interpretation(mut self) -> Self {
+        self.requires_interpretation = true;
+        self
+    }
+}
+
+/// Court proceeding live translation system.
+#[derive(Debug, Clone)]
+pub struct CourtProceedingTranslator {
+    /// Court language (official language of the court).
+    pub court_language: Locale,
+    /// Participants in the proceeding.
+    pub participants: Vec<CourtParticipant>,
+    /// Active interpreters by target language.
+    pub interpreters: HashMap<String, SimultaneousInterpreter>,
+    /// Whether to record original and translated audio.
+    pub record_audio: bool,
+    /// Whether to generate real-time transcripts.
+    pub real_time_transcripts: bool,
+}
+
+impl CourtProceedingTranslator {
+    /// Creates a new court proceeding translator.
+    pub fn new(court_language: Locale) -> Self {
+        Self {
+            court_language,
+            participants: Vec::new(),
+            interpreters: HashMap::new(),
+            record_audio: true,
+            real_time_transcripts: true,
+        }
+    }
+
+    /// Adds a participant to the proceeding.
+    pub fn add_participant(&mut self, participant: CourtParticipant) {
+        // If participant requires interpretation and we don't have an interpreter yet
+        if participant.requires_interpretation {
+            let target_locale = participant.primary_language.clone();
+            let locale_key = target_locale.tag();
+
+            if !self.interpreters.contains_key(&locale_key) {
+                // Create an interpreter for this language pair
+                let interpreter = SimultaneousInterpreter::for_court_proceedings(
+                    self.court_language.clone(),
+                    target_locale,
+                );
+                self.interpreters.insert(locale_key, interpreter);
+            }
+        }
+
+        self.participants.push(participant);
+    }
+
+    /// Gets the number of languages being interpreted.
+    pub fn language_count(&self) -> usize {
+        self.interpreters.len() + 1 // +1 for court language
+    }
+
+    /// Processes a spoken utterance and distributes translations.
+    pub fn process_utterance(
+        &self,
+        _speaker_name: &str,
+        segment: TranscriptionSegment,
+    ) -> HashMap<String, InterpretedSegment> {
+        let mut translations = HashMap::new();
+
+        // Translate for each language that needs interpretation
+        for (locale_key, interpreter) in &self.interpreters {
+            let interpreted = interpreter.interpret_segment(segment.clone());
+            translations.insert(locale_key.clone(), interpreted);
+        }
+
+        translations
+    }
+
+    /// Enables or disables audio recording.
+    pub fn set_recording(mut self, enable: bool) -> Self {
+        self.record_audio = enable;
+        self
+    }
+
+    /// Enables or disables real-time transcripts.
+    pub fn set_transcripts(mut self, enable: bool) -> Self {
+        self.real_time_transcripts = enable;
+        self
+    }
+}
+
+/// Multilingual hearing support with channel management.
+#[derive(Debug, Clone)]
+pub struct MultilingualHearing {
+    /// Hearing title/case name.
+    pub title: String,
+    /// Primary language of the hearing.
+    pub primary_language: Locale,
+    /// All languages being used in the hearing.
+    pub active_languages: Vec<Locale>,
+    /// Interpreters by channel (language pair).
+    pub interpretation_channels: HashMap<String, SimultaneousInterpreter>,
+    /// Court proceeding translator.
+    pub court_translator: CourtProceedingTranslator,
+    /// Whether to provide closed captions.
+    pub closed_captions: bool,
+}
+
+impl MultilingualHearing {
+    /// Creates a new multilingual hearing.
+    pub fn new(title: impl Into<String>, primary_language: Locale) -> Self {
+        Self {
+            title: title.into(),
+            court_translator: CourtProceedingTranslator::new(primary_language.clone()),
+            primary_language: primary_language.clone(),
+            active_languages: vec![primary_language],
+            interpretation_channels: HashMap::new(),
+            closed_captions: true,
+        }
+    }
+
+    /// Adds a language to the hearing.
+    pub fn add_language(&mut self, locale: Locale) {
+        if !self.active_languages.contains(&locale) {
+            // Create interpretation channel
+            let channel_key = format!("{}_to_{}", self.primary_language.tag(), locale.tag());
+
+            let interpreter = SimultaneousInterpreter::for_court_proceedings(
+                self.primary_language.clone(),
+                locale.clone(),
+            );
+
+            self.interpretation_channels
+                .insert(channel_key, interpreter);
+            self.active_languages.push(locale);
+        }
+    }
+
+    /// Adds a participant to the hearing.
+    pub fn add_participant(&mut self, participant: CourtParticipant) {
+        // Ensure interpretation channel exists for participant's language
+        if participant.requires_interpretation {
+            self.add_language(participant.primary_language.clone());
+        }
+        self.court_translator.add_participant(participant);
+    }
+
+    /// Gets the total number of active interpretation channels.
+    pub fn channel_count(&self) -> usize {
+        self.interpretation_channels.len()
+    }
+
+    /// Enables or disables closed captions.
+    pub fn with_closed_captions(mut self, enable: bool) -> Self {
+        self.closed_captions = enable;
+        self
+    }
+
+    /// Processes an utterance and returns interpretations for all channels.
+    pub fn process_multilingual_utterance(
+        &self,
+        segment: TranscriptionSegment,
+    ) -> HashMap<String, InterpretedSegment> {
+        let mut all_interpretations = HashMap::new();
+
+        for (channel_key, interpreter) in &self.interpretation_channels {
+            let interpreted = interpreter.interpret_segment(segment.clone());
+            all_interpretations.insert(channel_key.clone(), interpreted);
+        }
+
+        all_interpretations
+    }
+}
+
+/// Subtitle timing and styling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubtitleCue {
+    /// Subtitle text content.
+    pub text: String,
+    /// Start time in milliseconds.
+    pub start_ms: u64,
+    /// End time in milliseconds.
+    pub end_ms: u64,
+    /// Language locale of the subtitle.
+    pub locale: Locale,
+    /// Speaker name (optional).
+    pub speaker: Option<String>,
+    /// Position on screen (optional, for multi-language subtitles).
+    pub position: Option<SubtitlePosition>,
+}
+
+impl SubtitleCue {
+    /// Creates a new subtitle cue.
+    pub fn new(text: impl Into<String>, start_ms: u64, end_ms: u64, locale: Locale) -> Self {
+        Self {
+            text: text.into(),
+            start_ms,
+            end_ms,
+            locale,
+            speaker: None,
+            position: None,
+        }
+    }
+
+    /// Sets the speaker.
+    pub fn with_speaker(mut self, speaker: impl Into<String>) -> Self {
+        self.speaker = Some(speaker.into());
+        self
+    }
+
+    /// Sets the position.
+    pub fn with_position(mut self, position: SubtitlePosition) -> Self {
+        self.position = Some(position);
+        self
+    }
+
+    /// Formats as WebVTT cue.
+    pub fn to_webvtt(&self) -> String {
+        let start = Self::format_timestamp(self.start_ms);
+        let end = Self::format_timestamp(self.end_ms);
+
+        let mut vtt = format!("{} --> {}\n", start, end);
+
+        if let Some(ref speaker) = self.speaker {
+            vtt.push_str(&format!("<v {}>{}</v>\n", speaker, self.text));
+        } else {
+            vtt.push_str(&format!("{}\n", self.text));
+        }
+
+        vtt
+    }
+
+    /// Formats as SRT subtitle.
+    pub fn to_srt(&self, index: u32) -> String {
+        let start = Self::format_timestamp_srt(self.start_ms);
+        let end = Self::format_timestamp_srt(self.end_ms);
+
+        let text = if let Some(ref speaker) = self.speaker {
+            format!("{}: {}", speaker, self.text)
+        } else {
+            self.text.clone()
+        };
+
+        format!("{}\n{} --> {}\n{}\n\n", index, start, end, text)
+    }
+
+    fn format_timestamp(ms: u64) -> String {
+        let total_seconds = ms / 1000;
+        let milliseconds = ms % 1000;
+        let seconds = total_seconds % 60;
+        let minutes = (total_seconds / 60) % 60;
+        let hours = total_seconds / 3600;
+
+        format!(
+            "{:02}:{:02}:{:02}.{:03}",
+            hours, minutes, seconds, milliseconds
+        )
+    }
+
+    fn format_timestamp_srt(ms: u64) -> String {
+        let total_seconds = ms / 1000;
+        let milliseconds = ms % 1000;
+        let seconds = total_seconds % 60;
+        let minutes = (total_seconds / 60) % 60;
+        let hours = total_seconds / 3600;
+
+        format!(
+            "{:02}:{:02}:{:02},{:03}",
+            hours, minutes, seconds, milliseconds
+        )
+    }
+}
+
+/// Subtitle position on screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SubtitlePosition {
+    /// Bottom center (default).
+    BottomCenter,
+    /// Top center.
+    TopCenter,
+    /// Bottom left.
+    BottomLeft,
+    /// Bottom right.
+    BottomRight,
+    /// Top left.
+    TopLeft,
+    /// Top right.
+    TopRight,
+}
+
+impl std::fmt::Display for SubtitlePosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SubtitlePosition::BottomCenter => write!(f, "Bottom Center"),
+            SubtitlePosition::TopCenter => write!(f, "Top Center"),
+            SubtitlePosition::BottomLeft => write!(f, "Bottom Left"),
+            SubtitlePosition::BottomRight => write!(f, "Bottom Right"),
+            SubtitlePosition::TopLeft => write!(f, "Top Left"),
+            SubtitlePosition::TopRight => write!(f, "Top Right"),
+        }
+    }
+}
+
+/// Accessibility subtitle generator for legal proceedings.
+#[derive(Debug, Clone)]
+pub struct AccessibilitySubtitleGenerator {
+    /// Primary language locale.
+    pub primary_locale: Locale,
+    /// Whether to include speaker labels.
+    pub include_speakers: bool,
+    /// Whether to include sound descriptions.
+    pub include_sound_descriptions: bool,
+    /// Maximum characters per line.
+    pub max_chars_per_line: usize,
+    /// Whether to generate multi-language subtitles.
+    pub multilingual: bool,
+    /// Secondary languages for multilingual subtitles.
+    pub secondary_locales: Vec<Locale>,
+}
+
+impl AccessibilitySubtitleGenerator {
+    /// Creates a new accessibility subtitle generator.
+    pub fn new(primary_locale: Locale) -> Self {
+        Self {
+            primary_locale,
+            include_speakers: true,
+            include_sound_descriptions: true,
+            max_chars_per_line: 42, // WCAG recommended
+            multilingual: false,
+            secondary_locales: Vec::new(),
+        }
+    }
+
+    /// Creates a generator for multilingual court proceedings.
+    pub fn for_multilingual_court(primary_locale: Locale, secondary_locales: Vec<Locale>) -> Self {
+        Self {
+            primary_locale,
+            include_speakers: true,
+            include_sound_descriptions: true,
+            max_chars_per_line: 42,
+            multilingual: true,
+            secondary_locales,
+        }
+    }
+
+    /// Enables or disables speaker labels.
+    pub fn with_speaker_labels(mut self, enable: bool) -> Self {
+        self.include_speakers = enable;
+        self
+    }
+
+    /// Enables or disables sound descriptions.
+    pub fn with_sound_descriptions(mut self, enable: bool) -> Self {
+        self.include_sound_descriptions = enable;
+        self
+    }
+
+    /// Sets maximum characters per line.
+    pub fn with_max_chars(mut self, max_chars: usize) -> Self {
+        self.max_chars_per_line = max_chars;
+        self
+    }
+
+    /// Generates subtitle cues from transcription segments.
+    pub fn generate_cues(&self, segments: &[TranscriptionSegment]) -> Vec<SubtitleCue> {
+        let mut cues = Vec::new();
+
+        for segment in segments {
+            // Break long text into multiple cues if needed
+            let lines = self.split_text(&segment.text);
+            let duration_per_line = segment.duration_ms() / lines.len() as u64;
+
+            for (i, line) in lines.iter().enumerate() {
+                let start = segment.start_ms + (i as u64 * duration_per_line);
+                let end = start + duration_per_line;
+
+                let mut cue = SubtitleCue::new(line.clone(), start, end, segment.locale.clone());
+
+                if self.include_speakers {
+                    if let Some(ref speaker) = segment.speaker {
+                        cue = cue.with_speaker(speaker.clone());
+                    }
+                }
+
+                cues.push(cue);
+            }
+        }
+
+        cues
+    }
+
+    /// Generates WebVTT format subtitles.
+    pub fn generate_webvtt(&self, segments: &[TranscriptionSegment]) -> String {
+        let mut webvtt = String::from("WEBVTT\n\n");
+
+        let cues = self.generate_cues(segments);
+        for cue in cues {
+            webvtt.push_str(&cue.to_webvtt());
+            webvtt.push('\n');
+        }
+
+        webvtt
+    }
+
+    /// Generates SRT format subtitles.
+    pub fn generate_srt(&self, segments: &[TranscriptionSegment]) -> String {
+        let mut srt = String::new();
+
+        let cues = self.generate_cues(segments);
+        for (i, cue) in cues.iter().enumerate() {
+            srt.push_str(&cue.to_srt((i + 1) as u32));
+        }
+
+        srt
+    }
+
+    /// Splits text into lines respecting max characters per line.
+    fn split_text(&self, text: &str) -> Vec<String> {
+        let mut lines = Vec::new();
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let mut current_line = String::new();
+
+        for word in words {
+            let test_line = if current_line.is_empty() {
+                word.to_string()
+            } else {
+                format!("{} {}", current_line, word)
+            };
+
+            if test_line.len() <= self.max_chars_per_line {
+                current_line = test_line;
+            } else {
+                if !current_line.is_empty() {
+                    lines.push(current_line.clone());
+                }
+                current_line = word.to_string();
+            }
+        }
+
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+
+        if lines.is_empty() {
+            lines.push(text.to_string());
+        }
+
+        lines
+    }
+
+    /// Adds a sound description cue.
+    pub fn add_sound_description(
+        &self,
+        cues: &mut Vec<SubtitleCue>,
+        description: &str,
+        start_ms: u64,
+        end_ms: u64,
+    ) {
+        if self.include_sound_descriptions {
+            let cue = SubtitleCue::new(
+                format!("[{}]", description),
+                start_ms,
+                end_ms,
+                self.primary_locale.clone(),
+            );
+            cues.push(cue);
+        }
+    }
+}
+
+// ============================================================================
+// v0.3.2: Semantic Cross-Lingual Search
+// ============================================================================
+
+/// Semantic embedding model for multilingual legal text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmbeddingModel {
+    /// Multilingual BERT (mBERT).
+    MultilinguralBERT,
+    /// XLM-RoBERTa for cross-lingual understanding.
+    XLMRoBERTa,
+    /// LaBSE (Language-agnostic BERT Sentence Encoder).
+    LaBSE,
+    /// Legal-domain fine-tuned multilingual model.
+    LegalMultilingual,
+    /// Custom embedding model.
+    Custom,
+}
+
+impl std::fmt::Display for EmbeddingModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmbeddingModel::MultilinguralBERT => write!(f, "Multilingual BERT"),
+            EmbeddingModel::XLMRoBERTa => write!(f, "XLM-RoBERTa"),
+            EmbeddingModel::LaBSE => write!(f, "LaBSE"),
+            EmbeddingModel::LegalMultilingual => write!(f, "Legal Multilingual"),
+            EmbeddingModel::Custom => write!(f, "Custom"),
+        }
+    }
+}
+
+/// Multilingual semantic embedding for legal text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SemanticEmbedding {
+    /// The embedded text.
+    pub text: String,
+    /// Language locale of the text.
+    pub locale: Locale,
+    /// Embedding vector (typically 768 or 1024 dimensions).
+    pub vector: Vec<f32>,
+    /// Embedding model used.
+    pub model: String,
+    /// Legal domain context (if applicable).
+    pub domain: Option<LegalSpeechDomain>,
+}
+
+impl SemanticEmbedding {
+    /// Creates a new semantic embedding.
+    pub fn new(
+        text: impl Into<String>,
+        locale: Locale,
+        vector: Vec<f32>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self {
+            text: text.into(),
+            locale,
+            vector,
+            model: model.into(),
+            domain: None,
+        }
+    }
+
+    /// Sets the legal domain.
+    pub fn with_domain(mut self, domain: LegalSpeechDomain) -> Self {
+        self.domain = Some(domain);
+        self
+    }
+
+    /// Computes cosine similarity with another embedding.
+    pub fn cosine_similarity(&self, other: &SemanticEmbedding) -> f32 {
+        if self.vector.len() != other.vector.len() {
+            return 0.0;
+        }
+
+        let dot_product: f32 = self
+            .vector
+            .iter()
+            .zip(other.vector.iter())
+            .map(|(a, b)| a * b)
+            .sum();
+
+        let magnitude_a: f32 = self.vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude_b: f32 = other.vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        if magnitude_a == 0.0 || magnitude_b == 0.0 {
+            return 0.0;
+        }
+
+        dot_product / (magnitude_a * magnitude_b)
+    }
+
+    /// Returns the dimensionality of the embedding vector.
+    pub fn dimensions(&self) -> usize {
+        self.vector.len()
+    }
+}
+
+/// Multilingual semantic embedder for legal text.
+#[derive(Debug, Clone)]
+pub struct MultilingualEmbedder {
+    /// Embedding model to use.
+    pub model: EmbeddingModel,
+    /// Embedding dimension size.
+    pub dimension: usize,
+    /// Whether to normalize embeddings.
+    pub normalize: bool,
+    /// Legal dictionary for domain adaptation.
+    pub dictionary: Option<LegalDictionary>,
+}
+
+impl MultilingualEmbedder {
+    /// Creates a new multilingual embedder.
+    pub fn new(model: EmbeddingModel, dimension: usize) -> Self {
+        Self {
+            model,
+            dimension,
+            normalize: true,
+            dictionary: None,
+        }
+    }
+
+    /// Creates an embedder with LaBSE (768 dimensions).
+    pub fn labse() -> Self {
+        Self::new(EmbeddingModel::LaBSE, 768)
+    }
+
+    /// Creates an embedder with XLM-RoBERTa (1024 dimensions).
+    pub fn xlm_roberta() -> Self {
+        Self::new(EmbeddingModel::XLMRoBERTa, 1024)
+    }
+
+    /// Creates an embedder for legal domain (768 dimensions).
+    pub fn legal_domain() -> Self {
+        Self::new(EmbeddingModel::LegalMultilingual, 768)
+    }
+
+    /// Sets whether to normalize embeddings.
+    pub fn with_normalization(mut self, normalize: bool) -> Self {
+        self.normalize = normalize;
+        self
+    }
+
+    /// Sets the legal dictionary for domain adaptation.
+    pub fn with_dictionary(mut self, dictionary: LegalDictionary) -> Self {
+        self.dictionary = Some(dictionary);
+        self
+    }
+
+    /// Embeds text into a semantic vector (placeholder - would use actual model).
+    pub fn embed(&self, text: &str, locale: Locale) -> SemanticEmbedding {
+        // Placeholder implementation - in production would call actual embedding model
+        // For now, create a simple hash-based pseudo-embedding
+        let mut vector = vec![0.0f32; self.dimension];
+
+        // Simple hash-based embedding (for demonstration)
+        for (i, byte) in text.bytes().enumerate() {
+            let idx = (byte as usize + i) % self.dimension;
+            vector[idx] += 1.0;
+        }
+
+        // Normalize if requested
+        if self.normalize {
+            let magnitude: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+            if magnitude > 0.0 {
+                for v in &mut vector {
+                    *v /= magnitude;
+                }
+            }
+        }
+
+        SemanticEmbedding::new(text, locale, vector, self.model.to_string())
+    }
+
+    /// Embeds multiple texts in batch.
+    pub fn embed_batch(&self, texts: &[(String, Locale)]) -> Vec<SemanticEmbedding> {
+        texts
+            .iter()
+            .map(|(text, locale)| self.embed(text, locale.clone()))
+            .collect()
+    }
+}
+
+/// Legal case metadata for cross-lingual search.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LegalCase {
+    /// Case identifier.
+    pub case_id: String,
+    /// Case title/name.
+    pub title: String,
+    /// Jurisdiction.
+    pub jurisdiction: String,
+    /// Case summary or holding.
+    pub summary: String,
+    /// Case text locale.
+    pub locale: Locale,
+    /// Case year.
+    pub year: u32,
+    /// Legal domain.
+    pub domain: Option<LegalSpeechDomain>,
+    /// Semantic embedding of the case.
+    pub embedding: Option<SemanticEmbedding>,
+}
+
+impl LegalCase {
+    /// Creates a new legal case.
+    pub fn new(
+        case_id: impl Into<String>,
+        title: impl Into<String>,
+        jurisdiction: impl Into<String>,
+        summary: impl Into<String>,
+        locale: Locale,
+        year: u32,
+    ) -> Self {
+        Self {
+            case_id: case_id.into(),
+            title: title.into(),
+            jurisdiction: jurisdiction.into(),
+            summary: summary.into(),
+            locale,
+            year,
+            domain: None,
+            embedding: None,
+        }
+    }
+
+    /// Sets the legal domain.
+    pub fn with_domain(mut self, domain: LegalSpeechDomain) -> Self {
+        self.domain = Some(domain);
+        self
+    }
+
+    /// Sets the semantic embedding.
+    pub fn with_embedding(mut self, embedding: SemanticEmbedding) -> Self {
+        self.embedding = Some(embedding);
+        self
+    }
+}
+
+/// Search result with similarity score.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchResult {
+    /// The matched legal case.
+    pub case: LegalCase,
+    /// Similarity score (0.0 to 1.0).
+    pub similarity: f32,
+    /// Rank in search results.
+    pub rank: usize,
+}
+
+impl SearchResult {
+    /// Creates a new search result.
+    pub fn new(case: LegalCase, similarity: f32, rank: usize) -> Self {
+        Self {
+            case,
+            similarity,
+            rank,
+        }
+    }
+}
+
+/// Cross-lingual case search engine.
+#[derive(Debug, Clone)]
+pub struct CrossLingualCaseSearch {
+    /// Multilingual embedder.
+    pub embedder: MultilingualEmbedder,
+    /// Indexed cases with embeddings.
+    pub cases: Vec<LegalCase>,
+    /// Minimum similarity threshold for results.
+    pub min_similarity: f32,
+}
+
+impl CrossLingualCaseSearch {
+    /// Creates a new cross-lingual case search engine.
+    pub fn new(embedder: MultilingualEmbedder) -> Self {
+        Self {
+            embedder,
+            cases: Vec::new(),
+            min_similarity: 0.5,
+        }
+    }
+
+    /// Sets the minimum similarity threshold.
+    pub fn with_min_similarity(mut self, min_similarity: f32) -> Self {
+        self.min_similarity = min_similarity.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds a case to the search index.
+    pub fn add_case(&mut self, mut case: LegalCase) {
+        // Generate embedding if not present
+        if case.embedding.is_none() {
+            let embedding = self.embedder.embed(&case.summary, case.locale.clone());
+            case.embedding = Some(embedding);
+        }
+        self.cases.push(case);
+    }
+
+    /// Searches for similar cases across languages.
+    pub fn search(
+        &self,
+        query: &str,
+        query_locale: Locale,
+        max_results: usize,
+    ) -> Vec<SearchResult> {
+        // Embed the query
+        let query_embedding = self.embedder.embed(query, query_locale);
+
+        // Compute similarities with all cases
+        let mut results: Vec<SearchResult> = self
+            .cases
+            .iter()
+            .filter_map(|case| {
+                if let Some(ref case_embedding) = case.embedding {
+                    let similarity = query_embedding.cosine_similarity(case_embedding);
+                    if similarity >= self.min_similarity {
+                        Some((case.clone(), similarity))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .enumerate()
+            .map(|(rank, (case, similarity))| SearchResult::new(case, similarity, rank + 1))
+            .collect();
+
+        // Sort by similarity (descending)
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Update ranks after sorting
+        for (i, result) in results.iter_mut().enumerate() {
+            result.rank = i + 1;
+        }
+
+        // Return top N results
+        results.into_iter().take(max_results).collect()
+    }
+
+    /// Searches for cases in a specific jurisdiction.
+    pub fn search_by_jurisdiction(
+        &self,
+        query: &str,
+        query_locale: Locale,
+        jurisdiction: &str,
+        max_results: usize,
+    ) -> Vec<SearchResult> {
+        let all_results = self.search(query, query_locale, self.cases.len());
+
+        all_results
+            .into_iter()
+            .filter(|result| result.case.jurisdiction == jurisdiction)
+            .take(max_results)
+            .enumerate()
+            .map(|(i, mut result)| {
+                result.rank = i + 1;
+                result
+            })
+            .collect()
+    }
+
+    /// Returns the total number of indexed cases.
+    pub fn case_count(&self) -> usize {
+        self.cases.len()
+    }
+}
+
+/// Legal concept for cross-lingual mapping.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LegalConcept {
+    /// Concept identifier.
+    pub concept_id: String,
+    /// Concept name in English (canonical).
+    pub canonical_name: String,
+    /// Localized names by locale.
+    pub localized_names: HashMap<String, String>,
+    /// Concept definition.
+    pub definition: String,
+    /// Legal domain.
+    pub domain: Option<LegalSpeechDomain>,
+    /// Semantic embedding.
+    pub embedding: Option<SemanticEmbedding>,
+}
+
+impl LegalConcept {
+    /// Creates a new legal concept.
+    pub fn new(
+        concept_id: impl Into<String>,
+        canonical_name: impl Into<String>,
+        definition: impl Into<String>,
+    ) -> Self {
+        Self {
+            concept_id: concept_id.into(),
+            canonical_name: canonical_name.into(),
+            localized_names: HashMap::new(),
+            definition: definition.into(),
+            domain: None,
+            embedding: None,
+        }
+    }
+
+    /// Adds a localized name for a locale.
+    pub fn add_localized_name(mut self, locale: Locale, name: impl Into<String>) -> Self {
+        self.localized_names.insert(locale.tag(), name.into());
+        self
+    }
+
+    /// Sets the legal domain.
+    pub fn with_domain(mut self, domain: LegalSpeechDomain) -> Self {
+        self.domain = Some(domain);
+        self
+    }
+
+    /// Sets the semantic embedding.
+    pub fn with_embedding(mut self, embedding: SemanticEmbedding) -> Self {
+        self.embedding = Some(embedding);
+        self
+    }
+
+    /// Gets the name in a specific locale, or canonical name if not available.
+    pub fn get_name(&self, locale: &Locale) -> String {
+        self.localized_names
+            .get(&locale.tag())
+            .cloned()
+            .unwrap_or_else(|| self.canonical_name.clone())
+    }
+}
+
+/// Cross-lingual concept mapper.
+#[derive(Debug, Clone)]
+pub struct ConceptMapper {
+    /// Legal concepts indexed by ID.
+    pub concepts: HashMap<String, LegalConcept>,
+    /// Multilingual embedder.
+    pub embedder: MultilingualEmbedder,
+}
+
+impl ConceptMapper {
+    /// Creates a new concept mapper.
+    pub fn new(embedder: MultilingualEmbedder) -> Self {
+        Self {
+            concepts: HashMap::new(),
+            embedder,
+        }
+    }
+
+    /// Creates a mapper with default legal concepts.
+    pub fn with_defaults(embedder: MultilingualEmbedder) -> Self {
+        let mut mapper = Self::new(embedder);
+
+        // Add common legal concepts
+        mapper.add_concept(
+            LegalConcept::new(
+                "contract",
+                "Contract",
+                "A legally binding agreement between two or more parties",
+            )
+            .add_localized_name(Locale::new("es").with_country("ES"), "Contrato")
+            .add_localized_name(Locale::new("fr").with_country("FR"), "Contrat")
+            .add_localized_name(Locale::new("de").with_country("DE"), "Vertrag")
+            .add_localized_name(Locale::new("ja").with_country("JP"), "契約"),
+        );
+
+        mapper.add_concept(
+            LegalConcept::new(
+                "tort",
+                "Tort",
+                "A civil wrong that causes harm or loss to another person",
+            )
+            .add_localized_name(Locale::new("fr").with_country("FR"), "Délit civil")
+            .add_localized_name(Locale::new("de").with_country("DE"), "Delikt")
+            .add_localized_name(Locale::new("ja").with_country("JP"), "不法行為"),
+        );
+
+        mapper.add_concept(
+            LegalConcept::new(
+                "jurisdiction",
+                "Jurisdiction",
+                "The official power to make legal decisions and judgments",
+            )
+            .add_localized_name(Locale::new("es").with_country("ES"), "Jurisdicción")
+            .add_localized_name(Locale::new("fr").with_country("FR"), "Juridiction")
+            .add_localized_name(Locale::new("de").with_country("DE"), "Gerichtsbarkeit")
+            .add_localized_name(Locale::new("ja").with_country("JP"), "管轄権"),
+        );
+
+        mapper
+    }
+
+    /// Adds a concept to the mapper.
+    pub fn add_concept(&mut self, mut concept: LegalConcept) {
+        // Generate embedding if not present
+        if concept.embedding.is_none() {
+            let embedding = self
+                .embedder
+                .embed(&concept.definition, Locale::new("en").with_country("US"));
+            concept.embedding = Some(embedding);
+        }
+        self.concepts.insert(concept.concept_id.clone(), concept);
+    }
+
+    /// Finds the most similar concept to a query.
+    pub fn find_concept(&self, query: &str, locale: Locale) -> Option<LegalConcept> {
+        let query_embedding = self.embedder.embed(query, locale);
+
+        self.concepts
+            .values()
+            .filter_map(|concept| {
+                concept.embedding.as_ref().map(|emb| {
+                    let similarity = query_embedding.cosine_similarity(emb);
+                    (concept.clone(), similarity)
+                })
+            })
+            .max_by(|(_, sim_a), (_, sim_b)| {
+                sim_a
+                    .partial_cmp(sim_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(concept, _)| concept)
+    }
+
+    /// Maps a term from one language to equivalent terms in other languages.
+    pub fn map_term_across_languages(
+        &self,
+        term: &str,
+        source_locale: Locale,
+    ) -> HashMap<String, String> {
+        if let Some(concept) = self.find_concept(term, source_locale) {
+            concept.localized_names.clone()
+        } else {
+            HashMap::new()
+        }
+    }
+
+    /// Returns the total number of concepts.
+    pub fn concept_count(&self) -> usize {
+        self.concepts.len()
+    }
+}
+
+/// Knowledge graph node representing a legal entity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeGraphNode {
+    /// Node identifier.
+    pub node_id: String,
+    /// Node type (concept, case, statute, etc.).
+    pub node_type: String,
+    /// Node label/name.
+    pub label: String,
+    /// Node locale.
+    pub locale: Locale,
+    /// Node properties.
+    pub properties: HashMap<String, String>,
+    /// Semantic embedding.
+    pub embedding: Option<SemanticEmbedding>,
+}
+
+impl KnowledgeGraphNode {
+    /// Creates a new knowledge graph node.
+    pub fn new(
+        node_id: impl Into<String>,
+        node_type: impl Into<String>,
+        label: impl Into<String>,
+        locale: Locale,
+    ) -> Self {
+        Self {
+            node_id: node_id.into(),
+            node_type: node_type.into(),
+            label: label.into(),
+            locale,
+            properties: HashMap::new(),
+            embedding: None,
+        }
+    }
+
+    /// Adds a property to the node.
+    pub fn with_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.properties.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets the semantic embedding.
+    pub fn with_embedding(mut self, embedding: SemanticEmbedding) -> Self {
+        self.embedding = Some(embedding);
+        self
+    }
+}
+
+/// Knowledge graph edge representing a relationship.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeGraphEdge {
+    /// Source node ID.
+    pub from_node: String,
+    /// Target node ID.
+    pub to_node: String,
+    /// Relationship type.
+    pub relationship: String,
+    /// Edge properties.
+    pub properties: HashMap<String, String>,
+}
+
+impl KnowledgeGraphEdge {
+    /// Creates a new knowledge graph edge.
+    pub fn new(
+        from_node: impl Into<String>,
+        to_node: impl Into<String>,
+        relationship: impl Into<String>,
+    ) -> Self {
+        Self {
+            from_node: from_node.into(),
+            to_node: to_node.into(),
+            relationship: relationship.into(),
+            properties: HashMap::new(),
+        }
+    }
+
+    /// Adds a property to the edge.
+    pub fn with_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.properties.insert(key.into(), value.into());
+        self
+    }
+}
+
+/// Multilingual knowledge graph for legal concepts.
+#[derive(Debug, Clone)]
+pub struct MultilingualKnowledgeGraph {
+    /// Graph nodes.
+    pub nodes: HashMap<String, KnowledgeGraphNode>,
+    /// Graph edges.
+    pub edges: Vec<KnowledgeGraphEdge>,
+    /// Multilingual embedder.
+    pub embedder: MultilingualEmbedder,
+}
+
+impl MultilingualKnowledgeGraph {
+    /// Creates a new multilingual knowledge graph.
+    pub fn new(embedder: MultilingualEmbedder) -> Self {
+        Self {
+            nodes: HashMap::new(),
+            edges: Vec::new(),
+            embedder,
+        }
+    }
+
+    /// Adds a node to the graph.
+    pub fn add_node(&mut self, mut node: KnowledgeGraphNode) {
+        // Generate embedding if not present
+        if node.embedding.is_none() {
+            let embedding = self.embedder.embed(&node.label, node.locale.clone());
+            node.embedding = Some(embedding);
+        }
+        self.nodes.insert(node.node_id.clone(), node);
+    }
+
+    /// Adds an edge to the graph.
+    pub fn add_edge(&mut self, edge: KnowledgeGraphEdge) {
+        self.edges.push(edge);
+    }
+
+    /// Gets a node by ID.
+    pub fn get_node(&self, node_id: &str) -> Option<&KnowledgeGraphNode> {
+        self.nodes.get(node_id)
+    }
+
+    /// Finds nodes by type.
+    pub fn find_nodes_by_type(&self, node_type: &str) -> Vec<&KnowledgeGraphNode> {
+        self.nodes
+            .values()
+            .filter(|node| node.node_type == node_type)
+            .collect()
+    }
+
+    /// Finds outgoing edges from a node.
+    pub fn find_outgoing_edges(&self, node_id: &str) -> Vec<&KnowledgeGraphEdge> {
+        self.edges
+            .iter()
+            .filter(|edge| edge.from_node == node_id)
+            .collect()
+    }
+
+    /// Finds incoming edges to a node.
+    pub fn find_incoming_edges(&self, node_id: &str) -> Vec<&KnowledgeGraphEdge> {
+        self.edges
+            .iter()
+            .filter(|edge| edge.to_node == node_id)
+            .collect()
+    }
+
+    /// Finds similar nodes using semantic search.
+    pub fn find_similar_nodes(
+        &self,
+        query: &str,
+        locale: Locale,
+        max_results: usize,
+    ) -> Vec<(String, f32)> {
+        let query_embedding = self.embedder.embed(query, locale);
+
+        let mut results: Vec<(String, f32)> = self
+            .nodes
+            .values()
+            .filter_map(|node| {
+                node.embedding.as_ref().map(|emb| {
+                    let similarity = query_embedding.cosine_similarity(emb);
+                    (node.node_id.clone(), similarity)
+                })
+            })
+            .collect();
+
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.into_iter().take(max_results).collect()
+    }
+
+    /// Returns graph statistics.
+    pub fn stats(&self) -> (usize, usize) {
+        (self.nodes.len(), self.edges.len())
+    }
+}
+
+/// Language-agnostic legal reasoning engine.
+#[derive(Debug, Clone)]
+pub struct LegalReasoningEngine {
+    /// Knowledge graph.
+    pub knowledge_graph: MultilingualKnowledgeGraph,
+    /// Concept mapper.
+    pub concept_mapper: ConceptMapper,
+    /// Case search engine.
+    pub case_search: CrossLingualCaseSearch,
+}
+
+impl LegalReasoningEngine {
+    /// Creates a new legal reasoning engine.
+    pub fn new(embedder: MultilingualEmbedder) -> Self {
+        Self {
+            knowledge_graph: MultilingualKnowledgeGraph::new(embedder.clone()),
+            concept_mapper: ConceptMapper::with_defaults(embedder.clone()),
+            case_search: CrossLingualCaseSearch::new(embedder),
+        }
+    }
+
+    /// Analyzes a legal query across languages.
+    pub fn analyze_query(&self, query: &str, locale: Locale) -> AnalysisResult {
+        // Find relevant concept
+        let concept = self.concept_mapper.find_concept(query, locale.clone());
+
+        // Search for similar cases
+        let cases = self.case_search.search(query, locale.clone(), 5);
+
+        // Find similar knowledge graph nodes
+        let similar_nodes = self
+            .knowledge_graph
+            .find_similar_nodes(query, locale.clone(), 5);
+
+        AnalysisResult {
+            query: query.to_string(),
+            locale,
+            matched_concept: concept,
+            similar_cases: cases,
+            related_nodes: similar_nodes,
+        }
+    }
+
+    /// Finds equivalent legal concepts across jurisdictions.
+    pub fn find_cross_jurisdictional_equivalents(
+        &self,
+        term: &str,
+        source_locale: Locale,
+    ) -> HashMap<String, String> {
+        self.concept_mapper
+            .map_term_across_languages(term, source_locale)
+    }
+}
+
+/// Analysis result from legal reasoning engine.
+#[derive(Debug, Clone)]
+pub struct AnalysisResult {
+    /// Original query.
+    pub query: String,
+    /// Query locale.
+    pub locale: Locale,
+    /// Matched legal concept.
+    pub matched_concept: Option<LegalConcept>,
+    /// Similar cases found.
+    pub similar_cases: Vec<SearchResult>,
+    /// Related knowledge graph nodes.
+    pub related_nodes: Vec<(String, f32)>,
+}
+
+impl AnalysisResult {
+    /// Checks if analysis found any results.
+    pub fn has_results(&self) -> bool {
+        self.matched_concept.is_some()
+            || !self.similar_cases.is_empty()
+            || !self.related_nodes.is_empty()
+    }
+
+    /// Returns the number of similar cases found.
+    pub fn case_count(&self) -> usize {
+        self.similar_cases.len()
+    }
+
+    /// Returns the number of related nodes found.
+    pub fn node_count(&self) -> usize {
+        self.related_nodes.len()
+    }
+}
+
 #[cfg(test)]
 mod ai_translation_tests {
     use super::*;
@@ -23280,5 +25090,1111 @@ mod historical_tests {
 
         assert_eq!(annotator.context_count(), 1);
         assert!(!annotator.get_contexts("Common Law").is_empty());
+    }
+}
+
+// ============================================================================
+// v0.3.1: Real-Time Interpretation Tests
+// ============================================================================
+
+#[cfg(test)]
+mod real_time_interpretation_tests {
+    use super::*;
+
+    // AudioQuality tests
+    #[test]
+    fn test_audio_quality_display() {
+        assert_eq!(AudioQuality::Low.to_string(), "Low (8kHz)");
+        assert_eq!(AudioQuality::Medium.to_string(), "Medium (16kHz)");
+        assert_eq!(AudioQuality::High.to_string(), "High (44.1kHz)");
+        assert_eq!(AudioQuality::Studio.to_string(), "Studio (48kHz+)");
+    }
+
+    // TranscriptionSegment tests
+    #[test]
+    fn test_transcription_segment_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let segment = TranscriptionSegment::new("This is a test.", 0, 3000, locale.clone());
+
+        assert_eq!(segment.text, "This is a test.");
+        assert_eq!(segment.start_ms, 0);
+        assert_eq!(segment.end_ms, 3000);
+        assert_eq!(segment.confidence, 1.0);
+        assert!(segment.speaker.is_none());
+    }
+
+    #[test]
+    fn test_transcription_segment_with_speaker() {
+        let locale = Locale::new("en").with_country("US");
+        let segment = TranscriptionSegment::new("Test", 0, 1000, locale)
+            .with_speaker("Judge")
+            .with_confidence(0.95);
+
+        assert_eq!(segment.speaker, Some("Judge".to_string()));
+        assert_eq!(segment.confidence, 0.95);
+    }
+
+    #[test]
+    fn test_transcription_segment_duration() {
+        let locale = Locale::new("en").with_country("US");
+        let segment = TranscriptionSegment::new("Test", 1000, 5000, locale);
+
+        assert_eq!(segment.duration_ms(), 4000);
+    }
+
+    #[test]
+    fn test_transcription_segment_format() {
+        let locale = Locale::new("en").with_country("US");
+        let segment =
+            TranscriptionSegment::new("Test speech", 0, 3000, locale).with_speaker("Attorney");
+
+        let formatted = segment.format_with_timestamp();
+        assert!(formatted.contains("00:00 - 00:03"));
+        assert!(formatted.contains("Attorney"));
+        assert!(formatted.contains("Test speech"));
+    }
+
+    // LegalSpeechDomain tests
+    #[test]
+    fn test_legal_speech_domain_display() {
+        assert_eq!(
+            LegalSpeechDomain::CourtProceedings.to_string(),
+            "Court Proceedings"
+        );
+        assert_eq!(LegalSpeechDomain::Depositions.to_string(), "Depositions");
+        assert_eq!(
+            LegalSpeechDomain::Consultations.to_string(),
+            "Legal Consultations"
+        );
+        assert_eq!(
+            LegalSpeechDomain::ContractNegotiations.to_string(),
+            "Contract Negotiations"
+        );
+        assert_eq!(
+            LegalSpeechDomain::ArbitrationMediation.to_string(),
+            "Arbitration/Mediation"
+        );
+        assert_eq!(LegalSpeechDomain::General.to_string(), "General Legal");
+    }
+
+    // LegalSpeechTranscriber tests
+    #[test]
+    fn test_legal_speech_transcriber_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let transcriber =
+            LegalSpeechTranscriber::new(locale.clone(), LegalSpeechDomain::CourtProceedings);
+
+        assert_eq!(transcriber.locale, locale);
+        assert_eq!(transcriber.audio_quality, AudioQuality::Medium);
+        assert_eq!(transcriber.domain, LegalSpeechDomain::CourtProceedings);
+        assert!(!transcriber.speaker_diarization);
+        assert!(!transcriber.legal_vocabulary_boost);
+    }
+
+    #[test]
+    fn test_legal_speech_transcriber_for_court() {
+        let locale = Locale::new("en").with_country("US");
+        let transcriber = LegalSpeechTranscriber::for_court_proceedings(locale);
+
+        assert_eq!(transcriber.audio_quality, AudioQuality::Studio);
+        assert!(transcriber.speaker_diarization);
+        assert!(transcriber.legal_vocabulary_boost);
+    }
+
+    #[test]
+    fn test_legal_speech_transcriber_for_depositions() {
+        let locale = Locale::new("en").with_country("US");
+        let transcriber = LegalSpeechTranscriber::for_depositions(locale);
+
+        assert_eq!(transcriber.audio_quality, AudioQuality::High);
+        assert!(transcriber.speaker_diarization);
+        assert!(transcriber.legal_vocabulary_boost);
+    }
+
+    #[test]
+    fn test_legal_speech_transcriber_vocabulary_hints() {
+        let locale = Locale::new("en").with_country("US");
+        let transcriber = LegalSpeechTranscriber::for_court_proceedings(locale);
+
+        let hints = transcriber.get_vocabulary_hints();
+        assert!(hints.contains(&"objection".to_string()));
+        assert!(hints.contains(&"sustained".to_string()));
+        assert!(hints.contains(&"Your Honor".to_string()));
+    }
+
+    #[test]
+    fn test_legal_speech_transcriber_with_dictionary() {
+        let locale = Locale::new("en").with_country("US");
+        let mut dict = LegalDictionary::new(locale.clone());
+        dict.add_translation(
+            "plaintiff",
+            "A person who brings a case against another in a court of law",
+        );
+
+        let transcriber =
+            LegalSpeechTranscriber::for_court_proceedings(locale).with_dictionary(dict);
+
+        assert!(transcriber.dictionary.is_some());
+
+        let hints = transcriber.get_vocabulary_hints();
+        assert!(hints.contains(&"plaintiff".to_string()));
+    }
+
+    // InterpretationMode tests
+    #[test]
+    fn test_interpretation_mode_display() {
+        assert_eq!(InterpretationMode::Consecutive.to_string(), "Consecutive");
+        assert_eq!(InterpretationMode::Simultaneous.to_string(), "Simultaneous");
+        assert_eq!(
+            InterpretationMode::Whispered.to_string(),
+            "Whispered (Chuchotage)"
+        );
+    }
+
+    // InterpretedSegment tests
+    #[test]
+    fn test_interpreted_segment_creation() {
+        let source_locale = Locale::new("en").with_country("US");
+        let target_locale = Locale::new("es").with_country("ES");
+        let source_segment =
+            TranscriptionSegment::new("The defendant is guilty.", 0, 2000, source_locale);
+
+        let interpreted = InterpretedSegment::new(
+            source_segment,
+            "El acusado es culpable.",
+            target_locale.clone(),
+        );
+
+        assert_eq!(interpreted.target_text, "El acusado es culpable.");
+        assert_eq!(interpreted.target_locale, target_locale);
+        assert_eq!(interpreted.interpretation_confidence, 1.0);
+        assert_eq!(interpreted.delay_ms, 0);
+    }
+
+    #[test]
+    fn test_interpreted_segment_with_confidence() {
+        let source_locale = Locale::new("en").with_country("US");
+        let target_locale = Locale::new("fr").with_country("FR");
+        let source_segment = TranscriptionSegment::new("Test", 0, 1000, source_locale);
+
+        let interpreted = InterpretedSegment::new(source_segment, "Test", target_locale)
+            .with_confidence(0.85)
+            .with_delay_ms(250);
+
+        assert_eq!(interpreted.interpretation_confidence, 0.85);
+        assert_eq!(interpreted.delay_ms, 250);
+    }
+
+    #[test]
+    fn test_interpreted_segment_format_bilingual() {
+        let source_locale = Locale::new("en").with_country("US");
+        let target_locale = Locale::new("ja").with_country("JP");
+        let source_segment = TranscriptionSegment::new("Court", 0, 1000, source_locale);
+
+        let interpreted = InterpretedSegment::new(source_segment, "裁判所", target_locale);
+        let formatted = interpreted.format_bilingual();
+
+        assert!(formatted.contains("[en-US]"));
+        assert!(formatted.contains("Court"));
+        assert!(formatted.contains("[ja-JP]"));
+        assert!(formatted.contains("裁判所"));
+    }
+
+    // SimultaneousInterpreter tests
+    #[test]
+    fn test_simultaneous_interpreter_creation() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("es").with_country("ES");
+
+        let interpreter = SimultaneousInterpreter::new(
+            source.clone(),
+            target.clone(),
+            LegalSpeechDomain::CourtProceedings,
+        );
+
+        assert_eq!(interpreter.source_locale, source);
+        assert_eq!(interpreter.target_locale, target);
+        assert_eq!(interpreter.mode, InterpretationMode::Simultaneous);
+        assert_eq!(interpreter.max_delay_ms, 3000);
+    }
+
+    #[test]
+    fn test_simultaneous_interpreter_for_court() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("fr").with_country("FR");
+
+        let interpreter = SimultaneousInterpreter::for_court_proceedings(source, target);
+
+        assert_eq!(interpreter.domain, LegalSpeechDomain::CourtProceedings);
+        assert_eq!(interpreter.transcriber.audio_quality, AudioQuality::Studio);
+    }
+
+    #[test]
+    fn test_simultaneous_interpreter_with_mode() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("de").with_country("DE");
+
+        let interpreter = SimultaneousInterpreter::new(source, target, LegalSpeechDomain::General)
+            .with_mode(InterpretationMode::Consecutive);
+
+        assert_eq!(interpreter.mode, InterpretationMode::Consecutive);
+    }
+
+    #[test]
+    fn test_simultaneous_interpreter_segment() {
+        let source = Locale::new("en").with_country("US");
+        let target = Locale::new("ja").with_country("JP");
+
+        let interpreter = SimultaneousInterpreter::new(
+            source.clone(),
+            target,
+            LegalSpeechDomain::CourtProceedings,
+        );
+
+        let segment =
+            TranscriptionSegment::new("Objection!", 0, 1000, source).with_confidence(0.98);
+
+        let interpreted = interpreter.interpret_segment(segment);
+
+        assert_eq!(interpreted.source_segment.text, "Objection!");
+        assert_eq!(interpreted.delay_ms, 200); // Simultaneous mode delay
+        assert!(interpreted.interpretation_confidence > 0.0);
+    }
+
+    // CourtParticipantRole tests
+    #[test]
+    fn test_court_participant_role_display() {
+        assert_eq!(CourtParticipantRole::Judge.to_string(), "Judge");
+        assert_eq!(CourtParticipantRole::Prosecutor.to_string(), "Prosecutor");
+        assert_eq!(
+            CourtParticipantRole::DefenseAttorney.to_string(),
+            "Defense Attorney"
+        );
+        assert_eq!(CourtParticipantRole::Witness.to_string(), "Witness");
+        assert_eq!(CourtParticipantRole::Juror.to_string(), "Juror");
+    }
+
+    // CourtParticipant tests
+    #[test]
+    fn test_court_participant_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let participant =
+            CourtParticipant::new("John Doe", CourtParticipantRole::Defendant, locale.clone());
+
+        assert_eq!(participant.name, "John Doe");
+        assert_eq!(participant.role, CourtParticipantRole::Defendant);
+        assert_eq!(participant.primary_language, locale);
+        assert!(!participant.requires_interpretation);
+    }
+
+    #[test]
+    fn test_court_participant_requires_interpretation() {
+        let locale = Locale::new("es").with_country("ES");
+        let participant =
+            CourtParticipant::new("Maria Garcia", CourtParticipantRole::Witness, locale)
+                .requires_interpretation();
+
+        assert!(participant.requires_interpretation);
+    }
+
+    // CourtProceedingTranslator tests
+    #[test]
+    fn test_court_proceeding_translator_creation() {
+        let court_language = Locale::new("en").with_country("US");
+        let translator = CourtProceedingTranslator::new(court_language.clone());
+
+        assert_eq!(translator.court_language, court_language);
+        assert_eq!(translator.participants.len(), 0);
+        assert_eq!(translator.interpreters.len(), 0);
+        assert!(translator.record_audio);
+        assert!(translator.real_time_transcripts);
+    }
+
+    #[test]
+    fn test_court_proceeding_add_participant() {
+        let court_language = Locale::new("en").with_country("US");
+        let mut translator = CourtProceedingTranslator::new(court_language);
+
+        let spanish_locale = Locale::new("es").with_country("ES");
+        let participant = CourtParticipant::new(
+            "Juan Lopez",
+            CourtParticipantRole::Defendant,
+            spanish_locale,
+        )
+        .requires_interpretation();
+
+        translator.add_participant(participant);
+
+        assert_eq!(translator.participants.len(), 1);
+        assert_eq!(translator.interpreters.len(), 1);
+        assert_eq!(translator.language_count(), 2); // English + Spanish
+    }
+
+    #[test]
+    fn test_court_proceeding_multiple_languages() {
+        let court_language = Locale::new("en").with_country("US");
+        let mut translator = CourtProceedingTranslator::new(court_language.clone());
+
+        let spanish = Locale::new("es").with_country("ES");
+        let french = Locale::new("fr").with_country("FR");
+
+        translator.add_participant(
+            CourtParticipant::new("Juan", CourtParticipantRole::Defendant, spanish)
+                .requires_interpretation(),
+        );
+
+        translator.add_participant(
+            CourtParticipant::new("Pierre", CourtParticipantRole::Witness, french)
+                .requires_interpretation(),
+        );
+
+        assert_eq!(translator.language_count(), 3); // English + Spanish + French
+    }
+
+    #[test]
+    #[allow(dead_code)]
+    fn test_court_proceeding_process_utterance() {
+        let court_language = Locale::new("en").with_country("US");
+        let mut translator = CourtProceedingTranslator::new(court_language.clone());
+
+        let spanish = Locale::new("es").with_country("ES");
+        translator.add_participant(
+            CourtParticipant::new("Defendant", CourtParticipantRole::Defendant, spanish)
+                .requires_interpretation(),
+        );
+
+        let segment = TranscriptionSegment::new("Please state your name.", 0, 2000, court_language);
+
+        let translations = translator.process_utterance("Judge", segment);
+        assert_eq!(translations.len(), 1);
+    }
+
+    // MultilingualHearing tests
+    #[test]
+    fn test_multilingual_hearing_creation() {
+        let primary = Locale::new("en").with_country("US");
+        let hearing = MultilingualHearing::new("Case 123", primary.clone());
+
+        assert_eq!(hearing.title, "Case 123");
+        assert_eq!(hearing.primary_language, primary);
+        assert_eq!(hearing.active_languages.len(), 1);
+        assert!(hearing.closed_captions);
+    }
+
+    #[test]
+    fn test_multilingual_hearing_add_language() {
+        let primary = Locale::new("en").with_country("US");
+        let mut hearing = MultilingualHearing::new("Hearing", primary);
+
+        let spanish = Locale::new("es").with_country("ES");
+        hearing.add_language(spanish.clone());
+
+        assert_eq!(hearing.active_languages.len(), 2);
+        assert_eq!(hearing.channel_count(), 1);
+        assert!(hearing.active_languages.contains(&spanish));
+    }
+
+    #[test]
+    fn test_multilingual_hearing_add_participant() {
+        let primary = Locale::new("en").with_country("US");
+        let mut hearing = MultilingualHearing::new("Trial", primary);
+
+        let japanese = Locale::new("ja").with_country("JP");
+        let participant =
+            CourtParticipant::new("Tanaka", CourtParticipantRole::Witness, japanese.clone())
+                .requires_interpretation();
+
+        hearing.add_participant(participant);
+
+        assert_eq!(hearing.active_languages.len(), 2);
+        assert!(hearing.active_languages.contains(&japanese));
+    }
+
+    #[test]
+    fn test_multilingual_hearing_process_utterance() {
+        let primary = Locale::new("en").with_country("US");
+        let mut hearing = MultilingualHearing::new("Case", primary.clone());
+
+        let french = Locale::new("fr").with_country("FR");
+        hearing.add_language(french);
+
+        let segment = TranscriptionSegment::new("The court is now in session.", 0, 3000, primary);
+        let interpretations = hearing.process_multilingual_utterance(segment);
+
+        assert_eq!(interpretations.len(), 1);
+    }
+
+    // SubtitleCue tests
+    #[test]
+    fn test_subtitle_cue_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let cue = SubtitleCue::new("Hello", 0, 2000, locale.clone());
+
+        assert_eq!(cue.text, "Hello");
+        assert_eq!(cue.start_ms, 0);
+        assert_eq!(cue.end_ms, 2000);
+        assert_eq!(cue.locale, locale);
+        assert!(cue.speaker.is_none());
+        assert!(cue.position.is_none());
+    }
+
+    #[test]
+    fn test_subtitle_cue_with_speaker() {
+        let locale = Locale::new("en").with_country("US");
+        let cue = SubtitleCue::new("Text", 0, 1000, locale)
+            .with_speaker("Judge")
+            .with_position(SubtitlePosition::BottomCenter);
+
+        assert_eq!(cue.speaker, Some("Judge".to_string()));
+        assert_eq!(cue.position, Some(SubtitlePosition::BottomCenter));
+    }
+
+    #[test]
+    fn test_subtitle_cue_to_webvtt() {
+        let locale = Locale::new("en").with_country("US");
+        let cue = SubtitleCue::new("Test subtitle", 1000, 3000, locale).with_speaker("Attorney");
+
+        let vtt = cue.to_webvtt();
+        assert!(vtt.contains("00:00:01.000 --> 00:00:03.000"));
+        assert!(vtt.contains("<v Attorney>Test subtitle</v>"));
+    }
+
+    #[test]
+    fn test_subtitle_cue_to_srt() {
+        let locale = Locale::new("en").with_country("US");
+        let cue = SubtitleCue::new("Test", 0, 2000, locale).with_speaker("Judge");
+
+        let srt = cue.to_srt(1);
+        assert!(srt.contains("1\n"));
+        assert!(srt.contains("00:00:00,000 --> 00:00:02,000"));
+        assert!(srt.contains("Judge: Test"));
+    }
+
+    // SubtitlePosition tests
+    #[test]
+    fn test_subtitle_position_display() {
+        assert_eq!(SubtitlePosition::BottomCenter.to_string(), "Bottom Center");
+        assert_eq!(SubtitlePosition::TopCenter.to_string(), "Top Center");
+        assert_eq!(SubtitlePosition::BottomLeft.to_string(), "Bottom Left");
+        assert_eq!(SubtitlePosition::TopRight.to_string(), "Top Right");
+    }
+
+    // AccessibilitySubtitleGenerator tests
+    #[test]
+    fn test_accessibility_subtitle_generator_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone());
+
+        assert_eq!(generator.primary_locale, locale);
+        assert!(generator.include_speakers);
+        assert!(generator.include_sound_descriptions);
+        assert_eq!(generator.max_chars_per_line, 42);
+        assert!(!generator.multilingual);
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_for_multilingual() {
+        let primary = Locale::new("en").with_country("US");
+        let spanish = Locale::new("es").with_country("ES");
+        let secondary = vec![spanish];
+
+        let generator = AccessibilitySubtitleGenerator::for_multilingual_court(primary, secondary);
+
+        assert!(generator.multilingual);
+        assert_eq!(generator.secondary_locales.len(), 1);
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_cues() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone());
+
+        let segments = vec![
+            TranscriptionSegment::new("First segment", 0, 2000, locale.clone())
+                .with_speaker("Judge"),
+            TranscriptionSegment::new("Second segment", 2000, 4000, locale)
+                .with_speaker("Attorney"),
+        ];
+
+        let cues = generator.generate_cues(&segments);
+        assert!(cues.len() >= 2);
+        assert_eq!(cues[0].speaker, Some("Judge".to_string()));
+        assert_eq!(cues[1].speaker, Some("Attorney".to_string()));
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_webvtt() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone());
+
+        let segments = vec![TranscriptionSegment::new("Test", 0, 1000, locale)];
+
+        let webvtt = generator.generate_webvtt(&segments);
+        assert!(webvtt.starts_with("WEBVTT"));
+        assert!(webvtt.contains("00:00:00.000 --> 00:00:01.000"));
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_srt() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone());
+
+        let segments = vec![TranscriptionSegment::new("Test", 0, 1000, locale)];
+
+        let srt = generator.generate_srt(&segments);
+        assert!(srt.contains("1\n"));
+        assert!(srt.contains("00:00:00,000 --> 00:00:01,000"));
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_long_text() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone()).with_max_chars(20);
+
+        let long_text = "This is a very long sentence that should be split into multiple lines.";
+        let segments = vec![TranscriptionSegment::new(long_text, 0, 5000, locale)];
+
+        let cues = generator.generate_cues(&segments);
+        assert!(cues.len() > 1); // Should be split into multiple cues
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_sound_description() {
+        let locale = Locale::new("en").with_country("US");
+        let generator = AccessibilitySubtitleGenerator::new(locale.clone());
+
+        let mut cues = Vec::new();
+        generator.add_sound_description(&mut cues, "gavel banging", 0, 500);
+
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].text, "[gavel banging]");
+    }
+
+    #[test]
+    fn test_accessibility_subtitle_generator_without_speakers() {
+        let locale = Locale::new("en").with_country("US");
+        let generator =
+            AccessibilitySubtitleGenerator::new(locale.clone()).with_speaker_labels(false);
+
+        let segments =
+            vec![TranscriptionSegment::new("Test", 0, 1000, locale).with_speaker("Judge")];
+
+        let cues = generator.generate_cues(&segments);
+        assert_eq!(cues[0].speaker, None);
+    }
+}
+
+// ============================================================================
+// v0.3.2: Semantic Cross-Lingual Search Tests
+// ============================================================================
+
+#[cfg(test)]
+mod semantic_search_tests {
+    use super::*;
+
+    // EmbeddingModel tests
+    #[test]
+    fn test_embedding_model_display() {
+        assert_eq!(
+            EmbeddingModel::MultilinguralBERT.to_string(),
+            "Multilingual BERT"
+        );
+        assert_eq!(EmbeddingModel::XLMRoBERTa.to_string(), "XLM-RoBERTa");
+        assert_eq!(EmbeddingModel::LaBSE.to_string(), "LaBSE");
+        assert_eq!(
+            EmbeddingModel::LegalMultilingual.to_string(),
+            "Legal Multilingual"
+        );
+    }
+
+    // SemanticEmbedding tests
+    #[test]
+    fn test_semantic_embedding_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let vector = vec![0.1, 0.2, 0.3, 0.4];
+        let embedding =
+            SemanticEmbedding::new("test", locale.clone(), vector.clone(), "test-model");
+
+        assert_eq!(embedding.text, "test");
+        assert_eq!(embedding.locale, locale);
+        assert_eq!(embedding.vector, vector);
+        assert_eq!(embedding.dimensions(), 4);
+    }
+
+    #[test]
+    fn test_semantic_embedding_cosine_similarity() {
+        let locale = Locale::new("en").with_country("US");
+        let vec1 = vec![1.0, 0.0, 0.0];
+        let vec2 = vec![1.0, 0.0, 0.0];
+        let vec3 = vec![0.0, 1.0, 0.0];
+
+        let emb1 = SemanticEmbedding::new("test1", locale.clone(), vec1, "model");
+        let emb2 = SemanticEmbedding::new("test2", locale.clone(), vec2, "model");
+        let emb3 = SemanticEmbedding::new("test3", locale, vec3, "model");
+
+        // Identical vectors
+        assert!((emb1.cosine_similarity(&emb2) - 1.0).abs() < 0.001);
+        // Orthogonal vectors
+        assert!((emb1.cosine_similarity(&emb3)).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_semantic_embedding_with_domain() {
+        let locale = Locale::new("en").with_country("US");
+        let embedding = SemanticEmbedding::new("test", locale, vec![0.1], "model")
+            .with_domain(LegalSpeechDomain::CourtProceedings);
+
+        assert_eq!(embedding.domain, Some(LegalSpeechDomain::CourtProceedings));
+    }
+
+    // MultilingualEmbedder tests
+    #[test]
+    fn test_multilingual_embedder_creation() {
+        let embedder = MultilingualEmbedder::new(EmbeddingModel::LaBSE, 768);
+
+        assert_eq!(embedder.model, EmbeddingModel::LaBSE);
+        assert_eq!(embedder.dimension, 768);
+        assert!(embedder.normalize);
+    }
+
+    #[test]
+    fn test_multilingual_embedder_labse() {
+        let embedder = MultilingualEmbedder::labse();
+
+        assert_eq!(embedder.model, EmbeddingModel::LaBSE);
+        assert_eq!(embedder.dimension, 768);
+    }
+
+    #[test]
+    fn test_multilingual_embedder_xlm_roberta() {
+        let embedder = MultilingualEmbedder::xlm_roberta();
+
+        assert_eq!(embedder.model, EmbeddingModel::XLMRoBERTa);
+        assert_eq!(embedder.dimension, 1024);
+    }
+
+    #[test]
+    fn test_multilingual_embedder_legal_domain() {
+        let embedder = MultilingualEmbedder::legal_domain();
+
+        assert_eq!(embedder.model, EmbeddingModel::LegalMultilingual);
+        assert_eq!(embedder.dimension, 768);
+    }
+
+    #[test]
+    fn test_multilingual_embedder_embed() {
+        let embedder = MultilingualEmbedder::labse();
+        let locale = Locale::new("en").with_country("US");
+
+        let embedding = embedder.embed("test text", locale.clone());
+
+        assert_eq!(embedding.text, "test text");
+        assert_eq!(embedding.locale, locale);
+        assert_eq!(embedding.dimensions(), 768);
+    }
+
+    #[test]
+    fn test_multilingual_embedder_embed_batch() {
+        let embedder = MultilingualEmbedder::labse();
+        let en_us = Locale::new("en").with_country("US");
+        let es_es = Locale::new("es").with_country("ES");
+
+        let texts = vec![
+            ("text1".to_string(), en_us.clone()),
+            ("text2".to_string(), es_es.clone()),
+        ];
+
+        let embeddings = embedder.embed_batch(&texts);
+
+        assert_eq!(embeddings.len(), 2);
+        assert_eq!(embeddings[0].text, "text1");
+        assert_eq!(embeddings[1].text, "text2");
+    }
+
+    // LegalCase tests
+    #[test]
+    fn test_legal_case_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let case = LegalCase::new(
+            "123",
+            "Smith v. Jones",
+            "US Federal",
+            "Summary",
+            locale.clone(),
+            2023,
+        );
+
+        assert_eq!(case.case_id, "123");
+        assert_eq!(case.title, "Smith v. Jones");
+        assert_eq!(case.jurisdiction, "US Federal");
+        assert_eq!(case.year, 2023);
+        assert!(case.embedding.is_none());
+    }
+
+    #[test]
+    fn test_legal_case_with_domain() {
+        let locale = Locale::new("en").with_country("US");
+        let case = LegalCase::new("123", "Title", "Jurisdiction", "Summary", locale, 2023)
+            .with_domain(LegalSpeechDomain::ContractNegotiations);
+
+        assert_eq!(case.domain, Some(LegalSpeechDomain::ContractNegotiations));
+    }
+
+    // SearchResult tests
+    #[test]
+    fn test_search_result_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let case = LegalCase::new("1", "Title", "Jurisdiction", "Summary", locale, 2023);
+        let result = SearchResult::new(case.clone(), 0.95, 1);
+
+        assert_eq!(result.case.case_id, "1");
+        assert_eq!(result.similarity, 0.95);
+        assert_eq!(result.rank, 1);
+    }
+
+    // CrossLingualCaseSearch tests
+    #[test]
+    fn test_cross_lingual_case_search_creation() {
+        let embedder = MultilingualEmbedder::labse();
+        let search = CrossLingualCaseSearch::new(embedder);
+
+        assert_eq!(search.min_similarity, 0.5);
+        assert_eq!(search.case_count(), 0);
+    }
+
+    #[test]
+    fn test_cross_lingual_case_search_add_case() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut search = CrossLingualCaseSearch::new(embedder);
+
+        let locale = Locale::new("en").with_country("US");
+        let case = LegalCase::new("1", "Title", "US", "Summary", locale, 2023);
+
+        search.add_case(case);
+        assert_eq!(search.case_count(), 1);
+    }
+
+    #[test]
+    fn test_cross_lingual_case_search_search() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut search = CrossLingualCaseSearch::new(embedder).with_min_similarity(0.0);
+
+        let en = Locale::new("en").with_country("US");
+        let case1 = LegalCase::new(
+            "1",
+            "Contract Case",
+            "US",
+            "contract dispute",
+            en.clone(),
+            2023,
+        );
+        let case2 = LegalCase::new("2", "Tort Case", "US", "negligence claim", en.clone(), 2023);
+
+        search.add_case(case1);
+        search.add_case(case2);
+
+        let results = search.search("contract", en, 10);
+        assert!(results.len() <= 2);
+    }
+
+    #[test]
+    fn test_cross_lingual_case_search_by_jurisdiction() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut search = CrossLingualCaseSearch::new(embedder).with_min_similarity(0.0);
+
+        let en = Locale::new("en").with_country("US");
+        let case1 = LegalCase::new("1", "Title", "US", "Summary", en.clone(), 2023);
+        let case2 = LegalCase::new("2", "Title", "UK", "Summary", en.clone(), 2023);
+
+        search.add_case(case1);
+        search.add_case(case2);
+
+        let results = search.search_by_jurisdiction("test", en, "US", 10);
+        assert!(results.iter().all(|r| r.case.jurisdiction == "US"));
+    }
+
+    // LegalConcept tests
+    #[test]
+    fn test_legal_concept_creation() {
+        let concept = LegalConcept::new("contract", "Contract", "A legally binding agreement");
+
+        assert_eq!(concept.concept_id, "contract");
+        assert_eq!(concept.canonical_name, "Contract");
+        assert_eq!(concept.definition, "A legally binding agreement");
+    }
+
+    #[test]
+    fn test_legal_concept_add_localized_name() {
+        let es = Locale::new("es").with_country("ES");
+        let concept = LegalConcept::new("contract", "Contract", "Definition")
+            .add_localized_name(es.clone(), "Contrato");
+
+        assert_eq!(concept.get_name(&es), "Contrato");
+    }
+
+    #[test]
+    fn test_legal_concept_get_name_fallback() {
+        let concept = LegalConcept::new("contract", "Contract", "Definition");
+        let de = Locale::new("de").with_country("DE");
+
+        // Should fall back to canonical name
+        assert_eq!(concept.get_name(&de), "Contract");
+    }
+
+    // ConceptMapper tests
+    #[test]
+    fn test_concept_mapper_creation() {
+        let embedder = MultilingualEmbedder::labse();
+        let mapper = ConceptMapper::new(embedder);
+
+        assert_eq!(mapper.concept_count(), 0);
+    }
+
+    #[test]
+    fn test_concept_mapper_with_defaults() {
+        let embedder = MultilingualEmbedder::labse();
+        let mapper = ConceptMapper::with_defaults(embedder);
+
+        assert!(mapper.concept_count() > 0);
+        assert!(mapper.concepts.contains_key("contract"));
+        assert!(mapper.concepts.contains_key("tort"));
+        assert!(mapper.concepts.contains_key("jurisdiction"));
+    }
+
+    #[test]
+    fn test_concept_mapper_add_concept() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut mapper = ConceptMapper::new(embedder);
+
+        let concept = LegalConcept::new("test", "Test", "Test definition");
+        mapper.add_concept(concept);
+
+        assert_eq!(mapper.concept_count(), 1);
+    }
+
+    #[test]
+    fn test_concept_mapper_find_concept() {
+        let embedder = MultilingualEmbedder::labse();
+        let mapper = ConceptMapper::with_defaults(embedder);
+        let en = Locale::new("en").with_country("US");
+
+        let result = mapper.find_concept("contract", en);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_concept_mapper_map_term_across_languages() {
+        let embedder = MultilingualEmbedder::labse();
+        let mapper = ConceptMapper::with_defaults(embedder);
+        let en = Locale::new("en").with_country("US");
+
+        let mappings = mapper.map_term_across_languages("contract", en);
+        assert!(!mappings.is_empty());
+    }
+
+    // KnowledgeGraphNode tests
+    #[test]
+    fn test_knowledge_graph_node_creation() {
+        let locale = Locale::new("en").with_country("US");
+        let node = KnowledgeGraphNode::new("node1", "concept", "Contract", locale.clone());
+
+        assert_eq!(node.node_id, "node1");
+        assert_eq!(node.node_type, "concept");
+        assert_eq!(node.label, "Contract");
+        assert_eq!(node.locale, locale);
+    }
+
+    #[test]
+    fn test_knowledge_graph_node_with_property() {
+        let locale = Locale::new("en").with_country("US");
+        let node = KnowledgeGraphNode::new("node1", "concept", "Label", locale)
+            .with_property("key", "value");
+
+        assert_eq!(node.properties.get("key"), Some(&"value".to_string()));
+    }
+
+    // KnowledgeGraphEdge tests
+    #[test]
+    fn test_knowledge_graph_edge_creation() {
+        let edge = KnowledgeGraphEdge::new("node1", "node2", "relates_to");
+
+        assert_eq!(edge.from_node, "node1");
+        assert_eq!(edge.to_node, "node2");
+        assert_eq!(edge.relationship, "relates_to");
+    }
+
+    #[test]
+    fn test_knowledge_graph_edge_with_property() {
+        let edge =
+            KnowledgeGraphEdge::new("node1", "node2", "relates_to").with_property("weight", "0.5");
+
+        assert_eq!(edge.properties.get("weight"), Some(&"0.5".to_string()));
+    }
+
+    // MultilingualKnowledgeGraph tests
+    #[test]
+    fn test_multilingual_knowledge_graph_creation() {
+        let embedder = MultilingualEmbedder::labse();
+        let graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let (nodes, edges) = graph.stats();
+        assert_eq!(nodes, 0);
+        assert_eq!(edges, 0);
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_add_node() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let locale = Locale::new("en").with_country("US");
+        let node = KnowledgeGraphNode::new("node1", "concept", "Contract", locale);
+
+        graph.add_node(node);
+
+        let (nodes, _) = graph.stats();
+        assert_eq!(nodes, 1);
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_add_edge() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let edge = KnowledgeGraphEdge::new("node1", "node2", "relates_to");
+        graph.add_edge(edge);
+
+        let (_, edges) = graph.stats();
+        assert_eq!(edges, 1);
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_get_node() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let locale = Locale::new("en").with_country("US");
+        let node = KnowledgeGraphNode::new("node1", "concept", "Contract", locale);
+
+        graph.add_node(node);
+
+        let retrieved = graph.get_node("node1");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().node_id, "node1");
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_find_nodes_by_type() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let locale = Locale::new("en").with_country("US");
+        let node1 = KnowledgeGraphNode::new("node1", "concept", "Contract", locale.clone());
+        let node2 = KnowledgeGraphNode::new("node2", "case", "Smith v Jones", locale);
+
+        graph.add_node(node1);
+        graph.add_node(node2);
+
+        let concepts = graph.find_nodes_by_type("concept");
+        assert_eq!(concepts.len(), 1);
+        assert_eq!(concepts[0].node_id, "node1");
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_find_edges() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let edge1 = KnowledgeGraphEdge::new("node1", "node2", "relates_to");
+        let edge2 = KnowledgeGraphEdge::new("node2", "node3", "relates_to");
+
+        graph.add_edge(edge1);
+        graph.add_edge(edge2);
+
+        let outgoing = graph.find_outgoing_edges("node1");
+        assert_eq!(outgoing.len(), 1);
+
+        let incoming = graph.find_incoming_edges("node2");
+        assert_eq!(incoming.len(), 1);
+    }
+
+    #[test]
+    fn test_multilingual_knowledge_graph_find_similar_nodes() {
+        let embedder = MultilingualEmbedder::labse();
+        let mut graph = MultilingualKnowledgeGraph::new(embedder);
+
+        let locale = Locale::new("en").with_country("US");
+        let node =
+            KnowledgeGraphNode::new("node1", "concept", "contract agreement", locale.clone());
+
+        graph.add_node(node);
+
+        let similar = graph.find_similar_nodes("contract", locale, 5);
+        assert!(!similar.is_empty());
+    }
+
+    // LegalReasoningEngine tests
+    #[test]
+    fn test_legal_reasoning_engine_creation() {
+        let embedder = MultilingualEmbedder::labse();
+        let engine = LegalReasoningEngine::new(embedder);
+
+        assert!(engine.concept_mapper.concept_count() > 0);
+        assert_eq!(engine.case_search.case_count(), 0);
+    }
+
+    #[test]
+    fn test_legal_reasoning_engine_analyze_query() {
+        let embedder = MultilingualEmbedder::labse();
+        let engine = LegalReasoningEngine::new(embedder);
+        let locale = Locale::new("en").with_country("US");
+
+        let result = engine.analyze_query("contract", locale);
+
+        assert_eq!(result.query, "contract");
+        assert!(result.has_results());
+    }
+
+    #[test]
+    fn test_legal_reasoning_engine_cross_jurisdictional() {
+        let embedder = MultilingualEmbedder::labse();
+        let engine = LegalReasoningEngine::new(embedder);
+        let en = Locale::new("en").with_country("US");
+
+        let equivalents = engine.find_cross_jurisdictional_equivalents("contract", en);
+        assert!(!equivalents.is_empty());
+    }
+
+    // AnalysisResult tests
+    #[test]
+    fn test_analysis_result_has_results() {
+        let locale = Locale::new("en").with_country("US");
+        let result = AnalysisResult {
+            query: "test".to_string(),
+            locale,
+            matched_concept: None,
+            similar_cases: vec![],
+            related_nodes: vec![],
+        };
+
+        assert!(!result.has_results());
+        assert_eq!(result.case_count(), 0);
+        assert_eq!(result.node_count(), 0);
+    }
+
+    #[test]
+    fn test_analysis_result_with_concept() {
+        let locale = Locale::new("en").with_country("US");
+        let concept = LegalConcept::new("contract", "Contract", "Definition");
+
+        let result = AnalysisResult {
+            query: "test".to_string(),
+            locale,
+            matched_concept: Some(concept),
+            similar_cases: vec![],
+            related_nodes: vec![],
+        };
+
+        assert!(result.has_results());
     }
 }

@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.3.4 | Status: Stable | Tests: Passing (433+ tests) | Warnings: 0
+Version: 0.4.6 | Status: Stable | Tests: Passing (505 tests) | Warnings: 0
 
-All v0.1.x, v0.2.x, and v0.3.x series features complete! Autonomous Legal Intelligence (v0.3.0), Legal Knowledge Graphs (v0.3.1), Collaborative AI Drafting (v0.3.2), Explainable Legal AI (v0.3.3), and Quantum-Enhanced NLP (v0.3.4) all implemented and tested. The legalis-llm crate is feature-complete for the 0.3.x series.
+All v0.1.x, v0.2.x, v0.3.x, and v0.4.0-v0.4.6 series features complete! Latest additions include Federated Learning (v0.4.0), Legal Ontology Integration (v0.4.1), Causal Reasoning (v0.4.2), Adversarial Robustness (v0.4.3), Meta-Prompting (v0.4.4), Legal Citation Networks (v0.4.5), and Temporal Legal Reasoning (v0.4.6). The legalis-llm crate continues to expand with cutting-edge legal AI capabilities.
 
 ---
 
@@ -393,3 +393,113 @@ All v0.1.x, v0.2.x, and v0.3.x series features complete! Autonomous Legal Intell
 - [x] Add quantum-inspired similarity search
 - [x] Create hybrid classical-quantum inference
 - [x] Add quantum advantage benchmarking
+
+## Roadmap for 0.4.0 Series (Advanced AI & Security)
+
+### Federated Learning (v0.4.0)
+- [x] Privacy-preserving distributed learning across legal databases
+- [x] Federated averaging (FedAvg) aggregation
+- [x] Federated proximal (FedProx) aggregation
+- [x] Reputation-weighted aggregation
+- [x] Median aggregation (robust to outliers)
+- [x] Differential privacy with Laplace noise
+- [x] Multi-jurisdictional node support
+- [x] Legal-specific federated training (document classification, contract analysis)
+- [x] Federated statistics and monitoring
+
+### Legal Ontology Integration (v0.4.1)
+- [x] LegalRuleML-inspired ontology structure
+- [x] Legal concept modeling (norms, actors, objects, events, procedures)
+- [x] Relationship types (is-a, part-of, causes, conflicts, supports, etc.)
+- [x] Ontology inference with rules (transitivity, symmetry)
+- [x] Ancestor and descendant queries
+- [x] Subtype checking
+- [x] RDF/Turtle export
+- [x] Pre-built ontologies (contract law, tort law, criminal law)
+- [x] Ontology statistics and analysis
+
+### Causal Reasoning (v0.4.2)
+- [x] Causal event modeling
+- [x] Causal graph construction
+- [x] But-for test (factual causation)
+- [x] Proximate cause identification
+- [x] Intervening cause detection
+- [x] Counterfactual analysis
+- [x] Causal path finding
+- [x] Causal attribution scoring
+- [x] Legal causation analysis (tort, criminal, contract)
+- [x] DOT graph export for visualization
+
+### Adversarial Robustness (v0.4.3)
+- [x] Prompt injection detection
+- [x] Jailbreak attempt detection
+- [x] Role confusion attack detection
+- [x] Instruction override detection
+- [x] Goal hijacking detection
+- [x] Context manipulation detection
+- [x] Encoding evasion detection (base64, unicode)
+- [x] Statistical anomaly detection
+- [x] Defense strategies (reject, sanitize, log, multi-layered)
+- [x] Legal-specific adversarial protection
+- [x] Unauthorized practice of law detection
+
+### Meta-Prompting (v0.4.4)
+- [x] Self-improving prompt generation
+- [x] Quality criteria specification
+- [x] Prompt evaluation metrics (clarity, specificity, completeness, conciseness, effectiveness)
+- [x] Automatic prompt optimization
+- [x] Prompt history and versioning
+- [x] Best prompt tracking per task
+- [x] Improvement suggestions
+- [x] Legal-specific meta-prompts (document analysis, contract drafting, legal research)
+- [x] Meta-prompting statistics
+
+### Legal Citation Networks (v0.4.5)
+- [x] Citation graph construction
+- [x] Authority score calculation (like PageRank for case law)
+- [x] Citation clustering and communities
+- [x] Precedent strength analysis
+- [x] Citation evolution over time
+- [x] Cross-jurisdictional citation analysis
+- [x] Influential case identification
+- [x] Citation recommendation
+
+### Temporal Legal Reasoning (v0.4.6)
+- [x] Time-aware legal rule modeling
+- [x] Temporal validity tracking
+- [x] Legal change detection
+- [x] Retroactive vs. prospective application
+- [x] Temporal conflict resolution
+- [x] Historical legal analysis
+- [x] Amendment tracking over time
+- [x] Statute sunset clause handling
+
+### Cross-Domain Transfer Learning (v0.4.7)
+- [ ] Domain adaptation for legal specialties
+- [ ] Transfer between jurisdictions
+- [ ] Multi-task learning framework
+- [ ] Domain-invariant feature extraction
+- [ ] Few-shot learning for new legal domains
+- [ ] Zero-shot legal classification
+- [ ] Cross-lingual legal transfer
+- [ ] Continual learning without catastrophic forgetting
+
+### Neuro-Symbolic Integration (v0.4.8)
+- [ ] Hybrid neural-symbolic reasoning
+- [ ] Logic-guided neural generation
+- [ ] Symbolic constraint satisfaction
+- [ ] Neural network with logical rules
+- [ ] Explainable neuro-symbolic models
+- [ ] Legal knowledge compilation
+- [ ] Automated theorem proving for statutes
+- [ ] Probabilistic logic programming
+
+### Legal Simulation & Outcome Prediction (v0.4.9)
+- [ ] Case outcome prediction models
+- [ ] Litigation risk assessment
+- [ ] Settlement value estimation
+- [ ] Judge/jury behavior modeling
+- [ ] Multi-agent negotiation simulation
+- [ ] Contract scenario simulation
+- [ ] Regulatory compliance simulation
+- [ ] What-if analysis for legal strategies

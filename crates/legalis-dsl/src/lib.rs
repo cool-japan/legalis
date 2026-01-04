@@ -108,7 +108,10 @@ mod tests;
 
 pub use ast::*;
 pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
-pub use codegen::{CodeGenerator, PythonGenerator, SqlGenerator};
+pub use codegen::{
+    CSharpGenerator, CodeGenerator, GoGenerator, JavaGenerator, PrologGenerator, PythonGenerator,
+    RustGenerator, SqlGenerator, TypeScriptGenerator,
+};
 pub use compliance::{ComplianceMatrix, ComplianceStats};
 pub use consistency::{ConsistencyChecker, ConsistencyIssue};
 pub use dataflow::{DataFlowAnalyzer, DataFlowIssue, DataFlowState};

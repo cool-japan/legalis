@@ -119,7 +119,7 @@ pub struct CrossLingualAnalysis {
     /// Analyzed text in target language
     pub analyzed_text: String,
     /// Key legal concepts identified
-    pub concepts: Vec<LegalConcept>,
+    pub concepts: Vec<MultilingualLegalConcept>,
     /// Confidence score (0.0 - 1.0)
     pub confidence: f64,
     /// Jurisdiction context
@@ -128,7 +128,7 @@ pub struct CrossLingualAnalysis {
 
 /// Legal concept with multilingual support
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LegalConcept {
+pub struct MultilingualLegalConcept {
     /// Concept identifier
     pub id: String,
     /// Term in source language
@@ -147,7 +147,7 @@ pub struct CrossLingualAnalyzer {
     terminology: HashMap<(LanguageCode, LanguageCode), HashMap<String, String>>,
     /// Legal concept database
     #[allow(dead_code)]
-    concepts: HashMap<String, LegalConcept>,
+    concepts: HashMap<String, MultilingualLegalConcept>,
 }
 
 impl CrossLingualAnalyzer {
@@ -241,7 +241,7 @@ impl CrossLingualAnalyzer {
         text: &str,
         source: LanguageCode,
         target: LanguageCode,
-    ) -> Result<Vec<LegalConcept>> {
+    ) -> Result<Vec<MultilingualLegalConcept>> {
         let mut concepts = Vec::new();
         let text_lower = text.to_lowercase();
 
@@ -249,7 +249,7 @@ impl CrossLingualAnalyzer {
         if let Some(term_map) = self.terminology.get(&(source, target)) {
             for (source_term, target_term) in term_map {
                 if text_lower.contains(&source_term.to_lowercase()) {
-                    concepts.push(LegalConcept {
+                    concepts.push(MultilingualLegalConcept {
                         id: source_term.clone(),
                         source_term: source_term.clone(),
                         target_term: target_term.clone(),

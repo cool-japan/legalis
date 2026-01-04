@@ -6,8 +6,10 @@
 //! - Generating visualizations
 //! - Exporting to various formats
 
+pub mod ai;
 pub mod batch;
 pub mod cache;
+pub mod cloud;
 pub mod commands;
 pub mod config;
 pub mod debug;
@@ -19,7 +21,9 @@ pub mod profile;
 pub mod progress;
 pub mod scripting;
 pub mod theme;
+pub mod tui;
 pub mod tutorial;
+pub mod workflow;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
@@ -843,6 +847,38 @@ pub enum Commands {
         #[command(subcommand)]
         operation: ScriptOperation,
     },
+
+    /// AI-powered CLI features
+    Ai {
+        /// AI operation to perform
+        #[command(subcommand)]
+        operation: AiOperation,
+    },
+
+    /// Launch interactive TUI dashboard
+    Dashboard {
+        /// Enable vim-style keyboard shortcuts
+        #[arg(long)]
+        vim_keys: bool,
+
+        /// Disable mouse support
+        #[arg(long)]
+        no_mouse: bool,
+    },
+
+    /// Workflow automation operations
+    Workflow {
+        /// Workflow operation to perform
+        #[command(subcommand)]
+        operation: WorkflowOperation,
+    },
+
+    /// Cloud integration operations (AWS, Azure, GCP)
+    Cloud {
+        /// Cloud operation to perform
+        #[command(subcommand)]
+        operation: CloudOperation,
+    },
 }
 
 /// Batch operation types.
@@ -1335,6 +1371,230 @@ pub enum ScriptOperation {
         #[arg(short, long)]
         script: String,
     },
+}
+
+/// AI operation types.
+#[derive(Subcommand)]
+pub enum AiOperation {
+    /// Parse natural language command into CLI syntax
+    Parse {
+        /// Natural language input (e.g., "verify my statute file")
+        #[arg(trailing_var_arg = true)]
+        input: Vec<String>,
+    },
+
+    /// Recognize command intent from natural language
+    Intent {
+        /// Natural language query
+        #[arg(trailing_var_arg = true)]
+        query: Vec<String>,
+    },
+
+    /// Get AI-powered assistance for a command
+    Assist {
+        /// Help query or topic
+        #[arg(trailing_var_arg = true)]
+        query: Vec<String>,
+    },
+
+    /// Get suggested next commands based on history
+    Suggest {
+        /// Previous command (leave empty for general suggestions)
+        #[arg(short, long)]
+        previous: Option<String>,
+    },
+
+    /// Get autocomplete suggestions
+    Complete {
+        /// Partial command input
+        #[arg(trailing_var_arg = true)]
+        input: Vec<String>,
+    },
+}
+
+/// Workflow operation types.
+#[derive(Subcommand)]
+pub enum WorkflowOperation {
+    /// Execute a workflow from a definition file
+    Run {
+        /// Workflow file path (YAML format)
+        #[arg(short, long)]
+        file: String,
+
+        /// Override workflow variables (key=value format)
+        #[arg(short, long)]
+        vars: Vec<String>,
+
+        /// Dry run (show what would be executed without actually executing)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Continue workflow execution even if tasks fail
+        #[arg(long)]
+        continue_on_error: bool,
+    },
+
+    /// List all available workflow templates
+    ListTemplates {
+        /// Show detailed template information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Generate a new workflow from a template
+    New {
+        /// Template name (see list-templates for available templates)
+        #[arg(short, long)]
+        template: String,
+
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+
+        /// Override template variables (key=value format)
+        #[arg(short, long)]
+        vars: Vec<String>,
+    },
+
+    /// Validate a workflow definition file
+    Validate {
+        /// Workflow file path
+        #[arg(short, long)]
+        file: String,
+
+        /// Show detailed validation information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show information about a workflow file
+    Info {
+        /// Workflow file path
+        #[arg(short, long)]
+        file: String,
+    },
+}
+
+/// Cloud operation types.
+#[derive(Subcommand)]
+pub enum CloudOperation {
+    /// Check status of cloud CLI tools
+    Status,
+
+    /// Execute AWS CLI command
+    Aws {
+        /// AWS CLI command arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// AWS profile to use
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// AWS region to use
+        #[arg(long)]
+        region: Option<String>,
+    },
+
+    /// Execute Azure CLI command
+    Azure {
+        /// Azure CLI command arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// Azure subscription ID
+        #[arg(long)]
+        subscription: Option<String>,
+    },
+
+    /// Execute GCP gcloud command
+    Gcp {
+        /// gcloud command arguments
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// GCP project ID
+        #[arg(long)]
+        project: Option<String>,
+
+        /// GCP zone
+        #[arg(long)]
+        zone: Option<String>,
+    },
+
+    /// Provision cloud resources from definition file
+    Provision {
+        /// Resource definition file (YAML format)
+        #[arg(short, long)]
+        file: String,
+
+        /// Cloud provider (aws, azure, gcp)
+        #[arg(short, long)]
+        provider: CloudProviderArg,
+
+        /// Dry run (show what would be provisioned)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// List cloud resources
+    List {
+        /// Cloud provider (aws, azure, gcp)
+        #[arg(short, long)]
+        provider: CloudProviderArg,
+
+        /// Resource type (compute, storage, database, function, etc.)
+        #[arg(short, long)]
+        resource_type: String,
+
+        /// AWS profile (for AWS only)
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// AWS region (for AWS only)
+        #[arg(long)]
+        region: Option<String>,
+
+        /// Azure subscription (for Azure only)
+        #[arg(long)]
+        subscription: Option<String>,
+
+        /// GCP project (for GCP only)
+        #[arg(long)]
+        project: Option<String>,
+    },
+
+    /// Configure cloud provider
+    Configure {
+        /// Cloud provider to configure
+        #[arg(short, long)]
+        provider: CloudProviderArg,
+
+        /// Configuration in key=value format
+        #[arg(short, long)]
+        config: Vec<String>,
+    },
+}
+
+/// Cloud provider argument for CLI.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum CloudProviderArg {
+    /// Amazon Web Services
+    Aws,
+    /// Microsoft Azure
+    Azure,
+    /// Google Cloud Platform
+    Gcp,
+}
+
+impl From<CloudProviderArg> for cloud::CloudProvider {
+    fn from(arg: CloudProviderArg) -> Self {
+        match arg {
+            CloudProviderArg::Aws => cloud::CloudProvider::Aws,
+            CloudProviderArg::Azure => cloud::CloudProvider::Azure,
+            CloudProviderArg::Gcp => cloud::CloudProvider::Gcp,
+        }
+    }
 }
 
 /// Script template options.

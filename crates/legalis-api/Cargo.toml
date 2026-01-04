@@ -11,6 +11,7 @@ default = []
 redis-cache = ["redis"]
 oauth2-auth = ["oauth2", "reqwest"]
 otel-tracing = ["opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "tracing-opentelemetry"]
+grpc = ["tonic", "prost", "tonic-reflection", "tonic-health", "tonic-web"]
 
 [dependencies]
 legalis-core.workspace = true
@@ -51,3 +52,13 @@ opentelemetry-otlp = { version = "0.17", optional = true }
 tracing-opentelemetry = { version = "0.25", optional = true }
 regex = "1.11"
 rand = "0.9.1"
+sha2 = "0.10"
+hex = "0.4"
+tonic = { version = "0.12", optional = true }
+prost = { version = "0.13", optional = true }
+tonic-reflection = { version = "0.12", optional = true }
+tonic-health = { version = "0.12", optional = true }
+tonic-web = { version = "0.12", optional = true }
+
+[build-dependencies]
+tonic-build = "0.12"

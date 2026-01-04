@@ -173,6 +173,9 @@ pub enum PortingError {
 
     #[error("Section not found: {0}")]
     SectionNotFound(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 /// Result type for porting operations.
@@ -6131,6 +6134,1743 @@ impl IndustryConsultation {
                 .map(|(concern, _)| concern)
                 .collect();
         }
+    }
+}
+
+// ============================================================================
+// Simulation Integration (v0.2.9)
+// ============================================================================
+
+/// Simulation result for a ported statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortedStatuteSimulation {
+    /// Simulation ID
+    pub id: String,
+    /// Ported statute being simulated
+    pub statute_id: String,
+    /// Target jurisdiction
+    pub jurisdiction: String,
+    /// Simulation parameters
+    pub parameters: SimulationParameters,
+    /// Simulation outcomes
+    pub outcomes: Vec<SimulationOutcome>,
+    /// Compliance rate (0.0 - 1.0)
+    pub compliance_rate: f64,
+    /// Effectiveness score (0.0 - 1.0)
+    pub effectiveness: f64,
+    /// Unintended consequences detected
+    pub unintended_consequences: Vec<UnintendedConsequence>,
+    /// Resource requirements
+    pub resource_requirements: SimulationResourceRequirements,
+    /// Timestamp of simulation
+    pub simulated_at: String,
+}
+
+/// Resource requirements for simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulationResourceRequirements {
+    /// Financial cost estimate
+    pub financial_cost: f64,
+    /// Currency
+    pub currency: String,
+    /// Personnel required
+    pub personnel_count: usize,
+    /// Training hours needed
+    pub training_hours: f64,
+    /// Infrastructure requirements
+    pub infrastructure: Vec<String>,
+    /// Technology requirements
+    pub technology: Vec<String>,
+}
+
+/// Parameters for statute simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulationParameters {
+    /// Population size to simulate
+    pub population_size: usize,
+    /// Time horizon in years
+    pub time_horizon_years: u32,
+    /// Number of simulation runs (for Monte Carlo)
+    pub simulation_runs: usize,
+    /// Confidence level (e.g., 0.95 for 95%)
+    pub confidence_level: f64,
+    /// Enforcement intensity (0.0 - 1.0)
+    pub enforcement_intensity: f64,
+    /// Compliance culture factor (0.0 - 1.0)
+    pub compliance_culture: f64,
+}
+
+/// Outcome from a simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulationOutcome {
+    /// Outcome category
+    pub category: OutcomeCategory,
+    /// Description
+    pub description: String,
+    /// Probability of occurrence (0.0 - 1.0)
+    pub probability: f64,
+    /// Magnitude/impact score
+    pub magnitude: f64,
+    /// Affected population percentage
+    pub affected_population_pct: f64,
+    /// Timeframe when outcome manifests
+    pub timeframe: String,
+}
+
+/// Category of simulation outcome.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OutcomeCategory {
+    /// Positive intended outcome
+    PositiveIntended,
+    /// Negative intended outcome
+    NegativeIntended,
+    /// Positive unintended outcome
+    PositiveUnintended,
+    /// Negative unintended outcome
+    NegativeUnintended,
+    /// Neutral outcome
+    Neutral,
+}
+
+/// Unintended consequence detected in simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnintendedConsequence {
+    /// Description
+    pub description: String,
+    /// Severity (0.0 - 1.0)
+    pub severity: f64,
+    /// Likelihood (0.0 - 1.0)
+    pub likelihood: f64,
+    /// Affected groups
+    pub affected_groups: Vec<String>,
+    /// Mitigation strategies
+    pub mitigation_strategies: Vec<String>,
+}
+
+impl PortedStatuteSimulation {
+    /// Creates a new simulation.
+    pub fn new(statute_id: String, jurisdiction: String, parameters: SimulationParameters) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            parameters,
+            outcomes: Vec::new(),
+            compliance_rate: 0.0,
+            effectiveness: 0.0,
+            unintended_consequences: Vec::new(),
+            resource_requirements: SimulationResourceRequirements {
+                financial_cost: 0.0,
+                currency: "USD".to_string(),
+                personnel_count: 0,
+                training_hours: 0.0,
+                infrastructure: Vec::new(),
+                technology: Vec::new(),
+            },
+            simulated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a simulation outcome.
+    pub fn add_outcome(&mut self, outcome: SimulationOutcome) {
+        self.outcomes.push(outcome);
+    }
+
+    /// Adds an unintended consequence.
+    pub fn add_unintended_consequence(&mut self, consequence: UnintendedConsequence) {
+        self.unintended_consequences.push(consequence);
+    }
+
+    /// Gets high-severity unintended consequences (severity >= 0.7).
+    pub fn high_severity_consequences(&self) -> Vec<&UnintendedConsequence> {
+        self.unintended_consequences
+            .iter()
+            .filter(|c| c.severity >= 0.7)
+            .collect()
+    }
+
+    /// Gets likely negative outcomes (probability >= 0.5).
+    pub fn likely_negative_outcomes(&self) -> Vec<&SimulationOutcome> {
+        self.outcomes
+            .iter()
+            .filter(|o| {
+                matches!(
+                    o.category,
+                    OutcomeCategory::NegativeIntended | OutcomeCategory::NegativeUnintended
+                ) && o.probability >= 0.5
+            })
+            .collect()
+    }
+}
+
+/// Comparative outcome analysis between jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComparativeOutcomeAnalysis {
+    /// Analysis ID
+    pub id: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Statute being analyzed
+    pub statute_id: String,
+    /// Outcome comparisons
+    pub comparisons: Vec<OutcomeComparison>,
+    /// Overall similarity score (0.0 - 1.0)
+    pub similarity_score: f64,
+    /// Key differences
+    pub key_differences: Vec<KeyDifference>,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// Comparison of an outcome between jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutcomeComparison {
+    /// Outcome description
+    pub outcome: String,
+    /// Value in source jurisdiction
+    pub source_value: f64,
+    /// Value in target jurisdiction
+    pub target_value: f64,
+    /// Percentage difference
+    pub difference_pct: f64,
+    /// Statistical significance (p-value)
+    pub significance: f64,
+    /// Explanation for difference
+    pub explanation: String,
+}
+
+/// Key difference between jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyDifference {
+    /// Category of difference
+    pub category: DifferenceCategory,
+    /// Description
+    pub description: String,
+    /// Impact level (0.0 - 1.0)
+    pub impact: f64,
+    /// Whether this requires adaptation
+    pub requires_adaptation: bool,
+}
+
+/// Category of key difference.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DifferenceCategory {
+    /// Cultural difference
+    Cultural,
+    /// Legal system difference
+    LegalSystem,
+    /// Economic difference
+    Economic,
+    /// Social difference
+    Social,
+    /// Political difference
+    Political,
+    /// Infrastructure difference
+    Infrastructure,
+}
+
+impl ComparativeOutcomeAnalysis {
+    /// Creates a new comparative analysis.
+    pub fn new(
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+        statute_id: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            source_jurisdiction,
+            target_jurisdiction,
+            statute_id,
+            comparisons: Vec::new(),
+            similarity_score: 0.0,
+            key_differences: Vec::new(),
+            recommendations: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds an outcome comparison.
+    pub fn add_comparison(&mut self, comparison: OutcomeComparison) {
+        self.comparisons.push(comparison);
+        self.calculate_similarity();
+    }
+
+    /// Adds a key difference.
+    pub fn add_key_difference(&mut self, difference: KeyDifference) {
+        self.key_differences.push(difference);
+    }
+
+    /// Calculates overall similarity score.
+    fn calculate_similarity(&mut self) {
+        if self.comparisons.is_empty() {
+            self.similarity_score = 0.0;
+            return;
+        }
+
+        let total_similarity: f64 = self
+            .comparisons
+            .iter()
+            .map(|c| {
+                // Similarity = 1 - (normalized difference)
+                1.0 - (c.difference_pct.abs() / 100.0).min(1.0)
+            })
+            .sum();
+
+        self.similarity_score = total_similarity / self.comparisons.len() as f64;
+    }
+
+    /// Gets significant differences (abs difference >= 20%).
+    pub fn significant_differences(&self) -> Vec<&OutcomeComparison> {
+        self.comparisons
+            .iter()
+            .filter(|c| c.difference_pct.abs() >= 20.0)
+            .collect()
+    }
+}
+
+/// Population impact modeling.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PopulationImpactModeling {
+    /// Model ID
+    pub id: String,
+    /// Statute being modeled
+    pub statute_id: String,
+    /// Target jurisdiction
+    pub jurisdiction: String,
+    /// Population segments analyzed
+    pub segments: Vec<PopulationSegment>,
+    /// Overall impact score (0.0 - 1.0)
+    pub overall_impact: f64,
+    /// Equity assessment
+    pub equity_assessment: EquityAssessment,
+    /// Demographic projections
+    pub projections: Vec<DemographicProjection>,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// A segment of the population.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PopulationSegment {
+    /// Segment name
+    pub name: String,
+    /// Segment size (number of people)
+    pub size: usize,
+    /// Percentage of total population
+    pub percentage: f64,
+    /// Impact level on this segment (0.0 - 1.0)
+    pub impact_level: f64,
+    /// Impact type
+    pub impact_type: PopulationImpactType,
+    /// Specific effects
+    pub effects: Vec<String>,
+    /// Vulnerability factors
+    pub vulnerability_factors: Vec<String>,
+}
+
+/// Type of impact on population.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PopulationImpactType {
+    /// Highly beneficial
+    HighlyBeneficial,
+    /// Moderately beneficial
+    ModeratelyBeneficial,
+    /// Neutral
+    Neutral,
+    /// Moderately harmful
+    ModeratelyHarmful,
+    /// Highly harmful
+    HighlyHarmful,
+}
+
+/// Equity assessment for statute impact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquityAssessment {
+    /// Gini coefficient (0.0 - 1.0, lower is more equitable)
+    pub gini_coefficient: f64,
+    /// Disparate impact detected
+    pub disparate_impact: bool,
+    /// Affected vulnerable groups
+    pub vulnerable_groups_affected: Vec<String>,
+    /// Equity score (0.0 - 1.0, higher is more equitable)
+    pub equity_score: f64,
+    /// Recommendations for improving equity
+    pub equity_recommendations: Vec<String>,
+}
+
+/// Demographic projection over time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemographicProjection {
+    /// Year of projection
+    pub year: u32,
+    /// Segment being projected
+    pub segment: String,
+    /// Projected compliance rate
+    pub compliance_rate: f64,
+    /// Projected benefit/cost
+    pub net_benefit: f64,
+    /// Confidence interval (lower, upper)
+    pub confidence_interval: (f64, f64),
+}
+
+impl PopulationImpactModeling {
+    /// Creates a new population impact model.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            segments: Vec::new(),
+            overall_impact: 0.0,
+            equity_assessment: EquityAssessment {
+                gini_coefficient: 0.0,
+                disparate_impact: false,
+                vulnerable_groups_affected: Vec::new(),
+                equity_score: 1.0,
+                equity_recommendations: Vec::new(),
+            },
+            projections: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a population segment.
+    pub fn add_segment(&mut self, segment: PopulationSegment) {
+        self.segments.push(segment);
+        self.calculate_overall_impact();
+        self.assess_equity();
+    }
+
+    /// Calculates overall impact across all segments.
+    fn calculate_overall_impact(&mut self) {
+        if self.segments.is_empty() {
+            self.overall_impact = 0.0;
+            return;
+        }
+
+        let weighted_impact: f64 = self
+            .segments
+            .iter()
+            .map(|s| {
+                let impact_value = match s.impact_type {
+                    PopulationImpactType::HighlyBeneficial => s.impact_level,
+                    PopulationImpactType::ModeratelyBeneficial => s.impact_level * 0.5,
+                    PopulationImpactType::Neutral => 0.0,
+                    PopulationImpactType::ModeratelyHarmful => -s.impact_level * 0.5,
+                    PopulationImpactType::HighlyHarmful => -s.impact_level,
+                };
+                impact_value * (s.percentage / 100.0)
+            })
+            .sum();
+
+        self.overall_impact = weighted_impact;
+    }
+
+    /// Assesses equity of statute impact.
+    fn assess_equity(&mut self) {
+        if self.segments.is_empty() {
+            return;
+        }
+
+        // Calculate Gini coefficient based on impact distribution
+        let mut impacts: Vec<f64> = self.segments.iter().map(|s| s.impact_level).collect();
+        impacts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let n = impacts.len() as f64;
+        let mut gini_sum = 0.0;
+        for (i, impact) in impacts.iter().enumerate() {
+            gini_sum += (2.0 * (i + 1) as f64 - n - 1.0) * impact;
+        }
+        let mean_impact = impacts.iter().sum::<f64>() / n;
+        if mean_impact > 0.0 {
+            self.equity_assessment.gini_coefficient = gini_sum / (n * n * mean_impact);
+        }
+
+        // Check for disparate impact (threshold: 0.8 ratio rule)
+        let max_impact = impacts.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let min_impact = impacts.iter().cloned().fold(f64::INFINITY, f64::min);
+        if max_impact > 0.0 {
+            self.equity_assessment.disparate_impact = (min_impact / max_impact) < 0.8;
+        }
+
+        // Equity score (inverse of Gini coefficient)
+        self.equity_assessment.equity_score = 1.0 - self.equity_assessment.gini_coefficient;
+    }
+
+    /// Gets negatively impacted segments.
+    pub fn negatively_impacted_segments(&self) -> Vec<&PopulationSegment> {
+        self.segments
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.impact_type,
+                    PopulationImpactType::ModeratelyHarmful | PopulationImpactType::HighlyHarmful
+                )
+            })
+            .collect()
+    }
+}
+
+/// Enforcement simulation for a statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementSimulation {
+    /// Simulation ID
+    pub id: String,
+    /// Statute being simulated
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Enforcement scenarios
+    pub scenarios: Vec<EnforcementScenario>,
+    /// Optimal enforcement strategy
+    pub optimal_strategy: Option<EnforcementStrategy>,
+    /// Resource efficiency score (0.0 - 1.0)
+    pub efficiency_score: f64,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// An enforcement scenario.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementScenario {
+    /// Scenario name
+    pub name: String,
+    /// Enforcement strategy
+    pub strategy: EnforcementStrategy,
+    /// Predicted compliance rate (0.0 - 1.0)
+    pub compliance_rate: f64,
+    /// Cost of enforcement
+    pub cost: f64,
+    /// Currency
+    pub currency: String,
+    /// Effectiveness score (0.0 - 1.0)
+    pub effectiveness: f64,
+    /// Public acceptance (0.0 - 1.0)
+    pub public_acceptance: f64,
+    /// Risks
+    pub risks: Vec<String>,
+}
+
+/// Enforcement strategy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementStrategy {
+    /// Strategy name
+    pub name: String,
+    /// Enforcement mechanisms
+    pub mechanisms: Vec<EnforcementMechanism>,
+    /// Penalty structure
+    pub penalties: Vec<Penalty>,
+    /// Monitoring approach
+    pub monitoring: MonitoringApproach,
+    /// Resource allocation
+    pub resources: ResourceAllocation,
+}
+
+/// An enforcement mechanism.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnforcementMechanism {
+    /// Mechanism type
+    pub mechanism_type: MechanismType,
+    /// Description
+    pub description: String,
+    /// Frequency
+    pub frequency: String,
+    /// Effectiveness (0.0 - 1.0)
+    pub effectiveness: f64,
+}
+
+/// Type of enforcement mechanism.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MechanismType {
+    /// Inspections
+    Inspection,
+    /// Audits
+    Audit,
+    /// Reporting requirements
+    Reporting,
+    /// Automated monitoring
+    AutomatedMonitoring,
+    /// Public disclosure
+    PublicDisclosure,
+    /// Certification
+    Certification,
+}
+
+/// Penalty in enforcement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Penalty {
+    /// Violation type
+    pub violation_type: String,
+    /// Penalty amount
+    pub amount: f64,
+    /// Currency
+    pub currency: String,
+    /// Additional sanctions
+    pub additional_sanctions: Vec<String>,
+    /// Deterrence effect (0.0 - 1.0)
+    pub deterrence: f64,
+}
+
+/// Monitoring approach for enforcement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonitoringApproach {
+    /// Approach type
+    pub approach_type: MonitoringType,
+    /// Coverage percentage
+    pub coverage: f64,
+    /// Frequency
+    pub frequency: String,
+    /// Technology used
+    pub technology: Vec<String>,
+}
+
+/// Type of monitoring.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MonitoringType {
+    /// Continuous monitoring
+    Continuous,
+    /// Periodic monitoring
+    Periodic,
+    /// Random sampling
+    RandomSampling,
+    /// Risk-based monitoring
+    RiskBased,
+    /// Complaint-driven
+    ComplaintDriven,
+}
+
+/// Resource allocation for enforcement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceAllocation {
+    /// Personnel count
+    pub personnel: usize,
+    /// Budget
+    pub budget: f64,
+    /// Currency
+    pub currency: String,
+    /// Equipment
+    pub equipment: Vec<String>,
+    /// Training requirements
+    pub training_hours: f64,
+}
+
+impl EnforcementSimulation {
+    /// Creates a new enforcement simulation.
+    pub fn new(statute_id: String, jurisdiction: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            scenarios: Vec::new(),
+            optimal_strategy: None,
+            efficiency_score: 0.0,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds an enforcement scenario.
+    pub fn add_scenario(&mut self, scenario: EnforcementScenario) {
+        self.scenarios.push(scenario);
+        self.find_optimal_strategy();
+    }
+
+    /// Finds the optimal enforcement strategy.
+    fn find_optimal_strategy(&mut self) {
+        if self.scenarios.is_empty() {
+            self.optimal_strategy = None;
+            self.efficiency_score = 0.0;
+            return;
+        }
+
+        // Find scenario with best effectiveness/cost ratio
+        let best_scenario = self.scenarios.iter().max_by(|a, b| {
+            let a_ratio = if a.cost > 0.0 {
+                a.effectiveness / a.cost
+            } else {
+                a.effectiveness
+            };
+            let b_ratio = if b.cost > 0.0 {
+                b.effectiveness / b.cost
+            } else {
+                b.effectiveness
+            };
+            a_ratio.partial_cmp(&b_ratio).unwrap()
+        });
+
+        if let Some(best) = best_scenario {
+            self.optimal_strategy = Some(best.strategy.clone());
+            self.efficiency_score = if best.cost > 0.0 {
+                best.effectiveness / best.cost
+            } else {
+                best.effectiveness
+            };
+        }
+    }
+
+    /// Gets high-effectiveness scenarios (>= 0.7).
+    pub fn high_effectiveness_scenarios(&self) -> Vec<&EnforcementScenario> {
+        self.scenarios
+            .iter()
+            .filter(|s| s.effectiveness >= 0.7)
+            .collect()
+    }
+}
+
+/// A/B testing framework for porting variants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ABTestingFramework {
+    /// Test ID
+    pub id: String,
+    /// Statute being tested
+    pub statute_id: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Test variants
+    pub variants: Vec<PortingVariant>,
+    /// Test configuration
+    pub config: TestConfiguration,
+    /// Test results
+    pub results: Option<ABTestResults>,
+    /// Status
+    pub status: ABTestStatus,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// A porting variant for A/B testing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingVariant {
+    /// Variant ID
+    pub id: String,
+    /// Variant name
+    pub name: String,
+    /// Ported statute
+    pub ported_statute_id: String,
+    /// Key differences from baseline
+    pub differences: Vec<String>,
+    /// Hypothesis being tested
+    pub hypothesis: String,
+    /// Traffic allocation (0.0 - 1.0)
+    pub traffic_allocation: f64,
+}
+
+/// Configuration for A/B test.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestConfiguration {
+    /// Sample size per variant
+    pub sample_size: usize,
+    /// Test duration in days
+    pub duration_days: u32,
+    /// Statistical significance threshold (e.g., 0.05)
+    pub significance_threshold: f64,
+    /// Minimum detectable effect (e.g., 0.1 for 10%)
+    pub minimum_effect: f64,
+    /// Primary metric
+    pub primary_metric: String,
+    /// Secondary metrics
+    pub secondary_metrics: Vec<String>,
+}
+
+/// Results from A/B test.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ABTestResults {
+    /// Variant performances
+    pub performances: Vec<VariantPerformance>,
+    /// Winner variant ID
+    pub winner_id: Option<String>,
+    /// Statistical significance achieved
+    pub statistically_significant: bool,
+    /// Confidence level
+    pub confidence_level: f64,
+    /// Recommendations
+    pub recommendations: Vec<String>,
+    /// Completed at timestamp
+    pub completed_at: String,
+}
+
+/// Performance of a variant.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VariantPerformance {
+    /// Variant ID
+    pub variant_id: String,
+    /// Primary metric value
+    pub primary_metric_value: f64,
+    /// Secondary metric values
+    pub secondary_metric_values: HashMap<String, f64>,
+    /// Sample size
+    pub sample_size: usize,
+    /// Compliance rate
+    pub compliance_rate: f64,
+    /// User satisfaction (0.0 - 1.0)
+    pub user_satisfaction: f64,
+    /// Confidence interval (lower, upper)
+    pub confidence_interval: (f64, f64),
+}
+
+/// Status of A/B test.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ABTestStatus {
+    /// Test is being set up
+    Setup,
+    /// Test is running
+    Running,
+    /// Test is paused
+    Paused,
+    /// Test is completed
+    Completed,
+    /// Test was cancelled
+    Cancelled,
+}
+
+impl ABTestingFramework {
+    /// Creates a new A/B testing framework.
+    pub fn new(statute_id: String, jurisdiction: String, config: TestConfiguration) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            statute_id,
+            jurisdiction,
+            variants: Vec::new(),
+            config,
+            results: None,
+            status: ABTestStatus::Setup,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a variant to the test.
+    pub fn add_variant(&mut self, variant: PortingVariant) {
+        self.variants.push(variant);
+    }
+
+    /// Starts the test.
+    pub fn start_test(&mut self) -> Result<(), PortingError> {
+        if self.variants.len() < 2 {
+            return Err(PortingError::InvalidInput(
+                "Need at least 2 variants for A/B testing".to_string(),
+            ));
+        }
+
+        let total_allocation: f64 = self.variants.iter().map(|v| v.traffic_allocation).sum();
+        if (total_allocation - 1.0).abs() > 0.01 {
+            return Err(PortingError::InvalidInput(
+                "Traffic allocation must sum to 1.0".to_string(),
+            ));
+        }
+
+        self.status = ABTestStatus::Running;
+        Ok(())
+    }
+
+    /// Records test results.
+    pub fn record_results(&mut self, results: ABTestResults) {
+        self.results = Some(results);
+        self.status = ABTestStatus::Completed;
+    }
+
+    /// Gets the winning variant if available.
+    pub fn get_winner(&self) -> Option<&PortingVariant> {
+        if let Some(results) = &self.results {
+            if let Some(winner_id) = &results.winner_id {
+                return self.variants.iter().find(|v| &v.id == winner_id);
+            }
+        }
+        None
+    }
+}
+
+// ============================================================================
+// Autonomous Porting Agents (v0.3.0)
+// ============================================================================
+
+/// AI agent for autonomous porting analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingAgent {
+    /// Agent ID
+    pub id: String,
+    /// Agent name
+    pub name: String,
+    /// Agent specialization
+    pub specialization: AgentSpecialization,
+    /// Learning model
+    pub model: LearningModel,
+    /// Agent performance metrics
+    pub performance: AgentPerformance,
+    /// Agent capabilities
+    pub capabilities: Vec<AgentCapability>,
+    /// Agent state
+    pub state: AgentState,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// Agent specialization area.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AgentSpecialization {
+    /// Cultural adaptation specialist
+    CulturalAdaptation,
+    /// Legal system compatibility
+    LegalSystemCompatibility,
+    /// Semantic preservation
+    SemanticPreservation,
+    /// Conflict resolution
+    ConflictResolution,
+    /// Risk assessment
+    RiskAssessment,
+    /// Compliance checking
+    ComplianceChecking,
+    /// General porting analysis
+    GeneralAnalysis,
+}
+
+/// Learning model for the agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningModel {
+    /// Model version
+    pub version: String,
+    /// Model type
+    pub model_type: ModelType,
+    /// Training data size
+    pub training_data_size: usize,
+    /// Model accuracy (0.0 - 1.0)
+    pub accuracy: f64,
+    /// Last training date
+    pub last_trained: String,
+    /// Model parameters
+    pub parameters: ModelParameters,
+}
+
+/// Type of learning model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ModelType {
+    /// Supervised learning
+    Supervised,
+    /// Reinforcement learning
+    Reinforcement,
+    /// Transfer learning
+    Transfer,
+    /// Ensemble
+    Ensemble,
+    /// Neural network
+    NeuralNetwork,
+}
+
+/// Model parameters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelParameters {
+    /// Learning rate
+    pub learning_rate: f64,
+    /// Batch size
+    pub batch_size: usize,
+    /// Number of layers (for neural networks)
+    pub layers: usize,
+    /// Hidden units per layer
+    pub hidden_units: usize,
+    /// Dropout rate
+    pub dropout_rate: f64,
+}
+
+/// Agent performance metrics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPerformance {
+    /// Total analyses performed
+    pub total_analyses: usize,
+    /// Successful analyses
+    pub successful_analyses: usize,
+    /// Average accuracy (0.0 - 1.0)
+    pub average_accuracy: f64,
+    /// Average processing time (seconds)
+    pub average_time_seconds: f64,
+    /// User satisfaction score (0.0 - 1.0)
+    pub user_satisfaction: f64,
+    /// Improvement rate over time
+    pub improvement_rate: f64,
+}
+
+/// Agent capability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentCapability {
+    /// Capability name
+    pub name: String,
+    /// Description
+    pub description: String,
+    /// Proficiency level (0.0 - 1.0)
+    pub proficiency: f64,
+    /// Confidence level (0.0 - 1.0)
+    pub confidence: f64,
+}
+
+/// State of the agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AgentState {
+    /// Agent is idle
+    Idle,
+    /// Agent is analyzing
+    Analyzing,
+    /// Agent is learning
+    Learning,
+    /// Agent is waiting for feedback
+    WaitingForFeedback,
+    /// Agent is suspended
+    Suspended,
+}
+
+impl PortingAgent {
+    /// Creates a new porting agent.
+    pub fn new(name: String, specialization: AgentSpecialization) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            specialization,
+            model: LearningModel {
+                version: "1.0.0".to_string(),
+                model_type: ModelType::Supervised,
+                training_data_size: 0,
+                accuracy: 0.5,
+                last_trained: chrono::Utc::now().to_rfc3339(),
+                parameters: ModelParameters {
+                    learning_rate: 0.001,
+                    batch_size: 32,
+                    layers: 3,
+                    hidden_units: 128,
+                    dropout_rate: 0.2,
+                },
+            },
+            performance: AgentPerformance {
+                total_analyses: 0,
+                successful_analyses: 0,
+                average_accuracy: 0.0,
+                average_time_seconds: 0.0,
+                user_satisfaction: 0.0,
+                improvement_rate: 0.0,
+            },
+            capabilities: Vec::new(),
+            state: AgentState::Idle,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a capability to the agent.
+    pub fn add_capability(&mut self, capability: AgentCapability) {
+        self.capabilities.push(capability);
+    }
+
+    /// Updates agent state.
+    pub fn set_state(&mut self, state: AgentState) {
+        self.state = state;
+    }
+
+    /// Records an analysis result for performance tracking.
+    pub fn record_analysis(&mut self, success: bool, accuracy: f64, time_seconds: f64) {
+        self.performance.total_analyses += 1;
+        if success {
+            self.performance.successful_analyses += 1;
+        }
+
+        // Update moving average of accuracy
+        let n = self.performance.total_analyses as f64;
+        self.performance.average_accuracy =
+            (self.performance.average_accuracy * (n - 1.0) + accuracy) / n;
+
+        // Update moving average of time
+        self.performance.average_time_seconds =
+            (self.performance.average_time_seconds * (n - 1.0) + time_seconds) / n;
+    }
+
+    /// Gets the success rate of the agent.
+    pub fn success_rate(&self) -> f64 {
+        if self.performance.total_analyses == 0 {
+            0.0
+        } else {
+            self.performance.successful_analyses as f64 / self.performance.total_analyses as f64
+        }
+    }
+}
+
+/// Automated adaptation proposal from an agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomatedAdaptationProposal {
+    /// Proposal ID
+    pub id: String,
+    /// Agent that generated this proposal
+    pub agent_id: String,
+    /// Statute being adapted
+    pub statute_id: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Proposed adaptations
+    pub adaptations: Vec<ProposedAdaptation>,
+    /// Confidence score (0.0 - 1.0)
+    pub confidence: f64,
+    /// Reasoning/explanation
+    pub reasoning: String,
+    /// Alternative proposals
+    pub alternatives: Vec<AlternativeProposal>,
+    /// Generated at timestamp
+    pub generated_at: String,
+}
+
+/// A proposed adaptation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProposedAdaptation {
+    /// Adaptation type
+    pub adaptation_type: AdaptationType,
+    /// Original text/value
+    pub original: String,
+    /// Proposed text/value
+    pub proposed: String,
+    /// Justification
+    pub justification: String,
+    /// Confidence in this adaptation (0.0 - 1.0)
+    pub confidence: f64,
+    /// Impact assessment
+    pub impact: AdaptationImpact,
+}
+
+/// Type of adaptation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AdaptationType {
+    /// Cultural parameter change
+    CulturalParameter,
+    /// Legal term translation
+    LegalTerm,
+    /// Structural modification
+    Structural,
+    /// Procedural adjustment
+    Procedural,
+    /// Penalty/sanction adjustment
+    Penalty,
+    /// Temporal adjustment
+    Temporal,
+}
+
+/// Impact of an adaptation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdaptationImpact {
+    /// Semantic preservation score (0.0 - 1.0)
+    pub semantic_preservation: f64,
+    /// Legal validity score (0.0 - 1.0)
+    pub legal_validity: f64,
+    /// Cultural appropriateness (0.0 - 1.0)
+    pub cultural_appropriateness: f64,
+    /// Implementation complexity (0.0 - 1.0)
+    pub implementation_complexity: f64,
+}
+
+/// Alternative proposal.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlternativeProposal {
+    /// Alternative ID
+    pub id: String,
+    /// Description
+    pub description: String,
+    /// Proposed value
+    pub proposed_value: String,
+    /// Confidence (0.0 - 1.0)
+    pub confidence: f64,
+    /// Trade-offs
+    pub tradeoffs: Vec<String>,
+}
+
+impl AutomatedAdaptationProposal {
+    /// Creates a new automated adaptation proposal.
+    pub fn new(
+        agent_id: String,
+        statute_id: String,
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent_id,
+            statute_id,
+            source_jurisdiction,
+            target_jurisdiction,
+            adaptations: Vec::new(),
+            confidence: 0.0,
+            reasoning: String::new(),
+            alternatives: Vec::new(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a proposed adaptation.
+    pub fn add_adaptation(&mut self, adaptation: ProposedAdaptation) {
+        self.adaptations.push(adaptation);
+        self.recalculate_confidence();
+    }
+
+    /// Adds an alternative proposal.
+    pub fn add_alternative(&mut self, alternative: AlternativeProposal) {
+        self.alternatives.push(alternative);
+    }
+
+    /// Recalculates overall confidence based on individual adaptations.
+    fn recalculate_confidence(&mut self) {
+        if self.adaptations.is_empty() {
+            self.confidence = 0.0;
+            return;
+        }
+
+        let total_confidence: f64 = self.adaptations.iter().map(|a| a.confidence).sum();
+        self.confidence = total_confidence / self.adaptations.len() as f64;
+    }
+
+    /// Gets high-confidence adaptations (>= 0.8).
+    pub fn high_confidence_adaptations(&self) -> Vec<&ProposedAdaptation> {
+        self.adaptations
+            .iter()
+            .filter(|a| a.confidence >= 0.8)
+            .collect()
+    }
+}
+
+/// Self-improving model that learns from outcomes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelfImprovingModel {
+    /// Model ID
+    pub id: String,
+    /// Model name
+    pub name: String,
+    /// Current version
+    pub version: String,
+    /// Training dataset
+    pub training_data: TrainingDataset,
+    /// Model metrics
+    pub metrics: ModelMetrics,
+    /// Improvement history
+    pub improvement_history: Vec<ImprovementRecord>,
+    /// Active learning strategy
+    pub learning_strategy: LearningStrategy,
+}
+
+/// Training dataset for the model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingDataset {
+    /// Number of samples
+    pub sample_count: usize,
+    /// Positive examples
+    pub positive_examples: usize,
+    /// Negative examples
+    pub negative_examples: usize,
+    /// Last updated timestamp
+    pub last_updated: String,
+    /// Data quality score (0.0 - 1.0)
+    pub quality_score: f64,
+}
+
+/// Metrics for the model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelMetrics {
+    /// Precision (0.0 - 1.0)
+    pub precision: f64,
+    /// Recall (0.0 - 1.0)
+    pub recall: f64,
+    /// F1 score (0.0 - 1.0)
+    pub f1_score: f64,
+    /// Accuracy (0.0 - 1.0)
+    pub accuracy: f64,
+    /// ROC AUC (0.0 - 1.0)
+    pub roc_auc: f64,
+}
+
+/// Record of model improvement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImprovementRecord {
+    /// Version before improvement
+    pub previous_version: String,
+    /// Version after improvement
+    pub new_version: String,
+    /// Accuracy improvement
+    pub accuracy_delta: f64,
+    /// F1 score improvement
+    pub f1_delta: f64,
+    /// Training samples added
+    pub samples_added: usize,
+    /// Improvement timestamp
+    pub improved_at: String,
+    /// Improvement notes
+    pub notes: String,
+}
+
+/// Learning strategy for self-improvement.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LearningStrategy {
+    /// Active learning (query most uncertain cases)
+    ActiveLearning,
+    /// Continuous learning (incremental updates)
+    ContinuousLearning,
+    /// Reinforcement learning (learn from rewards)
+    ReinforcementLearning,
+    /// Transfer learning (adapt from related domains)
+    TransferLearning,
+}
+
+impl SelfImprovingModel {
+    /// Creates a new self-improving model.
+    pub fn new(name: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            version: "1.0.0".to_string(),
+            training_data: TrainingDataset {
+                sample_count: 0,
+                positive_examples: 0,
+                negative_examples: 0,
+                last_updated: chrono::Utc::now().to_rfc3339(),
+                quality_score: 0.0,
+            },
+            metrics: ModelMetrics {
+                precision: 0.0,
+                recall: 0.0,
+                f1_score: 0.0,
+                accuracy: 0.0,
+                roc_auc: 0.0,
+            },
+            improvement_history: Vec::new(),
+            learning_strategy: LearningStrategy::ContinuousLearning,
+        }
+    }
+
+    /// Adds training data to the model.
+    pub fn add_training_data(&mut self, positive: usize, negative: usize) {
+        self.training_data.sample_count += positive + negative;
+        self.training_data.positive_examples += positive;
+        self.training_data.negative_examples += negative;
+        self.training_data.last_updated = chrono::Utc::now().to_rfc3339();
+
+        // Update quality score based on balance
+        let balance = if self.training_data.sample_count > 0 {
+            let ratio = self.training_data.positive_examples as f64
+                / self.training_data.sample_count as f64;
+            1.0 - (ratio - 0.5).abs() * 2.0 // Penalize imbalance
+        } else {
+            0.0
+        };
+        self.training_data.quality_score = balance;
+    }
+
+    /// Records an improvement in the model.
+    pub fn record_improvement(
+        &mut self,
+        new_accuracy: f64,
+        new_f1: f64,
+        samples_added: usize,
+        notes: String,
+    ) {
+        let accuracy_delta = new_accuracy - self.metrics.accuracy;
+        let f1_delta = new_f1 - self.metrics.f1_score;
+
+        let record = ImprovementRecord {
+            previous_version: self.version.clone(),
+            new_version: self.increment_version(),
+            accuracy_delta,
+            f1_delta,
+            samples_added,
+            improved_at: chrono::Utc::now().to_rfc3339(),
+            notes,
+        };
+
+        self.improvement_history.push(record);
+        self.metrics.accuracy = new_accuracy;
+        self.metrics.f1_score = new_f1;
+    }
+
+    /// Increments version number.
+    fn increment_version(&mut self) -> String {
+        let parts: Vec<&str> = self.version.split('.').collect();
+        if parts.len() == 3 {
+            if let Ok(patch) = parts[2].parse::<u32>() {
+                let new_version = format!("{}.{}.{}", parts[0], parts[1], patch + 1);
+                self.version = new_version.clone();
+                return new_version;
+            }
+        }
+        self.version.clone()
+    }
+
+    /// Gets the total improvement since creation.
+    pub fn total_improvement(&self) -> f64 {
+        self.improvement_history
+            .iter()
+            .map(|r| r.accuracy_delta)
+            .sum()
+    }
+}
+
+/// Continuous learning system for porting outcomes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContinuousLearningSystem {
+    /// System ID
+    pub id: String,
+    /// Outcome database
+    pub outcomes: Vec<PortingOutcome>,
+    /// Feedback database
+    pub feedback: Vec<UserFeedback>,
+    /// Learning insights
+    pub insights: Vec<LearningInsight>,
+    /// System metrics
+    pub metrics: LearningSystemMetrics,
+}
+
+/// Outcome from a porting operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingOutcome {
+    /// Outcome ID
+    pub id: String,
+    /// Porting request ID
+    pub porting_id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Success indicator
+    pub success: bool,
+    /// Quality score (0.0 - 1.0)
+    pub quality_score: f64,
+    /// Actual adaptations made
+    pub adaptations_made: Vec<String>,
+    /// Issues encountered
+    pub issues: Vec<String>,
+    /// Timestamp
+    pub recorded_at: String,
+}
+
+/// User feedback on a porting operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserFeedback {
+    /// Feedback ID
+    pub id: String,
+    /// Porting outcome ID
+    pub outcome_id: String,
+    /// User rating (1-5)
+    pub rating: u8,
+    /// Feedback text
+    pub feedback_text: String,
+    /// Specific issues noted
+    pub issues_noted: Vec<String>,
+    /// Suggestions for improvement
+    pub suggestions: Vec<String>,
+    /// Timestamp
+    pub submitted_at: String,
+}
+
+/// Learning insight derived from outcomes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningInsight {
+    /// Insight ID
+    pub id: String,
+    /// Insight type
+    pub insight_type: InsightType,
+    /// Description
+    pub description: String,
+    /// Confidence (0.0 - 1.0)
+    pub confidence: f64,
+    /// Supporting evidence count
+    pub evidence_count: usize,
+    /// Actionable recommendation
+    pub recommendation: String,
+    /// Discovered at timestamp
+    pub discovered_at: String,
+}
+
+/// Type of learning insight.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum InsightType {
+    /// Pattern identified
+    Pattern,
+    /// Common failure mode
+    FailureMode,
+    /// Best practice
+    BestPractice,
+    /// Correlation found
+    Correlation,
+    /// Edge case
+    EdgeCase,
+}
+
+/// Metrics for the learning system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningSystemMetrics {
+    /// Total outcomes recorded
+    pub total_outcomes: usize,
+    /// Success rate (0.0 - 1.0)
+    pub success_rate: f64,
+    /// Average quality score
+    pub average_quality: f64,
+    /// Insights discovered
+    pub insights_count: usize,
+    /// Feedback received
+    pub feedback_count: usize,
+    /// Average user rating
+    pub average_rating: f64,
+}
+
+impl ContinuousLearningSystem {
+    /// Creates a new continuous learning system.
+    pub fn new() -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            outcomes: Vec::new(),
+            feedback: Vec::new(),
+            insights: Vec::new(),
+            metrics: LearningSystemMetrics {
+                total_outcomes: 0,
+                success_rate: 0.0,
+                average_quality: 0.0,
+                insights_count: 0,
+                feedback_count: 0,
+                average_rating: 0.0,
+            },
+        }
+    }
+
+    /// Records a porting outcome.
+    pub fn record_outcome(&mut self, outcome: PortingOutcome) {
+        self.outcomes.push(outcome);
+        self.update_metrics();
+    }
+
+    /// Adds user feedback.
+    pub fn add_feedback(&mut self, feedback: UserFeedback) {
+        self.feedback.push(feedback);
+        self.update_metrics();
+    }
+
+    /// Adds a learning insight.
+    pub fn add_insight(&mut self, insight: LearningInsight) {
+        self.insights.push(insight);
+        self.metrics.insights_count = self.insights.len();
+    }
+
+    /// Updates system metrics.
+    fn update_metrics(&mut self) {
+        self.metrics.total_outcomes = self.outcomes.len();
+
+        if !self.outcomes.is_empty() {
+            let successes = self.outcomes.iter().filter(|o| o.success).count();
+            self.metrics.success_rate = successes as f64 / self.outcomes.len() as f64;
+
+            let total_quality: f64 = self.outcomes.iter().map(|o| o.quality_score).sum();
+            self.metrics.average_quality = total_quality / self.outcomes.len() as f64;
+        }
+
+        self.metrics.feedback_count = self.feedback.len();
+        if !self.feedback.is_empty() {
+            let total_rating: u32 = self.feedback.iter().map(|f| f.rating as u32).sum();
+            self.metrics.average_rating = total_rating as f64 / self.feedback.len() as f64;
+        }
+    }
+
+    /// Gets high-confidence insights (>= 0.8).
+    pub fn high_confidence_insights(&self) -> Vec<&LearningInsight> {
+        self.insights
+            .iter()
+            .filter(|i| i.confidence >= 0.8)
+            .collect()
+    }
+}
+
+impl Default for ContinuousLearningSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Human-in-the-loop refinement system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HumanInTheLoopSystem {
+    /// System ID
+    pub id: String,
+    /// Pending reviews
+    pub pending_reviews: Vec<PendingReview>,
+    /// Completed reviews
+    pub completed_reviews: Vec<CompletedReview>,
+    /// Expert reviewers
+    pub reviewers: Vec<ExpertReviewer>,
+    /// System configuration
+    pub config: HitlConfiguration,
+}
+
+/// Pending review requiring human input.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingReview {
+    /// Review ID
+    pub id: String,
+    /// Proposal being reviewed
+    pub proposal_id: String,
+    /// Agent that created the proposal
+    pub agent_id: String,
+    /// Priority (1-5, 5 is highest)
+    pub priority: u8,
+    /// Reason for human review
+    pub review_reason: ReviewReason,
+    /// Context information
+    pub context: String,
+    /// Questions for reviewer
+    pub questions: Vec<String>,
+    /// Created at timestamp
+    pub created_at: String,
+}
+
+/// Reason for requiring human review.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ReviewReason {
+    /// Low confidence in agent proposal
+    LowConfidence,
+    /// High-stakes decision
+    HighStakes,
+    /// Novel situation not in training data
+    NovelSituation,
+    /// Conflicting recommendations
+    ConflictingRecommendations,
+    /// Legal complexity
+    LegalComplexity,
+    /// User requested review
+    UserRequested,
+}
+
+/// Completed review with human feedback.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletedReview {
+    /// Review ID
+    pub id: String,
+    /// Original pending review ID
+    pub pending_review_id: String,
+    /// Reviewer ID
+    pub reviewer_id: String,
+    /// Reviewer decision
+    pub decision: AgentReviewDecision,
+    /// Reviewer comments
+    pub comments: String,
+    /// Corrections made
+    pub corrections: Vec<AgentReviewCorrection>,
+    /// Confidence in decision (0.0 - 1.0)
+    pub confidence: f64,
+    /// Time spent reviewing (seconds)
+    pub review_time_seconds: f64,
+    /// Completed at timestamp
+    pub completed_at: String,
+}
+
+/// Reviewer decision.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AgentReviewDecision {
+    /// Approve as-is
+    Approve,
+    /// Approve with modifications
+    ApproveWithModifications,
+    /// Reject
+    Reject,
+    /// Request more information
+    RequestMoreInfo,
+    /// Escalate to senior reviewer
+    Escalate,
+}
+
+/// Correction made by reviewer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentReviewCorrection {
+    /// Field or aspect being corrected
+    pub field: String,
+    /// Original value
+    pub original_value: String,
+    /// Corrected value
+    pub corrected_value: String,
+    /// Explanation
+    pub explanation: String,
+}
+
+/// Expert reviewer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpertReviewer {
+    /// Reviewer ID
+    pub id: String,
+    /// Name
+    pub name: String,
+    /// Expertise areas
+    pub expertise: Vec<String>,
+    /// Reviews completed
+    pub reviews_completed: usize,
+    /// Average review time (seconds)
+    pub average_review_time: f64,
+    /// Reviewer accuracy (0.0 - 1.0)
+    pub accuracy: f64,
+}
+
+/// Configuration for human-in-the-loop system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HitlConfiguration {
+    /// Confidence threshold below which human review is required
+    pub confidence_threshold: f64,
+    /// Whether to require review for high-stakes decisions
+    pub require_review_for_high_stakes: bool,
+    /// Maximum time for review (seconds)
+    pub max_review_time: f64,
+    /// Escalation threshold (number of rejections before escalation)
+    pub escalation_threshold: usize,
+}
+
+impl HumanInTheLoopSystem {
+    /// Creates a new human-in-the-loop system.
+    pub fn new(config: HitlConfiguration) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            pending_reviews: Vec::new(),
+            completed_reviews: Vec::new(),
+            reviewers: Vec::new(),
+            config,
+        }
+    }
+
+    /// Submits a proposal for human review.
+    pub fn submit_for_review(&mut self, review: PendingReview) {
+        self.pending_reviews.push(review);
+    }
+
+    /// Completes a review.
+    pub fn complete_review(&mut self, review: CompletedReview) {
+        // Remove from pending
+        self.pending_reviews
+            .retain(|r| r.id != review.pending_review_id);
+        // Add to completed
+        self.completed_reviews.push(review);
+    }
+
+    /// Adds a reviewer to the system.
+    pub fn add_reviewer(&mut self, reviewer: ExpertReviewer) {
+        self.reviewers.push(reviewer);
+    }
+
+    /// Gets high-priority pending reviews (priority >= 4).
+    pub fn high_priority_reviews(&self) -> Vec<&PendingReview> {
+        self.pending_reviews
+            .iter()
+            .filter(|r| r.priority >= 4)
+            .collect()
+    }
+
+    /// Gets the approval rate.
+    pub fn approval_rate(&self) -> f64 {
+        if self.completed_reviews.is_empty() {
+            return 0.0;
+        }
+
+        let approved = self
+            .completed_reviews
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r.decision,
+                    AgentReviewDecision::Approve | AgentReviewDecision::ApproveWithModifications
+                )
+            })
+            .count();
+
+        approved as f64 / self.completed_reviews.len() as f64
     }
 }
 
@@ -18397,8 +20137,7 @@ mod tests {
 
     #[test]
     fn test_market_impact_assessment() {
-        let mut assessment =
-            MarketImpactAssessment::new("test-statute".to_string(), "US".to_string());
+        let assessment = MarketImpactAssessment::new("test-statute".to_string(), "US".to_string());
 
         assert_eq!(assessment.statute_id, "test-statute");
         assert_eq!(assessment.jurisdiction, "US");
@@ -18463,7 +20202,7 @@ mod tests {
 
     #[test]
     fn test_compliance_cost_estimation() {
-        let mut estimation =
+        let estimation =
             ComplianceCostEstimation::new("test-statute".to_string(), "US".to_string());
 
         assert_eq!(estimation.statute_id, "test-statute");
@@ -18530,7 +20269,7 @@ mod tests {
     fn test_compliance_capacity_levels() {
         let high = ComplianceCapacity::High;
         let moderate = ComplianceCapacity::Moderate;
-        let low = ComplianceCapacity::Low;
+        let _low = ComplianceCapacity::Low;
         let insufficient = ComplianceCapacity::Insufficient;
 
         assert_eq!(high, ComplianceCapacity::High);
@@ -18578,7 +20317,7 @@ mod tests {
     fn test_risk_level_with_negligible() {
         let negligible = RiskLevel::Negligible;
         let low = RiskLevel::Low;
-        let medium = RiskLevel::Medium;
+        let _medium = RiskLevel::Medium;
         let high = RiskLevel::High;
         let critical = RiskLevel::Critical;
 
@@ -21949,5 +23688,544 @@ mod tests {
             },
             summary: format!("Validation passed with score {:.2}", score),
         }
+    }
+
+    // ========================================================================
+    // Simulation Integration Tests (v0.2.9)
+    // ========================================================================
+
+    #[test]
+    fn test_ported_statute_simulation_creation() {
+        let params = SimulationParameters {
+            population_size: 100000,
+            time_horizon_years: 5,
+            simulation_runs: 1000,
+            confidence_level: 0.95,
+            enforcement_intensity: 0.8,
+            compliance_culture: 0.7,
+        };
+
+        let simulation =
+            PortedStatuteSimulation::new("statute-1".to_string(), "US".to_string(), params.clone());
+
+        assert_eq!(simulation.statute_id, "statute-1");
+        assert_eq!(simulation.jurisdiction, "US");
+        assert_eq!(simulation.parameters.population_size, 100000);
+        assert_eq!(simulation.outcomes.len(), 0);
+        assert_eq!(simulation.unintended_consequences.len(), 0);
+    }
+
+    #[test]
+    fn test_simulation_add_outcomes() {
+        let params = SimulationParameters {
+            population_size: 50000,
+            time_horizon_years: 3,
+            simulation_runs: 500,
+            confidence_level: 0.95,
+            enforcement_intensity: 0.7,
+            compliance_culture: 0.8,
+        };
+
+        let mut simulation =
+            PortedStatuteSimulation::new("statute-1".to_string(), "JP".to_string(), params);
+
+        let outcome1 = SimulationOutcome {
+            category: OutcomeCategory::PositiveIntended,
+            description: "Increased compliance".to_string(),
+            probability: 0.85,
+            magnitude: 0.75,
+            affected_population_pct: 80.0,
+            timeframe: "1-2 years".to_string(),
+        };
+
+        let outcome2 = SimulationOutcome {
+            category: OutcomeCategory::NegativeUnintended,
+            description: "Increased administrative burden".to_string(),
+            probability: 0.6,
+            magnitude: 0.4,
+            affected_population_pct: 20.0,
+            timeframe: "6 months".to_string(),
+        };
+
+        simulation.add_outcome(outcome1);
+        simulation.add_outcome(outcome2);
+
+        assert_eq!(simulation.outcomes.len(), 2);
+
+        let negative_outcomes = simulation.likely_negative_outcomes();
+        assert_eq!(negative_outcomes.len(), 1);
+        assert_eq!(
+            negative_outcomes[0].description,
+            "Increased administrative burden"
+        );
+    }
+
+    #[test]
+    fn test_unintended_consequences() {
+        let params = SimulationParameters {
+            population_size: 1000000,
+            time_horizon_years: 10,
+            simulation_runs: 2000,
+            confidence_level: 0.99,
+            enforcement_intensity: 0.9,
+            compliance_culture: 0.6,
+        };
+
+        let mut simulation =
+            PortedStatuteSimulation::new("statute-2".to_string(), "GB".to_string(), params);
+
+        let consequence1 = UnintendedConsequence {
+            description: "Market distortion".to_string(),
+            severity: 0.8,
+            likelihood: 0.7,
+            affected_groups: vec!["Small businesses".to_string()],
+            mitigation_strategies: vec!["Exemptions for small entities".to_string()],
+        };
+
+        let consequence2 = UnintendedConsequence {
+            description: "Minor compliance confusion".to_string(),
+            severity: 0.3,
+            likelihood: 0.5,
+            affected_groups: vec!["General public".to_string()],
+            mitigation_strategies: vec!["Public education campaign".to_string()],
+        };
+
+        simulation.add_unintended_consequence(consequence1);
+        simulation.add_unintended_consequence(consequence2);
+
+        assert_eq!(simulation.unintended_consequences.len(), 2);
+
+        let high_severity = simulation.high_severity_consequences();
+        assert_eq!(high_severity.len(), 1);
+        assert_eq!(high_severity[0].description, "Market distortion");
+    }
+
+    #[test]
+    fn test_comparative_outcome_analysis() {
+        let mut analysis = ComparativeOutcomeAnalysis::new(
+            "JP".to_string(),
+            "US".to_string(),
+            "statute-1".to_string(),
+        );
+
+        let comparison1 = OutcomeComparison {
+            outcome: "Compliance rate".to_string(),
+            source_value: 85.0,
+            target_value: 75.0,
+            difference_pct: -11.76,
+            significance: 0.02,
+            explanation: "Different compliance cultures".to_string(),
+        };
+
+        let comparison2 = OutcomeComparison {
+            outcome: "Implementation cost".to_string(),
+            source_value: 1000000.0,
+            target_value: 1500000.0,
+            difference_pct: 50.0,
+            significance: 0.01,
+            explanation: "Higher labor costs".to_string(),
+        };
+
+        analysis.add_comparison(comparison1);
+        analysis.add_comparison(comparison2);
+
+        assert_eq!(analysis.comparisons.len(), 2);
+        assert!(analysis.similarity_score > 0.0);
+        assert!(analysis.similarity_score <= 1.0);
+
+        let significant = analysis.significant_differences();
+        assert_eq!(significant.len(), 1);
+        assert_eq!(significant[0].outcome, "Implementation cost");
+    }
+
+    #[test]
+    fn test_key_differences() {
+        let mut analysis = ComparativeOutcomeAnalysis::new(
+            "US".to_string(),
+            "DE".to_string(),
+            "statute-2".to_string(),
+        );
+
+        let diff = KeyDifference {
+            category: DifferenceCategory::Cultural,
+            description: "Privacy expectations differ significantly".to_string(),
+            impact: 0.9,
+            requires_adaptation: true,
+        };
+
+        analysis.add_key_difference(diff);
+
+        assert_eq!(analysis.key_differences.len(), 1);
+        assert!(analysis.key_differences[0].requires_adaptation);
+    }
+
+    #[test]
+    fn test_population_impact_modeling() {
+        let mut model = PopulationImpactModeling::new("statute-1".to_string(), "US".to_string());
+
+        let segment1 = PopulationSegment {
+            name: "Working age adults".to_string(),
+            size: 150000000,
+            percentage: 60.0,
+            impact_level: 0.7,
+            impact_type: PopulationImpactType::ModeratelyBeneficial,
+            effects: vec!["Improved workplace safety".to_string()],
+            vulnerability_factors: vec![],
+        };
+
+        let segment2 = PopulationSegment {
+            name: "Small business owners".to_string(),
+            size: 10000000,
+            percentage: 4.0,
+            impact_level: 0.6,
+            impact_type: PopulationImpactType::ModeratelyHarmful,
+            effects: vec!["Increased compliance costs".to_string()],
+            vulnerability_factors: vec!["Limited resources".to_string()],
+        };
+
+        model.add_segment(segment1);
+        model.add_segment(segment2);
+
+        assert_eq!(model.segments.len(), 2);
+        assert!(model.overall_impact != 0.0);
+
+        let negative = model.negatively_impacted_segments();
+        assert_eq!(negative.len(), 1);
+        assert_eq!(negative[0].name, "Small business owners");
+    }
+
+    #[test]
+    fn test_equity_assessment() {
+        let mut model = PopulationImpactModeling::new("statute-2".to_string(), "JP".to_string());
+
+        // Add segments with varying impacts
+        for i in 0..5 {
+            let segment = PopulationSegment {
+                name: format!("Segment {}", i),
+                size: 20000000,
+                percentage: 20.0,
+                impact_level: (i as f64 + 1.0) * 0.2,
+                impact_type: PopulationImpactType::ModeratelyBeneficial,
+                effects: vec![],
+                vulnerability_factors: vec![],
+            };
+            model.add_segment(segment);
+        }
+
+        // Equity assessment should be calculated
+        assert!(model.equity_assessment.gini_coefficient >= 0.0);
+        assert!(model.equity_assessment.gini_coefficient <= 1.0);
+        assert!(model.equity_assessment.equity_score >= 0.0);
+        assert!(model.equity_assessment.equity_score <= 1.0);
+    }
+
+    #[test]
+    fn test_enforcement_simulation() {
+        let mut simulation = EnforcementSimulation::new("statute-1".to_string(), "US".to_string());
+
+        let strategy1 = EnforcementStrategy {
+            name: "Strict enforcement".to_string(),
+            mechanisms: vec![EnforcementMechanism {
+                mechanism_type: MechanismType::Inspection,
+                description: "Regular inspections".to_string(),
+                frequency: "Monthly".to_string(),
+                effectiveness: 0.9,
+            }],
+            penalties: vec![Penalty {
+                violation_type: "Non-compliance".to_string(),
+                amount: 10000.0,
+                currency: "USD".to_string(),
+                additional_sanctions: vec![],
+                deterrence: 0.8,
+            }],
+            monitoring: MonitoringApproach {
+                approach_type: MonitoringType::Continuous,
+                coverage: 100.0,
+                frequency: "Daily".to_string(),
+                technology: vec!["Automated sensors".to_string()],
+            },
+            resources: ResourceAllocation {
+                personnel: 100,
+                budget: 5000000.0,
+                currency: "USD".to_string(),
+                equipment: vec!["Inspection tools".to_string()],
+                training_hours: 1000.0,
+            },
+        };
+
+        let scenario1 = EnforcementScenario {
+            name: "High enforcement".to_string(),
+            strategy: strategy1,
+            compliance_rate: 0.95,
+            cost: 5000000.0,
+            currency: "USD".to_string(),
+            effectiveness: 0.9,
+            public_acceptance: 0.6,
+            risks: vec![],
+        };
+
+        simulation.add_scenario(scenario1);
+
+        assert_eq!(simulation.scenarios.len(), 1);
+        assert!(simulation.optimal_strategy.is_some());
+        assert!(simulation.efficiency_score > 0.0);
+    }
+
+    #[test]
+    fn test_enforcement_optimal_strategy() {
+        let mut simulation = EnforcementSimulation::new("statute-2".to_string(), "JP".to_string());
+
+        // Add multiple scenarios
+        for i in 0..3 {
+            let strategy = EnforcementStrategy {
+                name: format!("Strategy {}", i),
+                mechanisms: vec![],
+                penalties: vec![],
+                monitoring: MonitoringApproach {
+                    approach_type: MonitoringType::Periodic,
+                    coverage: 50.0,
+                    frequency: "Weekly".to_string(),
+                    technology: vec![],
+                },
+                resources: ResourceAllocation {
+                    personnel: 10 * (i + 1),
+                    budget: 100000.0 * (i + 1) as f64,
+                    currency: "JPY".to_string(),
+                    equipment: vec![],
+                    training_hours: 100.0,
+                },
+            };
+
+            let scenario = EnforcementScenario {
+                name: format!("Scenario {}", i),
+                strategy,
+                compliance_rate: 0.7 + (i as f64 * 0.1),
+                cost: 100000.0 * (i + 1) as f64,
+                currency: "JPY".to_string(),
+                effectiveness: 0.6 + (i as f64 * 0.15),
+                public_acceptance: 0.8,
+                risks: vec![],
+            };
+
+            simulation.add_scenario(scenario);
+        }
+
+        assert_eq!(simulation.scenarios.len(), 3);
+        assert!(simulation.optimal_strategy.is_some());
+
+        let high_eff = simulation.high_effectiveness_scenarios();
+        assert!(!high_eff.is_empty());
+    }
+
+    #[test]
+    fn test_ab_testing_framework_creation() {
+        let config = TestConfiguration {
+            sample_size: 10000,
+            duration_days: 30,
+            significance_threshold: 0.05,
+            minimum_effect: 0.1,
+            primary_metric: "Compliance rate".to_string(),
+            secondary_metrics: vec!["Cost".to_string(), "User satisfaction".to_string()],
+        };
+
+        let framework = ABTestingFramework::new("statute-1".to_string(), "US".to_string(), config);
+
+        assert_eq!(framework.statute_id, "statute-1");
+        assert_eq!(framework.jurisdiction, "US");
+        assert_eq!(framework.status, ABTestStatus::Setup);
+        assert_eq!(framework.config.sample_size, 10000);
+    }
+
+    #[test]
+    fn test_ab_testing_add_variants() {
+        let config = TestConfiguration {
+            sample_size: 5000,
+            duration_days: 60,
+            significance_threshold: 0.05,
+            minimum_effect: 0.15,
+            primary_metric: "Effectiveness".to_string(),
+            secondary_metrics: vec![],
+        };
+
+        let mut framework =
+            ABTestingFramework::new("statute-2".to_string(), "JP".to_string(), config);
+
+        let variant1 = PortingVariant {
+            id: "v1".to_string(),
+            name: "Strict approach".to_string(),
+            ported_statute_id: "ported-1".to_string(),
+            differences: vec!["Stricter penalties".to_string()],
+            hypothesis: "Higher penalties improve compliance".to_string(),
+            traffic_allocation: 0.5,
+        };
+
+        let variant2 = PortingVariant {
+            id: "v2".to_string(),
+            name: "Lenient approach".to_string(),
+            ported_statute_id: "ported-2".to_string(),
+            differences: vec!["Education focus".to_string()],
+            hypothesis: "Education improves long-term compliance".to_string(),
+            traffic_allocation: 0.5,
+        };
+
+        framework.add_variant(variant1);
+        framework.add_variant(variant2);
+
+        assert_eq!(framework.variants.len(), 2);
+    }
+
+    #[test]
+    fn test_ab_testing_start_validation() {
+        let config = TestConfiguration {
+            sample_size: 1000,
+            duration_days: 14,
+            significance_threshold: 0.05,
+            minimum_effect: 0.1,
+            primary_metric: "Success rate".to_string(),
+            secondary_metrics: vec![],
+        };
+
+        let mut framework =
+            ABTestingFramework::new("statute-3".to_string(), "GB".to_string(), config);
+
+        // Should fail with less than 2 variants
+        let result = framework.start_test();
+        assert!(result.is_err());
+
+        // Add two variants
+        framework.add_variant(PortingVariant {
+            id: "v1".to_string(),
+            name: "Variant 1".to_string(),
+            ported_statute_id: "p1".to_string(),
+            differences: vec![],
+            hypothesis: "Test".to_string(),
+            traffic_allocation: 0.5,
+        });
+
+        framework.add_variant(PortingVariant {
+            id: "v2".to_string(),
+            name: "Variant 2".to_string(),
+            ported_statute_id: "p2".to_string(),
+            differences: vec![],
+            hypothesis: "Test".to_string(),
+            traffic_allocation: 0.5,
+        });
+
+        let result = framework.start_test();
+        assert!(result.is_ok());
+        assert_eq!(framework.status, ABTestStatus::Running);
+    }
+
+    #[test]
+    fn test_ab_testing_traffic_allocation_validation() {
+        let config = TestConfiguration {
+            sample_size: 1000,
+            duration_days: 14,
+            significance_threshold: 0.05,
+            minimum_effect: 0.1,
+            primary_metric: "Metric".to_string(),
+            secondary_metrics: vec![],
+        };
+
+        let mut framework =
+            ABTestingFramework::new("statute-4".to_string(), "DE".to_string(), config);
+
+        // Add variants with invalid allocation (doesn't sum to 1.0)
+        framework.add_variant(PortingVariant {
+            id: "v1".to_string(),
+            name: "Variant 1".to_string(),
+            ported_statute_id: "p1".to_string(),
+            differences: vec![],
+            hypothesis: "Test".to_string(),
+            traffic_allocation: 0.6,
+        });
+
+        framework.add_variant(PortingVariant {
+            id: "v2".to_string(),
+            name: "Variant 2".to_string(),
+            ported_statute_id: "p2".to_string(),
+            differences: vec![],
+            hypothesis: "Test".to_string(),
+            traffic_allocation: 0.6,
+        });
+
+        let result = framework.start_test();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ab_testing_results() {
+        let config = TestConfiguration {
+            sample_size: 2000,
+            duration_days: 30,
+            significance_threshold: 0.05,
+            minimum_effect: 0.1,
+            primary_metric: "Compliance".to_string(),
+            secondary_metrics: vec![],
+        };
+
+        let mut framework =
+            ABTestingFramework::new("statute-5".to_string(), "FR".to_string(), config);
+
+        framework.add_variant(PortingVariant {
+            id: "v1".to_string(),
+            name: "Control".to_string(),
+            ported_statute_id: "p1".to_string(),
+            differences: vec![],
+            hypothesis: "Baseline".to_string(),
+            traffic_allocation: 0.5,
+        });
+
+        framework.add_variant(PortingVariant {
+            id: "v2".to_string(),
+            name: "Treatment".to_string(),
+            ported_statute_id: "p2".to_string(),
+            differences: vec!["Enhanced communication".to_string()],
+            hypothesis: "Better communication improves compliance".to_string(),
+            traffic_allocation: 0.5,
+        });
+
+        let _ = framework.start_test();
+
+        // Record results
+        let mut secondary_metrics = HashMap::new();
+        secondary_metrics.insert("Cost".to_string(), 50000.0);
+
+        let results = ABTestResults {
+            performances: vec![
+                VariantPerformance {
+                    variant_id: "v1".to_string(),
+                    primary_metric_value: 0.75,
+                    secondary_metric_values: secondary_metrics.clone(),
+                    sample_size: 1000,
+                    compliance_rate: 0.75,
+                    user_satisfaction: 0.7,
+                    confidence_interval: (0.72, 0.78),
+                },
+                VariantPerformance {
+                    variant_id: "v2".to_string(),
+                    primary_metric_value: 0.82,
+                    secondary_metric_values: secondary_metrics,
+                    sample_size: 1000,
+                    compliance_rate: 0.82,
+                    user_satisfaction: 0.85,
+                    confidence_interval: (0.79, 0.85),
+                },
+            ],
+            winner_id: Some("v2".to_string()),
+            statistically_significant: true,
+            confidence_level: 0.95,
+            recommendations: vec!["Deploy treatment variant".to_string()],
+            completed_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        framework.record_results(results);
+
+        assert_eq!(framework.status, ABTestStatus::Completed);
+        assert!(framework.results.is_some());
+
+        let winner = framework.get_winner();
+        assert!(winner.is_some());
+        assert_eq!(winner.unwrap().name, "Treatment");
     }
 }

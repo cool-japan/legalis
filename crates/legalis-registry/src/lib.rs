@@ -15194,6 +15194,1486 @@ pub mod multi_tenant;
 
 pub mod ai_features;
 
+// ============================================================================
+// Event Sourcing 2.0 Module (v0.2.6)
+// ============================================================================
+
+/// Event Sourcing 2.0: Advanced event replay, projections, and archiving.
+pub mod event_sourcing_v2 {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    // ========================================================================
+    // 1. Event Replay with Time-Travel Queries
+    // ========================================================================
+
+    /// Time-travel query builder for replaying events.
+    #[derive(Debug, Clone)]
+    pub struct TimeTravelQuery {
+        /// Target point in time
+        pub target_time: DateTime<Utc>,
+        /// Optional statute filter
+        pub statute_filter: Option<String>,
+        /// Include only specific event types
+        pub event_types: Vec<String>,
+    }
+
+    impl TimeTravelQuery {
+        /// Creates a new time-travel query for a specific point in time.
+        pub fn new(target_time: DateTime<Utc>) -> Self {
+            Self {
+                target_time,
+                statute_filter: None,
+                event_types: Vec::new(),
+            }
+        }
+
+        /// Filters for a specific statute.
+        pub fn for_statute(mut self, statute_id: String) -> Self {
+            self.statute_filter = Some(statute_id);
+            self
+        }
+
+        /// Filters for specific event types.
+        pub fn with_event_types(mut self, event_types: Vec<String>) -> Self {
+            self.event_types = event_types;
+            self
+        }
+    }
+
+    /// Result of replaying events to reconstruct state at a point in time.
+    #[derive(Debug, Clone)]
+    pub struct ReplayResult {
+        /// Reconstructed statute state
+        pub statutes: HashMap<String, StatuteEntry>,
+        /// Number of events replayed
+        pub events_replayed: usize,
+        /// Target timestamp
+        pub target_time: DateTime<Utc>,
+        /// Replay duration
+        pub replay_duration: std::time::Duration,
+    }
+
+    /// Event replay engine for time-travel queries.
+    #[derive(Debug)]
+    pub struct EventReplayEngine {
+        event_store: Arc<Mutex<EventStore>>,
+    }
+
+    impl EventReplayEngine {
+        /// Creates a new event replay engine.
+        pub fn new(event_store: Arc<Mutex<EventStore>>) -> Self {
+            Self { event_store }
+        }
+
+        /// Replays events up to a specific point in time.
+        pub fn replay(&self, query: TimeTravelQuery) -> Result<ReplayResult, String> {
+            let start = std::time::Instant::now();
+            let store = self.event_store.lock().unwrap();
+
+            let mut statutes = HashMap::new();
+            let mut events_replayed = 0;
+
+            for event in store.all_events() {
+                let event_time = self.get_event_timestamp(event);
+                if event_time > query.target_time {
+                    break;
+                }
+
+                // Apply statute filter
+                if let Some(ref statute_id) = query.statute_filter {
+                    if !self.event_matches_statute(event, statute_id) {
+                        continue;
+                    }
+                }
+
+                // Apply event
+                self.apply_event(&mut statutes, event);
+                events_replayed += 1;
+            }
+
+            Ok(ReplayResult {
+                statutes,
+                events_replayed,
+                target_time: query.target_time,
+                replay_duration: start.elapsed(),
+            })
+        }
+
+        fn get_event_timestamp(&self, event: &RegistryEvent) -> DateTime<Utc> {
+            match event {
+                RegistryEvent::StatuteRegistered { timestamp, .. }
+                | RegistryEvent::StatuteUpdated { timestamp, .. }
+                | RegistryEvent::StatusChanged { timestamp, .. }
+                | RegistryEvent::TagAdded { timestamp, .. }
+                | RegistryEvent::TagRemoved { timestamp, .. }
+                | RegistryEvent::ReferenceAdded { timestamp, .. }
+                | RegistryEvent::ReferenceRemoved { timestamp, .. }
+                | RegistryEvent::MetadataUpdated { timestamp, .. }
+                | RegistryEvent::StatuteDeleted { timestamp, .. }
+                | RegistryEvent::StatuteArchived { timestamp, .. } => *timestamp,
+            }
+        }
+
+        fn event_matches_statute(&self, event: &RegistryEvent, statute_id: &str) -> bool {
+            match event {
+                RegistryEvent::StatuteRegistered { statute_id: id, .. }
+                | RegistryEvent::StatuteUpdated { statute_id: id, .. }
+                | RegistryEvent::StatusChanged { statute_id: id, .. }
+                | RegistryEvent::TagAdded { statute_id: id, .. }
+                | RegistryEvent::TagRemoved { statute_id: id, .. }
+                | RegistryEvent::ReferenceAdded { statute_id: id, .. }
+                | RegistryEvent::ReferenceRemoved { statute_id: id, .. }
+                | RegistryEvent::MetadataUpdated { statute_id: id, .. }
+                | RegistryEvent::StatuteDeleted { statute_id: id, .. }
+                | RegistryEvent::StatuteArchived { statute_id: id, .. } => id == statute_id,
+            }
+        }
+
+        fn apply_event(&self, statutes: &mut HashMap<String, StatuteEntry>, event: &RegistryEvent) {
+            match event {
+                RegistryEvent::StatuteRegistered {
+                    statute_id,
+                    jurisdiction,
+                    ..
+                } => {
+                    let statute = legalis_core::Statute {
+                        id: statute_id.clone(),
+                        title: format!("Statute {}", statute_id),
+                        preconditions: Vec::new(),
+                        effect: legalis_core::Effect {
+                            effect_type: legalis_core::EffectType::Obligation,
+                            description: "Default effect".to_string(),
+                            parameters: HashMap::new(),
+                        },
+                        discretion_logic: None,
+                        temporal_validity: legalis_core::TemporalValidity {
+                            effective_date: None,
+                            expiry_date: None,
+                            enacted_at: None,
+                            amended_at: None,
+                        },
+                        version: 1,
+                        jurisdiction: Some(jurisdiction.clone()),
+                        derives_from: Vec::new(),
+                        applies_to: Vec::new(),
+                        exceptions: Vec::new(),
+                    };
+                    statutes.insert(statute_id.clone(), StatuteEntry::new(statute, jurisdiction));
+                }
+                RegistryEvent::StatusChanged {
+                    statute_id,
+                    new_status,
+                    ..
+                } => {
+                    if let Some(entry) = statutes.get_mut(statute_id) {
+                        entry.status = new_status.clone();
+                    }
+                }
+                RegistryEvent::StatuteDeleted { statute_id, .. } => {
+                    statutes.remove(statute_id);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // ========================================================================
+    // 2. Event Projections for Analytics
+    // ========================================================================
+
+    /// Projection types for analytics.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum ProjectionType {
+        /// Count events by type
+        EventTypeCount,
+        /// Count events by statute
+        StatuteActivityCount,
+        /// Track status changes over time
+        StatusChangeTimeline,
+        /// Tag usage statistics
+        TagUsageStats,
+        /// Daily activity summary
+        DailyActivitySummary,
+    }
+
+    /// Event projection result.
+    #[derive(Debug, Clone)]
+    pub struct ProjectionResult {
+        /// Projection type
+        pub projection_type: ProjectionType,
+        /// Aggregated data
+        pub data: BTreeMap<String, usize>,
+        /// Number of events processed
+        pub events_processed: usize,
+        /// Time range covered
+        pub time_range: (DateTime<Utc>, DateTime<Utc>),
+    }
+
+    /// Event projection engine for analytics.
+    #[derive(Debug)]
+    pub struct ProjectionEngine {
+        event_store: Arc<Mutex<EventStore>>,
+    }
+
+    impl ProjectionEngine {
+        /// Creates a new projection engine.
+        pub fn new(event_store: Arc<Mutex<EventStore>>) -> Self {
+            Self { event_store }
+        }
+
+        /// Computes a projection from the event stream.
+        pub fn project(&self, projection_type: ProjectionType) -> ProjectionResult {
+            let store = self.event_store.lock().unwrap();
+            let events = store.all_events();
+
+            let mut data = BTreeMap::new();
+            let mut min_time = Utc::now();
+            let mut max_time = DateTime::<Utc>::MIN_UTC;
+
+            for event in &events {
+                let timestamp = self.get_event_timestamp(event);
+                if timestamp < min_time {
+                    min_time = timestamp;
+                }
+                if timestamp > max_time {
+                    max_time = timestamp;
+                }
+
+                match projection_type {
+                    ProjectionType::EventTypeCount => {
+                        let event_type = self.get_event_type_name(event);
+                        *data.entry(event_type).or_insert(0) += 1;
+                    }
+                    ProjectionType::StatuteActivityCount => {
+                        if let Some(statute_id) = self.get_statute_id(event) {
+                            *data.entry(statute_id).or_insert(0) += 1;
+                        }
+                    }
+                    ProjectionType::StatusChangeTimeline => {
+                        if let RegistryEvent::StatusChanged { new_status, .. } = event {
+                            let status_str = format!("{:?}", new_status);
+                            *data.entry(status_str).or_insert(0) += 1;
+                        }
+                    }
+                    ProjectionType::TagUsageStats => {
+                        if let RegistryEvent::TagAdded { tag, .. } = event {
+                            *data.entry(tag.clone()).or_insert(0) += 1;
+                        }
+                    }
+                    ProjectionType::DailyActivitySummary => {
+                        let date_key = timestamp.format("%Y-%m-%d").to_string();
+                        *data.entry(date_key).or_insert(0) += 1;
+                    }
+                }
+            }
+
+            ProjectionResult {
+                projection_type,
+                data,
+                events_processed: events.len(),
+                time_range: (min_time, max_time),
+            }
+        }
+
+        fn get_event_timestamp(&self, event: &RegistryEvent) -> DateTime<Utc> {
+            match event {
+                RegistryEvent::StatuteRegistered { timestamp, .. }
+                | RegistryEvent::StatuteUpdated { timestamp, .. }
+                | RegistryEvent::StatusChanged { timestamp, .. }
+                | RegistryEvent::TagAdded { timestamp, .. }
+                | RegistryEvent::TagRemoved { timestamp, .. }
+                | RegistryEvent::ReferenceAdded { timestamp, .. }
+                | RegistryEvent::ReferenceRemoved { timestamp, .. }
+                | RegistryEvent::MetadataUpdated { timestamp, .. }
+                | RegistryEvent::StatuteDeleted { timestamp, .. }
+                | RegistryEvent::StatuteArchived { timestamp, .. } => *timestamp,
+            }
+        }
+
+        fn get_event_type_name(&self, event: &RegistryEvent) -> String {
+            match event {
+                RegistryEvent::StatuteRegistered { .. } => "StatuteRegistered".to_string(),
+                RegistryEvent::StatuteUpdated { .. } => "StatuteUpdated".to_string(),
+                RegistryEvent::StatusChanged { .. } => "StatusChanged".to_string(),
+                RegistryEvent::TagAdded { .. } => "TagAdded".to_string(),
+                RegistryEvent::TagRemoved { .. } => "TagRemoved".to_string(),
+                RegistryEvent::ReferenceAdded { .. } => "ReferenceAdded".to_string(),
+                RegistryEvent::ReferenceRemoved { .. } => "ReferenceRemoved".to_string(),
+                RegistryEvent::MetadataUpdated { .. } => "MetadataUpdated".to_string(),
+                RegistryEvent::StatuteDeleted { .. } => "StatuteDeleted".to_string(),
+                RegistryEvent::StatuteArchived { .. } => "StatuteArchived".to_string(),
+            }
+        }
+
+        fn get_statute_id(&self, event: &RegistryEvent) -> Option<String> {
+            match event {
+                RegistryEvent::StatuteRegistered { statute_id, .. }
+                | RegistryEvent::StatuteUpdated { statute_id, .. }
+                | RegistryEvent::StatusChanged { statute_id, .. }
+                | RegistryEvent::TagAdded { statute_id, .. }
+                | RegistryEvent::TagRemoved { statute_id, .. }
+                | RegistryEvent::ReferenceAdded { statute_id, .. }
+                | RegistryEvent::ReferenceRemoved { statute_id, .. }
+                | RegistryEvent::MetadataUpdated { statute_id, .. }
+                | RegistryEvent::StatuteDeleted { statute_id, .. }
+                | RegistryEvent::StatuteArchived { statute_id, .. } => Some(statute_id.clone()),
+            }
+        }
+    }
+
+    // ========================================================================
+    // 3. Event-Driven Notifications
+    // ========================================================================
+
+    /// Notification channel for event-driven updates.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum NotificationChannel {
+        /// Email notification
+        Email(String),
+        /// Webhook URL
+        Webhook(String),
+        /// SMS notification
+        Sms(String),
+        /// In-app notification
+        InApp(String),
+    }
+
+    /// Notification rule configuration.
+    #[derive(Debug, Clone)]
+    pub struct NotificationRule {
+        /// Rule ID
+        pub id: Uuid,
+        /// Rule name
+        pub name: String,
+        /// Event filter pattern
+        pub event_pattern: String,
+        /// Notification channels
+        pub channels: Vec<NotificationChannel>,
+        /// Enabled flag
+        pub enabled: bool,
+    }
+
+    impl NotificationRule {
+        /// Creates a new notification rule.
+        pub fn new(name: String, event_pattern: String) -> Self {
+            Self {
+                id: Uuid::new_v4(),
+                name,
+                event_pattern,
+                channels: Vec::new(),
+                enabled: true,
+            }
+        }
+
+        /// Adds a notification channel.
+        pub fn add_channel(mut self, channel: NotificationChannel) -> Self {
+            self.channels.push(channel);
+            self
+        }
+    }
+
+    /// Event notification manager.
+    #[derive(Debug)]
+    pub struct NotificationManager {
+        rules: Arc<Mutex<Vec<NotificationRule>>>,
+    }
+
+    impl NotificationManager {
+        /// Creates a new notification manager.
+        pub fn new() -> Self {
+            Self {
+                rules: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// Adds a notification rule.
+        pub fn add_rule(&self, rule: NotificationRule) {
+            let mut rules = self.rules.lock().unwrap();
+            rules.push(rule);
+        }
+
+        /// Removes a notification rule.
+        pub fn remove_rule(&self, rule_id: Uuid) -> bool {
+            let mut rules = self.rules.lock().unwrap();
+            if let Some(pos) = rules.iter().position(|r| r.id == rule_id) {
+                rules.remove(pos);
+                true
+            } else {
+                false
+            }
+        }
+
+        /// Processes an event and sends notifications.
+        pub fn process_event(&self, event: &RegistryEvent) -> usize {
+            let rules = self.rules.lock().unwrap();
+            let mut notifications_sent = 0;
+
+            for rule in rules.iter() {
+                if !rule.enabled {
+                    continue;
+                }
+
+                if self.event_matches_pattern(event, &rule.event_pattern) {
+                    for channel in &rule.channels {
+                        self.send_notification(channel, event);
+                        notifications_sent += 1;
+                    }
+                }
+            }
+
+            notifications_sent
+        }
+
+        fn event_matches_pattern(&self, event: &RegistryEvent, pattern: &str) -> bool {
+            let event_type = match event {
+                RegistryEvent::StatuteRegistered { .. } => "StatuteRegistered",
+                RegistryEvent::StatuteUpdated { .. } => "StatuteUpdated",
+                RegistryEvent::StatusChanged { .. } => "StatusChanged",
+                RegistryEvent::TagAdded { .. } => "TagAdded",
+                RegistryEvent::TagRemoved { .. } => "TagRemoved",
+                RegistryEvent::ReferenceAdded { .. } => "ReferenceAdded",
+                RegistryEvent::ReferenceRemoved { .. } => "ReferenceRemoved",
+                RegistryEvent::MetadataUpdated { .. } => "MetadataUpdated",
+                RegistryEvent::StatuteDeleted { .. } => "StatuteDeleted",
+                RegistryEvent::StatuteArchived { .. } => "StatuteArchived",
+            };
+
+            pattern == "*" || event_type.contains(pattern)
+        }
+
+        fn send_notification(&self, _channel: &NotificationChannel, _event: &RegistryEvent) {
+            // Actual notification sending would be implemented here
+            // For now, this is a placeholder
+        }
+
+        /// Lists all notification rules.
+        pub fn list_rules(&self) -> Vec<NotificationRule> {
+            self.rules.lock().unwrap().clone()
+        }
+    }
+
+    impl Default for NotificationManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    // ========================================================================
+    // 4. Event Archiving with Cold Storage
+    // ========================================================================
+
+    /// Cold storage configuration.
+    #[derive(Debug, Clone)]
+    pub struct ColdStorageConfig {
+        /// Archive events older than this duration
+        pub archive_after: chrono::Duration,
+        /// Compression enabled
+        pub compression: bool,
+        /// Archive path
+        pub archive_path: String,
+    }
+
+    impl Default for ColdStorageConfig {
+        fn default() -> Self {
+            Self {
+                archive_after: chrono::Duration::days(90),
+                compression: true,
+                archive_path: "/tmp/event_archive".to_string(),
+            }
+        }
+    }
+
+    /// Archived event batch.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ArchivedEventBatch {
+        /// Archive ID
+        pub id: Uuid,
+        /// Events in this batch
+        pub events: Vec<RegistryEvent>,
+        /// Archive timestamp
+        pub archived_at: DateTime<Utc>,
+        /// Compressed flag
+        pub compressed: bool,
+    }
+
+    /// Event archiver for cold storage management.
+    #[derive(Debug)]
+    pub struct EventArchiver {
+        config: ColdStorageConfig,
+        archived_batches: Arc<Mutex<Vec<ArchivedEventBatch>>>,
+    }
+
+    impl EventArchiver {
+        /// Creates a new event archiver.
+        pub fn new(config: ColdStorageConfig) -> Self {
+            Self {
+                config,
+                archived_batches: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// Archives old events from the event store.
+        pub fn archive_old_events(&self, event_store: &mut EventStore) -> Result<usize, String> {
+            let cutoff_time = Utc::now() - self.config.archive_after;
+            let all_events = event_store.all_events();
+
+            let (to_archive, to_keep): (Vec<_>, Vec<_>) =
+                all_events.into_iter().cloned().partition(|event| {
+                    let timestamp = self.get_event_timestamp(event);
+                    timestamp < cutoff_time
+                });
+
+            if to_archive.is_empty() {
+                return Ok(0);
+            }
+
+            let batch = ArchivedEventBatch {
+                id: Uuid::new_v4(),
+                events: to_archive.clone(),
+                archived_at: Utc::now(),
+                compressed: self.config.compression,
+            };
+
+            let archived_count = batch.events.len();
+
+            // Store the archived batch
+            let mut batches = self.archived_batches.lock().unwrap();
+            batches.push(batch);
+
+            // Clear and repopulate event store with non-archived events
+            event_store.clear();
+            for event in to_keep {
+                event_store.record(event);
+            }
+
+            Ok(archived_count)
+        }
+
+        /// Retrieves archived events.
+        pub fn get_archived_events(&self) -> Vec<ArchivedEventBatch> {
+            self.archived_batches.lock().unwrap().clone()
+        }
+
+        /// Restores events from an archived batch.
+        pub fn restore_batch(
+            &self,
+            batch_id: Uuid,
+            event_store: &mut EventStore,
+        ) -> Result<usize, String> {
+            let batches = self.archived_batches.lock().unwrap();
+
+            if let Some(batch) = batches.iter().find(|b| b.id == batch_id) {
+                let count = batch.events.len();
+                for event in &batch.events {
+                    event_store.record(event.clone());
+                }
+                Ok(count)
+            } else {
+                Err("Batch not found".to_string())
+            }
+        }
+
+        fn get_event_timestamp(&self, event: &RegistryEvent) -> DateTime<Utc> {
+            match event {
+                RegistryEvent::StatuteRegistered { timestamp, .. }
+                | RegistryEvent::StatuteUpdated { timestamp, .. }
+                | RegistryEvent::StatusChanged { timestamp, .. }
+                | RegistryEvent::TagAdded { timestamp, .. }
+                | RegistryEvent::TagRemoved { timestamp, .. }
+                | RegistryEvent::ReferenceAdded { timestamp, .. }
+                | RegistryEvent::ReferenceRemoved { timestamp, .. }
+                | RegistryEvent::MetadataUpdated { timestamp, .. }
+                | RegistryEvent::StatuteDeleted { timestamp, .. }
+                | RegistryEvent::StatuteArchived { timestamp, .. } => *timestamp,
+            }
+        }
+    }
+
+    // ========================================================================
+    // 5. Event Schema Evolution Support
+    // ========================================================================
+
+    /// Event schema version.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    pub struct SchemaVersion {
+        pub major: u32,
+        pub minor: u32,
+        pub patch: u32,
+    }
+
+    impl SchemaVersion {
+        /// Creates a new schema version.
+        pub fn new(major: u32, minor: u32, patch: u32) -> Self {
+            Self {
+                major,
+                minor,
+                patch,
+            }
+        }
+
+        /// Returns the current schema version.
+        pub fn current() -> Self {
+            Self::new(1, 0, 0)
+        }
+    }
+
+    impl std::fmt::Display for SchemaVersion {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+        }
+    }
+
+    /// Event envelope with schema versioning.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VersionedEvent {
+        /// Schema version
+        pub schema_version: SchemaVersion,
+        /// Event ID
+        pub event_id: Uuid,
+        /// Timestamp
+        pub timestamp: DateTime<Utc>,
+        /// Event data
+        pub event: RegistryEvent,
+        /// Migration history
+        pub migration_history: Vec<SchemaVersion>,
+    }
+
+    impl VersionedEvent {
+        /// Creates a new versioned event.
+        pub fn new(event: RegistryEvent) -> Self {
+            Self {
+                schema_version: SchemaVersion::current(),
+                event_id: Uuid::new_v4(),
+                timestamp: Utc::now(),
+                event,
+                migration_history: Vec::new(),
+            }
+        }
+    }
+
+    /// Schema migration handler.
+    pub trait SchemaMigration: Send + Sync {
+        /// Source schema version.
+        fn from_version(&self) -> SchemaVersion;
+
+        /// Target schema version.
+        fn to_version(&self) -> SchemaVersion;
+
+        /// Migrates an event to the new schema.
+        fn migrate(&self, event: RegistryEvent) -> Result<RegistryEvent, String>;
+    }
+
+    /// Schema evolution manager.
+    pub struct SchemaEvolutionManager {
+        current_version: SchemaVersion,
+        migrations: Vec<Box<dyn SchemaMigration>>,
+    }
+
+    impl SchemaEvolutionManager {
+        /// Creates a new schema evolution manager.
+        pub fn new() -> Self {
+            Self {
+                current_version: SchemaVersion::current(),
+                migrations: Vec::new(),
+            }
+        }
+
+        /// Registers a schema migration.
+        pub fn register_migration(&mut self, migration: Box<dyn SchemaMigration>) {
+            self.migrations.push(migration);
+        }
+
+        /// Migrates an event to the current schema version.
+        pub fn migrate_event(
+            &self,
+            mut versioned: VersionedEvent,
+        ) -> Result<VersionedEvent, String> {
+            while versioned.schema_version < self.current_version {
+                let migration = self.find_migration(versioned.schema_version)?;
+                versioned.event = migration.migrate(versioned.event)?;
+                versioned.migration_history.push(versioned.schema_version);
+                versioned.schema_version = migration.to_version();
+            }
+            Ok(versioned)
+        }
+
+        fn find_migration(
+            &self,
+            from_version: SchemaVersion,
+        ) -> Result<&dyn SchemaMigration, String> {
+            self.migrations
+                .iter()
+                .find(|m| m.from_version() == from_version)
+                .map(|b| b.as_ref())
+                .ok_or_else(|| format!("No migration found from version {}", from_version))
+        }
+
+        /// Gets the current schema version.
+        pub fn current_version(&self) -> SchemaVersion {
+            self.current_version
+        }
+    }
+
+    impl Default for SchemaEvolutionManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+// ============================================================================
+// Federation Protocol Module (v0.2.7)
+// ============================================================================
+
+/// Federation Protocol: Multi-registry federation and cross-registry queries.
+pub mod federation {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    // ========================================================================
+    // 1. Federated Registry Discovery
+    // ========================================================================
+
+    /// Registry metadata for federation.
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct RegistryMetadata {
+        /// Unique registry identifier
+        pub registry_id: Uuid,
+        /// Registry name
+        pub name: String,
+        /// Registry endpoint URL
+        pub endpoint: String,
+        /// Supported API version
+        pub api_version: String,
+        /// Jurisdictions covered by this registry
+        pub jurisdictions: Vec<String>,
+        /// Registry capabilities
+        pub capabilities: Vec<RegistryCapability>,
+        /// Last seen timestamp
+        pub last_seen: DateTime<Utc>,
+        /// Trust level (0-100)
+        pub trust_level: u8,
+    }
+
+    impl RegistryMetadata {
+        /// Creates new registry metadata.
+        pub fn new(name: String, endpoint: String) -> Self {
+            Self {
+                registry_id: Uuid::new_v4(),
+                name,
+                endpoint,
+                api_version: "1.0.0".to_string(),
+                jurisdictions: Vec::new(),
+                capabilities: Vec::new(),
+                last_seen: Utc::now(),
+                trust_level: 50,
+            }
+        }
+
+        /// Updates the last seen timestamp.
+        pub fn update_last_seen(&mut self) {
+            self.last_seen = Utc::now();
+        }
+
+        /// Checks if the registry is active (seen within the last hour).
+        pub fn is_active(&self) -> bool {
+            let now = Utc::now();
+            let elapsed = now.signed_duration_since(self.last_seen);
+            elapsed.num_hours() < 1
+        }
+    }
+
+    /// Registry capability flags.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum RegistryCapability {
+        /// Supports full-text search
+        FullTextSearch,
+        /// Supports version control
+        VersionControl,
+        /// Supports real-time updates
+        RealTimeUpdates,
+        /// Supports event sourcing
+        EventSourcing,
+        /// Supports GraphQL queries
+        GraphQL,
+        /// Supports bulk operations
+        BulkOperations,
+    }
+
+    /// Registry discovery service.
+    #[derive(Debug)]
+    pub struct RegistryDiscovery {
+        /// Known registries
+        registries: Arc<Mutex<HashMap<Uuid, RegistryMetadata>>>,
+        /// Discovery interval in seconds
+        #[allow(dead_code)]
+        discovery_interval: u64,
+    }
+
+    impl RegistryDiscovery {
+        /// Creates a new registry discovery service.
+        pub fn new() -> Self {
+            Self {
+                registries: Arc::new(Mutex::new(HashMap::new())),
+                discovery_interval: 300, // 5 minutes
+            }
+        }
+
+        /// Registers a new registry.
+        pub fn register(&self, metadata: RegistryMetadata) {
+            let mut registries = self.registries.lock().unwrap();
+            registries.insert(metadata.registry_id, metadata);
+        }
+
+        /// Unregisters a registry.
+        pub fn unregister(&self, registry_id: Uuid) -> bool {
+            let mut registries = self.registries.lock().unwrap();
+            registries.remove(&registry_id).is_some()
+        }
+
+        /// Lists all registered registries.
+        pub fn list_registries(&self) -> Vec<RegistryMetadata> {
+            self.registries.lock().unwrap().values().cloned().collect()
+        }
+
+        /// Finds registries by jurisdiction.
+        pub fn find_by_jurisdiction(&self, jurisdiction: &str) -> Vec<RegistryMetadata> {
+            self.registries
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|r| r.jurisdictions.contains(&jurisdiction.to_string()))
+                .cloned()
+                .collect()
+        }
+
+        /// Gets active registries only.
+        pub fn get_active_registries(&self) -> Vec<RegistryMetadata> {
+            self.registries
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|r| r.is_active())
+                .cloned()
+                .collect()
+        }
+
+        /// Updates registry metadata.
+        pub fn update_metadata(
+            &self,
+            registry_id: Uuid,
+            metadata: RegistryMetadata,
+        ) -> Result<(), String> {
+            let mut registries = self.registries.lock().unwrap();
+            if registries.contains_key(&registry_id) {
+                registries.insert(registry_id, metadata);
+                Ok(())
+            } else {
+                Err("Registry not found".to_string())
+            }
+        }
+    }
+
+    impl Default for RegistryDiscovery {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    // ========================================================================
+    // 2. Cross-Registry Statute Queries
+    // ========================================================================
+
+    /// Cross-registry query request.
+    #[derive(Debug, Clone)]
+    pub struct FederatedQuery {
+        /// Query text
+        pub query: String,
+        /// Target jurisdictions
+        pub jurisdictions: Vec<String>,
+        /// Target registries (if empty, queries all)
+        pub target_registries: Vec<Uuid>,
+        /// Maximum results per registry
+        pub max_results_per_registry: usize,
+        /// Timeout in seconds
+        pub timeout: u64,
+    }
+
+    impl FederatedQuery {
+        /// Creates a new federated query.
+        pub fn new(query: String) -> Self {
+            Self {
+                query,
+                jurisdictions: Vec::new(),
+                target_registries: Vec::new(),
+                max_results_per_registry: 50,
+                timeout: 30,
+            }
+        }
+
+        /// Filters by jurisdictions.
+        pub fn with_jurisdictions(mut self, jurisdictions: Vec<String>) -> Self {
+            self.jurisdictions = jurisdictions;
+            self
+        }
+
+        /// Targets specific registries.
+        pub fn with_target_registries(mut self, registries: Vec<Uuid>) -> Self {
+            self.target_registries = registries;
+            self
+        }
+    }
+
+    /// Federated query result from a single registry.
+    #[derive(Debug, Clone)]
+    pub struct RegistryQueryResult {
+        /// Source registry ID
+        pub registry_id: Uuid,
+        /// Registry name
+        pub registry_name: String,
+        /// Matched statute IDs
+        pub statute_ids: Vec<String>,
+        /// Query execution time
+        pub execution_time: std::time::Duration,
+        /// Success flag
+        pub success: bool,
+        /// Error message if failed
+        pub error: Option<String>,
+    }
+
+    /// Aggregated federated query results.
+    #[derive(Debug, Clone)]
+    pub struct FederatedQueryResult {
+        /// Query text
+        pub query: String,
+        /// Results from each registry
+        pub registry_results: Vec<RegistryQueryResult>,
+        /// Total statutes found
+        pub total_statutes: usize,
+        /// Number of registries queried
+        pub registries_queried: usize,
+        /// Number of successful queries
+        pub successful_queries: usize,
+        /// Total execution time
+        pub total_execution_time: std::time::Duration,
+    }
+
+    /// Cross-registry query engine.
+    #[derive(Debug)]
+    pub struct FederatedQueryEngine {
+        discovery: Arc<RegistryDiscovery>,
+    }
+
+    impl FederatedQueryEngine {
+        /// Creates a new federated query engine.
+        pub fn new(discovery: Arc<RegistryDiscovery>) -> Self {
+            Self { discovery }
+        }
+
+        /// Executes a federated query across multiple registries.
+        pub fn execute(&self, query: FederatedQuery) -> FederatedQueryResult {
+            let start = std::time::Instant::now();
+            let registries = if query.target_registries.is_empty() {
+                self.discovery.get_active_registries()
+            } else {
+                self.discovery
+                    .list_registries()
+                    .into_iter()
+                    .filter(|r| query.target_registries.contains(&r.registry_id))
+                    .collect()
+            };
+
+            let mut registry_results = Vec::new();
+            let mut total_statutes = 0;
+
+            for registry in &registries {
+                let result = self.query_single_registry(registry, &query);
+                total_statutes += result.statute_ids.len();
+                registry_results.push(result);
+            }
+
+            let successful_queries = registry_results.iter().filter(|r| r.success).count();
+
+            FederatedQueryResult {
+                query: query.query.clone(),
+                registry_results,
+                total_statutes,
+                registries_queried: registries.len(),
+                successful_queries,
+                total_execution_time: start.elapsed(),
+            }
+        }
+
+        fn query_single_registry(
+            &self,
+            registry: &RegistryMetadata,
+            _query: &FederatedQuery,
+        ) -> RegistryQueryResult {
+            let start = std::time::Instant::now();
+
+            // Simulated query execution
+            // In a real implementation, this would make HTTP calls to the remote registry
+            RegistryQueryResult {
+                registry_id: registry.registry_id,
+                registry_name: registry.name.clone(),
+                statute_ids: Vec::new(),
+                execution_time: start.elapsed(),
+                success: true,
+                error: None,
+            }
+        }
+    }
+
+    // ========================================================================
+    // 3. Registry Peering Agreements
+    // ========================================================================
+
+    /// Peering agreement status.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum PeeringStatus {
+        /// Agreement pending approval
+        Pending,
+        /// Agreement active
+        Active,
+        /// Agreement suspended
+        Suspended,
+        /// Agreement terminated
+        Terminated,
+    }
+
+    /// Data sharing level in peering agreement.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SharingLevel {
+        /// Share public data only
+        Public,
+        /// Share metadata only
+        Metadata,
+        /// Share full statute data
+        Full,
+        /// Bidirectional full sharing
+        Bidirectional,
+    }
+
+    /// Registry peering agreement.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PeeringAgreement {
+        /// Agreement ID
+        pub id: Uuid,
+        /// Local registry ID
+        pub local_registry: Uuid,
+        /// Peer registry ID
+        pub peer_registry: Uuid,
+        /// Agreement status
+        pub status: PeeringStatus,
+        /// Data sharing level
+        pub sharing_level: SharingLevel,
+        /// Created timestamp
+        pub created_at: DateTime<Utc>,
+        /// Last updated timestamp
+        pub updated_at: DateTime<Utc>,
+        /// Expiration date
+        pub expires_at: Option<DateTime<Utc>>,
+        /// Terms and conditions
+        pub terms: String,
+    }
+
+    impl PeeringAgreement {
+        /// Creates a new peering agreement.
+        pub fn new(local_registry: Uuid, peer_registry: Uuid, sharing_level: SharingLevel) -> Self {
+            let now = Utc::now();
+            Self {
+                id: Uuid::new_v4(),
+                local_registry,
+                peer_registry,
+                status: PeeringStatus::Pending,
+                sharing_level,
+                created_at: now,
+                updated_at: now,
+                expires_at: None,
+                terms: String::new(),
+            }
+        }
+
+        /// Activates the peering agreement.
+        pub fn activate(&mut self) {
+            self.status = PeeringStatus::Active;
+            self.updated_at = Utc::now();
+        }
+
+        /// Suspends the peering agreement.
+        pub fn suspend(&mut self) {
+            self.status = PeeringStatus::Suspended;
+            self.updated_at = Utc::now();
+        }
+
+        /// Terminates the peering agreement.
+        pub fn terminate(&mut self) {
+            self.status = PeeringStatus::Terminated;
+            self.updated_at = Utc::now();
+        }
+
+        /// Checks if the agreement is active and not expired.
+        pub fn is_valid(&self) -> bool {
+            if self.status != PeeringStatus::Active {
+                return false;
+            }
+            if let Some(expires_at) = self.expires_at {
+                Utc::now() < expires_at
+            } else {
+                true
+            }
+        }
+    }
+
+    /// Peering agreement manager.
+    #[derive(Debug)]
+    pub struct PeeringManager {
+        agreements: Arc<Mutex<HashMap<Uuid, PeeringAgreement>>>,
+    }
+
+    impl PeeringManager {
+        /// Creates a new peering manager.
+        pub fn new() -> Self {
+            Self {
+                agreements: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        /// Creates a new peering agreement.
+        pub fn create_agreement(&self, agreement: PeeringAgreement) -> Uuid {
+            let id = agreement.id;
+            let mut agreements = self.agreements.lock().unwrap();
+            agreements.insert(id, agreement);
+            id
+        }
+
+        /// Gets a peering agreement by ID.
+        pub fn get_agreement(&self, id: Uuid) -> Option<PeeringAgreement> {
+            self.agreements.lock().unwrap().get(&id).cloned()
+        }
+
+        /// Lists all agreements for a registry.
+        pub fn list_agreements(&self, registry_id: Uuid) -> Vec<PeeringAgreement> {
+            self.agreements
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|a| a.local_registry == registry_id || a.peer_registry == registry_id)
+                .cloned()
+                .collect()
+        }
+
+        /// Gets active agreements for a registry.
+        pub fn get_active_agreements(&self, registry_id: Uuid) -> Vec<PeeringAgreement> {
+            self.list_agreements(registry_id)
+                .into_iter()
+                .filter(|a| a.is_valid())
+                .collect()
+        }
+
+        /// Updates an agreement.
+        pub fn update_agreement(
+            &self,
+            id: Uuid,
+            agreement: PeeringAgreement,
+        ) -> Result<(), String> {
+            let mut agreements = self.agreements.lock().unwrap();
+            if agreements.contains_key(&id) {
+                agreements.insert(id, agreement);
+                Ok(())
+            } else {
+                Err("Agreement not found".to_string())
+            }
+        }
+
+        /// Deletes an agreement.
+        pub fn delete_agreement(&self, id: Uuid) -> bool {
+            let mut agreements = self.agreements.lock().unwrap();
+            agreements.remove(&id).is_some()
+        }
+    }
+
+    impl Default for PeeringManager {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    // ========================================================================
+    // 4. Federated Search Aggregation
+    // ========================================================================
+
+    /// Search result ranking strategy.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum RankingStrategy {
+        /// Rank by relevance score
+        Relevance,
+        /// Rank by registry trust level
+        TrustLevel,
+        /// Rank by recency
+        Recency,
+        /// Combined ranking
+        Combined,
+    }
+
+    /// Aggregated search result.
+    #[derive(Debug, Clone)]
+    pub struct AggregatedSearchResult {
+        /// Statute ID
+        pub statute_id: String,
+        /// Source registry ID
+        pub registry_id: Uuid,
+        /// Registry name
+        pub registry_name: String,
+        /// Relevance score (0.0 - 1.0)
+        pub relevance_score: f64,
+        /// Registry trust level
+        pub trust_level: u8,
+        /// Combined score
+        pub combined_score: f64,
+    }
+
+    /// Federated search aggregator.
+    #[derive(Debug)]
+    pub struct FederatedSearchAggregator {
+        ranking_strategy: RankingStrategy,
+    }
+
+    impl FederatedSearchAggregator {
+        /// Creates a new search aggregator.
+        pub fn new(ranking_strategy: RankingStrategy) -> Self {
+            Self { ranking_strategy }
+        }
+
+        /// Aggregates results from multiple registries.
+        pub fn aggregate(
+            &self,
+            federated_result: &FederatedQueryResult,
+        ) -> Vec<AggregatedSearchResult> {
+            let mut results = Vec::new();
+
+            for registry_result in &federated_result.registry_results {
+                if !registry_result.success {
+                    continue;
+                }
+
+                for statute_id in &registry_result.statute_ids {
+                    let result = AggregatedSearchResult {
+                        statute_id: statute_id.clone(),
+                        registry_id: registry_result.registry_id,
+                        registry_name: registry_result.registry_name.clone(),
+                        relevance_score: 1.0, // Would be calculated based on query match
+                        trust_level: 50,      // Would come from registry metadata
+                        combined_score: 0.0,
+                    };
+                    results.push(result);
+                }
+            }
+
+            self.rank_results(&mut results);
+            results
+        }
+
+        fn rank_results(&self, results: &mut [AggregatedSearchResult]) {
+            for result in results.iter_mut() {
+                result.combined_score = match self.ranking_strategy {
+                    RankingStrategy::Relevance => result.relevance_score,
+                    RankingStrategy::TrustLevel => f64::from(result.trust_level) / 100.0,
+                    RankingStrategy::Recency => 0.5, // Placeholder
+                    RankingStrategy::Combined => {
+                        (result.relevance_score * 0.5)
+                            + (f64::from(result.trust_level) / 100.0 * 0.5)
+                    }
+                };
+            }
+
+            results.sort_by(|a, b| {
+                b.combined_score
+                    .partial_cmp(&a.combined_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
+        /// Deduplicates results across registries.
+        pub fn deduplicate(
+            &self,
+            results: Vec<AggregatedSearchResult>,
+        ) -> Vec<AggregatedSearchResult> {
+            let mut seen = BTreeSet::new();
+            results
+                .into_iter()
+                .filter(|r| seen.insert(r.statute_id.clone()))
+                .collect()
+        }
+    }
+
+    // ========================================================================
+    // 5. Trust Frameworks for Federation
+    // ========================================================================
+
+    /// Trust level category.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum TrustLevel {
+        /// Untrusted (0-20)
+        Untrusted,
+        /// Low trust (21-40)
+        Low,
+        /// Medium trust (41-60)
+        Medium,
+        /// High trust (61-80)
+        High,
+        /// Verified (81-100)
+        Verified,
+    }
+
+    impl TrustLevel {
+        /// Converts a numeric score to a trust level.
+        pub fn from_score(score: u8) -> Self {
+            match score {
+                0..=20 => TrustLevel::Untrusted,
+                21..=40 => TrustLevel::Low,
+                41..=60 => TrustLevel::Medium,
+                61..=80 => TrustLevel::High,
+                81..=100 => TrustLevel::Verified,
+                _ => TrustLevel::Medium,
+            }
+        }
+
+        /// Converts trust level to numeric score.
+        pub fn to_score(&self) -> u8 {
+            match self {
+                TrustLevel::Untrusted => 10,
+                TrustLevel::Low => 30,
+                TrustLevel::Medium => 50,
+                TrustLevel::High => 70,
+                TrustLevel::Verified => 90,
+            }
+        }
+    }
+
+    /// Trust metric for a registry.
+    #[derive(Debug, Clone)]
+    pub struct TrustMetric {
+        /// Registry ID
+        pub registry_id: Uuid,
+        /// Uptime percentage (0-100)
+        pub uptime: f64,
+        /// Response time average (ms)
+        pub avg_response_time: u64,
+        /// Successful queries percentage
+        pub success_rate: f64,
+        /// Data quality score (0-100)
+        pub data_quality: u8,
+        /// Community reputation score (0-100)
+        pub reputation: u8,
+        /// Calculated trust score
+        pub trust_score: u8,
+    }
+
+    impl TrustMetric {
+        /// Creates a new trust metric.
+        pub fn new(registry_id: Uuid) -> Self {
+            Self {
+                registry_id,
+                uptime: 100.0,
+                avg_response_time: 100,
+                success_rate: 100.0,
+                data_quality: 50,
+                reputation: 50,
+                trust_score: 50,
+            }
+        }
+
+        /// Calculates the trust score based on metrics.
+        pub fn calculate_trust_score(&mut self) {
+            let uptime_score = self.uptime;
+            let response_score = if self.avg_response_time < 100 {
+                100.0
+            } else if self.avg_response_time < 500 {
+                80.0
+            } else if self.avg_response_time < 1000 {
+                60.0
+            } else {
+                40.0
+            };
+            let success_score = self.success_rate;
+
+            self.trust_score = ((uptime_score * 0.3)
+                + (response_score * 0.2)
+                + (success_score * 0.2)
+                + (f64::from(self.data_quality) * 0.15)
+                + (f64::from(self.reputation) * 0.15)) as u8;
+        }
+
+        /// Gets the trust level category.
+        pub fn trust_level(&self) -> TrustLevel {
+            TrustLevel::from_score(self.trust_score)
+        }
+    }
+
+    /// Trust framework manager.
+    #[derive(Debug)]
+    pub struct TrustFramework {
+        metrics: Arc<Mutex<HashMap<Uuid, TrustMetric>>>,
+    }
+
+    impl TrustFramework {
+        /// Creates a new trust framework.
+        pub fn new() -> Self {
+            Self {
+                metrics: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        /// Updates trust metrics for a registry.
+        pub fn update_metrics(&self, metric: TrustMetric) {
+            let mut metrics = self.metrics.lock().unwrap();
+            metrics.insert(metric.registry_id, metric);
+        }
+
+        /// Gets trust metrics for a registry.
+        pub fn get_metrics(&self, registry_id: Uuid) -> Option<TrustMetric> {
+            self.metrics.lock().unwrap().get(&registry_id).cloned()
+        }
+
+        /// Gets trust score for a registry.
+        pub fn get_trust_score(&self, registry_id: Uuid) -> u8 {
+            self.metrics
+                .lock()
+                .unwrap()
+                .get(&registry_id)
+                .map(|m| m.trust_score)
+                .unwrap_or(50)
+        }
+
+        /// Lists all registries by trust level.
+        pub fn list_by_trust_level(&self, min_level: TrustLevel) -> Vec<Uuid> {
+            self.metrics
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|m| m.trust_level() >= min_level)
+                .map(|m| m.registry_id)
+                .collect()
+        }
+
+        /// Recalculates all trust scores.
+        pub fn recalculate_all(&self) {
+            let mut metrics = self.metrics.lock().unwrap();
+            for metric in metrics.values_mut() {
+                metric.calculate_trust_score();
+            }
+        }
+    }
+
+    impl Default for TrustFramework {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -24316,5 +25796,897 @@ mod tests {
         let _java = SdkLanguage::Java;
         let _csharp = SdkLanguage::CSharp;
         let _ruby = SdkLanguage::Ruby;
+    }
+
+    // ========================================================================
+    // Event Sourcing 2.0 Tests (v0.2.6)
+    // ========================================================================
+
+    #[test]
+    fn test_time_travel_query_creation() {
+        use event_sourcing_v2::*;
+
+        let target_time = Utc::now();
+        let query = TimeTravelQuery::new(target_time);
+        assert_eq!(query.target_time, target_time);
+        assert!(query.statute_filter.is_none());
+        assert!(query.event_types.is_empty());
+    }
+
+    #[test]
+    fn test_time_travel_query_builder() {
+        use event_sourcing_v2::*;
+
+        let target_time = Utc::now();
+        let query = TimeTravelQuery::new(target_time)
+            .for_statute("S1".to_string())
+            .with_event_types(vec!["StatuteRegistered".to_string()]);
+
+        assert_eq!(query.statute_filter, Some("S1".to_string()));
+        assert_eq!(query.event_types.len(), 1);
+    }
+
+    #[test]
+    fn test_event_replay_engine_creation() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        let engine = EventReplayEngine::new(store);
+        assert!(format!("{:?}", engine).contains("EventReplayEngine"));
+    }
+
+    #[test]
+    fn test_event_replay_basic() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        {
+            let mut s = store.lock().unwrap();
+            let event = RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S1".to_string(),
+                jurisdiction: "JP".to_string(),
+                timestamp: Utc::now() - chrono::Duration::hours(1),
+            };
+            s.record(event);
+        }
+
+        let engine = EventReplayEngine::new(store);
+        let query = TimeTravelQuery::new(Utc::now());
+        let result = engine.replay(query).unwrap();
+
+        assert_eq!(result.events_replayed, 1);
+        assert_eq!(result.statutes.len(), 1);
+        assert!(result.statutes.contains_key("S1"));
+    }
+
+    #[test]
+    fn test_event_replay_with_filter() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        {
+            let mut s = store.lock().unwrap();
+            let event1 = RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S1".to_string(),
+                jurisdiction: "JP".to_string(),
+                timestamp: Utc::now() - chrono::Duration::hours(2),
+            };
+            let event2 = RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S2".to_string(),
+                jurisdiction: "US".to_string(),
+                timestamp: Utc::now() - chrono::Duration::hours(1),
+            };
+            s.record(event1);
+            s.record(event2);
+        }
+
+        let engine = EventReplayEngine::new(store);
+        let query = TimeTravelQuery::new(Utc::now()).for_statute("S1".to_string());
+        let result = engine.replay(query).unwrap();
+
+        assert_eq!(result.events_replayed, 1);
+        assert_eq!(result.statutes.len(), 1);
+        assert!(result.statutes.contains_key("S1"));
+    }
+
+    #[test]
+    fn test_projection_type_variants() {
+        use event_sourcing_v2::*;
+
+        let _event_type_count = ProjectionType::EventTypeCount;
+        let _statute_activity = ProjectionType::StatuteActivityCount;
+        let _status_timeline = ProjectionType::StatusChangeTimeline;
+        let _tag_usage = ProjectionType::TagUsageStats;
+        let _daily_activity = ProjectionType::DailyActivitySummary;
+    }
+
+    #[test]
+    fn test_projection_engine_creation() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        let engine = ProjectionEngine::new(store);
+        assert!(format!("{:?}", engine).contains("ProjectionEngine"));
+    }
+
+    #[test]
+    fn test_projection_event_type_count() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        {
+            let mut s = store.lock().unwrap();
+            s.record(RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S1".to_string(),
+                jurisdiction: "JP".to_string(),
+                timestamp: Utc::now(),
+            });
+            s.record(RegistryEvent::StatuteUpdated {
+                statute_id: "S1".to_string(),
+                old_version: 1,
+                new_version: 2,
+                timestamp: Utc::now(),
+            });
+            s.record(RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S2".to_string(),
+                jurisdiction: "US".to_string(),
+                timestamp: Utc::now(),
+            });
+        }
+
+        let engine = ProjectionEngine::new(store);
+        let result = engine.project(ProjectionType::EventTypeCount);
+
+        assert_eq!(result.events_processed, 3);
+        assert_eq!(result.data.get("StatuteRegistered"), Some(&2));
+        assert_eq!(result.data.get("StatuteUpdated"), Some(&1));
+    }
+
+    #[test]
+    fn test_projection_statute_activity() {
+        use event_sourcing_v2::*;
+
+        let store = Arc::new(Mutex::new(EventStore::new()));
+        {
+            let mut s = store.lock().unwrap();
+            s.record(RegistryEvent::StatuteRegistered {
+                registry_id: Uuid::new_v4(),
+                statute_id: "S1".to_string(),
+                jurisdiction: "JP".to_string(),
+                timestamp: Utc::now(),
+            });
+            s.record(RegistryEvent::TagAdded {
+                statute_id: "S1".to_string(),
+                tag: "important".to_string(),
+                timestamp: Utc::now(),
+            });
+            s.record(RegistryEvent::StatusChanged {
+                statute_id: "S1".to_string(),
+                old_status: StatuteStatus::Draft,
+                new_status: StatuteStatus::Active,
+                timestamp: Utc::now(),
+            });
+        }
+
+        let engine = ProjectionEngine::new(store);
+        let result = engine.project(ProjectionType::StatuteActivityCount);
+
+        assert_eq!(result.events_processed, 3);
+        assert_eq!(result.data.get("S1"), Some(&3));
+    }
+
+    #[test]
+    fn test_notification_channel_variants() {
+        use event_sourcing_v2::*;
+
+        let _email = NotificationChannel::Email("test@example.com".to_string());
+        let _webhook = NotificationChannel::Webhook("https://example.com/hook".to_string());
+        let _sms = NotificationChannel::Sms("+1234567890".to_string());
+        let _in_app = NotificationChannel::InApp("user123".to_string());
+    }
+
+    #[test]
+    fn test_notification_rule_creation() {
+        use event_sourcing_v2::*;
+
+        let rule = NotificationRule::new("Test Rule".to_string(), "StatuteRegistered".to_string());
+
+        assert!(!rule.name.is_empty());
+        assert_eq!(rule.event_pattern, "StatuteRegistered");
+        assert!(rule.enabled);
+        assert!(rule.channels.is_empty());
+    }
+
+    #[test]
+    fn test_notification_rule_with_channels() {
+        use event_sourcing_v2::*;
+
+        let rule = NotificationRule::new("Test Rule".to_string(), "StatuteRegistered".to_string())
+            .add_channel(NotificationChannel::Email("test@example.com".to_string()))
+            .add_channel(NotificationChannel::Webhook(
+                "https://example.com/hook".to_string(),
+            ));
+
+        assert_eq!(rule.channels.len(), 2);
+    }
+
+    #[test]
+    fn test_notification_manager_add_remove_rules() {
+        use event_sourcing_v2::*;
+
+        let manager = NotificationManager::new();
+        let rule = NotificationRule::new("Test Rule".to_string(), "StatuteRegistered".to_string());
+        let rule_id = rule.id;
+
+        manager.add_rule(rule);
+        assert_eq!(manager.list_rules().len(), 1);
+
+        assert!(manager.remove_rule(rule_id));
+        assert_eq!(manager.list_rules().len(), 0);
+    }
+
+    #[test]
+    fn test_notification_manager_process_event() {
+        use event_sourcing_v2::*;
+
+        let manager = NotificationManager::new();
+        let rule = NotificationRule::new("Test Rule".to_string(), "StatuteRegistered".to_string())
+            .add_channel(NotificationChannel::Email("test@example.com".to_string()));
+
+        manager.add_rule(rule);
+
+        let event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S1".to_string(),
+            jurisdiction: "JP".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        let notifications_sent = manager.process_event(&event);
+        assert_eq!(notifications_sent, 1);
+    }
+
+    #[test]
+    fn test_notification_manager_wildcard_pattern() {
+        use event_sourcing_v2::*;
+
+        let manager = NotificationManager::new();
+        let rule = NotificationRule::new("Catch All".to_string(), "*".to_string())
+            .add_channel(NotificationChannel::Email("test@example.com".to_string()));
+
+        manager.add_rule(rule);
+
+        let event = RegistryEvent::TagAdded {
+            statute_id: "S1".to_string(),
+            tag: "important".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        let notifications_sent = manager.process_event(&event);
+        assert_eq!(notifications_sent, 1);
+    }
+
+    #[test]
+    fn test_cold_storage_config_default() {
+        use event_sourcing_v2::*;
+
+        let config = ColdStorageConfig::default();
+        assert_eq!(config.archive_after, chrono::Duration::days(90));
+        assert!(config.compression);
+        assert!(!config.archive_path.is_empty());
+    }
+
+    #[test]
+    fn test_event_archiver_creation() {
+        use event_sourcing_v2::*;
+
+        let config = ColdStorageConfig::default();
+        let archiver = EventArchiver::new(config);
+        assert!(format!("{:?}", archiver).contains("EventArchiver"));
+    }
+
+    #[test]
+    fn test_event_archiver_archive_old_events() {
+        use event_sourcing_v2::*;
+
+        let config = ColdStorageConfig {
+            archive_after: chrono::Duration::hours(1),
+            compression: true,
+            archive_path: "/tmp/archive".to_string(),
+        };
+        let archiver = EventArchiver::new(config);
+        let mut store = EventStore::new();
+
+        // Add old event
+        let old_event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S1".to_string(),
+            jurisdiction: "JP".to_string(),
+            timestamp: Utc::now() - chrono::Duration::hours(2),
+        };
+        store.record(old_event);
+
+        // Add recent event
+        let recent_event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S2".to_string(),
+            jurisdiction: "US".to_string(),
+            timestamp: Utc::now(),
+        };
+        store.record(recent_event);
+
+        let archived_count = archiver.archive_old_events(&mut store).unwrap();
+        assert_eq!(archived_count, 1);
+        assert_eq!(store.count(), 1);
+    }
+
+    #[test]
+    fn test_event_archiver_get_archived_events() {
+        use event_sourcing_v2::*;
+
+        let config = ColdStorageConfig {
+            archive_after: chrono::Duration::hours(1),
+            compression: true,
+            archive_path: "/tmp/archive".to_string(),
+        };
+        let archiver = EventArchiver::new(config);
+        let mut store = EventStore::new();
+
+        let old_event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S1".to_string(),
+            jurisdiction: "JP".to_string(),
+            timestamp: Utc::now() - chrono::Duration::hours(2),
+        };
+        store.record(old_event);
+
+        archiver.archive_old_events(&mut store).unwrap();
+        let batches = archiver.get_archived_events();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].events.len(), 1);
+    }
+
+    #[test]
+    fn test_event_archiver_restore_batch() {
+        use event_sourcing_v2::*;
+
+        let config = ColdStorageConfig {
+            archive_after: chrono::Duration::hours(1),
+            compression: true,
+            archive_path: "/tmp/archive".to_string(),
+        };
+        let archiver = EventArchiver::new(config);
+        let mut store = EventStore::new();
+
+        let old_event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S1".to_string(),
+            jurisdiction: "JP".to_string(),
+            timestamp: Utc::now() - chrono::Duration::hours(2),
+        };
+        store.record(old_event);
+
+        archiver.archive_old_events(&mut store).unwrap();
+        assert_eq!(store.count(), 0);
+
+        let batches = archiver.get_archived_events();
+        let batch_id = batches[0].id;
+
+        let restored_count = archiver.restore_batch(batch_id, &mut store).unwrap();
+        assert_eq!(restored_count, 1);
+        assert_eq!(store.count(), 1);
+    }
+
+    #[test]
+    fn test_schema_version_creation() {
+        use event_sourcing_v2::*;
+
+        let version = SchemaVersion::new(1, 2, 3);
+        assert_eq!(version.major, 1);
+        assert_eq!(version.minor, 2);
+        assert_eq!(version.patch, 3);
+    }
+
+    #[test]
+    fn test_schema_version_current() {
+        use event_sourcing_v2::*;
+
+        let version = SchemaVersion::current();
+        assert_eq!(version.major, 1);
+        assert_eq!(version.minor, 0);
+        assert_eq!(version.patch, 0);
+    }
+
+    #[test]
+    fn test_schema_version_display() {
+        use event_sourcing_v2::*;
+
+        let version = SchemaVersion::new(1, 2, 3);
+        assert_eq!(format!("{}", version), "1.2.3");
+    }
+
+    #[test]
+    fn test_schema_version_comparison() {
+        use event_sourcing_v2::*;
+
+        let v1 = SchemaVersion::new(1, 0, 0);
+        let v2 = SchemaVersion::new(1, 1, 0);
+        let v3 = SchemaVersion::new(2, 0, 0);
+
+        assert!(v1 < v2);
+        assert!(v2 < v3);
+        assert!(v1 < v3);
+    }
+
+    #[test]
+    fn test_versioned_event_creation() {
+        use event_sourcing_v2::*;
+
+        let event = RegistryEvent::StatuteRegistered {
+            registry_id: Uuid::new_v4(),
+            statute_id: "S1".to_string(),
+            jurisdiction: "JP".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        let versioned = VersionedEvent::new(event);
+        assert_eq!(versioned.schema_version, SchemaVersion::current());
+        assert!(versioned.migration_history.is_empty());
+    }
+
+    #[test]
+    fn test_schema_evolution_manager_creation() {
+        use event_sourcing_v2::*;
+
+        let manager = SchemaEvolutionManager::new();
+        assert_eq!(manager.current_version(), SchemaVersion::current());
+    }
+
+    // ========================================================================
+    // Federation Protocol Tests (v0.2.7)
+    // ========================================================================
+
+    #[test]
+    fn test_registry_metadata_creation() {
+        use federation::*;
+
+        let metadata = RegistryMetadata::new(
+            "Test Registry".to_string(),
+            "https://example.com".to_string(),
+        );
+        assert_eq!(metadata.name, "Test Registry");
+        assert_eq!(metadata.endpoint, "https://example.com");
+        assert_eq!(metadata.api_version, "1.0.0");
+        assert_eq!(metadata.trust_level, 50);
+        assert!(metadata.is_active());
+    }
+
+    #[test]
+    fn test_registry_metadata_update_last_seen() {
+        use federation::*;
+
+        let mut metadata =
+            RegistryMetadata::new("Test".to_string(), "https://example.com".to_string());
+        let old_time = metadata.last_seen;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        metadata.update_last_seen();
+        assert!(metadata.last_seen > old_time);
+    }
+
+    #[test]
+    fn test_registry_capability_variants() {
+        use federation::*;
+
+        let _full_text = RegistryCapability::FullTextSearch;
+        let _version_control = RegistryCapability::VersionControl;
+        let _real_time = RegistryCapability::RealTimeUpdates;
+        let _event_sourcing = RegistryCapability::EventSourcing;
+        let _graphql = RegistryCapability::GraphQL;
+        let _bulk = RegistryCapability::BulkOperations;
+    }
+
+    #[test]
+    fn test_registry_discovery_creation() {
+        use federation::*;
+
+        let discovery = RegistryDiscovery::new();
+        assert_eq!(discovery.list_registries().len(), 0);
+    }
+
+    #[test]
+    fn test_registry_discovery_register() {
+        use federation::*;
+
+        let discovery = RegistryDiscovery::new();
+        let metadata = RegistryMetadata::new(
+            "Test Registry".to_string(),
+            "https://example.com".to_string(),
+        );
+        let registry_id = metadata.registry_id;
+
+        discovery.register(metadata);
+        assert_eq!(discovery.list_registries().len(), 1);
+        assert!(discovery.unregister(registry_id));
+        assert_eq!(discovery.list_registries().len(), 0);
+    }
+
+    #[test]
+    fn test_registry_discovery_find_by_jurisdiction() {
+        use federation::*;
+
+        let discovery = RegistryDiscovery::new();
+        let mut metadata = RegistryMetadata::new(
+            "JP Registry".to_string(),
+            "https://jp.example.com".to_string(),
+        );
+        metadata.jurisdictions.push("JP".to_string());
+        discovery.register(metadata);
+
+        let results = discovery.find_by_jurisdiction("JP");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "JP Registry");
+    }
+
+    #[test]
+    fn test_registry_discovery_get_active_registries() {
+        use federation::*;
+
+        let discovery = RegistryDiscovery::new();
+        let metadata = RegistryMetadata::new(
+            "Active Registry".to_string(),
+            "https://example.com".to_string(),
+        );
+        discovery.register(metadata);
+
+        let active = discovery.get_active_registries();
+        assert_eq!(active.len(), 1);
+    }
+
+    #[test]
+    fn test_federated_query_creation() {
+        use federation::*;
+
+        let query = FederatedQuery::new("test query".to_string());
+        assert_eq!(query.query, "test query");
+        assert_eq!(query.max_results_per_registry, 50);
+        assert_eq!(query.timeout, 30);
+    }
+
+    #[test]
+    fn test_federated_query_builder() {
+        use federation::*;
+
+        let registry_id = Uuid::new_v4();
+        let query = FederatedQuery::new("test".to_string())
+            .with_jurisdictions(vec!["JP".to_string()])
+            .with_target_registries(vec![registry_id]);
+
+        assert_eq!(query.jurisdictions.len(), 1);
+        assert_eq!(query.target_registries.len(), 1);
+    }
+
+    #[test]
+    fn test_federated_query_engine_creation() {
+        use federation::*;
+
+        let discovery = Arc::new(RegistryDiscovery::new());
+        let engine = FederatedQueryEngine::new(discovery);
+        assert!(format!("{:?}", engine).contains("FederatedQueryEngine"));
+    }
+
+    #[test]
+    fn test_federated_query_engine_execute() {
+        use federation::*;
+
+        let discovery = Arc::new(RegistryDiscovery::new());
+        let metadata = RegistryMetadata::new(
+            "Test Registry".to_string(),
+            "https://example.com".to_string(),
+        );
+        discovery.register(metadata);
+
+        let engine = FederatedQueryEngine::new(discovery);
+        let query = FederatedQuery::new("test".to_string());
+        let result = engine.execute(query);
+
+        assert_eq!(result.query, "test");
+        assert_eq!(result.registries_queried, 1);
+        assert_eq!(result.successful_queries, 1);
+    }
+
+    #[test]
+    fn test_peering_status_variants() {
+        use federation::*;
+
+        let _pending = PeeringStatus::Pending;
+        let _active = PeeringStatus::Active;
+        let _suspended = PeeringStatus::Suspended;
+        let _terminated = PeeringStatus::Terminated;
+    }
+
+    #[test]
+    fn test_sharing_level_variants() {
+        use federation::*;
+
+        let _public = SharingLevel::Public;
+        let _metadata = SharingLevel::Metadata;
+        let _full = SharingLevel::Full;
+        let _bidirectional = SharingLevel::Bidirectional;
+    }
+
+    #[test]
+    fn test_peering_agreement_creation() {
+        use federation::*;
+
+        let local_id = Uuid::new_v4();
+        let peer_id = Uuid::new_v4();
+        let agreement = PeeringAgreement::new(local_id, peer_id, SharingLevel::Full);
+
+        assert_eq!(agreement.local_registry, local_id);
+        assert_eq!(agreement.peer_registry, peer_id);
+        assert_eq!(agreement.status, PeeringStatus::Pending);
+        assert_eq!(agreement.sharing_level, SharingLevel::Full);
+    }
+
+    #[test]
+    fn test_peering_agreement_activate() {
+        use federation::*;
+
+        let mut agreement =
+            PeeringAgreement::new(Uuid::new_v4(), Uuid::new_v4(), SharingLevel::Full);
+        agreement.activate();
+        assert_eq!(agreement.status, PeeringStatus::Active);
+        assert!(agreement.is_valid());
+    }
+
+    #[test]
+    fn test_peering_agreement_suspend() {
+        use federation::*;
+
+        let mut agreement =
+            PeeringAgreement::new(Uuid::new_v4(), Uuid::new_v4(), SharingLevel::Full);
+        agreement.activate();
+        agreement.suspend();
+        assert_eq!(agreement.status, PeeringStatus::Suspended);
+        assert!(!agreement.is_valid());
+    }
+
+    #[test]
+    fn test_peering_agreement_terminate() {
+        use federation::*;
+
+        let mut agreement =
+            PeeringAgreement::new(Uuid::new_v4(), Uuid::new_v4(), SharingLevel::Full);
+        agreement.activate();
+        agreement.terminate();
+        assert_eq!(agreement.status, PeeringStatus::Terminated);
+        assert!(!agreement.is_valid());
+    }
+
+    #[test]
+    fn test_peering_manager_creation() {
+        use federation::*;
+
+        let manager = PeeringManager::new();
+        assert!(format!("{:?}", manager).contains("PeeringManager"));
+    }
+
+    #[test]
+    fn test_peering_manager_create_agreement() {
+        use federation::*;
+
+        let manager = PeeringManager::new();
+        let agreement = PeeringAgreement::new(Uuid::new_v4(), Uuid::new_v4(), SharingLevel::Full);
+        let id = agreement.id;
+
+        let created_id = manager.create_agreement(agreement);
+        assert_eq!(created_id, id);
+        assert!(manager.get_agreement(id).is_some());
+    }
+
+    #[test]
+    fn test_peering_manager_list_agreements() {
+        use federation::*;
+
+        let manager = PeeringManager::new();
+        let registry_id = Uuid::new_v4();
+        let agreement = PeeringAgreement::new(registry_id, Uuid::new_v4(), SharingLevel::Full);
+
+        manager.create_agreement(agreement);
+        let agreements = manager.list_agreements(registry_id);
+        assert_eq!(agreements.len(), 1);
+    }
+
+    #[test]
+    fn test_peering_manager_get_active_agreements() {
+        use federation::*;
+
+        let manager = PeeringManager::new();
+        let registry_id = Uuid::new_v4();
+        let mut agreement = PeeringAgreement::new(registry_id, Uuid::new_v4(), SharingLevel::Full);
+        agreement.activate();
+
+        manager.create_agreement(agreement);
+        let active = manager.get_active_agreements(registry_id);
+        assert_eq!(active.len(), 1);
+    }
+
+    #[test]
+    fn test_ranking_strategy_variants() {
+        use federation::*;
+
+        let _relevance = RankingStrategy::Relevance;
+        let _trust = RankingStrategy::TrustLevel;
+        let _recency = RankingStrategy::Recency;
+        let _combined = RankingStrategy::Combined;
+    }
+
+    #[test]
+    fn test_federated_search_aggregator_creation() {
+        use federation::*;
+
+        let aggregator = FederatedSearchAggregator::new(RankingStrategy::Combined);
+        assert!(format!("{:?}", aggregator).contains("FederatedSearchAggregator"));
+    }
+
+    #[test]
+    fn test_federated_search_aggregator_deduplicate() {
+        use federation::*;
+
+        let aggregator = FederatedSearchAggregator::new(RankingStrategy::Relevance);
+        let results = vec![
+            AggregatedSearchResult {
+                statute_id: "S1".to_string(),
+                registry_id: Uuid::new_v4(),
+                registry_name: "R1".to_string(),
+                relevance_score: 1.0,
+                trust_level: 50,
+                combined_score: 0.0,
+            },
+            AggregatedSearchResult {
+                statute_id: "S1".to_string(),
+                registry_id: Uuid::new_v4(),
+                registry_name: "R2".to_string(),
+                relevance_score: 0.9,
+                trust_level: 60,
+                combined_score: 0.0,
+            },
+        ];
+
+        let deduplicated = aggregator.deduplicate(results);
+        assert_eq!(deduplicated.len(), 1);
+    }
+
+    #[test]
+    fn test_trust_level_variants() {
+        use federation::*;
+
+        let _untrusted = TrustLevel::Untrusted;
+        let _low = TrustLevel::Low;
+        let _medium = TrustLevel::Medium;
+        let _high = TrustLevel::High;
+        let _verified = TrustLevel::Verified;
+    }
+
+    #[test]
+    fn test_trust_level_from_score() {
+        use federation::*;
+
+        assert_eq!(TrustLevel::from_score(10), TrustLevel::Untrusted);
+        assert_eq!(TrustLevel::from_score(30), TrustLevel::Low);
+        assert_eq!(TrustLevel::from_score(50), TrustLevel::Medium);
+        assert_eq!(TrustLevel::from_score(70), TrustLevel::High);
+        assert_eq!(TrustLevel::from_score(90), TrustLevel::Verified);
+    }
+
+    #[test]
+    fn test_trust_level_to_score() {
+        use federation::*;
+
+        assert_eq!(TrustLevel::Untrusted.to_score(), 10);
+        assert_eq!(TrustLevel::Low.to_score(), 30);
+        assert_eq!(TrustLevel::Medium.to_score(), 50);
+        assert_eq!(TrustLevel::High.to_score(), 70);
+        assert_eq!(TrustLevel::Verified.to_score(), 90);
+    }
+
+    #[test]
+    fn test_trust_metric_creation() {
+        use federation::*;
+
+        let registry_id = Uuid::new_v4();
+        let metric = TrustMetric::new(registry_id);
+        assert_eq!(metric.registry_id, registry_id);
+        assert_eq!(metric.trust_score, 50);
+        assert_eq!(metric.trust_level(), TrustLevel::Medium);
+    }
+
+    #[test]
+    fn test_trust_metric_calculate_trust_score() {
+        use federation::*;
+
+        let registry_id = Uuid::new_v4();
+        let mut metric = TrustMetric::new(registry_id);
+        metric.uptime = 99.9;
+        metric.avg_response_time = 50;
+        metric.success_rate = 98.0;
+        metric.data_quality = 80;
+        metric.reputation = 85;
+
+        metric.calculate_trust_score();
+        assert!(metric.trust_score > 80);
+        assert_eq!(metric.trust_level(), TrustLevel::Verified);
+    }
+
+    #[test]
+    fn test_trust_framework_creation() {
+        use federation::*;
+
+        let framework = TrustFramework::new();
+        assert!(format!("{:?}", framework).contains("TrustFramework"));
+    }
+
+    #[test]
+    fn test_trust_framework_update_metrics() {
+        use federation::*;
+
+        let framework = TrustFramework::new();
+        let registry_id = Uuid::new_v4();
+        let metric = TrustMetric::new(registry_id);
+
+        framework.update_metrics(metric);
+        assert!(framework.get_metrics(registry_id).is_some());
+    }
+
+    #[test]
+    fn test_trust_framework_get_trust_score() {
+        use federation::*;
+
+        let framework = TrustFramework::new();
+        let registry_id = Uuid::new_v4();
+        let mut metric = TrustMetric::new(registry_id);
+        metric.trust_score = 75;
+
+        framework.update_metrics(metric);
+        assert_eq!(framework.get_trust_score(registry_id), 75);
+    }
+
+    #[test]
+    fn test_trust_framework_list_by_trust_level() {
+        use federation::*;
+
+        let framework = TrustFramework::new();
+        let registry_id1 = Uuid::new_v4();
+        let registry_id2 = Uuid::new_v4();
+
+        let mut metric1 = TrustMetric::new(registry_id1);
+        metric1.trust_score = 85;
+        framework.update_metrics(metric1);
+
+        let mut metric2 = TrustMetric::new(registry_id2);
+        metric2.trust_score = 45;
+        framework.update_metrics(metric2);
+
+        let verified = framework.list_by_trust_level(TrustLevel::Verified);
+        assert_eq!(verified.len(), 1);
+        assert_eq!(verified[0], registry_id1);
+    }
+
+    #[test]
+    fn test_trust_framework_recalculate_all() {
+        use federation::*;
+
+        let framework = TrustFramework::new();
+        let registry_id = Uuid::new_v4();
+        let metric = TrustMetric::new(registry_id);
+
+        framework.update_metrics(metric);
+        framework.recalculate_all();
+        assert!(framework.get_metrics(registry_id).is_some());
     }
 }

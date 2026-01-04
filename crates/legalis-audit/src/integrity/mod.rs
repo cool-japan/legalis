@@ -5,6 +5,7 @@
 //! verification required for simple hash chains.
 
 pub mod blockchain;
+// pub mod forest; // TODO: Refactor to match actual MerkleTree API
 pub mod multiparty;
 pub mod parallel;
 pub mod sealed;

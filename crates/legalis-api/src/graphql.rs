@@ -723,7 +723,7 @@ impl SubscriptionRoot {
 
 /// Creates a new GraphQL schema with subscription support, query complexity limiting,
 /// and depth limiting for security.
-/// TODO: Add DataLoader support for N+1 optimization
+/// TODO: Add DataLoader support for N+1 optimization (requires trait signature fixes)
 pub fn create_schema(state: GraphQLState) -> LegalisSchema {
     Schema::build(QueryRoot, MutationRoot, SubscriptionRoot)
         .data(state)

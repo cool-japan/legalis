@@ -319,6 +319,26 @@ pub mod probabilistic;
 // Multi-Jurisdictional Support (v0.2.6)
 pub mod multi_jurisdictional;
 
+// Legal Explanation Generation (v0.2.7)
+pub mod explanation;
+
+// Rule Learning & Discovery (v0.2.8)
+pub mod rule_learning;
+
+// Performance Optimization (v0.2.9)
+pub mod adaptive_cache;
+pub mod gpu_offload;
+pub mod jit_framework;
+pub mod memory_pool;
+pub mod simd_eval;
+
+// AI-Native Legal Reasoning (v0.3.0)
+pub mod explainable_ai;
+pub mod finetuned_llm;
+pub mod hybrid_reasoning;
+pub mod llm_interpretation;
+pub mod neural_entailment;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;

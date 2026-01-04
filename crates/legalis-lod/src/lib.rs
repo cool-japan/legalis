@@ -45,31 +45,45 @@ use legalis_core::{ComparisonOp, Condition, EffectType, Statute};
 use std::collections::HashMap;
 use thiserror::Error;
 
+pub mod audit_log;
 pub mod av_annotation;
+pub mod bitemporal;
 pub mod blockchain;
 pub mod cache;
+pub mod competency_questions;
+pub mod compliance;
 pub mod content_addressed;
 pub mod continuous_query;
 pub mod crossmodal_reasoning;
+pub mod crowdsourced_evolution;
 pub mod dcat;
 pub mod did;
 pub mod document_layout;
 pub mod embeddings;
+pub mod enterprise_deployment;
 pub mod entity_linking;
 pub mod external;
 pub mod fusion;
+pub mod geosparql;
+pub mod governance;
 pub mod image_rdf;
 pub mod ipld;
+pub mod jurisdiction_queries;
 pub mod kg_completion;
 pub mod knowledge_graph;
 pub mod ldn;
 pub mod link_prediction;
 pub mod linked_data;
+pub mod map_exploration;
 pub mod multimodal_alignment;
 pub mod neural_symbolic;
 pub mod ontology;
+pub mod ontology_alignment;
 pub mod ontology_learning;
+pub mod ontology_metrics;
+pub mod ontology_versioning;
 pub mod quality;
+pub mod rbac;
 pub mod rdfa;
 pub mod rdfstar;
 pub mod realtime;
@@ -80,9 +94,13 @@ pub mod shex;
 pub mod similarity;
 pub mod sparql;
 pub mod sparqlstar;
+pub mod spatial_reasoning;
 pub mod store;
 pub mod streaming;
 pub mod streaming_sparql;
+pub mod temporal_consistency;
+pub mod temporal_rdf;
+pub mod time_aware_queries;
 pub mod validation;
 pub mod verifiable;
 pub mod versioning;
@@ -238,6 +256,10 @@ impl Namespaces {
             ("void", "http://rdfs.org/ns/void#"),
             ("prov", "http://www.w3.org/ns/prov#"),
             ("cc", "http://creativecommons.org/ns#"),
+            ("geo", geosparql::GEOSPARQL_NS),
+            ("sf", geosparql::SF_NS),
+            ("temporal", temporal_rdf::TEMPORAL_NS),
+            ("time", temporal_rdf::TIME_NS),
             ("legalis", "https://legalis.dev/ontology#"),
             ("fabio", ontology::fabio::NAMESPACE),
             ("lkif", ontology::lkif::NAMESPACE),
@@ -248,7 +270,7 @@ impl Namespaces {
 }
 
 /// RDF triple representation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Triple {
     pub subject: String,
     pub predicate: String,
@@ -256,7 +278,7 @@ pub struct Triple {
 }
 
 /// RDF object value types.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum RdfValue {
     /// URI reference
     Uri(String),

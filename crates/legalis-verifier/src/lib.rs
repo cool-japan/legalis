@@ -10,6 +10,9 @@ mod smt;
 #[cfg(feature = "z3-solver")]
 pub use smt::{SmtVerifier, create_z3_context};
 
+pub mod formal_methods;
+pub mod ml_verification;
+
 use legalis_core::{EffectType, Statute};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -17285,12 +17288,12 @@ pub fn what_if_analysis(
 ) -> WhatIfScenario {
     let verifier = StatuteVerifier::new();
 
-    let original_result = verifier.verify(&[original.clone()]);
+    let original_result = verifier.verify(std::slice::from_ref(&original));
 
     let mut modified = original.clone();
     modifier(&mut modified);
 
-    let new_result = verifier.verify(&[modified.clone()]);
+    let new_result = verifier.verify(std::slice::from_ref(&modified));
 
     WhatIfScenario::new(description, original, modified, original_result, new_result)
 }
@@ -17433,7 +17436,7 @@ pub fn secure_multiparty_verification(
     // In a real implementation, this would use secure MPC protocols
     // For now, we perform verification and prove it was done correctly
     let verifier = StatuteVerifier::new();
-    let result = verifier.verify(&[statute.clone()]);
+    let result = verifier.verify(std::slice::from_ref(statute));
 
     MultiPartyVerificationResult::new(parties, result)
 }
@@ -17526,7 +17529,7 @@ pub fn differential_private_analysis(
     let mut total_errors = 0;
 
     for statute in statutes {
-        let result = verifier.verify(&[statute.clone()]);
+        let result = verifier.verify(std::slice::from_ref(statute));
         total_complexity += statute.preconditions.len();
         if !result.passed {
             total_errors += 1;
@@ -17713,7 +17716,7 @@ pub fn tee_verification(statute: &Statute, tee_config: TeeConfig) -> TeeVerifica
     // In reality, this would execute inside an actual TEE enclave
     // For now, we perform verification with TEE guarantees
     let verifier = StatuteVerifier::new();
-    let result = verifier.verify(&[statute.clone()]);
+    let result = verifier.verify(std::slice::from_ref(statute));
 
     TeeVerificationResult::new(result, tee_config)
 }
@@ -23282,7 +23285,7 @@ mod tests {
         });
 
         let verifier = StatuteVerifier::new();
-        let result = verifier.verify(&[statute.clone()]);
+        let result = verifier.verify(std::slice::from_ref(&statute));
 
         let risk = analyze_statute_risk(&statute, &result);
 
