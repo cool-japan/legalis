@@ -44,7 +44,7 @@ async-graphql-axum = "7.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
 oauth2 = { version = "4.4", optional = true }
-reqwest = { version = "0.12", features = ["json"], optional = true }
+reqwest = { version = "0.13", features = ["json"], optional = true }
 url = "2.5"
 opentelemetry = { version = "0.24", optional = true }
 opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"], optional = true }
