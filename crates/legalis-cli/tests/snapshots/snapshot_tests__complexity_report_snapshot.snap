@@ -1,0 +1,30 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: report
+---
+# Statute Complexity Report
+
+## snapshot-test: "Snapshot Test Act"
+- Complexity Level: Simple
+- Complexity Score: 0/100
+- Conditions: 1
+- Max Depth: 1
+- Logical Operators: 0
+- Condition Types: 1
+- Has Discretion: false
+- Cyclomatic Complexity: 2
+
+## complex-snapshot: "Complex Snapshot Test Act"
+- Complexity Level: Moderate
+- Complexity Score: 26/100
+- Conditions: 2
+- Max Depth: 1
+- Logical Operators: 0
+- Condition Types: 2
+- Has Discretion: true
+- Cyclomatic Complexity: 3
+
+## Summary
+- Total Statutes: 2
+- Average Complexity Score: 13
+- Maximum Complexity Level: Moderate

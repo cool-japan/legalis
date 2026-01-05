@@ -1,0 +1,29 @@
+[package]
+name = "legalis-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Simulation engine for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-sim"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+num_cpus = "1.17"
+wide = "0.7"
+rand = "0.9"
+
+[dev-dependencies]
+criterion = { version = "0.7", features = ["async_tokio"] }
+
+[[bench]]
+name = "simulation"
+harness = false

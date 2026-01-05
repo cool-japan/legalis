@@ -1,0 +1,13 @@
+[package]
+name = "multilingual-statute"
+version = "0.1.0"
+edition = "2021"
+description = "Example: Multilingual statute display with legalis-i18n"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-i18n = { path = "../../crates/legalis-i18n" }
+
+tokio = { version = "1", features = ["full"] }

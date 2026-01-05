@@ -1,0 +1,69 @@
+---
+source: crates/legalis-dsl/src/tests.rs
+expression: doc
+---
+{
+  "namespace": null,
+  "imports": [],
+  "exports": [],
+  "statutes": [
+    {
+      "id": "statute1",
+      "title": "First Statute",
+      "visibility": "Private",
+      "conditions": [
+        {
+          "Comparison": {
+            "field": "age",
+            "operator": ">=",
+            "value": {
+              "Number": 18
+            }
+          }
+        }
+      ],
+      "effects": [
+        {
+          "effect_type": "grant",
+          "description": "benefit1",
+          "parameters": []
+        }
+      ],
+      "discretion": null,
+      "exceptions": [],
+      "amendments": [],
+      "supersedes": [],
+      "defaults": [],
+      "requires": [],
+      "delegates": [],
+      "scope": null,
+      "constraints": [],
+      "priority": null
+    },
+    {
+      "id": "statute2",
+      "title": "Second Statute",
+      "visibility": "Private",
+      "conditions": [],
+      "effects": [
+        {
+          "effect_type": "grant",
+          "description": "benefit2",
+          "parameters": []
+        }
+      ],
+      "discretion": null,
+      "exceptions": [],
+      "amendments": [],
+      "supersedes": [],
+      "defaults": [],
+      "requires": [
+        "statute1"
+      ],
+      "delegates": [],
+      "scope": null,
+      "constraints": [],
+      "priority": null
+    }
+  ]
+}

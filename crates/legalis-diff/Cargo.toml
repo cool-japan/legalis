@@ -1,0 +1,29 @@
+[package]
+name = "legalis-diff"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Statute diffing and change detection for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-diff"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+rayon = "1.11"
+rhai = { version = "1.23", features = ["serde", "sync"] }
+lru = "0.16"
+uuid = { version = "1.19", features = ["v4", "serde"] }
+
+[dev-dependencies]
+criterion = "0.7"
+proptest = "1.9"
+
+[[bench]]
+name = "diff_performance"
+harness = false

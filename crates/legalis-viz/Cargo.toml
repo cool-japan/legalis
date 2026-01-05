@@ -1,0 +1,32 @@
+[package]
+name = "legalis-viz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Visualization engine for legal statutes - decision trees, flowcharts, and dependency graphs"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-viz"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+petgraph.workspace = true
+
+# Optional dependencies for advanced rendering
+resvg = { version = "0.45", optional = true }
+tiny-skia = { version = "0.11", optional = true }
+usvg = { version = "0.45", optional = true }
+
+[features]
+default = []
+png-export = ["resvg", "tiny-skia", "usvg"]
+pdf-export = []
+
+[[bench]]
+name = "rendering"
+harness = false
+required-features = []

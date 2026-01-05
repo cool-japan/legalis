@@ -1,0 +1,159 @@
+# Changelog
+
+All notable changes to Legalis-RS will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-01-05
+
+### Initial Release
+
+### Bug Fixes (Pre-Release)
+- **legalis-api**: Fixed cross-platform build errors by adding `grpc` to default features
+  - Linux builds now work with `cargo build` (no need for `--all-features`)
+  - Users can still disable gRPC with `--no-default-features` if needed
+  - Ensures consistent behavior across macOS, Linux, and Windows
+
+#### Core Infrastructure
+- **legalis-core**: Core type system with `LegalResult<T>`, `Statute`, `Condition`, `Effect`
+  - Temporal validity support with effective/expiry dates
+  - Recursive statute references with cycle detection
+  - Comprehensive condition types (Age, Income, Date, Custom, etc.)
+  - Document processing with metadata extraction
+  - Format conversion (JSON, YAML, TOML, XML, HTML)
+
+- **legalis-dsl**: Domain Specific Language parser
+  - Legal DSL syntax for statute definition
+  - LSP server integration for IDE support
+  - Real-time syntax validation and diagnostics
+
+- **legalis-registry**: Statute registry with version control
+  - Git-based version tracking
+  - Tag and category management
+  - Cross-reference resolution
+  - Bulk import/export capabilities
+
+#### Intelligence Layer
+- **legalis-llm**: LLM integration framework
+  - Multi-provider support (OpenAI, Anthropic, Google, etc.)
+  - Law compilation from natural language
+  - Cost analytics and usage tracking
+  - Streaming responses
+
+- **legalis-verifier**: Formal verification engine
+  - Circular reference detection
+  - Dead statute detection (unsatisfiable conditions)
+  - Constitutional compliance checking
+  - Optional Z3 SMT solver integration for rigorous proofs
+  - Complexity metrics and analysis
+
+#### Simulation & Analysis
+- **legalis-sim**: Async simulation engine
+  - Population-based testing
+  - Temporal simulations
+  - Economic impact modeling
+  - ECS-like architecture for extensibility
+
+- **legalis-diff**: Statute comparison and change detection
+  - Structural diffing
+  - Impact analysis
+  - Change visualization
+
+#### Internationalization
+- **legalis-i18n**: Multi-language support
+  - Locale handling
+  - Jurisdiction registry
+  - Translation management
+
+- **legalis-porting**: Cross-jurisdiction law transfer
+  - Cultural adaptation ("Soft ODA")
+  - Equivalence mapping
+  - Jurisdiction-specific customization
+
+#### Interoperability
+- **legalis-interop**: Import/export formats
+  - Catala integration
+  - Stipula support
+  - L4 format compatibility
+  - Custom DSL converters
+
+#### Output Layer
+- **legalis-viz**: Visualization tools
+  - Decision tree generation
+  - Flowchart rendering
+  - 3D legal space visualization
+  - SVG/PNG export
+
+- **legalis-chain**: Smart contract export
+  - Solidity code generation
+  - WASM compilation
+  - Ink! (Substrate) support
+
+- **legalis-lod**: Linked Open Data export
+  - RDF/Turtle generation
+  - SPARQL query support
+  - Legal knowledge graphs
+
+#### Infrastructure
+- **legalis-audit**: Audit trail and compliance
+  - Immutable decision logging
+  - Forensic analysis
+  - Partitioned storage
+  - SQL/PostgreSQL backends
+
+- **legalis-api**: REST & gRPC API servers
+  - RESTful endpoints
+  - gRPC with streaming
+  - GraphQL support
+  - Rate limiting and caching
+  - OpenTelemetry integration
+
+- **legalis**: Command-line interface
+  - Interactive REPL
+  - Batch processing
+  - LSP integration
+  - Profiling and benchmarking
+
+#### Jurisdictions
+- **legalis-jp**: Japanese legal system
+- **legalis-de**: German legal system
+- **legalis-fr**: French legal system
+- **legalis-us**: United States legal system
+
+#### Examples
+- 24 comprehensive examples covering:
+  - Japanese Constitution 3D visualization
+  - Welfare benefits eligibility
+  - Tort law (Minpo Article 709)
+  - Comparative tort law across jurisdictions
+  - Drone regulations
+  - GDPR compliance
+  - Employment law
+  - Tax law
+  - And more...
+
+### Features
+- Pure Rust implementation (Edition 2024, Rust 1.86+)
+- Optional C dependencies feature-gated
+- Comprehensive test coverage
+- Benchmarking infrastructure
+- Fuzz testing support
+- Platform support: macOS, Linux, Windows (via WSL)
+- Optional Z3 SMT solver integration
+- Dual license: MIT OR Apache-2.0
+
+### Documentation
+- Complete API documentation
+- Platform-specific installation guides
+- Publishing and deployment guides
+- TODO and ADR documents
+- 24 working examples
+
+### Known Limitations
+- Z3 integration requires manual environment setup
+- Some examples have dependency conflicts (being addressed)
+- Performance optimization ongoing
+- Documentation in English (multilingual docs planned)
+
+[0.1.0]: https://github.com/cool-japan/legalis-rs/releases/tag/v0.1.0

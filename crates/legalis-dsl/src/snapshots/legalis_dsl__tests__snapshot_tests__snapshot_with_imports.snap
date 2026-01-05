@@ -1,0 +1,37 @@
+---
+source: crates/legalis-dsl/src/tests.rs
+expression: doc
+---
+namespace: ~
+imports:
+  - path: common/definitions.legalis
+    alias: ~
+    kind: Simple
+  - path: lib/utils.legalis
+    alias: utils
+    kind: Simple
+exports: []
+statutes:
+  - id: test
+    title: Test Statute
+    visibility: Private
+    conditions:
+      - Comparison:
+          field: age
+          operator: ">="
+          value:
+            Number: 21
+    effects:
+      - effect_type: grant
+        description: adult rights
+        parameters: []
+    discretion: ~
+    exceptions: []
+    amendments: []
+    supersedes: []
+    defaults: []
+    requires: []
+    delegates: []
+    scope: ~
+    constraints: []
+    priority: ~

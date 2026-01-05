@@ -1,0 +1,39 @@
+[package]
+name = "legalis-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Core types and traits for Legalis-RS legal framework"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-core"
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "dep:serde_json", "uuid/serde", "chrono/serde"]
+schema = ["dep:schemars", "serde"]
+parallel = ["dep:rayon"]
+yaml = ["dep:serde_yaml", "serde"]
+toml = ["dep:toml", "serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_yaml = { version = "0.9", optional = true }
+toml = { version = "0.9", optional = true }
+schemars = { version = "1.2", features = ["uuid1", "chrono04"], optional = true }
+rayon = { version = "1.11", optional = true }
+uuid.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+regex = "1.12"
+sha2 = "0.10"
+
+[dev-dependencies]
+proptest = "1.9"
+criterion = "0.7"
+
+[[bench]]
+name = "core_benchmarks"
+harness = false

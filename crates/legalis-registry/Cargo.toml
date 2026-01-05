@@ -1,0 +1,49 @@
+[package]
+name = "legalis-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Statute registry and version management for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-registry"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+indexmap.workspace = true
+lru = "0.16"
+fuzzy-matcher = "0.3"
+serde_yaml = { version = "0.9", optional = true }
+csv = { version = "1.4", optional = true }
+flate2 = { version = "1.1", optional = true }
+tokio = { version = "1.49", features = ["sync", "macros", "rt-multi-thread"], optional = true }
+futures = { version = "0.3", optional = true }
+async-stream = { version = "0.3", optional = true }
+quick-xml = { version = "0.38", features = ["serialize"], optional = true }
+sqlx = { version = "0.9.0-alpha.1", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "uuid", "json"], optional = true }
+async-graphql = { version = "7.0.17", optional = true }
+async-graphql-axum = { version = "7.1.0", optional = true }
+async-trait = { version = "0.1", optional = true }
+sha2 = "0.10"
+
+[features]
+default = []
+async = ["tokio", "futures", "async-stream", "async-trait"]
+akoma-ntoso = ["quick-xml"]
+yaml = ["serde_yaml"]
+csv-export = ["csv"]
+compression = ["flate2"]
+sqlite = ["sqlx", "async", "tokio/rt-multi-thread", "async-trait"]
+postgres = ["sqlx", "async", "tokio/rt-multi-thread", "async-trait"]
+graphql = ["async-graphql", "async-graphql-axum", "async"]
+all-backends = ["sqlite", "postgres"]
+all-formats = ["yaml", "csv-export", "compression", "akoma-ntoso"]
+
+[dev-dependencies]
+criterion = "0.7"

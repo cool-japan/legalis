@@ -1,0 +1,17 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: mermaid
+---
+flowchart TD
+    N0["Snapshot Test Act"]
+    N1{"Age ≥ 18"}:::condition
+    N2(["✓ Condition 1 not met"]):::outcome
+    N3(["✓ Test right"]):::outcome
+
+    N0 -->|→| N1
+    N1 -->|No| N2
+    N1 -->|Yes| N3
+
+    classDef condition fill:#e1f5fe
+    classDef outcome fill:#c8e6c9
+    classDef discretion fill:#ffcdd2

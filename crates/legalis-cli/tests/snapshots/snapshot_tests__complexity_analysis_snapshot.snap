@@ -1,0 +1,11 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: "serde_json::to_string_pretty(&snapshot_data).unwrap()"
+---
+{
+  "complexity_score": 26,
+  "condition_count": 2,
+  "condition_depth": 1,
+  "has_discretion": true,
+  "logical_operator_count": 0
+}

@@ -1,0 +1,68 @@
+[package]
+name = "legalis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Command-line interface for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis"
+
+[[bin]]
+name = "legalis"
+path = "src/main.rs"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-dsl.workspace = true
+legalis-verifier.workspace = true
+legalis-viz.workspace = true
+legalis-chain.workspace = true
+legalis-api.workspace = true
+legalis-diff.workspace = true
+legalis-sim.workspace = true
+legalis-audit.workspace = true
+legalis-porting.workspace = true
+legalis-i18n.workspace = true
+legalis-interop.workspace = true
+legalis-lod.workspace = true
+legalis-registry.workspace = true
+axum.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+clap.workspace = true
+clap_complete = "4.5"
+clap_mangen = "0.2"
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+toml = "0.9"
+dirs = "6.0"
+colored = "3.0"
+comfy-table = "7.2"
+rustyline = "17.0"
+indicatif = "0.18"
+csv = "1.4"
+rayon = "1.11"
+glob = "0.3"
+num_cpus = "1.17"
+terminal_size = "0.4"
+mlua = { version = "0.11", features = ["lua54", "vendored", "serialize"] }
+ratatui = "0.29"
+crossterm = "0.29"
+
+[dev-dependencies]
+assert_cmd = "2.1"
+predicates = "3.1"
+tempfile = "3.24"
+insta = { version = "1.46", features = ["yaml"] }
+criterion = { version = "0.7", features = ["html_reports"] }
+
+[[bench]]
+name = "cli_benchmarks"
+harness = false

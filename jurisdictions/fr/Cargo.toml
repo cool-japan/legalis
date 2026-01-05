@@ -1,0 +1,16 @@
+[package]
+name = "legalis-fr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "French jurisdiction support for Legalis-RS (Code civil, Code pénal)"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-fr"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+chrono.workspace = true
+thiserror.workspace = true

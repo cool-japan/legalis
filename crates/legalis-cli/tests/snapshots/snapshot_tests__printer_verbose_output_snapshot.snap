@@ -1,0 +1,14 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: output
+---
+// Statute: Complex Snapshot Test Act
+// Jurisdiction: US-CA
+
+STATUTE complex-snapshot: "Complex Snapshot Test Act" {
+    JURISDICTION "US-CA"
+    VERSION 2
+    WHEN AGE >= 18 AND INCOME > 30000
+    THEN GRANT "Complex right"
+    DISCRETION "Consider individual circumstances"
+}

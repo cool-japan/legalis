@@ -1,0 +1,129 @@
+[workspace]
+resolver = "3"
+members = [
+    # Core Layer
+    "crates/legalis-core",
+    "crates/legalis-dsl",
+    "crates/legalis-registry",
+    # Intelligence Layer
+    "crates/legalis-llm",
+    "crates/legalis-verifier",
+    # Simulation & Analysis Layer
+    "crates/legalis-sim",
+    "crates/legalis-diff",
+    # Internationalization & Porting Layer
+    "crates/legalis-i18n",
+    "crates/legalis-porting",
+    # Interoperability Layer
+    "crates/legalis-interop",
+    # Output Layer
+    "crates/legalis-viz",
+    "crates/legalis-chain",
+    "crates/legalis-lod",
+    # Infrastructure Layer
+    "crates/legalis-audit",
+    "crates/legalis-api",
+    "crates/legalis-cli",
+    # Jurisdictions
+    "jurisdictions/jp",
+    "jurisdictions/de",
+    "jurisdictions/fr",
+    "jurisdictions/us",
+    # Examples
+    "examples/jp-constitution-3d",
+    "examples/welfare-benefits",
+    "examples/minpo-709-tort",
+    "examples/comparative-tort-law",
+    "examples/jp-drone-regulation",
+    # International Examples
+    "examples/eu-gdpr-compliance",
+    "examples/uk-employment-law",
+    "examples/brazil-consumer-protection",
+    "examples/india-rti-act",
+    "examples/singapore-business",
+    "examples/australia-immigration",
+    "examples/canada-healthcare",
+    "examples/korea-labor-law",
+    "examples/mexico-tax-law",
+    "examples/thailand-business",
+    # Advanced/Research Examples
+    "examples/soviet-law-history",
+    "examples/private-international-law",
+    "examples/laos-civil-code",
+    "examples/religious-legal-systems",
+    # Technical Feature Examples
+    "examples/smart-contract-export",
+    "examples/legal-knowledge-graph",
+    "examples/statute-version-control",
+    "examples/legal-dsl-interop",
+    "examples/multilingual-statute",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.86"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.9"
+
+# Async runtime
+tokio = { version = "1.49", features = ["full"] }
+async-trait = "0.1"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Utilities
+uuid = { version = "1.19", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+indexmap = { version = "2.12", features = ["serde"] }
+
+# HTTP/API
+reqwest = { version = "0.13", features = ["json", "stream"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-full"] }
+governor = "0.10"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Visualization
+petgraph = "0.8"
+
+# Tracing/Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Internationalization
+rust-i18n = "3.1"
+unic-langid = "0.9"
+
+# Internal crates
+legalis-core = { version = "0.1.0", path = "crates/legalis-core" }
+legalis-dsl = { version = "0.1.0", path = "crates/legalis-dsl" }
+legalis-llm = { version = "0.1.0", path = "crates/legalis-llm" }
+legalis-sim = { version = "0.1.0", path = "crates/legalis-sim" }
+legalis-verifier = { version = "0.1.0", path = "crates/legalis-verifier" }
+legalis-chain = { version = "0.1.0", path = "crates/legalis-chain" }
+legalis-viz = { version = "0.1.0", path = "crates/legalis-viz" }
+legalis-i18n = { version = "0.1.0", path = "crates/legalis-i18n" }
+legalis-porting = { version = "0.1.0", path = "crates/legalis-porting" }
+legalis-api = { version = "0.1.0", path = "crates/legalis-api" }
+legalis = { version = "0.1.0", path = "crates/legalis-cli" }
+legalis-audit = { version = "0.1.0", path = "crates/legalis-audit" }
+legalis-registry = { version = "0.1.0", path = "crates/legalis-registry" }
+legalis-diff = { version = "0.1.0", path = "crates/legalis-diff" }
+legalis-interop = { version = "0.1.0", path = "crates/legalis-interop" }
+legalis-lod = { version = "0.1.0", path = "crates/legalis-lod" }
+legalis-jp = { version = "0.1.0", path = "jurisdictions/jp" }
+legalis-de = { version = "0.1.0", path = "jurisdictions/de" }
+legalis-fr = { version = "0.1.0", path = "jurisdictions/fr" }
+legalis-us = { version = "0.1.0", path = "jurisdictions/us" }

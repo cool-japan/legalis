@@ -1,0 +1,25 @@
+[package]
+name = "legalis-chain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Smart contract export for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-chain"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono = "0.4"
+rayon = "1.11"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "contract_generation"
+harness = false

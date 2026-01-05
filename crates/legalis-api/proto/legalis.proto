@@ -1,0 +1,249 @@
+syntax = "proto3";
+
+package legalis.v1;
+
+// Legalis gRPC service definition
+service LegalisService {
+  // List all statutes
+  rpc ListStatutes(ListStatutesRequest) returns (ListStatutesResponse);
+
+  // Get statute by ID
+  rpc GetStatute(GetStatuteRequest) returns (GetStatuteResponse);
+
+  // Create a new statute
+  rpc CreateStatute(CreateStatuteRequest) returns (Statute);
+
+  // Update an existing statute
+  rpc UpdateStatute(UpdateStatuteRequest) returns (Statute);
+
+  // Delete a statute
+  rpc DeleteStatute(DeleteStatuteRequest) returns (DeleteStatuteResponse);
+
+  // Batch create statutes
+  rpc BatchCreateStatutes(BatchCreateStatutesRequest) returns (BatchCreateStatutesResponse);
+
+  // Verify statutes
+  rpc VerifyStatutes(VerifyStatutesRequest) returns (VerificationResult);
+
+  // Stream verification results
+  rpc StreamVerifyStatutes(StreamVerifyStatutesRequest) returns (stream VerificationResult);
+
+  // Run simulation
+  rpc RunSimulation(RunSimulationRequest) returns (SimulationResult);
+
+  // Collaborate on statute (bidirectional streaming)
+  rpc CollaborateOnStatute(stream CollaborationMessage) returns (stream CollaborationMessage);
+
+  // Stream simulation progress
+  rpc StreamSimulation(RunSimulationRequest) returns (stream SimulationProgress);
+
+  // Search statutes
+  rpc SearchStatutes(SearchStatutesRequest) returns (SearchStatutesResponse);
+
+  // Verify a condition
+  rpc VerifyCondition(VerifyConditionRequest) returns (VerifyConditionResponse);
+
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Effect types enum
+enum EffectType {
+  EFFECT_TYPE_UNSPECIFIED = 0;
+  EFFECT_TYPE_GRANT = 1;
+  EFFECT_TYPE_REVOKE = 2;
+  EFFECT_TYPE_OBLIGATION = 3;
+  EFFECT_TYPE_PROHIBITION = 4;
+}
+
+// Effect message
+message Effect {
+  EffectType effect_type = 1;
+  string description = 2;
+  map<string, string> parameters = 3;
+}
+
+// Precondition message
+message Precondition {
+  string description = 1;
+  string condition = 2;
+}
+
+// Exception message
+message Exception {
+  string description = 1;
+  string condition = 2;
+}
+
+// Temporal validity message
+message TemporalValidity {
+  int64 effective_from = 1;
+  int64 effective_until = 2;
+  repeated string temporal_modifiers = 3;
+}
+
+// Statute message
+message Statute {
+  string id = 1;
+  string title = 2;
+  int32 version = 3;
+  string jurisdiction = 4;
+  Effect effect = 5;
+  repeated Precondition preconditions = 6;
+  string discretion_logic = 7;
+  repeated Exception exceptions = 8;
+  repeated string applies_to = 9;
+  repeated string derives_from = 10;
+  TemporalValidity temporal_validity = 11;
+}
+
+// List statutes request
+message ListStatutesRequest {
+  string jurisdiction = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// List statutes response
+message ListStatutesResponse {
+  repeated Statute statutes = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// Get statute request
+message GetStatuteRequest {
+  string statute_id = 1;
+}
+
+// Get statute response
+message GetStatuteResponse {
+  string statute_id = 1;
+  string title = 2;
+  string content = 3;
+}
+
+// Create statute request
+message CreateStatuteRequest {
+  string id = 1;
+  string title = 2;
+  int32 effect_type = 3;
+  string effect_description = 4;
+  string jurisdiction = 5;
+  int32 version = 6;
+  bool has_version = 7;
+}
+
+// Update statute request
+message UpdateStatuteRequest {
+  string id = 1;
+  string title = 2;
+  string jurisdiction = 3;
+  int32 version = 4;
+  bool has_version = 5;
+}
+
+// Delete statute request
+message DeleteStatuteRequest {
+  string id = 1;
+}
+
+// Delete statute response
+message DeleteStatuteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Batch create statutes request
+message BatchCreateStatutesRequest {
+  repeated CreateStatuteRequest statutes = 1;
+}
+
+// Batch create statutes response
+message BatchCreateStatutesResponse {
+  repeated Statute statutes = 1;
+  repeated string errors = 2;
+}
+
+// Verify statutes request
+message VerifyStatutesRequest {
+  repeated string statute_ids = 1;
+}
+
+// Verification result
+message VerificationResult {
+  bool passed = 1;
+  repeated string errors = 2;
+  repeated string warnings = 3;
+  repeated string suggestions = 4;
+}
+
+// Stream verify statutes request
+message StreamVerifyStatutesRequest {
+  repeated string statute_ids = 1;
+}
+
+// Run simulation request
+message RunSimulationRequest {
+  string statute_id = 1;
+  map<string, string> parameters = 2;
+}
+
+// Simulation result
+message SimulationResult {
+  string simulation_id = 1;
+  bool success = 2;
+  map<string, string> results = 3;
+  repeated string errors = 4;
+}
+
+// Simulation progress
+message SimulationProgress {
+  string simulation_id = 1;
+  int32 progress_percent = 2;
+  string current_step = 3;
+  SimulationResult result = 4;
+}
+
+// Collaboration message
+message CollaborationMessage {
+  string user_id = 1;
+  string statute_id = 2;
+  string message_type = 3;
+  string content = 4;
+  int64 timestamp = 5;
+}
+
+// Search statutes request
+message SearchStatutesRequest {
+  string query = 1;
+  string jurisdiction = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+// Search statutes response
+message SearchStatutesResponse {
+  repeated Statute statutes = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// Verify condition request
+message VerifyConditionRequest {
+  string condition = 1;
+}
+
+// Verify condition response
+message VerifyConditionResponse {
+  bool is_valid = 1;
+  string message = 2;
+}
+
+// Health check request
+message HealthCheckRequest {}
+
+// Health check response
+message HealthCheckResponse {
+  string status = 1;
+}

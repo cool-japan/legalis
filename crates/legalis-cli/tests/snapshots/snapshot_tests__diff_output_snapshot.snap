@@ -1,0 +1,44 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: json
+---
+{
+  "statute_id": "diff-snapshot",
+  "version_info": null,
+  "changes": [
+    {
+      "change_type": "Modified",
+      "target": "Title",
+      "description": "Title was modified",
+      "old_value": "Original Title",
+      "new_value": "Updated Title"
+    },
+    {
+      "change_type": "Modified",
+      "target": {
+        "Precondition": {
+          "index": 0
+        }
+      },
+      "description": "Precondition 1 was modified",
+      "old_value": "Age { operator: GreaterOrEqual, value: 18 }",
+      "new_value": "Age { operator: GreaterOrEqual, value: 21 }"
+    },
+    {
+      "change_type": "Modified",
+      "target": "Effect",
+      "description": "Effect was modified",
+      "old_value": "Effect { effect_type: Grant, description: \"Original right\", parameters: {} }",
+      "new_value": "Effect { effect_type: Grant, description: \"Updated right\", parameters: {} }"
+    }
+  ],
+  "impact": {
+    "severity": "Major",
+    "affects_eligibility": true,
+    "affects_outcome": true,
+    "discretion_changed": false,
+    "notes": [
+      "Outcome of statute application changed"
+    ]
+  }
+}

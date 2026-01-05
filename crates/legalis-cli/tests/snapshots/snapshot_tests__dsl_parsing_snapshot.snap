@@ -1,0 +1,43 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: json
+---
+{
+  "id": "test-parsing",
+  "title": "Test Parsing Act",
+  "preconditions": [
+    {
+      "And": [
+        {
+          "Age": {
+            "operator": "GreaterOrEqual",
+            "value": 21
+          }
+        },
+        {
+          "Income": {
+            "operator": "GreaterThan",
+            "value": 25000
+          }
+        }
+      ]
+    }
+  ],
+  "effect": {
+    "effect_type": "Grant",
+    "description": "Special privilege",
+    "parameters": {}
+  },
+  "discretion_logic": "May require additional documentation",
+  "temporal_validity": {
+    "effective_date": null,
+    "expiry_date": null,
+    "enacted_at": null,
+    "amended_at": null
+  },
+  "version": 1,
+  "jurisdiction": null,
+  "derives_from": [],
+  "applies_to": [],
+  "exceptions": []
+}

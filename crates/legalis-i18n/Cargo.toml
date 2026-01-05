@@ -1,0 +1,27 @@
+[package]
+name = "legalis-i18n"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Internationalization support for Legalis-RS - multi-language and multi-jurisdiction"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-i18n"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+lru = "0.16"
+rayon = "1.11"
+once_cell = "1.21"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "i18n_benchmarks"
+harness = false

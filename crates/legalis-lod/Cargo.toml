@@ -1,0 +1,21 @@
+[package]
+name = "legalis-lod"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Linked Open Data (RDF/TTL) export for Legalis-RS"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-lod"
+
+[dependencies]
+legalis-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+rand = "0.9"
+ordered-float = "5.1"
+sha2 = "0.10"

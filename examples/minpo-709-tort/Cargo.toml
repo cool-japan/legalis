@@ -1,0 +1,11 @@
+[package]
+name = "minpo-709-tort"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-jp = { path = "../../jurisdictions/jp" }
+legalis-sim = { path = "../../crates/legalis-sim" }
+tokio = { version = "1.49", features = ["full"] }
+uuid = "1.19"

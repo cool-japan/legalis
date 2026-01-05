@@ -1,0 +1,39 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: json
+---
+{
+  "id": "complex-snapshot",
+  "title": "Complex Snapshot Test Act",
+  "preconditions": [
+    {
+      "Age": {
+        "operator": "GreaterOrEqual",
+        "value": 18
+      }
+    },
+    {
+      "Income": {
+        "operator": "GreaterThan",
+        "value": 30000
+      }
+    }
+  ],
+  "effect": {
+    "effect_type": "Grant",
+    "description": "Complex right",
+    "parameters": {}
+  },
+  "discretion_logic": "Consider individual circumstances",
+  "temporal_validity": {
+    "effective_date": null,
+    "expiry_date": null,
+    "enacted_at": null,
+    "amended_at": null
+  },
+  "version": 2,
+  "jurisdiction": "US-CA",
+  "derives_from": [],
+  "applies_to": [],
+  "exceptions": []
+}

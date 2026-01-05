@@ -1,0 +1,13 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+expression: dot
+---
+digraph {
+    0 [ label = "Root { statute_id: \"snapshot-test\", title: \"Snapshot Test Act\" }" ]
+    1 [ label = "Condition { description: \"Age ≥ 18\", is_discretionary: false }" ]
+    2 [ label = "Outcome { description: \"Condition 1 not met\" }" ]
+    3 [ label = "Outcome { description: \"Test right\" }" ]
+    0 -> 1 [ ]
+    1 -> 2 [ ]
+    1 -> 3 [ ]
+}

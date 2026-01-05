@@ -1,0 +1,65 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+**/*.rs.bk
+**/*.pdb
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation build
+book/
+docs/_build/
+
+# Test and coverage data
+*.profraw
+*.profdata
+coverage/
+lcov.info
+cobertura.xml
+
+# Temporary files
+/tmp
+*.tmp
+*.log
+
+# Node modules (if any)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI artifacts
+.cargo/git/
+.cargo/registry/
+
+# Keep only necessary workspace files
+!Cargo.toml
+!Cargo.lock
+!.cargo/config.toml

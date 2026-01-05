@@ -1,0 +1,31 @@
+[package]
+name = "legalis-porting"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Legal system porting - transfer laws between jurisdictions with cultural adaptation"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-porting"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+legalis-llm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+uuid = { version = "1.19", features = ["v4", "serde"] }
+
+[dev-dependencies]
+criterion = { version = "0.7", features = ["async_tokio"] }
+proptest = "1.9"
+
+[[bench]]
+name = "porting"
+harness = false

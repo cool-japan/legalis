@@ -1,0 +1,50 @@
+# Docker Compose override for development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - RUST_VERSION=1.83
+    image: legalis-rs:dev
+    container_name: legalis-api-dev
+    # Override command for development with auto-reload
+    command: cargo watch -x 'run --bin legalis-api-server'
+    environment:
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+      - LEGALIS_HOST=0.0.0.0
+      - LEGALIS_PORT=3000
+    volumes:
+      # Mount source code for live reload
+      - .:/app:cached
+      # Cache cargo registry
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      # Cache target directory (huge performance improvement)
+      - target-cache:/app/target
+    ports:
+      - "3000:3000"
+      # Debugger port
+      - "5000:5000"
+
+  # Development database with exposed ports and less strict settings
+  postgres:
+    environment:
+      - POSTGRES_PASSWORD=dev_password_change_in_production
+    ports:
+      - "5432:5432"
+
+  # Development Redis with less strict settings
+  redis:
+    ports:
+      - "6379:6379"
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target-cache:

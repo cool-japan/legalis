@@ -1,0 +1,55 @@
+---
+source: crates/legalis-dsl/src/tests.rs
+expression: doc
+---
+namespace: ~
+imports: []
+exports: []
+statutes:
+  - id: tax-credit
+    title: Tax Credit Eligibility
+    visibility: Private
+    conditions:
+      - And:
+          - Comparison:
+              field: age
+              operator: ">="
+              value:
+                Number: 25
+          - Comparison:
+              field: age
+              operator: "<="
+              value:
+                Number: 65
+      - HasAttribute:
+          key: dependents
+    effects:
+      - effect_type: grant
+        description: tax credit
+        parameters: []
+      - effect_type: obligation
+        description: file tax return
+        parameters: []
+    discretion: ~
+    exceptions:
+      - conditions:
+          - Comparison:
+              field: income
+              operator: ">"
+              value:
+                Number: 90000
+        description: High income exception
+    amendments: []
+    supersedes:
+      - old-tax-credit
+    defaults:
+      - field: category
+        value:
+          String: standard
+    requires:
+      - base-income
+      - residency
+    delegates: []
+    scope: ~
+    constraints: []
+    priority: ~

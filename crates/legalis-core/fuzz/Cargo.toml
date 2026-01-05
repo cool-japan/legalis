@@ -1,0 +1,37 @@
+[package]
+name = "legalis-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+chrono = "0.4"
+
+[dependencies.legalis-core]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_attribute_parse"
+path = "fuzz_targets/fuzz_attribute_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_statute_validation"
+path = "fuzz_targets/fuzz_statute_validation.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_condition_display"
+path = "fuzz_targets/fuzz_condition_display.rs"
+test = false
+doc = false
