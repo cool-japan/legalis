@@ -182,7 +182,7 @@ impl CacheBackend for RedisCacheBackend {
         if let Some(mut conn) = self.get_connection().await {
             if let Ok(serialized) = serde_json::to_vec(&entry) {
                 let _: Result<(), redis::RedisError> = if let Some(ttl_secs) = ttl {
-                    conn.set_ex(key, serialized, ttl_secs as u64).await
+                    conn.set_ex(key, serialized, ttl_secs).await
                 } else {
                     conn.set(key, serialized).await
                 };

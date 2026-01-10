@@ -651,19 +651,15 @@ pub struct ListSavedSimulationsQuery {
 /// Visualization format options.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum VizFormat {
     Dot,
     Ascii,
     Mermaid,
     PlantUml,
+    #[default]
     Svg,
     Html,
-}
-
-impl Default for VizFormat {
-    fn default() -> Self {
-        Self::Svg
-    }
 }
 
 /// Visualization request query parameters.

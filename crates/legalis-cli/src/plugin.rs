@@ -113,17 +113,9 @@ impl PluginHook {
 }
 
 /// Plugin state configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct PluginState {
     enabled_plugins: Vec<String>,
-}
-
-impl Default for PluginState {
-    fn default() -> Self {
-        Self {
-            enabled_plugins: Vec::new(),
-        }
-    }
 }
 
 /// Plugin manager for discovering and loading plugins.

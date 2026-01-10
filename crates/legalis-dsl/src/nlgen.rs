@@ -291,24 +291,24 @@ impl NLGenerator {
         }
     }
 
-    fn generate_condition(&self, condition: &ConditionNode, inline: bool) -> String {
+    fn generate_condition(&self, condition: &ConditionNode, _inline: bool) -> String {
         match condition {
             ConditionNode::And(left, right) => {
                 format!(
                     "{} and {}",
-                    self.generate_condition(left, inline),
-                    self.generate_condition(right, inline)
+                    self.generate_condition(left, _inline),
+                    self.generate_condition(right, _inline)
                 )
             }
             ConditionNode::Or(left, right) => {
                 format!(
                     "({} or {})",
-                    self.generate_condition(left, inline),
-                    self.generate_condition(right, inline)
+                    self.generate_condition(left, _inline),
+                    self.generate_condition(right, _inline)
                 )
             }
             ConditionNode::Not(inner) => {
-                format!("not ({})", self.generate_condition(inner, inline))
+                format!("not ({})", self.generate_condition(inner, _inline))
             }
             ConditionNode::Comparison {
                 field,

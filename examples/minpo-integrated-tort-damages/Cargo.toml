@@ -1,0 +1,11 @@
+[package]
+name = "minpo-integrated-tort-damages"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "minpo-integrated-tort-damages"
+path = "src/main.rs"
+
+[dependencies]
+legalis-jp = { path = "../../jurisdictions/jp" }

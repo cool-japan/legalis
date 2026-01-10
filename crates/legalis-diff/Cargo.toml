@@ -21,7 +21,7 @@ lru = "0.16"
 uuid = { version = "1.19", features = ["v4", "serde"] }
 
 [dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"
 proptest = "1.9"
 
 [[bench]]

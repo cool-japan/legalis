@@ -297,7 +297,7 @@ impl CrossLingualAnalyzer {
     ) {
         self.terminology
             .entry((source, target))
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(source_term, target_term);
     }
 }
@@ -391,7 +391,7 @@ impl TerminologyTranslator {
     ) {
         self.translations
             .entry((source, target))
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(term, translation);
     }
 
@@ -702,10 +702,7 @@ impl JargonNormalizer {
 
     /// Adds a normalization rule
     pub fn add_rule(&mut self, language: LanguageCode, rule: NormalizationRule) {
-        self.rules
-            .entry(language)
-            .or_insert_with(Vec::new)
-            .push(rule);
+        self.rules.entry(language).or_default().push(rule);
     }
 
     /// Returns the number of normalizations that would be applied

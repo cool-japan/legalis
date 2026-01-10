@@ -135,20 +135,20 @@ impl HotPathTracker {
 
     /// Records an evaluation of a condition.
     pub fn record_evaluation(&mut self, condition: &Condition) {
-        let hash = self.hash_condition(condition);
+        let hash = Self::hash_condition(condition);
         *self.eval_counts.entry(hash).or_insert(0) += 1;
         self.total_evaluations += 1;
     }
 
     /// Checks if a condition is a hot path.
     pub fn is_hot(&self, condition: &Condition) -> bool {
-        let hash = self.hash_condition(condition);
+        let hash = Self::hash_condition(condition);
         self.eval_counts.get(&hash).copied().unwrap_or(0) >= self.hot_threshold
     }
 
     /// Returns the evaluation count for a condition.
     pub fn eval_count(&self, condition: &Condition) -> u64 {
-        let hash = self.hash_condition(condition);
+        let hash = Self::hash_condition(condition);
         self.eval_counts.get(&hash).copied().unwrap_or(0)
     }
 
@@ -173,7 +173,7 @@ impl HotPathTracker {
     }
 
     /// Computes a hash for a condition.
-    fn hash_condition(&self, condition: &Condition) -> u64 {
+    fn hash_condition(condition: &Condition) -> u64 {
         let mut hasher = DefaultHasher::new();
         // Simple hash based on condition type (in real impl, would be more sophisticated)
         match condition {
@@ -189,17 +189,17 @@ impl HotPathTracker {
             }
             Condition::And(left, right) => {
                 "and".hash(&mut hasher);
-                self.hash_condition(left).hash(&mut hasher);
-                self.hash_condition(right).hash(&mut hasher);
+                Self::hash_condition(left).hash(&mut hasher);
+                Self::hash_condition(right).hash(&mut hasher);
             }
             Condition::Or(left, right) => {
                 "or".hash(&mut hasher);
-                self.hash_condition(left).hash(&mut hasher);
-                self.hash_condition(right).hash(&mut hasher);
+                Self::hash_condition(left).hash(&mut hasher);
+                Self::hash_condition(right).hash(&mut hasher);
             }
             Condition::Not(inner) => {
                 "not".hash(&mut hasher);
-                self.hash_condition(inner).hash(&mut hasher);
+                Self::hash_condition(inner).hash(&mut hasher);
             }
             _ => {
                 "other".hash(&mut hasher);
@@ -264,13 +264,13 @@ impl JitCompiler {
 
     /// Checks if a condition has been compiled.
     pub fn is_compiled(&self, condition: &Condition) -> bool {
-        let hash = self.tracker.hash_condition(condition);
+        let hash = HotPathTracker::hash_condition(condition);
         self.compiled_cache.contains_key(&hash)
     }
 
     /// Attempts to compile a condition.
     fn try_compile(&mut self, condition: &Condition) {
-        let hash = self.tracker.hash_condition(condition);
+        let hash = HotPathTracker::hash_condition(condition);
 
         // Placeholder compilation (real implementation would use JIT backend)
         let compiled = CompiledCode::new(hash, 10);

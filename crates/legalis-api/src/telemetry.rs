@@ -104,7 +104,7 @@ pub fn init_telemetry(config: OtelConfig) -> Result<(), Box<dyn std::error::Erro
     let tracer = provider.tracer("legalis-api");
 
     // Set as global provider
-    let _ = global::set_tracer_provider(provider);
+    global::set_tracer_provider(provider);
 
     // Create tracing layer
     let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);

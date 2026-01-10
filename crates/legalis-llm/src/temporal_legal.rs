@@ -40,7 +40,7 @@ impl ValidityPeriod {
 
     /// Checks if the period is valid at a given time.
     pub fn is_valid_at(&self, timestamp: i64) -> bool {
-        timestamp >= self.start && self.end.map_or(true, |end| timestamp <= end)
+        timestamp >= self.start && self.end.is_none_or(|end| timestamp <= end)
     }
 
     /// Checks if the period overlaps with another.
@@ -203,7 +203,7 @@ impl LegalChangeDetector {
     pub fn record_snapshot(&mut self, rule_id: impl Into<String>, snapshot: LegalSnapshot) {
         self.snapshots
             .entry(rule_id.into())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(snapshot);
     }
 

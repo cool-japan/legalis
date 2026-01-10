@@ -23,7 +23,7 @@ chrono.workspace = true
 uuid = { version = "1.19", features = ["v4", "serde"] }
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 proptest = "1.9"
 
 [[bench]]

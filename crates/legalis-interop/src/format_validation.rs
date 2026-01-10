@@ -553,10 +553,7 @@ impl ValidationStats {
         self.total_errors += report.error_count;
         self.total_warnings += report.warning_count;
 
-        let format_stats = self
-            .by_format
-            .entry(report.format)
-            .or_insert_with(FormatStats::new);
+        let format_stats = self.by_format.entry(report.format).or_default();
         format_stats.record(report);
     }
 

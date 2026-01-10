@@ -4075,8 +4075,7 @@ pub fn handle_profile(
     iterations: usize,
     output: Option<&str>,
     flamegraph: bool,
-    #[cfg(target_os = "linux")]
-    flamegraph_dir: &str,
+    #[cfg(target_os = "linux")] flamegraph_dir: &str,
     format: &OutputFormat,
 ) -> Result<()> {
     use crate::profile::Profiler;
@@ -4278,7 +4277,7 @@ pub fn handle_debug(
         );
 
         let verifier = StatuteVerifier::new();
-        let result = verifier.verify(&[statute.clone()]);
+        let result = verifier.verify(std::slice::from_ref(&statute));
 
         let is_valid = result.errors.is_empty();
         guard.complete(serde_json::json!({
@@ -4972,9 +4971,7 @@ jurisdiction = "US"
     println!("{}", "=".repeat(50).dimmed());
 
     for profile_name in profiles {
-        let is_active = config
-            .get_active_profile()
-            .map_or(false, |ap| ap == profile_name);
+        let is_active = config.get_active_profile() == Some(profile_name);
 
         let marker = if is_active {
             "●".green()

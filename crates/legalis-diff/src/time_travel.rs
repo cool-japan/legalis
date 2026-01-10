@@ -168,7 +168,7 @@ impl TemporalRepository {
     /// ```
     pub fn at_time(&self, statute_id: &str, time: DateTime<Utc>) -> Option<&TemporalStatute> {
         self.versions.get(statute_id).and_then(|versions| {
-            versions.iter().filter(|v| v.is_active_at(time)).next_back() // Get the most recent version active at that time
+            versions.iter().rfind(|v| v.is_active_at(time)) // Get the most recent version active at that time
         })
     }
 

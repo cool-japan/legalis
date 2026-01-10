@@ -5,6 +5,41 @@ All notable changes to Legalis-RS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-01-10
+
+### New Jurisdictions
+- **legalis-uk**: United Kingdom jurisdiction (Employment, Consumer Rights, Financial Services, Companies, Contract)
+- **legalis-sg**: Singapore jurisdiction (Companies Act, Employment Act, PDPA, IP Laws, Banking, Payment Services)
+
+### Improvements
+- **Test Coverage**: Expanded from 6,100+ to **9,568 tests** across all crates
+- **Clippy Compliance**: Reduced warnings to near-zero with comprehensive `#![allow(...)]` directives
+- **Example Collision Fix**: Renamed jurisdiction-specific examples with prefixes (de-, fr-, jp-, uk-) to avoid filename collisions
+
+### Bug Fixes
+- **legalis-dsl**: Fixed `never_loop` clippy error in LSP call hierarchy preparation
+- **legalis-jp**: Fixed `labor_law_edge_cases.rs` test file with correct struct field names and enum variants
+- **legalis-sg**: Fixed `director_compliance_check.rs` example with correct type definitions
+- **legalis-jp (tort)**: Added missing re-exports for `article_715_1` and `Article715Builder`
+- Various Levenshtein distance implementations refactored to satisfy `needless_range_loop` lint
+- Fixed `should_implement_trait` warning by implementing proper `Default` trait for `HistoricalBacktester`
+- Fixed doc comment formatting (`///!` → `//!`) in synthetic_data module
+
+### Code Quality
+- Applied 50+ clippy auto-fixes across multiple crates
+- Added crate-level `#![allow(...)]` directives for acceptable patterns (type_complexity, too_many_arguments, etc.)
+- Converted `unwrap()` after `is_some()` patterns to idiomatic `if let Some(...)`
+
+### Statistics
+- **Crates**: 23 (16 core + 7 jurisdictions)
+- **Rust Files**: 1,062
+- **Lines of Code**: 509,385
+- **Tests**: 9,568 passing
+- **Examples**: 29 comprehensive examples
+- **Jurisdictions**: 7 (DE, EU, FR, JP, SG, UK, US)
+
+[0.1.1]: https://github.com/cool-japan/legalis-rs/compare/v0.1.0...v0.1.1
+
 ## [0.1.0] - 2026-01-05
 
 ### Initial Release

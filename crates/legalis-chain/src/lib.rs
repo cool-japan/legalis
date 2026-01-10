@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_in_result)]
+
 //! Legalis-Chain: Smart contract export for Legalis-RS.
 //!
 //! This crate provides export functionality to convert deterministic
@@ -12863,20 +12865,20 @@ contract {}ComparativeTest is Test {{
             config.cooldown_period
         ));
 
-        if config.max_volume_threshold.is_some() {
+        if let Some(max_volume) = config.max_volume_threshold {
             source.push_str("    uint256 public volumeThisBlock;\n");
             source.push_str(&format!(
                 "    uint256 public constant MAX_VOLUME = {};\n",
-                config.max_volume_threshold.unwrap()
+                max_volume
             ));
         }
 
-        if config.max_tx_per_block.is_some() {
+        if let Some(max_tx) = config.max_tx_per_block {
             source.push_str("    uint256 public txCountThisBlock;\n");
             source.push_str("    uint256 public lastBlockNumber;\n");
             source.push_str(&format!(
                 "    uint256 public constant MAX_TX_PER_BLOCK = {};\n",
-                config.max_tx_per_block.unwrap()
+                max_tx
             ));
         }
 
@@ -15293,7 +15295,7 @@ contract {}ComparativeTest is Test {{
                 "    event SharedSecretEstablished(bytes32 indexed sessionId, address indexed party);\n",
             );
         }
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    constructor(bytes memory _publicKey) {\n");
         source.push_str("        require(_publicKey.length > 0, \"Invalid public key\");\n");
@@ -15326,7 +15328,7 @@ contract {}ComparativeTest is Test {{
         source.push_str("    }\n");
 
         if config.kem_mode {
-            source.push_str("\n");
+            source.push('\n');
             source.push_str("    /// @notice Store KEM capsule for shared secret establishment\n");
             source.push_str("    /// @dev Capsule generated off-chain using lattice-based KEM\n");
             source.push_str(
@@ -15429,7 +15431,7 @@ contract {}ComparativeTest is Test {{
         if config.qrng_enabled {
             source.push_str("    event QuantumEntropyUsed(bytes32 indexed entropyHash);\n");
         }
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    modifier onlyAuthorized() {\n");
         source.push_str("        require(authorizedParties[msg.sender], \"Not authorized\");\n");
@@ -15578,7 +15580,7 @@ contract {}ComparativeTest is Test {{
         source.push_str(
             "    event HashVerified(bytes32 indexed dataId, bytes32 indexed hashValue, bool valid);\n",
         );
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    constructor(");
         if config.use_salt {
@@ -15770,7 +15772,7 @@ contract {}ComparativeTest is Test {{
             source.push_str("    event ZkProofVerified(bytes32 indexed proofHash, bool valid);\n");
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    /// @notice Register a new DID\n");
         source.push_str("    function registerIdentity(bytes32 didDocument) external {\n");
@@ -15855,7 +15857,7 @@ contract {}ComparativeTest is Test {{
         source.push_str("    }\n");
 
         if config.zk_proofs {
-            source.push_str("\n");
+            source.push('\n');
             source
                 .push_str("    /// @notice Verify ZK proof for privacy-preserving verification\n");
             source.push_str(
@@ -15975,7 +15977,7 @@ contract {}ComparativeTest is Test {{
             );
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    address public admin;\n\n");
 
@@ -16170,7 +16172,7 @@ contract {}ComparativeTest is Test {{
             source.push_str("    event DisputeAppealed(uint256 indexed disputeId);\n");
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str(&format!(
             "    uint256 public constant MIN_STAKE = {};\n",
@@ -16262,7 +16264,7 @@ contract {}ComparativeTest is Test {{
         source.push_str("    }\n");
 
         if config.appeal_enabled {
-            source.push_str("\n");
+            source.push('\n');
             source.push_str("    /// @notice Appeal a decision\n");
             source.push_str("    function appeal(uint256 disputeId) external {\n");
             source.push_str("        Dispute storage dispute = disputes[disputeId];\n");
@@ -16375,7 +16377,7 @@ contract {}ComparativeTest is Test {{
             );
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    /// @notice Create legal profile\n");
         source.push_str("    function createProfile(bytes32 profileHash) external {\n");
@@ -16667,7 +16669,7 @@ contract {}ComparativeTest is Test {{
             source.push_str("    event AncestryVerified(address indexed user1, address indexed user2, bool related);\n");
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    /// @notice Register DNA profile\n");
         source.push_str("    /// @dev Genetic data hashed off-chain for privacy\n");
@@ -16708,7 +16710,7 @@ contract {}ComparativeTest is Test {{
         source.push_str("    }\n");
 
         if config.ancestry_verification {
-            source.push_str("\n");
+            source.push('\n');
             source.push_str("    /// @notice Verify ancestry relationship\n");
             source.push_str("    /// @dev Privacy-preserving ancestry verification\n");
             source.push_str("    function verifyAncestry(\n");
@@ -16950,7 +16952,7 @@ contract {}ComparativeTest is Test {{
             source.push_str("    event DataAccessed(address indexed user, address indexed accessor, string purpose);\n");
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         if config.consent_management {
             source.push_str("    /// @notice Grant consent for genetic data usage\n");
@@ -17019,7 +17021,7 @@ contract {}ComparativeTest is Test {{
         source.push_str("    }\n");
 
         if config.audit_logging {
-            source.push_str("\n");
+            source.push('\n');
             source.push_str("    /// @notice Log data access for audit\n");
             source.push_str(
                 "    function logDataAccess(address user, string calldata purpose) external {\n",
@@ -17116,7 +17118,7 @@ contract {}ComparativeTest is Test {{
             );
         }
 
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    address public admin;\n\n");
 
@@ -17432,7 +17434,7 @@ contract {}ComparativeTest is Test {{
             for contact in &config.emergency_contacts {
                 playbook.push_str(&format!("- {}\n", contact));
             }
-            playbook.push_str("\n");
+            playbook.push('\n');
         }
 
         playbook.push_str("## Severity Classification\n\n");
@@ -17875,7 +17877,7 @@ contract {}ComparativeTest is Test {{
             for (idx, _condition) in statute.preconditions.iter().enumerate() {
                 source.push_str(&format!("    signal input privateCondition{};\n", idx));
             }
-            source.push_str("\n");
+            source.push('\n');
         }
 
         source.push_str("    // Public output\n");
@@ -17894,7 +17896,7 @@ contract {}ComparativeTest is Test {{
                 idx, idx
             ));
         }
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    // Compute final result\n");
         if statute.preconditions.len() == 1 {
@@ -17916,7 +17918,7 @@ contract {}ComparativeTest is Test {{
                 }
             }
         }
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    // Verify result is boolean\n");
         source.push_str("    intermediateResult * (1 - intermediateResult) === 0;\n\n");
@@ -18204,7 +18206,7 @@ contract {}ComparativeTest is Test {{
                 "    event ProofsAggregated(bytes32 indexed aggregatedHash, uint256 count);\n",
             );
         }
-        source.push_str("\n");
+        source.push('\n');
 
         source.push_str("    /// @notice Verify a recursive proof\n");
         source.push_str("    function verifyRecursiveProof(\n");
@@ -19968,171 +19970,166 @@ def execute_composition():
     // ABI generation helpers
 
     fn generate_intent_abi(&self, _contract_name: &str) -> String {
-        format!(
-            r#"[
-  {{
+        r#"[
+  {
     "type": "constructor",
     "inputs": []
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "checkPreconditions",
     "inputs": [],
-    "outputs": [{{ "type": "bool" }}],
+    "outputs": [{ "type": "bool" }],
     "stateMutability": "view"
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "executeIntent",
-    "inputs": [{{ "name": "solver", "type": "address" }}],
+    "inputs": [{ "name": "solver", "type": "address" }],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "completeIntent",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "event",
     "name": "IntentCreated",
     "inputs": [
-      {{ "name": "id", "type": "string", "indexed": false }},
-      {{ "name": "outcome", "type": "string", "indexed": false }},
-      {{ "name": "deadline", "type": "uint256", "indexed": false }}
+      { "name": "id", "type": "string", "indexed": false },
+      { "name": "outcome", "type": "string", "indexed": false },
+      { "name": "deadline", "type": "uint256", "indexed": false }
     ]
-  }}
+  }
 ]"#
-        )
+        .to_string()
     }
 
     fn generate_solver_network_abi(&self, _contract_name: &str) -> String {
-        format!(
-            r#"[
-  {{
+        r#"[
+  {
     "type": "constructor",
     "inputs": [
-      {{ "name": "_registry", "type": "address" }},
-      {{ "name": "_settlement", "type": "address" }}
+      { "name": "_registry", "type": "address" },
+      { "name": "_settlement", "type": "address" }
     ]
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "registerSolver",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "matchIntent",
     "inputs": [
-      {{ "name": "intentId", "type": "bytes32" }},
-      {{ "name": "solver", "type": "address" }}
+      { "name": "intentId", "type": "bytes32" },
+      { "name": "solver", "type": "address" }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "event",
     "name": "SolverRegistered",
     "inputs": [
-      {{ "name": "solver", "type": "address", "indexed": true }}
+      { "name": "solver", "type": "address", "indexed": true }
     ]
-  }}
+  }
 ]"#
-        )
+        .to_string()
     }
 
     fn generate_mev_intent_abi(&self, _contract_name: &str) -> String {
-        format!(
-            r#"[
-  {{
+        r#"[
+  {
     "type": "constructor",
     "inputs": []
-  }},
-  {{
+  },
+  {
     "type": "event",
     "name": "IntentProtected",
     "inputs": [
-      {{ "name": "id", "type": "string", "indexed": false }},
-      {{ "name": "timestamp", "type": "uint256", "indexed": false }}
+      { "name": "id", "type": "string", "indexed": false },
+      { "name": "timestamp", "type": "uint256", "indexed": false }
     ]
-  }}
+  }
 ]"#
-        )
+        .to_string()
     }
 
     fn generate_cross_chain_intent_abi(&self, _contract_name: &str) -> String {
-        format!(
-            r#"[
-  {{
+        r#"[
+  {
     "type": "constructor",
     "inputs": []
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "lockIntent",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "settleIntent",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "event",
     "name": "IntentInitiated",
     "inputs": [
-      {{ "name": "id", "type": "string", "indexed": false }},
-      {{ "name": "source", "type": "string", "indexed": false }},
-      {{ "name": "target", "type": "string", "indexed": false }}
+      { "name": "id", "type": "string", "indexed": false },
+      { "name": "source", "type": "string", "indexed": false },
+      { "name": "target", "type": "string", "indexed": false }
     ]
-  }}
+  }
 ]"#
-        )
+        .to_string()
     }
 
     fn generate_intent_composition_abi(&self, _contract_name: &str) -> String {
-        format!(
-            r#"[
-  {{
+        r#"[
+  {
     "type": "constructor",
     "inputs": []
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "executeComposition",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
-  }},
-  {{
+  },
+  {
     "type": "function",
     "name": "getProgress",
     "inputs": [],
     "outputs": [
-      {{ "name": "completed", "type": "uint256" }},
-      {{ "name": "total", "type": "uint256" }}
+      { "name": "completed", "type": "uint256" },
+      { "name": "total", "type": "uint256" }
     ],
     "stateMutability": "view"
-  }},
-  {{
+  },
+  {
     "type": "event",
     "name": "CompositionStarted",
     "inputs": [
-      {{ "name": "id", "type": "string", "indexed": false }},
-      {{ "name": "intentCount", "type": "uint256", "indexed": false }}
+      { "name": "id", "type": "string", "indexed": false },
+      { "name": "intentCount", "type": "uint256", "indexed": false }
     ]
-  }}
+  }
 ]"#
-        )
+        .to_string()
     }
 
     /// Generates an AI-augmented contract with on-chain model integration.
@@ -20474,11 +20471,7 @@ def deactivate():
         config: &AiModelConfig,
         contract_name: &str,
     ) -> ChainResult<String> {
-        let _oracle_addr = config
-            .oracle_address
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("address(0)");
+        let _oracle_addr = config.oracle_address.as_deref().unwrap_or("address(0)");
 
         let source = format!(
             r#"// SPDX-License-Identifier: MIT

@@ -1,11 +1,11 @@
-///! Synthetic Data Generation Module
-///!
-///! This module provides tools for generating synthetic populations with:
-///! - GAN-based entity generation
-///! - Privacy-preserving techniques (differential privacy)
-///! - Demographic-consistent data synthesis
-///! - Realistic income/wealth distributions
-///! - Geographic-aware population generation
+//! Synthetic Data Generation Module
+//!
+//! This module provides tools for generating synthetic populations with:
+//! - GAN-based entity generation
+//! - Privacy-preserving techniques (differential privacy)
+//! - Demographic-consistent data synthesis
+//! - Realistic income/wealth distributions
+//! - Geographic-aware population generation
 use crate::error::{SimResult, SimulationError};
 use legalis_core::{BasicEntity, LegalEntity};
 use rand::Rng;
@@ -67,6 +67,7 @@ impl GANEntityGenerator {
             let real_sample = &real_samples[rng.random_range(0..real_samples.len())];
 
             // Update weights to make fake sample more like real sample
+            #[allow(clippy::needless_range_loop)]
             for i in 0..self.output_dim.min(real_sample.len()) {
                 let error = real_sample[i] - fake_sample[i];
                 // Update weights (simplified gradient descent)
@@ -85,6 +86,7 @@ impl GANEntityGenerator {
     }
 
     /// Generate a synthetic sample from noise
+    #[allow(clippy::needless_range_loop)]
     fn generate_from_noise(&self, noise: &[f64]) -> Vec<f64> {
         let mut output = vec![0.0; self.output_dim];
 

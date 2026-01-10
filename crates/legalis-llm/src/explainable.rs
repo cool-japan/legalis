@@ -623,13 +623,11 @@ pub enum ReadingLevel {
 impl LaypersonSummarizer {
     /// Creates a new layperson summarizer.
     pub fn new() -> Self {
-        let summarizer = Self {
+        // Initialize with common legal terms
+        Self {
             simplification_rules: Arc::new(RwLock::new(Vec::new())),
             summaries: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        // Initialize with common legal terms
-        summarizer
+        }
     }
 
     /// Adds a simplification rule.

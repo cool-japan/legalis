@@ -212,7 +212,7 @@ impl QuantumAttention {
                 // Simulate Hadamard gate (creates superposition)
                 let scale = gate
                     .parameters
-                    .get(0)
+                    .first()
                     .copied()
                     .unwrap_or(1.0 / 2.0_f64.sqrt());
                 for val in &mut new_state {
@@ -221,7 +221,7 @@ impl QuantumAttention {
             }
             GateType::Phase => {
                 // Apply phase rotation
-                let theta = gate.parameters.get(0).copied().unwrap_or(0.0);
+                let theta = gate.parameters.first().copied().unwrap_or(0.0);
                 for (i, val) in new_state.iter_mut().enumerate() {
                     *val *= (theta * i as f64).cos();
                 }
@@ -230,7 +230,7 @@ impl QuantumAttention {
                 // Apply rotation in quantum state space
                 let angle = gate
                     .parameters
-                    .get(0)
+                    .first()
                     .copied()
                     .unwrap_or(std::f64::consts::PI / 4.0);
                 for val in &mut new_state {
@@ -242,9 +242,7 @@ impl QuantumAttention {
                 // Controlled-NOT simulation (entanglement)
                 for i in (0..new_state.len()).step_by(2) {
                     if i + 1 < new_state.len() {
-                        let temp = new_state[i + 1];
-                        new_state[i + 1] = new_state[i];
-                        new_state[i] = temp;
+                        new_state.swap(i + 1, i);
                     }
                 }
             }

@@ -196,6 +196,7 @@ impl InputOutputModel {
 
         // Calculate (I - A)
         let mut i_minus_a = vec![vec![0.0; self.sectors]; self.sectors];
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.sectors {
             for j in 0..self.sectors {
                 i_minus_a[i][j] = if i == j { 1.0 } else { 0.0 } - self.tech_coefficients[i][j];
@@ -208,6 +209,7 @@ impl InputOutputModel {
     }
 
     /// Simple Gaussian elimination for solving linear systems
+    #[allow(clippy::needless_range_loop)]
     fn solve_linear_system(&self, matrix: &[Vec<f64>], rhs: &[f64]) -> SimResult<Vec<f64>> {
         let n = matrix.len();
         let mut aug = vec![vec![0.0; n + 1]; n];
@@ -730,7 +732,7 @@ pub struct AnchoringModel {
 impl AnchoringModel {
     /// Create a new anchoring model
     pub fn new(anchor: f64, adjustment_factor: f64) -> SimResult<Self> {
-        if adjustment_factor < 0.0 || adjustment_factor > 1.0 {
+        if !(0.0..=1.0).contains(&adjustment_factor) {
             return Err(SimulationError::InvalidParameter(
                 "Adjustment factor must be between 0 and 1".to_string(),
             ));

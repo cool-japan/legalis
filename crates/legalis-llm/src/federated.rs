@@ -407,7 +407,7 @@ impl FederatedCoordinator {
             for update in updates {
                 if let Some(params) = update.parameters.get(&key) {
                     for (i, &val) in params.iter().enumerate() {
-                        values_by_index.entry(i).or_insert_with(Vec::new).push(val);
+                        values_by_index.entry(i).or_default().push(val);
                     }
                 }
             }

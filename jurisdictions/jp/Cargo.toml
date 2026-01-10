@@ -18,5 +18,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 quick-xml = { version = "0.38", features = ["serialize"] }
 
+[features]
+default = []
+serde = []
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

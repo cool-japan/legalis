@@ -47,8 +47,7 @@ async fn main() -> Result<()> {
     if cli.interactive {
         match &cli.command {
             Commands::New { .. } => {
-                let (name, template_str, output) =
-                    legalis::interactive::interactive_new_statute()?;
+                let (name, template_str, output) = legalis::interactive::interactive_new_statute()?;
                 let template = match template_str.as_str() {
                     "basic" => legalis::StatuteTemplate::Basic,
                     "income" => legalis::StatuteTemplate::Income,

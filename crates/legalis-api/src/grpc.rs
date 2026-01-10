@@ -25,7 +25,8 @@ pub mod service {
         tonic::include_proto!("legalis.v1");
 
         // File descriptor set for reflection (loaded from OUT_DIR)
-        pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/legalis_descriptor.bin"));
+        pub const FILE_DESCRIPTOR_SET: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/legalis_descriptor.bin"));
     }
 
     use pb::legalis_service_server::{LegalisService, LegalisServiceServer};
@@ -160,7 +161,9 @@ pub mod service {
             let statute = statutes
                 .iter()
                 .find(|s| s.id == req.statute_id)
-                .ok_or_else(|| Status::not_found(format!("Statute not found: {}", req.statute_id)))?;
+                .ok_or_else(|| {
+                    Status::not_found(format!("Statute not found: {}", req.statute_id))
+                })?;
 
             Ok(Response::new(GetStatuteResponse {
                 statute_id: statute.id.clone(),
@@ -527,10 +530,7 @@ pub mod service {
                 format!("Condition '{}' is invalid", req.condition)
             };
 
-            Ok(Response::new(VerifyConditionResponse {
-                is_valid,
-                message,
-            }))
+            Ok(Response::new(VerifyConditionResponse { is_valid, message }))
         }
 
         async fn health_check(
@@ -588,7 +588,7 @@ pub mod service {
         let service = create_grpc_service(state);
 
         // Create health reporter
-        let (mut health_reporter, health_service) = health_reporter();
+        let (health_reporter, health_service) = health_reporter();
 
         // Set the gRPC service as serving
         health_reporter
@@ -620,7 +620,7 @@ pub mod service {
             .build_v1()?;
 
         // Create health reporter
-        let (mut health_reporter, health_service) = health_reporter();
+        let (health_reporter, health_service) = health_reporter();
 
         // Set the gRPC service as serving
         health_reporter
@@ -640,11 +640,13 @@ pub mod service {
     #[cfg(feature = "grpc")]
     pub fn create_grpc_server_with_web(
         state: GrpcServiceState,
-    ) -> impl tonic::server::NamedService + Clone + Send + 'static {
+    ) -> tonic_web::GrpcWebService<impl tonic::server::NamedService + Clone + Send + 'static> {
         let service = create_grpc_service(state);
 
-        // Wrap service with gRPC-web layer
-        tonic_web::enable(service)
+        // Wrap service with gRPC-web layer using tower ServiceBuilder
+        tower::ServiceBuilder::new()
+            .layer(tonic_web::GrpcWebLayer::new())
+            .service(service)
     }
 }
 

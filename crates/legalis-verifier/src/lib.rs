@@ -1,3 +1,6 @@
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::format_in_format_args)]
+
 //! Legalis-Verifier: Formal verification for Legalis-RS legal statutes.
 //!
 //! This crate provides static analysis and verification tools for detecting
@@ -3987,127 +3990,182 @@ pub fn generate_pdf_report(
     result: &VerificationResult,
     title: &str,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    use printpdf::*;
+    use printpdf::{
+        BuiltinFont, Mm, Op, PdfDocument, PdfPage, PdfSaveOptions, Point, Pt, TextItem,
+    };
 
-    // Create a new PDF document
-    let (doc, page1, layer1) = PdfDocument::new(title, Mm(210.0), Mm(297.0), "Layer 1");
-    let current_layer = doc.get_page(page1).get_layer(layer1);
+    /// Helper to create text operations at a specific position
+    fn pdf_text_op(text: &str, size: f32, x: Mm, y: Mm, font: BuiltinFont) -> Vec<Op> {
+        vec![
+            Op::StartTextSection,
+            Op::SetFontSizeBuiltinFont {
+                size: Pt(size),
+                font,
+            },
+            Op::SetTextCursor {
+                pos: Point {
+                    x: x.into(),
+                    y: y.into(),
+                },
+            },
+            Op::WriteTextBuiltinFont {
+                items: vec![TextItem::Text(text.to_string())],
+                font,
+            },
+            Op::EndTextSection,
+        ]
+    }
 
-    // Load fonts
-    let font = doc.add_builtin_font(BuiltinFont::Helvetica)?;
-    let font_bold = doc.add_builtin_font(BuiltinFont::HelveticaBold)?;
+    // Page builder helper
+    struct PageBuilder {
+        pages: Vec<Vec<Op>>,
+        current_ops: Vec<Op>,
+        y_position: Mm,
+        line_height: Mm,
+        left_margin: Mm,
+        page_top: Mm,
+        page_bottom: Mm,
+    }
 
-    let mut y_position = Mm(270.0);
-    let left_margin = Mm(20.0);
-    let line_height = Mm(6.0);
+    impl PageBuilder {
+        fn new() -> Self {
+            Self {
+                pages: Vec::new(),
+                current_ops: Vec::new(),
+                y_position: Mm(270.0),
+                line_height: Mm(6.0),
+                left_margin: Mm(20.0),
+                page_top: Mm(270.0),
+                page_bottom: Mm(30.0),
+            }
+        }
+
+        fn add_text(&mut self, text: &str, size: f32, font: BuiltinFont) {
+            self.add_text_at(text, size, self.left_margin, font);
+        }
+
+        fn add_text_at(&mut self, text: &str, size: f32, x: Mm, font: BuiltinFont) {
+            if self.y_position < self.page_bottom {
+                self.new_page();
+            }
+            self.current_ops
+                .extend(pdf_text_op(text, size, x, self.y_position, font));
+        }
+
+        fn advance_line(&mut self) {
+            self.y_position -= self.line_height;
+        }
+
+        fn advance_lines(&mut self, n: f32) {
+            self.y_position -= self.line_height * n;
+        }
+
+        fn new_page(&mut self) {
+            if !self.current_ops.is_empty() {
+                self.pages.push(std::mem::take(&mut self.current_ops));
+            }
+            self.y_position = self.page_top;
+        }
+
+        fn finish(mut self) -> Vec<Vec<Op>> {
+            if !self.current_ops.is_empty() {
+                self.pages.push(self.current_ops);
+            }
+            self.pages
+        }
+    }
+
+    let mut builder = PageBuilder::new();
 
     // Title
-    current_layer.use_text(title, 18.0, left_margin, y_position, &font_bold);
-    y_position -= line_height * 2.0;
+    builder.add_text(title, 18.0, BuiltinFont::HelveticaBold);
+    builder.advance_lines(2.0);
 
     // Timestamp
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    current_layer.use_text(
+    builder.add_text(
         &format!("Generated: {}", timestamp),
         10.0,
-        left_margin,
-        y_position,
-        &font,
+        BuiltinFont::Helvetica,
     );
-    y_position -= line_height * 2.0;
+    builder.advance_lines(2.0);
 
     // Status
     let status_text = if result.passed {
-        "✓ Verification Passed"
+        "Verification Passed"
     } else {
-        "✗ Verification Failed"
+        "Verification Failed"
     };
-    current_layer.use_text(status_text, 14.0, left_margin, y_position, &font_bold);
-    y_position -= line_height * 2.0;
+    builder.add_text(status_text, 14.0, BuiltinFont::HelveticaBold);
+    builder.advance_lines(2.0);
 
     // Errors section
-    current_layer.use_text("Errors:", 12.0, left_margin, y_position, &font_bold);
-    y_position -= line_height;
+    builder.add_text("Errors:", 12.0, BuiltinFont::HelveticaBold);
+    builder.advance_line();
 
     if result.errors.is_empty() {
-        current_layer.use_text("  No errors found", 10.0, left_margin, y_position, &font);
-        y_position -= line_height;
+        builder.add_text("  No errors found", 10.0, BuiltinFont::Helvetica);
+        builder.advance_line();
     } else {
         for (idx, error) in result.errors.iter().enumerate() {
             let error_text = format!("  {}. {}", idx + 1, error);
-            // Wrap long text
             for line in wrap_text(&error_text, 80) {
-                if y_position < Mm(30.0) {
-                    // Add new page if needed
-                    let (page, layer) = doc.add_page(Mm(210.0), Mm(297.0), "Layer 1");
-                    let new_layer = doc.get_page(page).get_layer(layer);
-                    y_position = Mm(270.0);
-                    new_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                } else {
-                    current_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                }
-                y_position -= line_height;
+                builder.add_text(&line, 10.0, BuiltinFont::Helvetica);
+                builder.advance_line();
             }
         }
     }
-    y_position -= line_height;
+    builder.advance_line();
 
     // Warnings section
-    current_layer.use_text("Warnings:", 12.0, left_margin, y_position, &font_bold);
-    y_position -= line_height;
+    builder.add_text("Warnings:", 12.0, BuiltinFont::HelveticaBold);
+    builder.advance_line();
 
     if result.warnings.is_empty() {
-        current_layer.use_text("  No warnings found", 10.0, left_margin, y_position, &font);
-        y_position -= line_height;
+        builder.add_text("  No warnings found", 10.0, BuiltinFont::Helvetica);
+        builder.advance_line();
     } else {
         for (idx, warning) in result.warnings.iter().enumerate() {
             let warning_text = format!("  {}. {}", idx + 1, warning);
             for line in wrap_text(&warning_text, 80) {
-                if y_position < Mm(30.0) {
-                    let (page, layer) = doc.add_page(Mm(210.0), Mm(297.0), "Layer 1");
-                    let new_layer = doc.get_page(page).get_layer(layer);
-                    y_position = Mm(270.0);
-                    new_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                } else {
-                    current_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                }
-                y_position -= line_height;
+                builder.add_text(&line, 10.0, BuiltinFont::Helvetica);
+                builder.advance_line();
             }
         }
     }
-    y_position -= line_height;
+    builder.advance_line();
 
     // Suggestions section
-    current_layer.use_text("Suggestions:", 12.0, left_margin, y_position, &font_bold);
-    y_position -= line_height;
+    builder.add_text("Suggestions:", 12.0, BuiltinFont::HelveticaBold);
+    builder.advance_line();
 
     if result.suggestions.is_empty() {
-        current_layer.use_text("  No suggestions", 10.0, left_margin, y_position, &font);
+        builder.add_text("  No suggestions", 10.0, BuiltinFont::Helvetica);
     } else {
         for (idx, suggestion) in result.suggestions.iter().enumerate() {
             let suggestion_text = format!("  {}. {}", idx + 1, suggestion);
             for line in wrap_text(&suggestion_text, 80) {
-                if y_position < Mm(30.0) {
-                    let (page, layer) = doc.add_page(Mm(210.0), Mm(297.0), "Layer 1");
-                    let new_layer = doc.get_page(page).get_layer(layer);
-                    y_position = Mm(270.0);
-                    new_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                } else {
-                    current_layer.use_text(&line, 10.0, left_margin, y_position, &font);
-                }
-                y_position -= line_height;
+                builder.add_text(&line, 10.0, BuiltinFont::Helvetica);
+                builder.advance_line();
             }
         }
     }
 
-    // Save to bytes
-    let buffer = std::io::Cursor::new(Vec::new());
-    let mut buf_writer = std::io::BufWriter::new(buffer);
-    doc.save(&mut buf_writer)?;
-    Ok(buf_writer
-        .into_inner()
-        .map_err(|e| anyhow::anyhow!("Failed to get inner buffer: {}", e))?
-        .into_inner())
+    // Build all pages
+    let page_ops = builder.finish();
+    let pages: Vec<PdfPage> = page_ops
+        .into_iter()
+        .map(|ops| PdfPage::new(Mm(210.0), Mm(297.0), ops))
+        .collect();
+
+    // Create document and save
+    let mut doc = PdfDocument::new(title);
+    doc.with_pages(pages);
+
+    let mut warnings = Vec::new();
+    let pdf_bytes = doc.save(&PdfSaveOptions::default(), &mut warnings);
+
+    Ok(pdf_bytes)
 }
 
 /// Helper function to wrap text to a specified width.
@@ -4117,11 +4175,9 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     let mut current_line = String::new();
 
     for word in text.split_whitespace() {
-        if current_line.len() + word.len() + 1 > max_width {
-            if !current_line.is_empty() {
-                lines.push(current_line.clone());
-                current_line.clear();
-            }
+        if current_line.len() + word.len() + 1 > max_width && !current_line.is_empty() {
+            lines.push(current_line.clone());
+            current_line.clear();
         }
         if !current_line.is_empty() {
             current_line.push(' ');

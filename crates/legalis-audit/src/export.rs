@@ -1,10 +1,10 @@
 //! Export functionality for audit trails.
 
 use crate::{AuditError, AuditRecord, AuditResult, ComplianceReport};
-use printpdf::*;
+use printpdf::{BuiltinFont, Mm, Op, PdfDocument, PdfPage, PdfSaveOptions, Point, Pt, TextItem};
 use rust_xlsxwriter::{Format, Workbook};
 use serde_json::{Value, json};
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 /// Exports audit records to CSV format.
@@ -230,6 +230,28 @@ pub fn to_excel<P: AsRef<Path>>(records: &[AuditRecord], path: P) -> AuditResult
     Ok(())
 }
 
+/// Helper to create text operations at a specific position
+fn text_op(text: &str, size: f32, x: Mm, y: Mm, font: BuiltinFont) -> Vec<Op> {
+    vec![
+        Op::StartTextSection,
+        Op::SetFontSizeBuiltinFont {
+            size: Pt(size),
+            font,
+        },
+        Op::SetTextCursor {
+            pos: Point {
+                x: x.into(),
+                y: y.into(),
+            },
+        },
+        Op::WriteTextBuiltinFont {
+            items: vec![TextItem::Text(text.to_string())],
+            font,
+        },
+        Op::EndTextSection,
+    ]
+}
+
 /// Exports a compliance report to PDF format.
 #[allow(clippy::too_many_arguments)]
 pub fn to_pdf<P: AsRef<Path>>(
@@ -239,89 +261,83 @@ pub fn to_pdf<P: AsRef<Path>>(
     title: &str,
 ) -> AuditResult<()> {
     // Create PDF document
-    let (doc, page1, layer1) = PdfDocument::new(
-        title,
-        Mm(210.0), // A4 width
-        Mm(297.0), // A4 height
-        "Layer 1",
-    );
+    let mut doc = PdfDocument::new(title);
 
-    let current_layer = doc.get_page(page1).get_layer(layer1);
-
-    // Add fonts
-    let font_bold = doc
-        .add_builtin_font(BuiltinFont::HelveticaBold)
-        .map_err(|e| AuditError::ExportError(format!("PDF font error: {}", e)))?;
-    let font = doc
-        .add_builtin_font(BuiltinFont::Helvetica)
-        .map_err(|e| AuditError::ExportError(format!("PDF font error: {}", e)))?;
-
+    let mut ops: Vec<Op> = Vec::new();
     let mut y_position = Mm(280.0);
+    let left_margin = Mm(20.0);
 
     // Title
-    current_layer.use_text(title, 18.0, Mm(20.0), y_position, &font_bold);
+    ops.extend(text_op(
+        title,
+        18.0,
+        left_margin,
+        y_position,
+        BuiltinFont::HelveticaBold,
+    ));
     y_position -= Mm(15.0);
 
-    // Report summary
-    current_layer.use_text(
+    // Report summary header
+    ops.extend(text_op(
         "Compliance Report Summary",
         14.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font_bold,
-    );
+        BuiltinFont::HelveticaBold,
+    ));
     y_position -= Mm(10.0);
 
-    current_layer.use_text(
-        format!("Generated: {}", report.generated_at.to_rfc3339()),
+    // Report details
+    ops.extend(text_op(
+        &format!("Generated: {}", report.generated_at.to_rfc3339()),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(7.0);
 
-    current_layer.use_text(
-        format!("Total Decisions: {}", report.total_decisions),
+    ops.extend(text_op(
+        &format!("Total Decisions: {}", report.total_decisions),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(7.0);
 
-    current_layer.use_text(
-        format!("Automatic Decisions: {}", report.automatic_decisions),
+    ops.extend(text_op(
+        &format!("Automatic Decisions: {}", report.automatic_decisions),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(7.0);
 
-    current_layer.use_text(
-        format!(
+    ops.extend(text_op(
+        &format!(
             "Discretionary Decisions: {}",
             report.discretionary_decisions
         ),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(7.0);
 
-    current_layer.use_text(
-        format!("Human Overrides: {}", report.human_overrides),
+    ops.extend(text_op(
+        &format!("Human Overrides: {}", report.human_overrides),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(7.0);
 
-    current_layer.use_text(
-        format!(
+    ops.extend(text_op(
+        &format!(
             "Integrity Verified: {}",
             if report.integrity_verified {
                 "Yes"
@@ -330,26 +346,44 @@ pub fn to_pdf<P: AsRef<Path>>(
             }
         ),
         10.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font,
-    );
+        BuiltinFont::Helvetica,
+    ));
     y_position -= Mm(15.0);
 
-    // Recent records section
-    current_layer.use_text(
-        format!("Recent Records (showing up to 20 of {})", records.len()),
+    // Recent records section header
+    ops.extend(text_op(
+        &format!("Recent Records (showing up to 20 of {})", records.len()),
         12.0,
-        Mm(20.0),
+        left_margin,
         y_position,
-        &font_bold,
-    );
+        BuiltinFont::HelveticaBold,
+    ));
     y_position -= Mm(10.0);
 
     // Table headers
-    current_layer.use_text("Timestamp", 9.0, Mm(20.0), y_position, &font_bold);
-    current_layer.use_text("Statute ID", 9.0, Mm(70.0), y_position, &font_bold);
-    current_layer.use_text("Result", 9.0, Mm(120.0), y_position, &font_bold);
+    ops.extend(text_op(
+        "Timestamp",
+        9.0,
+        Mm(20.0),
+        y_position,
+        BuiltinFont::HelveticaBold,
+    ));
+    ops.extend(text_op(
+        "Statute ID",
+        9.0,
+        Mm(70.0),
+        y_position,
+        BuiltinFont::HelveticaBold,
+    ));
+    ops.extend(text_op(
+        "Result",
+        9.0,
+        Mm(120.0),
+        y_position,
+        BuiltinFont::HelveticaBold,
+    ));
     y_position -= Mm(7.0);
 
     // List records (up to 20)
@@ -365,23 +399,40 @@ pub fn to_pdf<P: AsRef<Path>>(
             crate::DecisionResult::Overridden { .. } => "Overridden",
         };
 
-        current_layer.use_text(
-            record.timestamp.format("%Y-%m-%d %H:%M").to_string(),
+        ops.extend(text_op(
+            &record.timestamp.format("%Y-%m-%d %H:%M").to_string(),
             8.0,
             Mm(20.0),
             y_position,
-            &font,
-        );
-        current_layer.use_text(&record.statute_id, 8.0, Mm(70.0), y_position, &font);
-        current_layer.use_text(result_str, 8.0, Mm(120.0), y_position, &font);
+            BuiltinFont::Helvetica,
+        ));
+        ops.extend(text_op(
+            &record.statute_id,
+            8.0,
+            Mm(70.0),
+            y_position,
+            BuiltinFont::Helvetica,
+        ));
+        ops.extend(text_op(
+            result_str,
+            8.0,
+            Mm(120.0),
+            y_position,
+            BuiltinFont::Helvetica,
+        ));
         y_position -= Mm(6.0);
     }
 
+    // Create page with all operations
+    let page = PdfPage::new(Mm(210.0), Mm(297.0), ops);
+    doc.with_pages(vec![page]);
+
     // Save PDF
-    doc.save(&mut BufWriter::new(std::fs::File::create(path).map_err(
-        |e| AuditError::ExportError(format!("Failed to create PDF file: {}", e)),
-    )?))
-    .map_err(|e| AuditError::ExportError(format!("Failed to save PDF: {}", e)))?;
+    let mut warnings = Vec::new();
+    let pdf_bytes = doc.save(&PdfSaveOptions::default(), &mut warnings);
+
+    std::fs::write(&path, pdf_bytes)
+        .map_err(|e| AuditError::ExportError(format!("Failed to write PDF file: {}", e)))?;
 
     Ok(())
 }

@@ -18,7 +18,7 @@ chrono = "0.4"
 rayon = "1.11"
 
 [dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"
 
 [[bench]]
 name = "contract_generation"

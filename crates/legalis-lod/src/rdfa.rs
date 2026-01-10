@@ -7,18 +7,13 @@ use crate::{LodResult, Namespaces, RdfValue, Triple};
 use std::collections::HashMap;
 
 /// RDFa version to use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RdfaVersion {
     /// RDFa 1.0
     V1_0,
     /// RDFa 1.1 (recommended)
+    #[default]
     V1_1,
-}
-
-impl Default for RdfaVersion {
-    fn default() -> Self {
-        Self::V1_1
-    }
 }
 
 /// RDFa exporter.

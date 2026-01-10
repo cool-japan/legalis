@@ -4,13 +4,18 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "French jurisdiction support for Legalis-RS (Code civil, Code pénal)"
+description = "French jurisdiction support for Legalis-RS (Code civil, Code de commerce, Code du travail)"
 repository = "https://github.com/cool-japan/legalis"
 homepage = "https://github.com/cool-japan/legalis"
 documentation = "https://docs.rs/legalis-fr"
 
 [dependencies]
 legalis-core.workspace = true
+legalis-i18n.workspace = true
 serde.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+
+[features]
+default = []
+serde = []

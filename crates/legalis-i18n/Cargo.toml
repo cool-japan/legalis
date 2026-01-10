@@ -20,7 +20,7 @@ rayon = "1.11"
 once_cell = "1.21"
 
 [dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"
 
 [[bench]]
 name = "i18n_benchmarks"

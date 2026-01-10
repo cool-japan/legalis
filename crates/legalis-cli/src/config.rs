@@ -338,7 +338,7 @@ impl Config {
     /// Get the global configuration instance (lazy-loaded).
     /// This function loads the configuration only once and caches it.
     pub fn global() -> &'static Config {
-        GLOBAL_CONFIG.get_or_init(|| Self::load())
+        GLOBAL_CONFIG.get_or_init(Self::load)
     }
 
     /// Try to get the global configuration if it's already loaded.

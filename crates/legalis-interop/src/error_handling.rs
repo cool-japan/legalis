@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Error recovery strategy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RecoveryStrategy {
     /// Skip the problematic element and continue
+    #[default]
     Skip,
     /// Use a default/fallback value
     UseDefault,
@@ -24,12 +25,6 @@ pub enum RecoveryStrategy {
     AskUser,
     /// Abort the entire conversion
     Abort,
-}
-
-impl Default for RecoveryStrategy {
-    fn default() -> Self {
-        Self::Skip
-    }
 }
 
 /// Configuration for error handling behavior.

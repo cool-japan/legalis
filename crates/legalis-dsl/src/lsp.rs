@@ -700,8 +700,8 @@ impl LanguageServer for LegalisLspBackend {
         if let Some(text) = documents.get(uri.as_str()) {
             let parser = LegalDslParser::new();
             if let Ok(doc) = parser.parse_document(text) {
-                // Find statute at position
-                for statute in &doc.statutes {
+                // Find statute at position (return first match)
+                if let Some(statute) = doc.statutes.first() {
                     let item = CallHierarchyItem {
                         name: statute.id.clone(),
                         kind: SymbolKind::FUNCTION,

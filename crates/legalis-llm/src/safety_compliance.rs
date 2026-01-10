@@ -224,19 +224,19 @@ impl LegalAccuracyValidator {
     fn validate_citations(&self, text: &str) -> ValidationCheck {
         // Simple pattern for US legal citations
         let citation_pattern = Regex::new(r"\d+\s+U\.S\.C\.\s+§\s+\d+").unwrap();
-        let found_citations = citation_pattern.find_iter(text).count();
+        let _found_citations = citation_pattern.find_iter(text).count();
 
         ValidationCheck {
             name: "Citation Format".to_string(),
             description: "Validates legal citation format".to_string(),
-            passed: found_citations == 0 || found_citations > 0, // If citations exist, assume valid format for now
+            passed: true, // If citations exist, assume valid format for now
             confidence: 0.7,
         }
     }
 
     /// Checks for overly broad statements
     fn check_broad_statements(&self, text: &str) -> ValidationCheck {
-        let broad_terms = vec!["always", "never", "all", "none", "every", "no one"];
+        let broad_terms = ["always", "never", "all", "none", "every", "no one"];
         let text_lower = text.to_lowercase();
 
         let found_broad = broad_terms.iter().any(|term| text_lower.contains(term));
@@ -251,7 +251,7 @@ impl LegalAccuracyValidator {
 
     /// Checks for missing context
     fn check_context(&self, text: &str) -> ValidationCheck {
-        let context_indicators = vec!["jurisdiction", "state", "federal", "court", "applicable"];
+        let context_indicators = ["jurisdiction", "state", "federal", "court", "applicable"];
         let text_lower = text.to_lowercase();
 
         let has_context = context_indicators
@@ -552,7 +552,7 @@ impl DisclaimerGenerator {
     pub fn add_jurisdiction_requirement(&mut self, jurisdiction: String, requirement: String) {
         self.jurisdiction_requirements
             .entry(jurisdiction)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(requirement);
     }
 }

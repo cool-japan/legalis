@@ -1,3 +1,10 @@
+#![allow(clippy::type_complexity)]
+#![allow(clippy::inherent_to_string)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::collapsible_match)]
+#![allow(clippy::vec_init_then_push)]
+#![allow(clippy::field_reassign_with_default)]
+
 //! Legalis-LOD: Linked Open Data (RDF/TTL) export for Legalis-RS.
 //!
 //! This crate provides comprehensive RDF export and Linked Data functionality for legal statutes.

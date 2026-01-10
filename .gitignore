@@ -24,6 +24,7 @@ Thumbs.db
 
 # Other
 Cargo.lock
+**/.claude
 
 # Backup files
 *.backup
@@ -32,3 +33,7 @@ Cargo.lock
 
 # Proto generated files (keep source .proto files)
 crates/legalis-api/proto/legalis_descriptor.bin
+
+# CLAUDE
+**/CLAUDE.md
+**/claude_output/

@@ -288,7 +288,7 @@ impl AdversarialDetector {
         // Check for unusual capitalization patterns
         let caps_count = prompt.chars().filter(|c| c.is_uppercase()).count();
         let caps_ratio = caps_count as f64 / prompt.len().max(1) as f64;
-        if caps_ratio > 0.5 || caps_ratio < 0.01 {
+        if !(0.01..=0.5).contains(&caps_ratio) {
             score += 0.2;
         }
 

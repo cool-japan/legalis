@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 //! Legalis-Porting: Legal system porting for Legalis-RS.
 //!
 //! This crate enables "Soft ODA" (Official Development Assistance through legal framework
@@ -10096,9 +10098,7 @@ impl PrePortingFeasibilityAnalyzer {
 
         // Recommended approach
         let recommended_approach = if is_feasible {
-            format!(
-                "Proceed with phased approach: (1) Legal review, (2) Cultural adaptation, (3) Stakeholder engagement, (4) Pilot implementation"
-            )
+            "Proceed with phased approach: (1) Legal review, (2) Cultural adaptation, (3) Stakeholder engagement, (4) Pilot implementation".to_string()
         } else {
             format!(
                 "Address critical issues before proceeding: focus on improving {} feasibility",
@@ -11081,7 +11081,7 @@ impl PortingChangelog {
     pub fn to_markdown(&self) -> String {
         let mut output = String::new();
 
-        output.push_str(&format!("# Porting Changelog\n\n"));
+        output.push_str("# Porting Changelog\n\n");
         output.push_str(&format!("**Project ID:** {}\n", self.project_id));
         output.push_str(&format!("**Generated:** {}\n", self.generated_at));
         output.push_str(&format!(
@@ -11115,7 +11115,7 @@ impl PortingChangelog {
                 for change in &entry.changes {
                     output.push_str(&format!("- {}\n", change));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
 
             if !entry.tags.is_empty() {
@@ -14308,6 +14308,7 @@ impl SemanticEquivalenceDetector {
     }
 
     /// Calculates Levenshtein distance.
+    #[allow(clippy::needless_range_loop)]
     fn levenshtein_distance(&self, s1: &str, s2: &str) -> usize {
         let len1 = s1.len();
         let len2 = s2.len();
@@ -14316,8 +14317,8 @@ impl SemanticEquivalenceDetector {
         for i in 0..=len1 {
             matrix[i][0] = i;
         }
-        for j in 0..=len2 {
-            matrix[0][j] = j;
+        for (j, cell) in matrix[0].iter_mut().enumerate().take(len2 + 1) {
+            *cell = j;
         }
 
         for (i, c1) in s1.chars().enumerate() {
@@ -16852,10 +16853,7 @@ impl DriftMonitor {
             metadata: std::collections::HashMap::new(),
         };
 
-        self.snapshots
-            .entry(statute_id)
-            .or_insert_with(Vec::new)
-            .push(snapshot);
+        self.snapshots.entry(statute_id).or_default().push(snapshot);
 
         snapshot_id
     }
@@ -17725,7 +17723,7 @@ impl TrainingMaterialGenerator {
         if !ported.changes.is_empty() {
             questions.push(AssessmentQuestion {
                 question_number: 2,
-                question: format!("How many adaptations were made to this statute?"),
+                question: "How many adaptations were made to this statute?".to_string(),
                 options: vec![
                     format!("{}", ported.changes.len()),
                     "0".to_string(),

@@ -24,7 +24,7 @@ tokio = { version = "1", features = ["full"] }
 env_logger = "0.11"
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 proptest = "1"
 insta = { version = "1", features = ["json", "yaml"] }
 tempfile = "3"

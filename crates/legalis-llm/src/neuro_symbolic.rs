@@ -452,10 +452,8 @@ impl ConstraintSolver {
                 for value in domain {
                     assignment.insert(var.clone(), value.clone());
 
-                    if self.is_consistent(assignment) {
-                        if self.backtrack(assignment) {
-                            return true;
-                        }
+                    if self.is_consistent(assignment) && self.backtrack(assignment) {
+                        return true;
                     }
 
                     assignment.remove(var);

@@ -1,3 +1,12 @@
+#![allow(clippy::type_complexity)]
+#![allow(clippy::comparison_to_empty)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::should_implement_trait)]
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::vec_init_then_push)]
+#![allow(clippy::absurd_extreme_comparisons)]
+#![allow(clippy::useless_conversion)]
+
 //! Legalis-LLM: LLM integration layer for Legalis-RS.
 //!
 //! This crate provides an abstraction layer for LLM providers,

@@ -201,11 +201,11 @@ impl CostAnalyzer {
 
         // Remove all newlines and extra whitespace for easier parsing
         let cleaned = query.replace('\n', " ").replace('\r', "");
-        let mut chars = cleaned.chars().peekable();
+        let chars = cleaned.chars().peekable();
         let mut current_field = String::new();
         let mut in_args = false;
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             match ch {
                 '{' => {
                     // Before opening brace, we might have a field name

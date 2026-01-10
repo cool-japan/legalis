@@ -1,3 +1,5 @@
+#![allow(clippy::manual_clamp)]
+
 //! Legalis-Diff: Statute diffing and change detection for Legalis-RS.
 //!
 //! This crate provides tools for detecting and analyzing changes between

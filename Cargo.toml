@@ -29,10 +29,18 @@ members = [
     "jurisdictions/de",
     "jurisdictions/fr",
     "jurisdictions/us",
+    "jurisdictions/eu",
+    "jurisdictions/sg",
+    "jurisdictions/uk",
     # Examples
     "examples/jp-constitution-3d",
     "examples/welfare-benefits",
     "examples/minpo-709-tort",
+    "examples/minpo-709-builder",
+    "examples/minpo-710-damages-builder",
+    "examples/minpo-715-employer-liability",
+    "examples/minpo-415-breach-damages",
+    "examples/minpo-integrated-tort-damages",
     "examples/comparative-tort-law",
     "examples/jp-drone-regulation",
     # International Examples
@@ -60,7 +68,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.86"
@@ -83,7 +91,7 @@ thiserror = "2.0"
 # Utilities
 uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-indexmap = { version = "2.12", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde"] }
 
 # HTTP/API
 reqwest = { version = "0.13", features = ["json", "stream"] }
@@ -98,6 +106,9 @@ clap = { version = "4.5", features = ["derive"] }
 # Visualization
 petgraph = "0.8"
 
+# PDF Export
+printpdf = "0.8"
+
 # Tracing/Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -107,23 +118,26 @@ rust-i18n = "3.1"
 unic-langid = "0.9"
 
 # Internal crates
-legalis-core = { version = "0.1.0", path = "crates/legalis-core" }
-legalis-dsl = { version = "0.1.0", path = "crates/legalis-dsl" }
-legalis-llm = { version = "0.1.0", path = "crates/legalis-llm" }
-legalis-sim = { version = "0.1.0", path = "crates/legalis-sim" }
-legalis-verifier = { version = "0.1.0", path = "crates/legalis-verifier" }
-legalis-chain = { version = "0.1.0", path = "crates/legalis-chain" }
-legalis-viz = { version = "0.1.0", path = "crates/legalis-viz" }
-legalis-i18n = { version = "0.1.0", path = "crates/legalis-i18n" }
-legalis-porting = { version = "0.1.0", path = "crates/legalis-porting" }
-legalis-api = { version = "0.1.0", path = "crates/legalis-api" }
-legalis = { version = "0.1.0", path = "crates/legalis-cli" }
-legalis-audit = { version = "0.1.0", path = "crates/legalis-audit" }
-legalis-registry = { version = "0.1.0", path = "crates/legalis-registry" }
-legalis-diff = { version = "0.1.0", path = "crates/legalis-diff" }
-legalis-interop = { version = "0.1.0", path = "crates/legalis-interop" }
-legalis-lod = { version = "0.1.0", path = "crates/legalis-lod" }
-legalis-jp = { version = "0.1.0", path = "jurisdictions/jp" }
-legalis-de = { version = "0.1.0", path = "jurisdictions/de" }
-legalis-fr = { version = "0.1.0", path = "jurisdictions/fr" }
-legalis-us = { version = "0.1.0", path = "jurisdictions/us" }
+legalis-core = { version = "0.1.1", path = "crates/legalis-core" }
+legalis-dsl = { version = "0.1.1", path = "crates/legalis-dsl" }
+legalis-llm = { version = "0.1.1", path = "crates/legalis-llm" }
+legalis-sim = { version = "0.1.1", path = "crates/legalis-sim" }
+legalis-verifier = { version = "0.1.1", path = "crates/legalis-verifier" }
+legalis-chain = { version = "0.1.1", path = "crates/legalis-chain" }
+legalis-viz = { version = "0.1.1", path = "crates/legalis-viz" }
+legalis-i18n = { version = "0.1.1", path = "crates/legalis-i18n" }
+legalis-porting = { version = "0.1.1", path = "crates/legalis-porting" }
+legalis-api = { version = "0.1.1", path = "crates/legalis-api" }
+legalis = { version = "0.1.1", path = "crates/legalis-cli" }
+legalis-audit = { version = "0.1.1", path = "crates/legalis-audit" }
+legalis-registry = { version = "0.1.1", path = "crates/legalis-registry" }
+legalis-diff = { version = "0.1.1", path = "crates/legalis-diff" }
+legalis-interop = { version = "0.1.1", path = "crates/legalis-interop" }
+legalis-lod = { version = "0.1.1", path = "crates/legalis-lod" }
+legalis-jp = { version = "0.1.1", path = "jurisdictions/jp" }
+legalis-de = { version = "0.1.1", path = "jurisdictions/de" }
+legalis-fr = { version = "0.1.1", path = "jurisdictions/fr" }
+legalis-us = { version = "0.1.1", path = "jurisdictions/us" }
+legalis-eu = { version = "0.1.1", path = "jurisdictions/eu" }
+legalis-sg = { version = "0.1.1", path = "jurisdictions/sg" }
+legalis-uk = { version = "0.1.1", path = "jurisdictions/uk" }

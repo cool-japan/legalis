@@ -1,22 +1,78 @@
 //! BGB (Bürgerliches Gesetzbuch) - German Civil Code
 //!
 //! The German Civil Code enacted in 1900, following the Pandekten system.
-//! This module implements key provisions of the BGB, particularly tort law (§§ 823-853).
+//! This module implements key provisions of the BGB.
 //!
 //! ## Structure
 //!
 //! The BGB consists of 5 books (Bücher):
 //! - Book 1: General Part (Allgemeiner Teil) - §§ 1-240
 //! - Book 2: Law of Obligations (Recht der Schuldverhältnisse) - §§ 241-853
+//!   - **Schuldrecht (Contract Law)** - Now available as comprehensive module
 //! - Book 3: Law of Things (Sachenrecht) - §§ 854-1296
+//!   - **Sachenrecht (Property Law)** - Now available as comprehensive module
 //! - Book 4: Family Law (Familienrecht) - §§ 1297-1921
+//!   - **Familienrecht (Family Law)** - Now available as comprehensive module
 //! - Book 5: Law of Succession (Erbrecht) - §§ 1922-2385
+//!   - **Erbrecht (Succession Law)** - Now available as comprehensive module
+//!
+//! ## Contract Law (Schuldrecht)
+//!
+//! See the [`schuldrecht`] module for comprehensive contract law implementation:
+//! - Contract formation (§§145-157 BGB)
+//! - Legal capacity (§§104-115 BGB)
+//! - Breach of contract (§280 BGB)
+//! - Damages claims (§§280-283 BGB)
+//! - Termination (§§323-326 BGB)
 //!
 //! ## Tort Law (Unerlaubte Handlungen)
 //!
 //! - § 823: Liability in damages (Schadensersatzpflicht)
 //! - § 826: Intentional damage contrary to public policy
 //! - § 831: Liability of the principal
+//!
+//! ## Property Law (Sachenrecht)
+//!
+//! See the [`sachenrecht`] module for comprehensive property law implementation:
+//! - Transfer of movables (§§929-936 BGB)
+//! - Transfer of immovables (§§873-902 BGB)
+//! - Possession (§§854-872 BGB)
+//! - Easements (§§1018-1093 BGB)
+//! - Mortgages and land charges (§§1113-1203 BGB)
+//!
+//! ## Family Law (Familienrecht)
+//!
+//! See the [`familienrecht`] module for comprehensive family law implementation:
+//! - Marriage (§§1303-1362 BGB)
+//! - Matrimonial property regimes (§§1363-1563 BGB)
+//! - Divorce (§§1564-1587 BGB)
+//! - Maintenance obligations (§§1569-1615 BGB)
+//! - Parentage (§§1591-1600 BGB)
+//! - Parental custody (§§1626-1698 BGB)
+//!
+//! ## Succession Law (Erbrecht)
+//!
+//! See the [`erbrecht`] module for comprehensive succession law implementation:
+//! - Legal succession (§§1924-1936 BGB)
+//! - Testamentary succession (Wills and inheritance contracts)
+//! - Will formalities (§§2231-2247 BGB)
+//! - Compulsory portion (§§2303-2338 BGB)
+//! - Acceptance and renunciation (§§1942-2063 BGB)
+
+// Contract Law module (Book 2 - Schuldrecht)
+pub mod schuldrecht;
+
+// Tort Law module (Book 2 - Unerlaubte Handlungen)
+pub mod unerlaubte_handlungen;
+
+// Property Law module (Book 3 - Sachenrecht)
+pub mod sachenrecht;
+
+// Family Law module (Book 4 - Familienrecht)
+pub mod familienrecht;
+
+// Succession Law module (Book 5 - Erbrecht)
+pub mod erbrecht;
 
 use legalis_core::{Condition, Effect, EffectType, Statute};
 

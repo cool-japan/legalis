@@ -1078,7 +1078,7 @@ impl BacktestResult {
 }
 
 /// Historical backtester for time series validation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HistoricalBacktester {
     /// Configuration
     pub config: BacktestConfig,
@@ -1088,13 +1088,6 @@ impl HistoricalBacktester {
     /// Create a new backtester
     pub fn new(config: BacktestConfig) -> Self {
         Self { config }
-    }
-
-    /// Create with default configuration
-    pub fn default() -> Self {
-        Self {
-            config: BacktestConfig::default(),
-        }
     }
 
     /// Run backtest with a prediction function

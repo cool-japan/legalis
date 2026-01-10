@@ -69,7 +69,7 @@ impl DebugTrace {
                 report.push_str("Peak Memory: N/A\n\n");
             }
         } else {
-            report.push_str("\n");
+            report.push('\n');
         }
 
         for step in &self.steps {
@@ -114,7 +114,7 @@ impl DebugTrace {
                 }
             }
 
-            report.push_str("\n");
+            report.push('\n');
         }
 
         report
@@ -209,11 +209,9 @@ impl Debugger {
         println!("\nPress Enter to continue, 'q' to quit...");
 
         let mut input = String::new();
-        if std::io::stdin().read_line(&mut input).is_ok() {
-            if input.trim() == "q" {
-                println!("Exiting debugger...");
-                std::process::exit(0);
-            }
+        if std::io::stdin().read_line(&mut input).is_ok() && input.trim() == "q" {
+            println!("Exiting debugger...");
+            std::process::exit(0);
         }
     }
 }

@@ -1,0 +1,27 @@
+[package]
+name = "legalis-uk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "United Kingdom jurisdiction support for Legalis-RS (Employment Law, UK GDPR, Consumer Rights, Contract Law, Company Law)"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-uk"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-eu.workspace = true  # For UK GDPR reuse (80% of EU GDPR)
+legalis-i18n.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[features]
+default = []
+serde = []
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

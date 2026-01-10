@@ -340,10 +340,10 @@ impl<'ctx> SmtVerifier<'ctx> {
         smtlib2.push_str("(set-logic ALL)\n");
 
         // Declare variables
-        for (name, _) in &self.int_vars {
+        for name in self.int_vars.keys() {
             smtlib2.push_str(&format!("(declare-const {} Int)\n", name));
         }
-        for (name, _) in &self.bool_vars {
+        for name in self.bool_vars.keys() {
             smtlib2.push_str(&format!("(declare-const {} Bool)\n", name));
         }
 
@@ -1316,9 +1316,9 @@ impl<'ctx> SmtVerifier<'ctx> {
         let result = func.apply(&ast_args);
 
         // Convert the result back to Int
-        Ok(result
+        result
             .as_int()
-            .ok_or_else(|| anyhow::anyhow!("Function application did not return an Int"))?)
+            .ok_or_else(|| anyhow::anyhow!("Function application did not return an Int"))
     }
 
     /// Asserts a property about an uninterpreted function.

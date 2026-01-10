@@ -46,4 +46,4 @@ all-backends = ["sqlite", "postgres"]
 all-formats = ["yaml", "csv-export", "compression", "akoma-ntoso"]
 
 [dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"

@@ -265,19 +265,15 @@ impl WorkflowExecutor {
     fn evaluate_condition(&self, condition: &Condition) -> bool {
         match condition {
             Condition::Always => true,
-            Condition::VarEquals { var, value } => {
-                self.variables.get(var).map_or(false, |v| v == value)
-            }
-            Condition::VarNotEquals { var, value } => {
-                self.variables.get(var).map_or(true, |v| v != value)
-            }
+            Condition::VarEquals { var, value } => self.variables.get(var) == Some(value),
+            Condition::VarNotEquals { var, value } => self.variables.get(var) != Some(value),
             Condition::FileExists { path } => Path::new(path).exists(),
             Condition::FileNotExists { path } => !Path::new(path).exists(),
             Condition::PrevSuccess { task_id } => {
-                self.task_results.get(task_id).map_or(false, |r| r.success)
+                self.task_results.get(task_id).is_some_and(|r| r.success)
             }
             Condition::PrevFailed { task_id } => {
-                self.task_results.get(task_id).map_or(false, |r| !r.success)
+                self.task_results.get(task_id).is_some_and(|r| !r.success)
             }
             Condition::Or { conditions } => conditions.iter().any(|c| self.evaluate_condition(c)),
             Condition::And { conditions } => conditions.iter().all(|c| self.evaluate_condition(c)),

@@ -6931,8 +6931,8 @@ impl TranslationMemory {
         for i in 0..=len1 {
             matrix[i][0] = i;
         }
-        for j in 0..=len2 {
-            matrix[0][j] = j;
+        for (j, cell) in matrix[0].iter_mut().enumerate().take(len2 + 1) {
+            *cell = j;
         }
 
         let chars1: Vec<char> = text1.chars().collect();
@@ -24071,10 +24071,7 @@ impl EURegulationAligner {
     pub fn add_term(&mut self, term: EURegulationTerm) {
         self.term_index
             .insert(term.canonical_term.clone(), term.clone());
-        self.terms
-            .entry(term.regulation)
-            .or_insert_with(Vec::new)
-            .push(term);
+        self.terms.entry(term.regulation).or_default().push(term);
     }
 
     /// Gets all terms for a specific regulation.
@@ -24265,12 +24262,12 @@ impl TreatyStandardizer {
     pub fn add_term(&mut self, term: TreatyTerm) {
         self.treaties
             .entry(term.treaty_name.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(term.clone());
 
         self.term_index
             .entry(term.canonical_term.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(term);
     }
 
@@ -24509,12 +24506,12 @@ impl StandardAdoptionTracker {
     pub fn add_adoption(&mut self, adoption: StandardAdoption) {
         self.adoptions
             .entry(adoption.standard_id.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(adoption.clone());
 
         self.by_jurisdiction
             .entry(adoption.jurisdiction.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(adoption);
     }
 
@@ -24772,12 +24769,12 @@ impl RegulatoryEquivalenceMapper {
     pub fn add_equivalence(&mut self, equivalence: RegulatoryEquivalence) {
         self.equivalences
             .entry(equivalence.source_jurisdiction.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(equivalence.clone());
 
         self.by_domain
             .entry(equivalence.domain)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(equivalence);
     }
 
@@ -24998,7 +24995,7 @@ impl ComplianceNormalizer {
     pub fn add_term(&mut self, term: ComplianceTerm) {
         self.by_domain
             .entry(term.domain)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(term.clone());
 
         self.terms.insert(term.canonical.clone(), term);
@@ -25524,7 +25521,7 @@ impl ExtendedLanguageRegistry {
 
         self.by_family
             .entry(lang.family.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(lang.code.clone());
 
         self.languages.insert(lang.code.clone(), lang);
@@ -25935,7 +25932,7 @@ impl DialectHandler {
     pub fn add_dialect(&mut self, dialect: Dialect) {
         self.by_language
             .entry(dialect.base_language.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(dialect.dialect_id.clone());
 
         self.dialects.insert(dialect.dialect_id.clone(), dialect);
@@ -26185,12 +26182,12 @@ impl LocalLawDatabase {
     pub fn add_term(&mut self, term: LocalLawTerm) {
         self.by_jurisdiction
             .entry(term.jurisdiction.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(term.local_term.clone());
 
         self.by_system
             .entry(term.legal_system.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(term.local_term.clone());
 
         self.terms.insert(term.local_term.clone(), term);
@@ -26353,12 +26350,12 @@ impl ContributionWorkflow {
     pub fn submit(&mut self, contribution: Contribution) {
         self.by_status
             .entry(contribution.status)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(contribution.contribution_id.clone());
 
         self.by_language
             .entry(contribution.language_code.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(contribution.contribution_id.clone());
 
         self.contributions
@@ -26407,7 +26404,7 @@ impl ContributionWorkflow {
             }
             self.by_status
                 .entry(new_status)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id.to_string());
 
             Ok(())
@@ -26429,7 +26426,7 @@ impl ContributionWorkflow {
             }
             self.by_status
                 .entry(new_status)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id.to_string());
 
             Ok(())

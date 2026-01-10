@@ -716,7 +716,7 @@ impl IntelligentAutocomplete {
 
         // Try prefix matching
         let mut matches = Vec::new();
-        for (_, commands) in &self.suggestions {
+        for commands in self.suggestions.values() {
             for cmd in commands {
                 if cmd.starts_with(&input_lower) && !matches.contains(cmd) {
                     matches.push(cmd.clone());

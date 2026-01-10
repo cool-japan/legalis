@@ -1,0 +1,11 @@
+[package]
+name = "minpo-709-builder"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "minpo-709-builder"
+path = "src/main.rs"
+
+[dependencies]
+legalis-jp = { path = "../../jurisdictions/jp" }

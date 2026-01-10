@@ -32,7 +32,7 @@ sha2 = "0.10"
 
 [dev-dependencies]
 proptest = "1.9"
-criterion = "0.7"
+criterion = "0.8"
 
 [[bench]]
 name = "core_benchmarks"

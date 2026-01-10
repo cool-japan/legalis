@@ -601,7 +601,10 @@ pub fn run_tui() -> Result<()> {
 }
 
 /// Run the app event loop.
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut TuiDashboard) -> Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut TuiDashboard) -> Result<()>
+where
+    B::Error: Send + Sync + 'static,
+{
     loop {
         terminal.draw(|f| app.ui(f))?;
 

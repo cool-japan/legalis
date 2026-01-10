@@ -40,7 +40,7 @@ cd /Users/kitasan/work/legalis
 ```
 
 **What it does:**
-- Tests all 20 crates in dependency order
+- Tests all 23 crates in dependency order
 - Runs `cargo publish --dry-run` for each
 - Saves logs to `/tmp/legalis_dryrun_*.log`
 - Reports success/failure for each crate
@@ -59,12 +59,12 @@ Publishes all Legalis-RS crates to crates.io in the correct dependency order.
 
 **What it does:**
 - Sets required Z3 environment variables
-- Publishes all 20 crates in dependency order
+- Publishes all 23 crates in dependency order
 - Waits 20 seconds between each publish (crates.io requirement)
 - Asks for confirmation before starting
 - Stops on first error
 
-**Estimated time:** ~7 minutes (20 crates × 20 seconds)
+**Estimated time:** ~7 minutes (23 crates × 20 seconds)
 
 ### 3. Single Crate Publishing Script
 
@@ -111,6 +111,9 @@ Crates are published in dependency order to ensure dependencies are available be
 18. `legalis-de` - German legal system
 19. `legalis-fr` - French legal system
 20. `legalis-us` - US legal system
+21. `legalis-eu` - EU legal system (GDPR, Competition, Consumer Rights)
+22. `legalis-sg` - Singapore legal system (Companies Act, Employment, PDPA)
+23. `legalis-uk` - UK legal system (Employment, Consumer Rights, Companies)
 
 ## Step-by-Step Publishing Process
 
@@ -257,7 +260,7 @@ cargo yank --undo --vers 0.1.0 legalis-core
 
 ## Post-Publication Checklist
 
-- [ ] All 20 crates published successfully
+- [ ] All 23 crates published successfully
 - [ ] All crates visible on crates.io
 - [ ] GitHub release created with release notes
 - [ ] Documentation updated (if needed)
