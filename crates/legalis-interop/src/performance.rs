@@ -628,7 +628,7 @@ mod tests {
         for i in 0..5 {
             let source = format!("source{}", i);
             let statute = Statute::new(
-                &format!("test{}", i),
+                format!("test{}", i),
                 "Test",
                 Effect::new(EffectType::Grant, "test"),
             );

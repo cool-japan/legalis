@@ -21,7 +21,7 @@ Legalis-RS tutvustab kolmeväärtuselist loogikatüüpi `LegalResult<T>`, kasuta
 
 **Peamised Tehnilised Panused**:
 1. Õiguslik domeenispetsiifiline keel (DSL) ja parseri implementatsioon
-2. Formaalne verifitseerimine Z3 SMT lahendajaga
+2. Formaalne verifitseerimine OxiZ SMT lahendajaga
 3. ECS-stiilis simulatsioonimootor sotsiaalse mõju ennustamiseks
 4. Nutikate lepingute genereerimine 25+ plokiahela platvormile
 5. Linked Open Data (RDF/TTL) integratsioon semantilise veebi jaoks
@@ -297,7 +297,7 @@ pub enum LegalResult<T> {
 }
 ```
 
-### 5.3 Formaalne Verifitseerimine Z3 SMT Lahendajaga
+### 5.3 Formaalne Verifitseerimine OxiZ SMT Lahendajaga
 
 **Verifitseerimise Sihtmärgid**:
 1. Ringviited
@@ -411,7 +411,7 @@ Legalis-RS esitab uue lähenemise õiguse kodifitseerimiseks, muutes "arvutatavu
 2. **Tüübisüsteem**: Kolmeväärtuseline loogika `LegalResult<T>` kaudu
 3. **Integreeritud arhitektuur**: Põhjalik disain 7 kihi ja 16 crate'iga
 4. **Implementatsioon**: Umbes 450 000 rida Rust koodi
-5. **Verifitseerimine**: Z3 SMT lahendaja integratsioon
+5. **Verifitseerimine**: OxiZ SMT lahendaja integratsioon
 6. **Simulatsioon**: ECS-stiilis mootor (GPU kiirenduse tugi)
 7. **Väljund**: 25+ plokiahelat, RDF/TTL, mitu vormingut
 

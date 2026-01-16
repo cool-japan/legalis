@@ -1115,7 +1115,7 @@ Para definições completas dos tipos principais, veja `crates/legalis-core/src/
 ```toml
 [legalis]
 default_jurisdiction = "JP"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

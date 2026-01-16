@@ -427,7 +427,7 @@ mod tests {
         let p95 = tester.percentile(&durations, 0.95);
         let p99 = tester.percentile(&durations, 0.99);
 
-        assert!(p50 >= 5.0 && p50 <= 6.0);
+        assert!((5.0..=6.0).contains(&p50));
         assert!(p95 >= 9.0);
         assert!(p99 >= 9.0);
     }

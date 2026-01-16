@@ -351,8 +351,10 @@ mod tests {
 
     #[test]
     fn test_gpu_disabled() {
-        let mut config = GpuConfig::default();
-        config.enabled = false;
+        let config = GpuConfig {
+            enabled: false,
+            ..Default::default()
+        };
 
         let engine = GpuDiffEngine::new(config);
         assert!(!engine.is_gpu_available());
@@ -391,8 +393,10 @@ mod tests {
 
     #[test]
     fn test_min_size_for_gpu() {
-        let mut config = GpuConfig::default();
-        config.min_size_for_gpu = 1000000; // Very high threshold
+        let config = GpuConfig {
+            min_size_for_gpu: 1000000, // Very high threshold
+            ..Default::default()
+        };
 
         let mut engine = GpuDiffEngine::new(config);
         let old = create_test_statute("law", "Old");

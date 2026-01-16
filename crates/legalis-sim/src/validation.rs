@@ -1090,6 +1090,13 @@ impl HistoricalBacktester {
         Self { config }
     }
 
+    /// Create with default configuration
+    pub fn with_default_config() -> Self {
+        Self {
+            config: BacktestConfig::default(),
+        }
+    }
+
     /// Run backtest with a prediction function
     pub fn run<F>(
         &self,

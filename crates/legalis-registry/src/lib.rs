@@ -15194,6 +15194,12 @@ pub mod multi_tenant;
 
 pub mod ai_features;
 
+/// Global Registry Network module (v0.3.0)
+pub mod global_network;
+
+/// Autonomous Registry Management module (v0.3.1)
+pub mod autonomous;
+
 // ============================================================================
 // Event Sourcing 2.0 Module (v0.2.6)
 // ============================================================================

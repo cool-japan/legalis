@@ -67,14 +67,14 @@ impl GANEntityGenerator {
             let real_sample = &real_samples[rng.random_range(0..real_samples.len())];
 
             // Update weights to make fake sample more like real sample
-            #[allow(clippy::needless_range_loop)]
-            for i in 0..self.output_dim.min(real_sample.len()) {
-                let error = real_sample[i] - fake_sample[i];
+            for (i, &real_val) in real_sample.iter().enumerate().take(self.output_dim) {
+                let error = real_val - fake_sample[i];
                 // Update weights (simplified gradient descent)
-                for j in 0..self.latent_dim {
+                for (j, &noise_val) in noise.iter().enumerate().take(self.latent_dim) {
                     let weight_idx = i * self.latent_dim + j;
                     if weight_idx < self.generator_weights.len() {
-                        self.generator_weights[weight_idx] += self.learning_rate * error * noise[j];
+                        self.generator_weights[weight_idx] +=
+                            self.learning_rate * error * noise_val;
                     }
                 }
             }
@@ -90,16 +90,16 @@ impl GANEntityGenerator {
     fn generate_from_noise(&self, noise: &[f64]) -> Vec<f64> {
         let mut output = vec![0.0; self.output_dim];
 
-        for i in 0..self.output_dim {
+        for (i, out_val) in output.iter_mut().enumerate() {
             let mut sum = 0.0;
-            for j in 0..self.latent_dim.min(noise.len()) {
+            for (j, &noise_val) in noise.iter().enumerate().take(self.latent_dim) {
                 let weight_idx = i * self.latent_dim + j;
                 if weight_idx < self.generator_weights.len() {
-                    sum += self.generator_weights[weight_idx] * noise[j];
+                    sum += self.generator_weights[weight_idx] * noise_val;
                 }
             }
             // Tanh activation
-            output[i] = sum.tanh();
+            *out_val = sum.tanh();
         }
 
         output
@@ -646,7 +646,7 @@ mod tests {
         assert_eq!(sample.len(), 5);
         // Values should be between -1 and 1 due to tanh activation
         for &val in &sample {
-            assert!(val >= -1.0 && val <= 1.0);
+            assert!((-1.0..=1.0).contains(&val));
         }
     }
 

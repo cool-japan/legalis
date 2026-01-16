@@ -806,7 +806,7 @@ fn test_quick_validate_request() {
 
 #[test]
 fn test_all_purpose_types() {
-    let purposes = vec![
+    let purposes = [
         PurposeType::CustomerManagement,
         PurposeType::MarketingAdvertising,
         PurposeType::ServiceProvision,
@@ -822,7 +822,7 @@ fn test_all_purpose_types() {
 
 #[test]
 fn test_all_data_types() {
-    let types = vec![
+    let types = [
         PersonalInfoType::Basic,
         PersonalInfoType::Sensitive,
         PersonalInfoType::Anonymous,
@@ -834,7 +834,7 @@ fn test_all_data_types() {
 
 #[test]
 fn test_all_business_types() {
-    let types = vec![
+    let types = [
         BusinessType::SmallBusiness,
         BusinessType::StandardBusiness,
         BusinessType::LargeScaleBusiness,
@@ -846,7 +846,7 @@ fn test_all_business_types() {
 
 #[test]
 fn test_all_request_types() {
-    let types = vec![
+    let types = [
         RequestType::Disclosure,
         RequestType::Correction,
         RequestType::StopUsage,

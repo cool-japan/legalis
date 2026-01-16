@@ -78,6 +78,5 @@ mod tests {
     #[test]
     fn test_module_loads() {
         // Smoke test to ensure module compiles
-        assert!(true);
     }
 }

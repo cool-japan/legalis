@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn test_prefecture_enum_all_values() {
         // Ensure all 47 prefectures are defined
-        let prefectures = vec![
+        let prefectures = [
             Prefecture::Hokkaido,
             Prefecture::Tokyo,
             Prefecture::Osaka,

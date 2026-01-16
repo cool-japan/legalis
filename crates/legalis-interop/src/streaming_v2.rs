@@ -659,7 +659,7 @@ mod tests {
     #[test]
     fn test_parallel_format_processor_new() {
         let processor = ParallelFormatProcessor::new();
-        assert!(processor.converter.supported_exports().len() > 0);
+        assert!(!processor.converter.supported_exports().is_empty());
     }
 
     #[test]

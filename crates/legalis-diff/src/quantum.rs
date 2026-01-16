@@ -433,7 +433,7 @@ mod tests {
         let fp2 = QuantumFingerprint::new(&s2, 64);
 
         let fidelity = fp1.fidelity(&fp2);
-        assert!(fidelity >= 0.0 && fidelity <= 1.0);
+        assert!((0.0..=1.0).contains(&fidelity));
     }
 
     #[test]
@@ -444,7 +444,7 @@ mod tests {
         let config = QuantumSimilarityConfig::default();
         let similarity = quantum_similarity(&s1, &s2, &config);
 
-        assert!(similarity >= 0.0 && similarity <= 1.0);
+        assert!((0.0..=1.0).contains(&similarity));
     }
 
     #[test]
@@ -529,6 +529,6 @@ mod tests {
         let fp2 = QuantumFingerprint::new(&s2, 64);
 
         let distance = fp1.distance(&fp2);
-        assert!(distance >= 0.0 && distance <= 1.0);
+        assert!((0.0..=1.0).contains(&distance));
     }
 }

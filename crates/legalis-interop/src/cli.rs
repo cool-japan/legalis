@@ -529,9 +529,9 @@ mod tests {
 
         let executor = CliExecutor::new(config.clone());
 
-        assert_eq!(executor.config().cache_enabled, false);
-        assert_eq!(executor.config().verbose, true);
-        assert_eq!(executor.config().fail_on_warnings, true);
+        assert!(!executor.config().cache_enabled);
+        assert!(executor.config().verbose);
+        assert!(executor.config().fail_on_warnings);
         assert_eq!(executor.config().min_confidence, 0.8);
     }
 

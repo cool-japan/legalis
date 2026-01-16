@@ -7,16 +7,18 @@
 //! logical inconsistencies, circular references, and constitutional conflicts
 //! in legal statutes.
 
-#[cfg(feature = "z3-solver")]
+#[cfg(feature = "smt-solver")]
 mod smt;
 
-#[cfg(feature = "z3-solver")]
-pub use smt::{SmtVerifier, create_z3_context};
+#[cfg(feature = "smt-solver")]
+pub use smt::SmtVerifier;
 
+pub mod autonomous_agents;
 pub mod certification_framework;
 pub mod distributed_verification;
 pub mod formal_methods;
 pub mod ml_verification;
+pub mod quantum_verification;
 
 use legalis_core::{EffectType, Statute};
 use std::collections::{HashMap, HashSet};
@@ -794,11 +796,10 @@ impl StatuteVerifier {
             return false;
         }
 
-        #[cfg(feature = "z3-solver")]
+        #[cfg(feature = "smt-solver")]
         {
-            // Create Z3 context and verifier
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            // Create SMT context and verifier (OxiZ)
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             // Build conjunction of all preconditions
             let mut combined = statute.preconditions[0].clone();
@@ -814,7 +815,7 @@ impl StatuteVerifier {
             // Fall through to simple checking on error
         }
 
-        // Simple pairwise checking (used when z3-solver feature is not enabled or SMT fails)
+        // Simple pairwise checking (used when smt-solver feature is not enabled or SMT fails)
         for i in 0..statute.preconditions.len() {
             for j in (i + 1)..statute.preconditions.len() {
                 if self.conditions_contradict(&statute.preconditions[i], &statute.preconditions[j])
@@ -831,11 +832,10 @@ impl StatuteVerifier {
         cond1: &legalis_core::Condition,
         cond2: &legalis_core::Condition,
     ) -> bool {
-        #[cfg(feature = "z3-solver")]
+        #[cfg(feature = "smt-solver")]
         {
             // Use SMT solver to check if conditions contradict
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             if let Ok(contradicts) = smt_verifier.contradict(cond1, cond2) {
                 return contradicts;
@@ -843,9 +843,9 @@ impl StatuteVerifier {
             // Fall through to simple check on error
         }
 
-        // Simple heuristic check (used when z3-solver feature is not enabled)
+        // Simple heuristic check (used when smt-solver feature is not enabled)
         // This is conservative and only catches obvious cases
-        #[cfg(not(feature = "z3-solver"))]
+        #[cfg(not(feature = "smt-solver"))]
         {
             let _ = (cond1, cond2);
         }
@@ -919,10 +919,9 @@ impl StatuteVerifier {
             return false;
         }
 
-        #[cfg(feature = "z3-solver")]
+        #[cfg(feature = "smt-solver")]
         {
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             // Build conjunction of all preconditions from both statutes
             let mut combined1 = statute1.preconditions[0].clone();
@@ -968,12 +967,11 @@ impl StatuteVerifier {
             return VerificationResult::pass();
         }
 
-        #[cfg(feature = "z3-solver")]
+        #[cfg(feature = "smt-solver")]
         {
             use crate::smt;
 
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             for i in 0..statute.preconditions.len() {
                 for j in 0..statute.preconditions.len() {
@@ -1025,13 +1023,12 @@ impl StatuteVerifier {
 
     /// Recursively finds unreachable branches in a condition tree.
     fn find_unreachable_branch(&self, condition: &legalis_core::Condition) -> Option<String> {
-        #[cfg(feature = "z3-solver")]
+        #[cfg(feature = "smt-solver")]
         {
             use crate::smt;
             use legalis_core::Condition;
 
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             // Check if this condition is unsatisfiable
             if let Ok(satisfiable) = smt_verifier.is_satisfiable(condition) {
@@ -1097,7 +1094,7 @@ impl StatuteVerifier {
             }
         }
 
-        #[cfg(not(feature = "z3-solver"))]
+        #[cfg(not(feature = "smt-solver"))]
         {
             let _ = condition; // Suppress unused variable warning
         }
@@ -3218,12 +3215,11 @@ impl CoverageInfo {
 pub fn analyze_coverage(statutes: &[Statute]) -> CoverageInfo {
     let mut coverage = CoverageInfo::new();
 
-    #[cfg(feature = "z3-solver")]
+    #[cfg(feature = "smt-solver")]
     {
         use crate::smt;
 
-        let ctx = smt::create_z3_context();
-        let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+        let mut smt_verifier = smt::SmtVerifier::new();
 
         for statute in statutes {
             let statute_id = statute.id.clone();
@@ -3263,7 +3259,7 @@ pub fn analyze_coverage(statutes: &[Statute]) -> CoverageInfo {
         }
     }
 
-    #[cfg(not(feature = "z3-solver"))]
+    #[cfg(not(feature = "smt-solver"))]
     {
         // Without SMT solver, mark all conditions as covered (conservative approach)
         for statute in statutes {
@@ -3294,13 +3290,12 @@ pub fn analyze_coverage_parallel(statutes: &[Statute]) -> CoverageInfo {
 
     let coverage = Mutex::new(CoverageInfo::new());
 
-    #[cfg(feature = "z3-solver")]
+    #[cfg(feature = "smt-solver")]
     {
         use crate::smt;
 
         statutes.par_iter().for_each(|statute| {
-            let ctx = smt::create_z3_context();
-            let mut smt_verifier = smt::SmtVerifier::new(&ctx);
+            let mut smt_verifier = smt::SmtVerifier::new();
 
             let statute_id = statute.id.clone();
             let mut covered_indices = Vec::new();
@@ -3347,7 +3342,7 @@ pub fn analyze_coverage_parallel(statutes: &[Statute]) -> CoverageInfo {
         });
     }
 
-    #[cfg(not(feature = "z3-solver"))]
+    #[cfg(not(feature = "smt-solver"))]
     {
         // Without SMT solver, mark all conditions as covered (conservative approach)
         statutes.par_iter().for_each(|statute| {
@@ -8305,12 +8300,11 @@ pub struct OptimizationSuggestion {
 /// Analyzes statutes and suggests optimizations for complex conditions.
 ///
 /// This function uses SMT-based analysis to identify simplification opportunities.
-#[cfg(feature = "z3-solver")]
+#[cfg(feature = "smt-solver")]
 pub fn suggest_optimizations(statutes: &[Statute]) -> Vec<OptimizationSuggestion> {
-    use crate::smt::{SmtVerifier, create_z3_context};
+    use crate::smt::SmtVerifier;
 
-    let ctx = create_z3_context();
-    let mut verifier = SmtVerifier::new(&ctx);
+    let mut verifier = SmtVerifier::new();
     let mut suggestions = Vec::new();
 
     for statute in statutes {
@@ -8482,8 +8476,8 @@ pub fn optimization_and_gaps_report(statutes: &[Statute]) -> String {
         }
     }
 
-    // Optimization suggestions (only available with z3-solver feature)
-    #[cfg(feature = "z3-solver")]
+    // Optimization suggestions (only available with smt-solver feature)
+    #[cfg(feature = "smt-solver")]
     {
         let optimizations = suggest_optimizations(statutes);
         report.push_str("## Optimization Suggestions\n\n");
@@ -8520,11 +8514,11 @@ pub fn optimization_and_gaps_report(statutes: &[Statute]) -> String {
         }
     }
 
-    #[cfg(not(feature = "z3-solver"))]
+    #[cfg(not(feature = "smt-solver"))]
     {
         report.push_str("## Optimization Suggestions\n\n");
         report.push_str(
-            "*Optimization suggestions require the `z3-solver` feature to be enabled.*\n\n",
+            "*Optimization suggestions require the `smt-solver` feature to be enabled.*\n\n",
         );
     }
 
@@ -8532,7 +8526,7 @@ pub fn optimization_and_gaps_report(statutes: &[Statute]) -> String {
     report.push_str(&format!("- Total statutes analyzed: {}\n", statutes.len()));
     report.push_str(&format!("- Coverage gaps found: {}\n", gaps.len()));
 
-    #[cfg(feature = "z3-solver")]
+    #[cfg(feature = "smt-solver")]
     {
         let optimizations = suggest_optimizations(statutes);
         report.push_str(&format!(
@@ -9390,7 +9384,7 @@ pub fn detect_ambiguities(statute: &Statute) -> Vec<Ambiguity> {
     }
 
     // Check for overlapping conditions using SMT solver if available
-    #[cfg(feature = "z3-solver")]
+    #[cfg(feature = "smt-solver")]
     {
         if let Some(overlaps) = detect_overlapping_conditions(&statute.preconditions) {
             ambiguities.push(Ambiguity::new(
@@ -9454,16 +9448,15 @@ fn contains_ambiguous_quantifiers(text: &str) -> bool {
 }
 
 /// Detects overlapping conditions using SMT solver.
-#[cfg(feature = "z3-solver")]
+#[cfg(feature = "smt-solver")]
 fn detect_overlapping_conditions(conditions: &[legalis_core::Condition]) -> Option<String> {
-    use crate::smt::{SmtVerifier, create_z3_context};
+    use crate::smt::SmtVerifier;
 
     if conditions.len() < 2 {
         return None;
     }
 
-    let ctx = create_z3_context();
-    let mut verifier = SmtVerifier::new(&ctx);
+    let mut verifier = SmtVerifier::new();
 
     // Check for conditions that always imply each other (redundant)
     for i in 0..conditions.len() {
@@ -21000,7 +20993,7 @@ mod tests {
         assert_eq!(batch_result.passed, 1);
         assert_eq!(batch_result.failed, 1);
         assert_eq!(batch_result.pass_rate(), 50.0);
-        assert!(batch_result.error_counts.get(&Severity::Error).is_some());
+        assert!(batch_result.error_counts.contains_key(&Severity::Error));
     }
 
     #[test]
@@ -23375,7 +23368,7 @@ mod tests {
 
         // Should have higher risk due to errors
         assert!(risk.overall_score > 0.3);
-        assert!(risk.mitigations.len() >= 1);
+        assert!(!risk.mitigations.is_empty());
     }
 
     #[test]
@@ -24275,8 +24268,8 @@ mod tests {
         let diff = VerificationDiff::diff(&old, &new);
         assert!(diff.has_changes());
         assert!(diff.status_changed);
-        assert_eq!(diff.old_passed, true);
-        assert_eq!(diff.new_passed, false);
+        assert!(diff.old_passed);
+        assert!(!diff.new_passed);
     }
 
     #[test]

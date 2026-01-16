@@ -95,6 +95,7 @@ impl Optimizer {
     }
 
     /// Checks if a condition is invariant (doesn't depend on runtime state)
+    #[allow(clippy::only_used_in_recursion)]
     fn is_invariant(&self, condition: &ConditionNode) -> bool {
         match condition {
             ConditionNode::Comparison { field, .. } => {
@@ -139,6 +140,7 @@ impl Optimizer {
     }
 
     /// Creates a signature for a condition to detect duplicates
+    #[allow(clippy::only_used_in_recursion)]
     fn condition_signature(&self, condition: &ConditionNode) -> String {
         match condition {
             ConditionNode::Comparison {
@@ -227,6 +229,7 @@ impl Optimizer {
     }
 
     /// Checks if a condition is dead (always false or contradictory)
+    #[allow(clippy::only_used_in_recursion)]
     fn is_dead_condition(&self, condition: &ConditionNode) -> bool {
         match condition {
             ConditionNode::Comparison {
@@ -281,6 +284,7 @@ impl Optimizer {
     }
 
     /// Estimates the cost of evaluating a condition
+    #[allow(clippy::only_used_in_recursion)]
     fn condition_cost(&self, condition: &ConditionNode) -> u32 {
         match condition {
             ConditionNode::HasAttribute { .. } => 1, // Cheapest: simple attribute check

@@ -24,6 +24,7 @@
 pub mod administrative_procedure; // Administrative Procedure Act (行政手続法)
 pub mod case_law;
 pub mod commercial_law;
+pub mod common; // Common utilities (共通ユーティリティ) - holidays, working days
 pub mod constitution;
 pub mod construction_real_estate; // Construction & Real Estate Acts (建設業法・宅建業法)
 pub mod consumer_protection;
@@ -38,6 +39,7 @@ pub mod labor_law;
 pub mod law;
 pub mod minpo;
 pub mod personal_info_protection; // Personal Information Protection Act (個人情報保護法)
+pub mod reasoning; // Legal Reasoning Engine (法的推論エンジン) - legalis-core integration
 pub mod risk_analysis;
 pub mod tort;
 
@@ -153,4 +155,15 @@ pub use risk_analysis::{
 pub use tort::{
     Article709, Article710, Article715, CausalLink, Damage, Intent, ProtectedInterest,
     TortClaimError, TortLiability, validate_tort_claim,
+};
+
+// Legal Reasoning Engine exports (法的推論エンジン - legalis-core integration)
+pub use reasoning::{
+    ComplianceStatus, JpEvaluationContext, LegalAnalysis, LegalReasoningEngine, ReasoningError,
+    ReasoningResult, RiskLevel as LegalRiskLevel, Violation, ViolationSeverity,
+};
+
+// Common utilities exports (共通ユーティリティ - legalis-i18n integration)
+pub use common::{
+    JapaneseLegalCalendar, calculate_legal_deadline, is_japanese_holiday, is_working_day,
 };

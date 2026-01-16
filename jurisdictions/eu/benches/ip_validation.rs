@@ -2,8 +2,9 @@
 //!
 //! Run with: cargo bench --bench ip_validation
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use legalis_eu::intellectual_property::*;
+use std::hint::black_box;
 
 fn bench_trademark_validation(c: &mut Criterion) {
     c.bench_function("trademark_validation", |b| {

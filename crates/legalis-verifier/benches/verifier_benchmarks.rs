@@ -3,7 +3,7 @@
 //! Run with: cargo bench
 
 use chrono::NaiveDate;
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute, TemporalValidity};
 use legalis_verifier::{
     ConstitutionalPrinciple, PrincipleCheck, StatuteVerifier, VerificationBudget,
@@ -11,6 +11,7 @@ use legalis_verifier::{
     analyze_statute_statistics, batch_verify, compare_statutes, detect_duplicates,
     detect_statute_conflicts, semantic_similarity, verify_integrity,
 };
+use std::hint::black_box;
 
 /// Helper to create a simple statute for benchmarking
 fn create_simple_statute(id: &str) -> Statute {
@@ -54,11 +55,11 @@ fn bench_statute_verification(c: &mut Criterion) {
     let complex_statute = create_complex_statute("complex-001");
 
     c.bench_function("verify_simple_statute", |b| {
-        b.iter(|| black_box(verifier.verify(&[simple_statute.clone()])))
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&simple_statute))))
     });
 
     c.bench_function("verify_complex_statute", |b| {
-        b.iter(|| black_box(verifier.verify(&[complex_statute.clone()])))
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&complex_statute))))
     });
 }
 
@@ -110,7 +111,7 @@ fn bench_constitutional_checks(c: &mut Criterion) {
     let statute = create_complex_statute("equality-test");
 
     c.bench_function("check_equality_principle", |b| {
-        b.iter(|| black_box(verifier.verify(&[statute.clone()])))
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&statute))))
     });
 }
 
@@ -123,7 +124,7 @@ fn bench_caching(c: &mut Criterion) {
     // Benchmark without caching
     let verifier_no_cache = StatuteVerifier::new();
     group.bench_function("verify_no_cache", |b| {
-        b.iter(|| black_box(verifier_no_cache.verify(&[statute.clone()])))
+        b.iter(|| black_box(verifier_no_cache.verify(std::slice::from_ref(&statute))))
     });
 
     // Benchmark with caching (first call)
@@ -131,14 +132,14 @@ fn bench_caching(c: &mut Criterion) {
     group.bench_function("verify_with_cache_first", |b| {
         b.iter(|| {
             verifier_with_cache.clear_cache();
-            black_box(verifier_with_cache.verify(&[statute.clone()]))
+            black_box(verifier_with_cache.verify(std::slice::from_ref(&statute)))
         })
     });
 
     // Benchmark with caching (cached call)
-    verifier_with_cache.verify(&[statute.clone()]); // Prime the cache
+    verifier_with_cache.verify(std::slice::from_ref(&statute)); // Prime the cache
     group.bench_function("verify_with_cache_hit", |b| {
-        b.iter(|| black_box(verifier_with_cache.verify(&[statute.clone()])))
+        b.iter(|| black_box(verifier_with_cache.verify(std::slice::from_ref(&statute))))
     });
 
     group.finish();
@@ -375,11 +376,15 @@ fn bench_verification_budget(c: &mut Criterion) {
     };
 
     c.bench_function("verify_unlimited_budget", |b| {
-        b.iter(|| black_box(verifier.verify_with_budget(&[statute.clone()], unlimited_budget)))
+        b.iter(|| {
+            black_box(verifier.verify_with_budget(std::slice::from_ref(&statute), unlimited_budget))
+        })
     });
 
     c.bench_function("verify_limited_budget", |b| {
-        b.iter(|| black_box(verifier.verify_with_budget(&[statute.clone()], limited_budget)))
+        b.iter(|| {
+            black_box(verifier.verify_with_budget(std::slice::from_ref(&statute), limited_budget))
+        })
     });
 }
 

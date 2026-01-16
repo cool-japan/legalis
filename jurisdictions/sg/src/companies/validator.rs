@@ -504,11 +504,11 @@ mod tests {
             identification: "S1234567A".to_string(),
             nationality_or_jurisdiction: "Singapore".to_string(),
             address: Address::singapore("123 Main St", "123456"),
-            share_allocation: ShareAllocation::new("Ordinary", 100, 100_00),
+            share_allocation: ShareAllocation::new("Ordinary", 100, 10_000),
             acquisition_date: Utc::now(),
         });
 
-        company.share_capital.paid_up_capital_cents = 10_000_00; // SGD 10,000
+        company.share_capital.paid_up_capital_cents = 1_000_000; // SGD 10,000
         company.share_capital.issued_shares = 100;
 
         company
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn test_validate_share_capital() {
-        let capital = ShareCapital::new(100_00); // SGD 100
+        let capital = ShareCapital::new(10_000); // SGD 100
         assert!(validate_share_capital(&capital).is_ok());
 
         let zero_capital = ShareCapital::new(0);

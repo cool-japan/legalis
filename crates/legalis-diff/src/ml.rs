@@ -605,7 +605,7 @@ mod tests {
         let mut learner = PatternLearner::new();
 
         let diff1 = diff(&test_statute("Old1"), &test_statute("New1")).unwrap();
-        learner.learn_from_diffs(&[diff1.clone()]);
+        learner.learn_from_diffs(std::slice::from_ref(&diff1));
 
         let matched = learner.match_pattern(&diff1);
         assert!(matched.is_some());

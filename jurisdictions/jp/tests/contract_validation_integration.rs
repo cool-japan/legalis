@@ -68,7 +68,7 @@ fn test_minimum_wage_violation_tokyo() {
 
     // Should have violation
     assert!(!report.is_compliant(), "Contract should not be compliant");
-    assert!(report.violations.len() > 0, "Should have violations");
+    assert!(!report.violations.is_empty(), "Should have violations");
 
     // Should have minimum wage violation
     let has_minimum_wage_violation = report
@@ -158,7 +158,7 @@ fn test_excessive_working_hours_warning() {
         report.is_compliant(),
         "Contract should be compliant (structurally valid)"
     );
-    assert!(report.warnings.len() > 0, "Should have warnings");
+    assert!(!report.warnings.is_empty(), "Should have warnings");
 
     // Should have working hours warnings
     let has_daily_warning = report
@@ -225,7 +225,7 @@ fn test_non_compete_unreasonable() {
         !report.is_compliant(),
         "Unreasonable clause should not be compliant"
     );
-    assert!(report.violations.len() > 0, "Should have violations");
+    assert!(!report.violations.is_empty(), "Should have violations");
 
     // Score should be heavily penalized
     assert!(report.score() < 80, "Score should be significantly reduced");
@@ -421,7 +421,7 @@ fn test_violation_deduction_calculation() {
         .expect("Should succeed");
 
     assert!(
-        report.violations.len() > 0,
+        !report.violations.is_empty(),
         "Should have at least one violation"
     );
 
@@ -453,7 +453,7 @@ fn test_non_compete_with_no_consideration() {
 
     // Should have violations or warnings about lack of consideration
     assert!(
-        !report.is_compliant() || report.warnings.len() > 0,
+        !report.is_compliant() || !report.warnings.is_empty(),
         "No consideration should result in violation or warning"
     );
 }

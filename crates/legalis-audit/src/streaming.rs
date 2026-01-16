@@ -538,8 +538,10 @@ mod tests {
 
     #[test]
     fn test_window_types() {
-        let mut config = StreamConfig::default();
-        config.window_type = WindowType::Tumbling;
+        let config = StreamConfig {
+            window_type: WindowType::Tumbling,
+            ..Default::default()
+        };
         let analyzer = StreamingAnalyzer::with_config(config);
 
         for _ in 0..5 {

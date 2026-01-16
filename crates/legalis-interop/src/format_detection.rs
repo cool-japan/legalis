@@ -534,12 +534,16 @@ mod tests {
     fn test_format_recommendation() {
         let detector = FormatDetector::new();
 
-        let mut chars = ContentCharacteristics::default();
-        chars.has_deontic_logic = true;
+        let chars = ContentCharacteristics {
+            has_deontic_logic: true,
+            ..Default::default()
+        };
         assert_eq!(detector.recommend_format(&chars), LegalFormat::L4);
 
-        let mut chars2 = ContentCharacteristics::default();
-        chars2.has_scope_declarations = true;
+        let chars2 = ContentCharacteristics {
+            has_scope_declarations: true,
+            ..Default::default()
+        };
         assert_eq!(detector.recommend_format(&chars2), LegalFormat::Catala);
     }
 

@@ -5,6 +5,22 @@ All notable changes to Legalis-RS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-01-15
+
+### Fixed
+- **Code Quality**: Fixed 50+ clippy warnings across 16 files
+- **legalis-interop**: Fixed push_str and manual pattern issues in 7 files (blockchain_docs, cadence, move_lang, solidity, universal_format, vyper)
+- **legalis-llm**: Fixed needless borrows and collapsed nested if statements (document_intelligence, simulation)
+- **legalis-viz**: Fixed 11 push_str and format issues
+- **legalis-chain**: Fixed 4 push_str issues
+- **legalis-api**: Fixed mutex guard across await, useless format calls (changelog, cqrs, event_schema, playground)
+- **legalis-dsl**: Derived Default trait, updated benchmarks to std::hint::black_box
+
+### Changed
+- **Build**: All 25 crates now compile with zero warnings under `-D warnings`
+- **Tests**: 11,365 tests passing across all features
+- **Documentation**: Updated README.md and TODO.md version references to 0.1.2
+
 ## [0.1.1] - 2026-01-10
 
 ### New Jurisdictions
@@ -38,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Examples**: 29 comprehensive examples
 - **Jurisdictions**: 7 (DE, EU, FR, JP, SG, UK, US)
 
+[0.1.2]: https://github.com/cool-japan/legalis-rs/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cool-japan/legalis-rs/compare/v0.1.0...v0.1.1
 
 ## [0.1.0] - 2026-01-05

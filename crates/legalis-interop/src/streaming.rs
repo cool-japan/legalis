@@ -305,8 +305,8 @@ scope VotingRights:
         let statutes: Vec<Statute> = (0..250)
             .map(|i| {
                 Statute::new(
-                    &format!("statute-{}", i),
-                    &format!("Statute {}", i),
+                    format!("statute-{}", i),
+                    format!("Statute {}", i),
                     Effect::new(EffectType::Grant, "test"),
                 )
             })

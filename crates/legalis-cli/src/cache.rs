@@ -292,10 +292,12 @@ mod tests {
 
     #[test]
     fn test_cache_stats_format() {
-        let mut stats = CacheStats::default();
-        stats.total_entries = 10;
-        stats.expired_entries = 2;
-        stats.total_size = 1024;
+        let mut stats = CacheStats {
+            total_entries: 10,
+            expired_entries: 2,
+            total_size: 1024,
+            ..Default::default()
+        };
         stats.commands.insert("verify".to_string(), 5);
         stats.commands.insert("parse".to_string(), 5);
 

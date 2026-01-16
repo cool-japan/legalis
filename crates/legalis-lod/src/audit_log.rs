@@ -252,8 +252,10 @@ impl AuditLogger {
 
     /// Generates a summary report.
     pub fn summary(&self) -> AuditSummary {
-        let mut summary = AuditSummary::default();
-        summary.total_events = self.events.len();
+        let mut summary = AuditSummary {
+            total_events: self.events.len(),
+            ..Default::default()
+        };
 
         for event in &self.events {
             *summary.actions_by_type.entry(event.action).or_insert(0) += 1;

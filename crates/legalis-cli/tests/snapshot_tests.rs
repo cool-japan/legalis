@@ -224,7 +224,7 @@ fn test_statute_display_snapshot() {
 
 #[test]
 fn test_condition_display_snapshots() {
-    let conditions = vec![
+    let conditions = [
         Condition::Age {
             operator: ComparisonOp::GreaterOrEqual,
             value: 18,

@@ -12,10 +12,13 @@ documentation = "https://docs.rs/legalis-jp"
 [dependencies]
 legalis-core.workspace = true
 legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-sim.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 quick-xml = { version = "0.38", features = ["serialize"] }
 
 [features]

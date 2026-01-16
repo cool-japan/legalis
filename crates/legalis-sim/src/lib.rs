@@ -149,6 +149,20 @@
 //! - Batch job execution with dependency graphs
 //! - Parameter sweep orchestration for sensitivity analysis
 //! - Execution history tracking and statistics
+//!
+//! ## Quantum Simulation (v0.3.0)
+//! - Quantum Monte Carlo methods (variational and diffusion)
+//! - Quantum-inspired optimization algorithms
+//! - Quantum annealing for parameter search
+//! - Hybrid classical-quantum simulations
+//! - Quantum random number generation with multiple measurement bases
+//!
+//! ## Digital Twin Integration (v0.3.1)
+//! - Real-time entity synchronization between physical and digital twins
+//! - IoT data ingestion from sensors and devices
+//! - Predictive maintenance simulation
+//! - Twin-based what-if analysis
+//! - Bidirectional updates between physical and digital entities
 
 mod agent_based_2;
 mod agent_intelligence;
@@ -159,6 +173,7 @@ mod builder;
 mod calibration;
 mod comparison;
 mod demographic_modeling;
+mod digital_twin;
 mod distributed;
 mod domain_models;
 mod economic;
@@ -182,6 +197,7 @@ mod persistence;
 mod policy_analysis;
 mod population;
 mod portfolio;
+mod quantum;
 mod realtime;
 mod relationships;
 mod risk;
@@ -203,6 +219,7 @@ pub use builder::*;
 pub use calibration::*;
 pub use comparison::*;
 pub use demographic_modeling::*;
+pub use digital_twin::*;
 pub use distributed::*;
 pub use domain_models::*;
 pub use economic::*;
@@ -226,6 +243,7 @@ pub use persistence::*;
 pub use policy_analysis::*;
 pub use population::*;
 pub use portfolio::*;
+pub use quantum::*;
 pub use realtime::*;
 pub use relationships::*;
 pub use risk::*;

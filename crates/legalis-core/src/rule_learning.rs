@@ -764,7 +764,7 @@ mod tests {
             "US",
         )
         .with_facts("Test facts");
-        let similar = reasoner.find_similar_cases(&case1, &[case1.clone()], 1);
+        let similar = reasoner.find_similar_cases(&case1, std::slice::from_ref(&case1), 1);
         assert_eq!(similar.len(), 1);
     }
 

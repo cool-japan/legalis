@@ -88,6 +88,9 @@ pub mod tax;
 // ===== Legislative Tracking (Phase 5) =====
 pub mod legislative;
 
+// ===== Legal Reasoning Engine (Phase 6) =====
+pub mod reasoning;
+
 // ===== Re-exports for Convenience =====
 
 // Common Law cases
@@ -174,6 +177,13 @@ pub use legislative::{
         cannabis_status, comprehensive_privacy_laws, has_comprehensive_privacy_law,
         right_to_repair_status, states_with_recreational_cannabis,
     },
+};
+
+// Legal reasoning engine
+pub use reasoning::{
+    ComplianceStatus, LegalAnalysis, LegalReasoningEngine, ReasoningError, ReasoningResult,
+    ReasoningStep, RiskLevel, UsEvaluationContext, Violation, ViolationSeverity,
+    all_federal_statutes, employment_statutes, tax_statutes,
 };
 
 #[cfg(test)]

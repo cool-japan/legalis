@@ -82,7 +82,9 @@ fn build_fixed_term_contract() -> EmploymentContract {
     let _renewal_count = get_renewal_count();
 
     // Build the contract
-    let contract = EmploymentContractBuilder::new()
+    // Note: We'll use the actual start date for eligibility calculation
+    // The builder requires Utc::now() but we track the real start date separately
+    EmploymentContractBuilder::new()
         .with_employee(&employee_name)
         .with_employer(&employer_name)
         .with_employment_type(EmploymentType::FixedTerm)
@@ -94,12 +96,7 @@ fn build_fixed_term_contract() -> EmploymentContract {
         .with_job_description("General Employment")
         .with_work_location("Workplace")
         .build()
-        .expect("Failed to build contract");
-
-    // Note: We'll use the actual start date for eligibility calculation
-    // The builder requires Utc::now() but we track the real start date separately
-
-    contract
+        .expect("Failed to build contract")
 }
 
 fn display_contract(contract: &EmploymentContract) {
@@ -312,17 +309,14 @@ fn get_date() -> NaiveDate {
         let mut day_input = String::new();
         io::stdin().read_line(&mut day_input).unwrap();
 
-        match (
+        if let (Ok(year), Ok(month), Ok(day)) = (
             year_input.trim().parse::<i32>(),
             month_input.trim().parse::<u32>(),
             day_input.trim().parse::<u32>(),
         ) {
-            (Ok(year), Ok(month), Ok(day)) => {
-                if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
-                    return date;
-                }
+            if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
+                return date;
             }
-            _ => {}
         }
         println!("❌ 無効な日付です。もう一度入力してください。");
     }

@@ -31,7 +31,7 @@ mod metrics;
 pub mod multitenancy;
 pub mod oauth2_provider;
 pub mod observability;
-mod openapi;
+pub mod openapi;
 pub mod persisted_queries;
 pub mod presence;
 pub mod query_batch;
@@ -45,6 +45,20 @@ pub mod slo;
 pub mod telemetry;
 pub mod versioning;
 pub mod websocket;
+
+// Event-Driven Architecture (v0.2.4)
+pub mod cqrs;
+pub mod event_replay;
+pub mod event_schema;
+pub mod event_sourcing;
+pub mod event_streaming;
+
+// Developer Experience (v0.2.5)
+pub mod changelog;
+pub mod mocking;
+pub mod playground;
+pub mod sdk_notifications;
+pub mod test_utils;
 
 use axum::{
     Extension, Json, Router,

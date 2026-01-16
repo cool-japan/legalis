@@ -1,0 +1,103 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Legalis DSL",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#identifiers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.legalis",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.legalis",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.legalis",
+          "match": "\\b(STATUTE|WHEN|THEN|AND|OR|NOT|IF|ELSE|IMPORT|EXCEPTION|AMENDMENT)\\b"
+        },
+        {
+          "name": "keyword.other.legalis",
+          "match": "\\b(EFFECTIVE_DATE|EXPIRY_DATE|JURISDICTION|METADATA|VERSION)\\b"
+        },
+        {
+          "name": "keyword.effect.legalis",
+          "match": "\\b(GRANT|DENY|REQUIRE|OBLIGATE|PERMIT|PROHIBIT)\\b"
+        },
+        {
+          "name": "keyword.condition.legalis",
+          "match": "\\b(AGE|INCOME|ATTRIBUTE|DATE|HAS|IN|BETWEEN)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.legalis",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.legalis",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.legalis",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.legalis",
+          "match": "(>=|<=|!=|==|>|<)"
+        },
+        {
+          "name": "keyword.operator.logical.legalis",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.legalis",
+          "match": "(\\+|-|\\*|/|%)"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.type.legalis",
+          "match": "\\b[A-Z][A-Z0-9_-]*\\b"
+        },
+        {
+          "name": "variable.other.legalis",
+          "match": "\\b[a-z][a-z0-9_]*\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.legalis"
+}

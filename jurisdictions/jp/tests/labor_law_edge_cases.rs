@@ -86,7 +86,7 @@ fn test_employment_contract_flextime() {
 
 #[test]
 fn test_all_employment_types() {
-    let types = vec![
+    let types = [
         EmploymentType::IndefiniteTerm,
         EmploymentType::FixedTerm,
         EmploymentType::PartTime,
@@ -97,7 +97,7 @@ fn test_all_employment_types() {
 
 #[test]
 fn test_all_work_patterns() {
-    let patterns = vec![
+    let patterns = [
         WorkPattern::Regular,
         WorkPattern::Flextime,
         WorkPattern::Shift,
@@ -269,7 +269,7 @@ fn test_termination_notice_insufficient_period() {
 
 #[test]
 fn test_all_termination_types() {
-    let types = vec![
+    let types = [
         TerminationType::OrdinaryDismissal,
         TerminationType::DisciplinaryDismissal,
         TerminationType::VoluntaryResignation,
@@ -428,7 +428,7 @@ fn test_harassment_report_maternity() {
 
 #[test]
 fn test_all_harassment_types() {
-    let types = vec![
+    let types = [
         HarassmentType::PowerHarassment,
         HarassmentType::SexualHarassment,
         HarassmentType::MaternityHarassment,

@@ -605,7 +605,7 @@ mod tests {
     fn test_forecast_multiple() {
         let forecaster = TrendForecaster::new();
 
-        let records: Vec<_> = (0..30).map(|i| create_test_record(i)).collect();
+        let records: Vec<_> = (0..30).map(create_test_record).collect();
 
         let metrics = vec![ForecastMetric::Volume, ForecastMetric::OverrideRate];
 
@@ -626,7 +626,7 @@ mod tests {
     fn test_forecast_confidence() {
         let forecaster = TrendForecaster::new();
 
-        let records: Vec<_> = (0..30).map(|i| create_test_record(i)).collect();
+        let records: Vec<_> = (0..30).map(create_test_record).collect();
 
         let forecast = forecaster
             .forecast(&records, ForecastMetric::Volume)

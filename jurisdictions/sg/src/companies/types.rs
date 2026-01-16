@@ -24,7 +24,7 @@
 //!     company_type: CompanyType::PrivateLimited,
 //!     registration_date: Utc::now(),
 //!     registered_address: Address::singapore("1 Raffles Place", "048616"),
-//!     share_capital: ShareCapital::new(100_000_00), // SGD 100,000
+//!     share_capital: ShareCapital::new(10_000_000), // SGD 100,000
 //!     directors: vec![],
 //!     shareholders: vec![],
 //!     company_secretary: None,
@@ -763,13 +763,13 @@ mod tests {
 
     #[test]
     fn test_share_capital_sgd_conversion() {
-        let capital = ShareCapital::new(100_000_00); // SGD 100,000
+        let capital = ShareCapital::new(10_000_000); // SGD 100,000
         assert_eq!(capital.paid_up_sgd(), 100_000.0);
     }
 
     #[test]
     fn test_share_allocation_ownership_percentage() {
-        let allocation = ShareAllocation::new("Ordinary", 25, 100_00);
+        let allocation = ShareAllocation::new("Ordinary", 25, 10_000);
         assert_eq!(allocation.ownership_percentage(100), 25.0);
     }
 
@@ -817,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_share_class_ordinary() {
-        let ordinary = ShareClass::ordinary(1000, Some(100_00));
+        let ordinary = ShareClass::ordinary(1000, Some(10_000));
         assert_eq!(ordinary.class_name, "Ordinary");
         assert!(ordinary.voting_rights);
         assert!(!ordinary.redeemable);
@@ -825,7 +825,7 @@ mod tests {
 
     #[test]
     fn test_share_class_preference() {
-        let preference = ShareClass::preference(500, Some(100_00), 500); // 5% = 500 bps
+        let preference = ShareClass::preference(500, Some(10_000), 500); // 5% = 500 bps
         assert_eq!(preference.class_name, "Preference");
         assert!(!preference.voting_rights);
         match preference.dividend_rights {

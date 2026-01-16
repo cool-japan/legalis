@@ -377,7 +377,7 @@ mod tests {
 
         assert!(sim.is_some());
         let sim_val = sim.unwrap();
-        assert!(sim_val >= -1.0 && sim_val <= 1.0);
+        assert!((-1.0..=1.0).contains(&sim_val));
     }
 
     #[test]

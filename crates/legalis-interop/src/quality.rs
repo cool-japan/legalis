@@ -485,13 +485,11 @@ mod tests {
     #[test]
     fn test_quality_analyzer_creation() {
         let _analyzer = QualityAnalyzer::new();
-        assert!(true); // Just check it can be created
     }
 
     #[test]
     fn test_quality_analyzer_with_cache() {
         let _analyzer = QualityAnalyzer::with_cache(10);
-        assert!(true); // Just check it can be created
     }
 
     #[test]

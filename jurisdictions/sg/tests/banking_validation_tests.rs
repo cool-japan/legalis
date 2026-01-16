@@ -6,10 +6,10 @@ use legalis_sg::banking::*;
 #[test]
 fn test_full_bank_compliant() {
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 1_500_000_000_00,
-        at1_capital_sgd: 300_000_000_00,
-        tier2_capital_sgd: 500_000_000_00,
-        risk_weighted_assets_sgd: 10_000_000_000_00,
+        cet1_capital_sgd: 150_000_000_000,
+        at1_capital_sgd: 30_000_000_000,
+        tier2_capital_sgd: 50_000_000_000,
+        risk_weighted_assets_sgd: 1_000_000_000_000,
         calculation_date: Utc::now(),
     };
 
@@ -31,8 +31,8 @@ fn test_full_bank_compliant() {
         .country_of_incorporation("Singapore".to_string())
         .capital_adequacy(capital)
         .aml_officer(aml_officer)
-        .total_assets_sgd(50_000_000_000_00)
-        .total_deposits_sgd(40_000_000_000_00)
+        .total_assets_sgd(5_000_000_000_000)
+        .total_deposits_sgd(4_000_000_000_000)
         .build()
         .unwrap();
 
@@ -46,10 +46,10 @@ fn test_full_bank_compliant() {
 #[test]
 fn test_insufficient_cet1_capital() {
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 500_000_000_00, // 5% - INSUFFICIENT
-        at1_capital_sgd: 200_000_000_00,
-        tier2_capital_sgd: 300_000_000_00,
-        risk_weighted_assets_sgd: 10_000_000_000_00,
+        cet1_capital_sgd: 50_000_000_000, // 5% - INSUFFICIENT
+        at1_capital_sgd: 20_000_000_000,
+        tier2_capital_sgd: 30_000_000_000,
+        risk_weighted_assets_sgd: 1_000_000_000_000,
         calculation_date: Utc::now(),
     };
 
@@ -121,7 +121,7 @@ fn test_customer_cdd_high_risk() {
         edd_performed: true,
         source_of_funds_verified: true,
         beneficial_owner_identified: true,
-        balance_sgd: 100_000_00,
+        balance_sgd: 10_000_000,
     };
 
     let result = validate_customer_account(&account);
@@ -153,7 +153,7 @@ fn test_edd_requirement() {
         edd_performed: false, // EDD NOT performed
         source_of_funds_verified: true,
         beneficial_owner_identified: true,
-        balance_sgd: 100_000_00,
+        balance_sgd: 10_000_000,
     };
 
     assert!(account.requires_edd());
@@ -182,7 +182,7 @@ fn test_str_filing_timeline() {
         reference_number: "STR001".to_string(),
         account_number: "ACC003".to_string(),
         customer_name: "Test".to_string(),
-        transaction_amount_sgd: 100_000_00,
+        transaction_amount_sgd: 10_000_000,
         transaction_date,
         filing_date,
         suspicion_description: "Suspicious pattern".to_string(),
@@ -237,10 +237,10 @@ fn test_cash_transaction_reporting_threshold() {
 #[test]
 fn test_capital_calculations() {
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 1_000_000_000_00,          // SGD 10M
-        at1_capital_sgd: 200_000_000_00,             // SGD 2M
-        tier2_capital_sgd: 300_000_000_00,           // SGD 3M
-        risk_weighted_assets_sgd: 10_000_000_000_00, // SGD 100M
+        cet1_capital_sgd: 100_000_000_000,           // SGD 10M
+        at1_capital_sgd: 20_000_000_000,             // SGD 2M
+        tier2_capital_sgd: 30_000_000_000,           // SGD 3M
+        risk_weighted_assets_sgd: 1_000_000_000_000, // SGD 100M
         calculation_date: Utc::now(),
     };
 
@@ -251,24 +251,24 @@ fn test_capital_calculations() {
 
     // Test capital shortfall calculation
     let required = calculate_required_capital(capital.risk_weighted_assets_sgd, 6.5);
-    assert_eq!(required, 650_000_000_00); // 6.5% of 100M
+    assert_eq!(required, 65_000_000_000); // 6.5% of 100M
 
     let shortfall = calculate_capital_shortfall(
-        500_000_000_00, // Only SGD 5M
+        50_000_000_000, // Only SGD 5M
         capital.risk_weighted_assets_sgd,
         6.5,
     );
-    assert_eq!(shortfall, 150_000_000_00); // Need additional 1.5M
+    assert_eq!(shortfall, 15_000_000_000); // Need additional 1.5M
 }
 
 #[test]
 fn test_bank_builder_validation() {
     // Test successful build
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 1_000_000_000_00,
-        at1_capital_sgd: 200_000_000_00,
-        tier2_capital_sgd: 300_000_000_00,
-        risk_weighted_assets_sgd: 10_000_000_000_00,
+        cet1_capital_sgd: 100_000_000_000,
+        at1_capital_sgd: 20_000_000_000,
+        tier2_capital_sgd: 30_000_000_000,
+        risk_weighted_assets_sgd: 1_000_000_000_000,
         calculation_date: Utc::now(),
     };
 
@@ -303,7 +303,7 @@ fn test_aml_compliance_assessment() {
             edd_performed: true,
             source_of_funds_verified: true,
             beneficial_owner_identified: true,
-            balance_sgd: 100_000_00,
+            balance_sgd: 10_000_000,
         },
         CustomerAccount {
             account_number: "ACC002".to_string(),
@@ -315,7 +315,7 @@ fn test_aml_compliance_assessment() {
             edd_performed: true,
             source_of_funds_verified: true,
             beneficial_owner_identified: true,
-            balance_sgd: 200_000_00,
+            balance_sgd: 20_000_000,
         },
         CustomerAccount {
             account_number: "ACC003".to_string(),
@@ -327,7 +327,7 @@ fn test_aml_compliance_assessment() {
             edd_performed: false,
             source_of_funds_verified: true,
             beneficial_owner_identified: true,
-            balance_sgd: 50_000_00,
+            balance_sgd: 5_000_000,
         },
     ];
 

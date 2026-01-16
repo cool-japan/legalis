@@ -610,8 +610,10 @@ mod tests {
     #[test]
     fn test_analyze_patterns() {
         // Use custom config with lower threshold so test data triggers pattern detection
-        let mut config = BehavioralConfig::default();
-        config.min_pattern_occurrences = 2;
+        let config = BehavioralConfig {
+            min_pattern_occurrences: 2,
+            ..Default::default()
+        };
         let recognizer = BehavioralRecognizer::with_config(config);
 
         // Create more records with override pattern
@@ -650,8 +652,10 @@ mod tests {
     #[test]
     fn test_detect_temporal_patterns() {
         // Use custom config with lower threshold
-        let mut config = BehavioralConfig::default();
-        config.min_pattern_occurrences = 2;
+        let config = BehavioralConfig {
+            min_pattern_occurrences: 2,
+            ..Default::default()
+        };
         let recognizer = BehavioralRecognizer::with_config(config);
 
         // Create records that share the same (day_of_week, hour) slot
@@ -674,8 +678,10 @@ mod tests {
     #[test]
     fn test_detect_decision_flows() {
         // Use custom config with lower threshold
-        let mut config = BehavioralConfig::default();
-        config.min_pattern_occurrences = 2;
+        let config = BehavioralConfig {
+            min_pattern_occurrences: 2,
+            ..Default::default()
+        };
         let recognizer = BehavioralRecognizer::with_config(config);
 
         // Create multiple subjects with the same flow pattern to meet threshold

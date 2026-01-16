@@ -1,5 +1,6 @@
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use legalis_interop::{LegalConverter, LegalFormat};
+use std::hint::black_box;
 
 fn catala_import_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("catala_import");
@@ -311,7 +312,7 @@ scope VotingRights:
             let mut output = Vec::new();
             let exporter = StreamingExporter::new(LegalFormat::L4);
             exporter
-                .export(black_box(&[statute.clone()]), &mut output)
+                .export(black_box(std::slice::from_ref(&statute)), &mut output)
                 .unwrap()
         })
     });

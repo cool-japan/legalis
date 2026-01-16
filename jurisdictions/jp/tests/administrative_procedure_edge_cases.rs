@@ -358,7 +358,7 @@ fn test_validate_procedure_with_91_day_processing() {
 
     let report = validate_procedure(&procedure).unwrap();
     assert!(report.is_valid()); // Valid but should have warning
-    assert!(report.warnings.len() > 0);
+    assert!(!report.warnings.is_empty());
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn test_validate_disposition_without_reason_statement() {
 
     let report = validate_procedure(&procedure).unwrap();
     assert!(!report.is_valid()); // Should fail Article 5 validation
-    assert!(report.errors.len() > 0);
+    assert!(!report.errors.is_empty());
 }
 
 #[test]
@@ -529,12 +529,13 @@ fn test_all_signature_algorithms() {
     ];
 
     for algo in algorithms {
+        let serial = format!("CERT-{:?}", algo);
         let cert = CertificateBuilder::new()
             .issuer("Test CA")
             .subject("Test Subject")
             .valid_from(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
             .valid_until(NaiveDate::from_ymd_opt(2028, 1, 1).unwrap())
-            .serial_number(&format!("CERT-{:?}", algo))
+            .serial_number(&serial)
             .public_key(vec![0x04; 256])
             .build()
             .unwrap();
@@ -709,9 +710,10 @@ fn test_all_procedure_types() {
 
     for proc_type in types {
         let applicant = Applicant::individual("名前", "住所");
+        let proc_id = format!("TEST-{:?}", proc_type);
 
         let procedure = ProcedureBuilder::new()
-            .procedure_id(&format!("TEST-{:?}", proc_type))
+            .procedure_id(&proc_id)
             .procedure_type(proc_type.clone())
             .agency(GovernmentAgency::DigitalAgency)
             .applicant(applicant)
@@ -742,9 +744,10 @@ fn test_all_government_agencies() {
 
     for agency in agencies {
         let applicant = Applicant::individual("名前", "住所");
+        let proc_id = format!("TEST-{:?}", agency);
 
         let procedure = ProcedureBuilder::new()
-            .procedure_id(&format!("TEST-{:?}", agency))
+            .procedure_id(&proc_id)
             .procedure_type(ProcedureType::Application)
             .agency(agency)
             .applicant(applicant)

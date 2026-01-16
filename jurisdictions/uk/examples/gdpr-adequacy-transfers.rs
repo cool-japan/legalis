@@ -111,7 +111,7 @@ fn example_3_transfer_mechanisms() {
     println!("Scenario: Transferring data to Brazil (no UK adequacy decision)");
     println!();
 
-    let mechanisms = vec![
+    let mechanisms = [
         TransferMechanism::UkIdta,
         TransferMechanism::EuSccsWithAddendum,
         TransferMechanism::BindingCorporateRules {

@@ -104,7 +104,7 @@
 //! #     .with_cultural_params(CulturalParams::for_country("US"));
 //! let engine = PortingEngine::new(japan, usa);
 //!
-//! let statutes = vec![
+//! let statutes = [
 //!     Statute::new("s1", "Statute 1", Effect::new(EffectType::Grant, "Right 1")),
 //!     Statute::new("s2", "Statute 2", Effect::new(EffectType::Grant, "Right 2")),
 //! ];
@@ -14045,6 +14045,7 @@ impl StakeholderImpactTracker {
     }
 
     /// Records a stakeholder impact.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_impact(
         &mut self,
         project_id: String,
@@ -17747,6 +17748,1635 @@ impl Default for TrainingMaterialGenerator {
     }
 }
 
+// ============================================================================
+// Global Legal Harmonization (v0.3.1)
+// ============================================================================
+
+/// Model law that can be adopted across jurisdictions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelLaw {
+    /// Model law ID
+    pub id: String,
+    /// Model law name
+    pub name: String,
+    /// Issuing organization (e.g., UNCITRAL, UNIDROIT)
+    pub issuing_organization: String,
+    /// Version
+    pub version: String,
+    /// Subject area
+    pub subject_area: String,
+    /// Text of the model law
+    pub text: String,
+    /// Adoption status across jurisdictions
+    pub adoptions: Vec<ModelLawAdoption>,
+    /// Recommended adaptations
+    pub recommended_adaptations: Vec<String>,
+    /// Creation date
+    pub created_at: String,
+    /// Last updated
+    pub updated_at: String,
+}
+
+/// Adoption of a model law by a jurisdiction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelLawAdoption {
+    /// Jurisdiction that adopted the model law
+    pub jurisdiction: String,
+    /// Adoption date
+    pub adoption_date: String,
+    /// Adoption level
+    pub adoption_level: AdoptionLevel,
+    /// Local adaptations made
+    pub local_adaptations: Vec<String>,
+    /// Implementation status
+    pub implementation_status: ImplementationStatus,
+    /// Notes on adoption
+    pub notes: String,
+}
+
+/// Level of model law adoption.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AdoptionLevel {
+    /// Full adoption without modifications
+    FullAdoption,
+    /// Substantial adoption with minor modifications
+    SubstantialAdoption,
+    /// Partial adoption (selected provisions)
+    PartialAdoption,
+    /// Inspired by model law but significantly modified
+    Inspired,
+    /// Under consideration
+    UnderConsideration,
+}
+
+/// Implementation status of adopted model law.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ImplementationStatus {
+    /// Fully implemented
+    Implemented,
+    /// Partially implemented
+    PartiallyImplemented,
+    /// Enacted but not yet implemented
+    Enacted,
+    /// In legislative process
+    InLegislativeProcess,
+    /// Planned
+    Planned,
+}
+
+impl ModelLaw {
+    /// Creates a new model law.
+    pub fn new(
+        name: String,
+        issuing_organization: String,
+        version: String,
+        subject_area: String,
+        text: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            issuing_organization,
+            version,
+            subject_area,
+            text,
+            adoptions: Vec::new(),
+            recommended_adaptations: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds an adoption record.
+    pub fn add_adoption(&mut self, adoption: ModelLawAdoption) {
+        self.adoptions.push(adoption);
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Gets adoption rate (percentage of jurisdictions that adopted).
+    pub fn get_adoption_rate(&self, total_jurisdictions: usize) -> f64 {
+        if total_jurisdictions == 0 {
+            return 0.0;
+        }
+        self.adoptions.len() as f64 / total_jurisdictions as f64
+    }
+
+    /// Gets jurisdictions with full adoption.
+    pub fn get_full_adoptions(&self) -> Vec<&ModelLawAdoption> {
+        self.adoptions
+            .iter()
+            .filter(|a| a.adoption_level == AdoptionLevel::FullAdoption)
+            .collect()
+    }
+}
+
+/// Treaty-based porting framework.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreatyBasedPorting {
+    /// Treaty ID
+    pub treaty_id: String,
+    /// Treaty name
+    pub treaty_name: String,
+    /// Treaty type
+    pub treaty_type: TreatyType,
+    /// Signatory jurisdictions
+    pub signatories: Vec<String>,
+    /// Treaty provisions
+    pub provisions: Vec<TreatyProvision>,
+    /// Harmonization requirements
+    pub harmonization_requirements: Vec<HarmonizationRequirement>,
+    /// Porting obligations
+    pub porting_obligations: Vec<PortingObligation>,
+    /// Status
+    pub status: TreatyStatus,
+    /// Entry into force date
+    pub entry_into_force: Option<String>,
+}
+
+/// Type of international treaty.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TreatyType {
+    /// Bilateral treaty
+    Bilateral,
+    /// Multilateral treaty
+    Multilateral,
+    /// Regional agreement
+    Regional,
+    /// Framework convention
+    FrameworkConvention,
+    /// Protocol
+    Protocol,
+    /// Memorandum of understanding
+    MOU,
+}
+
+/// Provision in a treaty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreatyProvision {
+    /// Provision ID
+    pub id: String,
+    /// Article number
+    pub article_number: String,
+    /// Provision text
+    pub text: String,
+    /// Binding nature
+    pub binding: bool,
+    /// Implementation deadline
+    pub implementation_deadline: Option<String>,
+    /// Related domestic law areas
+    pub related_law_areas: Vec<String>,
+}
+
+/// Harmonization requirement from a treaty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarmonizationRequirement {
+    /// Requirement ID
+    pub id: String,
+    /// Description
+    pub description: String,
+    /// Required harmonization level
+    pub harmonization_level: HarmonizationLevel,
+    /// Affected legal areas
+    pub affected_areas: Vec<String>,
+    /// Deadline
+    pub deadline: Option<String>,
+    /// Compliance status per jurisdiction
+    pub compliance_status: Vec<(String, ComplianceLevel)>,
+}
+
+/// Level of harmonization required.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum HarmonizationLevel {
+    /// Complete harmonization (identical laws)
+    Complete,
+    /// Substantial harmonization (core provisions identical)
+    Substantial,
+    /// Minimum standards (minimum requirements only)
+    MinimumStandards,
+    /// Mutual recognition (recognize each other's laws)
+    MutualRecognition,
+    /// Coordination (coordinate but not harmonize)
+    Coordination,
+}
+
+/// Porting obligation from treaty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortingObligation {
+    /// Obligation ID
+    pub id: String,
+    /// Source provision (treaty article)
+    pub source_provision: String,
+    /// Required domestic implementation
+    pub required_implementation: String,
+    /// Signatory jurisdictions affected
+    pub affected_jurisdictions: Vec<String>,
+    /// Deadline
+    pub deadline: Option<String>,
+    /// Implementation status
+    pub implementation_status: Vec<(String, ImplementationStatus)>,
+}
+
+/// Treaty status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TreatyStatus {
+    /// Negotiation phase
+    Negotiation,
+    /// Signed but not ratified
+    Signed,
+    /// Ratified and in force
+    InForce,
+    /// Suspended
+    Suspended,
+    /// Terminated
+    Terminated,
+}
+
+/// Compliance level with treaty requirements.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ComplianceLevel {
+    /// Full compliance
+    FullCompliance,
+    /// Partial compliance
+    PartialCompliance,
+    /// Non-compliance
+    NonCompliance,
+    /// Assessment pending
+    Pending,
+}
+
+impl TreatyBasedPorting {
+    /// Creates a new treaty-based porting framework.
+    pub fn new(treaty_name: String, treaty_type: TreatyType, signatories: Vec<String>) -> Self {
+        Self {
+            treaty_id: uuid::Uuid::new_v4().to_string(),
+            treaty_name,
+            treaty_type,
+            signatories,
+            provisions: Vec::new(),
+            harmonization_requirements: Vec::new(),
+            porting_obligations: Vec::new(),
+            status: TreatyStatus::Negotiation,
+            entry_into_force: None,
+        }
+    }
+
+    /// Adds a treaty provision.
+    pub fn add_provision(&mut self, provision: TreatyProvision) {
+        self.provisions.push(provision);
+    }
+
+    /// Adds a harmonization requirement.
+    pub fn add_harmonization_requirement(&mut self, requirement: HarmonizationRequirement) {
+        self.harmonization_requirements.push(requirement);
+    }
+
+    /// Gets compliance rate for a jurisdiction.
+    pub fn get_compliance_rate(&self, jurisdiction: &str) -> f64 {
+        let total = self.harmonization_requirements.len();
+        if total == 0 {
+            return 1.0;
+        }
+
+        let compliant = self
+            .harmonization_requirements
+            .iter()
+            .filter(|req| {
+                req.compliance_status.iter().any(|(j, level)| {
+                    j == jurisdiction && *level == ComplianceLevel::FullCompliance
+                })
+            })
+            .count();
+
+        compliant as f64 / total as f64
+    }
+}
+
+/// International standard alignment framework.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InternationalStandard {
+    /// Standard ID
+    pub id: String,
+    /// Standard name
+    pub name: String,
+    /// Issuing body (e.g., ISO, IEC, ITU)
+    pub issuing_body: String,
+    /// Standard number
+    pub standard_number: String,
+    /// Subject area
+    pub subject_area: String,
+    /// Standard type
+    pub standard_type: StandardType,
+    /// Technical specifications
+    pub technical_specs: String,
+    /// Adoption recommendations
+    pub adoption_recommendations: Vec<AdoptionRecommendation>,
+    /// Alignment status across jurisdictions
+    pub alignment_status: Vec<AlignmentStatus>,
+    /// Publication date
+    pub publication_date: String,
+}
+
+/// Type of international standard.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum StandardType {
+    /// Technical standard
+    Technical,
+    /// Safety standard
+    Safety,
+    /// Quality standard
+    Quality,
+    /// Environmental standard
+    Environmental,
+    /// Data protection standard
+    DataProtection,
+    /// Cybersecurity standard
+    Cybersecurity,
+    /// Best practice guideline
+    BestPractice,
+}
+
+/// Recommendation for adopting a standard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdoptionRecommendation {
+    /// Recommendation ID
+    pub id: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Recommended adoption approach
+    pub adoption_approach: String,
+    /// Required legal changes
+    pub required_legal_changes: Vec<String>,
+    /// Estimated timeline
+    pub estimated_timeline: String,
+    /// Priority level
+    pub priority: AdoptionPriority,
+}
+
+/// Priority level for adoption recommendations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AdoptionPriority {
+    /// Critical priority
+    Critical,
+    /// High priority
+    High,
+    /// Medium priority
+    Medium,
+    /// Low priority
+    Low,
+}
+
+/// Alignment status of jurisdiction with international standard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlignmentStatus {
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Alignment level
+    pub alignment_level: AlignmentLevel,
+    /// Deviations from standard
+    pub deviations: Vec<String>,
+    /// Planned alignment actions
+    pub planned_actions: Vec<String>,
+    /// Last assessment date
+    pub last_assessment: String,
+}
+
+/// Level of alignment with international standard.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AlignmentLevel {
+    /// Fully aligned
+    FullyAligned,
+    /// Substantially aligned
+    SubstantiallyAligned,
+    /// Partially aligned
+    PartiallyAligned,
+    /// Minimal alignment
+    MinimalAlignment,
+    /// Not aligned
+    NotAligned,
+}
+
+impl InternationalStandard {
+    /// Creates a new international standard.
+    pub fn new(
+        name: String,
+        issuing_body: String,
+        standard_number: String,
+        subject_area: String,
+        standard_type: StandardType,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            issuing_body,
+            standard_number,
+            subject_area,
+            standard_type,
+            technical_specs: String::new(),
+            adoption_recommendations: Vec::new(),
+            alignment_status: Vec::new(),
+            publication_date: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Gets global alignment rate.
+    pub fn get_global_alignment_rate(&self) -> f64 {
+        if self.alignment_status.is_empty() {
+            return 0.0;
+        }
+
+        let aligned = self
+            .alignment_status
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.alignment_level,
+                    AlignmentLevel::FullyAligned | AlignmentLevel::SubstantiallyAligned
+                )
+            })
+            .count();
+
+        aligned as f64 / self.alignment_status.len() as f64
+    }
+}
+
+/// Global best practice repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BestPractice {
+    /// Practice ID
+    pub id: String,
+    /// Practice name
+    pub name: String,
+    /// Legal area
+    pub legal_area: String,
+    /// Description
+    pub description: String,
+    /// Source jurisdiction(s)
+    pub source_jurisdictions: Vec<String>,
+    /// Evidence of effectiveness
+    pub evidence: Vec<Evidence>,
+    /// Transferability assessment
+    pub transferability: TransferabilityAssessment,
+    /// Adoption history
+    pub adoptions: Vec<BestPracticeAdoption>,
+    /// Recommended adaptations
+    pub recommended_adaptations: Vec<String>,
+    /// Created at
+    pub created_at: String,
+}
+
+/// Evidence supporting best practice effectiveness.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Evidence {
+    /// Evidence type
+    pub evidence_type: EvidenceType,
+    /// Description
+    pub description: String,
+    /// Source
+    pub source: String,
+    /// Date
+    pub date: String,
+    /// Quality score (0.0 - 1.0)
+    pub quality_score: f64,
+}
+
+/// Type of evidence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EvidenceType {
+    /// Empirical research
+    EmpiricalResearch,
+    /// Case study
+    CaseStudy,
+    /// Expert opinion
+    ExpertOpinion,
+    /// Statistical data
+    StatisticalData,
+    /// Comparative analysis
+    ComparativeAnalysis,
+    /// Implementation report
+    ImplementationReport,
+}
+
+/// Assessment of practice transferability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransferabilityAssessment {
+    /// Overall transferability score (0.0 - 1.0)
+    pub overall_score: f64,
+    /// Legal system compatibility
+    pub legal_system_compatibility: Vec<(String, f64)>,
+    /// Cultural adaptability
+    pub cultural_adaptability: f64,
+    /// Economic feasibility
+    pub economic_feasibility: f64,
+    /// Prerequisites for adoption
+    pub prerequisites: Vec<String>,
+    /// Potential barriers
+    pub potential_barriers: Vec<String>,
+}
+
+/// Adoption of a best practice.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BestPracticeAdoption {
+    /// Jurisdiction that adopted
+    pub jurisdiction: String,
+    /// Adoption date
+    pub adoption_date: String,
+    /// Adaptations made
+    pub adaptations: Vec<String>,
+    /// Outcome assessment
+    pub outcome: OutcomeAssessment,
+    /// Lessons learned
+    pub lessons_learned: Vec<String>,
+}
+
+/// Assessment of adoption outcome.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutcomeAssessment {
+    /// Success level
+    pub success_level: SuccessLevel,
+    /// Impact metrics
+    pub impact_metrics: Vec<(String, f64)>,
+    /// Challenges encountered
+    pub challenges: Vec<String>,
+    /// Assessment date
+    pub assessment_date: String,
+}
+
+/// Success level of best practice adoption.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SuccessLevel {
+    /// Highly successful
+    HighlySuccessful,
+    /// Successful
+    Successful,
+    /// Moderately successful
+    ModeratelySuccessful,
+    /// Limited success
+    LimitedSuccess,
+    /// Unsuccessful
+    Unsuccessful,
+}
+
+impl BestPractice {
+    /// Creates a new best practice.
+    pub fn new(name: String, legal_area: String, description: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            legal_area,
+            description,
+            source_jurisdictions: Vec::new(),
+            evidence: Vec::new(),
+            transferability: TransferabilityAssessment {
+                overall_score: 0.5,
+                legal_system_compatibility: Vec::new(),
+                cultural_adaptability: 0.5,
+                economic_feasibility: 0.5,
+                prerequisites: Vec::new(),
+                potential_barriers: Vec::new(),
+            },
+            adoptions: Vec::new(),
+            recommended_adaptations: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Gets average success rate of adoptions.
+    pub fn get_success_rate(&self) -> f64 {
+        if self.adoptions.is_empty() {
+            return 0.0;
+        }
+
+        let successful = self
+            .adoptions
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.outcome.success_level,
+                    SuccessLevel::HighlySuccessful | SuccessLevel::Successful
+                )
+            })
+            .count();
+
+        successful as f64 / self.adoptions.len() as f64
+    }
+}
+
+/// Soft law to hard law conversion framework.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoftLawConversion {
+    /// Conversion ID
+    pub id: String,
+    /// Soft law source
+    pub soft_law_source: SoftLawSource,
+    /// Target hard law
+    pub target_hard_law: HardLawTarget,
+    /// Conversion strategy
+    pub conversion_strategy: ConversionStrategy,
+    /// Legal basis for conversion
+    pub legal_basis: Vec<String>,
+    /// Stakeholder consultations
+    pub consultations: Vec<StakeholderConsultation>,
+    /// Implementation steps
+    pub implementation_steps: Vec<ConversionImplementationStep>,
+    /// Status
+    pub status: ConversionStatus,
+    /// Created at
+    pub created_at: String,
+}
+
+/// Soft law source document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoftLawSource {
+    /// Source ID
+    pub id: String,
+    /// Source name
+    pub name: String,
+    /// Source type
+    pub source_type: SoftLawType,
+    /// Issuing body
+    pub issuing_body: String,
+    /// Content
+    pub content: String,
+    /// Binding force (if any)
+    pub binding_force: BindingForce,
+    /// Adoption/endorsement status
+    pub endorsements: Vec<String>,
+}
+
+/// Type of soft law.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SoftLawType {
+    /// UN resolution
+    UNResolution,
+    /// Guidelines
+    Guidelines,
+    /// Recommendations
+    Recommendations,
+    /// Principles
+    Principles,
+    /// Codes of conduct
+    CodeOfConduct,
+    /// Declarations
+    Declaration,
+    /// Best practices
+    BestPractices,
+    /// Standards
+    Standards,
+}
+
+/// Binding force of soft law.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BindingForce {
+    /// No binding force (purely advisory)
+    NonBinding,
+    /// Political commitment
+    PoliticalCommitment,
+    /// Moral obligation
+    MoralObligation,
+    /// Quasi-legal effect
+    QuasiLegal,
+    /// Legally binding (exceptional for soft law)
+    LegallyBinding,
+}
+
+/// Target for hard law conversion.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardLawTarget {
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Target legal instrument type
+    pub instrument_type: LegalInstrumentType,
+    /// Draft legislation
+    pub draft_legislation: String,
+    /// Expected enforcement mechanisms
+    pub enforcement_mechanisms: Vec<String>,
+    /// Penalties for non-compliance
+    pub penalties: Vec<String>,
+}
+
+/// Type of legal instrument for hard law.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LegalInstrumentType {
+    /// Primary legislation (statute, act)
+    PrimaryLegislation,
+    /// Secondary legislation (regulation, order)
+    SecondaryLegislation,
+    /// Constitutional amendment
+    ConstitutionalAmendment,
+    /// Treaty implementation
+    TreatyImplementation,
+    /// Administrative rule
+    AdministrativeRule,
+}
+
+/// Strategy for converting soft law to hard law.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversionStrategy {
+    /// Strategy type
+    pub strategy_type: ConversionStrategyType,
+    /// Rationale
+    pub rationale: String,
+    /// Key adaptations needed
+    pub adaptations: Vec<String>,
+    /// Risks and mitigation
+    pub risks: Vec<(String, String)>,
+    /// Timeline
+    pub timeline: String,
+}
+
+/// Type of conversion strategy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ConversionStrategyType {
+    /// Direct incorporation
+    DirectIncorporation,
+    /// Adaptive incorporation
+    AdaptiveIncorporation,
+    /// Inspired legislation
+    InspiredLegislation,
+    /// Phased implementation
+    PhasedImplementation,
+    /// Pilot program first
+    PilotProgram,
+}
+
+/// Stakeholder consultation record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StakeholderConsultation {
+    /// Stakeholder group
+    pub stakeholder_group: String,
+    /// Consultation date
+    pub consultation_date: String,
+    /// Feedback received
+    pub feedback: Vec<String>,
+    /// Concerns raised
+    pub concerns: Vec<String>,
+    /// Proposals incorporated
+    pub incorporated_proposals: Vec<String>,
+}
+
+/// Implementation step for soft law conversion.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversionImplementationStep {
+    /// Step number
+    pub step_number: usize,
+    /// Description
+    pub description: String,
+    /// Responsible party
+    pub responsible_party: String,
+    /// Deadline
+    pub deadline: Option<String>,
+    /// Status
+    pub status: ConversionStepStatus,
+    /// Dependencies
+    pub dependencies: Vec<usize>,
+}
+
+/// Status of conversion implementation step.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ConversionStepStatus {
+    /// Not started
+    NotStarted,
+    /// In progress
+    InProgress,
+    /// Completed
+    Completed,
+    /// Blocked
+    Blocked,
+    /// Cancelled
+    Cancelled,
+}
+
+/// Conversion status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ConversionStatus {
+    /// Planning phase
+    Planning,
+    /// Drafting legislation
+    Drafting,
+    /// Stakeholder consultation
+    Consultation,
+    /// Legislative review
+    LegislativeReview,
+    /// Enacted
+    Enacted,
+    /// Implementation in progress
+    Implementing,
+    /// Fully implemented
+    Implemented,
+    /// Abandoned
+    Abandoned,
+}
+
+impl SoftLawConversion {
+    /// Creates a new soft law conversion framework.
+    pub fn new(
+        soft_law_source: SoftLawSource,
+        target_hard_law: HardLawTarget,
+        conversion_strategy: ConversionStrategy,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            soft_law_source,
+            target_hard_law,
+            conversion_strategy,
+            legal_basis: Vec::new(),
+            consultations: Vec::new(),
+            implementation_steps: Vec::new(),
+            status: ConversionStatus::Planning,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Gets implementation progress percentage.
+    pub fn get_implementation_progress(&self) -> f64 {
+        if self.implementation_steps.is_empty() {
+            return 0.0;
+        }
+
+        let completed = self
+            .implementation_steps
+            .iter()
+            .filter(|step| step.status == ConversionStepStatus::Completed)
+            .count();
+
+        (completed as f64 / self.implementation_steps.len() as f64) * 100.0
+    }
+
+    /// Adds an implementation step.
+    pub fn add_implementation_step(&mut self, step: ConversionImplementationStep) {
+        self.implementation_steps.push(step);
+    }
+}
+
+// ============================================================================
+// Real-Time Porting Intelligence (v0.3.2)
+// ============================================================================
+
+/// Real-time regulatory change tracking system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulatoryChangeTracker {
+    /// Tracker ID
+    pub id: String,
+    /// Monitored jurisdictions
+    pub monitored_jurisdictions: Vec<String>,
+    /// Tracked regulatory areas
+    pub tracked_areas: Vec<String>,
+    /// Detected changes
+    pub detected_changes: Vec<RegulatoryChange>,
+    /// Active subscriptions
+    pub subscriptions: Vec<ChangeSubscription>,
+    /// Last update timestamp
+    pub last_update: String,
+    /// Tracking status
+    pub status: TrackerStatus,
+}
+
+/// Detected regulatory change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegulatoryChange {
+    /// Change ID
+    pub id: String,
+    /// Jurisdiction where change occurred
+    pub jurisdiction: String,
+    /// Regulatory area affected
+    pub regulatory_area: String,
+    /// Change type
+    pub change_type: RegulatoryChangeType,
+    /// Change description
+    pub description: String,
+    /// Source reference
+    pub source_reference: String,
+    /// Detection timestamp
+    pub detected_at: String,
+    /// Effective date
+    pub effective_date: Option<String>,
+    /// Impact severity
+    pub impact_severity: ImpactSeverity,
+    /// Affected statutes
+    pub affected_statutes: Vec<String>,
+    /// Porting implications
+    pub porting_implications: Vec<String>,
+}
+
+/// Type of regulatory change.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RegulatoryChangeType {
+    /// New legislation enacted
+    NewLegislation,
+    /// Amendment to existing law
+    Amendment,
+    /// Repeal of law
+    Repeal,
+    /// New regulation issued
+    NewRegulation,
+    /// Court decision with precedential value
+    CourtDecision,
+    /// Administrative guidance
+    AdministrativeGuidance,
+    /// Emergency order
+    EmergencyOrder,
+    /// Sunset provision activation
+    SunsetProvision,
+}
+
+/// Subscription to regulatory changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangeSubscription {
+    /// Subscription ID
+    pub id: String,
+    /// Subscriber identifier
+    pub subscriber_id: String,
+    /// Jurisdictions of interest
+    pub jurisdictions: Vec<String>,
+    /// Regulatory areas of interest
+    pub areas: Vec<String>,
+    /// Minimum severity to notify
+    pub min_severity: ImpactSeverity,
+    /// Notification channels
+    pub notification_channels: Vec<NotificationChannel>,
+    /// Active status
+    pub active: bool,
+    /// Created at
+    pub created_at: String,
+}
+
+/// Tracker status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrackerStatus {
+    /// Active and monitoring
+    Active,
+    /// Paused
+    Paused,
+    /// Error state
+    Error,
+    /// Maintenance mode
+    Maintenance,
+}
+
+impl RegulatoryChangeTracker {
+    /// Creates a new regulatory change tracker.
+    pub fn new(monitored_jurisdictions: Vec<String>, tracked_areas: Vec<String>) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            monitored_jurisdictions,
+            tracked_areas,
+            detected_changes: Vec::new(),
+            subscriptions: Vec::new(),
+            last_update: chrono::Utc::now().to_rfc3339(),
+            status: TrackerStatus::Active,
+        }
+    }
+
+    /// Adds a detected regulatory change.
+    pub fn add_change(&mut self, change: RegulatoryChange) {
+        self.detected_changes.push(change);
+        self.last_update = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Subscribes to regulatory changes.
+    pub fn subscribe(&mut self, subscription: ChangeSubscription) {
+        self.subscriptions.push(subscription);
+    }
+
+    /// Gets recent changes within a time window.
+    pub fn get_recent_changes(&self, hours: i64) -> Vec<&RegulatoryChange> {
+        let cutoff = chrono::Utc::now() - chrono::Duration::hours(hours);
+        let cutoff_str = cutoff.to_rfc3339();
+
+        self.detected_changes
+            .iter()
+            .filter(|change| change.detected_at >= cutoff_str)
+            .collect()
+    }
+
+    /// Gets changes by jurisdiction.
+    pub fn get_changes_by_jurisdiction(&self, jurisdiction: &str) -> Vec<&RegulatoryChange> {
+        self.detected_changes
+            .iter()
+            .filter(|change| change.jurisdiction == jurisdiction)
+            .collect()
+    }
+
+    /// Gets critical changes requiring immediate attention.
+    pub fn get_critical_changes(&self) -> Vec<&RegulatoryChange> {
+        self.detected_changes
+            .iter()
+            .filter(|change| change.impact_severity == ImpactSeverity::Severe)
+            .collect()
+    }
+}
+
+/// Automatic porting trigger system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomaticPortingTrigger {
+    /// Trigger ID
+    pub id: String,
+    /// Trigger name
+    pub name: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdictions for automatic porting
+    pub target_jurisdictions: Vec<String>,
+    /// Trigger conditions
+    pub conditions: Vec<TriggerCondition>,
+    /// Porting options to apply
+    pub porting_options: PortingOptions,
+    /// Trigger status
+    pub status: TriggerStatus,
+    /// Execution history
+    pub execution_history: Vec<TriggerExecution>,
+    /// Created at
+    pub created_at: String,
+}
+
+/// Condition that activates a porting trigger.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerCondition {
+    /// Condition ID
+    pub id: String,
+    /// Condition type
+    pub condition_type: TriggerConditionType,
+    /// Condition parameters
+    pub parameters: Vec<(String, String)>,
+    /// Whether condition is met
+    pub is_met: bool,
+}
+
+/// Type of trigger condition.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TriggerConditionType {
+    /// New legislation in source jurisdiction
+    NewLegislation,
+    /// Amendment to tracked statute
+    StatuteAmendment,
+    /// Treaty obligation deadline approaching
+    TreatyDeadline,
+    /// Harmonization requirement updated
+    HarmonizationUpdate,
+    /// Model law adoption in related jurisdiction
+    ModelLawAdoption,
+    /// Court decision precedent
+    CourtPrecedent,
+    /// Scheduled periodic review
+    ScheduledReview,
+}
+
+/// Status of automatic trigger.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TriggerStatus {
+    /// Active and monitoring
+    Active,
+    /// Disabled
+    Disabled,
+    /// Triggered and executing
+    Executing,
+    /// Completed execution
+    Completed,
+    /// Failed execution
+    Failed,
+}
+
+/// Record of trigger execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerExecution {
+    /// Execution ID
+    pub id: String,
+    /// Execution timestamp
+    pub executed_at: String,
+    /// Conditions that triggered execution
+    pub triggered_by: Vec<String>,
+    /// Porting results
+    pub porting_results: Vec<String>,
+    /// Success status
+    pub success: bool,
+    /// Execution notes
+    pub notes: String,
+}
+
+impl AutomaticPortingTrigger {
+    /// Creates a new automatic porting trigger.
+    pub fn new(
+        name: String,
+        source_jurisdiction: String,
+        target_jurisdictions: Vec<String>,
+        porting_options: PortingOptions,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            source_jurisdiction,
+            target_jurisdictions,
+            conditions: Vec::new(),
+            porting_options,
+            status: TriggerStatus::Active,
+            execution_history: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a trigger condition.
+    pub fn add_condition(&mut self, condition: TriggerCondition) {
+        self.conditions.push(condition);
+    }
+
+    /// Checks if trigger conditions are met.
+    pub fn check_conditions(&self) -> bool {
+        !self.conditions.is_empty() && self.conditions.iter().all(|c| c.is_met)
+    }
+
+    /// Records an execution.
+    pub fn record_execution(&mut self, execution: TriggerExecution) {
+        self.execution_history.push(execution);
+    }
+
+    /// Gets execution success rate.
+    pub fn get_success_rate(&self) -> f64 {
+        if self.execution_history.is_empty() {
+            return 0.0;
+        }
+
+        let successful = self.execution_history.iter().filter(|e| e.success).count();
+
+        successful as f64 / self.execution_history.len() as f64
+    }
+}
+
+/// Proactive adaptation alert system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdaptationAlert {
+    /// Alert ID
+    pub id: String,
+    /// Alert title
+    pub title: String,
+    /// Alert description
+    pub description: String,
+    /// Alert severity
+    pub severity: AlertSeverity,
+    /// Affected jurisdictions
+    pub affected_jurisdictions: Vec<String>,
+    /// Affected statutes
+    pub affected_statutes: Vec<String>,
+    /// Recommended actions
+    pub recommended_actions: Vec<RecommendedAction>,
+    /// Alert status
+    pub status: AlertStatus,
+    /// Created at
+    pub created_at: String,
+    /// Expiry date
+    pub expires_at: Option<String>,
+}
+
+/// Severity level of adaptation alert.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AlertSeverity {
+    /// Urgent action required
+    Urgent,
+    /// High priority
+    High,
+    /// Medium priority
+    Medium,
+    /// Low priority
+    Low,
+    /// Informational
+    Info,
+}
+
+/// Recommended action in response to alert.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecommendedAction {
+    /// Action ID
+    pub id: String,
+    /// Action description
+    pub action: String,
+    /// Action priority
+    pub priority: ActionPriority,
+    /// Estimated effort
+    pub estimated_effort: String,
+    /// Deadline
+    pub deadline: Option<String>,
+    /// Prerequisites
+    pub prerequisites: Vec<String>,
+}
+
+/// Priority level for recommended action.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ActionPriority {
+    /// Immediate action
+    Immediate,
+    /// Short-term action (within days)
+    ShortTerm,
+    /// Medium-term action (within weeks)
+    MediumTerm,
+    /// Long-term action (within months)
+    LongTerm,
+    /// Optional action
+    Optional,
+}
+
+/// Status of adaptation alert.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AlertStatus {
+    /// Alert is active
+    Active,
+    /// Alert acknowledged
+    Acknowledged,
+    /// Action in progress
+    InProgress,
+    /// Alert resolved
+    Resolved,
+    /// Alert dismissed
+    Dismissed,
+    /// Alert expired
+    Expired,
+}
+
+impl AdaptationAlert {
+    /// Creates a new adaptation alert.
+    pub fn new(
+        title: String,
+        description: String,
+        severity: AlertSeverity,
+        affected_jurisdictions: Vec<String>,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            title,
+            description,
+            severity,
+            affected_jurisdictions,
+            affected_statutes: Vec::new(),
+            recommended_actions: Vec::new(),
+            status: AlertStatus::Active,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            expires_at: None,
+        }
+    }
+
+    /// Adds a recommended action.
+    pub fn add_action(&mut self, action: RecommendedAction) {
+        self.recommended_actions.push(action);
+    }
+
+    /// Acknowledges the alert.
+    pub fn acknowledge(&mut self) {
+        if self.status == AlertStatus::Active {
+            self.status = AlertStatus::Acknowledged;
+        }
+    }
+
+    /// Marks alert as resolved.
+    pub fn resolve(&mut self) {
+        self.status = AlertStatus::Resolved;
+    }
+
+    /// Gets high-priority actions.
+    pub fn get_high_priority_actions(&self) -> Vec<&RecommendedAction> {
+        self.recommended_actions
+            .iter()
+            .filter(|action| {
+                matches!(
+                    action.priority,
+                    ActionPriority::Immediate | ActionPriority::ShortTerm
+                )
+            })
+            .collect()
+    }
+}
+
+/// Emerging law early warning system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmergingLawWarning {
+    /// Warning ID
+    pub id: String,
+    /// Warning title
+    pub title: String,
+    /// Jurisdiction
+    pub jurisdiction: String,
+    /// Emerging legal trend or development
+    pub description: String,
+    /// Warning level
+    pub warning_level: WarningLevel,
+    /// Confidence score (0.0 - 1.0)
+    pub confidence_score: f64,
+    /// Data sources
+    pub data_sources: Vec<DataSource>,
+    /// Predicted timeline
+    pub predicted_timeline: String,
+    /// Potential impact on porting
+    pub potential_impact: Vec<String>,
+    /// Monitoring indicators
+    pub indicators: Vec<EmergingLawIndicator>,
+    /// Created at
+    pub created_at: String,
+    /// Last updated
+    pub updated_at: String,
+}
+
+/// Warning level for emerging law.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WarningLevel {
+    /// Imminent change expected
+    Imminent,
+    /// Near-term change likely
+    NearTerm,
+    /// Medium-term possibility
+    MediumTerm,
+    /// Long-term trend
+    LongTerm,
+    /// Early signal
+    EarlySignal,
+}
+
+/// Data source for emerging law analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataSource {
+    /// Source type
+    pub source_type: SourceType,
+    /// Source identifier
+    pub source_id: String,
+    /// Source description
+    pub description: String,
+    /// Reliability score (0.0 - 1.0)
+    pub reliability: f64,
+    /// Last accessed
+    pub last_accessed: String,
+}
+
+/// Type of data source.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SourceType {
+    /// Legislative proposal
+    LegislativeProposal,
+    /// Policy white paper
+    PolicyWhitePaper,
+    /// Parliamentary debate
+    ParliamentaryDebate,
+    /// Regulatory consultation
+    RegulatoryConsultation,
+    /// Academic research
+    AcademicResearch,
+    /// Industry report
+    IndustryReport,
+    /// Media coverage
+    MediaCoverage,
+    /// International trend
+    InternationalTrend,
+}
+
+/// Indicator of emerging legal development.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmergingLawIndicator {
+    /// Indicator name
+    pub name: String,
+    /// Indicator value
+    pub value: f64,
+    /// Threshold for concern
+    pub threshold: f64,
+    /// Trend direction
+    pub trend: TrendDirection,
+    /// Last measurement
+    pub last_measured: String,
+}
+
+/// Direction of trend.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrendDirection {
+    /// Increasing
+    Increasing,
+    /// Stable
+    Stable,
+    /// Decreasing
+    Decreasing,
+    /// Volatile
+    Volatile,
+}
+
+impl EmergingLawWarning {
+    /// Creates a new emerging law warning.
+    pub fn new(
+        title: String,
+        jurisdiction: String,
+        description: String,
+        warning_level: WarningLevel,
+        confidence_score: f64,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            title,
+            jurisdiction,
+            description,
+            warning_level,
+            confidence_score,
+            data_sources: Vec::new(),
+            predicted_timeline: String::new(),
+            potential_impact: Vec::new(),
+            indicators: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a data source.
+    pub fn add_data_source(&mut self, source: DataSource) {
+        self.data_sources.push(source);
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Adds an indicator.
+    pub fn add_indicator(&mut self, indicator: EmergingLawIndicator) {
+        self.indicators.push(indicator);
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Gets average reliability of data sources.
+    pub fn get_average_reliability(&self) -> f64 {
+        if self.data_sources.is_empty() {
+            return 0.0;
+        }
+
+        let sum: f64 = self.data_sources.iter().map(|s| s.reliability).sum();
+        sum / self.data_sources.len() as f64
+    }
+
+    /// Checks if any indicators exceed thresholds.
+    pub fn has_threshold_breach(&self) -> bool {
+        self.indicators.iter().any(|i| i.value >= i.threshold)
+    }
+}
+
+/// Predictive porting recommendation system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictivePortingRecommendation {
+    /// Recommendation ID
+    pub id: String,
+    /// Source jurisdiction
+    pub source_jurisdiction: String,
+    /// Target jurisdiction
+    pub target_jurisdiction: String,
+    /// Recommended statute for porting
+    pub recommended_statute: String,
+    /// Recommendation reason
+    pub reason: String,
+    /// Predicted success probability (0.0 - 1.0)
+    pub success_probability: f64,
+    /// Predicted benefits
+    pub predicted_benefits: Vec<PredictedBenefit>,
+    /// Predicted challenges
+    pub predicted_challenges: Vec<PredictedChallenge>,
+    /// Recommended timing
+    pub recommended_timing: RecommendedTiming,
+    /// Machine learning model used
+    pub model_version: String,
+    /// Confidence intervals
+    pub confidence_intervals: Vec<(String, f64, f64)>,
+    /// Created at
+    pub created_at: String,
+}
+
+/// Predicted benefit of porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictedBenefit {
+    /// Benefit type
+    pub benefit_type: BenefitType,
+    /// Benefit description
+    pub description: String,
+    /// Expected impact score (0.0 - 1.0)
+    pub impact_score: f64,
+    /// Time to realization
+    pub time_to_realization: String,
+}
+
+/// Type of predicted benefit.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BenefitType {
+    /// Legal harmonization benefit
+    LegalHarmonization,
+    /// Economic efficiency
+    EconomicEfficiency,
+    /// Reduced compliance burden
+    ReducedComplianceBurden,
+    /// Improved legal clarity
+    ImprovedClarity,
+    /// Enhanced international cooperation
+    InternationalCooperation,
+    /// Innovation enablement
+    InnovationEnablement,
+}
+
+/// Predicted challenge in porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictedChallenge {
+    /// Challenge type
+    pub challenge_type: ChallengeType,
+    /// Challenge description
+    pub description: String,
+    /// Severity score (0.0 - 1.0)
+    pub severity_score: f64,
+    /// Mitigation strategies
+    pub mitigation_strategies: Vec<String>,
+}
+
+/// Type of predicted challenge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ChallengeType {
+    /// Cultural incompatibility
+    CulturalIncompatibility,
+    /// Legal system mismatch
+    LegalSystemMismatch,
+    /// Political resistance
+    PoliticalResistance,
+    /// Economic barriers
+    EconomicBarriers,
+    /// Technical implementation difficulty
+    TechnicalDifficulty,
+    /// Stakeholder opposition
+    StakeholderOpposition,
+}
+
+/// Recommended timing for porting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecommendedTiming {
+    /// Optimal start date
+    pub optimal_start: String,
+    /// Latest recommended start
+    pub latest_start: String,
+    /// Expected duration
+    pub expected_duration: String,
+    /// Timing rationale
+    pub rationale: String,
+    /// Window of opportunity factors
+    pub opportunity_factors: Vec<String>,
+}
+
+impl PredictivePortingRecommendation {
+    /// Creates a new predictive porting recommendation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        source_jurisdiction: String,
+        target_jurisdiction: String,
+        recommended_statute: String,
+        reason: String,
+        success_probability: f64,
+        recommended_timing: RecommendedTiming,
+        model_version: String,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            source_jurisdiction,
+            target_jurisdiction,
+            recommended_statute,
+            reason,
+            success_probability,
+            predicted_benefits: Vec::new(),
+            predicted_challenges: Vec::new(),
+            recommended_timing,
+            model_version,
+            confidence_intervals: Vec::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Adds a predicted benefit.
+    pub fn add_benefit(&mut self, benefit: PredictedBenefit) {
+        self.predicted_benefits.push(benefit);
+    }
+
+    /// Adds a predicted challenge.
+    pub fn add_challenge(&mut self, challenge: PredictedChallenge) {
+        self.predicted_challenges.push(challenge);
+    }
+
+    /// Gets overall benefit score.
+    pub fn get_benefit_score(&self) -> f64 {
+        if self.predicted_benefits.is_empty() {
+            return 0.0;
+        }
+
+        let sum: f64 = self.predicted_benefits.iter().map(|b| b.impact_score).sum();
+        sum / self.predicted_benefits.len() as f64
+    }
+
+    /// Gets overall challenge severity.
+    pub fn get_challenge_severity(&self) -> f64 {
+        if self.predicted_challenges.is_empty() {
+            return 0.0;
+        }
+
+        let sum: f64 = self
+            .predicted_challenges
+            .iter()
+            .map(|c| c.severity_score)
+            .sum();
+        sum / self.predicted_challenges.len() as f64
+    }
+
+    /// Calculates risk-adjusted success probability.
+    pub fn get_risk_adjusted_probability(&self) -> f64 {
+        let challenge_penalty = self.get_challenge_severity() * 0.3;
+        (self.success_probability - challenge_penalty).max(0.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -17786,7 +19416,7 @@ mod tests {
     #[test]
     fn test_compatibility_report() {
         let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
-        let statutes = vec![Statute::new(
+        let statutes = [Statute::new(
             "test",
             "Test",
             Effect::new(EffectType::Grant, "Test"),
@@ -17864,7 +19494,7 @@ mod tests {
     #[tokio::test]
     async fn test_batch_port() {
         let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
-        let statutes = vec![
+        let statutes = [
             Statute::new("test1", "Test 1", Effect::new(EffectType::Grant, "Test 1")),
             Statute::new("test2", "Test 2", Effect::new(EffectType::Grant, "Test 2")),
         ];
@@ -18186,7 +19816,7 @@ mod tests {
     #[test]
     fn test_batch_compliance_check() {
         let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
-        let statutes = vec![
+        let statutes = [
             Statute::new("test1", "Test 1", Effect::new(EffectType::Grant, "Test 1")),
             Statute::new("test2", "Test 2", Effect::new(EffectType::Grant, "Test 2")),
         ];
@@ -18210,7 +19840,7 @@ mod tests {
     #[test]
     fn test_compliance_summary() {
         let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
-        let statutes = vec![
+        let statutes = [
             Statute::new("test1", "Test 1", Effect::new(EffectType::Grant, "Test 1")),
             Statute::new("test2", "Test 2", Effect::new(EffectType::Grant, "Test 2")),
         ];
@@ -18264,7 +19894,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_porting_output() {
         let engine = PortingEngine::new(test_jurisdiction_jp(), test_jurisdiction_us());
-        let statutes = vec![Statute::new(
+        let statutes = [Statute::new(
             "test",
             "Test",
             Effect::new(EffectType::Grant, "Test"),
@@ -18911,7 +20541,7 @@ mod tests {
 
     #[test]
     fn test_audience_levels() {
-        let levels = vec![
+        let levels = [
             AudienceLevel::GeneralPublic,
             AudienceLevel::Business,
             AudienceLevel::Government,
@@ -19137,8 +20767,8 @@ mod tests {
         let us_jp_score = us.compatibility_score(&jp);
 
         assert!(us_gb_score > us_jp_score);
-        assert!(us_gb_score >= 0.0 && us_gb_score <= 1.0);
-        assert!(us_jp_score >= 0.0 && us_jp_score <= 1.0);
+        assert!((0.0..=1.0).contains(&us_gb_score));
+        assert!((0.0..=1.0).contains(&us_jp_score));
     }
 
     #[test]
@@ -19382,7 +21012,7 @@ mod tests {
         let calculator = SemanticDistanceCalculator::new(concept_db);
 
         let distance = calculator.calculate_distance("US", "JP", "contract", "契約");
-        assert!(distance >= 0.0 && distance <= 1.0);
+        assert!((0.0..=1.0).contains(&distance));
         assert!(distance < 0.1); // Should be low for known equivalence
     }
 
@@ -19698,7 +21328,7 @@ mod tests {
         jp_context.time_orientation = 0.7;
 
         let compatibility = us_context.assess_compatibility(&jp_context);
-        assert!(compatibility >= 0.0 && compatibility <= 1.0);
+        assert!((0.0..=1.0).contains(&compatibility));
         // Different cultural dimensions should result in lower compatibility
         assert!(compatibility < 0.8);
     }
@@ -19987,7 +21617,7 @@ mod tests {
         );
         let impact_score = assessment.assess_impact(&statute);
 
-        assert!(impact_score >= -1.0 && impact_score <= 1.0);
+        assert!((-1.0..=1.0).contains(&impact_score));
         assert_eq!(assessment.impact_assessments.len(), 1);
         assert!(
             !assessment.impact_assessments[0]
@@ -20835,7 +22465,7 @@ mod tests {
 
     #[test]
     fn test_impact_severity_levels() {
-        let severities = vec![
+        let severities = [
             ImpactSeverity::Severe,
             ImpactSeverity::Moderate,
             ImpactSeverity::Minor,
@@ -21535,7 +23165,7 @@ mod tests {
         let role = StakeholderRole::LegalExpert;
         assert_eq!(role, StakeholderRole::LegalExpert);
 
-        let roles = vec![
+        let roles = [
             StakeholderRole::ProjectManager,
             StakeholderRole::LegalExpert,
             StakeholderRole::TechnicalReviewer,
@@ -21549,7 +23179,7 @@ mod tests {
 
     #[test]
     fn test_notification_channels() {
-        let channels = vec![
+        let channels = [
             NotificationChannel::Email,
             NotificationChannel::InApp,
             NotificationChannel::Sms,
@@ -23596,11 +25226,11 @@ mod tests {
         (0..count)
             .map(|i| PortedStatute {
                 original_id: format!("statute-{}", i),
-                statute: Statute::new(
-                    &format!("ported-{}", i),
-                    &format!("Test Statute {}", i),
-                    Effect::new(EffectType::Grant, "Test effect"),
-                ),
+                statute: {
+                    let id = format!("ported-{}", i);
+                    let title = format!("Test Statute {}", i);
+                    Statute::new(&id, &title, Effect::new(EffectType::Grant, "Test effect"))
+                },
                 changes: vec![],
                 locale: Locale::new("en").with_country("US"),
                 compatibility_score: 0.85,
@@ -24225,5 +25855,1100 @@ mod tests {
         let winner = framework.get_winner();
         assert!(winner.is_some());
         assert_eq!(winner.unwrap().name, "Treatment");
+    }
+
+    // ========================================================================
+    // Global Legal Harmonization Tests (v0.3.1)
+    // ========================================================================
+
+    #[test]
+    fn test_model_law_creation() {
+        let model_law = ModelLaw::new(
+            "UNCITRAL Model Law on Electronic Commerce".to_string(),
+            "UNCITRAL".to_string(),
+            "1.0".to_string(),
+            "Electronic Commerce".to_string(),
+            "Model law text...".to_string(),
+        );
+
+        assert!(!model_law.id.is_empty());
+        assert_eq!(model_law.name, "UNCITRAL Model Law on Electronic Commerce");
+        assert_eq!(model_law.issuing_organization, "UNCITRAL");
+        assert_eq!(model_law.version, "1.0");
+        assert_eq!(model_law.subject_area, "Electronic Commerce");
+        assert!(model_law.adoptions.is_empty());
+    }
+
+    #[test]
+    fn test_model_law_adoption_tracking() {
+        let mut model_law = ModelLaw::new(
+            "Model Law on Arbitration".to_string(),
+            "UNCITRAL".to_string(),
+            "2.0".to_string(),
+            "International Arbitration".to_string(),
+            "Model law text...".to_string(),
+        );
+
+        let adoption = ModelLawAdoption {
+            jurisdiction: "JP".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adoption_level: AdoptionLevel::FullAdoption,
+            local_adaptations: vec!["Minor translation adjustments".to_string()],
+            implementation_status: ImplementationStatus::Implemented,
+            notes: "Fully adopted".to_string(),
+        };
+
+        model_law.add_adoption(adoption);
+
+        assert_eq!(model_law.adoptions.len(), 1);
+        assert_eq!(model_law.adoptions[0].jurisdiction, "JP");
+        assert_eq!(
+            model_law.adoptions[0].adoption_level,
+            AdoptionLevel::FullAdoption
+        );
+    }
+
+    #[test]
+    fn test_model_law_adoption_rate() {
+        let mut model_law = ModelLaw::new(
+            "Model Law".to_string(),
+            "UNCITRAL".to_string(),
+            "1.0".to_string(),
+            "Commerce".to_string(),
+            "Text".to_string(),
+        );
+
+        // Add 3 adoptions
+        for i in 0..3 {
+            model_law.add_adoption(ModelLawAdoption {
+                jurisdiction: format!("Country{}", i),
+                adoption_date: "2023-01-01".to_string(),
+                adoption_level: AdoptionLevel::FullAdoption,
+                local_adaptations: Vec::new(),
+                implementation_status: ImplementationStatus::Implemented,
+                notes: String::new(),
+            });
+        }
+
+        let rate = model_law.get_adoption_rate(10);
+        assert_eq!(rate, 0.3); // 3 out of 10
+    }
+
+    #[test]
+    fn test_model_law_full_adoptions_filter() {
+        let mut model_law = ModelLaw::new(
+            "Model Law".to_string(),
+            "UNCITRAL".to_string(),
+            "1.0".to_string(),
+            "Commerce".to_string(),
+            "Text".to_string(),
+        );
+
+        model_law.add_adoption(ModelLawAdoption {
+            jurisdiction: "JP".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adoption_level: AdoptionLevel::FullAdoption,
+            local_adaptations: Vec::new(),
+            implementation_status: ImplementationStatus::Implemented,
+            notes: String::new(),
+        });
+
+        model_law.add_adoption(ModelLawAdoption {
+            jurisdiction: "US".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adoption_level: AdoptionLevel::PartialAdoption,
+            local_adaptations: Vec::new(),
+            implementation_status: ImplementationStatus::Implemented,
+            notes: String::new(),
+        });
+
+        let full_adoptions = model_law.get_full_adoptions();
+        assert_eq!(full_adoptions.len(), 1);
+        assert_eq!(full_adoptions[0].jurisdiction, "JP");
+    }
+
+    #[test]
+    fn test_treaty_based_porting_creation() {
+        let treaty = TreatyBasedPorting::new(
+            "GDPR Adequacy Agreement".to_string(),
+            TreatyType::Bilateral,
+            vec!["EU".to_string(), "JP".to_string()],
+        );
+
+        assert!(!treaty.treaty_id.is_empty());
+        assert_eq!(treaty.treaty_name, "GDPR Adequacy Agreement");
+        assert_eq!(treaty.treaty_type, TreatyType::Bilateral);
+        assert_eq!(treaty.signatories.len(), 2);
+        assert_eq!(treaty.status, TreatyStatus::Negotiation);
+        assert!(treaty.provisions.is_empty());
+    }
+
+    #[test]
+    fn test_treaty_provision_management() {
+        let mut treaty = TreatyBasedPorting::new(
+            "Treaty".to_string(),
+            TreatyType::Multilateral,
+            vec!["JP".to_string(), "US".to_string()],
+        );
+
+        let provision = TreatyProvision {
+            id: uuid::Uuid::new_v4().to_string(),
+            article_number: "Article 1".to_string(),
+            text: "Data protection requirements".to_string(),
+            binding: true,
+            implementation_deadline: Some("2024-01-01".to_string()),
+            related_law_areas: vec!["Data Protection".to_string()],
+        };
+
+        treaty.add_provision(provision);
+
+        assert_eq!(treaty.provisions.len(), 1);
+        assert_eq!(treaty.provisions[0].article_number, "Article 1");
+        assert!(treaty.provisions[0].binding);
+    }
+
+    #[test]
+    fn test_treaty_compliance_rate() {
+        let mut treaty = TreatyBasedPorting::new(
+            "Treaty".to_string(),
+            TreatyType::Multilateral,
+            vec!["JP".to_string(), "US".to_string()],
+        );
+
+        let requirement1 = HarmonizationRequirement {
+            id: uuid::Uuid::new_v4().to_string(),
+            description: "Req 1".to_string(),
+            harmonization_level: HarmonizationLevel::Complete,
+            affected_areas: Vec::new(),
+            deadline: None,
+            compliance_status: vec![
+                ("JP".to_string(), ComplianceLevel::FullCompliance),
+                ("US".to_string(), ComplianceLevel::PartialCompliance),
+            ],
+        };
+
+        let requirement2 = HarmonizationRequirement {
+            id: uuid::Uuid::new_v4().to_string(),
+            description: "Req 2".to_string(),
+            harmonization_level: HarmonizationLevel::Substantial,
+            affected_areas: Vec::new(),
+            deadline: None,
+            compliance_status: vec![
+                ("JP".to_string(), ComplianceLevel::FullCompliance),
+                ("US".to_string(), ComplianceLevel::NonCompliance),
+            ],
+        };
+
+        treaty.add_harmonization_requirement(requirement1);
+        treaty.add_harmonization_requirement(requirement2);
+
+        let jp_rate = treaty.get_compliance_rate("JP");
+        assert_eq!(jp_rate, 1.0); // 2/2 full compliance
+
+        let us_rate = treaty.get_compliance_rate("US");
+        assert_eq!(us_rate, 0.0); // 0/2 full compliance
+    }
+
+    #[test]
+    fn test_harmonization_levels() {
+        let levels = [
+            HarmonizationLevel::Complete,
+            HarmonizationLevel::Substantial,
+            HarmonizationLevel::MinimumStandards,
+            HarmonizationLevel::MutualRecognition,
+            HarmonizationLevel::Coordination,
+        ];
+
+        assert_eq!(levels.len(), 5);
+        assert_eq!(levels[0], HarmonizationLevel::Complete);
+    }
+
+    #[test]
+    fn test_international_standard_creation() {
+        let standard = InternationalStandard::new(
+            "ISO 27001".to_string(),
+            "ISO".to_string(),
+            "27001:2013".to_string(),
+            "Information Security".to_string(),
+            StandardType::Cybersecurity,
+        );
+
+        assert!(!standard.id.is_empty());
+        assert_eq!(standard.name, "ISO 27001");
+        assert_eq!(standard.issuing_body, "ISO");
+        assert_eq!(standard.standard_number, "27001:2013");
+        assert_eq!(standard.standard_type, StandardType::Cybersecurity);
+        assert!(standard.alignment_status.is_empty());
+    }
+
+    #[test]
+    fn test_international_standard_alignment_rate() {
+        let mut standard = InternationalStandard::new(
+            "ISO 9001".to_string(),
+            "ISO".to_string(),
+            "9001:2015".to_string(),
+            "Quality Management".to_string(),
+            StandardType::Quality,
+        );
+
+        standard.alignment_status.push(AlignmentStatus {
+            jurisdiction: "JP".to_string(),
+            alignment_level: AlignmentLevel::FullyAligned,
+            deviations: Vec::new(),
+            planned_actions: Vec::new(),
+            last_assessment: chrono::Utc::now().to_rfc3339(),
+        });
+
+        standard.alignment_status.push(AlignmentStatus {
+            jurisdiction: "US".to_string(),
+            alignment_level: AlignmentLevel::SubstantiallyAligned,
+            deviations: vec!["Minor deviation".to_string()],
+            planned_actions: Vec::new(),
+            last_assessment: chrono::Utc::now().to_rfc3339(),
+        });
+
+        standard.alignment_status.push(AlignmentStatus {
+            jurisdiction: "GB".to_string(),
+            alignment_level: AlignmentLevel::PartiallyAligned,
+            deviations: Vec::new(),
+            planned_actions: Vec::new(),
+            last_assessment: chrono::Utc::now().to_rfc3339(),
+        });
+
+        let rate = standard.get_global_alignment_rate();
+        assert!((rate - 0.666).abs() < 0.01); // 2/3 fully or substantially aligned
+    }
+
+    #[test]
+    fn test_standard_types() {
+        let types = [
+            StandardType::Technical,
+            StandardType::Safety,
+            StandardType::Quality,
+            StandardType::Environmental,
+            StandardType::DataProtection,
+            StandardType::Cybersecurity,
+            StandardType::BestPractice,
+        ];
+
+        assert_eq!(types.len(), 7);
+    }
+
+    #[test]
+    fn test_best_practice_creation() {
+        let practice = BestPractice::new(
+            "Regulatory Sandbox".to_string(),
+            "Financial Regulation".to_string(),
+            "Allow innovation under controlled conditions".to_string(),
+        );
+
+        assert!(!practice.id.is_empty());
+        assert_eq!(practice.name, "Regulatory Sandbox");
+        assert_eq!(practice.legal_area, "Financial Regulation");
+        assert!(practice.evidence.is_empty());
+        assert!(practice.adoptions.is_empty());
+    }
+
+    #[test]
+    fn test_best_practice_success_rate() {
+        let mut practice = BestPractice::new(
+            "Practice".to_string(),
+            "Area".to_string(),
+            "Description".to_string(),
+        );
+
+        practice.adoptions.push(BestPracticeAdoption {
+            jurisdiction: "JP".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adaptations: Vec::new(),
+            outcome: OutcomeAssessment {
+                success_level: SuccessLevel::HighlySuccessful,
+                impact_metrics: Vec::new(),
+                challenges: Vec::new(),
+                assessment_date: chrono::Utc::now().to_rfc3339(),
+            },
+            lessons_learned: Vec::new(),
+        });
+
+        practice.adoptions.push(BestPracticeAdoption {
+            jurisdiction: "US".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adaptations: Vec::new(),
+            outcome: OutcomeAssessment {
+                success_level: SuccessLevel::Successful,
+                impact_metrics: Vec::new(),
+                challenges: Vec::new(),
+                assessment_date: chrono::Utc::now().to_rfc3339(),
+            },
+            lessons_learned: Vec::new(),
+        });
+
+        practice.adoptions.push(BestPracticeAdoption {
+            jurisdiction: "GB".to_string(),
+            adoption_date: "2023-01-01".to_string(),
+            adaptations: Vec::new(),
+            outcome: OutcomeAssessment {
+                success_level: SuccessLevel::LimitedSuccess,
+                impact_metrics: Vec::new(),
+                challenges: Vec::new(),
+                assessment_date: chrono::Utc::now().to_rfc3339(),
+            },
+            lessons_learned: Vec::new(),
+        });
+
+        let rate = practice.get_success_rate();
+        assert!((rate - 0.666).abs() < 0.01); // 2/3 successful
+    }
+
+    #[test]
+    fn test_evidence_types() {
+        let types = [
+            EvidenceType::EmpiricalResearch,
+            EvidenceType::CaseStudy,
+            EvidenceType::ExpertOpinion,
+            EvidenceType::StatisticalData,
+            EvidenceType::ComparativeAnalysis,
+            EvidenceType::ImplementationReport,
+        ];
+
+        assert_eq!(types.len(), 6);
+    }
+
+    #[test]
+    fn test_soft_law_conversion_creation() {
+        let soft_law = SoftLawSource {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "UN Guiding Principles on Business and Human Rights".to_string(),
+            source_type: SoftLawType::Principles,
+            issuing_body: "United Nations".to_string(),
+            content: "Protect, Respect, Remedy framework".to_string(),
+            binding_force: BindingForce::MoralObligation,
+            endorsements: vec!["Multiple countries".to_string()],
+        };
+
+        let hard_law = HardLawTarget {
+            jurisdiction: "JP".to_string(),
+            instrument_type: LegalInstrumentType::PrimaryLegislation,
+            draft_legislation: "Draft Act on Corporate Due Diligence".to_string(),
+            enforcement_mechanisms: vec!["Fines".to_string(), "Sanctions".to_string()],
+            penalties: vec!["Up to ¥100M fine".to_string()],
+        };
+
+        let strategy = ConversionStrategy {
+            strategy_type: ConversionStrategyType::AdaptiveIncorporation,
+            rationale: "Adapt to Japanese legal context".to_string(),
+            adaptations: vec!["Adjust to keiretsu structure".to_string()],
+            risks: vec![(
+                "Business resistance".to_string(),
+                "Gradual phase-in".to_string(),
+            )],
+            timeline: "2 years".to_string(),
+        };
+
+        let conversion = SoftLawConversion::new(soft_law, hard_law, strategy);
+
+        assert!(!conversion.id.is_empty());
+        assert_eq!(
+            conversion.soft_law_source.name,
+            "UN Guiding Principles on Business and Human Rights"
+        );
+        assert_eq!(conversion.target_hard_law.jurisdiction, "JP");
+        assert_eq!(conversion.status, ConversionStatus::Planning);
+        assert!(conversion.implementation_steps.is_empty());
+    }
+
+    #[test]
+    fn test_soft_law_conversion_progress() {
+        let soft_law = SoftLawSource {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "Guidelines".to_string(),
+            source_type: SoftLawType::Guidelines,
+            issuing_body: "UN".to_string(),
+            content: "Content".to_string(),
+            binding_force: BindingForce::NonBinding,
+            endorsements: Vec::new(),
+        };
+
+        let hard_law = HardLawTarget {
+            jurisdiction: "US".to_string(),
+            instrument_type: LegalInstrumentType::SecondaryLegislation,
+            draft_legislation: "Draft".to_string(),
+            enforcement_mechanisms: Vec::new(),
+            penalties: Vec::new(),
+        };
+
+        let strategy = ConversionStrategy {
+            strategy_type: ConversionStrategyType::DirectIncorporation,
+            rationale: "Direct".to_string(),
+            adaptations: Vec::new(),
+            risks: Vec::new(),
+            timeline: "1 year".to_string(),
+        };
+
+        let mut conversion = SoftLawConversion::new(soft_law, hard_law, strategy);
+
+        conversion.add_implementation_step(ConversionImplementationStep {
+            step_number: 1,
+            description: "Step 1".to_string(),
+            responsible_party: "Ministry".to_string(),
+            deadline: None,
+            status: ConversionStepStatus::Completed,
+            dependencies: Vec::new(),
+        });
+
+        conversion.add_implementation_step(ConversionImplementationStep {
+            step_number: 2,
+            description: "Step 2".to_string(),
+            responsible_party: "Ministry".to_string(),
+            deadline: None,
+            status: ConversionStepStatus::InProgress,
+            dependencies: vec![1],
+        });
+
+        let progress = conversion.get_implementation_progress();
+        assert_eq!(progress, 50.0); // 1 out of 2 completed
+    }
+
+    #[test]
+    fn test_soft_law_types() {
+        let types = [
+            SoftLawType::UNResolution,
+            SoftLawType::Guidelines,
+            SoftLawType::Recommendations,
+            SoftLawType::Principles,
+            SoftLawType::CodeOfConduct,
+            SoftLawType::Declaration,
+            SoftLawType::BestPractices,
+            SoftLawType::Standards,
+        ];
+
+        assert_eq!(types.len(), 8);
+    }
+
+    #[test]
+    fn test_binding_force_levels() {
+        let forces = [
+            BindingForce::NonBinding,
+            BindingForce::PoliticalCommitment,
+            BindingForce::MoralObligation,
+            BindingForce::QuasiLegal,
+            BindingForce::LegallyBinding,
+        ];
+
+        assert_eq!(forces.len(), 5);
+    }
+
+    #[test]
+    fn test_legal_instrument_types() {
+        let types = [
+            LegalInstrumentType::PrimaryLegislation,
+            LegalInstrumentType::SecondaryLegislation,
+            LegalInstrumentType::ConstitutionalAmendment,
+            LegalInstrumentType::TreatyImplementation,
+            LegalInstrumentType::AdministrativeRule,
+        ];
+
+        assert_eq!(types.len(), 5);
+    }
+
+    #[test]
+    fn test_conversion_strategy_types() {
+        let strategies = [
+            ConversionStrategyType::DirectIncorporation,
+            ConversionStrategyType::AdaptiveIncorporation,
+            ConversionStrategyType::InspiredLegislation,
+            ConversionStrategyType::PhasedImplementation,
+            ConversionStrategyType::PilotProgram,
+        ];
+
+        assert_eq!(strategies.len(), 5);
+    }
+
+    #[test]
+    fn test_conversion_step_status() {
+        let statuses = [
+            ConversionStepStatus::NotStarted,
+            ConversionStepStatus::InProgress,
+            ConversionStepStatus::Completed,
+            ConversionStepStatus::Blocked,
+            ConversionStepStatus::Cancelled,
+        ];
+
+        assert_eq!(statuses.len(), 5);
+    }
+
+    #[test]
+    fn test_treaty_status_transitions() {
+        let statuses = [
+            TreatyStatus::Negotiation,
+            TreatyStatus::Signed,
+            TreatyStatus::InForce,
+            TreatyStatus::Suspended,
+            TreatyStatus::Terminated,
+        ];
+
+        assert_eq!(statuses.len(), 5);
+    }
+
+    #[test]
+    fn test_adoption_priority_ordering() {
+        let mut priorities = [
+            AdoptionPriority::Low,
+            AdoptionPriority::Critical,
+            AdoptionPriority::Medium,
+            AdoptionPriority::High,
+        ];
+
+        priorities.sort();
+
+        assert_eq!(priorities[0], AdoptionPriority::Critical);
+        assert_eq!(priorities[1], AdoptionPriority::High);
+        assert_eq!(priorities[2], AdoptionPriority::Medium);
+        assert_eq!(priorities[3], AdoptionPriority::Low);
+    }
+
+    // ========================================================================
+    // Real-Time Porting Intelligence Tests (v0.3.2)
+    // ========================================================================
+
+    #[test]
+    fn test_regulatory_change_tracker_creation() {
+        let tracker = RegulatoryChangeTracker::new(
+            vec!["JP".to_string(), "US".to_string()],
+            vec![
+                "Data Protection".to_string(),
+                "Financial Services".to_string(),
+            ],
+        );
+
+        assert!(!tracker.id.is_empty());
+        assert_eq!(tracker.monitored_jurisdictions.len(), 2);
+        assert_eq!(tracker.tracked_areas.len(), 2);
+        assert_eq!(tracker.status, TrackerStatus::Active);
+        assert!(tracker.detected_changes.is_empty());
+    }
+
+    #[test]
+    fn test_add_regulatory_change() {
+        let mut tracker =
+            RegulatoryChangeTracker::new(vec!["JP".to_string()], vec!["Privacy".to_string()]);
+
+        let change = RegulatoryChange {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction: "JP".to_string(),
+            regulatory_area: "Privacy".to_string(),
+            change_type: RegulatoryChangeType::NewLegislation,
+            description: "New privacy law enacted".to_string(),
+            source_reference: "Act No. 123".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+            effective_date: Some("2024-06-01".to_string()),
+            impact_severity: ImpactSeverity::Severe,
+            affected_statutes: vec!["Privacy Act".to_string()],
+            porting_implications: vec!["Requires updates to ported statutes".to_string()],
+        };
+
+        tracker.add_change(change);
+
+        assert_eq!(tracker.detected_changes.len(), 1);
+        assert_eq!(tracker.detected_changes[0].jurisdiction, "JP");
+        assert_eq!(
+            tracker.detected_changes[0].change_type,
+            RegulatoryChangeType::NewLegislation
+        );
+    }
+
+    #[test]
+    fn test_get_changes_by_jurisdiction() {
+        let mut tracker = RegulatoryChangeTracker::new(
+            vec!["JP".to_string(), "US".to_string()],
+            vec!["Privacy".to_string()],
+        );
+
+        tracker.add_change(RegulatoryChange {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction: "JP".to_string(),
+            regulatory_area: "Privacy".to_string(),
+            change_type: RegulatoryChangeType::NewLegislation,
+            description: "JP law".to_string(),
+            source_reference: "Act No. 1".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+            effective_date: None,
+            impact_severity: ImpactSeverity::Severe,
+            affected_statutes: Vec::new(),
+            porting_implications: Vec::new(),
+        });
+
+        tracker.add_change(RegulatoryChange {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction: "US".to_string(),
+            regulatory_area: "Privacy".to_string(),
+            change_type: RegulatoryChangeType::Amendment,
+            description: "US law".to_string(),
+            source_reference: "USC 123".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+            effective_date: None,
+            impact_severity: ImpactSeverity::Moderate,
+            affected_statutes: Vec::new(),
+            porting_implications: Vec::new(),
+        });
+
+        let jp_changes = tracker.get_changes_by_jurisdiction("JP");
+        assert_eq!(jp_changes.len(), 1);
+        assert_eq!(jp_changes[0].jurisdiction, "JP");
+    }
+
+    #[test]
+    fn test_get_critical_changes() {
+        let mut tracker =
+            RegulatoryChangeTracker::new(vec!["JP".to_string()], vec!["Security".to_string()]);
+
+        tracker.add_change(RegulatoryChange {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction: "JP".to_string(),
+            regulatory_area: "Security".to_string(),
+            change_type: RegulatoryChangeType::EmergencyOrder,
+            description: "Critical change".to_string(),
+            source_reference: "Emergency Order 1".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+            effective_date: None,
+            impact_severity: ImpactSeverity::Severe,
+            affected_statutes: Vec::new(),
+            porting_implications: Vec::new(),
+        });
+
+        tracker.add_change(RegulatoryChange {
+            id: uuid::Uuid::new_v4().to_string(),
+            jurisdiction: "JP".to_string(),
+            regulatory_area: "Security".to_string(),
+            change_type: RegulatoryChangeType::AdministrativeGuidance,
+            description: "Low priority change".to_string(),
+            source_reference: "Guidance 1".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+            effective_date: None,
+            impact_severity: ImpactSeverity::Minor,
+            affected_statutes: Vec::new(),
+            porting_implications: Vec::new(),
+        });
+
+        let critical = tracker.get_critical_changes();
+        assert_eq!(critical.len(), 1);
+        assert_eq!(critical[0].impact_severity, ImpactSeverity::Severe);
+    }
+
+    #[test]
+    fn test_automatic_porting_trigger_creation() {
+        let trigger = AutomaticPortingTrigger::new(
+            "Auto-port privacy laws".to_string(),
+            "JP".to_string(),
+            vec!["US".to_string(), "GB".to_string()],
+            PortingOptions::default(),
+        );
+
+        assert!(!trigger.id.is_empty());
+        assert_eq!(trigger.name, "Auto-port privacy laws");
+        assert_eq!(trigger.source_jurisdiction, "JP");
+        assert_eq!(trigger.target_jurisdictions.len(), 2);
+        assert_eq!(trigger.status, TriggerStatus::Active);
+        assert!(trigger.conditions.is_empty());
+    }
+
+    #[test]
+    fn test_trigger_condition_checking() {
+        let mut trigger = AutomaticPortingTrigger::new(
+            "Test trigger".to_string(),
+            "JP".to_string(),
+            vec!["US".to_string()],
+            PortingOptions::default(),
+        );
+
+        trigger.add_condition(TriggerCondition {
+            id: uuid::Uuid::new_v4().to_string(),
+            condition_type: TriggerConditionType::NewLegislation,
+            parameters: Vec::new(),
+            is_met: true,
+        });
+
+        trigger.add_condition(TriggerCondition {
+            id: uuid::Uuid::new_v4().to_string(),
+            condition_type: TriggerConditionType::StatuteAmendment,
+            parameters: Vec::new(),
+            is_met: true,
+        });
+
+        assert!(trigger.check_conditions());
+    }
+
+    #[test]
+    fn test_trigger_execution_tracking() {
+        let mut trigger = AutomaticPortingTrigger::new(
+            "Test trigger".to_string(),
+            "JP".to_string(),
+            vec!["US".to_string()],
+            PortingOptions::default(),
+        );
+
+        trigger.record_execution(TriggerExecution {
+            id: uuid::Uuid::new_v4().to_string(),
+            executed_at: chrono::Utc::now().to_rfc3339(),
+            triggered_by: vec!["NewLegislation".to_string()],
+            porting_results: vec!["statute_123".to_string()],
+            success: true,
+            notes: "Successful execution".to_string(),
+        });
+
+        trigger.record_execution(TriggerExecution {
+            id: uuid::Uuid::new_v4().to_string(),
+            executed_at: chrono::Utc::now().to_rfc3339(),
+            triggered_by: vec!["StatuteAmendment".to_string()],
+            porting_results: Vec::new(),
+            success: false,
+            notes: "Failed execution".to_string(),
+        });
+
+        assert_eq!(trigger.execution_history.len(), 2);
+        assert_eq!(trigger.get_success_rate(), 0.5); // 1/2
+    }
+
+    #[test]
+    fn test_adaptation_alert_creation() {
+        let alert = AdaptationAlert::new(
+            "Critical Adaptation Needed".to_string(),
+            "GDPR compliance gap identified".to_string(),
+            AlertSeverity::Urgent,
+            vec!["JP".to_string(), "US".to_string()],
+        );
+
+        assert!(!alert.id.is_empty());
+        assert_eq!(alert.title, "Critical Adaptation Needed");
+        assert_eq!(alert.severity, AlertSeverity::Urgent);
+        assert_eq!(alert.status, AlertStatus::Active);
+        assert_eq!(alert.affected_jurisdictions.len(), 2);
+    }
+
+    #[test]
+    fn test_alert_acknowledgment() {
+        let mut alert = AdaptationAlert::new(
+            "Test Alert".to_string(),
+            "Description".to_string(),
+            AlertSeverity::High,
+            vec!["JP".to_string()],
+        );
+
+        assert_eq!(alert.status, AlertStatus::Active);
+
+        alert.acknowledge();
+        assert_eq!(alert.status, AlertStatus::Acknowledged);
+    }
+
+    #[test]
+    fn test_alert_recommended_actions() {
+        let mut alert = AdaptationAlert::new(
+            "Test Alert".to_string(),
+            "Description".to_string(),
+            AlertSeverity::Medium,
+            vec!["JP".to_string()],
+        );
+
+        alert.add_action(RecommendedAction {
+            id: uuid::Uuid::new_v4().to_string(),
+            action: "Immediate review required".to_string(),
+            priority: ActionPriority::Immediate,
+            estimated_effort: "2 hours".to_string(),
+            deadline: Some("2024-01-01".to_string()),
+            prerequisites: Vec::new(),
+        });
+
+        alert.add_action(RecommendedAction {
+            id: uuid::Uuid::new_v4().to_string(),
+            action: "Long-term planning".to_string(),
+            priority: ActionPriority::LongTerm,
+            estimated_effort: "1 week".to_string(),
+            deadline: None,
+            prerequisites: Vec::new(),
+        });
+
+        assert_eq!(alert.recommended_actions.len(), 2);
+
+        let high_priority = alert.get_high_priority_actions();
+        assert_eq!(high_priority.len(), 1);
+        assert_eq!(high_priority[0].priority, ActionPriority::Immediate);
+    }
+
+    #[test]
+    fn test_emerging_law_warning_creation() {
+        let warning = EmergingLawWarning::new(
+            "AI Regulation Emerging".to_string(),
+            "JP".to_string(),
+            "New AI safety regulations being drafted".to_string(),
+            WarningLevel::NearTerm,
+            0.75,
+        );
+
+        assert!(!warning.id.is_empty());
+        assert_eq!(warning.title, "AI Regulation Emerging");
+        assert_eq!(warning.jurisdiction, "JP");
+        assert_eq!(warning.warning_level, WarningLevel::NearTerm);
+        assert_eq!(warning.confidence_score, 0.75);
+        assert!(warning.data_sources.is_empty());
+    }
+
+    #[test]
+    fn test_emerging_law_data_sources() {
+        let mut warning = EmergingLawWarning::new(
+            "Test Warning".to_string(),
+            "US".to_string(),
+            "Description".to_string(),
+            WarningLevel::MediumTerm,
+            0.65,
+        );
+
+        warning.add_data_source(DataSource {
+            source_type: SourceType::LegislativeProposal,
+            source_id: "HB-123".to_string(),
+            description: "House Bill 123".to_string(),
+            reliability: 0.9,
+            last_accessed: chrono::Utc::now().to_rfc3339(),
+        });
+
+        warning.add_data_source(DataSource {
+            source_type: SourceType::MediaCoverage,
+            source_id: "News-456".to_string(),
+            description: "News article".to_string(),
+            reliability: 0.6,
+            last_accessed: chrono::Utc::now().to_rfc3339(),
+        });
+
+        assert_eq!(warning.data_sources.len(), 2);
+        let avg_reliability = warning.get_average_reliability();
+        assert!((avg_reliability - 0.75).abs() < 0.01); // (0.9 + 0.6) / 2
+    }
+
+    #[test]
+    fn test_emerging_law_indicators() {
+        let mut warning = EmergingLawWarning::new(
+            "Test Warning".to_string(),
+            "JP".to_string(),
+            "Description".to_string(),
+            WarningLevel::LongTerm,
+            0.5,
+        );
+
+        warning.add_indicator(EmergingLawIndicator {
+            name: "Legislative activity".to_string(),
+            value: 8.5,
+            threshold: 7.0,
+            trend: TrendDirection::Increasing,
+            last_measured: chrono::Utc::now().to_rfc3339(),
+        });
+
+        warning.add_indicator(EmergingLawIndicator {
+            name: "Public interest".to_string(),
+            value: 4.0,
+            threshold: 5.0,
+            trend: TrendDirection::Stable,
+            last_measured: chrono::Utc::now().to_rfc3339(),
+        });
+
+        assert_eq!(warning.indicators.len(), 2);
+        assert!(warning.has_threshold_breach()); // First indicator exceeds threshold
+    }
+
+    #[test]
+    fn test_predictive_porting_recommendation_creation() {
+        let timing = RecommendedTiming {
+            optimal_start: "2024-01-01".to_string(),
+            latest_start: "2024-03-01".to_string(),
+            expected_duration: "6 months".to_string(),
+            rationale: "Window of political opportunity".to_string(),
+            opportunity_factors: vec!["Legislative session".to_string()],
+        };
+
+        let recommendation = PredictivePortingRecommendation::new(
+            "JP".to_string(),
+            "US".to_string(),
+            "Data Protection Act".to_string(),
+            "High compatibility and need".to_string(),
+            0.85,
+            timing,
+            "v2.0".to_string(),
+        );
+
+        assert!(!recommendation.id.is_empty());
+        assert_eq!(recommendation.source_jurisdiction, "JP");
+        assert_eq!(recommendation.target_jurisdiction, "US");
+        assert_eq!(recommendation.success_probability, 0.85);
+        assert_eq!(recommendation.model_version, "v2.0");
+    }
+
+    #[test]
+    fn test_predicted_benefits_and_challenges() {
+        let timing = RecommendedTiming {
+            optimal_start: "2024-01-01".to_string(),
+            latest_start: "2024-03-01".to_string(),
+            expected_duration: "6 months".to_string(),
+            rationale: "Good timing".to_string(),
+            opportunity_factors: Vec::new(),
+        };
+
+        let mut recommendation = PredictivePortingRecommendation::new(
+            "JP".to_string(),
+            "US".to_string(),
+            "Test Statute".to_string(),
+            "Test reason".to_string(),
+            0.8,
+            timing,
+            "v1.0".to_string(),
+        );
+
+        recommendation.add_benefit(PredictedBenefit {
+            benefit_type: BenefitType::LegalHarmonization,
+            description: "Improved harmonization".to_string(),
+            impact_score: 0.9,
+            time_to_realization: "1 year".to_string(),
+        });
+
+        recommendation.add_benefit(PredictedBenefit {
+            benefit_type: BenefitType::EconomicEfficiency,
+            description: "Cost savings".to_string(),
+            impact_score: 0.7,
+            time_to_realization: "2 years".to_string(),
+        });
+
+        recommendation.add_challenge(PredictedChallenge {
+            challenge_type: ChallengeType::CulturalIncompatibility,
+            description: "Cultural differences".to_string(),
+            severity_score: 0.4,
+            mitigation_strategies: vec!["Adaptation".to_string()],
+        });
+
+        assert_eq!(recommendation.predicted_benefits.len(), 2);
+        assert_eq!(recommendation.predicted_challenges.len(), 1);
+
+        let benefit_score = recommendation.get_benefit_score();
+        assert!((benefit_score - 0.8).abs() < 0.01); // (0.9 + 0.7) / 2
+
+        let challenge_severity = recommendation.get_challenge_severity();
+        assert_eq!(challenge_severity, 0.4);
+
+        let risk_adjusted = recommendation.get_risk_adjusted_probability();
+        assert!((risk_adjusted - 0.68).abs() < 0.01); // 0.8 - (0.4 * 0.3)
+    }
+
+    #[test]
+    fn test_regulatory_change_types() {
+        let types = [
+            RegulatoryChangeType::NewLegislation,
+            RegulatoryChangeType::Amendment,
+            RegulatoryChangeType::Repeal,
+            RegulatoryChangeType::NewRegulation,
+            RegulatoryChangeType::CourtDecision,
+            RegulatoryChangeType::AdministrativeGuidance,
+            RegulatoryChangeType::EmergencyOrder,
+            RegulatoryChangeType::SunsetProvision,
+        ];
+
+        assert_eq!(types.len(), 8);
+    }
+
+    #[test]
+    fn test_impact_severity_ordering() {
+        let severities = [
+            ImpactSeverity::Minor,
+            ImpactSeverity::Severe,
+            ImpactSeverity::Moderate,
+            ImpactSeverity::Negligible,
+        ];
+
+        assert_eq!(severities.len(), 4);
+    }
+
+    #[test]
+    fn test_v32_notification_channels() {
+        let channels = [
+            NotificationChannel::Email,
+            NotificationChannel::Sms,
+            NotificationChannel::Website,
+            NotificationChannel::Webhook,
+            NotificationChannel::InApp,
+            NotificationChannel::PublicNotice,
+        ];
+
+        assert_eq!(channels.len(), 6);
+    }
+
+    #[test]
+    fn test_alert_severity_ordering() {
+        let mut severities = [
+            AlertSeverity::Low,
+            AlertSeverity::Urgent,
+            AlertSeverity::Medium,
+            AlertSeverity::High,
+            AlertSeverity::Info,
+        ];
+
+        severities.sort();
+
+        assert_eq!(severities[0], AlertSeverity::Urgent);
+        assert_eq!(severities[4], AlertSeverity::Info);
+    }
+
+    #[test]
+    fn test_warning_level_ordering() {
+        let mut levels = [
+            WarningLevel::LongTerm,
+            WarningLevel::Imminent,
+            WarningLevel::MediumTerm,
+            WarningLevel::NearTerm,
+            WarningLevel::EarlySignal,
+        ];
+
+        levels.sort();
+
+        assert_eq!(levels[0], WarningLevel::Imminent);
+        assert_eq!(levels[4], WarningLevel::EarlySignal);
+    }
+
+    #[test]
+    fn test_source_types() {
+        let types = [
+            SourceType::LegislativeProposal,
+            SourceType::PolicyWhitePaper,
+            SourceType::ParliamentaryDebate,
+            SourceType::RegulatoryConsultation,
+            SourceType::AcademicResearch,
+            SourceType::IndustryReport,
+            SourceType::MediaCoverage,
+            SourceType::InternationalTrend,
+        ];
+
+        assert_eq!(types.len(), 8);
+    }
+
+    #[test]
+    fn test_benefit_types() {
+        let types = [
+            BenefitType::LegalHarmonization,
+            BenefitType::EconomicEfficiency,
+            BenefitType::ReducedComplianceBurden,
+            BenefitType::ImprovedClarity,
+            BenefitType::InternationalCooperation,
+            BenefitType::InnovationEnablement,
+        ];
+
+        assert_eq!(types.len(), 6);
+    }
+
+    #[test]
+    fn test_challenge_types() {
+        let types = [
+            ChallengeType::CulturalIncompatibility,
+            ChallengeType::LegalSystemMismatch,
+            ChallengeType::PoliticalResistance,
+            ChallengeType::EconomicBarriers,
+            ChallengeType::TechnicalDifficulty,
+            ChallengeType::StakeholderOpposition,
+        ];
+
+        assert_eq!(types.len(), 6);
     }
 }

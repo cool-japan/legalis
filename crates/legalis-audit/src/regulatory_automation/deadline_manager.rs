@@ -498,7 +498,7 @@ mod tests {
         );
 
         let days = deadline.days_until();
-        assert!(days >= 9 && days <= 10);
+        assert!((9..=10).contains(&days));
     }
 
     #[test]

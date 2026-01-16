@@ -26452,6 +26452,848 @@ impl Default for ContributionWorkflow {
     }
 }
 
+// ============================================================================
+// v0.4.0: Advanced Legal NLP
+// ============================================================================
+
+/// Legal entity types for recognition.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LegalEntityType {
+    /// Court (e.g., "Supreme Court", "Court of Appeals")
+    Court,
+    /// Company/Corporation (e.g., "Apple Inc.", "Google LLC")
+    Company,
+    /// Statute/Law (e.g., "Civil Rights Act of 1964")
+    Statute,
+    /// Legal person (individual in legal context)
+    Person,
+    /// Government agency (e.g., "SEC", "FTC")
+    GovernmentAgency,
+    /// Law firm
+    LawFirm,
+    /// Other entity type
+    Other(String),
+}
+
+impl std::fmt::Display for LegalEntityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LegalEntityType::Court => write!(f, "Court"),
+            LegalEntityType::Company => write!(f, "Company"),
+            LegalEntityType::Statute => write!(f, "Statute"),
+            LegalEntityType::Person => write!(f, "Person"),
+            LegalEntityType::GovernmentAgency => write!(f, "Government Agency"),
+            LegalEntityType::LawFirm => write!(f, "Law Firm"),
+            LegalEntityType::Other(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+/// Recognized legal entity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalEntity {
+    /// Entity text as it appears in document
+    pub text: String,
+    /// Type of entity
+    pub entity_type: LegalEntityType,
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Position in document (character offset)
+    pub position: usize,
+    /// Normalized form (canonical name)
+    pub normalized: Option<String>,
+}
+
+impl LegalEntity {
+    /// Creates a new legal entity.
+    pub fn new(text: impl Into<String>, entity_type: LegalEntityType, position: usize) -> Self {
+        Self {
+            text: text.into(),
+            entity_type,
+            confidence: 1.0,
+            position,
+            normalized: None,
+        }
+    }
+
+    /// Sets the confidence score.
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.confidence = confidence.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets the normalized form.
+    pub fn with_normalized(mut self, normalized: impl Into<String>) -> Self {
+        self.normalized = Some(normalized.into());
+        self
+    }
+}
+
+/// Legal entity recognizer for identifying entities in legal text.
+pub struct LegalEntityRecognizer {
+    /// Court patterns
+    court_patterns: Vec<String>,
+    /// Company suffixes
+    company_suffixes: Vec<String>,
+    /// Statute keywords
+    statute_keywords: Vec<String>,
+    /// Government agency patterns
+    agency_patterns: Vec<String>,
+    /// Law firm suffixes
+    law_firm_suffixes: Vec<String>,
+}
+
+impl LegalEntityRecognizer {
+    /// Creates a new legal entity recognizer with default patterns.
+    pub fn new() -> Self {
+        Self {
+            court_patterns: vec![
+                "Court".to_string(),
+                "Tribunal".to_string(),
+                "裁判所".to_string(),
+                "Gericht".to_string(),
+                "Cour".to_string(),
+                "Corte".to_string(),
+            ],
+            company_suffixes: vec![
+                "Inc.".to_string(),
+                "LLC".to_string(),
+                "Ltd.".to_string(),
+                "Corp.".to_string(),
+                "GmbH".to_string(),
+                "株式会社".to_string(),
+                "S.A.".to_string(),
+                "AG".to_string(),
+            ],
+            statute_keywords: vec![
+                "Act".to_string(),
+                "Code".to_string(),
+                "Law".to_string(),
+                "Statute".to_string(),
+                "法".to_string(),
+                "Gesetz".to_string(),
+                "Loi".to_string(),
+            ],
+            agency_patterns: vec![
+                "SEC".to_string(),
+                "FTC".to_string(),
+                "FDA".to_string(),
+                "EPA".to_string(),
+                "Commission".to_string(),
+                "Agency".to_string(),
+                "Bureau".to_string(),
+            ],
+            law_firm_suffixes: vec![
+                "LLP".to_string(),
+                "P.C.".to_string(),
+                "P.A.".to_string(),
+                "& Associates".to_string(),
+            ],
+        }
+    }
+
+    /// Recognizes legal entities in text.
+    pub fn recognize(&self, text: &str) -> Vec<LegalEntity> {
+        let mut entities = Vec::new();
+        let words: Vec<&str> = text.split_whitespace().collect();
+
+        // Simple pattern-based recognition
+        for window in words.windows(1) {
+            let combined = window.join(" ");
+            let pos = text.find(window[0]).unwrap_or(0);
+
+            // Check for court
+            if self.court_patterns.iter().any(|p| combined.contains(p)) {
+                entities.push(
+                    LegalEntity::new(combined.clone(), LegalEntityType::Court, pos)
+                        .with_confidence(0.8),
+                );
+            }
+
+            // Check for company
+            if self.company_suffixes.iter().any(|s| combined.ends_with(s)) {
+                entities.push(
+                    LegalEntity::new(combined.clone(), LegalEntityType::Company, pos)
+                        .with_confidence(0.85),
+                );
+            }
+
+            // Check for statute
+            if self.statute_keywords.iter().any(|k| combined.contains(k)) {
+                entities.push(
+                    LegalEntity::new(combined.clone(), LegalEntityType::Statute, pos)
+                        .with_confidence(0.75),
+                );
+            }
+
+            // Check for government agency
+            if self.agency_patterns.iter().any(|p| combined.contains(p)) {
+                entities.push(
+                    LegalEntity::new(combined.clone(), LegalEntityType::GovernmentAgency, pos)
+                        .with_confidence(0.9),
+                );
+            }
+
+            // Check for law firm
+            if self.law_firm_suffixes.iter().any(|s| combined.ends_with(s)) {
+                entities.push(
+                    LegalEntity::new(combined.clone(), LegalEntityType::LawFirm, pos)
+                        .with_confidence(0.85),
+                );
+            }
+        }
+
+        entities
+    }
+
+    /// Adds a custom court pattern.
+    pub fn add_court_pattern(&mut self, pattern: impl Into<String>) {
+        self.court_patterns.push(pattern.into());
+    }
+
+    /// Adds a custom company suffix.
+    pub fn add_company_suffix(&mut self, suffix: impl Into<String>) {
+        self.company_suffixes.push(suffix.into());
+    }
+
+    /// Gets the count of recognized entities by type.
+    pub fn count_by_type(&self, entities: &[LegalEntity], entity_type: &LegalEntityType) -> usize {
+        entities
+            .iter()
+            .filter(|e| &e.entity_type == entity_type)
+            .count()
+    }
+}
+
+impl Default for LegalEntityRecognizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Contract clause classification types.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ClauseClass {
+    /// Payment terms
+    Payment,
+    /// Termination conditions
+    Termination,
+    /// Confidentiality provisions
+    Confidentiality,
+    /// Liability limitations
+    LiabilityLimitation,
+    /// Indemnification
+    Indemnification,
+    /// Force majeure
+    ForceMajeure,
+    /// Dispute resolution
+    DisputeResolution,
+    /// Intellectual property
+    IntellectualProperty,
+    /// Governing law
+    GoverningLaw,
+    /// Warranties and representations
+    Warranties,
+    /// Assignment rights
+    Assignment,
+    /// Severability
+    Severability,
+    /// Custom class
+    Custom(String),
+}
+
+impl std::fmt::Display for ClauseClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClauseClass::Payment => write!(f, "Payment"),
+            ClauseClass::Termination => write!(f, "Termination"),
+            ClauseClass::Confidentiality => write!(f, "Confidentiality"),
+            ClauseClass::LiabilityLimitation => write!(f, "Liability Limitation"),
+            ClauseClass::Indemnification => write!(f, "Indemnification"),
+            ClauseClass::ForceMajeure => write!(f, "Force Majeure"),
+            ClauseClass::DisputeResolution => write!(f, "Dispute Resolution"),
+            ClauseClass::IntellectualProperty => write!(f, "Intellectual Property"),
+            ClauseClass::GoverningLaw => write!(f, "Governing Law"),
+            ClauseClass::Warranties => write!(f, "Warranties"),
+            ClauseClass::Assignment => write!(f, "Assignment"),
+            ClauseClass::Severability => write!(f, "Severability"),
+            ClauseClass::Custom(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+/// Classified clause with confidence score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassifiedClause {
+    /// Original clause text
+    pub text: String,
+    /// Predicted class
+    pub class: ClauseClass,
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Alternative classifications
+    pub alternatives: Vec<(ClauseClass, f64)>,
+}
+
+impl ClassifiedClause {
+    /// Creates a new classified clause.
+    pub fn new(text: impl Into<String>, class: ClauseClass, confidence: f64) -> Self {
+        Self {
+            text: text.into(),
+            class,
+            confidence: confidence.clamp(0.0, 1.0),
+            alternatives: Vec::new(),
+        }
+    }
+
+    /// Adds an alternative classification.
+    pub fn add_alternative(mut self, class: ClauseClass, confidence: f64) -> Self {
+        self.alternatives.push((class, confidence.clamp(0.0, 1.0)));
+        self
+    }
+}
+
+/// Contract clause classifier.
+pub struct ClauseClassifier {
+    /// Classification patterns (keywords -> class)
+    patterns: HashMap<ClauseClass, Vec<String>>,
+    /// Minimum confidence threshold
+    threshold: f64,
+}
+
+impl ClauseClassifier {
+    /// Creates a new clause classifier with default patterns.
+    pub fn new() -> Self {
+        let mut patterns = HashMap::new();
+
+        patterns.insert(
+            ClauseClass::Payment,
+            vec![
+                "payment".to_string(),
+                "pay".to_string(),
+                "fee".to_string(),
+                "compensation".to_string(),
+                "invoice".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::Termination,
+            vec![
+                "termination".to_string(),
+                "terminate".to_string(),
+                "cancellation".to_string(),
+                "cancel".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::Confidentiality,
+            vec![
+                "confidential".to_string(),
+                "confidentiality".to_string(),
+                "non-disclosure".to_string(),
+                "proprietary".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::LiabilityLimitation,
+            vec![
+                "liability".to_string(),
+                "limitation of liability".to_string(),
+                "limited to".to_string(),
+                "no liability".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::Indemnification,
+            vec![
+                "indemnify".to_string(),
+                "indemnification".to_string(),
+                "hold harmless".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::ForceMajeure,
+            vec![
+                "force majeure".to_string(),
+                "act of god".to_string(),
+                "beyond control".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::DisputeResolution,
+            vec![
+                "dispute".to_string(),
+                "arbitration".to_string(),
+                "mediation".to_string(),
+                "litigation".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::IntellectualProperty,
+            vec![
+                "intellectual property".to_string(),
+                "copyright".to_string(),
+                "patent".to_string(),
+                "trademark".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::GoverningLaw,
+            vec![
+                "governing law".to_string(),
+                "applicable law".to_string(),
+                "jurisdiction".to_string(),
+            ],
+        );
+
+        patterns.insert(
+            ClauseClass::Warranties,
+            vec![
+                "warranty".to_string(),
+                "warrants".to_string(),
+                "represent".to_string(),
+                "representation".to_string(),
+            ],
+        );
+
+        Self {
+            patterns,
+            threshold: 0.5,
+        }
+    }
+
+    /// Classifies a clause.
+    pub fn classify(&self, clause: &str) -> Option<ClassifiedClause> {
+        let clause_lower = clause.to_lowercase();
+        let mut scores: Vec<(ClauseClass, f64)> = Vec::new();
+
+        for (class, keywords) in &self.patterns {
+            let mut score = 0.0;
+            for keyword in keywords {
+                if clause_lower.contains(keyword) {
+                    score += 1.0;
+                }
+            }
+            if score > 0.0 {
+                let confidence = (score / keywords.len() as f64).min(1.0);
+                scores.push((class.clone(), confidence));
+            }
+        }
+
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        if let Some((class, confidence)) = scores.first() {
+            if *confidence >= self.threshold {
+                let mut result = ClassifiedClause::new(clause, class.clone(), *confidence);
+                for (alt_class, alt_conf) in scores.iter().skip(1).take(2) {
+                    result = result.add_alternative(alt_class.clone(), *alt_conf);
+                }
+                return Some(result);
+            }
+        }
+
+        None
+    }
+
+    /// Sets the confidence threshold.
+    pub fn with_threshold(mut self, threshold: f64) -> Self {
+        self.threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Adds a custom pattern.
+    pub fn add_pattern(&mut self, class: ClauseClass, keywords: Vec<String>) {
+        self.patterns.insert(class, keywords);
+    }
+}
+
+impl Default for ClauseClassifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legal topic for topic modeling.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegalTopic {
+    /// Topic ID
+    pub id: String,
+    /// Topic name
+    pub name: String,
+    /// Key terms for this topic
+    pub key_terms: Vec<String>,
+    /// Topic weight in document (0.0 to 1.0)
+    pub weight: f64,
+}
+
+impl LegalTopic {
+    /// Creates a new legal topic.
+    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            key_terms: Vec::new(),
+            weight: 0.0,
+        }
+    }
+
+    /// Adds a key term.
+    pub fn add_term(mut self, term: impl Into<String>) -> Self {
+        self.key_terms.push(term.into());
+        self
+    }
+
+    /// Sets the topic weight.
+    pub fn with_weight(mut self, weight: f64) -> Self {
+        self.weight = weight.clamp(0.0, 1.0);
+        self
+    }
+}
+
+/// Legal topic modeler for extracting topics from legal documents.
+pub struct LegalTopicModeler {
+    /// Predefined topics
+    topics: Vec<LegalTopic>,
+}
+
+impl LegalTopicModeler {
+    /// Creates a new topic modeler with default legal topics.
+    pub fn new() -> Self {
+        let topics = vec![
+            LegalTopic::new("contract", "Contract Law")
+                .add_term("contract")
+                .add_term("agreement")
+                .add_term("party")
+                .add_term("obligation"),
+            LegalTopic::new("tort", "Tort Law")
+                .add_term("negligence")
+                .add_term("liability")
+                .add_term("damages")
+                .add_term("injury"),
+            LegalTopic::new("property", "Property Law")
+                .add_term("property")
+                .add_term("ownership")
+                .add_term("title")
+                .add_term("deed"),
+            LegalTopic::new("criminal", "Criminal Law")
+                .add_term("crime")
+                .add_term("offense")
+                .add_term("prosecution")
+                .add_term("defendant"),
+            LegalTopic::new("corporate", "Corporate Law")
+                .add_term("corporation")
+                .add_term("shareholder")
+                .add_term("board")
+                .add_term("merger"),
+            LegalTopic::new("ip", "Intellectual Property")
+                .add_term("patent")
+                .add_term("copyright")
+                .add_term("trademark")
+                .add_term("license"),
+        ];
+
+        Self { topics }
+    }
+
+    /// Extracts topics from text.
+    pub fn extract_topics(&self, text: &str) -> Vec<LegalTopic> {
+        let text_lower = text.to_lowercase();
+        let mut results = Vec::new();
+
+        for topic in &self.topics {
+            let mut matches = 0;
+            for term in &topic.key_terms {
+                if text_lower.contains(term) {
+                    matches += 1;
+                }
+            }
+
+            if matches > 0 {
+                let weight = matches as f64 / topic.key_terms.len() as f64;
+                results.push(LegalTopic::new(&topic.id, &topic.name).with_weight(weight));
+            }
+        }
+
+        results.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
+        results
+    }
+
+    /// Adds a custom topic.
+    pub fn add_topic(&mut self, topic: LegalTopic) {
+        self.topics.push(topic);
+    }
+
+    /// Gets all topics.
+    pub fn topic_count(&self) -> usize {
+        self.topics.len()
+    }
+}
+
+impl Default for LegalTopicModeler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Document similarity score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarityScore {
+    /// Document 1 ID
+    pub doc1_id: String,
+    /// Document 2 ID
+    pub doc2_id: String,
+    /// Similarity score (0.0 to 1.0)
+    pub score: f64,
+    /// Similarity method used
+    pub method: String,
+}
+
+impl SimilarityScore {
+    /// Creates a new similarity score.
+    pub fn new(
+        doc1_id: impl Into<String>,
+        doc2_id: impl Into<String>,
+        score: f64,
+        method: impl Into<String>,
+    ) -> Self {
+        Self {
+            doc1_id: doc1_id.into(),
+            doc2_id: doc2_id.into(),
+            score: score.clamp(0.0, 1.0),
+            method: method.into(),
+        }
+    }
+
+    /// Checks if documents are highly similar (>= 0.8).
+    pub fn is_highly_similar(&self) -> bool {
+        self.score >= 0.8
+    }
+
+    /// Checks if documents are moderately similar (>= 0.5).
+    pub fn is_moderately_similar(&self) -> bool {
+        self.score >= 0.5
+    }
+}
+
+/// Document similarity calculator for legal documents.
+pub struct DocumentSimilarityCalculator {
+    /// Similarity threshold
+    threshold: f64,
+}
+
+impl DocumentSimilarityCalculator {
+    /// Creates a new similarity calculator.
+    pub fn new() -> Self {
+        Self { threshold: 0.5 }
+    }
+
+    /// Calculates Jaccard similarity between two documents.
+    pub fn jaccard_similarity(&self, doc1: &str, doc2: &str) -> f64 {
+        let words1: std::collections::HashSet<&str> = doc1.split_whitespace().collect();
+        let words2: std::collections::HashSet<&str> = doc2.split_whitespace().collect();
+
+        let intersection = words1.intersection(&words2).count();
+        let union = words1.union(&words2).count();
+
+        if union == 0 {
+            0.0
+        } else {
+            intersection as f64 / union as f64
+        }
+    }
+
+    /// Calculates cosine similarity based on term frequency.
+    pub fn cosine_similarity(&self, doc1: &str, doc2: &str) -> f64 {
+        let words1: Vec<&str> = doc1.split_whitespace().collect();
+        let words2: Vec<&str> = doc2.split_whitespace().collect();
+
+        // Build term frequency vectors
+        let mut all_terms = std::collections::HashSet::new();
+        for word in words1.iter().chain(words2.iter()) {
+            all_terms.insert(*word);
+        }
+
+        let mut vec1 = Vec::new();
+        let mut vec2 = Vec::new();
+
+        for term in &all_terms {
+            vec1.push(words1.iter().filter(|w| *w == term).count() as f64);
+            vec2.push(words2.iter().filter(|w| *w == term).count() as f64);
+        }
+
+        // Calculate dot product
+        let dot_product: f64 = vec1.iter().zip(vec2.iter()).map(|(a, b)| a * b).sum();
+
+        // Calculate magnitudes
+        let mag1: f64 = vec1.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let mag2: f64 = vec2.iter().map(|x| x * x).sum::<f64>().sqrt();
+
+        if mag1 == 0.0 || mag2 == 0.0 {
+            0.0
+        } else {
+            dot_product / (mag1 * mag2)
+        }
+    }
+
+    /// Compares two documents and returns similarity score.
+    pub fn compare(
+        &self,
+        doc1_id: impl Into<String>,
+        doc1_text: &str,
+        doc2_id: impl Into<String>,
+        doc2_text: &str,
+    ) -> SimilarityScore {
+        let score = self.cosine_similarity(doc1_text, doc2_text);
+        SimilarityScore::new(doc1_id, doc2_id, score, "cosine")
+    }
+
+    /// Sets the similarity threshold.
+    pub fn with_threshold(mut self, threshold: f64) -> Self {
+        self.threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+}
+
+impl Default for DocumentSimilarityCalculator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Term frequency-inverse document frequency (TF-IDF) score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TfIdfScore {
+    /// Term
+    pub term: String,
+    /// TF-IDF score
+    pub score: f64,
+    /// Term frequency in document
+    pub term_frequency: f64,
+    /// Inverse document frequency
+    pub idf: f64,
+}
+
+impl TfIdfScore {
+    /// Creates a new TF-IDF score.
+    pub fn new(term: impl Into<String>, tf: f64, idf: f64) -> Self {
+        Self {
+            term: term.into(),
+            score: tf * idf,
+            term_frequency: tf,
+            idf,
+        }
+    }
+}
+
+/// Key term extractor using TF-IDF.
+pub struct KeyTermExtractor {
+    /// Document corpus for IDF calculation
+    corpus: Vec<String>,
+    /// Stop words to exclude
+    stop_words: std::collections::HashSet<String>,
+}
+
+impl KeyTermExtractor {
+    /// Creates a new key term extractor.
+    pub fn new() -> Self {
+        let stop_words = vec![
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+            "by", "from", "as", "is", "was", "are", "were", "be", "been", "being", "have", "has",
+            "had", "do", "does", "did", "will", "would", "should", "could", "may", "might",
+            "shall", "must", "can",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+        Self {
+            corpus: Vec::new(),
+            stop_words,
+        }
+    }
+
+    /// Adds a document to the corpus.
+    pub fn add_document(&mut self, text: impl Into<String>) {
+        self.corpus.push(text.into());
+    }
+
+    /// Calculates term frequency for a document.
+    fn calculate_tf(&self, text: &str) -> HashMap<String, f64> {
+        let words: Vec<String> = text
+            .to_lowercase()
+            .split_whitespace()
+            .filter(|w| !self.stop_words.contains(*w))
+            .map(|s| s.to_string())
+            .collect();
+
+        let total = words.len() as f64;
+        let mut tf = HashMap::new();
+
+        for word in words {
+            *tf.entry(word).or_insert(0.0) += 1.0;
+        }
+
+        for count in tf.values_mut() {
+            *count /= total;
+        }
+
+        tf
+    }
+
+    /// Calculates inverse document frequency.
+    fn calculate_idf(&self, term: &str) -> f64 {
+        let docs_with_term = self
+            .corpus
+            .iter()
+            .filter(|doc| doc.to_lowercase().contains(term))
+            .count();
+
+        if docs_with_term == 0 {
+            0.0
+        } else {
+            (self.corpus.len() as f64 / docs_with_term as f64).ln()
+        }
+    }
+
+    /// Extracts key terms from a document using TF-IDF.
+    pub fn extract_key_terms(&self, text: &str, top_n: usize) -> Vec<TfIdfScore> {
+        let tf = self.calculate_tf(text);
+        let mut scores = Vec::new();
+
+        for (term, tf_val) in tf {
+            let idf = self.calculate_idf(&term);
+            scores.push(TfIdfScore::new(term, tf_val, idf));
+        }
+
+        scores.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        scores.into_iter().take(top_n).collect()
+    }
+
+    /// Gets the corpus size.
+    pub fn corpus_size(&self) -> usize {
+        self.corpus.len()
+    }
+
+    /// Adds a custom stop word.
+    pub fn add_stop_word(&mut self, word: impl Into<String>) {
+        self.stop_words.insert(word.into());
+    }
+}
+
+impl Default for KeyTermExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod ai_translation_tests {
     use super::*;
@@ -26737,7 +27579,7 @@ mod ai_translation_tests {
         );
 
         assert!(report.overall_score > 0.0);
-        assert!(report.metric_scores.len() > 0);
+        assert!(!report.metric_scores.is_empty());
     }
 
     #[test]
@@ -27457,9 +28299,9 @@ mod historical_tests {
         let (year, month, day) = converter.gregorian_to_julian(1700, 1, 1);
 
         // The conversion should maintain the year
-        assert!(year >= 1699 && year <= 1700);
-        assert!(month >= 1 && month <= 12);
-        assert!(day >= 1 && day <= 31);
+        assert!((1699..=1700).contains(&year));
+        assert!((1..=12).contains(&month));
+        assert!((1..=31).contains(&day));
     }
 
     #[test]
@@ -29912,5 +30754,359 @@ mod emerging_markets_tests {
         workflow.approve("contrib-1").ok();
         let approved = workflow.get_by_status(ContributionStatus::Approved);
         assert_eq!(approved.len(), 1);
+    }
+}
+
+// ============================================================================
+// v0.4.0: Advanced Legal NLP Tests
+// ============================================================================
+
+#[cfg(test)]
+mod legal_nlp_tests {
+    use super::*;
+
+    // LegalEntityType tests
+    #[test]
+    fn test_legal_entity_type_display() {
+        assert_eq!(LegalEntityType::Court.to_string(), "Court");
+        assert_eq!(LegalEntityType::Company.to_string(), "Company");
+        assert_eq!(LegalEntityType::Statute.to_string(), "Statute");
+        assert_eq!(LegalEntityType::Person.to_string(), "Person");
+        assert_eq!(
+            LegalEntityType::GovernmentAgency.to_string(),
+            "Government Agency"
+        );
+        assert_eq!(LegalEntityType::LawFirm.to_string(), "Law Firm");
+    }
+
+    // LegalEntity tests
+    #[test]
+    fn test_legal_entity_creation() {
+        let entity = LegalEntity::new("Supreme Court", LegalEntityType::Court, 0)
+            .with_confidence(0.95)
+            .with_normalized("US Supreme Court");
+
+        assert_eq!(entity.text, "Supreme Court");
+        assert_eq!(entity.entity_type, LegalEntityType::Court);
+        assert_eq!(entity.confidence, 0.95);
+        assert_eq!(entity.position, 0);
+        assert_eq!(entity.normalized, Some("US Supreme Court".to_string()));
+    }
+
+    // LegalEntityRecognizer tests
+    #[test]
+    fn test_entity_recognizer_court() {
+        let recognizer = LegalEntityRecognizer::new();
+        let text = "The Supreme Court ruled in favor.";
+        let entities = recognizer.recognize(text);
+
+        assert!(!entities.is_empty());
+        let court_count = recognizer.count_by_type(&entities, &LegalEntityType::Court);
+        assert!(court_count > 0);
+    }
+
+    #[test]
+    fn test_entity_recognizer_company() {
+        let recognizer = LegalEntityRecognizer::new();
+        let text = "Apple Inc. signed the agreement.";
+        let entities = recognizer.recognize(text);
+
+        let company_count = recognizer.count_by_type(&entities, &LegalEntityType::Company);
+        assert!(company_count > 0);
+    }
+
+    #[test]
+    fn test_entity_recognizer_custom_patterns() {
+        let mut recognizer = LegalEntityRecognizer::new();
+        recognizer.add_court_pattern("High Court");
+        recognizer.add_company_suffix("Plc.");
+
+        assert!(
+            recognizer
+                .court_patterns
+                .contains(&"High Court".to_string())
+        );
+        assert!(recognizer.company_suffixes.contains(&"Plc.".to_string()));
+    }
+
+    // ClauseClass tests
+    #[test]
+    fn test_clause_class_display() {
+        assert_eq!(ClauseClass::Payment.to_string(), "Payment");
+        assert_eq!(ClauseClass::Termination.to_string(), "Termination");
+        assert_eq!(ClauseClass::Confidentiality.to_string(), "Confidentiality");
+        assert_eq!(
+            ClauseClass::LiabilityLimitation.to_string(),
+            "Liability Limitation"
+        );
+        assert_eq!(ClauseClass::Indemnification.to_string(), "Indemnification");
+        assert_eq!(ClauseClass::ForceMajeure.to_string(), "Force Majeure");
+    }
+
+    // ClassifiedClause tests
+    #[test]
+    fn test_classified_clause_creation() {
+        let clause = ClassifiedClause::new(
+            "This is a confidentiality clause.",
+            ClauseClass::Confidentiality,
+            0.9,
+        )
+        .add_alternative(ClauseClass::Payment, 0.3);
+
+        assert_eq!(clause.text, "This is a confidentiality clause.");
+        assert_eq!(clause.class, ClauseClass::Confidentiality);
+        assert_eq!(clause.confidence, 0.9);
+        assert_eq!(clause.alternatives.len(), 1);
+    }
+
+    // ClauseClassifier tests
+    #[test]
+    fn test_clause_classifier_payment() {
+        let classifier = ClauseClassifier::new();
+        let clause = "The client shall make payment of fees upon receipt of invoice.";
+        let result = classifier.classify(clause);
+
+        assert!(result.is_some());
+        let classified = result.unwrap();
+        assert_eq!(classified.class, ClauseClass::Payment);
+        assert!(classified.confidence > 0.0);
+    }
+
+    #[test]
+    fn test_clause_classifier_confidentiality() {
+        let classifier = ClauseClassifier::new();
+        let clause = "All confidential information shall remain proprietary.";
+        let result = classifier.classify(clause);
+
+        assert!(result.is_some());
+        let classified = result.unwrap();
+        assert_eq!(classified.class, ClauseClass::Confidentiality);
+    }
+
+    #[test]
+    fn test_clause_classifier_threshold() {
+        let classifier = ClauseClassifier::new().with_threshold(0.8);
+        let clause = "Random text without keywords.";
+        let result = classifier.classify(clause);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_clause_classifier_custom_pattern() {
+        let mut classifier = ClauseClassifier::new();
+        classifier.add_pattern(
+            ClauseClass::Custom("Test".to_string()),
+            vec!["custom".to_string(), "test".to_string()],
+        );
+
+        let clause = "This is a custom test clause.";
+        let result = classifier.classify(clause);
+        assert!(result.is_some());
+    }
+
+    // LegalTopic tests
+    #[test]
+    fn test_legal_topic_creation() {
+        let topic = LegalTopic::new("contract", "Contract Law")
+            .add_term("contract")
+            .add_term("agreement")
+            .with_weight(0.75);
+
+        assert_eq!(topic.id, "contract");
+        assert_eq!(topic.name, "Contract Law");
+        assert_eq!(topic.key_terms.len(), 2);
+        assert_eq!(topic.weight, 0.75);
+    }
+
+    // LegalTopicModeler tests
+    #[test]
+    fn test_topic_modeler_extract() {
+        let modeler = LegalTopicModeler::new();
+        let text = "This contract agreement creates obligations between the parties.";
+        let topics = modeler.extract_topics(text);
+
+        assert!(!topics.is_empty());
+        assert_eq!(topics[0].id, "contract");
+        assert!(topics[0].weight > 0.0);
+    }
+
+    #[test]
+    fn test_topic_modeler_multiple_topics() {
+        let modeler = LegalTopicModeler::new();
+        let text = "The corporation's shareholders approved the merger. The patent for this invention is pending.";
+        let topics = modeler.extract_topics(text);
+
+        assert!(topics.len() >= 2);
+    }
+
+    #[test]
+    fn test_topic_modeler_custom_topic() {
+        let mut modeler = LegalTopicModeler::new();
+        let custom_topic = LegalTopic::new("custom", "Custom Topic")
+            .add_term("custom")
+            .add_term("specific");
+
+        modeler.add_topic(custom_topic);
+        assert_eq!(modeler.topic_count(), 7); // 6 default + 1 custom
+    }
+
+    // SimilarityScore tests
+    #[test]
+    fn test_similarity_score_creation() {
+        let score = SimilarityScore::new("doc1", "doc2", 0.85, "cosine");
+
+        assert_eq!(score.doc1_id, "doc1");
+        assert_eq!(score.doc2_id, "doc2");
+        assert_eq!(score.score, 0.85);
+        assert_eq!(score.method, "cosine");
+    }
+
+    #[test]
+    fn test_similarity_score_highly_similar() {
+        let score = SimilarityScore::new("doc1", "doc2", 0.9, "cosine");
+        assert!(score.is_highly_similar());
+        assert!(score.is_moderately_similar());
+    }
+
+    #[test]
+    fn test_similarity_score_moderately_similar() {
+        let score = SimilarityScore::new("doc1", "doc2", 0.6, "cosine");
+        assert!(!score.is_highly_similar());
+        assert!(score.is_moderately_similar());
+    }
+
+    // DocumentSimilarityCalculator tests
+    #[test]
+    fn test_similarity_calculator_jaccard() {
+        let calc = DocumentSimilarityCalculator::new();
+        let doc1 = "contract agreement terms conditions";
+        let doc2 = "contract terms conditions legal";
+
+        let similarity = calc.jaccard_similarity(doc1, doc2);
+        assert!(similarity > 0.0);
+        assert!(similarity <= 1.0);
+    }
+
+    #[test]
+    fn test_similarity_calculator_cosine() {
+        let calc = DocumentSimilarityCalculator::new();
+        let doc1 = "legal contract agreement";
+        let doc2 = "legal contract agreement";
+
+        let similarity = calc.cosine_similarity(doc1, doc2);
+        assert!((similarity - 1.0).abs() < 0.01); // Should be ~1.0 for identical docs
+    }
+
+    #[test]
+    fn test_similarity_calculator_compare() {
+        let calc = DocumentSimilarityCalculator::new();
+        let doc1 = "This is a legal contract.";
+        let doc2 = "This is a legal agreement.";
+
+        let score = calc.compare("doc1", doc1, "doc2", doc2);
+
+        assert_eq!(score.doc1_id, "doc1");
+        assert_eq!(score.doc2_id, "doc2");
+        assert_eq!(score.method, "cosine");
+        assert!(score.score > 0.0);
+    }
+
+    #[test]
+    fn test_similarity_calculator_threshold() {
+        let calc = DocumentSimilarityCalculator::new().with_threshold(0.7);
+        assert_eq!(calc.threshold, 0.7);
+    }
+
+    // TfIdfScore tests
+    #[test]
+    fn test_tfidf_score_creation() {
+        let score = TfIdfScore::new("contract", 0.5, 2.0);
+
+        assert_eq!(score.term, "contract");
+        assert_eq!(score.term_frequency, 0.5);
+        assert_eq!(score.idf, 2.0);
+        assert_eq!(score.score, 1.0); // 0.5 * 2.0
+    }
+
+    // KeyTermExtractor tests
+    #[test]
+    fn test_key_term_extractor_creation() {
+        let extractor = KeyTermExtractor::new();
+        assert_eq!(extractor.corpus_size(), 0);
+        assert!(extractor.stop_words.contains("the"));
+    }
+
+    #[test]
+    fn test_key_term_extractor_add_document() {
+        let mut extractor = KeyTermExtractor::new();
+        extractor.add_document("This is a legal contract.");
+        extractor.add_document("This is a legal agreement.");
+
+        assert_eq!(extractor.corpus_size(), 2);
+    }
+
+    #[test]
+    fn test_key_term_extractor_extract() {
+        let mut extractor = KeyTermExtractor::new();
+        extractor.add_document("Legal contract with legal terms.");
+        extractor.add_document("Another legal document.");
+
+        let text = "Legal contract agreement with specific terms.";
+        let key_terms = extractor.extract_key_terms(text, 3);
+
+        assert!(key_terms.len() <= 3);
+        assert!(!key_terms.is_empty());
+
+        // First term should have highest score
+        if key_terms.len() >= 2 {
+            assert!(key_terms[0].score >= key_terms[1].score);
+        }
+    }
+
+    #[test]
+    fn test_key_term_extractor_custom_stop_word() {
+        let mut extractor = KeyTermExtractor::new();
+        extractor.add_stop_word("legal");
+
+        assert!(extractor.stop_words.contains("legal"));
+    }
+
+    // Integration tests
+    #[test]
+    fn test_nlp_pipeline_integration() {
+        // Entity recognition
+        let recognizer = LegalEntityRecognizer::new();
+        let text = "Apple Inc. sued Samsung Corp. in the Supreme Court.";
+        let entities = recognizer.recognize(text);
+        assert!(!entities.is_empty());
+
+        // Clause classification
+        let classifier = ClauseClassifier::new();
+        let clause = "The parties agree to maintain confidentiality.";
+        let classified = classifier.classify(clause);
+        assert!(classified.is_some());
+
+        // Topic modeling
+        let modeler = LegalTopicModeler::new();
+        let _topics = modeler.extract_topics(text);
+        // May or may not find topics depending on keywords
+    }
+
+    #[test]
+    fn test_document_analysis_integration() {
+        // Similarity calculation
+        let calc = DocumentSimilarityCalculator::new();
+        let doc1 = "This contract establishes the terms and conditions.";
+        let doc2 = "This agreement sets forth the terms and conditions.";
+        let similarity = calc.compare("d1", doc1, "d2", doc2);
+        assert!(similarity.score > 0.5);
+
+        // TF-IDF extraction
+        let mut extractor = KeyTermExtractor::new();
+        extractor.add_document(doc1);
+        extractor.add_document(doc2);
+        let key_terms = extractor.extract_key_terms(doc1, 5);
+        assert!(!key_terms.is_empty());
     }
 }

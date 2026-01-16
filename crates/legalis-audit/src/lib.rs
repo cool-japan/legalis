@@ -100,6 +100,7 @@ pub mod compliance;
 pub mod compression;
 pub mod custody;
 pub mod dashboard;
+pub mod datadog;
 pub mod delivery;
 pub mod distributed;
 pub mod elasticsearch;
@@ -111,9 +112,11 @@ pub mod incident_response;
 pub mod integrity;
 pub mod integrity_checker;
 pub mod interactive;
+pub mod jira;
 pub mod join;
 pub mod lineage;
 pub mod ml_anomaly;
+pub mod newrelic;
 pub mod notifications;
 pub mod predictive;
 pub mod privacy;
@@ -127,7 +130,9 @@ pub mod retention;
 pub mod risk_scoring;
 pub mod scheduler;
 pub mod search;
+pub mod servicenow;
 pub mod siem;
+pub mod splunk;
 pub mod storage;
 pub mod streaming;
 pub mod telemetry;
@@ -798,6 +803,101 @@ impl AuditTrail {
     ) -> AuditResult<timeline::Timeline> {
         let records = self.storage.get_all()?;
         timeline::TimelineReconstructor::reconstruct_subject(&records, subject_id)
+    }
+
+    /// Exports all records to Splunk HEC format.
+    pub fn export_splunk(&self, config: splunk::SplunkConfig) -> AuditResult<Vec<String>> {
+        let records = self.storage.get_all()?;
+        let exporter = splunk::SplunkExporter::new(config);
+        exporter.export_records(&records)
+    }
+
+    /// Exports a single record to Splunk HEC format.
+    pub fn export_record_splunk(
+        &self,
+        record_id: Uuid,
+        config: splunk::SplunkConfig,
+    ) -> AuditResult<String> {
+        let record = self.get(record_id)?;
+        let exporter = splunk::SplunkExporter::new(config);
+        exporter.export_record(&record)
+    }
+
+    /// Exports all records to Datadog log format.
+    pub fn export_datadog_logs(&self, config: datadog::DatadogConfig) -> AuditResult<Vec<String>> {
+        let records = self.storage.get_all()?;
+        let exporter = datadog::DatadogExporter::new(config);
+        exporter.export_logs(&records)
+    }
+
+    /// Exports a single record to Datadog log format.
+    pub fn export_record_datadog_log(
+        &self,
+        record_id: Uuid,
+        config: datadog::DatadogConfig,
+    ) -> AuditResult<String> {
+        let record = self.get(record_id)?;
+        let exporter = datadog::DatadogExporter::new(config);
+        exporter.export_log(&record)
+    }
+
+    /// Exports all records to New Relic events format.
+    pub fn export_newrelic_events(&self, config: newrelic::NewRelicConfig) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let exporter = newrelic::NewRelicExporter::new(config);
+        exporter.export_events(&records)
+    }
+
+    /// Exports all records to New Relic logs format.
+    pub fn export_newrelic_logs(&self, config: newrelic::NewRelicConfig) -> AuditResult<String> {
+        let records = self.storage.get_all()?;
+        let exporter = newrelic::NewRelicExporter::new(config);
+        exporter.export_logs(&records)
+    }
+
+    /// Exports a single record to ServiceNow incident format.
+    pub fn export_servicenow_incident(
+        &self,
+        record_id: Uuid,
+        config: servicenow::ServiceNowConfig,
+        severity: servicenow::IncidentSeverity,
+    ) -> AuditResult<String> {
+        let record = self.get(record_id)?;
+        let exporter = servicenow::ServiceNowExporter::new(config);
+        exporter.export_incident(&record, severity)
+    }
+
+    /// Exports all records to ServiceNow table entries format.
+    pub fn export_servicenow_table_entries(
+        &self,
+        config: servicenow::ServiceNowConfig,
+    ) -> AuditResult<Vec<String>> {
+        let records = self.storage.get_all()?;
+        let exporter = servicenow::ServiceNowExporter::new(config);
+        exporter.export_table_entries(&records)
+    }
+
+    /// Exports a single record to Jira issue format.
+    pub fn export_jira_issue(
+        &self,
+        record_id: Uuid,
+        config: jira::JiraConfig,
+        priority: jira::IssuePriority,
+    ) -> AuditResult<String> {
+        let record = self.get(record_id)?;
+        let exporter = jira::JiraExporter::new(config);
+        exporter.export_issue(&record, priority)
+    }
+
+    /// Exports all records to Jira issues format.
+    pub fn export_jira_issues(
+        &self,
+        config: jira::JiraConfig,
+        priority: jira::IssuePriority,
+    ) -> AuditResult<Vec<String>> {
+        let records = self.storage.get_all()?;
+        let exporter = jira::JiraExporter::new(config);
+        exporter.export_issues(&records, priority)
     }
 }
 

@@ -2,9 +2,10 @@
 //!
 //! Run with: cargo bench
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use legalis_audit::{Actor, AuditRecord, AuditTrail, DecisionContext, DecisionResult, EventType};
 use std::collections::HashMap;
+use std::hint::black_box;
 use uuid::Uuid;
 
 /// Creates a test audit record.

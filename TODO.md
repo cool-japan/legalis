@@ -25,17 +25,68 @@ All 23 crates (16 core + 7 jurisdictions) compile cleanly with no warnings. The 
 | legalis-api | 0.2.3 | Stable | 200 passing |
 | legalis (CLI) | 0.2.3 | Stable | Passing |
 
-### Jurisdiction Crates (7)
+### Jurisdiction Crates (9)
 
 | Crate | Version | Status | Tests |
 |-------|---------|--------|-------|
-| legalis-jp | 0.1.1 | Stable | Passing |
-| legalis-de | 0.1.1 | Stable | Passing |
-| legalis-fr | 0.1.1 | Stable | Passing |
-| legalis-us | 0.1.1 | Stable | Passing |
-| legalis-eu | 0.1.1 | Stable | Passing |
-| legalis-sg | 0.1.1 | Stable | Passing |
-| legalis-uk | 0.1.1 | Stable | Passing |
+| legalis-jp | 0.1.2 | Stable | Passing |
+| legalis-de | 0.1.2 | Stable | Passing |
+| legalis-fr | 0.1.2 | Stable | Passing |
+| legalis-us | 0.1.2 | Stable | Passing |
+| legalis-eu | 0.1.2 | Stable | Passing |
+| legalis-sg | 0.1.2 | Stable | Passing |
+| legalis-uk | 0.1.2 | Stable | Passing |
+| legalis-ca | 0.1.2 | Stable | 238 passing |
+| legalis-au | 0.1.2 | Stable | 168 passing |
+
+### Jurisdiction Integration Improvements
+
+The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis-i18n`, and `legalis-audit` for consistent API and rule engine integration.
+
+**Current framework usage (updated 2026-01-11):**
+| Jurisdiction | legalis-core | legalis-verifier | legalis-i18n | legalis-audit | legalis-sim | legalis-interop | legalis-lod | Status |
+|--------------|--------------|------------------|--------------|---------------|-------------|-----------------|-------------|--------|
+| legalis-fr | 26+ uses | ✅ verifier.rs | ✅ | - | - | ✅ Catala | - | Full integration |
+| legalis-us | 11+ uses | ✅ verifier.rs | - | - | ✅ FLSA sim | - | - | Full integration |
+| legalis-eu | 9+ uses | ✅ verifier.rs | ✅ | ✅ audit.rs | ✅ GDPR sim | - | ✅ EUR-Lex | Full integration |
+| legalis-jp | 5+ uses | ✅ verifier.rs | ✅ dates.rs | - | ✅ labor sim | - | - | Full integration |
+| legalis-de | 4+ uses | ✅ verifier.rs | ✅ dates.rs | - | ✅ Arbeit sim | - | - | Full integration |
+| legalis-sg | 3+ uses | ✅ verifier.rs | ✅ dates.rs | - | - | ✅ L4 | - | Full integration |
+| legalis-uk | 3+ uses | ✅ verifier.rs | ✅ dates.rs | - | ✅ NLW sim | - | ✅ leg.gov.uk | Full integration |
+| legalis-ca | 5+ uses | ✅ verifier.rs | - | - | - | - | - | Full integration |
+| legalis-au | 5+ uses | ✅ verifier.rs | - | - | - | - | - | Full integration |
+
+**Completed integrations:**
+- [x] **All jurisdictions**: reasoning/ module with Statute-based legal analysis
+- [x] **All jurisdictions**: Constitutional/fundamental rights verification (verifier.rs)
+- [x] **All jurisdictions**: Legal hierarchy checking (lex specialis, federal preemption, etc.)
+- [x] **JP**: Japanese calendar (和暦) with holiday-aware working days calculation
+- [x] **DE**: German federal state holidays (Bundesländer) with working days calculation
+- [x] **SG**: Singapore calendar with multi-ethnic holiday support
+- [x] **UK**: UK timezone (GMT/BST) with bank holiday calculation
+- [x] **EU**: GDPR audit trail (Articles 15, 22, 5(2)) with legalis-audit integration
+- [x] **US**: FLSA minimum wage/overtime impact simulation with legalis-sim
+- [x] **EU**: GDPR fine/compliance impact simulation with legalis-sim
+- [x] **FR**: Catala DSL integration with legalis-interop (Code Civil, Code Travail, CGI)
+- [x] **SG**: L4 DSL integration with legalis-interop (Companies Act, Employment Act, PDPA)
+- [x] **JP**: Labor law simulation with legalis-sim (minimum wage, work style reform, paid leave)
+- [x] **DE**: Arbeitsrecht simulation with legalis-sim (Mindestlohn, ArbZG, BUrlG)
+- [x] **UK**: Employment law simulation with legalis-sim (NLW, WTR, annual leave)
+- [x] **EU**: EUR-Lex integration with legalis-lod (GDPR, TFEU, Consumer Rights RDF export)
+- [x] **UK**: legislation.gov.uk integration with legalis-lod (ERA, NMWA, WTR RDF export)
+
+**Recommended future improvements:**
+- [ ] **All jurisdictions**: Integrate with `legalis-dsl` for rule definitions
+
+**Benefits achieved:**
+1. Unified rule engine evaluation across all jurisdictions
+2. Constitutional/fundamental rights compliance checking
+3. Jurisdiction-specific calendar and deadline calculations
+4. GDPR-compliant audit trail for EU jurisdiction
+5. Better interoperability with legalis-porting
+6. Policy impact simulation for US (FLSA), EU (GDPR), JP (Labor Law), DE (Arbeitsrecht), UK (Employment)
+7. Cross-DSL interoperability for FR (Catala) and SG (L4)
+8. Linked Open Data export for EU (EUR-Lex) and UK (legislation.gov.uk)
 
 ---
 
@@ -65,10 +116,10 @@ All 23 crates (16 core + 7 jurisdictions) compile cleanly with no warnings. The 
 - [ ] Add documentation comments (rustdoc) to all public APIs
 
 ### Backlog
-- [ ] Create web-based UI frontend for legalis-api
-- [ ] Add GraphQL support to legalis-api
-- [ ] Create VS Code extension for Legal DSL syntax highlighting
-- [ ] Add Jupyter notebook integration for legal analysis
+- [x] Create web-based UI frontend for legalis-api (completed - web-ui/public/index.html)
+- [x] Add GraphQL support to legalis-api (implemented in graphql.rs)
+- [x] Create VS Code extension for Legal DSL syntax highlighting (completed - vscode-extension/)
+- [x] Add Jupyter notebook integration for legal analysis (completed - notebooks/legal_analysis_demo.ipynb)
 
 ---
 
@@ -168,7 +219,7 @@ All 23 crates (16 core + 7 jurisdictions) compile cleanly with no warnings. The 
 - [x] Comprehensive roadmap through v0.4.8 (see crate TODO.md)
 
 ### legalis-verifier
-- [x] Integrate Z3 SMT solver for proper constraint solving
+- [x] Integrate OxiZ SMT solver (Pure Rust) for proper constraint solving
 - [x] Implement satisfiability checking for conditions
 - [x] Basic conflict detection between statutes
 - [x] Logical contradiction checking

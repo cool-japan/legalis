@@ -1204,7 +1204,7 @@ mod tests {
 
         assert!(!result.eligible);
         assert_eq!(result.benefit_amount, 0.0);
-        assert!(result.reasons.len() > 0);
+        assert!(!result.reasons.is_empty());
     }
 
     #[test]

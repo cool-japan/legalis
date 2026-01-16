@@ -303,8 +303,10 @@ mod tests {
 
     #[test]
     fn test_cache_expiry() {
-        let mut config = CloudStorageConfig::default();
-        config.cache_ttl = 0; // Immediate expiry
+        let config = CloudStorageConfig {
+            cache_ttl: 0, // Immediate expiry
+            ..Default::default()
+        };
 
         let mut storage = CloudStorage::new(config);
         let diff = create_test_diff();

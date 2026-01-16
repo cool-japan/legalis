@@ -7,6 +7,9 @@ use crate::{LodResult, Triple};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+/// Type alias for derivation functions used in materialization rules.
+pub type DeriveFn = Box<dyn Fn(&Triple) -> Vec<Triple> + Send + Sync>;
+
 /// Real-time graph update event.
 #[derive(Debug, Clone)]
 pub enum GraphUpdate {
@@ -192,7 +195,7 @@ pub struct MaterializationRule {
     /// Pattern to match
     pub pattern: RulePattern,
     /// Derivation function
-    pub derive_fn: Box<dyn Fn(&Triple) -> Vec<Triple> + Send + Sync>,
+    pub derive_fn: DeriveFn,
 }
 
 impl MaterializationRule {

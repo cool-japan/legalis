@@ -6,7 +6,7 @@
 
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.1-brightgreen.svg)](RELEASE-0.1.1.md)
+[![Version](https://img.shields.io/badge/version-0.1.2-brightgreen.svg)](RELEASE-0.1.2.md)
 [![Crates](https://img.shields.io/badge/crates-23-blue.svg)](#crates)
 [![Jurisdictions](https://img.shields.io/badge/jurisdictions-7%20operational-green.svg)](#jurisdictions)
 [![Tests](https://img.shields.io/badge/tests-9580%20passing-success.svg)](#crates)
@@ -110,7 +110,7 @@ All 23 crates (16 core + 7 jurisdictions) compile cleanly with **NO WARNINGS** -
 | Crate | Version | Tests | Description |
 |-------|---------|-------|-------------|
 | `legalis-llm` | 0.4.8 | 543 | LLM provider abstraction (OpenAI, Anthropic, Gemini, Ollama) with law compiler, federated learning, neuro-symbolic integration. |
-| `legalis-verifier` | 0.2.9 | 392 | Static analysis with Z3 SMT solver, temporal logic (LTL/CTL), formal methods (Coq, Lean 4), distributed verification. |
+| `legalis-verifier` | 0.2.9 | 392 | Static analysis with OxiZ SMT solver (Pure Rust), temporal logic (LTL/CTL), formal methods (Coq, Lean 4), distributed verification. |
 
 ### Simulation & Analysis Layer
 | Crate | Version | Tests | Description |
@@ -215,7 +215,7 @@ Legalis-RS now includes comprehensive support for **7 major jurisdictions** (all
 git clone https://github.com/cool-japan/legalis
 cd legalis
 
-# Build all crates (default features: includes REST + gRPC APIs, no Z3 required)
+# Build all crates (default features: includes REST + gRPC APIs)
 cargo build
 
 # Build without gRPC (minimal dependencies)
@@ -228,25 +228,13 @@ cargo test
 cargo clippy
 ```
 
-#### Building with Z3 SMT Solver (Optional)
+#### Building with SMT Solver (Optional)
 
-The `legalis-verifier` crate has an optional `z3-solver` feature for rigorous formal verification. To build with all features including Z3 support:
+The `legalis-verifier` crate has an optional `smt-solver` feature for rigorous formal verification using **OxiZ** (Pure Rust SMT solver):
 
 ```bash
-# Install Z3 (macOS)
-brew install z3
-
-# Install Z3 (Ubuntu/Debian)
-sudo apt install libz3-dev
-
-# Install Z3 (Fedora/RHEL)
-sudo dnf install z3-devel
-
-# Install Z3 (Arch Linux)
-sudo pacman -S z3
-
-# Setup Z3 environment variables (macOS/Linux) - REQUIRED for all-features builds
-source setup-z3-env.sh
+# Build with SMT solver (Pure Rust - no external dependencies)
+cargo build --features smt-solver
 
 # Build with all features
 cargo build --all-features
@@ -255,9 +243,7 @@ cargo build --all-features
 cargo nextest run --all-features
 ```
 
-**Important**: You MUST source the `setup-z3-env.sh` script in every shell session where you want to build with `--all-features`. The script automatically detects your platform and configures the necessary environment variables.
-
-Alternatively, you can use [direnv](https://direnv.net/) with the included `.envrc` file for automatic environment setup whenever you `cd` into the project directory.
+**Note**: OxiZ is a Pure Rust SMT solver, so no external libraries or environment variables are needed!
 
 ### Basic Usage
 
@@ -418,14 +404,15 @@ This enables integration with knowledge graphs and semantic web systems, allowin
 1. **No External Orchestrator Dependency**: Uses Rust's native async (Tokio) instead of external task queues
 2. **Vendor-Agnostic LLM Layer**: Trait-based abstraction allows swapping providers without code changes
 3. **Explicit Discretion Markers**: The type system enforces acknowledgment of human judgment requirements
-4. **SMT Solver Integration**: Currently uses Z3 (v0.12) for formal verification of legal consistency
-   - **Note**: In v0.2.0, Z3 will be replaced with a Pure Rust SMT solver from the COOLJAPAN Ecosystem to achieve 100% Pure Rust implementation
+4. **SMT Solver Integration**: Uses OxiZ (Pure Rust) for formal verification of legal consistency
+   - **Achieved**: 100% Pure Rust implementation with no external C/C++ dependencies
 5. **Object Storage**: S3-compatible storage support for audit trails
    - **Note**: MinIO can be replaced with rs3gw (Pure Rust S3-compatible gateway) from the COOLJAPAN Ecosystem
 
 ## Documentation
 
 ### Release Notes
+- **[v0.1.2](RELEASE-0.1.2.md)** (January 15, 2026) - Code Quality: Clippy Compliance
 - **[v0.1.1](RELEASE-0.1.1.md)** (January 10, 2026) - Jurisdiction Expansion: EU, Singapore, UK
 - **[v0.1.0](RELEASE-0.1.0.md)** (January 5, 2026) - Genesis: Initial release
 

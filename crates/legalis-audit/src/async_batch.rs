@@ -223,8 +223,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_batch_auto_flush() {
-        let mut config = BatchConfig::default();
-        config.max_batch_size = 3;
+        let config = BatchConfig {
+            max_batch_size: 3,
+            ..Default::default()
+        };
 
         let writer = AsyncBatchWriter::new(config);
 

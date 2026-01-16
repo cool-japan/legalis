@@ -339,6 +339,20 @@ pub mod hybrid_reasoning;
 pub mod llm_interpretation;
 pub mod neural_entailment;
 
+// Blockchain & Smart Contract Bridge (v0.3.1)
+pub mod blockchain_verification;
+pub mod decentralized_registry;
+pub mod oracle;
+pub mod smart_contract;
+pub mod zkp;
+
+// Legal Digital Twins (v0.3.2)
+pub mod digital_twin;
+pub mod event_sourcing;
+pub mod realtime_sync;
+pub mod scenario_simulation;
+pub mod time_travel;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;

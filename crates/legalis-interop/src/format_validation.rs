@@ -692,7 +692,7 @@ mod tests {
     fn test_schema_validator_xml_invalid() {
         let validator = SchemaValidator::new(LegalFormat::AkomaNtoso);
         let issues = validator.validate_xml("not xml");
-        assert!(issues.len() > 0);
+        assert!(!issues.is_empty());
     }
 
     #[test]
@@ -706,7 +706,7 @@ mod tests {
     fn test_schema_validator_json_invalid() {
         let validator = SchemaValidator::new(LegalFormat::CommonForm);
         let issues = validator.validate_json("{invalid json}");
-        assert!(issues.len() > 0);
+        assert!(!issues.is_empty());
     }
 
     #[test]
@@ -759,13 +759,13 @@ mod tests {
 
         let checker = ConsistencyChecker::new(reference);
         let issues = checker.check_consistency(&target);
-        assert!(issues.len() > 0); // Should have issues
+        assert!(!issues.is_empty()); // Should have issues
     }
 
     #[test]
     fn test_format_validator_new() {
         let validator = FormatValidator::new();
-        assert!(validator.rules.len() > 0);
+        assert!(!validator.rules.is_empty());
     }
 
     #[test]

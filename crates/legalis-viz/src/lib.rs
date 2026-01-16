@@ -16907,6 +16907,1957 @@ impl ConceptHierarchyTree {
     }
 }
 
+// ============================================================================
+// Temporal Legal Analytics (v0.4.2)
+// ============================================================================
+
+/// Represents a change event in a statute's history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteChangeEvent {
+    /// Event ID
+    pub id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Statute name
+    pub statute_name: String,
+    /// Timestamp (ISO 8601 format)
+    pub timestamp: String,
+    /// Type of change (enacted, amended, repealed, suspended, reinstated)
+    pub change_type: String,
+    /// Description of the change
+    pub description: String,
+    /// Version number (e.g., "1.0", "2.0", "2.1")
+    pub version: String,
+    /// Optional numerical value for metrics (e.g., number of sections changed)
+    pub metric_value: Option<f64>,
+}
+
+impl StatuteChangeEvent {
+    /// Creates a new statute change event.
+    pub fn new(
+        id: &str,
+        statute_id: &str,
+        statute_name: &str,
+        timestamp: &str,
+        change_type: &str,
+        description: &str,
+        version: &str,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            statute_id: statute_id.to_string(),
+            statute_name: statute_name.to_string(),
+            timestamp: timestamp.to_string(),
+            change_type: change_type.to_string(),
+            description: description.to_string(),
+            version: version.to_string(),
+            metric_value: None,
+        }
+    }
+
+    /// Sets the metric value.
+    pub fn with_metric(mut self, value: f64) -> Self {
+        self.metric_value = Some(value);
+        self
+    }
+}
+
+/// Time-series visualization for statute changes.
+#[derive(Debug, Clone)]
+pub struct StatuteTimeSeries {
+    /// Title of the time series
+    pub title: String,
+    /// Change events
+    pub events: Vec<StatuteChangeEvent>,
+    /// Theme
+    pub theme: Theme,
+    /// Show metrics on chart
+    pub show_metrics: bool,
+}
+
+impl StatuteTimeSeries {
+    /// Creates a new statute time series.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            events: Vec::new(),
+            theme: Theme::light(),
+            show_metrics: true,
+        }
+    }
+
+    /// Adds a change event.
+    pub fn add_event(&mut self, event: StatuteChangeEvent) {
+        self.events.push(event);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets whether to show metrics.
+    pub fn with_show_metrics(mut self, show: bool) -> Self {
+        self.show_metrics = show;
+        self
+    }
+
+    /// Generates HTML time-series chart using D3.js.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 20px; background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str("        .chart { margin: 20px auto; max-width: 1200px; }\n");
+        html.push_str("        .axis-label { font-size: 14px; font-weight: bold; }\n");
+        html.push_str("        .event-dot { cursor: pointer; }\n");
+        html.push_str("        .event-dot:hover { r: 8; }\n");
+        html.push_str("        .tooltip { position: absolute; padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 5px; pointer-events: none; opacity: 0; }\n");
+        html.push_str("        .legend { margin: 20px 0; }\n");
+        html.push_str("        .legend-item { display: inline-block; margin-right: 20px; }\n");
+        html.push_str("        .legend-color { display: inline-block; width: 15px; height: 15px; margin-right: 5px; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str(&format!("    <h1>{}</h1>\n", self.title));
+
+        // Legend
+        html.push_str("    <div class=\"legend\">\n");
+        html.push_str("        <div class=\"legend-item\"><span class=\"legend-color\" style=\"background: #27ae60;\"></span>Enacted</div>\n");
+        html.push_str("        <div class=\"legend-item\"><span class=\"legend-color\" style=\"background: #3498db;\"></span>Amended</div>\n");
+        html.push_str("        <div class=\"legend-item\"><span class=\"legend-color\" style=\"background: #e74c3c;\"></span>Repealed</div>\n");
+        html.push_str("        <div class=\"legend-item\"><span class=\"legend-color\" style=\"background: #f39c12;\"></span>Suspended</div>\n");
+        html.push_str("        <div class=\"legend-item\"><span class=\"legend-color\" style=\"background: #9b59b6;\"></span>Reinstated</div>\n");
+        html.push_str("    </div>\n");
+
+        html.push_str("    <div id=\"chart\" class=\"chart\"></div>\n");
+        html.push_str("    <div id=\"tooltip\" class=\"tooltip\"></div>\n");
+
+        // D3.js visualization script
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "        const data = {};\n",
+            serde_json::to_string(&self.events).unwrap()
+        ));
+        html.push_str("        \n");
+        html.push_str("        const margin = {top: 40, right: 40, bottom: 60, left: 60};\n");
+        html.push_str("        const width = 1100 - margin.left - margin.right;\n");
+        html.push_str("        const height = 500 - margin.top - margin.bottom;\n");
+        html.push_str("        \n");
+        html.push_str("        const svg = d3.select('#chart')\n");
+        html.push_str("            .append('svg')\n");
+        html.push_str("            .attr('width', width + margin.left + margin.right)\n");
+        html.push_str("            .attr('height', height + margin.top + margin.bottom)\n");
+        html.push_str("            .append('g')\n");
+        html.push_str(
+            "            .attr('transform', `translate(${margin.left},${margin.top})`);\n",
+        );
+        html.push_str("        \n");
+        html.push_str("        // Parse dates\n");
+        html.push_str("        data.forEach(d => { d.date = new Date(d.timestamp); });\n");
+        html.push_str("        \n");
+        html.push_str("        // Scales\n");
+        html.push_str("        const x = d3.scaleTime()\n");
+        html.push_str("            .domain(d3.extent(data, d => d.date))\n");
+        html.push_str("            .range([0, width]);\n");
+        html.push_str("        \n");
+
+        if self.show_metrics {
+            html.push_str("        const y = d3.scaleLinear()\n");
+            html.push_str("            .domain([0, d3.max(data, d => d.metric_value || 0)])\n");
+            html.push_str("            .range([height, 0]);\n");
+        } else {
+            html.push_str("        const y = d3.scaleBand()\n");
+            html.push_str("            .domain(data.map(d => d.id))\n");
+            html.push_str("            .range([0, height])\n");
+            html.push_str("            .padding(0.1);\n");
+        }
+
+        html.push_str("        \n");
+        html.push_str("        // Color scale\n");
+        html.push_str("        const colorMap = {\n");
+        html.push_str("            'enacted': '#27ae60',\n");
+        html.push_str("            'amended': '#3498db',\n");
+        html.push_str("            'repealed': '#e74c3c',\n");
+        html.push_str("            'suspended': '#f39c12',\n");
+        html.push_str("            'reinstated': '#9b59b6'\n");
+        html.push_str("        };\n");
+        html.push_str("        \n");
+        html.push_str("        // Axes\n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .attr('transform', `translate(0,${height})`)\n");
+        html.push_str("            .call(d3.axisBottom(x));\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .call(d3.axisLeft(y));\n");
+        html.push_str("        \n");
+        html.push_str("        // Axis labels\n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('class', 'axis-label')\n");
+        html.push_str("            .attr('x', width / 2)\n");
+        html.push_str("            .attr('y', height + 50)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+        html.push_str("            .text('Time');\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('class', 'axis-label')\n");
+        html.push_str("            .attr('transform', 'rotate(-90)')\n");
+        html.push_str("            .attr('x', -height / 2)\n");
+        html.push_str("            .attr('y', -50)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+
+        if self.show_metrics {
+            html.push_str("            .text('Metric Value');\n");
+        } else {
+            html.push_str("            .text('Events');\n");
+        }
+
+        html.push_str("        \n");
+        html.push_str("        // Tooltip\n");
+        html.push_str("        const tooltip = d3.select('#tooltip');\n");
+        html.push_str("        \n");
+        html.push_str("        // Plot events\n");
+        html.push_str("        svg.selectAll('.event-dot')\n");
+        html.push_str("            .data(data)\n");
+        html.push_str("            .enter()\n");
+        html.push_str("            .append('circle')\n");
+        html.push_str("            .attr('class', 'event-dot')\n");
+        html.push_str("            .attr('cx', d => x(d.date))\n");
+
+        if self.show_metrics {
+            html.push_str("            .attr('cy', d => y(d.metric_value || 0))\n");
+        } else {
+            html.push_str("            .attr('cy', (d, i) => y(d.id) + y.bandwidth() / 2)\n");
+        }
+
+        html.push_str("            .attr('r', 5)\n");
+        html.push_str(
+            "            .attr('fill', d => colorMap[d.change_type.toLowerCase()] || '#95a5a6')\n",
+        );
+        html.push_str("            .on('mouseover', (event, d) => {\n");
+        html.push_str("                tooltip.style('opacity', 1)\n");
+        html.push_str("                    .html(`<strong>${d.statute_name}</strong><br>Type: ${d.change_type}<br>Version: ${d.version}<br>Date: ${d.timestamp}<br>${d.description}`)\n");
+        html.push_str("                    .style('left', (event.pageX + 10) + 'px')\n");
+        html.push_str("                    .style('top', (event.pageY - 10) + 'px');\n");
+        html.push_str("            })\n");
+        html.push_str("            .on('mouseout', () => {\n");
+        html.push_str("                tooltip.style('opacity', 0);\n");
+        html.push_str("            });\n");
+
+        // Add connecting lines if showing metrics
+        if self.show_metrics {
+            html.push_str("        \n");
+            html.push_str("        // Connect events with lines\n");
+            html.push_str("        const line = d3.line()\n");
+            html.push_str("            .x(d => x(d.date))\n");
+            html.push_str("            .y(d => y(d.metric_value || 0))\n");
+            html.push_str("            .curve(d3.curveMonotoneX);\n");
+            html.push_str("        \n");
+            html.push_str("        svg.append('path')\n");
+            html.push_str("            .datum(data)\n");
+            html.push_str("            .attr('fill', 'none')\n");
+            html.push_str(&format!(
+                "            .attr('stroke', '{}')\n",
+                self.theme.link_color
+            ));
+            html.push_str("            .attr('stroke-width', 2)\n");
+            html.push_str("            .attr('d', line);\n");
+        }
+
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    /// Generates Mermaid timeline diagram.
+    pub fn to_mermaid(&self) -> String {
+        let mut diagram = String::new();
+        diagram.push_str("timeline\n");
+        diagram.push_str(&format!("    title {}\n", self.title));
+
+        for event in &self.events {
+            diagram.push_str(&format!(
+                "    {} : {} ({}) - {}\n",
+                event.timestamp, event.statute_name, event.change_type, event.version
+            ));
+        }
+
+        diagram
+    }
+}
+
+/// Legal evolution timeline showing statute lifecycle.
+#[derive(Debug, Clone)]
+pub struct LegalEvolutionTimeline {
+    /// Timeline title
+    pub title: String,
+    /// Statute ID being tracked
+    pub statute_id: String,
+    /// Statute name
+    pub statute_name: String,
+    /// Evolution events
+    pub events: Vec<StatuteChangeEvent>,
+    /// Theme
+    pub theme: Theme,
+}
+
+impl LegalEvolutionTimeline {
+    /// Creates a new legal evolution timeline.
+    pub fn new(statute_id: &str, statute_name: &str) -> Self {
+        Self {
+            title: format!("Evolution of {}", statute_name),
+            statute_id: statute_id.to_string(),
+            statute_name: statute_name.to_string(),
+            events: Vec::new(),
+            theme: Theme::light(),
+        }
+    }
+
+    /// Adds an evolution event.
+    pub fn add_event(&mut self, event: StatuteChangeEvent) {
+        self.events.push(event);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML evolution timeline.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 20px; background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str(
+            "        .timeline { position: relative; max-width: 1000px; margin: 40px auto; }\n",
+        );
+        html.push_str("        .timeline::after { content: ''; position: absolute; width: 4px; background-color: #3498db; top: 0; bottom: 0; left: 50%; margin-left: -2px; }\n");
+        html.push_str("        .timeline-event { padding: 10px 40px; position: relative; background-color: inherit; width: 50%; }\n");
+        html.push_str("        .timeline-event::after { content: ''; position: absolute; width: 20px; height: 20px; right: -10px; background-color: white; border: 4px solid #3498db; top: 15px; border-radius: 50%; z-index: 1; }\n");
+        html.push_str("        .left { left: 0; }\n");
+        html.push_str("        .right { left: 50%; }\n");
+        html.push_str("        .left::before { content: ' '; height: 0; position: absolute; top: 22px; width: 0; z-index: 1; right: 30px; border: medium solid white; border-width: 10px 0 10px 10px; border-color: transparent transparent transparent white; }\n");
+        html.push_str("        .right::before { content: ' '; height: 0; position: absolute; top: 22px; width: 0; z-index: 1; left: 30px; border: medium solid white; border-width: 10px 10px 10px 0; border-color: transparent white transparent transparent; }\n");
+        html.push_str("        .right::after { left: -10px; }\n");
+        html.push_str("        .content { padding: 20px 30px; background-color: white; position: relative; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .content h2 { margin-top: 0; color: #2c3e50; }\n");
+        html.push_str("        .content .date { color: #7f8c8d; font-size: 0.9em; }\n");
+        html.push_str("        .content .change-type { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin: 10px 0; }\n");
+        html.push_str("        .enacted { background-color: #27ae60; color: white; }\n");
+        html.push_str("        .amended { background-color: #3498db; color: white; }\n");
+        html.push_str("        .repealed { background-color: #e74c3c; color: white; }\n");
+        html.push_str("        .suspended { background-color: #f39c12; color: white; }\n");
+        html.push_str("        .reinstated { background-color: #9b59b6; color: white; }\n");
+        html.push_str("        .version { font-style: italic; color: #95a5a6; }\n");
+        html.push_str("        @media screen and (max-width: 600px) { .timeline::after { left: 31px; } .timeline-event { width: 100%; padding-left: 70px; padding-right: 25px; } .timeline-event::before { left: 60px; border: medium solid white; border-width: 10px 10px 10px 0; border-color: transparent white transparent transparent; } .left::after, .right::after { left: 15px; } .right { left: 0%; } }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str(&format!(
+            "    <h1 style=\"text-align: center;\">{}</h1>\n",
+            self.title
+        ));
+        html.push_str("    <div class=\"timeline\">\n");
+
+        for (i, event) in self.events.iter().enumerate() {
+            let position = if i % 2 == 0 { "left" } else { "right" };
+            html.push_str(&format!(
+                "        <div class=\"timeline-event {}\">\n",
+                position
+            ));
+            html.push_str("            <div class=\"content\">\n");
+            html.push_str(&format!(
+                "                <span class=\"change-type {}\">{}</span>\n",
+                event.change_type.to_lowercase(),
+                event.change_type
+            ));
+            html.push_str(&format!("                <h2>{}</h2>\n", event.description));
+            html.push_str(&format!(
+                "                <p class=\"date\">{}</p>\n",
+                event.timestamp
+            ));
+            html.push_str(&format!(
+                "                <p class=\"version\">Version {}</p>\n",
+                event.version
+            ));
+            html.push_str("            </div>\n");
+            html.push_str("        </div>\n");
+        }
+
+        html.push_str("    </div>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    /// Generates Mermaid diagram.
+    pub fn to_mermaid(&self) -> String {
+        let mut diagram = String::new();
+        diagram.push_str("graph LR\n");
+
+        for (i, event) in self.events.iter().enumerate() {
+            let node_id = format!("E{}", i);
+            let next_id = format!("E{}", i + 1);
+
+            diagram.push_str(&format!(
+                "    {}[\"{}\\n{}\\n{}\"]\n",
+                node_id,
+                event.change_type,
+                event.version,
+                event
+                    .timestamp
+                    .split('T')
+                    .next()
+                    .unwrap_or(&event.timestamp)
+            ));
+
+            if i < self.events.len() - 1 {
+                diagram.push_str(&format!("    {} --> {}\n", node_id, next_id));
+            }
+        }
+
+        diagram
+    }
+}
+
+/// Amendment impact analysis visualizer.
+#[derive(Debug, Clone)]
+pub struct AmendmentImpactAnalysis {
+    /// Analysis title
+    pub title: String,
+    /// Amendment events with impact metrics
+    pub amendments: Vec<AmendmentImpact>,
+    /// Theme
+    pub theme: Theme,
+}
+
+/// Represents the impact of an amendment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AmendmentImpact {
+    /// Amendment ID
+    pub id: String,
+    /// Statute ID
+    pub statute_id: String,
+    /// Statute name
+    pub statute_name: String,
+    /// Amendment date
+    pub date: String,
+    /// Description
+    pub description: String,
+    /// Number of sections affected
+    pub sections_affected: usize,
+    /// Number of downstream statutes affected
+    pub downstream_statutes: usize,
+    /// Estimated affected population
+    pub affected_population: Option<usize>,
+    /// Impact severity (0.0 to 1.0)
+    pub severity: f64,
+}
+
+impl AmendmentImpact {
+    /// Creates a new amendment impact record.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        id: &str,
+        statute_id: &str,
+        statute_name: &str,
+        date: &str,
+        description: &str,
+        sections_affected: usize,
+        downstream_statutes: usize,
+        severity: f64,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            statute_id: statute_id.to_string(),
+            statute_name: statute_name.to_string(),
+            date: date.to_string(),
+            description: description.to_string(),
+            sections_affected,
+            downstream_statutes,
+            affected_population: None,
+            severity: severity.clamp(0.0, 1.0),
+        }
+    }
+
+    /// Sets the affected population.
+    pub fn with_affected_population(mut self, population: usize) -> Self {
+        self.affected_population = Some(population);
+        self
+    }
+}
+
+impl AmendmentImpactAnalysis {
+    /// Creates a new amendment impact analysis.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            amendments: Vec::new(),
+            theme: Theme::light(),
+        }
+    }
+
+    /// Adds an amendment impact.
+    pub fn add_amendment(&mut self, amendment: AmendmentImpact) {
+        self.amendments.push(amendment);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates HTML impact analysis dashboard.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 20px; background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str("        .dashboard { max-width: 1200px; margin: 0 auto; }\n");
+        html.push_str("        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }\n");
+        html.push_str("        .metric-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .metric-value { font-size: 2.5em; font-weight: bold; color: #3498db; margin: 10px 0; }\n");
+        html.push_str("        .metric-label { color: #7f8c8d; font-size: 0.9em; }\n");
+        html.push_str("        .amendments-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .amendments-table th, .amendments-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ecf0f1; }\n");
+        html.push_str("        .amendments-table th { background-color: #34495e; color: white; font-weight: bold; }\n");
+        html.push_str("        .amendments-table tr:hover { background-color: #ecf0f1; }\n");
+        html.push_str("        .severity-badge { padding: 4px 12px; border-radius: 4px; font-size: 0.85em; font-weight: bold; }\n");
+        html.push_str("        .severity-low { background-color: #27ae60; color: white; }\n");
+        html.push_str("        .severity-medium { background-color: #f39c12; color: white; }\n");
+        html.push_str("        .severity-high { background-color: #e74c3c; color: white; }\n");
+        html.push_str("        #impact-chart { margin: 30px 0; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str("    <div class=\"dashboard\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+
+        // Calculate summary metrics
+        let total_amendments = self.amendments.len();
+        let total_sections: usize = self.amendments.iter().map(|a| a.sections_affected).sum();
+        let total_downstream: usize = self.amendments.iter().map(|a| a.downstream_statutes).sum();
+        let avg_severity = if total_amendments > 0 {
+            self.amendments.iter().map(|a| a.severity).sum::<f64>() / total_amendments as f64
+        } else {
+            0.0
+        };
+
+        html.push_str("        <div class=\"metrics\">\n");
+        html.push_str("            <div class=\"metric-card\">\n");
+        html.push_str(&format!(
+            "                <div class=\"metric-value\">{}</div>\n",
+            total_amendments
+        ));
+        html.push_str("                <div class=\"metric-label\">Total Amendments</div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("            <div class=\"metric-card\">\n");
+        html.push_str(&format!(
+            "                <div class=\"metric-value\">{}</div>\n",
+            total_sections
+        ));
+        html.push_str("                <div class=\"metric-label\">Sections Affected</div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("            <div class=\"metric-card\">\n");
+        html.push_str(&format!(
+            "                <div class=\"metric-value\">{}</div>\n",
+            total_downstream
+        ));
+        html.push_str("                <div class=\"metric-label\">Downstream Statutes</div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("            <div class=\"metric-card\">\n");
+        html.push_str(&format!(
+            "                <div class=\"metric-value\">{:.2}</div>\n",
+            avg_severity
+        ));
+        html.push_str("                <div class=\"metric-label\">Avg Severity</div>\n");
+        html.push_str("            </div>\n");
+        html.push_str("        </div>\n");
+
+        // Impact chart
+        html.push_str("        <div id=\"impact-chart\"></div>\n");
+
+        // Amendments table
+        html.push_str("        <h2>Amendment Details</h2>\n");
+        html.push_str("        <table class=\"amendments-table\">\n");
+        html.push_str("            <thead>\n");
+        html.push_str("                <tr>\n");
+        html.push_str("                    <th>Date</th>\n");
+        html.push_str("                    <th>Statute</th>\n");
+        html.push_str("                    <th>Description</th>\n");
+        html.push_str("                    <th>Sections</th>\n");
+        html.push_str("                    <th>Downstream</th>\n");
+        html.push_str("                    <th>Severity</th>\n");
+        html.push_str("                </tr>\n");
+        html.push_str("            </thead>\n");
+        html.push_str("            <tbody>\n");
+
+        for amendment in &self.amendments {
+            let severity_class = if amendment.severity < 0.33 {
+                "severity-low"
+            } else if amendment.severity < 0.67 {
+                "severity-medium"
+            } else {
+                "severity-high"
+            };
+
+            html.push_str("                <tr>\n");
+            html.push_str(&format!(
+                "                    <td>{}</td>\n",
+                amendment.date.split('T').next().unwrap_or(&amendment.date)
+            ));
+            html.push_str(&format!(
+                "                    <td>{}</td>\n",
+                amendment.statute_name
+            ));
+            html.push_str(&format!(
+                "                    <td>{}</td>\n",
+                amendment.description
+            ));
+            html.push_str(&format!(
+                "                    <td>{}</td>\n",
+                amendment.sections_affected
+            ));
+            html.push_str(&format!(
+                "                    <td>{}</td>\n",
+                amendment.downstream_statutes
+            ));
+            html.push_str(&format!(
+                "                    <td><span class=\"severity-badge {}\">{:.2}</span></td>\n",
+                severity_class, amendment.severity
+            ));
+            html.push_str("                </tr>\n");
+        }
+
+        html.push_str("            </tbody>\n");
+        html.push_str("        </table>\n");
+
+        // D3.js chart script
+        html.push_str("    </div>\n");
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "        const data = {};\n",
+            serde_json::to_string(&self.amendments).unwrap()
+        ));
+        html.push_str("        \n");
+        html.push_str("        const margin = {top: 40, right: 40, bottom: 60, left: 60};\n");
+        html.push_str("        const width = 1100 - margin.left - margin.right;\n");
+        html.push_str("        const height = 400 - margin.top - margin.bottom;\n");
+        html.push_str("        \n");
+        html.push_str("        const svg = d3.select('#impact-chart')\n");
+        html.push_str("            .append('svg')\n");
+        html.push_str("            .attr('width', width + margin.left + margin.right)\n");
+        html.push_str("            .attr('height', height + margin.top + margin.bottom)\n");
+        html.push_str("            .append('g')\n");
+        html.push_str(
+            "            .attr('transform', `translate(${margin.left},${margin.top})`);\n",
+        );
+        html.push_str("        \n");
+        html.push_str("        // Parse dates\n");
+        html.push_str("        data.forEach(d => { d.parsed_date = new Date(d.date); });\n");
+        html.push_str("        \n");
+        html.push_str("        // Scales\n");
+        html.push_str("        const x = d3.scaleTime()\n");
+        html.push_str("            .domain(d3.extent(data, d => d.parsed_date))\n");
+        html.push_str("            .range([0, width]);\n");
+        html.push_str("        \n");
+        html.push_str("        const y = d3.scaleLinear()\n");
+        html.push_str("            .domain([0, d3.max(data, d => d.sections_affected)])\n");
+        html.push_str("            .range([height, 0]);\n");
+        html.push_str("        \n");
+        html.push_str("        const colorScale = d3.scaleLinear()\n");
+        html.push_str("            .domain([0, 0.5, 1])\n");
+        html.push_str("            .range(['#27ae60', '#f39c12', '#e74c3c']);\n");
+        html.push_str("        \n");
+        html.push_str("        // Axes\n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .attr('transform', `translate(0,${height})`)\n");
+        html.push_str("            .call(d3.axisBottom(x));\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .call(d3.axisLeft(y));\n");
+        html.push_str("        \n");
+        html.push_str("        // Axis labels\n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('x', width / 2)\n");
+        html.push_str("            .attr('y', height + 50)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+        html.push_str("            .text('Time');\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('transform', 'rotate(-90)')\n");
+        html.push_str("            .attr('x', -height / 2)\n");
+        html.push_str("            .attr('y', -50)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+        html.push_str("            .text('Sections Affected');\n");
+        html.push_str("        \n");
+        html.push_str("        // Plot bars\n");
+        html.push_str("        svg.selectAll('.bar')\n");
+        html.push_str("            .data(data)\n");
+        html.push_str("            .enter()\n");
+        html.push_str("            .append('rect')\n");
+        html.push_str("            .attr('class', 'bar')\n");
+        html.push_str("            .attr('x', d => x(d.parsed_date) - 10)\n");
+        html.push_str("            .attr('y', d => y(d.sections_affected))\n");
+        html.push_str("            .attr('width', 20)\n");
+        html.push_str("            .attr('height', d => height - y(d.sections_affected))\n");
+        html.push_str("            .attr('fill', d => colorScale(d.severity));\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    /// Generates summary report in text format.
+    pub fn to_text_report(&self) -> String {
+        let mut report = String::new();
+
+        report.push_str(&format!("{}\n", self.title));
+        report.push_str(&"=".repeat(self.title.len()));
+        report.push_str("\n\n");
+
+        report.push_str(&format!("Total Amendments: {}\n", self.amendments.len()));
+        report.push_str(&format!(
+            "Total Sections Affected: {}\n",
+            self.amendments
+                .iter()
+                .map(|a| a.sections_affected)
+                .sum::<usize>()
+        ));
+        report.push_str(&format!(
+            "Total Downstream Statutes: {}\n\n",
+            self.amendments
+                .iter()
+                .map(|a| a.downstream_statutes)
+                .sum::<usize>()
+        ));
+
+        report.push_str("Detailed Breakdown:\n");
+        report.push_str("-".repeat(80).as_str());
+        report.push('\n');
+
+        for amendment in &self.amendments {
+            report.push_str(&format!(
+                "\n[{}] {}\n",
+                amendment.date.split('T').next().unwrap_or(&amendment.date),
+                amendment.statute_name
+            ));
+            report.push_str(&format!("  {}\n", amendment.description));
+            report.push_str(&format!(
+                "  Sections: {}, Downstream: {}, Severity: {:.2}\n",
+                amendment.sections_affected, amendment.downstream_statutes, amendment.severity
+            ));
+        }
+
+        report
+    }
+}
+
+/// Legislative trend chart visualizer.
+#[derive(Debug, Clone)]
+pub struct LegislativeTrendChart {
+    /// Chart title
+    pub title: String,
+    /// Trend data points
+    pub data_points: Vec<TrendDataPoint>,
+    /// Theme
+    pub theme: Theme,
+    /// Chart type (line, bar, area)
+    pub chart_type: ChartType,
+}
+
+/// Trend data point.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrendDataPoint {
+    /// Period (e.g., "2020-Q1", "2021-01")
+    pub period: String,
+    /// Category/label
+    pub category: String,
+    /// Value
+    pub value: f64,
+}
+
+/// Chart type for trends.
+#[derive(Debug, Clone)]
+pub enum ChartType {
+    Line,
+    Bar,
+    Area,
+}
+
+impl LegislativeTrendChart {
+    /// Creates a new legislative trend chart.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            data_points: Vec::new(),
+            theme: Theme::light(),
+            chart_type: ChartType::Line,
+        }
+    }
+
+    /// Adds a data point.
+    pub fn add_data_point(&mut self, period: &str, category: &str, value: f64) {
+        self.data_points.push(TrendDataPoint {
+            period: period.to_string(),
+            category: category.to_string(),
+            value,
+        });
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Sets the chart type.
+    pub fn with_chart_type(mut self, chart_type: ChartType) -> Self {
+        self.chart_type = chart_type;
+        self
+    }
+
+    /// Generates HTML trend chart using D3.js.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <script src=\"https://d3js.org/d3.v7.min.js\"></script>\n");
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 20px; background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str("        .chart { margin: 20px auto; max-width: 1200px; }\n");
+        html.push_str("        .axis-label { font-size: 14px; font-weight: bold; }\n");
+        html.push_str("        .legend { margin: 20px 0; }\n");
+        html.push_str("        .legend-item { display: inline-block; margin-right: 20px; }\n");
+        html.push_str("        .legend-color { display: inline-block; width: 20px; height: 4px; margin-right: 5px; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str(&format!("    <h1>{}</h1>\n", self.title));
+        html.push_str("    <div id=\"chart\" class=\"chart\"></div>\n");
+
+        // D3.js visualization script
+        html.push_str("    <script>\n");
+        html.push_str(&format!(
+            "        const data = {};\n",
+            serde_json::to_string(&self.data_points).unwrap()
+        ));
+        html.push_str("        \n");
+        html.push_str("        const margin = {top: 40, right: 40, bottom: 80, left: 60};\n");
+        html.push_str("        const width = 1100 - margin.left - margin.right;\n");
+        html.push_str("        const height = 500 - margin.top - margin.bottom;\n");
+        html.push_str("        \n");
+        html.push_str("        const svg = d3.select('#chart')\n");
+        html.push_str("            .append('svg')\n");
+        html.push_str("            .attr('width', width + margin.left + margin.right)\n");
+        html.push_str("            .attr('height', height + margin.top + margin.bottom)\n");
+        html.push_str("            .append('g')\n");
+        html.push_str(
+            "            .attr('transform', `translate(${margin.left},${margin.top})`);\n",
+        );
+        html.push_str("        \n");
+        html.push_str("        // Group data by category\n");
+        html.push_str(
+            "        const categories = Array.from(new Set(data.map(d => d.category)));\n",
+        );
+        html.push_str("        const periods = Array.from(new Set(data.map(d => d.period)));\n");
+        html.push_str("        \n");
+        html.push_str("        // Scales\n");
+        html.push_str("        const x = d3.scaleBand()\n");
+        html.push_str("            .domain(periods)\n");
+        html.push_str("            .range([0, width])\n");
+        html.push_str("            .padding(0.1);\n");
+        html.push_str("        \n");
+        html.push_str("        const y = d3.scaleLinear()\n");
+        html.push_str("            .domain([0, d3.max(data, d => d.value)])\n");
+        html.push_str("            .range([height, 0]);\n");
+        html.push_str("        \n");
+        html.push_str("        const color = d3.scaleOrdinal(d3.schemeCategory10)\n");
+        html.push_str("            .domain(categories);\n");
+        html.push_str("        \n");
+        html.push_str("        // Axes\n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .attr('transform', `translate(0,${height})`)\n");
+        html.push_str("            .call(d3.axisBottom(x))\n");
+        html.push_str("            .selectAll('text')\n");
+        html.push_str("            .attr('transform', 'rotate(-45)')\n");
+        html.push_str("            .style('text-anchor', 'end');\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('g')\n");
+        html.push_str("            .call(d3.axisLeft(y));\n");
+        html.push_str("        \n");
+        html.push_str("        // Axis labels\n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('class', 'axis-label')\n");
+        html.push_str("            .attr('x', width / 2)\n");
+        html.push_str("            .attr('y', height + 70)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+        html.push_str("            .text('Period');\n");
+        html.push_str("        \n");
+        html.push_str("        svg.append('text')\n");
+        html.push_str("            .attr('class', 'axis-label')\n");
+        html.push_str("            .attr('transform', 'rotate(-90)')\n");
+        html.push_str("            .attr('x', -height / 2)\n");
+        html.push_str("            .attr('y', -50)\n");
+        html.push_str("            .attr('text-anchor', 'middle')\n");
+        html.push_str("            .text('Value');\n");
+        html.push_str("        \n");
+
+        match self.chart_type {
+            ChartType::Line => {
+                html.push_str("        // Line chart\n");
+                html.push_str("        const line = d3.line()\n");
+                html.push_str("            .x(d => x(d.period) + x.bandwidth() / 2)\n");
+                html.push_str("            .y(d => y(d.value));\n");
+                html.push_str("        \n");
+                html.push_str("        categories.forEach(cat => {\n");
+                html.push_str(
+                    "            const catData = data.filter(d => d.category === cat);\n",
+                );
+                html.push_str("            svg.append('path')\n");
+                html.push_str("                .datum(catData)\n");
+                html.push_str("                .attr('fill', 'none')\n");
+                html.push_str("                .attr('stroke', color(cat))\n");
+                html.push_str("                .attr('stroke-width', 2)\n");
+                html.push_str("                .attr('d', line);\n");
+                html.push_str("            \n");
+                html.push_str("            svg.selectAll(`.dot-${cat}`)\n");
+                html.push_str("                .data(catData)\n");
+                html.push_str("                .enter()\n");
+                html.push_str("                .append('circle')\n");
+                html.push_str(
+                    "                .attr('cx', d => x(d.period) + x.bandwidth() / 2)\n",
+                );
+                html.push_str("                .attr('cy', d => y(d.value))\n");
+                html.push_str("                .attr('r', 4)\n");
+                html.push_str("                .attr('fill', color(cat));\n");
+                html.push_str("        });\n");
+            }
+            ChartType::Bar => {
+                html.push_str("        // Bar chart\n");
+                html.push_str("        const subgroups = categories;\n");
+                html.push_str("        const xSubgroup = d3.scaleBand()\n");
+                html.push_str("            .domain(subgroups)\n");
+                html.push_str("            .range([0, x.bandwidth()])\n");
+                html.push_str("            .padding(0.05);\n");
+                html.push_str("        \n");
+                html.push_str("        svg.append('g')\n");
+                html.push_str("            .selectAll('g')\n");
+                html.push_str("            .data(periods)\n");
+                html.push_str("            .enter()\n");
+                html.push_str("            .append('g')\n");
+                html.push_str("            .attr('transform', d => `translate(${x(d)},0)`)\n");
+                html.push_str("            .selectAll('rect')\n");
+                html.push_str("            .data(period => categories.map(cat => ({period, category: cat, value: (data.find(d => d.period === period && d.category === cat) || {value: 0}).value})))\n");
+                html.push_str("            .enter()\n");
+                html.push_str("            .append('rect')\n");
+                html.push_str("            .attr('x', d => xSubgroup(d.category))\n");
+                html.push_str("            .attr('y', d => y(d.value))\n");
+                html.push_str("            .attr('width', xSubgroup.bandwidth())\n");
+                html.push_str("            .attr('height', d => height - y(d.value))\n");
+                html.push_str("            .attr('fill', d => color(d.category));\n");
+            }
+            ChartType::Area => {
+                html.push_str("        // Area chart\n");
+                html.push_str("        const area = d3.area()\n");
+                html.push_str("            .x(d => x(d.period) + x.bandwidth() / 2)\n");
+                html.push_str("            .y0(height)\n");
+                html.push_str("            .y1(d => y(d.value));\n");
+                html.push_str("        \n");
+                html.push_str("        categories.forEach(cat => {\n");
+                html.push_str(
+                    "            const catData = data.filter(d => d.category === cat);\n",
+                );
+                html.push_str("            svg.append('path')\n");
+                html.push_str("                .datum(catData)\n");
+                html.push_str("                .attr('fill', color(cat))\n");
+                html.push_str("                .attr('fill-opacity', 0.5)\n");
+                html.push_str("                .attr('stroke', color(cat))\n");
+                html.push_str("                .attr('stroke-width', 2)\n");
+                html.push_str("                .attr('d', area);\n");
+                html.push_str("        });\n");
+            }
+        }
+
+        html.push_str("        \n");
+        html.push_str("        // Legend\n");
+        html.push_str("        const legend = svg.append('g')\n");
+        html.push_str("            .attr('transform', `translate(${width - 100}, 0)`);\n");
+        html.push_str("        \n");
+        html.push_str("        categories.forEach((cat, i) => {\n");
+        html.push_str("            const legendRow = legend.append('g')\n");
+        html.push_str("                .attr('transform', `translate(0, ${i * 20})`);\n");
+        html.push_str("            \n");
+        html.push_str("            legendRow.append('rect')\n");
+        html.push_str("                .attr('width', 15)\n");
+        html.push_str("                .attr('height', 15)\n");
+        html.push_str("                .attr('fill', color(cat));\n");
+        html.push_str("            \n");
+        html.push_str("            legendRow.append('text')\n");
+        html.push_str("                .attr('x', 20)\n");
+        html.push_str("                .attr('y', 12)\n");
+        html.push_str("                .text(cat);\n");
+        html.push_str("        });\n");
+        html.push_str("    </script>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+}
+
+/// Historical comparison view for comparing statute versions.
+#[derive(Debug, Clone)]
+pub struct HistoricalComparisonView {
+    /// Comparison title
+    pub title: String,
+    /// Statute versions to compare
+    pub versions: Vec<StatuteVersion>,
+    /// Theme
+    pub theme: Theme,
+}
+
+/// Represents a historical version of a statute.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatuteVersion {
+    /// Version ID
+    pub version_id: String,
+    /// Version number
+    pub version: String,
+    /// Effective date
+    pub effective_date: String,
+    /// Statute text or summary
+    pub content: String,
+    /// List of sections
+    pub sections: Vec<String>,
+    /// Metadata
+    pub metadata: HashMap<String, String>,
+}
+
+impl StatuteVersion {
+    /// Creates a new statute version.
+    pub fn new(version_id: &str, version: &str, effective_date: &str, content: &str) -> Self {
+        Self {
+            version_id: version_id.to_string(),
+            version: version.to_string(),
+            effective_date: effective_date.to_string(),
+            content: content.to_string(),
+            sections: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Adds a section.
+    pub fn add_section(&mut self, section: &str) {
+        self.sections.push(section.to_string());
+    }
+
+    /// Adds metadata.
+    pub fn add_metadata(&mut self, key: &str, value: &str) {
+        self.metadata.insert(key.to_string(), value.to_string());
+    }
+}
+
+impl HistoricalComparisonView {
+    /// Creates a new historical comparison view.
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            versions: Vec::new(),
+            theme: Theme::light(),
+        }
+    }
+
+    /// Adds a statute version.
+    pub fn add_version(&mut self, version: StatuteVersion) {
+        self.versions.push(version);
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Generates side-by-side comparison HTML.
+    pub fn to_html(&self) -> String {
+        let mut html = String::new();
+
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.push_str("    <meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!("    <title>{}</title>\n", self.title));
+        html.push_str("    <style>\n");
+        html.push_str(&format!("        body {{ margin: 20px; background-color: {}; color: {}; font-family: 'Segoe UI', Arial, sans-serif; }}\n",
+            self.theme.background_color, self.theme.text_color));
+        html.push_str("        .comparison-container { max-width: 1400px; margin: 0 auto; }\n");
+        html.push_str("        .versions { display: flex; gap: 20px; overflow-x: auto; }\n");
+        html.push_str("        .version-panel { flex: 1; min-width: 350px; background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }\n");
+        html.push_str("        .version-header { background: #3498db; color: white; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 8px 8px 0 0; }\n");
+        html.push_str(
+            "        .version-title { font-size: 1.3em; font-weight: bold; margin: 0; }\n",
+        );
+        html.push_str(
+            "        .version-date { font-size: 0.9em; opacity: 0.9; margin-top: 5px; }\n",
+        );
+        html.push_str("        .section-list { list-style: none; padding: 0; }\n");
+        html.push_str("        .section-item { padding: 10px; margin: 5px 0; background: #ecf0f1; border-radius: 4px; border-left: 4px solid #3498db; }\n");
+        html.push_str("        .content { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 4px; line-height: 1.6; }\n");
+        html.push_str(
+            "        .metadata { margin-top: 20px; font-size: 0.9em; color: #7f8c8d; }\n",
+        );
+        html.push_str("        .metadata-item { margin: 5px 0; }\n");
+        html.push_str("    </style>\n");
+        html.push_str("</head>\n<body>\n");
+        html.push_str("    <div class=\"comparison-container\">\n");
+        html.push_str(&format!("        <h1>{}</h1>\n", self.title));
+        html.push_str("        <div class=\"versions\">\n");
+
+        for version in &self.versions {
+            html.push_str("            <div class=\"version-panel\">\n");
+            html.push_str("                <div class=\"version-header\">\n");
+            html.push_str(&format!(
+                "                    <h2 class=\"version-title\">Version {}</h2>\n",
+                version.version
+            ));
+            html.push_str(&format!(
+                "                    <div class=\"version-date\">Effective: {}</div>\n",
+                version.effective_date
+            ));
+            html.push_str("                </div>\n");
+
+            html.push_str("                <h3>Content</h3>\n");
+            html.push_str(&format!(
+                "                <div class=\"content\">{}</div>\n",
+                version.content
+            ));
+
+            if !version.sections.is_empty() {
+                html.push_str("                <h3>Sections</h3>\n");
+                html.push_str("                <ul class=\"section-list\">\n");
+                for section in &version.sections {
+                    html.push_str(&format!(
+                        "                    <li class=\"section-item\">{}</li>\n",
+                        section
+                    ));
+                }
+                html.push_str("                </ul>\n");
+            }
+
+            if !version.metadata.is_empty() {
+                html.push_str("                <div class=\"metadata\">\n");
+                html.push_str("                    <h4>Metadata</h4>\n");
+                for (key, value) in &version.metadata {
+                    html.push_str(&format!("                    <div class=\"metadata-item\"><strong>{}:</strong> {}</div>\n", key, value));
+                }
+                html.push_str("                </div>\n");
+            }
+
+            html.push_str("            </div>\n");
+        }
+
+        html.push_str("        </div>\n");
+        html.push_str("    </div>\n");
+        html.push_str("</body>\n</html>");
+
+        html
+    }
+
+    /// Generates a Mermaid comparison diagram.
+    pub fn to_mermaid(&self) -> String {
+        let mut diagram = String::new();
+        diagram.push_str("graph LR\n");
+
+        for (i, version) in self.versions.iter().enumerate() {
+            let node_id = format!("V{}", i);
+            let next_id = format!("V{}", i + 1);
+
+            diagram.push_str(&format!(
+                "    {}[\"Version {}\\n{}\"]\n",
+                node_id, version.version, version.effective_date
+            ));
+
+            if i < self.versions.len() - 1 {
+                diagram.push_str(&format!("    {} -->|Amended| {}\n", node_id, next_id));
+            }
+        }
+
+        diagram
+    }
+}
+
+// ============================================================================
+// Advanced Export Formats (v0.4.3)
+// ============================================================================
+
+/// LaTeX/TikZ exporter for academic papers.
+#[derive(Debug, Clone)]
+pub struct LatexTikzExporter {
+    /// Document class (article, paper, beamer)
+    pub document_class: String,
+    /// Include standalone wrapper
+    pub standalone: bool,
+    /// Theme
+    pub theme: Theme,
+}
+
+impl LatexTikzExporter {
+    /// Creates a new LaTeX/TikZ exporter.
+    pub fn new() -> Self {
+        Self {
+            document_class: "article".to_string(),
+            standalone: false,
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets the document class.
+    pub fn with_document_class(mut self, class: &str) -> Self {
+        self.document_class = class.to_string();
+        self
+    }
+
+    /// Sets standalone mode.
+    pub fn with_standalone(mut self, standalone: bool) -> Self {
+        self.standalone = standalone;
+        self
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Exports a decision tree to LaTeX/TikZ format.
+    pub fn export_decision_tree(&self, _tree: &DecisionTree) -> String {
+        let mut latex = String::new();
+
+        if self.standalone {
+            latex.push_str("\\documentclass[tikz,border=10pt]{standalone}\n");
+        } else {
+            latex.push_str(&format!("\\documentclass{{{}}}\n", self.document_class));
+        }
+
+        latex.push_str("\\usepackage{tikz}\n");
+        latex.push_str("\\usetikzlibrary{shapes,arrows,positioning,trees}\n");
+        latex.push('\n');
+        latex.push_str("\\begin{document}\n");
+        latex.push('\n');
+        latex.push_str("\\begin{tikzpicture}[\n");
+        latex.push_str("    node distance=1.5cm and 2cm,\n");
+        latex.push_str("    every node/.style={rectangle, draw, rounded corners, align=center, minimum width=3cm, minimum height=1cm},\n");
+        latex.push_str("    condition/.style={fill=blue!20},\n");
+        latex.push_str("    outcome/.style={fill=green!20},\n");
+        latex.push_str("    discretion/.style={fill=red!20},\n");
+        latex.push_str("    arrow/.style={->, >=stealth, thick}\n");
+        latex.push_str("]\n\n");
+
+        // Generate nodes
+        latex.push_str("% Nodes\n");
+        latex.push_str("\\node[condition] (root) {Decision Tree};\n");
+        latex.push_str("\\node[outcome, below=of root] (outcome1) {Outcome};\n");
+        latex.push('\n');
+
+        // Generate edges
+        latex.push_str("% Edges\n");
+        latex.push_str("\\draw[arrow] (root) -- (outcome1);\n");
+        latex.push('\n');
+
+        latex.push_str("\\end{tikzpicture}\n");
+        latex.push('\n');
+        latex.push_str("\\end{document}\n");
+
+        latex
+    }
+
+    /// Exports a dependency graph to LaTeX/TikZ format.
+    pub fn export_dependency_graph(&self, graph: &DependencyGraph) -> String {
+        let mut latex = String::new();
+
+        if self.standalone {
+            latex.push_str("\\documentclass[tikz,border=10pt]{standalone}\n");
+        } else {
+            latex.push_str(&format!("\\documentclass{{{}}}\n", self.document_class));
+        }
+
+        latex.push_str("\\usepackage{tikz}\n");
+        latex.push_str("\\usetikzlibrary{shapes,arrows,positioning,graphs,graphdrawing}\n");
+        latex.push_str("\\usegdlibrary{force}\n");
+        latex.push('\n');
+        latex.push_str("\\begin{document}\n");
+        latex.push('\n');
+        latex.push_str("\\begin{tikzpicture}[\n");
+        latex.push_str("    every node/.style={circle, draw, fill=blue!20, minimum size=1.5cm},\n");
+        latex.push_str("    arrow/.style={->, >=stealth, thick}\n");
+        latex.push_str("]\n\n");
+
+        latex.push_str("\\graph[spring layout, node distance=3cm] {\n");
+
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            latex.push_str(&format!("    \"{}\";\n", statute_id.replace('_', "\\_")));
+        }
+
+        latex.push_str("};\n\n");
+        latex.push_str("\\end{tikzpicture}\n");
+        latex.push('\n');
+        latex.push_str("\\end{document}\n");
+
+        latex
+    }
+}
+
+impl Default for LatexTikzExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// GraphML exporter for network analysis tools.
+#[derive(Debug, Clone)]
+pub struct GraphMLExporter {
+    /// Include visual attributes
+    pub include_visuals: bool,
+    /// Theme
+    pub theme: Theme,
+}
+
+impl GraphMLExporter {
+    /// Creates a new GraphML exporter.
+    pub fn new() -> Self {
+        Self {
+            include_visuals: true,
+            theme: Theme::light(),
+        }
+    }
+
+    /// Sets whether to include visual attributes.
+    pub fn with_visuals(mut self, include: bool) -> Self {
+        self.include_visuals = include;
+        self
+    }
+
+    /// Sets the theme.
+    pub fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Exports a dependency graph to GraphML format.
+    pub fn export_graph(&self, graph: &DependencyGraph) -> String {
+        let mut xml = String::new();
+
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\"\n");
+        xml.push_str("    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n");
+        xml.push_str("    xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns\n");
+        xml.push_str("    http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">\n\n");
+
+        // Define keys
+        xml.push_str("  <key id=\"d0\" for=\"node\" attr.name=\"label\" attr.type=\"string\"/>\n");
+        xml.push_str("  <key id=\"d1\" for=\"node\" attr.name=\"type\" attr.type=\"string\"/>\n");
+        xml.push_str(
+            "  <key id=\"d2\" for=\"edge\" attr.name=\"relationship\" attr.type=\"string\"/>\n",
+        );
+
+        if self.include_visuals {
+            xml.push_str(
+                "  <key id=\"d3\" for=\"node\" attr.name=\"color\" attr.type=\"string\"/>\n",
+            );
+            xml.push_str(
+                "  <key id=\"d4\" for=\"node\" attr.name=\"size\" attr.type=\"double\"/>\n",
+            );
+        }
+
+        xml.push('\n');
+        xml.push_str("  <graph id=\"G\" edgedefault=\"directed\">\n");
+
+        // Export nodes
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            xml.push_str(&format!("    <node id=\"n{}\">\n", node_idx.index()));
+            xml.push_str(&format!("      <data key=\"d0\">{}</data>\n", statute_id));
+            xml.push_str("      <data key=\"d1\">statute</data>\n");
+
+            if self.include_visuals {
+                xml.push_str(&format!(
+                    "      <data key=\"d3\">{}</data>\n",
+                    self.theme.condition_color
+                ));
+                xml.push_str("      <data key=\"d4\">30.0</data>\n");
+            }
+
+            xml.push_str("    </node>\n");
+        }
+
+        // Export edges
+        let mut edge_id = 0;
+        for edge in graph.graph.edge_indices() {
+            if let Some((source, target)) = graph.graph.edge_endpoints(edge) {
+                xml.push_str(&format!(
+                    "    <edge id=\"e{}\" source=\"n{}\" target=\"n{}\">\n",
+                    edge_id,
+                    source.index(),
+                    target.index()
+                ));
+                xml.push_str("      <data key=\"d2\">depends_on</data>\n");
+                xml.push_str("    </edge>\n");
+                edge_id += 1;
+            }
+        }
+
+        xml.push_str("  </graph>\n");
+        xml.push_str("</graphml>\n");
+
+        xml
+    }
+
+    /// Exports a decision tree to GraphML format.
+    pub fn export_decision_tree(&self, _tree: &DecisionTree) -> String {
+        let mut xml = String::new();
+
+        xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.push_str("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\">\n");
+        xml.push_str("  <key id=\"d0\" for=\"node\" attr.name=\"label\" attr.type=\"string\"/>\n");
+        xml.push_str("  <key id=\"d1\" for=\"node\" attr.name=\"type\" attr.type=\"string\"/>\n");
+        xml.push('\n');
+        xml.push_str("  <graph id=\"G\" edgedefault=\"directed\">\n");
+        xml.push_str("    <node id=\"n0\">\n");
+        xml.push_str("      <data key=\"d0\">Decision Tree</data>\n");
+        xml.push_str("      <data key=\"d1\">root</data>\n");
+        xml.push_str("    </node>\n");
+        xml.push_str("  </graph>\n");
+        xml.push_str("</graphml>\n");
+
+        xml
+    }
+}
+
+impl Default for GraphMLExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cypher query exporter for Neo4j graph database.
+#[derive(Debug, Clone)]
+pub struct CypherExporter {
+    /// Include CREATE INDEX statements
+    pub include_indexes: bool,
+    /// Use MERGE instead of CREATE
+    pub use_merge: bool,
+}
+
+impl CypherExporter {
+    /// Creates a new Cypher exporter.
+    pub fn new() -> Self {
+        Self {
+            include_indexes: true,
+            use_merge: false,
+        }
+    }
+
+    /// Sets whether to include index statements.
+    pub fn with_indexes(mut self, include: bool) -> Self {
+        self.include_indexes = include;
+        self
+    }
+
+    /// Sets whether to use MERGE instead of CREATE.
+    pub fn with_merge(mut self, use_merge: bool) -> Self {
+        self.use_merge = use_merge;
+        self
+    }
+
+    /// Exports a dependency graph to Cypher queries.
+    pub fn export_graph(&self, graph: &DependencyGraph) -> String {
+        let mut cypher = String::new();
+
+        cypher.push_str("// Neo4j Cypher Query Export\n");
+        cypher.push_str("// Generated by legalis-viz\n\n");
+
+        if self.include_indexes {
+            cypher.push_str("// Create indexes\n");
+            cypher.push_str("CREATE INDEX statute_id IF NOT EXISTS FOR (s:Statute) ON (s.id);\n");
+            cypher.push_str(
+                "CREATE INDEX statute_name IF NOT EXISTS FOR (s:Statute) ON (s.name);\n\n",
+            );
+        }
+
+        let node_cmd = if self.use_merge { "MERGE" } else { "CREATE" };
+
+        cypher.push_str("// Create statute nodes\n");
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            cypher.push_str(&format!(
+                "{} (s_{}:Statute {{id: '{}', name: '{}', type: 'statute'}})\n",
+                node_cmd,
+                statute_id.replace('-', "_"),
+                statute_id,
+                statute_id
+            ));
+        }
+
+        cypher.push_str("\n// Create relationships\n");
+        for edge in graph.graph.edge_indices() {
+            if let Some((source, target)) = graph.graph.edge_endpoints(edge) {
+                let source_id = &graph.graph[source];
+                let target_id = &graph.graph[target];
+                cypher.push_str(&format!(
+                    "{} (s_{})-[:DEPENDS_ON {{type: 'dependency'}}]->(s_{})\n",
+                    node_cmd,
+                    source_id.replace('-', "_"),
+                    target_id.replace('-', "_")
+                ));
+            }
+        }
+
+        cypher.push_str("\n// Return created nodes\n");
+        cypher.push_str("MATCH (s:Statute) RETURN s;\n");
+
+        cypher
+    }
+
+    /// Exports a legal concept graph to Cypher queries.
+    pub fn export_concept_graph(&self, graph: &ConceptRelationshipGraph) -> String {
+        let mut cypher = String::new();
+
+        cypher.push_str("// Neo4j Cypher Query Export - Legal Concepts\n");
+        cypher.push_str("// Generated by legalis-viz\n\n");
+
+        if self.include_indexes {
+            cypher.push_str("// Create indexes\n");
+            cypher.push_str("CREATE INDEX concept_id IF NOT EXISTS FOR (c:Concept) ON (c.id);\n");
+            cypher.push_str(
+                "CREATE INDEX concept_name IF NOT EXISTS FOR (c:Concept) ON (c.name);\n\n",
+            );
+        }
+
+        let node_cmd = if self.use_merge { "MERGE" } else { "CREATE" };
+
+        cypher.push_str("// Create concept nodes\n");
+        for concept in &graph.concepts {
+            cypher.push_str(&format!(
+                "{} (c_{}:Concept {{id: '{}', name: '{}', description: '{}', category: '{}'}});\n",
+                node_cmd,
+                concept.id.replace('-', "_"),
+                concept.id,
+                concept.name,
+                concept.description,
+                concept.category
+            ));
+        }
+
+        cypher.push_str("\n// Create relationships\n");
+        for rel in &graph.relationships {
+            let rel_type = format!("{:?}", rel.relation_type).to_uppercase();
+            cypher.push_str(&format!(
+                "{} (c_{})-[:{}{{strength: {}, description: '{}'}}]->(c_{});\n",
+                node_cmd,
+                rel.from_id.replace('-', "_"),
+                rel_type,
+                rel.strength,
+                rel.description,
+                rel.to_id.replace('-', "_")
+            ));
+        }
+
+        cypher.push_str("\n// Return created concepts\n");
+        cypher.push_str("MATCH (c:Concept) RETURN c;\n");
+
+        cypher
+    }
+}
+
+impl Default for CypherExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// SPARQL export for semantic web/RDF.
+#[derive(Debug, Clone)]
+pub struct SparqlExporter {
+    /// Base URI for resources
+    pub base_uri: String,
+    /// Include prefixes
+    pub include_prefixes: bool,
+}
+
+impl SparqlExporter {
+    /// Creates a new SPARQL exporter.
+    pub fn new() -> Self {
+        Self {
+            base_uri: "http://example.org/legalis/".to_string(),
+            include_prefixes: true,
+        }
+    }
+
+    /// Sets the base URI.
+    pub fn with_base_uri(mut self, uri: &str) -> Self {
+        self.base_uri = uri.to_string();
+        self
+    }
+
+    /// Sets whether to include prefixes.
+    pub fn with_prefixes(mut self, include: bool) -> Self {
+        self.include_prefixes = include;
+        self
+    }
+
+    /// Exports a dependency graph to SPARQL INSERT queries.
+    pub fn export_graph(&self, graph: &DependencyGraph) -> String {
+        let mut sparql = String::new();
+
+        if self.include_prefixes {
+            sparql.push_str("# SPARQL INSERT Queries\n");
+            sparql.push_str("# Generated by legalis-viz\n\n");
+            sparql.push_str("PREFIX leg: <http://example.org/legalis#>\n");
+            sparql.push_str("PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n");
+            sparql.push_str("PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n");
+            sparql.push_str("PREFIX dc: <http://purl.org/dc/elements/1.1/>\n\n");
+        }
+
+        sparql.push_str("INSERT DATA {\n");
+
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            let uri = format!("{}{}", self.base_uri, statute_id);
+            sparql.push_str(&format!("  <{}> rdf:type leg:Statute ;\n", uri));
+            sparql.push_str(&format!("    leg:id \"{}\" ;\n", statute_id));
+            sparql.push_str(&format!("    rdfs:label \"{}\" .\n\n", statute_id));
+        }
+
+        for edge in graph.graph.edge_indices() {
+            if let Some((source, target)) = graph.graph.edge_endpoints(edge) {
+                let source_id = &graph.graph[source];
+                let target_id = &graph.graph[target];
+                let source_uri = format!("{}{}", self.base_uri, source_id);
+                let target_uri = format!("{}{}", self.base_uri, target_id);
+                sparql.push_str(&format!(
+                    "  <{}> leg:dependsOn <{}> .\n",
+                    source_uri, target_uri
+                ));
+            }
+        }
+
+        sparql.push_str("}\n");
+
+        sparql
+    }
+
+    /// Exports a concept graph to SPARQL INSERT queries.
+    pub fn export_concept_graph(&self, graph: &ConceptRelationshipGraph) -> String {
+        let mut sparql = String::new();
+
+        if self.include_prefixes {
+            sparql.push_str("# SPARQL INSERT Queries - Legal Concepts\n");
+            sparql.push_str("# Generated by legalis-viz\n\n");
+            sparql.push_str("PREFIX leg: <http://example.org/legalis#>\n");
+            sparql.push_str("PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n");
+            sparql.push_str("PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n");
+            sparql.push_str("PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n\n");
+        }
+
+        sparql.push_str("INSERT DATA {\n");
+
+        for concept in &graph.concepts {
+            let uri = format!("{}{}", self.base_uri, concept.id);
+            sparql.push_str(&format!("  <{}> rdf:type skos:Concept ;\n", uri));
+            sparql.push_str(&format!("    leg:id \"{}\" ;\n", concept.id));
+            sparql.push_str(&format!("    skos:prefLabel \"{}\" ;\n", concept.name));
+            sparql.push_str(&format!(
+                "    skos:definition \"{}\" ;\n",
+                concept.description
+            ));
+            sparql.push_str(&format!("    leg:category \"{}\" .\n\n", concept.category));
+        }
+
+        for rel in &graph.relationships {
+            let source_uri = format!("{}{}", self.base_uri, rel.from_id);
+            let target_uri = format!("{}{}", self.base_uri, rel.to_id);
+
+            let predicate = match rel.relation_type {
+                ConceptRelationType::IsA => "skos:broader",
+                ConceptRelationType::PartOf => "leg:partOf",
+                ConceptRelationType::Requires => "leg:requires",
+                ConceptRelationType::ConflictsWith => "leg:conflictsWith",
+                ConceptRelationType::Enables => "leg:enables",
+                ConceptRelationType::RelatedTo => "skos:related",
+                ConceptRelationType::Supersedes => "leg:supersedes",
+                ConceptRelationType::Implements => "leg:implements",
+            };
+
+            sparql.push_str(&format!(
+                "  <{}> {} <{}> .\n",
+                source_uri, predicate, target_uri
+            ));
+        }
+
+        sparql.push_str("}\n");
+
+        sparql
+    }
+
+    /// Exports to Turtle (TTL) format.
+    pub fn export_to_turtle(&self, graph: &DependencyGraph) -> String {
+        let mut turtle = String::new();
+
+        if self.include_prefixes {
+            turtle.push_str("@prefix leg: <http://example.org/legalis#> .\n");
+            turtle.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+            turtle.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n\n");
+        }
+
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            let uri = format!("{}{}", self.base_uri, statute_id);
+            turtle.push_str(&format!("<{}>\n", uri));
+            turtle.push_str("  rdf:type leg:Statute ;\n");
+            turtle.push_str(&format!("  leg:id \"{}\" ;\n", statute_id));
+            turtle.push_str(&format!("  rdfs:label \"{}\" .\n\n", statute_id));
+        }
+
+        turtle
+    }
+}
+
+impl Default for SparqlExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Jupyter notebook integration.
+#[derive(Debug, Clone)]
+pub struct JupyterNotebookIntegration {
+    /// Notebook metadata
+    pub metadata: HashMap<String, String>,
+    /// Kernel name
+    pub kernel: String,
+}
+
+impl JupyterNotebookIntegration {
+    /// Creates a new Jupyter notebook integration.
+    pub fn new() -> Self {
+        Self {
+            metadata: HashMap::new(),
+            kernel: "python3".to_string(),
+        }
+    }
+
+    /// Sets the kernel.
+    pub fn with_kernel(mut self, kernel: &str) -> Self {
+        self.kernel = kernel.to_string();
+        self
+    }
+
+    /// Adds metadata.
+    pub fn add_metadata(&mut self, key: &str, value: &str) {
+        self.metadata.insert(key.to_string(), value.to_string());
+    }
+
+    /// Creates a Jupyter notebook with visualization code.
+    pub fn create_notebook(&self, title: &str, description: &str) -> String {
+        let mut notebook = String::new();
+
+        notebook.push_str("{\n");
+        notebook.push_str("  \"cells\": [\n");
+
+        // Title cell
+        notebook.push_str("    {\n");
+        notebook.push_str("      \"cell_type\": \"markdown\",\n");
+        notebook.push_str("      \"metadata\": {},\n");
+        notebook.push_str("      \"source\": [\n");
+        notebook.push_str(&format!("        \"# {}\\n\",\n", title));
+        notebook.push_str("        \"\\n\",\n");
+        notebook.push_str(&format!("        \"{}\\n\"\n", description));
+        notebook.push_str("      ]\n");
+        notebook.push_str("    },\n");
+
+        // Import cell
+        notebook.push_str("    {\n");
+        notebook.push_str("      \"cell_type\": \"code\",\n");
+        notebook.push_str("      \"execution_count\": null,\n");
+        notebook.push_str("      \"metadata\": {},\n");
+        notebook.push_str("      \"outputs\": [],\n");
+        notebook.push_str("      \"source\": [\n");
+        notebook.push_str("        \"# Import required libraries\\n\",\n");
+        notebook.push_str("        \"import matplotlib.pyplot as plt\\n\",\n");
+        notebook.push_str("        \"import networkx as nx\\n\",\n");
+        notebook.push_str("        \"import pandas as pd\\n\",\n");
+        notebook.push_str("        \"import numpy as np\\n\",\n");
+        notebook.push_str("        \"from IPython.display import display, HTML\\n\"\n");
+        notebook.push_str("      ]\n");
+        notebook.push_str("    },\n");
+
+        // Visualization cell
+        notebook.push_str("    {\n");
+        notebook.push_str("      \"cell_type\": \"code\",\n");
+        notebook.push_str("      \"execution_count\": null,\n");
+        notebook.push_str("      \"metadata\": {},\n");
+        notebook.push_str("      \"outputs\": [],\n");
+        notebook.push_str("      \"source\": [\n");
+        notebook.push_str("        \"# Create visualization\\n\",\n");
+        notebook.push_str("        \"G = nx.DiGraph()\\n\",\n");
+        notebook
+            .push_str("        \"G.add_edges_from([('A', 'B'), ('B', 'C'), ('A', 'C')])\\n\",\n");
+        notebook.push_str("        \"\\n\",\n");
+        notebook.push_str("        \"plt.figure(figsize=(12, 8))\\n\",\n");
+        notebook.push_str("        \"pos = nx.spring_layout(G)\\n\",\n");
+        notebook.push_str(
+            "        \"nx.draw(G, pos, with_labels=True, node_color='lightblue', \\n\",\n",
+        );
+        notebook.push_str(
+            "        \"        node_size=2000, font_size=16, font_weight='bold', \\n\",\n",
+        );
+        notebook.push_str("        \"        arrows=True, arrowsize=20)\\n\",\n");
+        notebook.push_str("        \"plt.title('Legal Statute Dependencies')\\n\",\n");
+        notebook.push_str("        \"plt.axis('off')\\n\",\n");
+        notebook.push_str("        \"plt.tight_layout()\\n\",\n");
+        notebook.push_str("        \"plt.show()\\n\"\n");
+        notebook.push_str("      ]\n");
+        notebook.push_str("    }\n");
+
+        notebook.push_str("  ],\n");
+        notebook.push_str("  \"metadata\": {\n");
+        notebook.push_str("    \"kernelspec\": {\n");
+        notebook.push_str("      \"display_name\": \"Python 3\",\n");
+        notebook.push_str("      \"language\": \"python\",\n");
+        notebook.push_str(&format!("      \"name\": \"{}\"\n", self.kernel));
+        notebook.push_str("    },\n");
+        notebook.push_str("    \"language_info\": {\n");
+        notebook.push_str("      \"codemirror_mode\": {\n");
+        notebook.push_str("        \"name\": \"ipython\",\n");
+        notebook.push_str("        \"version\": 3\n");
+        notebook.push_str("      },\n");
+        notebook.push_str("      \"file_extension\": \".py\",\n");
+        notebook.push_str("      \"mimetype\": \"text/x-python\",\n");
+        notebook.push_str("      \"name\": \"python\",\n");
+        notebook.push_str("      \"nbconvert_exporter\": \"python\",\n");
+        notebook.push_str("      \"pygments_lexer\": \"ipython3\",\n");
+        notebook.push_str("      \"version\": \"3.8.0\"\n");
+        notebook.push_str("    }\n");
+        notebook.push_str("  },\n");
+        notebook.push_str("  \"nbformat\": 4,\n");
+        notebook.push_str("  \"nbformat_minor\": 4\n");
+        notebook.push_str("}\n");
+
+        notebook
+    }
+
+    /// Creates a notebook with decision tree visualization.
+    pub fn create_decision_tree_notebook(&self, _tree: &DecisionTree) -> String {
+        self.create_notebook(
+            "Legal Decision Tree Analysis",
+            "Interactive visualization and analysis of legal decision trees.",
+        )
+    }
+
+    /// Creates a notebook with dependency graph visualization.
+    pub fn create_dependency_graph_notebook(&self, graph: &DependencyGraph) -> String {
+        let notebook = self.create_notebook(
+            "Legal Statute Dependencies",
+            "Network analysis of statute dependencies and relationships.",
+        );
+
+        // Add statute count to description
+        let statute_count = graph.graph.node_count();
+        notebook.replace(
+            "Network analysis",
+            &format!("Network analysis of {} statutes", statute_count),
+        )
+    }
+
+    /// Generates Python code for interactive visualization.
+    pub fn generate_python_code(&self, graph: &DependencyGraph) -> String {
+        let mut code = String::new();
+
+        code.push_str("# Python code for legal statute visualization\n");
+        code.push_str("import networkx as nx\n");
+        code.push_str("import matplotlib.pyplot as plt\n");
+        code.push_str("from matplotlib.patches import FancyBboxPatch\n\n");
+
+        code.push_str("# Create directed graph\n");
+        code.push_str("G = nx.DiGraph()\n\n");
+
+        code.push_str("# Add statute nodes\n");
+        for node_idx in graph.graph.node_indices() {
+            let statute_id = &graph.graph[node_idx];
+            code.push_str(&format!("G.add_node('{}', type='statute')\n", statute_id));
+        }
+
+        code.push_str("\n# Add dependencies\n");
+        for edge in graph.graph.edge_indices() {
+            if let Some((source, target)) = graph.graph.edge_endpoints(edge) {
+                let source_id = &graph.graph[source];
+                let target_id = &graph.graph[target];
+                code.push_str(&format!("G.add_edge('{}', '{}')\n", source_id, target_id));
+            }
+        }
+
+        code.push_str("\n# Create visualization\n");
+        code.push_str("plt.figure(figsize=(14, 10))\n");
+        code.push_str("pos = nx.spring_layout(G, k=2, iterations=50)\n");
+        code.push_str(
+            "nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=3000, alpha=0.9)\n",
+        );
+        code.push_str("nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')\n");
+        code.push_str("nx.draw_networkx_edges(G, pos, edge_color='gray', arrows=True, arrowsize=20, width=2)\n");
+        code.push_str(
+            "plt.title('Legal Statute Dependency Network', fontsize=16, fontweight='bold')\n",
+        );
+        code.push_str("plt.axis('off')\n");
+        code.push_str("plt.tight_layout()\n");
+        code.push_str("plt.show()\n\n");
+
+        code.push_str("# Print network statistics\n");
+        code.push_str("print(f'Total statutes: {G.number_of_nodes()}')\n");
+        code.push_str("print(f'Total dependencies: {G.number_of_edges()}')\n");
+        code.push_str("print(f'Average degree: {sum(dict(G.degree()).values()) / G.number_of_nodes():.2f}')\n");
+
+        code
+    }
+}
+
+impl Default for JupyterNotebookIntegration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -18213,9 +20164,11 @@ mod tests {
 
     #[test]
     fn test_interactive_visualizer_with_config() {
-        let mut config = InteractiveConfig::default();
-        config.enable_minimap = false;
-        config.initial_zoom = 2.0;
+        let config = InteractiveConfig {
+            enable_minimap: false,
+            initial_zoom: 2.0,
+            ..Default::default()
+        };
 
         let visualizer = InteractiveVisualizer::new().with_config(config);
         assert!(!visualizer.config.enable_minimap);
@@ -18338,11 +20291,13 @@ mod tests {
 
     #[test]
     fn test_3d_visualizer_with_config() {
-        let mut config = ThreeDConfig::default();
-        config.enable_vr = true;
-        config.enable_ar = true;
-        config.force_directed = false;
-        config.depth_coloring = false;
+        let config = ThreeDConfig {
+            enable_vr: true,
+            enable_ar: true,
+            force_directed: false,
+            depth_coloring: false,
+            ..Default::default()
+        };
 
         let visualizer = ThreeDVisualizer::new().with_config(config);
         assert!(visualizer.config.enable_vr);
@@ -18873,7 +20828,7 @@ mod tests {
 
     #[test]
     fn test_export_format_types() {
-        let formats = vec![
+        let formats = [
             ExportFormat::AnimatedGif,
             ExportFormat::Mp4,
             ExportFormat::WebM,
@@ -22525,5 +24480,917 @@ mod tests {
         assert!(json.contains("Test"));
         assert!(json.contains("c1"));
         assert!(json.contains("Privacy"));
+    }
+
+    // ============================================================================
+    // v0.4.2 - Temporal Legal Analytics Tests
+    // ============================================================================
+
+    #[test]
+    fn test_statute_change_event_creation() {
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "amended",
+            "Added new section",
+            "2.0",
+        );
+
+        assert_eq!(event.id, "evt-1");
+        assert_eq!(event.statute_id, "statute-1");
+        assert_eq!(event.statute_name, "Test Statute");
+        assert_eq!(event.timestamp, "2024-01-15T10:00:00Z");
+        assert_eq!(event.change_type, "amended");
+        assert_eq!(event.description, "Added new section");
+        assert_eq!(event.version, "2.0");
+        assert_eq!(event.metric_value, None);
+    }
+
+    #[test]
+    fn test_statute_change_event_with_metric() {
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "amended",
+            "Modified 5 sections",
+            "2.0",
+        )
+        .with_metric(5.0);
+
+        assert_eq!(event.metric_value, Some(5.0));
+    }
+
+    #[test]
+    fn test_statute_time_series_creation() {
+        let series = StatuteTimeSeries::new("Test Time Series");
+        assert_eq!(series.title, "Test Time Series");
+        assert_eq!(series.events.len(), 0);
+        assert!(series.show_metrics);
+    }
+
+    #[test]
+    fn test_statute_time_series_add_event() {
+        let mut series = StatuteTimeSeries::new("Test Series");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "enacted",
+            "Initial version",
+            "1.0",
+        );
+
+        series.add_event(event);
+        assert_eq!(series.events.len(), 1);
+        assert_eq!(series.events[0].change_type, "enacted");
+    }
+
+    #[test]
+    fn test_statute_time_series_with_theme() {
+        let series = StatuteTimeSeries::new("Test").with_theme(Theme::dark());
+        assert_eq!(series.theme.background_color, "#1a1a1a");
+    }
+
+    #[test]
+    fn test_statute_time_series_with_show_metrics() {
+        let series = StatuteTimeSeries::new("Test").with_show_metrics(false);
+        assert!(!series.show_metrics);
+    }
+
+    #[test]
+    fn test_statute_time_series_html_generation() {
+        let mut series = StatuteTimeSeries::new("Statute Changes");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "amended",
+            "Updated section 3",
+            "2.0",
+        )
+        .with_metric(3.0);
+        series.add_event(event);
+
+        let html = series.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Statute Changes"));
+        assert!(html.contains("d3.v7.min.js"));
+        assert!(html.contains("Test Statute"));
+    }
+
+    #[test]
+    fn test_statute_time_series_mermaid() {
+        let mut series = StatuteTimeSeries::new("Statute Changes");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "enacted",
+            "Initial version",
+            "1.0",
+        );
+        series.add_event(event);
+
+        let mermaid = series.to_mermaid();
+        assert!(mermaid.contains("timeline"));
+        assert!(mermaid.contains("Statute Changes"));
+        assert!(mermaid.contains("Test Statute"));
+        assert!(mermaid.contains("enacted"));
+    }
+
+    #[test]
+    fn test_legal_evolution_timeline_creation() {
+        let timeline = LegalEvolutionTimeline::new("statute-1", "Test Statute");
+        assert_eq!(timeline.statute_id, "statute-1");
+        assert_eq!(timeline.statute_name, "Test Statute");
+        assert_eq!(timeline.title, "Evolution of Test Statute");
+        assert_eq!(timeline.events.len(), 0);
+    }
+
+    #[test]
+    fn test_legal_evolution_timeline_add_event() {
+        let mut timeline = LegalEvolutionTimeline::new("statute-1", "Test Statute");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "enacted",
+            "Initial enactment",
+            "1.0",
+        );
+
+        timeline.add_event(event);
+        assert_eq!(timeline.events.len(), 1);
+    }
+
+    #[test]
+    fn test_legal_evolution_timeline_html() {
+        let mut timeline = LegalEvolutionTimeline::new("statute-1", "Test Statute");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "enacted",
+            "Initial enactment",
+            "1.0",
+        );
+        timeline.add_event(event);
+
+        let html = timeline.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Evolution of Test Statute"));
+        assert!(html.contains("timeline"));
+        assert!(html.contains("enacted"));
+    }
+
+    #[test]
+    fn test_legal_evolution_timeline_mermaid() {
+        let mut timeline = LegalEvolutionTimeline::new("statute-1", "Test Statute");
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "enacted",
+            "Initial enactment",
+            "1.0",
+        );
+        timeline.add_event(event);
+
+        let mermaid = timeline.to_mermaid();
+        assert!(mermaid.contains("graph LR"));
+        assert!(mermaid.contains("enacted"));
+        assert!(mermaid.contains("1.0"));
+    }
+
+    #[test]
+    fn test_amendment_impact_creation() {
+        let impact = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "Major amendment",
+            5,
+            3,
+            0.8,
+        );
+
+        assert_eq!(impact.id, "amend-1");
+        assert_eq!(impact.statute_id, "statute-1");
+        assert_eq!(impact.sections_affected, 5);
+        assert_eq!(impact.downstream_statutes, 3);
+        assert_eq!(impact.severity, 0.8);
+        assert_eq!(impact.affected_population, None);
+    }
+
+    #[test]
+    fn test_amendment_impact_with_affected_population() {
+        let impact = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "Major amendment",
+            5,
+            3,
+            0.8,
+        )
+        .with_affected_population(100000);
+
+        assert_eq!(impact.affected_population, Some(100000));
+    }
+
+    #[test]
+    fn test_amendment_impact_severity_clamping() {
+        let impact1 = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test",
+            "2024-01-15",
+            "Test",
+            5,
+            3,
+            1.5, // > 1.0, should be clamped
+        );
+        assert_eq!(impact1.severity, 1.0);
+
+        let impact2 = AmendmentImpact::new(
+            "amend-2",
+            "statute-2",
+            "Test",
+            "2024-01-15",
+            "Test",
+            5,
+            3,
+            -0.5, // < 0.0, should be clamped
+        );
+        assert_eq!(impact2.severity, 0.0);
+    }
+
+    #[test]
+    fn test_amendment_impact_analysis_creation() {
+        let analysis = AmendmentImpactAnalysis::new("Impact Analysis");
+        assert_eq!(analysis.title, "Impact Analysis");
+        assert_eq!(analysis.amendments.len(), 0);
+    }
+
+    #[test]
+    fn test_amendment_impact_analysis_add_amendment() {
+        let mut analysis = AmendmentImpactAnalysis::new("Impact Analysis");
+        let impact = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "Major amendment",
+            5,
+            3,
+            0.8,
+        );
+
+        analysis.add_amendment(impact);
+        assert_eq!(analysis.amendments.len(), 1);
+    }
+
+    #[test]
+    fn test_amendment_impact_analysis_html() {
+        let mut analysis = AmendmentImpactAnalysis::new("Impact Analysis");
+        let impact = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "Major amendment",
+            5,
+            3,
+            0.8,
+        );
+        analysis.add_amendment(impact);
+
+        let html = analysis.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Impact Analysis"));
+        assert!(html.contains("Test Statute"));
+        assert!(html.contains("Total Amendments"));
+        assert!(html.contains("d3.v7.min.js"));
+    }
+
+    #[test]
+    fn test_amendment_impact_analysis_text_report() {
+        let mut analysis = AmendmentImpactAnalysis::new("Impact Analysis");
+        let impact = AmendmentImpact::new(
+            "amend-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "Major amendment",
+            5,
+            3,
+            0.8,
+        );
+        analysis.add_amendment(impact);
+
+        let report = analysis.to_text_report();
+        assert!(report.contains("Impact Analysis"));
+        assert!(report.contains("Total Amendments: 1"));
+        assert!(report.contains("Test Statute"));
+        assert!(report.contains("Sections: 5"));
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_creation() {
+        let chart = LegislativeTrendChart::new("Trend Chart");
+        assert_eq!(chart.title, "Trend Chart");
+        assert_eq!(chart.data_points.len(), 0);
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_add_data_point() {
+        let mut chart = LegislativeTrendChart::new("Trend Chart");
+        chart.add_data_point("2024-Q1", "Enacted", 10.0);
+        chart.add_data_point("2024-Q2", "Enacted", 15.0);
+
+        assert_eq!(chart.data_points.len(), 2);
+        assert_eq!(chart.data_points[0].period, "2024-Q1");
+        assert_eq!(chart.data_points[0].category, "Enacted");
+        assert_eq!(chart.data_points[0].value, 10.0);
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_with_chart_type() {
+        let chart = LegislativeTrendChart::new("Test").with_chart_type(ChartType::Bar);
+        // Just verify it doesn't panic
+        assert_eq!(chart.title, "Test");
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_html_line() {
+        let mut chart = LegislativeTrendChart::new("Trend Chart").with_chart_type(ChartType::Line);
+        chart.add_data_point("2024-Q1", "Enacted", 10.0);
+
+        let html = chart.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Trend Chart"));
+        assert!(html.contains("d3.v7.min.js"));
+        assert!(html.contains("// Line chart"));
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_html_bar() {
+        let mut chart = LegislativeTrendChart::new("Trend Chart").with_chart_type(ChartType::Bar);
+        chart.add_data_point("2024-Q1", "Enacted", 10.0);
+
+        let html = chart.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("// Bar chart"));
+    }
+
+    #[test]
+    fn test_legislative_trend_chart_html_area() {
+        let mut chart = LegislativeTrendChart::new("Trend Chart").with_chart_type(ChartType::Area);
+        chart.add_data_point("2024-Q1", "Enacted", 10.0);
+
+        let html = chart.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("// Area chart"));
+    }
+
+    #[test]
+    fn test_statute_version_creation() {
+        let version =
+            StatuteVersion::new("v1", "1.0", "2024-01-01", "Initial version of the statute");
+
+        assert_eq!(version.version_id, "v1");
+        assert_eq!(version.version, "1.0");
+        assert_eq!(version.effective_date, "2024-01-01");
+        assert_eq!(version.content, "Initial version of the statute");
+        assert_eq!(version.sections.len(), 0);
+        assert_eq!(version.metadata.len(), 0);
+    }
+
+    #[test]
+    fn test_statute_version_add_section() {
+        let mut version = StatuteVersion::new("v1", "1.0", "2024-01-01", "Test");
+        version.add_section("Section 1: Definitions");
+        version.add_section("Section 2: Scope");
+
+        assert_eq!(version.sections.len(), 2);
+        assert_eq!(version.sections[0], "Section 1: Definitions");
+    }
+
+    #[test]
+    fn test_statute_version_add_metadata() {
+        let mut version = StatuteVersion::new("v1", "1.0", "2024-01-01", "Test");
+        version.add_metadata("author", "Legislature");
+        version.add_metadata("status", "active");
+
+        assert_eq!(version.metadata.len(), 2);
+        assert_eq!(
+            version.metadata.get("author"),
+            Some(&"Legislature".to_string())
+        );
+    }
+
+    #[test]
+    fn test_historical_comparison_view_creation() {
+        let view = HistoricalComparisonView::new("Version Comparison");
+        assert_eq!(view.title, "Version Comparison");
+        assert_eq!(view.versions.len(), 0);
+    }
+
+    #[test]
+    fn test_historical_comparison_view_add_version() {
+        let mut view = HistoricalComparisonView::new("Version Comparison");
+        let version = StatuteVersion::new("v1", "1.0", "2024-01-01", "Initial version");
+
+        view.add_version(version);
+        assert_eq!(view.versions.len(), 1);
+    }
+
+    #[test]
+    fn test_historical_comparison_view_html() {
+        let mut view = HistoricalComparisonView::new("Version Comparison");
+        let mut v1 = StatuteVersion::new("v1", "1.0", "2024-01-01", "Initial version");
+        v1.add_section("Section 1");
+        v1.add_metadata("author", "Legislature");
+
+        let mut v2 = StatuteVersion::new("v2", "2.0", "2024-06-01", "Amended version");
+        v2.add_section("Section 1");
+        v2.add_section("Section 2");
+
+        view.add_version(v1);
+        view.add_version(v2);
+
+        let html = view.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Version Comparison"));
+        assert!(html.contains("Version 1.0"));
+        assert!(html.contains("Version 2.0"));
+        assert!(html.contains("Initial version"));
+        assert!(html.contains("Amended version"));
+        assert!(html.contains("Section 1"));
+        assert!(html.contains("Section 2"));
+    }
+
+    #[test]
+    fn test_historical_comparison_view_mermaid() {
+        let mut view = HistoricalComparisonView::new("Version Comparison");
+        let v1 = StatuteVersion::new("v1", "1.0", "2024-01-01", "Initial");
+        let v2 = StatuteVersion::new("v2", "2.0", "2024-06-01", "Amended");
+
+        view.add_version(v1);
+        view.add_version(v2);
+
+        let mermaid = view.to_mermaid();
+        assert!(mermaid.contains("graph LR"));
+        assert!(mermaid.contains("Version 1.0"));
+        assert!(mermaid.contains("Version 2.0"));
+        assert!(mermaid.contains("Amended"));
+    }
+
+    #[test]
+    fn test_statute_change_event_serialization() {
+        let event = StatuteChangeEvent::new(
+            "evt-1",
+            "statute-1",
+            "Test Statute",
+            "2024-01-15T10:00:00Z",
+            "amended",
+            "Test",
+            "2.0",
+        );
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("evt-1"));
+        assert!(json.contains("statute-1"));
+        assert!(json.contains("Test Statute"));
+        assert!(json.contains("amended"));
+    }
+
+    #[test]
+    fn test_trend_data_point_serialization() {
+        let point = TrendDataPoint {
+            period: "2024-Q1".to_string(),
+            category: "Enacted".to_string(),
+            value: 10.0,
+        };
+
+        let json = serde_json::to_string(&point).unwrap();
+        assert!(json.contains("2024-Q1"));
+        assert!(json.contains("Enacted"));
+        assert!(json.contains("10"));
+    }
+
+    #[test]
+    fn test_statute_version_serialization() {
+        let version = StatuteVersion::new("v1", "1.0", "2024-01-01", "Test");
+        let json = serde_json::to_string(&version).unwrap();
+        assert!(json.contains("v1"));
+        assert!(json.contains("1.0"));
+        assert!(json.contains("2024-01-01"));
+    }
+
+    // ============================================================================
+    // v0.4.3 - Advanced Export Formats Tests
+    // ============================================================================
+
+    #[test]
+    fn test_latex_tikz_exporter_creation() {
+        let exporter = LatexTikzExporter::new();
+        assert_eq!(exporter.document_class, "article");
+        assert!(!exporter.standalone);
+    }
+
+    #[test]
+    fn test_latex_tikz_exporter_with_document_class() {
+        let exporter = LatexTikzExporter::new().with_document_class("beamer");
+        assert_eq!(exporter.document_class, "beamer");
+    }
+
+    #[test]
+    fn test_latex_tikz_exporter_with_standalone() {
+        let exporter = LatexTikzExporter::new().with_standalone(true);
+        assert!(exporter.standalone);
+    }
+
+    #[test]
+    fn test_latex_tikz_exporter_export_decision_tree() {
+        let exporter = LatexTikzExporter::new();
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let latex = exporter.export_decision_tree(&tree);
+        assert!(latex.contains("\\documentclass"));
+        assert!(latex.contains("\\usepackage{tikz}"));
+        assert!(latex.contains("\\begin{tikzpicture}"));
+        assert!(latex.contains("\\end{tikzpicture}"));
+        assert!(latex.contains("\\begin{document}"));
+        assert!(latex.contains("\\end{document}"));
+    }
+
+    #[test]
+    fn test_latex_tikz_exporter_export_dependency_graph() {
+        let exporter = LatexTikzExporter::new().with_standalone(true);
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test-1");
+        graph.add_statute("test-2");
+        graph.add_dependency("test-1", "test-2", "references");
+
+        let latex = exporter.export_dependency_graph(&graph);
+        assert!(latex.contains("\\documentclass[tikz,border=10pt]{standalone}"));
+        assert!(latex.contains("\\graph[spring layout"));
+        assert!(latex.contains("test-1"));
+        assert!(latex.contains("test-2"));
+    }
+
+    #[test]
+    fn test_latex_tikz_exporter_default() {
+        let exporter = LatexTikzExporter::default();
+        assert_eq!(exporter.document_class, "article");
+    }
+
+    #[test]
+    fn test_graphml_exporter_creation() {
+        let exporter = GraphMLExporter::new();
+        assert!(exporter.include_visuals);
+    }
+
+    #[test]
+    fn test_graphml_exporter_with_visuals() {
+        let exporter = GraphMLExporter::new().with_visuals(false);
+        assert!(!exporter.include_visuals);
+    }
+
+    #[test]
+    fn test_graphml_exporter_export_graph() {
+        let exporter = GraphMLExporter::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-a");
+        graph.add_statute("statute-b");
+        graph.add_dependency("statute-a", "statute-b", "depends_on");
+
+        let xml = exporter.export_graph(&graph);
+        assert!(xml.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+        assert!(xml.contains("<graphml"));
+        assert!(xml.contains("<node id="));
+        assert!(xml.contains("statute-a"));
+        assert!(xml.contains("statute-b"));
+        assert!(xml.contains("<key id=\"d0\""));
+        assert!(xml.contains("<key id=\"d1\""));
+        assert!(xml.contains("<key id=\"d2\""));
+        assert!(xml.contains("d3")); // Visual attributes key
+    }
+
+    #[test]
+    fn test_graphml_exporter_export_graph_no_visuals() {
+        let exporter = GraphMLExporter::new().with_visuals(false);
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test");
+
+        let xml = exporter.export_graph(&graph);
+        assert!(xml.contains("<graphml"));
+        assert!(!xml.contains("d3")); // No visual attributes
+        assert!(!xml.contains("d4"));
+    }
+
+    #[test]
+    fn test_graphml_exporter_export_decision_tree() {
+        let exporter = GraphMLExporter::new();
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let xml = exporter.export_decision_tree(&tree);
+        assert!(xml.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+        assert!(xml.contains("<graphml"));
+        assert!(xml.contains("<node id=\"n0\">"));
+        assert!(xml.contains("Decision Tree"));
+    }
+
+    #[test]
+    fn test_graphml_exporter_default() {
+        let exporter = GraphMLExporter::default();
+        assert!(exporter.include_visuals);
+    }
+
+    #[test]
+    fn test_cypher_exporter_creation() {
+        let exporter = CypherExporter::new();
+        assert!(exporter.include_indexes);
+        assert!(!exporter.use_merge);
+    }
+
+    #[test]
+    fn test_cypher_exporter_with_indexes() {
+        let exporter = CypherExporter::new().with_indexes(false);
+        assert!(!exporter.include_indexes);
+    }
+
+    #[test]
+    fn test_cypher_exporter_with_merge() {
+        let exporter = CypherExporter::new().with_merge(true);
+        assert!(exporter.use_merge);
+    }
+
+    #[test]
+    fn test_cypher_exporter_export_graph() {
+        let exporter = CypherExporter::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_dependency("statute-1", "statute-2", "depends_on");
+
+        let cypher = exporter.export_graph(&graph);
+        assert!(cypher.contains("// Neo4j Cypher Query Export"));
+        assert!(cypher.contains("CREATE INDEX statute_id"));
+        assert!(cypher.contains("CREATE (s_statute_1:Statute"));
+        assert!(cypher.contains("CREATE (s_statute_2:Statute"));
+        assert!(cypher.contains("DEPENDS_ON"));
+        assert!(cypher.contains("MATCH (s:Statute) RETURN s"));
+    }
+
+    #[test]
+    fn test_cypher_exporter_export_graph_with_merge() {
+        let exporter = CypherExporter::new().with_merge(true).with_indexes(false);
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test");
+
+        let cypher = exporter.export_graph(&graph);
+        assert!(cypher.contains("MERGE (s_test:Statute"));
+        assert!(!cypher.contains("CREATE INDEX"));
+    }
+
+    #[test]
+    fn test_cypher_exporter_export_concept_graph() {
+        let exporter = CypherExporter::new();
+        let mut graph = ConceptRelationshipGraph::new("Test Graph");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        let c2 = LegalConcept::new("c2", "Consent", "Consent concept", "rights");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_relationship(ConceptRelationship::new(
+            "c1",
+            "c2",
+            ConceptRelationType::Requires,
+        ));
+
+        let cypher = exporter.export_concept_graph(&graph);
+        assert!(cypher.contains("// Neo4j Cypher Query Export - Legal Concepts"));
+        assert!(cypher.contains("CREATE INDEX concept_id"));
+        assert!(cypher.contains("(c_c1:Concept"));
+        assert!(cypher.contains("Privacy"));
+        assert!(cypher.contains("Consent"));
+        assert!(cypher.contains("REQUIRES"));
+    }
+
+    #[test]
+    fn test_cypher_exporter_default() {
+        let exporter = CypherExporter::default();
+        assert!(exporter.include_indexes);
+    }
+
+    #[test]
+    fn test_sparql_exporter_creation() {
+        let exporter = SparqlExporter::new();
+        assert_eq!(exporter.base_uri, "http://example.org/legalis/");
+        assert!(exporter.include_prefixes);
+    }
+
+    #[test]
+    fn test_sparql_exporter_with_base_uri() {
+        let exporter = SparqlExporter::new().with_base_uri("http://custom.org/");
+        assert_eq!(exporter.base_uri, "http://custom.org/");
+    }
+
+    #[test]
+    fn test_sparql_exporter_with_prefixes() {
+        let exporter = SparqlExporter::new().with_prefixes(false);
+        assert!(!exporter.include_prefixes);
+    }
+
+    #[test]
+    fn test_sparql_exporter_export_graph() {
+        let exporter = SparqlExporter::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-a");
+        graph.add_statute("statute-b");
+        graph.add_dependency("statute-a", "statute-b", "depends_on");
+
+        let sparql = exporter.export_graph(&graph);
+        assert!(sparql.contains("# SPARQL INSERT Queries"));
+        assert!(sparql.contains("PREFIX leg:"));
+        assert!(sparql.contains("PREFIX rdf:"));
+        assert!(sparql.contains("PREFIX rdfs:"));
+        assert!(sparql.contains("INSERT DATA {"));
+        assert!(sparql.contains("rdf:type leg:Statute"));
+        assert!(sparql.contains("statute-a"));
+        assert!(sparql.contains("statute-b"));
+        assert!(sparql.contains("leg:dependsOn"));
+    }
+
+    #[test]
+    fn test_sparql_exporter_export_graph_no_prefixes() {
+        let exporter = SparqlExporter::new().with_prefixes(false);
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test");
+
+        let sparql = exporter.export_graph(&graph);
+        assert!(!sparql.contains("PREFIX"));
+        assert!(sparql.contains("INSERT DATA {"));
+    }
+
+    #[test]
+    fn test_sparql_exporter_export_concept_graph() {
+        let exporter = SparqlExporter::new();
+        let mut graph = ConceptRelationshipGraph::new("Test");
+        let c1 = LegalConcept::new("c1", "Privacy", "Privacy concept", "rights");
+        let c2 = LegalConcept::new("c2", "Data", "Data concept", "rights");
+        graph.add_concept(c1);
+        graph.add_concept(c2);
+        graph.add_relationship(ConceptRelationship::new(
+            "c1",
+            "c2",
+            ConceptRelationType::IsA,
+        ));
+
+        let sparql = exporter.export_concept_graph(&graph);
+        assert!(sparql.contains("# SPARQL INSERT Queries - Legal Concepts"));
+        assert!(sparql.contains("PREFIX skos:"));
+        assert!(sparql.contains("rdf:type skos:Concept"));
+        assert!(sparql.contains("skos:prefLabel \"Privacy\""));
+        assert!(sparql.contains("skos:broader"));
+    }
+
+    #[test]
+    fn test_sparql_exporter_export_to_turtle() {
+        let exporter = SparqlExporter::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("test-statute");
+
+        let turtle = exporter.export_to_turtle(&graph);
+        assert!(turtle.contains("@prefix leg:"));
+        assert!(turtle.contains("@prefix rdf:"));
+        assert!(turtle.contains("@prefix rdfs:"));
+        assert!(turtle.contains("rdf:type leg:Statute"));
+        assert!(turtle.contains("test-statute"));
+    }
+
+    #[test]
+    fn test_sparql_exporter_default() {
+        let exporter = SparqlExporter::default();
+        assert!(exporter.include_prefixes);
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_creation() {
+        let integration = JupyterNotebookIntegration::new();
+        assert_eq!(integration.kernel, "python3");
+        assert_eq!(integration.metadata.len(), 0);
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_with_kernel() {
+        let integration = JupyterNotebookIntegration::new().with_kernel("julia-1.0");
+        assert_eq!(integration.kernel, "julia-1.0");
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_add_metadata() {
+        let mut integration = JupyterNotebookIntegration::new();
+        integration.add_metadata("author", "Test Author");
+        integration.add_metadata("version", "1.0");
+
+        assert_eq!(integration.metadata.len(), 2);
+        assert_eq!(
+            integration.metadata.get("author"),
+            Some(&"Test Author".to_string())
+        );
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_create_notebook() {
+        let integration = JupyterNotebookIntegration::new();
+        let notebook = integration.create_notebook("Test Title", "Test Description");
+
+        assert!(notebook.contains("\"cells\":"));
+        assert!(notebook.contains("Test Title"));
+        assert!(notebook.contains("Test Description"));
+        assert!(notebook.contains("\"cell_type\": \"markdown\""));
+        assert!(notebook.contains("\"cell_type\": \"code\""));
+        assert!(notebook.contains("import matplotlib.pyplot as plt"));
+        assert!(notebook.contains("import networkx as nx"));
+        assert!(notebook.contains("\"nbformat\": 4"));
+        assert!(notebook.contains("\"python3\""));
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_create_decision_tree_notebook() {
+        let integration = JupyterNotebookIntegration::new();
+        let statute = Statute::new(
+            "test",
+            "Test Statute",
+            Effect::new(EffectType::Grant, "Test effect"),
+        );
+        let tree = DecisionTree::from_statute(&statute).unwrap();
+
+        let notebook = integration.create_decision_tree_notebook(&tree);
+        assert!(notebook.contains("Legal Decision Tree Analysis"));
+        assert!(notebook.contains("Interactive visualization"));
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_create_dependency_graph_notebook() {
+        let integration = JupyterNotebookIntegration::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-1");
+        graph.add_statute("statute-2");
+        graph.add_statute("statute-3");
+
+        let notebook = integration.create_dependency_graph_notebook(&graph);
+        assert!(notebook.contains("Legal Statute Dependencies"));
+        assert!(notebook.contains("Network analysis of 3 statutes"));
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_generate_python_code() {
+        let integration = JupyterNotebookIntegration::new();
+        let mut graph = DependencyGraph::new();
+        graph.add_statute("statute-a");
+        graph.add_statute("statute-b");
+        graph.add_dependency("statute-a", "statute-b", "depends_on");
+
+        let code = integration.generate_python_code(&graph);
+        assert!(code.contains("import networkx as nx"));
+        assert!(code.contains("import matplotlib.pyplot as plt"));
+        assert!(code.contains("G = nx.DiGraph()"));
+        assert!(code.contains("G.add_node('statute-a'"));
+        assert!(code.contains("G.add_node('statute-b'"));
+        assert!(code.contains("G.add_edge('statute-a', 'statute-b'"));
+        assert!(code.contains("nx.draw_networkx"));
+        assert!(code.contains("plt.show()"));
+        assert!(code.contains("Total statutes:"));
+    }
+
+    #[test]
+    fn test_jupyter_notebook_integration_default() {
+        let integration = JupyterNotebookIntegration::default();
+        assert_eq!(integration.kernel, "python3");
     }
 }

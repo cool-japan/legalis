@@ -11,7 +11,7 @@ This document explains how to publish Legalis-RS crates to crates.io.
    cargo login <your-api-token>
    ```
 
-**Note:** Z3 SMT Solver is **optional**. It's only required if you want to use the `z3-solver` feature in `legalis-verifier`. Default features do not require Z3.
+**Note:** SMT Solver (OxiZ) is **optional** and Pure Rust. It's only required if you want to use the `smt-solver` feature in `legalis-verifier`. Default features work without it, and no external dependencies are needed.
 
 ### Platform Support
 
@@ -20,7 +20,7 @@ The publishing scripts support multiple platforms:
 - ✅ **Linux** (Ubuntu/Debian/Fedora/Arch via apt/yum/pacman)
 - ✅ **Windows** (WSL, MSYS2, Git Bash)
 
-The scripts automatically detect the platform and configure Z3 paths if Z3 is installed.
+The scripts work on all platforms without external dependencies (OxiZ is Pure Rust).
 
 For detailed platform-specific instructions, see `PLATFORM-NOTES.md`.
 
@@ -58,7 +58,7 @@ Publishes all Legalis-RS crates to crates.io in the correct dependency order.
 ```
 
 **What it does:**
-- Sets required Z3 environment variables
+- Sets required environment variables
 - Publishes all 23 crates in dependency order
 - Waits 20 seconds between each publish (crates.io requirement)
 - Asks for confirmation before starting
@@ -88,7 +88,7 @@ Crates are published in dependency order to ensure dependencies are available be
 3. `legalis-registry` - Statute registry
 
 ### Level 3: Intelligence & Analysis
-4. `legalis-verifier` - Formal verification (Z3)
+4. `legalis-verifier` - Formal verification (OxiZ SMT solver)
 5. `legalis-llm` - LLM integration
 6. `legalis-sim` - Simulation engine
 7. `legalis-diff` - Statute diffing
@@ -200,22 +200,20 @@ This means the crate was already published. You cannot publish the same version 
 Check the error message for details. Common causes:
 - Missing files in `Cargo.toml` `include` field
 - Path dependencies not properly configured
-- Z3 environment variables not set
+- Build dependencies not satisfied
 
-### Error: "Z3 library not found"
+### Build Issues
 
-This error only occurs if you're building with `--features z3-solver`.
+If you encounter build issues:
 
-**Solution 1:** Don't use the z3-solver feature (default build doesn't need it):
+**Solution 1:** Build with default features (recommended):
 ```bash
-cargo build  # No Z3 required
+cargo build  # No external dependencies needed
 ```
 
-**Solution 2:** If you need Z3, install it and set environment variables:
+**Solution 2:** If using `smt-solver` feature:
 ```bash
-brew install z3
-export Z3_SYS_Z3_HEADER=/opt/homebrew/opt/z3/include/z3.h
-export LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$LIBRARY_PATH
+cargo build --features smt-solver  # Pure Rust OxiZ, no external dependencies
 ```
 
 ### Publishing stopped midway
@@ -229,14 +227,7 @@ If publishing stops due to an error:
 
 **No environment variables are required** for default features.
 
-Z3 environment variables are only needed if building with `--features z3-solver`:
-
-```bash
-# Only if using z3-solver feature
-Z3_SYS_Z3_HEADER=/opt/homebrew/opt/z3/include/z3.h
-LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$LIBRARY_PATH
-DYLD_LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$DYLD_LIBRARY_PATH
-```
+**Note:** OxiZ is a Pure Rust SMT solver, so no environment variables or external libraries are needed.
 
 ## Rate Limiting
 

@@ -68,6 +68,7 @@ use legalis_core::{Condition, Effect, EffectType, Statute, TemporalValidity};
 use thiserror::Error;
 
 mod ast;
+pub mod autofix;
 pub mod cache;
 pub mod codegen;
 pub mod completion;
@@ -89,7 +90,9 @@ pub mod lsp;
 pub mod macros;
 pub mod metadata;
 pub mod module_system;
+pub mod multilang;
 pub mod mutation;
+pub mod nl_to_dsl;
 pub mod nlgen;
 pub mod numeric;
 pub mod optimizer;
@@ -111,6 +114,7 @@ pub mod watch;
 mod tests;
 
 pub use ast::*;
+pub use autofix::{AutoFixer, Fix, FixCategory, FixPattern, FixReport};
 pub use cache::{CacheKey, CacheStats, CachingParser, ParseCache};
 pub use codegen::{
     CSharpGenerator, CodeGenerator, GoGenerator, JavaGenerator, PrologGenerator, PythonGenerator,
@@ -140,7 +144,11 @@ pub use metadata::{
     VersionHistory,
 };
 pub use module_system::{ExportNode, ImportKind, NamespaceNode, Visibility};
+pub use multilang::{DslLanguage, KeywordMapping, LanguageExamples, MultiLangTranslator};
 pub use mutation::{Mutation, MutationOperator, MutationReport, MutationResult, MutationType};
+pub use nl_to_dsl::{
+    CommonTemplates, NLPattern, NLTranslator, TranslationResult, TranslatorBuilder,
+};
 pub use nlgen::{Language, NLConfig, NLGenerator, Verbosity};
 pub use numeric::{NumericError, NumericParser, NumericValue, parse_numeric};
 pub use parser::*;

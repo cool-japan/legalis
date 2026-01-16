@@ -21,7 +21,7 @@ Legalis-RS introduce un tipo de lógica de tres valores `LegalResult<T>` aprovec
 
 **Contribuciones Técnicas Principales**:
 1. Lenguaje de Dominio Específico Legal (DSL) e implementación del analizador
-2. Verificación formal con el solucionador Z3 SMT
+2. Verificación formal con el solucionador OxiZ SMT
 3. Motor de simulación estilo ECS para predicción de impacto social
 4. Generación de contratos inteligentes para más de 25 plataformas blockchain
 5. Integración de Linked Open Data (RDF/TTL) para la web semántica
@@ -366,7 +366,7 @@ pub enum PartialBool {
 }
 ```
 
-### 5.3 Verificación Formal con el Solucionador Z3 SMT
+### 5.3 Verificación Formal con el Solucionador OxiZ SMT
 
 **Objetivos de Verificación**:
 1. Referencias circulares
@@ -560,7 +560,7 @@ Legalis-RS presenta un nuevo enfoque para codificar el derecho haciendo explíci
 2. **Sistema de tipos**: Lógica de tres valores vía `LegalResult<T>`
 3. **Arquitectura integrada**: Diseño integral con 7 capas y 16 crates
 4. **Implementación**: Aproximadamente 450,000 líneas de código Rust
-5. **Verificación**: Integración del solucionador Z3 SMT
+5. **Verificación**: Integración del solucionador OxiZ SMT
 6. **Simulación**: Motor estilo ECS (soporte de aceleración GPU)
 7. **Salida**: 25+ blockchains, RDF/TTL, múltiples formatos
 
@@ -607,7 +607,7 @@ Para definiciones completas de tipos principales, ver `crates/legalis-core/src/l
 ```toml
 [legalis]
 default_jurisdiction = "ES"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

@@ -21,7 +21,7 @@ Legalis-RS memperkenalkan tipe logika tiga-nilai `LegalResult<T>` memanfaatkan s
 
 **Kontribusi Teknis Utama**:
 1. Domain Specific Language (DSL) Hukum dan implementasi parser
-2. Verifikasi formal dengan Z3 SMT solver
+2. Verifikasi formal dengan OxiZ SMT solver (Pure Rust)
 3. Engine simulasi bergaya ECS untuk prediksi dampak sosial
 4. Pembuatan smart contract untuk 25+ platform blockchain
 5. Integrasi Linked Open Data (RDF/TTL) untuk web semantik
@@ -378,7 +378,7 @@ pub enum PartialBool {
 }
 ```
 
-### 5.3 Verifikasi Formal dengan Z3 SMT Solver
+### 5.3 Verifikasi Formal dengan OxiZ SMT Solver (Pure Rust)
 
 **Target Verifikasi**:
 1. Referensi sirkuler
@@ -572,7 +572,7 @@ Legalis-RS menyajikan pendekatan baru untuk mengkodifikasi hukum dengan membuat 
 2. **Sistem tipe**: Logika tiga-nilai via `LegalResult<T>`
 3. **Arsitektur terintegrasi**: Desain komprehensif dengan 7 lapis dan 16 crate
 4. **Implementasi**: Sekitar 450.000 baris kode Rust
-5. **Verifikasi**: Integrasi Z3 SMT solver
+5. **Verifikasi**: Integrasi OxiZ SMT solver (Pure Rust)
 6. **Simulasi**: Engine bergaya ECS (dukungan akselerasi GPU)
 7. **Output**: 25+ blockchain, RDF/TTL, berbagai format
 
@@ -619,7 +619,7 @@ Untuk definisi lengkap tipe utama, lihat `crates/legalis-core/src/lib.rs`.
 ```toml
 [legalis]
 default_jurisdiction = "ID"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

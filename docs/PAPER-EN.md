@@ -21,7 +21,7 @@ Legalis-RS introduces a three-valued logic type `LegalResult<T>` leveraging Rust
 
 **Key Technical Contributions**:
 1. Legal Domain Specific Language (DSL) and parser implementation
-2. Formal verification with Z3 SMT solver
+2. Formal verification with OxiZ SMT solver (Pure Rust)
 3. ECS-style simulation engine for social impact prediction
 4. Smart contract generation for 25+ blockchain platforms
 5. Linked Open Data (RDF/TTL) integration for the semantic web
@@ -158,7 +158,7 @@ agreement AdultRights(citizen) {
 
 ### 2.3 Formal Verification and Law
 
-Formal verification of law has been studied primarily using model checking and SMT solvers. SMT solvers such as Z3 (Microsoft Research) and CVC5 can determine the satisfiability of propositional and predicate logic, detecting logical contradictions in laws.
+Formal verification of law has been studied primarily using model checking and SMT solvers. SMT solvers such as OxiZ (Pure Rust) and CVC5 can determine the satisfiability of propositional and predicate logic, detecting logical contradictions in laws.
 
 However, existing research has mainly focused on internal consistency of individual laws, with limited investigation of interactions between multiple laws or consistency with constitutional law.
 
@@ -331,7 +331,7 @@ Formal verification engine.
 - Constitutional conflict checking
 - Ambiguity analysis
 
-**Technology**: Z3 SMT solver (optional)
+**Technology**: OxiZ SMT solver (Pure Rust) (optional)
 
 ### 4.4 Simulation Layer
 
@@ -563,7 +563,7 @@ pub enum PartialBool {
 | Unknown | Unknown | False | Unknown | Contradiction |
 | Contradiction | Contradiction | False | Contradiction | Contradiction |
 
-### 5.3 Formal Verification with Z3 SMT Solver
+### 5.3 Formal Verification with OxiZ SMT Solver (Pure Rust)
 
 #### 5.3.1 Verification Targets
 
@@ -1061,7 +1061,7 @@ Legalis-RS presents a new approach to codifying law by making the "boundary betw
 2. **Type system**: Three-valued logic via `LegalResult<T>`
 3. **Integrated architecture**: Comprehensive design with 7 layers and 16 crates
 4. **Implementation**: Approximately 450,000 lines of Rust code
-5. **Verification**: Z3 SMT solver integration
+5. **Verification**: OxiZ SMT solver (Pure Rust) integration
 6. **Simulation**: ECS-style engine (GPU acceleration support)
 7. **Output**: 25+ blockchains, RDF/TTL, multiple formats
 
@@ -1079,7 +1079,7 @@ Not complete automation of law, but clear separation of domains that should be a
 4. Governatori, G., & Shams, Z. (2019). L4: Legal Language and Logic for Law. *JURIX 2019*.
 5. Azzopardi, S., & Pace, G. J. (2018). Stipula: A domain-specific language for legal contracts. *JURIX 2018*.
 6. Palmirani, M., & Vitali, F. (2011). Akoma-Ntoso for Legal Documents. *Legislative XML for the Semantic Web*.
-7. de Moura, L., & Bjørner, N. (2008). Z3: An Efficient SMT Solver. *TACAS 2008*.
+7. OxiZ: Pure Rust SMT Solver. https://github.com/cool-japan/oxiz
 
 ---
 
@@ -1115,7 +1115,7 @@ For complete definitions of key types, see `crates/legalis-core/src/lib.rs`.
 ```toml
 [legalis]
 default_jurisdiction = "JP"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

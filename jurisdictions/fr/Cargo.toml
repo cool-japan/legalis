@@ -12,6 +12,8 @@ documentation = "https://docs.rs/legalis-fr"
 [dependencies]
 legalis-core.workspace = true
 legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-interop.workspace = true
 serde.workspace = true
 chrono.workspace = true
 thiserror.workspace = true

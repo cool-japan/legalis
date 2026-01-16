@@ -21,8 +21,10 @@ pub mod async_converter;
 pub mod basel3;
 #[cfg(feature = "batch")]
 pub mod batch;
+pub mod blockchain_docs;
 pub mod bpmn;
 pub mod cache;
+pub mod cadence;
 pub mod catala;
 pub mod cicero;
 pub mod clauseio;
@@ -55,6 +57,7 @@ pub mod lkif;
 pub mod metalex;
 pub mod metrics;
 pub mod mifid2;
+pub mod move_lang;
 pub mod mpeg21_rel;
 pub mod msword_legal;
 pub mod niem;
@@ -70,12 +73,15 @@ pub mod salesforce_contract;
 pub mod sap_legal;
 pub mod sbvr;
 pub mod schema;
+pub mod solidity;
 pub mod spdx;
 pub mod stipula;
 pub mod streaming;
 pub mod streaming_v2;
 pub mod transformation;
+pub mod universal_format;
 pub mod validation;
+pub mod vyper;
 pub mod webhooks;
 pub mod xbrl;
 
@@ -184,6 +190,14 @@ pub enum LegalFormat {
     MsWordLegal,
     /// PDF Legal - Adobe PDF legal annotations and form fields
     PdfLegal,
+    /// Solidity - Ethereum smart contract language
+    Solidity,
+    /// Vyper - Pythonic Ethereum smart contract language
+    Vyper,
+    /// Cadence - Flow blockchain smart contract language
+    Cadence,
+    /// Move - Aptos/Sui blockchain smart contract language
+    Move,
 }
 
 impl LegalFormat {
@@ -225,6 +239,10 @@ impl LegalFormat {
             LegalFormat::DocuSign => "json",
             LegalFormat::MsWordLegal => "json",
             LegalFormat::PdfLegal => "json",
+            LegalFormat::Solidity => "sol",
+            LegalFormat::Vyper => "vy",
+            LegalFormat::Cadence => "cdc",
+            LegalFormat::Move => "move",
         }
     }
 
@@ -262,6 +280,10 @@ impl LegalFormat {
             "docusign" | "docusign.json" | "envelope.json" => Some(LegalFormat::DocuSign),
             "msword" | "word-legal.json" | "msword-legal.json" => Some(LegalFormat::MsWordLegal),
             "pdf-legal" | "pdf-annotations.json" | "pdf-legal.json" => Some(LegalFormat::PdfLegal),
+            "sol" | "solidity" => Some(LegalFormat::Solidity),
+            "vy" | "vyper" => Some(LegalFormat::Vyper),
+            "cdc" | "cadence" => Some(LegalFormat::Cadence),
+            "move" => Some(LegalFormat::Move),
             _ => None,
         }
     }
@@ -394,6 +416,10 @@ impl LegalConverter {
                 Box::new(docusign::DocuSignImporter::new()),
                 Box::new(msword_legal::MsWordLegalImporter::new()),
                 Box::new(pdf_legal::PdfLegalImporter::new()),
+                Box::new(solidity::SolidityImporter::new()),
+                Box::new(vyper::VyperImporter::new()),
+                Box::new(cadence::CadenceImporter::new()),
+                Box::new(move_lang::MoveImporter::new()),
             ],
             exporters: vec![
                 Box::new(catala::CatalaExporter::new()),
@@ -430,6 +456,10 @@ impl LegalConverter {
                 Box::new(docusign::DocuSignExporter::new()),
                 Box::new(msword_legal::MsWordLegalExporter::new()),
                 Box::new(pdf_legal::PdfLegalExporter::new()),
+                Box::new(solidity::SolidityExporter::new()),
+                Box::new(vyper::VyperExporter::new()),
+                Box::new(cadence::CadenceExporter::new()),
+                Box::new(move_lang::MoveExporter::new()),
             ],
             cache: None,
         }
@@ -1606,5 +1636,309 @@ declaration scope AdultRights:
         assert!(exports.contains(&LegalFormat::Mpeg21Rel));
         assert!(exports.contains(&LegalFormat::CreativeCommons));
         assert!(exports.contains(&LegalFormat::Spdx));
+    }
+
+    // Blockchain format tests (v0.2.9)
+
+    #[test]
+    fn test_blockchain_formats_registered() {
+        let converter = LegalConverter::new();
+        let imports = converter.supported_imports();
+        let exports = converter.supported_exports();
+
+        // Check all blockchain formats are registered
+        assert!(imports.contains(&LegalFormat::Solidity));
+        assert!(imports.contains(&LegalFormat::Vyper));
+        assert!(imports.contains(&LegalFormat::Cadence));
+        assert!(imports.contains(&LegalFormat::Move));
+
+        assert!(exports.contains(&LegalFormat::Solidity));
+        assert!(exports.contains(&LegalFormat::Vyper));
+        assert!(exports.contains(&LegalFormat::Cadence));
+        assert!(exports.contains(&LegalFormat::Move));
+    }
+
+    #[test]
+    fn test_solidity_import_export_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let mut statute = Statute::new(
+            "token_transfer",
+            "Token Transfer",
+            Effect::new(EffectType::MonetaryTransfer, "Transfer tokens"),
+        );
+        statute
+            .effect
+            .parameters
+            .insert("contract".to_string(), "ERC20".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("function".to_string(), "transfer".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("license".to_string(), "MIT".to_string());
+
+        let (solidity_output, export_report) =
+            converter.export(&[statute], LegalFormat::Solidity).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(solidity_output.contains("contract ERC20"));
+        assert!(solidity_output.contains("function transfer()"));
+
+        let (imported, import_report) = converter
+            .import(&solidity_output, LegalFormat::Solidity)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert!(!imported.is_empty());
+    }
+
+    #[test]
+    fn test_vyper_import_export_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let mut statute = Statute::new(
+            "vote",
+            "Vote Function",
+            Effect::new(EffectType::Grant, "Cast a vote"),
+        );
+        statute
+            .effect
+            .parameters
+            .insert("contract".to_string(), "Voting".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("function".to_string(), "vote".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("license".to_string(), "MIT".to_string());
+
+        let (vyper_output, export_report) =
+            converter.export(&[statute], LegalFormat::Vyper).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(vyper_output.contains("# Voting"));
+        assert!(vyper_output.contains("def vote()"));
+
+        let (imported, import_report) =
+            converter.import(&vyper_output, LegalFormat::Vyper).unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert!(!imported.is_empty());
+    }
+
+    #[test]
+    fn test_cadence_import_export_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let mut statute = Statute::new(
+            "mint_nft",
+            "Mint NFT",
+            Effect::new(EffectType::Grant, "Mint new NFT"),
+        );
+        statute
+            .effect
+            .parameters
+            .insert("contract".to_string(), "NFT".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("function".to_string(), "mintNFT".to_string());
+
+        let (cadence_output, export_report) =
+            converter.export(&[statute], LegalFormat::Cadence).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(cadence_output.contains("pub contract NFT"));
+        assert!(cadence_output.contains("pub fun mintNFT()"));
+
+        let (imported, import_report) = converter
+            .import(&cadence_output, LegalFormat::Cadence)
+            .unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert!(!imported.is_empty());
+    }
+
+    #[test]
+    fn test_move_import_export_roundtrip() {
+        let mut converter = LegalConverter::new();
+
+        let mut statute = Statute::new(
+            "transfer_coin",
+            "Transfer Coin",
+            Effect::new(EffectType::MonetaryTransfer, "Transfer coins"),
+        );
+        statute
+            .effect
+            .parameters
+            .insert("module_address".to_string(), "0x1".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("module_name".to_string(), "Coin".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("function".to_string(), "transfer".to_string());
+        statute
+            .effect
+            .parameters
+            .insert("entry".to_string(), "true".to_string());
+
+        let (move_output, export_report) = converter.export(&[statute], LegalFormat::Move).unwrap();
+        assert_eq!(export_report.statutes_converted, 1);
+        assert!(move_output.contains("module 0x1::Coin"));
+        assert!(move_output.contains("public entry fun transfer()"));
+
+        let (imported, import_report) = converter.import(&move_output, LegalFormat::Move).unwrap();
+        assert_eq!(import_report.statutes_converted, 1);
+        assert!(!imported.is_empty());
+    }
+
+    #[test]
+    fn test_blockchain_format_extensions() {
+        assert_eq!(LegalFormat::Solidity.extension(), "sol");
+        assert_eq!(LegalFormat::Vyper.extension(), "vy");
+        assert_eq!(LegalFormat::Cadence.extension(), "cdc");
+        assert_eq!(LegalFormat::Move.extension(), "move");
+    }
+
+    #[test]
+    fn test_blockchain_format_from_extension() {
+        assert_eq!(
+            LegalFormat::from_extension("sol"),
+            Some(LegalFormat::Solidity)
+        );
+        assert_eq!(
+            LegalFormat::from_extension("solidity"),
+            Some(LegalFormat::Solidity)
+        );
+        assert_eq!(LegalFormat::from_extension("vy"), Some(LegalFormat::Vyper));
+        assert_eq!(
+            LegalFormat::from_extension("vyper"),
+            Some(LegalFormat::Vyper)
+        );
+        assert_eq!(
+            LegalFormat::from_extension("cdc"),
+            Some(LegalFormat::Cadence)
+        );
+        assert_eq!(
+            LegalFormat::from_extension("cadence"),
+            Some(LegalFormat::Cadence)
+        );
+        assert_eq!(LegalFormat::from_extension("move"), Some(LegalFormat::Move));
+    }
+
+    #[test]
+    fn test_solidity_source_import() {
+        let mut converter = LegalConverter::new();
+
+        let source = r#"
+        // SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.0;
+
+        contract SimpleStorage {
+            function store(uint256 value) public {
+            }
+        }
+        "#;
+
+        let (statutes, report) = converter.import(source, LegalFormat::Solidity).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(!statutes.is_empty());
+        assert_eq!(
+            statutes[0].effect.parameters.get("contract"),
+            Some(&"SimpleStorage".to_string())
+        );
+    }
+
+    #[test]
+    fn test_vyper_source_import() {
+        let mut converter = LegalConverter::new();
+
+        let source = r#"
+        # @version 0.3.0
+        # @license MIT
+
+        @external
+        def transfer():
+            pass
+        "#;
+
+        let (statutes, report) = converter.import(source, LegalFormat::Vyper).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(!statutes.is_empty());
+    }
+
+    #[test]
+    fn test_cadence_source_import() {
+        let mut converter = LegalConverter::new();
+
+        let source = r#"
+        pub contract FlowToken {
+            pub fun transfer() {
+            }
+        }
+        "#;
+
+        let (statutes, report) = converter.import(source, LegalFormat::Cadence).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(!statutes.is_empty());
+        assert_eq!(
+            statutes[0].effect.parameters.get("blockchain"),
+            Some(&"Flow".to_string())
+        );
+    }
+
+    #[test]
+    fn test_move_source_import() {
+        let mut converter = LegalConverter::new();
+
+        let source = r#"
+        module 0x1::Coin {
+            public entry fun mint() {
+            }
+        }
+        "#;
+
+        let (statutes, report) = converter.import(source, LegalFormat::Move).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(!statutes.is_empty());
+        assert_eq!(
+            statutes[0].effect.parameters.get("blockchain"),
+            Some(&"Move".to_string())
+        );
+    }
+
+    #[test]
+    fn test_cross_blockchain_conversion() {
+        let mut converter = LegalConverter::new();
+
+        // Import from Solidity
+        let solidity_source = r#"
+        pragma solidity ^0.8.0;
+        contract Token {
+            function transfer() public {
+            }
+        }
+        "#;
+
+        let (statutes, _) = converter
+            .import(solidity_source, LegalFormat::Solidity)
+            .unwrap();
+
+        // Export to Vyper
+        let (vyper_output, report) = converter.export(&statutes, LegalFormat::Vyper).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(vyper_output.contains("def transfer()"));
+
+        // Export to Cadence
+        let (cadence_output, report) = converter.export(&statutes, LegalFormat::Cadence).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(cadence_output.contains("pub fun transfer()"));
+
+        // Export to Move
+        let (move_output, report) = converter.export(&statutes, LegalFormat::Move).unwrap();
+        assert_eq!(report.statutes_converted, 1);
+        assert!(move_output.contains("fun transfer()"));
     }
 }

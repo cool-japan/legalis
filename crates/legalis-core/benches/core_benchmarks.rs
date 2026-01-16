@@ -3,11 +3,12 @@
 //! Run with: cargo bench
 
 use chrono::NaiveDate;
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use legalis_core::{
     BasicEntity, Case, CaseDatabase, ComparisonOp, Condition, Court, Effect, EffectType,
     LegalEntity, Statute, TemporalValidity,
 };
+use std::hint::black_box;
 
 /// Benchmark statute validation
 fn bench_statute_validate(c: &mut Criterion) {

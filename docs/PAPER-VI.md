@@ -21,7 +21,7 @@ Legalis-RS giới thiệu kiểu logic ba giá trị `LegalResult<T>` tận dụ
 
 **Đóng góp kỹ thuật chính**:
 1. Ngôn ngữ Đặc thù Miền Pháp lý (DSL) và triển khai bộ phân tích cú pháp
-2. Xác minh hình thức với Z3 SMT solver
+2. Xác minh hình thức với OxiZ SMT solver (Pure Rust)
 3. Engine mô phỏng kiểu ECS để dự đoán tác động xã hội
 4. Tạo hợp đồng thông minh cho hơn 25 nền tảng blockchain
 5. Tích hợp Linked Open Data (RDF/TTL) cho web ngữ nghĩa
@@ -395,7 +395,7 @@ pub enum PartialBool {
 }
 ```
 
-### 5.3 Xác minh Hình thức với Z3 SMT Solver
+### 5.3 Xác minh Hình thức với OxiZ SMT Solver (Pure Rust)
 
 **Mục tiêu Xác minh**:
 1. Tham chiếu vòng
@@ -589,7 +589,7 @@ Legalis-RS trình bày một phương pháp mới để mã hóa luật bằng c
 2. **Hệ thống kiểu**: Logic ba giá trị qua `LegalResult<T>`
 3. **Kiến trúc tích hợp**: Thiết kế toàn diện với 7 lớp và 16 crate
 4. **Triển khai**: Khoảng 450,000 dòng mã Rust
-5. **Xác minh**: Tích hợp Z3 SMT solver
+5. **Xác minh**: Tích hợp OxiZ SMT solver (Pure Rust)
 6. **Mô phỏng**: Engine kiểu ECS (hỗ trợ tăng tốc GPU)
 7. **Đầu ra**: 25+ blockchain, RDF/TTL, nhiều định dạng
 
@@ -636,7 +636,7 @@ discretion   = "DISCRETION" string ;
 ```toml
 [legalis]
 default_jurisdiction = "VN"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

@@ -536,7 +536,7 @@ mod tests {
         let similarity = generator.entity_similarity("ex:Alice", "ex:Bob");
         assert!(similarity.is_some());
         let sim_value = similarity.unwrap();
-        assert!(sim_value >= -1.0 && sim_value <= 1.0);
+        assert!((-1.0..=1.0).contains(&sim_value));
     }
 
     #[test]

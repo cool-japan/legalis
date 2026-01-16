@@ -1,0 +1,29 @@
+[package]
+name = "legalis-ca"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Canada jurisdiction support for Legalis-RS (Charter of Rights, Federal/Provincial Law, Quebec Civil Law)"
+repository = "https://github.com/cool-japan/legalis"
+homepage = "https://github.com/cool-japan/legalis"
+documentation = "https://docs.rs/legalis-ca"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-sim.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+uuid.workspace = true
+
+[features]
+default = []
+serde = []
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

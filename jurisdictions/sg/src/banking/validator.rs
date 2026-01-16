@@ -430,10 +430,10 @@ mod tests {
     #[test]
     fn test_capital_adequacy_calculations() {
         let capital = CapitalAdequacy {
-            cet1_capital_sgd: 1_000_000_000_00,          // SGD 10M
-            at1_capital_sgd: 200_000_000_00,             // SGD 2M
-            tier2_capital_sgd: 300_000_000_00,           // SGD 3M
-            risk_weighted_assets_sgd: 10_000_000_000_00, // SGD 100M
+            cet1_capital_sgd: 1_000_000_000,          // SGD 10M
+            at1_capital_sgd: 200_000_000,             // SGD 2M
+            tier2_capital_sgd: 300_000_000,           // SGD 3M
+            risk_weighted_assets_sgd: 10_000_000_000, // SGD 100M
             calculation_date: Utc::now(),
         };
 
@@ -452,10 +452,10 @@ mod tests {
     #[test]
     fn test_insufficient_capital() {
         let capital = CapitalAdequacy {
-            cet1_capital_sgd: 500_000_000_00, // SGD 5M - insufficient (5%)
-            at1_capital_sgd: 100_000_000_00,
-            tier2_capital_sgd: 200_000_000_00,
-            risk_weighted_assets_sgd: 10_000_000_000_00, // SGD 100M
+            cet1_capital_sgd: 500_000_000, // SGD 5M - insufficient (5%)
+            at1_capital_sgd: 10_000_000,
+            tier2_capital_sgd: 200_000_000,
+            risk_weighted_assets_sgd: 10_000_000_000, // SGD 100M
             calculation_date: Utc::now(),
         };
 
@@ -475,7 +475,7 @@ mod tests {
             edd_performed: true,
             source_of_funds_verified: true,
             beneficial_owner_identified: true,
-            balance_sgd: 50_000_00,
+            balance_sgd: 5_000_000,
         };
 
         // High risk: review required annually (365 days)

@@ -17,8 +17,7 @@ Legalis-RS is designed to be cross-platform and works on:
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Optional: Install Z3 (only for z3-solver feature)
-brew install z3
+# Note: OxiZ SMT solver is Pure Rust - no external dependencies needed
 
 # Clone and build
 git clone https://github.com/cool-japan/legalis-rs
@@ -54,8 +53,7 @@ cargo build --release
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Optional: Install Z3
-sudo dnf install z3-devel
+# Note: OxiZ SMT solver is Pure Rust - no external dependencies needed
 
 # Clone and build
 git clone https://github.com/cool-japan/legalis-rs
@@ -70,7 +68,7 @@ cargo build --release
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Optional: Install Z3
-sudo pacman -S z3
+# Note: OxiZ SMT solver is Pure Rust - no external dependencies needed
 
 # Clone and build
 git clone https://github.com/cool-japan/legalis-rs
@@ -107,7 +105,7 @@ cargo build --release
 pacman -S mingw-w64-x86_64-rust
 
 # Optional: Install Z3
-pacman -S mingw-w64-x86_64-z3
+# Note: OxiZ SMT solver is Pure Rust - no external dependencies needed
 
 # Clone and build
 git clone https://github.com/cool-japan/legalis-rs
@@ -132,52 +130,27 @@ cd legalis-rs
 cargo build --release
 ```
 
-## Z3 Installation (Optional)
+## SMT Solver (OxiZ)
 
-Z3 is **only required** if you want to use the `z3-solver` feature for SMT-based formal verification.
+**OxiZ is a Pure Rust SMT solver** - no external dependencies or installation needed!
 
-### macOS
+The `smt-solver` feature uses OxiZ, which compiles directly with your Rust code:
 
 ```bash
-# Homebrew
-brew install z3
-
-# Verify installation
-z3 --version
+# Enable SMT solver features (Pure Rust, no external dependencies)
+cargo build --features smt-solver
 ```
 
-### Linux
+### Why Pure Rust?
 
-#### Ubuntu/Debian
-```bash
-sudo apt install libz3-dev
-```
-
-#### Fedora/RHEL
-```bash
-sudo dnf install z3-devel
-```
-
-#### Arch Linux
-```bash
-sudo pacman -S z3
-```
-
-### Windows
-
-#### MSYS2
-```bash
-pacman -S mingw-w64-x86_64-z3
-```
-
-#### Manual Installation
-1. Download from: https://github.com/Z3Prover/z3/releases
-2. Extract to desired location
-3. Set environment variables (see examples above)
+- ✅ **No C/C++ dependencies**: Works on all platforms without external libraries
+- ✅ **Easy to build**: Just `cargo build`, no system packages needed
+- ✅ **Portable**: Works everywhere Rust works
+- ✅ **No environment variables**: Everything is handled by Cargo
 
 ## Publishing from Different Platforms
 
-The publishing scripts automatically detect the platform and configure Z3 paths if available:
+The publishing scripts work on all platforms without external dependencies:
 
 ```bash
 # macOS
@@ -193,68 +166,16 @@ The publishing scripts automatically detect the platform and configure Z3 paths 
 /c/Users/YourName/work/pub_legalis.sh
 ```
 
-## Platform-Specific Path Detection
-
-The scripts check these locations in order:
-
-### macOS
-1. `/opt/homebrew/opt/z3` (Apple Silicon Homebrew)
-2. `/usr/local/opt/z3` (Intel Homebrew)
-
-### Linux
-1. `/usr/include/z3.h` (system package manager)
-2. `/usr/local/include/z3.h` (manual install)
-
-### Windows
-1. `/mingw64/include/z3.h` (MSYS2)
-2. Manual path via environment variables
-
-## Environment Variables by Platform
-
-### macOS
-
-```bash
-# If Z3 is installed via Homebrew
-export Z3_SYS_Z3_HEADER=/opt/homebrew/opt/z3/include/z3.h  # or /usr/local/opt/z3/...
-export LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$LIBRARY_PATH
-export DYLD_LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$DYLD_LIBRARY_PATH
-```
-
-### Linux
-
-```bash
-# If Z3 is installed via package manager
-export Z3_SYS_Z3_HEADER=/usr/include/z3.h  # or /usr/local/include/z3.h
-export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH  # or /usr/local/lib
-```
-
-### Windows (PowerShell)
-
-```powershell
-# If Z3 is installed manually
-$env:Z3_SYS_Z3_HEADER = "C:\path\to\z3\include\z3.h"
-$env:LIB = "C:\path\to\z3\lib;$env:LIB"
-$env:PATH = "C:\path\to\z3\bin;$env:PATH"
-```
-
-### Windows (Git Bash/MSYS2)
-
-```bash
-# If Z3 is installed via MSYS2
-export Z3_SYS_Z3_HEADER=/mingw64/include/z3.h
-export PATH=/mingw64/bin:$PATH
-```
-
 ## Testing Platform Compatibility
 
 ### Quick Platform Test
 
 ```bash
-# Test basic build (no Z3)
+# Test basic build
 cargo build
 
-# Test with Z3 (if installed)
-cargo build --features z3-solver
+# Test with SMT solver (Pure Rust OxiZ)
+cargo build --features smt-solver
 
 # Run tests
 cargo nextest run
@@ -340,7 +261,7 @@ export DYLD_LIBRARY_PATH=/opt/homebrew/opt/z3/lib:$DYLD_LIBRARY_PATH
 # Install development package
 sudo apt install libz3-dev  # Ubuntu/Debian
 sudo dnf install z3-devel    # Fedora
-sudo pacman -S z3            # Arch
+# Note: OxiZ SMT solver is Pure Rust - no external dependencies needed            # Arch
 
 # Or set library path
 export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH

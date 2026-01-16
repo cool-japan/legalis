@@ -246,7 +246,7 @@ mod tests {
         let (statutes, report) = importer.import(bpmn).unwrap();
 
         assert_eq!(report.source_format, Some(LegalFormat::Bpmn));
-        assert!(statutes.len() >= 1);
+        assert!(!statutes.is_empty());
         assert_eq!(statutes[0].id, "approval_process");
         assert_eq!(statutes[0].title, "Document Approval");
     }

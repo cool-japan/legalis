@@ -6,6 +6,7 @@
 use crate::{LodError, LodResult, RdfValue, Triple};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// Content Identifier (CID) representation.
 ///
@@ -36,10 +37,11 @@ impl Cid {
         let hash = format!("{:x}", hasher.finalize());
         Self::new(hash, codec)
     }
+}
 
-    /// Returns the string representation (base58-encoded).
-    pub fn to_string(&self) -> String {
-        format!("{}/{}", self.codec, self.hash)
+impl fmt::Display for Cid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.codec, self.hash)
     }
 }
 
@@ -178,7 +180,7 @@ impl IpldStore {
     pub fn get_graph(&self, cid: &Cid) -> LodResult<Vec<Triple>> {
         let node = self
             .get(cid)
-            .ok_or_else(|| LodError::InvalidUri(format!("CID not found: {}", cid.to_string())))?;
+            .ok_or_else(|| LodError::InvalidUri(format!("CID not found: {}", cid)))?;
 
         match &node.data {
             IpldData::Graph { triples } => {
@@ -248,7 +250,7 @@ fn ipld_value_to_rdf(value: &IpldValue) -> RdfValue {
         IpldValue::TypedLiteral { value, datatype } => {
             RdfValue::TypedLiteral(value.clone(), datatype.clone())
         }
-        IpldValue::Link { cid } => RdfValue::Uri(format!("ipld://{}", cid.to_string())),
+        IpldValue::Link { cid } => RdfValue::Uri(format!("ipld://{}", cid)),
     }
 }
 
@@ -275,18 +277,17 @@ impl IpldPath {
         let mut current_cid = start_cid.clone();
 
         for segment in &self.segments {
-            let node = store.get(&current_cid).ok_or_else(|| {
-                LodError::InvalidUri(format!("CID not found: {}", current_cid.to_string()))
-            })?;
+            let node = store
+                .get(&current_cid)
+                .ok_or_else(|| LodError::InvalidUri(format!("CID not found: {}", current_cid)))?;
 
             // Navigate based on segment
             match &node.data {
-                IpldData::Triple { object, .. } => {
-                    if let IpldValue::Link { cid } = object {
-                        current_cid = cid.clone();
-                    } else {
-                        return Ok(None);
-                    }
+                IpldData::Triple {
+                    object: IpldValue::Link { cid },
+                    ..
+                } => {
+                    current_cid = cid.clone();
                 }
                 IpldData::NamedGraph { graph_cid, .. } if segment == "graph" => {
                     current_cid = graph_cid.clone();

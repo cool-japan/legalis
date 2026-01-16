@@ -82,6 +82,7 @@ pub mod article26;
 pub mod article6;
 pub mod article83;
 pub mod article9;
+pub mod audit;
 pub mod cross_border;
 pub mod dpia;
 pub mod dpo;
@@ -111,6 +112,11 @@ pub use article26::{
 };
 pub use article83::{
     AdministrativeFine, Article83Factors, FineCalculation, FineTier, ViolatedArticle,
+};
+pub use audit::{
+    AccountabilityReport, Article22Explanation, DecisionSignificance, DsarResponse, GdprActor,
+    GdprAuditTrail, GdprDecisionRecord, LawfulBasisMetadata, ProcessingActivitySummary,
+    RetentionCandidate,
 };
 pub use cross_border::{
     AdequateCountry, CrossBorderTransfer, CrossBorderTransferValidation, TransferDerogation,

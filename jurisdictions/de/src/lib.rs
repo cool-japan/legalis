@@ -135,9 +135,11 @@
 pub mod aktg;
 pub mod arbeitsrecht;
 pub mod bgb;
+pub mod common; // Common utilities (Gemeinsame Hilfsfunktionen) - holidays, working days
 pub mod gmbhg;
 pub mod grundgesetz;
 pub mod hgb;
+pub mod reasoning; // Legal Reasoning Engine (Rechtsanalyse-Engine) - legalis-core integration
 
 // BGB exports (tort law)
 pub use bgb::{bgb_823_1, bgb_823_2, bgb_826};
@@ -163,4 +165,15 @@ pub use gmbhg::{
 pub use hgb::{
     GmbHCoKG, GmbHPartner, HGBError, KG, LimitedPartner, MerchantType, OHG, Partner, PartnerType,
     validate_gmbh_co_kg, validate_kg, validate_ohg,
+};
+
+// Legal Reasoning Engine exports (Rechtsanalyse-Engine - legalis-core integration)
+pub use reasoning::{
+    ComplianceStatus, DeEvaluationContext, LegalAnalysis, LegalReasoningEngine, ReasoningError,
+    ReasoningResult, RiskLevel, Violation, ViolationSeverity,
+};
+
+// Common utilities exports (Gemeinsame Hilfsfunktionen - legalis-i18n integration)
+pub use common::{
+    GermanLegalCalendar, GermanState, calculate_legal_deadline, is_german_holiday, is_working_day,
 };

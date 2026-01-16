@@ -1,7 +1,8 @@
 //! Performance benchmarks for the Legalis DSL parser.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use legalis_dsl::{CachingParser, IncrementalParser, LegalDslParser, TextEdit};
+use std::hint::black_box;
 
 /// Simple statute for benchmarking
 fn simple_statute() -> &'static str {

@@ -186,16 +186,16 @@ fn create_subscription_service() -> SubscriptionService {
 fn validate_and_print_transaction(transaction: &EcommerceTransaction) {
     println!("Transaction ID: {}", transaction.transaction_id);
     println!(
-        "Platform: {} ({})",
+        "Platform: {} ({:?})",
         transaction.platform_type.name_ja(),
-        format!("{:?}", transaction.platform_type)
+        transaction.platform_type
     );
     println!("Seller: {}", transaction.seller_name);
     println!("Amount: ¥{}", transaction.order_amount_jpy);
     println!(
-        "Payment: {} ({})",
+        "Payment: {} ({:?})",
         transaction.payment_method.name_ja(),
-        format!("{:?}", transaction.payment_method)
+        transaction.payment_method
     );
 
     if transaction.is_digital_content {

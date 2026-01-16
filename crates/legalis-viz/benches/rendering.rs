@@ -156,7 +156,7 @@ fn bench_theme_application() {
     let statute = create_complex_statute();
     let tree = DecisionTree::from_statute(&statute).unwrap();
 
-    let themes = vec![
+    let themes = [
         Theme::light(),
         Theme::dark(),
         Theme::high_contrast(),

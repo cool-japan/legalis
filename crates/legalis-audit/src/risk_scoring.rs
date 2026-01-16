@@ -756,9 +756,11 @@ mod tests {
     #[test]
     fn test_risk_level_categorization() {
         // Use custom config with lower thresholds so override risk alone can trigger Medium
-        let mut config = RiskScoringConfig::default();
-        config.medium_risk_threshold = 0.2;
-        config.high_risk_threshold = 0.5;
+        let config = RiskScoringConfig {
+            medium_risk_threshold: 0.2,
+            high_risk_threshold: 0.5,
+            ..Default::default()
+        };
         let mut scorer = RiskScorer::with_config(config);
 
         let baseline_records: Vec<_> = (0..100).map(|i| create_test_record(i, false)).collect();

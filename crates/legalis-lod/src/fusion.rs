@@ -652,7 +652,7 @@ mod tests {
         let candidates = vec!["Alice".to_string(), "Alicia".to_string(), "Bob".to_string()];
 
         let matches = resolver.find_matches("Alice", &candidates);
-        assert!(matches.len() >= 1);
+        assert!(!matches.is_empty());
         assert_eq!(matches[0].0, "Alice");
     }
 

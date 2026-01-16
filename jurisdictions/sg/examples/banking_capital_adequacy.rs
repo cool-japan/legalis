@@ -72,10 +72,10 @@ fn example_full_bank_strong_capital() {
 
     // Create capital adequacy data meeting all requirements
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 1_500_000_000_00,          // SGD 15M
-        at1_capital_sgd: 300_000_000_00,             // SGD 3M
-        tier2_capital_sgd: 500_000_000_00,           // SGD 5M
-        risk_weighted_assets_sgd: 10_000_000_000_00, // SGD 100M
+        cet1_capital_sgd: 150_000_000_000,           // SGD 15M
+        at1_capital_sgd: 30_000_000_000,             // SGD 3M
+        tier2_capital_sgd: 50_000_000_000,           // SGD 5M
+        risk_weighted_assets_sgd: 1_000_000_000_000, // SGD 100M
         calculation_date: Utc::now(),
     };
 
@@ -152,8 +152,8 @@ fn example_full_bank_strong_capital() {
         .country_of_incorporation("Singapore".to_string())
         .capital_adequacy(capital)
         .aml_officer(aml_officer)
-        .total_assets_sgd(50_000_000_000_00) // SGD 500M
-        .total_deposits_sgd(40_000_000_000_00) // SGD 400M
+        .total_assets_sgd(5_000_000_000_000) // SGD 500M
+        .total_deposits_sgd(4_000_000_000_000) // SGD 400M
         .build()
         .expect("Failed to build bank");
 
@@ -205,10 +205,10 @@ fn example_insufficient_capital() {
 
     // Create capital adequacy data BELOW requirements
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 500_000_000_00,  // SGD 5M - INSUFFICIENT (5%)
-        at1_capital_sgd: 150_000_000_00,   // SGD 1.5M
-        tier2_capital_sgd: 200_000_000_00, // SGD 2M
-        risk_weighted_assets_sgd: 10_000_000_000_00, // SGD 100M
+        cet1_capital_sgd: 50_000_000_000,  // SGD 5M - INSUFFICIENT (5%)
+        at1_capital_sgd: 15_000_000_000,   // SGD 1.5M
+        tier2_capital_sgd: 20_000_000_000, // SGD 2M
+        risk_weighted_assets_sgd: 1_000_000_000_000, // SGD 100M
         calculation_date: Utc::now(),
     };
 
@@ -296,10 +296,10 @@ fn example_wholesale_bank() {
     println!("{}\\n", "─".repeat(66));
 
     let capital = CapitalAdequacy {
-        cet1_capital_sgd: 800_000_000_00,
-        at1_capital_sgd: 200_000_000_00,
-        tier2_capital_sgd: 300_000_000_00,
-        risk_weighted_assets_sgd: 10_000_000_000_00,
+        cet1_capital_sgd: 80_000_000_000,
+        at1_capital_sgd: 20_000_000_000,
+        tier2_capital_sgd: 30_000_000_000,
+        risk_weighted_assets_sgd: 1_000_000_000_000,
         calculation_date: Utc::now(),
     };
 
@@ -384,7 +384,7 @@ fn example_aml_cdd() {
         edd_performed: true,
         source_of_funds_verified: true,
         beneficial_owner_identified: true,
-        balance_sgd: 5_000_000_00, // SGD 50,000
+        balance_sgd: 500_000_000, // SGD 50,000
     };
 
     println!("👤 Customer Details:");
@@ -470,7 +470,7 @@ fn example_str_reporting() {
         reference_number: "STR-2024-001234".to_string(),
         account_number: "ACC-2024-005678".to_string(),
         customer_name: "ABC Trading Pte Ltd".to_string(),
-        transaction_amount_sgd: 1_500_000_00, // SGD 15,000
+        transaction_amount_sgd: 150_000_000, // SGD 15,000
         transaction_date: Utc::now(),
         filing_date: Utc::now(),
         suspicion_description:

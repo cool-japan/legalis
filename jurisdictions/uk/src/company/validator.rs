@@ -511,11 +511,18 @@ mod tests {
 
         // Private company: 1 director OK
         assert!(
-            validate_directors(&[director.clone()], CompanyType::PrivateLimitedByShares).is_ok()
+            validate_directors(
+                std::slice::from_ref(&director),
+                CompanyType::PrivateLimitedByShares
+            )
+            .is_ok()
         );
 
         // Public company: need 2 directors
-        let result = validate_directors(&[director.clone()], CompanyType::PublicLimitedCompany);
+        let result = validate_directors(
+            std::slice::from_ref(&director),
+            CompanyType::PublicLimitedCompany,
+        );
         assert!(result.is_err());
         assert!(matches!(
             result,

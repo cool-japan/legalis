@@ -121,11 +121,15 @@
 
 #![allow(missing_docs)]
 
+pub mod breach_contract;
 pub mod error;
+pub mod remedies;
+pub mod terms;
 pub mod types;
 pub mod validator;
+pub mod vitiating;
 
-// Re-exports
+// Re-exports from core types
 pub use error::{ContractError, Result};
 pub use types::{
     Acceptance, AcceptanceMethod, AgreementContext, BreachType, Consideration, ConsiderationType,
@@ -136,4 +140,40 @@ pub use types::{
 pub use validator::{
     validate_acceptance, validate_breach, validate_capacity, validate_consideration,
     validate_contract_formation, validate_intention, validate_offer, validate_remoteness,
+};
+
+// Re-exports from terms module
+pub use terms::{
+    ApplicableStatute, ContractContext, ExclusionClause, ExclusionClauseValidity, ImplicationTest,
+    ImpliedTermAnalysis, IncorporationAnalysis, IncorporationMethod, InterpretationResult,
+    InterpretationRule, LiabilityType, ReasonablenessFactor, StatutoryValidity,
+    TermSource as TermSourceExpanded, TermType, interpret_exclusion_clause,
+    validate_exclusion_clause,
+};
+
+// Re-exports from breach_contract module
+pub use breach_contract::{
+    AffirmationAnalysis, AffirmationRequirements, AnticipatoryBreachAnalysis,
+    AnticipatoryBreachType, AvailableRemedy as BreachRemedy, BreachAnalysis, BreachCategory,
+    BreachSeverity, BreachType as BreachTypeExpanded, Election, ElectionAnalysis, ElectionManner,
+    InnocentPartyOption, RepudiationAnalysis, RepudiationBasis,
+};
+
+// Re-exports from remedies module
+pub use remedies::{
+    AmericanCyanamidFactors, BalanceOfConvenience, BreachNature, DamagesCalculation,
+    DamagesMeasure, DeprivationAnalysis, EquitableBar, InjunctionAnalysis, InjunctionType,
+    MitigationAnalysis, RemotenessAnalysis, RescissionAnalysis,
+    RescissionBar as RemedyRescissionBar, RescissionGround, SpecificPerformanceAnalysis,
+    SubjectMatter, TerminationAnalysis,
+};
+
+// Re-exports from vitiating module
+pub use vitiating::{
+    AvailableRemedy as VitiatingRemedy, CommonMistakeCategory, ContractEffect, DuressAnalysis,
+    DuressType, EconomicDuressElements, IllegalityAnalysis, IllegalityType, IllegitimacyFactor,
+    MisrepresentationAnalysis, MisrepresentationElements, MisrepresentationType, MistakeAnalysis,
+    MistakeType, PatelVMirzaFactors, RecognizedRelationship, RescissionBar, ThirdPartyNotice,
+    UndueInfluenceAnalysis, UndueInfluenceClass, UnilateralMistakeCategory, VitiatingFactorResult,
+    VitiatingFactorType,
 };

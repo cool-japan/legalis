@@ -21,7 +21,7 @@ Legalis-RS führt einen dreiwertige Logiktyp `LegalResult<T>` ein, der Rusts Typ
 
 **Wesentliche Technische Beiträge**:
 1. Implementierung einer rechtlichen domänenspezifischen Sprache (DSL) und Parser
-2. Formale Verifikation mit dem Z3 SMT-Solver
+2. Formale Verifikation mit dem OxiZ SMT-Solver
 3. ECS-artiger Simulationsmotor für die Vorhersage sozialer Auswirkungen
 4. Smart-Contract-Generierung für über 25 Blockchain-Plattformen
 5. Linked Open Data (RDF/TTL) Integration für das Semantische Web
@@ -208,7 +208,7 @@ LLM-Anbieter-Abstraktionsschicht.
 **Unterstützte Anbieter**: OpenAI, Anthropic, Google Gemini, Lokale LLM
 
 #### legalis-verifier
-Motor für formale Verifikation mit Z3 SMT-Solver-Integration.
+Motor für formale Verifikation mit OxiZ SMT-Solver-Integration.
 
 **Verifikationsziele**:
 - Erkennung zirkulärer Verweise
@@ -283,7 +283,7 @@ pub enum PartialBool {
 }
 ```
 
-### 5.3 Formale Verifikation mit dem Z3 SMT-Solver
+### 5.3 Formale Verifikation mit dem OxiZ SMT-Solver
 
 Rechtliche Bedingungsausdrücke werden in das SMT-LIB-Format konvertiert:
 
@@ -445,7 +445,7 @@ Legalis-RS präsentiert einen neuen Ansatz zur Kodifizierung von Recht, indem di
 2. **Typsystem**: Dreiwertige Logik über `LegalResult<T>`
 3. **Integrierte Architektur**: Umfassendes Design mit 7 Schichten und 16 Crates
 4. **Implementierung**: Etwa 450.000 Zeilen Rust-Code
-5. **Verifikation**: Z3 SMT-Solver Integration
+5. **Verifikation**: OxiZ SMT-Solver Integration
 6. **Simulation**: ECS-artiger Motor (GPU-Beschleunigungsunterstützung)
 7. **Ausgabe**: 25+ Blockchains, RDF/TTL, mehrere Formate
 

@@ -226,11 +226,102 @@ impl NeuralLinkPredictor {
         }
     }
 
-    /// Predicts missing links based on embeddings (stub implementation).
-    /// In a real implementation, this would use a trained neural model.
-    pub fn predict(&mut self, _triples: &[Triple]) -> &[(Triple, f64)] {
-        // Stub: In practice, this would use embeddings and a neural model
-        // to predict missing links
+    /// Predicts missing links based on pattern analysis and co-occurrence.
+    /// Uses heuristic-based prediction to find likely missing connections.
+    /// In a production system, this would use trained neural embeddings.
+    pub fn predict(&mut self, triples: &[Triple]) -> &[(Triple, f64)] {
+        // Keep manually added predictions, only clear if empty or analyzing new data
+        let manual_predictions = self.predictions.clone();
+        self.predictions.clear();
+
+        // Build co-occurrence statistics
+        let mut subject_predicate_stats: HashMap<(String, String), Vec<String>> = HashMap::new();
+        let mut predicate_object_stats: HashMap<(String, String), Vec<String>> = HashMap::new();
+
+        for triple in triples {
+            // Track subject-predicate pairs and their objects
+            subject_predicate_stats
+                .entry((triple.subject.clone(), triple.predicate.clone()))
+                .or_default()
+                .push(object_to_string(&triple.object));
+
+            // Track predicate-object pairs and their subjects
+            predicate_object_stats
+                .entry((triple.predicate.clone(), object_to_string(&triple.object)))
+                .or_default()
+                .push(triple.subject.clone());
+        }
+
+        // Predict missing links based on similar patterns
+        for triple in triples {
+            // Look for symmetric patterns (e.g., if A relates-to B, predict B relates-to A)
+            if let RdfValue::Uri(ref obj_uri) = triple.object {
+                // Check if reverse relationship exists
+                let reverse_exists = triples.iter().any(|t| {
+                    t.subject == *obj_uri
+                        && t.predicate == triple.predicate
+                        && object_to_string(&t.object) == triple.subject
+                });
+
+                if !reverse_exists && is_symmetric_predicate(&triple.predicate) {
+                    self.predictions.push((
+                        Triple {
+                            subject: obj_uri.clone(),
+                            predicate: triple.predicate.clone(),
+                            object: RdfValue::Uri(triple.subject.clone()),
+                        },
+                        0.75, // High confidence for symmetric predicates
+                    ));
+                }
+            }
+
+            // Predict based on common co-occurrence patterns
+            if let Some(common_objects) =
+                subject_predicate_stats.get(&(triple.subject.clone(), triple.predicate.clone()))
+            {
+                // If a subject-predicate pair commonly has multiple objects,
+                // predict similar objects for similar subjects
+                if common_objects.len() > 1 {
+                    for obj in common_objects.iter().take(3) {
+                        if obj != &object_to_string(&triple.object) {
+                            // Check if this prediction already exists
+                            let exists = triples.iter().any(|t| {
+                                t.subject == triple.subject
+                                    && t.predicate == triple.predicate
+                                    && object_to_string(&t.object) == *obj
+                            });
+
+                            if !exists {
+                                self.predictions.push((
+                                    Triple {
+                                        subject: triple.subject.clone(),
+                                        predicate: triple.predicate.clone(),
+                                        object: RdfValue::Uri(obj.clone()),
+                                    },
+                                    0.6, // Medium confidence for co-occurrence
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add back manual predictions
+        self.predictions.extend(manual_predictions);
+
+        // Deduplicate and sort by confidence
+        self.predictions
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        self.predictions.dedup_by(|a, b| {
+            a.0.subject == b.0.subject
+                && a.0.predicate == b.0.predicate
+                && object_to_string(&a.0.object) == object_to_string(&b.0.object)
+        });
+
+        // Limit to top 100 predictions
+        self.predictions.truncate(100);
+
         &self.predictions
     }
 
@@ -309,6 +400,33 @@ pub enum CompletionMethod {
     SymbolicReasoning,
     /// Completed using neural link prediction
     NeuralPrediction,
+}
+
+/// Helper function to convert RdfValue to string for comparison
+fn object_to_string(value: &RdfValue) -> String {
+    match value {
+        RdfValue::Uri(uri) => uri.clone(),
+        RdfValue::Literal(lit, None) => lit.clone(),
+        RdfValue::Literal(lit, Some(lang)) => format!("{}@{}", lit, lang),
+        RdfValue::TypedLiteral(lit, dtype) => format!("{}^^{}", lit, dtype),
+        RdfValue::BlankNode(id) => format!("_:{}", id),
+    }
+}
+
+/// Checks if a predicate is likely to be symmetric
+fn is_symmetric_predicate(predicate: &str) -> bool {
+    let symmetric_predicates = [
+        "owl:sameAs",
+        "skos:related",
+        "legalis:relatedTo",
+        "foaf:knows",
+        "sibling",
+        "colleague",
+        "spouse",
+        "partner",
+    ];
+
+    symmetric_predicates.iter().any(|&p| predicate.contains(p))
 }
 
 #[cfg(test)]
@@ -403,7 +521,7 @@ mod tests {
         let triples = vec![sample_triple("Alice", "knows", "Bob")];
         let completions = completion.complete(&triples);
 
-        assert!(completions.len() > 0);
+        assert!(!completions.is_empty());
     }
 
     #[test]

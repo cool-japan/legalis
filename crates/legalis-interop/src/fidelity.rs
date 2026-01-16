@@ -877,7 +877,10 @@ mod tests {
                 value: 18,
             });
 
-        let fidelity = analyzer.calculate_fidelity(&[statute.clone()], &[statute]);
+        let fidelity = analyzer.calculate_fidelity(
+            std::slice::from_ref(&statute),
+            std::slice::from_ref(&statute),
+        );
         assert_eq!(fidelity.overall, 1.0);
         assert!(fidelity.is_lossless());
         assert_eq!(fidelity.grade(), "A+");

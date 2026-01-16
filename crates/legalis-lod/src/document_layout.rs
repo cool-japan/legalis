@@ -312,19 +312,19 @@ impl LayoutToRdfConverter {
                 if let Some(ref content) = zone.content {
                     text_parts.push(content.clone());
                 }
-                self.collect_child_text(zone, &mut text_parts);
+                Self::collect_child_text(zone, &mut text_parts);
             }
         }
 
         text_parts.join("\n")
     }
 
-    fn collect_child_text(&self, zone: &LayoutZone, text_parts: &mut Vec<String>) {
+    fn collect_child_text(zone: &LayoutZone, text_parts: &mut Vec<String>) {
         for child in &zone.children {
             if let Some(ref content) = child.content {
                 text_parts.push(content.clone());
             }
-            self.collect_child_text(child, text_parts);
+            Self::collect_child_text(child, text_parts);
         }
     }
 }

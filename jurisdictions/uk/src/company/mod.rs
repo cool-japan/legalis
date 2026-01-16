@@ -199,6 +199,10 @@
 //! ```
 
 pub mod error;
+pub mod insolvency;
+pub mod meetings;
+pub mod restructuring;
+pub mod shares;
 pub mod types;
 pub mod validator;
 
@@ -215,4 +219,37 @@ pub use types::{
 pub use validator::{
     validate_annual_accounts, validate_company_formation, validate_company_name,
     validate_director_duties, validate_directors, validate_resolution, validate_share_capital,
+};
+
+// Re-export from shares module
+pub use shares::{
+    AllotmentAuthorization, Allottee, BuybackFunding, CapitalReductionAnalysis,
+    CapitalReductionMethod, ConfirmationProcedure, ConversionRights, DistributionAnalysis,
+    DividendEntitlement, LockUpPeriod, LockUpRestriction, PreEmptionAnalysis, ShareAllotment,
+    ShareBuybackAnalysis, ShareClassSpec, ShareClassType, ShareTransfer, SolvencyStatement,
+    TransferMethod, TransferRestrictions,
+};
+
+// Re-export from meetings module
+pub use meetings::{
+    EligibleMember, MeetingBusiness, MeetingLocation, MeetingNotice,
+    MeetingType as MeetingTypeExpanded, NoticeSender, NoticeValidity, ProxyAppointment,
+    ProxyInstructions, ProxyVote, QuorumRequirement, Resolution, ResolutionCategory,
+    ResolutionType as ResolutionTypeExpanded, SpecialNotice, VotingMethod, VotingRecord,
+    WrittenResolution,
+};
+
+// Re-export from insolvency module
+pub use insolvency::{
+    AdministrationAnalysis, AdministrationEntryRoute, AdministrationPurpose, BalanceSheetAnalysis,
+    CashFlowAnalysis, CompulsoryWindingUpGround, CreditorPriority, FraudulentTradingAnalysis,
+    InsolvencyTest, LiquidationAnalysis, LiquidationType, PreferenceAnalysis, StatutoryDeclaration,
+    TransactionAtUndervalue, WrongfulTradingAnalysis,
+};
+
+// Re-export from restructuring module
+pub use restructuring::{
+    CreditorProtection, DemergerAnalysis, DemergerType, MergerAnalysis, MergerType,
+    RelevantAlternative, RestructuringClass, RestructuringPlan, SchemeClass, SchemeClassType,
+    SchemeOfArrangement, SchemeProposer, SchemeType,
 };

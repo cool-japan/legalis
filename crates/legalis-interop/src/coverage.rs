@@ -80,6 +80,10 @@ impl FormatCoverage {
             LegalFormat::DocuSign => Self::analyze_docusign(),
             LegalFormat::MsWordLegal => Self::analyze_msword_legal(),
             LegalFormat::PdfLegal => Self::analyze_pdf_legal(),
+            LegalFormat::Solidity => Self::analyze_solidity(),
+            LegalFormat::Vyper => Self::analyze_vyper(),
+            LegalFormat::Cadence => Self::analyze_cadence(),
+            LegalFormat::Move => Self::analyze_move(),
         }
     }
 
@@ -635,6 +639,62 @@ impl FormatCoverage {
             "Advanced PDF features".to_string(),
             "Digital signature validation".to_string(),
         ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_solidity() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Contract functions and modifiers".to_string(),
+            "State variables and events".to_string(),
+            "Access control patterns".to_string(),
+            "NatSpec documentation".to_string(),
+            "Function visibility and mutability".to_string(),
+        ];
+        let unsupported = vec![
+            "Complex inheritance patterns".to_string(),
+            "Assembly blocks".to_string(),
+        ];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_vyper() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Contract functions and decorators".to_string(),
+            "State variables and events".to_string(),
+            "Access control via decorators".to_string(),
+            "Function visibility".to_string(),
+        ];
+        let unsupported = vec!["Complex state transitions".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_cadence() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Contract functions and resources".to_string(),
+            "Resource ownership semantics".to_string(),
+            "Access control (pub, access(all), etc.)".to_string(),
+            "Pre/post conditions".to_string(),
+        ];
+        let unsupported = vec!["Capability-based security patterns".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    #[allow(dead_code)]
+    fn analyze_move() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Module functions and structs".to_string(),
+            "Resource types with abilities".to_string(),
+            "Entry functions".to_string(),
+            "Acquires clauses".to_string(),
+        ];
+        let unsupported = vec!["Generic type parameters".to_string()];
         let partial = HashMap::new();
         (supported, unsupported, partial)
     }

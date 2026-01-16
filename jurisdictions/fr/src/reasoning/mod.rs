@@ -22,16 +22,27 @@ pub mod analyzer;
 pub mod context;
 pub mod engine;
 pub mod error;
+pub mod interop;
 pub mod statute_adapter;
 pub mod types;
+pub mod verifier;
 
 pub use analyzer::{CompanyAnalyzer, ContractAnalyzer, FrenchLawAnalyzer, LaborAnalyzer};
 pub use engine::LegalReasoningEngine;
 pub use error::{ReasoningError, ReasoningResult};
+pub use interop::{
+    CodeCivilConverter, CodeImpotsConverter, CodeSecuriteSocialeConverter, CodeTravailConverter,
+    FrenchCatalaConverter, FrenchLanguageMode, batch_export_catala, batch_import_catala,
+    generate_catala_rule, generate_catala_scope,
+};
 pub use statute_adapter::{
     all_french_statutes, company_law_statutes, contract_law_statutes, labor_law_statutes,
 };
 pub use types::{
     ComplianceStatus, EntityType, LegalAnalysis, LegalOpinion, ReasoningStep, Remedy, RemedyType,
     RiskLevel, Violation, ViolationSeverity,
+};
+pub use verifier::{
+    FrLegalSource, FrStatuteVerifier, FrVerificationReport, HierarchyRules,
+    fr_constitutional_principles,
 };

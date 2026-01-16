@@ -495,8 +495,10 @@ mod tests {
 
     #[test]
     fn test_alert_throttling() {
-        let mut config = AlertConfig::default();
-        config.max_alerts_per_window = 2;
+        let config = AlertConfig {
+            max_alerts_per_window: 2,
+            ..Default::default()
+        };
 
         let manager = AlertManager::with_config(config);
 

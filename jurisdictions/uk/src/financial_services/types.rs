@@ -378,10 +378,19 @@ impl RiskRating {
         matches!(
             (self, tolerance),
             (RiskRating::Low, RiskTolerance::VeryLow | RiskTolerance::Low)
-                | (RiskRating::MediumLow, RiskTolerance::Low | RiskTolerance::Medium)
+                | (
+                    RiskRating::MediumLow,
+                    RiskTolerance::Low | RiskTolerance::Medium
+                )
                 | (RiskRating::Medium, RiskTolerance::Medium)
-                | (RiskRating::MediumHigh, RiskTolerance::Medium | RiskTolerance::High)
-                | (RiskRating::High, RiskTolerance::High | RiskTolerance::VeryHigh)
+                | (
+                    RiskRating::MediumHigh,
+                    RiskTolerance::Medium | RiskTolerance::High
+                )
+                | (
+                    RiskRating::High,
+                    RiskTolerance::High | RiskTolerance::VeryHigh
+                )
         )
     }
 }

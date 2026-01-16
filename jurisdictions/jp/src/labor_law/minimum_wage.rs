@@ -413,7 +413,7 @@ mod tests {
         for prefecture in prefectures {
             let wage = get_minimum_wage(prefecture, chrono::Utc::now().date_naive());
             assert!(
-                wage >= 893 && wage <= 1_113,
+                (893..=1_113).contains(&wage),
                 "Prefecture {:?} has invalid wage: {}",
                 prefecture,
                 wage

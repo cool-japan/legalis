@@ -173,7 +173,7 @@ pub fn validate_will(will: &Will) -> InheritanceLawResult<()> {
 /// let heir1 = Heir::new(child1, InheritanceRelationship::Child).with_actual_share(0.5);
 /// let heir2 = Heir::new(child2, InheritanceRelationship::Child).with_actual_share(0.5);
 ///
-/// assert!(validate_heir_shares(&vec![heir1, heir2]).is_ok());
+/// assert!(validate_heir_shares(&[heir1, heir2]).is_ok());
 /// ```
 pub fn validate_heir_shares(heirs: &[Heir]) -> InheritanceLawResult<()> {
     if heirs.is_empty() {
@@ -237,7 +237,7 @@ pub fn validate_heir_shares(heirs: &[Heir]) -> InheritanceLawResult<()> {
 ///     .with_actual_share(0.6);
 ///
 /// // 1 child: reserved = 0.5, actual = 0.6 (OK)
-/// assert!(validate_reserved_portion(&vec![heir], 400_000, 1_000_000).is_ok());
+/// assert!(validate_reserved_portion(&[heir], 400_000, 1_000_000).is_ok());
 /// ```
 pub fn validate_reserved_portion(
     heirs: &[Heir],
@@ -561,6 +561,6 @@ mod tests {
             .with_actual_share(0.25);
 
         // 3 children: 3/4 reserved (750k), 1/4 available (250k)
-        assert!(validate_reserved_portion(&vec![heir1, heir2, heir3], 250_000, 1_000_000).is_ok());
+        assert!(validate_reserved_portion(&[heir1, heir2, heir3], 250_000, 1_000_000).is_ok());
     }
 }

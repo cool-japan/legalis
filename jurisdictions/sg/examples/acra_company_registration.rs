@@ -61,7 +61,7 @@ fn example_1_valid_pte_ltd() {
     );
 
     // Set share capital
-    company.share_capital = ShareCapital::new(100_000_00); // SGD 100,000
+    company.share_capital = ShareCapital::new(10_000_000); // SGD 100,000
     company.share_capital.issued_shares = 10_000;
     company
         .share_capital
@@ -103,7 +103,7 @@ fn example_1_valid_pte_ltd() {
     });
 
     // Validate total paid-up capital
-    company.share_capital.paid_up_capital_cents = 100_000_00; // 10,000 shares × SGD 10
+    company.share_capital.paid_up_capital_cents = 10_000_000; // 10,000 shares × SGD 10
 
     // Add company secretary
     company.company_secretary = Some(CompanySecretary::new(
@@ -226,7 +226,7 @@ fn example_3_share_capital() {
     );
 
     // Set up share capital: 1 million shares at SGD 1 each
-    company.share_capital = ShareCapital::new(1_000_000_00); // SGD 1 million
+    company.share_capital = ShareCapital::new(100_000_000); // SGD 1 million
     company.share_capital.issued_shares = 1_000_000;
     company
         .share_capital

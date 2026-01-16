@@ -9,6 +9,9 @@ use crate::{LodResult, Triple};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+/// Type alias for callback functions used in continuous queries.
+pub type UpdateCallback = Box<dyn Fn(&[QueryResult]) + Send + Sync>;
+
 /// Continuous query that maintains results over changing data.
 pub struct ContinuousQuery {
     /// Query ID
@@ -18,7 +21,7 @@ pub struct ContinuousQuery {
     /// Current result set
     results: Arc<Mutex<Vec<QueryResult>>>,
     /// Callback for result updates
-    callbacks: Arc<Mutex<Vec<Box<dyn Fn(&[QueryResult]) + Send + Sync>>>>,
+    callbacks: Arc<Mutex<Vec<UpdateCallback>>>,
 }
 
 impl ContinuousQuery {

@@ -425,7 +425,7 @@ mod tests {
 
         // 44 hours/week * 4.33 weeks/month = 190.52 hours/month
         // SGD 5,000 / 190.52 ≈ SGD 26.24/hour
-        assert!(hourly_rate >= 2_600 && hourly_rate <= 2_700);
+        assert!((2_600..=2_700).contains(&hourly_rate));
     }
 
     #[test]

@@ -200,8 +200,8 @@ mod tests {
 
     #[test]
     fn test_parse_float() {
-        let result = parse_numeric("3.14").unwrap();
-        assert_eq!(result, NumericValue::Float(3.14));
+        let result = parse_numeric("3.5").unwrap();
+        assert_eq!(result, NumericValue::Float(3.5));
     }
 
     #[test]
@@ -335,8 +335,8 @@ mod tests {
         let int_val = NumericValue::Integer(42);
         assert_eq!(int_val.to_f64(), 42.0);
 
-        let float_val = NumericValue::Float(3.14);
-        assert_eq!(float_val.to_f64(), 3.14);
+        let float_val = NumericValue::Float(3.5);
+        assert_eq!(float_val.to_f64(), 3.5);
     }
 
     #[test]
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_numeric_value_is_float() {
-        let float_val = NumericValue::Float(3.14);
+        let float_val = NumericValue::Float(3.5);
         assert!(float_val.is_float());
         assert!(!float_val.is_integer());
     }

@@ -7,6 +7,7 @@
 //! - Simulation replay
 
 use crate::SimulationMetrics;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -233,7 +234,7 @@ impl Checkpoint {
 /// Checkpoint manager for handling multiple checkpoints
 #[derive(Debug, Default)]
 pub struct CheckpointManager {
-    checkpoints: HashMap<String, Checkpoint>,
+    checkpoints: IndexMap<String, Checkpoint>,
     max_checkpoints: Option<usize>,
 }
 
@@ -246,7 +247,7 @@ impl CheckpointManager {
     /// Creates a checkpoint manager with a maximum number of checkpoints
     pub fn with_max_checkpoints(max: usize) -> Self {
         Self {
-            checkpoints: HashMap::new(),
+            checkpoints: IndexMap::new(),
             max_checkpoints: Some(max),
         }
     }
@@ -257,7 +258,7 @@ impl CheckpointManager {
         if let Some(max) = self.max_checkpoints {
             if self.checkpoints.len() >= max {
                 if let Some(oldest_id) = self.oldest_checkpoint_id() {
-                    self.checkpoints.remove(&oldest_id);
+                    self.checkpoints.shift_remove(&oldest_id);
                 }
             }
         }
@@ -272,7 +273,7 @@ impl CheckpointManager {
 
     /// Deletes a checkpoint
     pub fn delete(&mut self, id: &str) -> Option<Checkpoint> {
-        self.checkpoints.remove(id)
+        self.checkpoints.shift_remove(id)
     }
 
     /// Lists all checkpoint IDs
@@ -290,17 +291,14 @@ impl CheckpointManager {
         self.checkpoints.clear();
     }
 
-    /// Finds the oldest checkpoint ID
+    /// Finds the oldest checkpoint ID (by insertion order)
     fn oldest_checkpoint_id(&self) -> Option<String> {
-        self.checkpoints
-            .values()
-            .min_by_key(|c| c.timestamp)
-            .map(|c| c.id.clone())
+        self.checkpoints.keys().next().cloned()
     }
 
-    /// Returns the most recent checkpoint
+    /// Returns the most recent checkpoint (by insertion order)
     pub fn latest(&self) -> Option<&Checkpoint> {
-        self.checkpoints.values().max_by_key(|c| c.timestamp)
+        self.checkpoints.values().last()
     }
 }
 

@@ -192,6 +192,11 @@ impl EnhancedConverter {
             | LegalFormat::DocuSign
             | LegalFormat::MsWordLegal
             | LegalFormat::PdfLegal => false,
+            // Blockchain formats - code-like, benefit from normalization
+            LegalFormat::Solidity
+            | LegalFormat::Vyper
+            | LegalFormat::Cadence
+            | LegalFormat::Move => true,
         }
     }
 

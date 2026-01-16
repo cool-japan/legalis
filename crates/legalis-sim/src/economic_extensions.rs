@@ -196,10 +196,9 @@ impl InputOutputModel {
 
         // Calculate (I - A)
         let mut i_minus_a = vec![vec![0.0; self.sectors]; self.sectors];
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..self.sectors {
-            for j in 0..self.sectors {
-                i_minus_a[i][j] = if i == j { 1.0 } else { 0.0 } - self.tech_coefficients[i][j];
+        for (i, row) in i_minus_a.iter_mut().enumerate() {
+            for (j, val) in row.iter_mut().enumerate() {
+                *val = if i == j { 1.0 } else { 0.0 } - self.tech_coefficients[i][j];
             }
         }
 

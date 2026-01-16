@@ -140,16 +140,16 @@ pub enum PrincipleCheck {
 
 ## SMT Solver Integration
 
-The verifier supports optional Z3 SMT solver integration for rigorous formal verification. Enable with the `z3-solver` feature:
+The verifier supports optional SMT solver (OxiZ - Pure Rust) integration for rigorous formal verification. Enable with the `smt-solver` feature:
 
 ```toml
 [dependencies]
-legalis-verifier = { version = "0.2", features = ["z3-solver"] }
+legalis-verifier = { version = "0.2", features = ["smt-solver"] }
 ```
 
 ### SMT-Based Verification Features
 
-When `z3-solver` is enabled:
+When `smt-solver` is enabled:
 
 - **Satisfiability Checking**: Formally proves whether conditions can be satisfied
 - **Tautology Verification**: Checks if conditions are always true
@@ -160,7 +160,7 @@ When `z3-solver` is enabled:
 ### Usage Example
 
 ```rust
-#[cfg(feature = "z3-solver")]
+#[cfg(feature = "smt-solver")]
 {
     use legalis_verifier::{create_z3_context, SmtVerifier};
     use legalis_core::{Condition, ComparisonOp};
@@ -191,7 +191,7 @@ When `z3-solver` is enabled:
 ### Automatic Fallback
 
 The verifier automatically falls back to heuristic checking if:
-- The `z3-solver` feature is not enabled
+- The `smt-solver` feature is not enabled
 - The SMT solver fails or times out
 
 This ensures verification always works, with optional enhanced precision.

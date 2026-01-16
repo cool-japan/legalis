@@ -300,7 +300,7 @@ mod tests {
 
         let report = validate_personal_info_handling(&handler).unwrap();
         assert!(!report.is_valid());
-        assert!(report.errors.len() > 0);
+        assert!(!report.errors.is_empty());
     }
 
     #[test]

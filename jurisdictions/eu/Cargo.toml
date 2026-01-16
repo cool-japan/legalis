@@ -12,10 +12,15 @@ documentation = "https://docs.rs/legalis-eu"
 [dependencies]
 legalis-core.workspace = true
 legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-audit.workspace = true
+legalis-sim.workspace = true
+legalis-lod.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 uuid.workspace = true
 schemars = { version = "1.2", optional = true, features = ["chrono04"] }
 

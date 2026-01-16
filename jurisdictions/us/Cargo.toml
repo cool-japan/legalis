@@ -11,9 +11,12 @@ documentation = "https://docs.rs/legalis-us"
 
 [dependencies]
 legalis-core.workspace = true
+legalis-verifier.workspace = true
+legalis-sim.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 uuid.workspace = true
 
 [dev-dependencies]

@@ -2,8 +2,9 @@
 //!
 //! Run with: cargo bench --bench gdpr_validation
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use legalis_eu::gdpr::*;
+use std::hint::black_box;
 
 fn bench_consent_validation(c: &mut Criterion) {
     c.bench_function("consent_validation", |b| {

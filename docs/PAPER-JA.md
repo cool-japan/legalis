@@ -21,7 +21,7 @@ Legalis-RSは、Rustの型システムを活用した三値論理型`LegalResult
 
 **主要な技術的貢献**:
 1. 法律ドメイン特化言語（DSL）とパーサーの実装
-2. Z3 SMTソルバーによる法律の形式検証
+2. OxiZ SMTソルバーによる法律の形式検証
 3. ECS型シミュレーションエンジンによる社会影響予測
 4. 25以上のブロックチェーンプラットフォーム向けスマートコントラクト生成
 5. Linked Open Data (RDF/TTL) によるセマンティックウェブ統合
@@ -331,7 +331,7 @@ LLMプロバイダ抽象化層。
 - 憲法的抵触検査
 - 曖昧性分析
 
-**技術**: Z3 SMTソルバー（オプション）
+**技術**: OxiZ SMTソルバー（オプション）
 
 ### 4.4 Simulation Layer（シミュレーション層）
 
@@ -563,7 +563,7 @@ pub enum PartialBool {
 | Unknown | Unknown | False | Unknown | Contradiction |
 | Contradiction | Contradiction | False | Contradiction | Contradiction |
 
-### 5.3 Z3 SMTソルバーによる形式検証
+### 5.3 OxiZ SMTソルバーによる形式検証
 
 #### 5.3.1 検証対象
 
@@ -1060,7 +1060,7 @@ Legalis-RSは、法律をコード化する試みにおいて、「計算可能�
 2. **型システム**: `LegalResult<T>`による三値論理
 3. **統合アーキテクチャ**: 7層16クレートの包括的設計
 4. **実装**: 約450,000行のRustコード
-5. **検証**: Z3 SMTソルバー統合
+5. **検証**: OxiZ SMTソルバー統合
 6. **シミュレーション**: ECS型エンジン（GPU加速対応）
 7. **出力**: 25+ブロックチェーン、RDF/TTL、多形式
 
@@ -1114,7 +1114,7 @@ effect       = "GRANT" string | "REVOKE" string | "OBLIGATION" string | "PROHIBI
 ```toml
 [legalis]
 default_jurisdiction = "JP"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 cache_dir = "~/.legalis/cache"
 log_level = "info"

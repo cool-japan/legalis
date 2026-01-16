@@ -315,7 +315,7 @@ mod tests {
         .unwrap();
 
         assert!(!report.is_compliant());
-        assert!(report.violations.len() > 0);
+        assert!(!report.violations.is_empty());
         assert!(
             report
                 .violations
@@ -338,7 +338,7 @@ mod tests {
 
         // Should be compliant but with warnings
         assert!(report.is_compliant());
-        assert!(report.warnings.len() > 0);
+        assert!(!report.warnings.is_empty());
         assert!(
             report
                 .warnings
@@ -376,7 +376,7 @@ mod tests {
         let report = validate_non_compete(&clause, "Junior Engineer").unwrap();
 
         assert!(!report.is_compliant());
-        assert!(report.violations.len() > 0);
+        assert!(!report.violations.is_empty());
     }
 
     #[test]

@@ -547,8 +547,10 @@ mod tests {
     #[test]
     fn test_ml_anomaly_detection() {
         // Use custom config with lower sensitivity threshold for easier detection
-        let mut config = MLAnomalyConfig::default();
-        config.sensitivity = 0.01; // Lower threshold to detect more anomalies
+        let config = MLAnomalyConfig {
+            sensitivity: 0.01, // Lower threshold to detect more anomalies
+            ..Default::default()
+        };
         let mut detector = MLAnomalyDetector::with_config(config);
 
         // Create normal training data (business hours, no overrides)
@@ -560,10 +562,11 @@ mod tests {
         detector.train(&training_records).unwrap();
 
         // Create test data with anomalies
-        let mut test_records = Vec::new();
-        test_records.push(create_test_record(10, false)); // Normal
-        test_records.push(create_test_record(3, true)); // Anomalous: late night override
-        test_records.push(create_test_record(11, false)); // Normal
+        let test_records = vec![
+            create_test_record(10, false), // Normal
+            create_test_record(3, true),   // Anomalous: late night override
+            create_test_record(11, false), // Normal
+        ];
 
         let anomalies = detector.detect(&test_records).unwrap();
 
@@ -577,7 +580,7 @@ mod tests {
         let vectors = MLAnomalyDetector::extract_features(&[record]);
 
         assert_eq!(vectors.len(), 1);
-        assert!(vectors[0].features.len() > 0);
+        assert!(!vectors[0].features.is_empty());
         assert_eq!(vectors[0].features.len(), vectors[0].feature_names.len());
     }
 

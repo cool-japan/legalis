@@ -2,12 +2,13 @@
 //!
 //! These benchmarks measure the performance of key CLI operations.
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 use legalis_diff::diff;
 use legalis_dsl::{DslPrinter, LegalDslParser, PrinterConfig};
 use legalis_verifier::{StatuteVerifier, analyze_complexity};
 use legalis_viz::DecisionTree;
+use std::hint::black_box;
 
 /// Create a simple test statute for benchmarking.
 fn create_benchmark_statute(id: &str) -> Statute {
@@ -83,7 +84,7 @@ fn bench_verification(c: &mut Criterion) {
     // Single statute verification
     let statute = create_benchmark_statute("bench-verify");
     c.bench_function("verify_single_statute", |b| {
-        b.iter(|| verifier.verify(black_box(&[statute.clone()])))
+        b.iter(|| verifier.verify(black_box(std::slice::from_ref(&statute))))
     });
 
     // Multiple statutes verification
@@ -98,7 +99,7 @@ fn bench_verification(c: &mut Criterion) {
     // Complex statute verification
     let complex = create_complex_benchmark_statute("bench-complex");
     c.bench_function("verify_complex_statute", |b| {
-        b.iter(|| verifier.verify(black_box(&[complex.clone()])))
+        b.iter(|| verifier.verify(black_box(std::slice::from_ref(&complex))))
     });
 }
 

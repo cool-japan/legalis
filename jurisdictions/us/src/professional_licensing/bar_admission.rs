@@ -1096,7 +1096,7 @@ mod tests {
             // All should have valid status
             match status {
                 UBEStatus::Adopted { minimum_score, .. } => {
-                    assert!(minimum_score >= 260 && minimum_score <= 280);
+                    assert!((260..=280).contains(&minimum_score));
                 }
                 UBEStatus::NotAdopted { .. } => {
                     // OK

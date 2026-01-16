@@ -114,7 +114,7 @@ fn test_emission_limit_very_high() {
 
 #[test]
 fn test_all_pollutant_types() {
-    let pollutants = vec![
+    let pollutants = [
         Pollutant::SulfurOxides,
         Pollutant::NitrogenOxides,
         Pollutant::Particulates,
@@ -130,7 +130,7 @@ fn test_all_pollutant_types() {
 
 #[test]
 fn test_all_facility_types() {
-    let types = vec![
+    let types = [
         FacilityType::PowerPlant,
         FacilityType::Incinerator,
         FacilityType::ChemicalPlant,
@@ -449,7 +449,7 @@ fn test_waste_manifest_with_completion() {
 
 #[test]
 fn test_all_waste_types() {
-    let types = vec![
+    let types = [
         WasteType::Municipal,
         WasteType::Industrial,
         WasteType::SpecialIndustrial,
@@ -463,7 +463,7 @@ fn test_all_waste_types() {
 
 #[test]
 fn test_all_waste_permit_types() {
-    let types = vec![
+    let types = [
         WastePermitType::Collection,
         WastePermitType::Disposal,
         WastePermitType::Intermediate,

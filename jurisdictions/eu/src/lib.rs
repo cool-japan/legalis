@@ -138,6 +138,9 @@ pub mod intellectual_property;
 // Shared utilities
 pub mod shared;
 
+// Legal Reasoning Engine
+pub mod reasoning;
+
 // Re-exports for convenience
 
 // GDPR (Phase 1 + Phase 2)
@@ -184,3 +187,11 @@ pub use i18n::MultilingualText;
 
 // Shared
 pub use shared::MemberState;
+
+// Legal reasoning engine
+pub use reasoning::{
+    ComplianceStatus as ReasoningComplianceStatus, EuEvaluationContext, LegalAnalysis,
+    LegalReasoningEngine, ReasoningError, ReasoningResult, ReasoningStep, RiskLevel, Violation,
+    ViolationSeverity, all_eu_statutes, competition_statutes, consumer_rights_statutes,
+    gdpr_statutes,
+};

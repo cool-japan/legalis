@@ -284,12 +284,14 @@
 
 pub mod banking;
 pub mod citation;
+pub mod common; // Common utilities - holidays, currency, names
 pub mod companies;
 pub mod consumer;
 pub mod employment;
 pub mod ip;
 pub mod payment;
 pub mod pdpa;
+pub mod reasoning;
 
 // Re-export commonly used types from each module
 
@@ -399,3 +401,26 @@ pub use payment::{
 
 // Citation exports
 pub use citation::{SingaporeCitation, Statute, StatuteSection};
+
+// Reasoning engine exports
+pub use reasoning::{
+    ComplianceStatus, LegalAnalysis, LegalReasoningEngine, ReasoningError, ReasoningResult,
+    RiskLevel, Violation, ViolationSeverity,
+};
+
+// Common utilities exports (legalis-i18n integration)
+pub use common::{
+    // Multi-ethnic name formatting
+    EthnicGroup,
+    // Currency formatting
+    SingaporeCurrency,
+    // Calendar and holidays
+    SingaporeLegalCalendar,
+    SingaporeNameFormatter,
+    SingaporePersonName,
+    calculate_legal_deadline,
+    format_sgd,
+    format_sgd_cents,
+    is_singapore_holiday,
+    is_working_day,
+};

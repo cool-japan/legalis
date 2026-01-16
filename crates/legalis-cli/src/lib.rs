@@ -16,10 +16,12 @@ pub mod debug;
 pub mod error_suggestions;
 pub mod interactive;
 pub mod parallel;
+pub mod perf;
 pub mod plugin;
 pub mod profile;
 pub mod progress;
 pub mod scripting;
+pub mod team;
 pub mod theme;
 pub mod tui;
 pub mod tutorial;
@@ -880,6 +882,20 @@ pub enum Commands {
         #[command(subcommand)]
         operation: CloudOperation,
     },
+
+    /// Team collaboration operations (workspace, history, sessions, notifications, access)
+    Team {
+        /// Team operation to perform
+        #[command(subcommand)]
+        operation: TeamOperation,
+    },
+
+    /// Performance profiling operations
+    Perf {
+        /// Performance operation to perform
+        #[command(subcommand)]
+        operation: PerfOperation,
+    },
 }
 
 /// Batch operation types.
@@ -1596,6 +1612,408 @@ impl From<CloudProviderArg> for cloud::CloudProvider {
             CloudProviderArg::Gcp => cloud::CloudProvider::Gcp,
         }
     }
+}
+
+/// Team operation types.
+#[derive(Subcommand)]
+pub enum TeamOperation {
+    /// Create a new team workspace
+    CreateWorkspace {
+        /// Workspace name
+        #[arg(short, long)]
+        name: String,
+
+        /// Workspace description
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// Team members (comma-separated usernames)
+        #[arg(short, long)]
+        members: Option<String>,
+
+        /// Output file for workspace config (defaults to workspace.toml)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// List team workspaces
+    ListWorkspaces {
+        /// Show verbose information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Join a team workspace
+    JoinWorkspace {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Invitation token
+        #[arg(short, long)]
+        token: Option<String>,
+    },
+
+    /// Leave a team workspace
+    LeaveWorkspace {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Sync command history with team
+    SyncHistory {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Direction (push, pull, both)
+        #[arg(short, long, default_value = "both")]
+        direction: SyncDirection,
+
+        /// Dry run (show what would be synced)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Show shared command history
+    ShowHistory {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Number of commands to show
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+
+        /// Filter by user
+        #[arg(short, long)]
+        user: Option<String>,
+    },
+
+    /// Start a collaborative session
+    StartSession {
+        /// Session name
+        #[arg(short, long)]
+        name: String,
+
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Session description
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// Maximum number of participants
+        #[arg(short, long)]
+        max_participants: Option<usize>,
+    },
+
+    /// Join a collaborative session
+    JoinSession {
+        /// Session ID or name
+        #[arg(short, long)]
+        session: String,
+
+        /// Read-only mode
+        #[arg(long)]
+        readonly: bool,
+    },
+
+    /// Leave a collaborative session
+    LeaveSession {
+        /// Session ID or name
+        #[arg(short, long)]
+        session: String,
+    },
+
+    /// List active collaborative sessions
+    ListSessions {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: Option<String>,
+
+        /// Show all sessions (including inactive)
+        #[arg(short, long)]
+        all: bool,
+    },
+
+    /// Send a notification to team members
+    Notify {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Message to send
+        #[arg(short, long)]
+        message: String,
+
+        /// Specific users to notify (comma-separated)
+        #[arg(short, long)]
+        users: Option<String>,
+
+        /// Notification priority (low, normal, high)
+        #[arg(short, long, default_value = "normal")]
+        priority: NotificationPriority,
+    },
+
+    /// List team notifications
+    ListNotifications {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: Option<String>,
+
+        /// Show only unread notifications
+        #[arg(short, long)]
+        unread: bool,
+
+        /// Number of notifications to show
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Mark notifications as read
+    MarkRead {
+        /// Notification IDs (comma-separated)
+        #[arg(short, long)]
+        ids: String,
+    },
+
+    /// Manage role-based access control
+    ManageAccess {
+        /// Access control operation
+        #[command(subcommand)]
+        operation: AccessOperation,
+    },
+}
+
+/// Access control operation types.
+#[derive(Subcommand)]
+pub enum AccessOperation {
+    /// Grant access to a user
+    Grant {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// User to grant access to
+        #[arg(short, long)]
+        user: String,
+
+        /// Role to assign (owner, admin, write, read)
+        #[arg(short, long)]
+        role: TeamRole,
+    },
+
+    /// Revoke access from a user
+    Revoke {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// User to revoke access from
+        #[arg(short, long)]
+        user: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// List access permissions
+    List {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// Show verbose information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Update user role
+    Update {
+        /// Workspace ID or name
+        #[arg(short, long)]
+        workspace: String,
+
+        /// User to update
+        #[arg(short, long)]
+        user: String,
+
+        /// New role to assign
+        #[arg(short, long)]
+        role: TeamRole,
+    },
+}
+
+/// Team role options.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum TeamRole {
+    /// Owner (full access, can delete workspace)
+    Owner,
+    /// Admin (can manage members and access)
+    Admin,
+    /// Write (can modify and execute commands)
+    Write,
+    /// Read (can view only)
+    Read,
+}
+
+/// Notification priority options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum NotificationPriority {
+    /// Low priority
+    Low,
+    /// Normal priority
+    #[default]
+    Normal,
+    /// High priority
+    High,
+}
+
+/// Performance profiling operation types.
+#[derive(Subcommand)]
+pub enum PerfOperation {
+    /// Start a new profiling session
+    Start {
+        /// Session name (optional)
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+
+    /// Stop the current profiling session
+    Stop {
+        /// Generate report immediately
+        #[arg(short, long)]
+        report: bool,
+    },
+
+    /// Record a command execution
+    Record {
+        /// Command name
+        #[arg(short, long)]
+        command: String,
+
+        /// Command arguments
+        #[arg(short, long)]
+        args: Vec<String>,
+
+        /// Duration in milliseconds
+        #[arg(short, long)]
+        duration: u64,
+
+        /// Memory used in bytes
+        #[arg(short, long)]
+        memory: Option<u64>,
+    },
+
+    /// List all profiling sessions
+    List {
+        /// Show verbose information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Generate a performance report
+    Report {
+        /// Session ID (defaults to last session)
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Output file (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Output format
+        #[arg(short, long, default_value = "text")]
+        format: PerfReportFormat,
+    },
+
+    /// Show performance statistics
+    Stats {
+        /// Session ID (defaults to last session)
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Command filter
+        #[arg(short, long)]
+        command: Option<String>,
+    },
+
+    /// Detect performance bottlenecks
+    Bottlenecks {
+        /// Session ID (defaults to last session)
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Minimum severity (low, medium, high, critical)
+        #[arg(short, long)]
+        min_severity: Option<PerfSeverity>,
+    },
+
+    /// Get optimization suggestions
+    Optimize {
+        /// Session ID (defaults to last session)
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Minimum impact (low, medium, high)
+        #[arg(short, long)]
+        min_impact: Option<PerfImpact>,
+    },
+
+    /// Enable global performance profiling
+    Enable,
+
+    /// Disable global performance profiling
+    Disable,
+
+    /// Show profiling status
+    Status,
+}
+
+/// Performance report format options.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum PerfReportFormat {
+    /// Text format
+    #[default]
+    Text,
+    /// JSON format
+    Json,
+    /// HTML format
+    Html,
+    /// Markdown format
+    Markdown,
+}
+
+/// Performance severity filter.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum PerfSeverity {
+    /// Low severity
+    Low,
+    /// Medium severity
+    Medium,
+    /// High severity
+    High,
+    /// Critical severity
+    Critical,
+}
+
+/// Performance impact filter.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum PerfImpact {
+    /// Low impact
+    Low,
+    /// Medium impact
+    Medium,
+    /// High impact
+    High,
 }
 
 /// Script template options.

@@ -1,8 +1,9 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use legalis_i18n::{
     BatchTranslator, CurrencyFormatter, DateTimeFormatter, LazyDictionary, LegalDictionary, Locale,
     NumberFormatter, TermIndex, TranslationManager, TranslationMemory,
 };
+use std::hint::black_box;
 
 fn locale_parsing_benchmark(c: &mut Criterion) {
     c.bench_function("parse simple locale", |b| {

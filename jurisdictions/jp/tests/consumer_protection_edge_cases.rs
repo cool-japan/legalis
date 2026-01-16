@@ -429,7 +429,7 @@ fn test_rescission_claim_misrepresentation() {
 
 #[test]
 fn test_all_rescission_grounds() {
-    let grounds = vec![
+    let grounds = [
         RescissionGround::Misrepresentation,
         RescissionGround::DefiniteJudgment,
         RescissionGround::NonDisclosure,
@@ -445,7 +445,7 @@ fn test_all_rescission_grounds() {
 
 #[test]
 fn test_all_transaction_types() {
-    let types = vec![
+    let types = [
         TransactionType::DoorToDoor,
         TransactionType::Telemarketing,
         TransactionType::MailOrder,
@@ -471,7 +471,7 @@ fn test_all_transaction_types() {
 
 #[test]
 fn test_all_unfair_term_types() {
-    let types = vec![
+    let types = [
         UnfairTermType::FullExemption,
         UnfairTermType::PartialExemption,
         UnfairTermType::ExcessivePenalty,

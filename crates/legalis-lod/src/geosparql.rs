@@ -375,40 +375,36 @@ impl Jurisdiction {
 
     /// Converts to RDF triples
     pub fn to_triples(&self) -> Vec<Triple> {
-        let mut triples = Vec::new();
-
-        // Type declarations
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdf:type".to_string(),
-            object: RdfValue::Uri("geo:Feature".to_string()),
-        });
-
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdf:type".to_string(),
-            object: RdfValue::Uri("eli:Jurisdiction".to_string()),
-        });
-
-        // Name
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdfs:label".to_string(),
-            object: RdfValue::string(&self.name),
-        });
-
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "dcterms:title".to_string(),
-            object: RdfValue::string(&self.name),
-        });
-
-        // Jurisdiction type
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "legalis:jurisdictionType".to_string(),
-            object: RdfValue::string(&self.jurisdiction_type),
-        });
+        let mut triples = vec![
+            // Type declarations
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdf:type".to_string(),
+                object: RdfValue::Uri("geo:Feature".to_string()),
+            },
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdf:type".to_string(),
+                object: RdfValue::Uri("eli:Jurisdiction".to_string()),
+            },
+            // Name
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdfs:label".to_string(),
+                object: RdfValue::string(&self.name),
+            },
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "dcterms:title".to_string(),
+                object: RdfValue::string(&self.name),
+            },
+            // Jurisdiction type
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "legalis:jurisdictionType".to_string(),
+                object: RdfValue::string(&self.jurisdiction_type),
+            },
+        ];
 
         // Boundary geometry
         let geom_uri = format!("{}/boundary", self.uri);
@@ -483,34 +479,31 @@ impl LegalZone {
 
     /// Converts to RDF triples
     pub fn to_triples(&self) -> Vec<Triple> {
-        let mut triples = Vec::new();
-
-        // Type declarations
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdf:type".to_string(),
-            object: RdfValue::Uri("geo:Feature".to_string()),
-        });
-
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdf:type".to_string(),
-            object: RdfValue::Uri("legalis:LegalZone".to_string()),
-        });
-
-        // Name
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "rdfs:label".to_string(),
-            object: RdfValue::string(&self.name),
-        });
-
-        // Zone type
-        triples.push(Triple {
-            subject: self.uri.clone(),
-            predicate: "legalis:zoneType".to_string(),
-            object: RdfValue::string(&self.zone_type),
-        });
+        let mut triples = vec![
+            // Type declarations
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdf:type".to_string(),
+                object: RdfValue::Uri("geo:Feature".to_string()),
+            },
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdf:type".to_string(),
+                object: RdfValue::Uri("legalis:LegalZone".to_string()),
+            },
+            // Name
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "rdfs:label".to_string(),
+                object: RdfValue::string(&self.name),
+            },
+            // Zone type
+            Triple {
+                subject: self.uri.clone(),
+                predicate: "legalis:zoneType".to_string(),
+                object: RdfValue::string(&self.zone_type),
+            },
+        ];
 
         // Extent geometry
         let geom_uri = format!("{}/extent", self.uri);
@@ -721,13 +714,8 @@ mod tests {
 
     #[test]
     fn test_jurisdiction_triples() {
-        let boundary = Geometry::polygon(&vec![
-            (0.0, 0.0),
-            (1.0, 0.0),
-            (1.0, 1.0),
-            (0.0, 1.0),
-            (0.0, 0.0),
-        ]);
+        let boundary =
+            Geometry::polygon(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.0, 0.0)]);
 
         let jurisdiction = Jurisdiction::new(
             "https://example.org/jurisdiction/tokyo",
@@ -747,13 +735,8 @@ mod tests {
 
     #[test]
     fn test_legal_zone_triples() {
-        let extent = Geometry::polygon(&vec![
-            (0.0, 0.0),
-            (0.5, 0.0),
-            (0.5, 0.5),
-            (0.0, 0.5),
-            (0.0, 0.0),
-        ]);
+        let extent =
+            Geometry::polygon(&[(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5), (0.0, 0.0)]);
 
         let zone = LegalZone::new(
             "https://example.org/zone/park",

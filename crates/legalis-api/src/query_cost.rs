@@ -479,8 +479,10 @@ mod tests {
 
     #[test]
     fn test_validate_query_exceeds_limit() {
-        let mut config = CostConfig::default();
-        config.max_cost = 1; // Very low limit
+        let config = CostConfig {
+            max_cost: 1, // Very low limit
+            ..Default::default()
+        };
         let analyzer = CostAnalyzer::with_config(config);
 
         let query = r#"

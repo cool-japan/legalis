@@ -75,7 +75,7 @@ impl ContentAddressedStore {
         let node = self
             .ipld
             .get(cid)
-            .ok_or_else(|| LodError::InvalidUri(format!("CID not found: {}", cid.to_string())))?;
+            .ok_or_else(|| LodError::InvalidUri(format!("CID not found: {}", cid)))?;
 
         // Extract graph CID and retrieve triples
         match &node.data {
@@ -211,13 +211,13 @@ impl CaExporter {
         // Simplified CAR format representation
         Ok(format!(
             "# CAR (Content Addressable aRchive)\nVersion: 1\nRoot CID: {}\n",
-            cid.to_string()
+            cid
         ))
     }
 
     fn export_dag_cbor(&self, _store: &ContentAddressedStore, cid: &Cid) -> LodResult<String> {
         // Simplified DAG-CBOR representation
-        Ok(format!("# DAG-CBOR\nCID: {}\n", cid.to_string()))
+        Ok(format!("# DAG-CBOR\nCID: {}\n", cid))
     }
 }
 

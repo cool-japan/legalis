@@ -1,0 +1,1284 @@
+{
+  "components": {
+    "schemas": {
+      "CreateStatuteRequest": {
+        "properties": {
+          "statute": {
+            "$ref": "#/components/schemas/Statute"
+          }
+        },
+        "required": [
+          "statute"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "SaveSimulationRequest": {
+        "properties": {
+          "description": {
+            "description": "Optional description",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "Name for the saved simulation",
+            "type": "string"
+          },
+          "simulation_result": {
+            "$ref": "#/components/schemas/SimulationResponse"
+          }
+        },
+        "required": [
+          "name",
+          "simulation_result"
+        ],
+        "type": "object"
+      },
+      "SavedSimulation": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "description": "Username of creator",
+            "type": "string"
+          },
+          "description": {
+            "description": "Optional description",
+            "nullable": true,
+            "type": "string"
+          },
+          "deterministic_outcomes": {
+            "description": "Number of deterministic outcomes",
+            "type": "integer"
+          },
+          "deterministic_rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "discretionary_outcomes": {
+            "description": "Number of discretionary outcomes",
+            "type": "integer"
+          },
+          "discretionary_rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "description": "Unique saved simulation identifier",
+            "type": "string"
+          },
+          "name": {
+            "description": "User-provided name for the simulation",
+            "type": "string"
+          },
+          "population_size": {
+            "description": "Population size",
+            "type": "integer"
+          },
+          "statute_ids": {
+            "description": "Statute IDs used in simulation",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "void_outcomes": {
+            "description": "Number of void outcomes",
+            "type": "integer"
+          },
+          "void_rate": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "population_size",
+          "deterministic_rate",
+          "discretionary_rate",
+          "void_rate",
+          "created_at",
+          "created_by"
+        ],
+        "type": "object"
+      },
+      "SimulationRequest": {
+        "properties": {
+          "entity_params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Additional parameters for entity generation",
+            "type": "object"
+          },
+          "population_size": {
+            "description": "Number of entities to generate for simulation",
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "statute_ids": {
+            "description": "IDs of statutes to simulate (empty = all statutes)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "statute_ids",
+          "population_size",
+          "entity_params"
+        ],
+        "type": "object"
+      },
+      "SimulationResponse": {
+        "properties": {
+          "completed_at": {
+            "description": "Completion timestamp (RFC3339)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "deterministic_outcomes": {
+            "description": "Number of deterministic outcomes",
+            "type": "integer"
+          },
+          "deterministic_rate": {
+            "description": "Percentage of deterministic outcomes",
+            "format": "double",
+            "type": "number"
+          },
+          "discretionary_outcomes": {
+            "description": "Number of discretionary outcomes",
+            "type": "integer"
+          },
+          "discretionary_rate": {
+            "description": "Percentage of discretionary outcomes",
+            "format": "double",
+            "type": "number"
+          },
+          "simulation_id": {
+            "description": "Unique simulation identifier",
+            "type": "string"
+          },
+          "total_entities": {
+            "description": "Total number of entities simulated",
+            "type": "integer"
+          },
+          "void_outcomes": {
+            "description": "Number of void/inapplicable outcomes",
+            "type": "integer"
+          },
+          "void_rate": {
+            "description": "Percentage of void outcomes",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "simulation_id",
+          "total_entities",
+          "deterministic_outcomes",
+          "discretionary_outcomes",
+          "void_outcomes",
+          "deterministic_rate",
+          "discretionary_rate",
+          "void_rate",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "Statute": {
+        "properties": {
+          "amendments": {
+            "description": "Amendment history",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "discretion_logic": {
+            "description": "Description of discretionary logic",
+            "nullable": true,
+            "type": "string"
+          },
+          "effect": {
+            "description": "Legal effect (Then clause)",
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "effect_type": {
+                "enum": [
+                  "Grant",
+                  "Revoke",
+                  "Obligation",
+                  "Prohibition",
+                  "MonetaryTransfer",
+                  "StatusChange"
+                ],
+                "type": "string"
+              },
+              "parameters": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "effect_type",
+              "description"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "description": "Unique identifier",
+            "example": "civil-code-article-1",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "description": "Jurisdiction identifier",
+            "nullable": true,
+            "type": "string"
+          },
+          "preconditions": {
+            "description": "List of preconditions (If clauses)",
+            "items": {
+              "description": "Condition specification (Age, Income, etc.)",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "relations": {
+            "description": "Hierarchical relationships to other statutes",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "temporal_validity": {
+            "description": "Temporal validity constraints",
+            "type": "object"
+          },
+          "title": {
+            "description": "Title of the statute",
+            "type": "string"
+          },
+          "version": {
+            "description": "Version number",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "preconditions",
+          "effect",
+          "version"
+        ],
+        "type": "object"
+      },
+      "StatuteListResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "statutes": {
+                "items": {
+                  "$ref": "#/components/schemas/StatuteSummary"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "StatuteSummary": {
+        "properties": {
+          "has_discretion": {
+            "description": "Whether this statute requires judicial discretion",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Unique statute identifier",
+            "example": "civil-code-art-1",
+            "type": "string"
+          },
+          "precondition_count": {
+            "description": "Number of preconditions",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "description": "Human-readable statute title",
+            "example": "Adult Rights",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "has_discretion",
+          "precondition_count"
+        ],
+        "type": "object"
+      },
+      "VerifyRequest": {
+        "properties": {
+          "statute_ids": {
+            "description": "List of statute IDs to verify (empty array = verify all)",
+            "example": [
+              "civil-code-art-1",
+              "tax-code-sec-42"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "statute_ids"
+        ],
+        "type": "object"
+      },
+      "VerifyResponse": {
+        "properties": {
+          "errors": {
+            "description": "List of errors found",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "passed": {
+            "description": "Whether verification passed",
+            "type": "boolean"
+          },
+          "warnings": {
+            "description": "List of warnings",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "passed",
+          "errors",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "VisualizationResponse": {
+        "properties": {
+          "content": {
+            "description": "Generated visualization content",
+            "type": "string"
+          },
+          "discretionary_count": {
+            "description": "Number of discretionary nodes",
+            "type": "integer"
+          },
+          "format": {
+            "description": "Output format used",
+            "type": "string"
+          },
+          "node_count": {
+            "description": "Number of nodes in the decision tree",
+            "type": "integer"
+          },
+          "statute_id": {
+            "description": "ID of the visualized statute",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statute_id",
+          "format",
+          "content",
+          "node_count",
+          "discretionary_count"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "description": "API key authentication using 'ApiKey <key>' format. Keys must start with 'lgl_' prefix. Example: 'ApiKey lgl_12345678901234567890'",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
+      },
+      "ApiKeyHeader": {
+        "description": "Alternative API key authentication using X-API-Key header. Example: 'lgl_12345678901234567890'",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      },
+      "BearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication. Tokens are issued upon successful login.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "name": "Legalis-RS Project"
+    },
+    "description": "REST API for the Legalis-RS legal framework. Provides CRUD operations for statutes, verification, and simulation endpoints.",
+    "license": {
+      "name": "MIT OR Apache-2.0"
+    },
+    "title": "Legalis API",
+    "version": "0.2.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/v1/simulate": {
+      "post": {
+        "description": "Simulates the application of statutes to a generated population",
+        "operationId": "runSimulation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "entity_params": {
+                  "region": "EU"
+                },
+                "population_size": 1000,
+                "statute_ids": [
+                  "tax-code-sec-1",
+                  "tax-code-sec-2"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationResponse"
+                }
+              }
+            },
+            "description": "Simulation completed successfully"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Run a simulation",
+        "tags": [
+          "simulation"
+        ]
+      }
+    },
+    "/api/v1/simulate/saved": {
+      "get": {
+        "description": "Retrieve a list of saved simulation results",
+        "operationId": "listSavedSimulations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SavedSimulation"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of saved simulations"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List saved simulations",
+        "tags": [
+          "simulation"
+        ]
+      },
+      "post": {
+        "description": "Save simulation results for later retrieval",
+        "operationId": "saveSimulation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSimulation"
+                }
+              }
+            },
+            "description": "Simulation saved successfully"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Save a simulation",
+        "tags": [
+          "simulation"
+        ]
+      }
+    },
+    "/api/v1/simulate/stream": {
+      "post": {
+        "description": "Run simulation with real-time progress updates via Server-Sent Events (SSE)",
+        "operationId": "streamSimulation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "Server-Sent Events stream with progress updates",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SSE stream established"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Stream simulation results",
+        "tags": [
+          "simulation"
+        ]
+      }
+    },
+    "/api/v1/statutes": {
+      "get": {
+        "description": "Returns a list of all statutes with summary information",
+        "operationId": "listStatutes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatuteListResponse"
+                }
+              }
+            },
+            "description": "List of statutes"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing authentication credentials"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid authentication credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Permission denied: ReadStatutes required"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient permissions to read statutes"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List all statutes",
+        "tags": [
+          "statutes"
+        ]
+      },
+      "post": {
+        "description": "Creates a new statute in the system",
+        "operationId": "createStatute",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "statute": {
+                  "effect": {
+                    "description": "Person gains capacity to enter into contracts",
+                    "effect_type": "Grant",
+                    "parameters": {
+                      "right": "contract_capacity"
+                    }
+                  },
+                  "id": "civil-code-article-42",
+                  "preconditions": [
+                    {
+                      "condition_type": "Age",
+                      "operator": "GreaterThanOrEqual",
+                      "value": 18
+                    }
+                  ],
+                  "title": "Contractual Capacity",
+                  "version": 1
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateStatuteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Statute"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Statute created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Invalid statute data: missing required field 'title'"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing authentication credentials"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid authentication credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Permission denied: WriteStatutes required"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient permissions to create statutes"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create a new statute",
+        "tags": [
+          "statutes"
+        ]
+      }
+    },
+    "/api/v1/statutes/{id}": {
+      "delete": {
+        "description": "Deletes a statute from the system",
+        "operationId": "deleteStatute",
+        "parameters": [
+          {
+            "description": "Statute ID to delete",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "civil-code-art-1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Statute deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing authentication credentials"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid authentication credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Permission denied: DeleteStatutes required"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient permissions to delete statutes"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Not found: statute with id 'civil-code-art-1'"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Statute not found"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete a statute",
+        "tags": [
+          "statutes"
+        ]
+      },
+      "get": {
+        "description": "Returns detailed information about a specific statute",
+        "operationId": "getStatute",
+        "parameters": [
+          {
+            "description": "Statute ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "civil-code-art-1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Statute"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Statute details"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing authentication credentials"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid authentication credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Permission denied: ReadStatutes required"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient permissions to read statutes"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Not found: statute with id 'civil-code-art-1'"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Statute not found"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get a statute by ID",
+        "tags": [
+          "statutes"
+        ]
+      }
+    },
+    "/api/v1/verify": {
+      "post": {
+        "description": "Verifies one or more statutes for logical consistency and validity",
+        "operationId": "verifyStatutes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "verify_all": {
+                  "summary": "Verify all statutes",
+                  "value": {
+                    "statute_ids": []
+                  }
+                },
+                "verify_specific": {
+                  "summary": "Verify specific statutes",
+                  "value": {
+                    "statute_ids": [
+                      "civil-code-art-1",
+                      "tax-code-sec-42"
+                    ]
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "failed": {
+                    "summary": "Verification failed",
+                    "value": {
+                      "data": {
+                        "errors": [
+                          "Contradiction detected between civil-code-art-1 and civil-code-art-2"
+                        ],
+                        "passed": false,
+                        "warnings": [
+                          "Statute tax-code-sec-42 has high complexity score"
+                        ]
+                      }
+                    }
+                  },
+                  "passed": {
+                    "summary": "Verification passed",
+                    "value": {
+                      "data": {
+                        "errors": [],
+                        "passed": true,
+                        "warnings": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VerifyResponse"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Verification results"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Invalid request: statute_ids must be an array"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing authentication credentials"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid authentication credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Permission denied: VerifyStatutes required"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient permissions to verify statutes"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Verify statutes",
+        "tags": [
+          "verification"
+        ]
+      }
+    },
+    "/api/v1/visualize/{id}": {
+      "get": {
+        "description": "Generate a visual representation of a statute in various formats (SVG, Mermaid, PlantUML, DOT, ASCII, HTML)",
+        "operationId": "visualizeStatute",
+        "parameters": [
+          {
+            "description": "Statute ID to visualize",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "civil-code-art-1",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Output format",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "svg",
+              "enum": [
+                "svg",
+                "mermaid",
+                "plantuml",
+                "dot",
+                "ascii",
+                "html"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Color theme",
+            "in": "query",
+            "name": "theme",
+            "required": false,
+            "schema": {
+              "default": "light",
+              "enum": [
+                "light",
+                "dark",
+                "high_contrast",
+                "colorblind_friendly"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisualizationResponse"
+                }
+              }
+            },
+            "description": "Visualization generated successfully"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "ApiKeyHeader": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Visualize a statute",
+        "tags": [
+          "visualization"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Returns the service health status",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "service": {
+                      "example": "legalis-api",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": "healthy",
+                      "type": "string"
+                    },
+                    "version": {
+                      "example": "0.2.0",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service is healthy"
+          }
+        },
+        "summary": "Health check",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Returns metrics in Prometheus format for monitoring",
+        "operationId": "metrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Prometheus metrics"
+          }
+        },
+        "summary": "Prometheus metrics",
+        "tags": [
+          "metrics"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local development server",
+      "url": "http://localhost:3000"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Health check and service status",
+      "name": "health"
+    },
+    {
+      "description": "Statute management operations",
+      "name": "statutes"
+    },
+    {
+      "description": "Statute verification and validation",
+      "name": "verification"
+    },
+    {
+      "description": "Legal system simulation endpoints",
+      "name": "simulation"
+    },
+    {
+      "description": "Statute visualization in various formats",
+      "name": "visualization"
+    },
+    {
+      "description": "Observability and monitoring",
+      "name": "metrics"
+    }
+  ]
+}

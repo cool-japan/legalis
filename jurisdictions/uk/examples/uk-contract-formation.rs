@@ -458,20 +458,17 @@ fn example_7_breach_classification() {
         description: "Unable to perform opening night".to_string(),
     };
 
-    match validate_breach(&condition_breach) {
-        Err(ContractError::BreachOfCondition { term, .. }) => {
-            println!("Classification: CONDITION (essential term)");
-            println!("Term: {}", term);
-            println!();
-            println!("✅ Remedies Available:");
-            println!("  1. TERMINATE contract (treat as discharged)");
-            println!("  2. Claim DAMAGES for losses");
-            println!();
-            println!("Held: Spiers entitled to terminate");
-            println!("      Opening performances were essence of contract");
-            println!();
-        }
-        _ => {}
+    if let Err(ContractError::BreachOfCondition { term, .. }) = validate_breach(&condition_breach) {
+        println!("Classification: CONDITION (essential term)");
+        println!("Term: {}", term);
+        println!();
+        println!("✅ Remedies Available:");
+        println!("  1. TERMINATE contract (treat as discharged)");
+        println!("  2. Claim DAMAGES for losses");
+        println!();
+        println!("Held: Spiers entitled to terminate");
+        println!("      Opening performances were essence of contract");
+        println!();
     }
 
     println!("─────────────────────────────────────────────────────────\n");
@@ -504,21 +501,18 @@ fn example_7_breach_classification() {
         description: "Missed first 3 days of rehearsals".to_string(),
     };
 
-    match validate_breach(&warranty_breach) {
-        Err(ContractError::BreachOfWarranty { term, .. }) => {
-            println!("Classification: WARRANTY (minor term)");
-            println!("Term: {}", term);
-            println!();
-            println!("❌ Limited Remedy:");
-            println!("  • DAMAGES only (compensation for loss)");
-            println!("  • CANNOT terminate contract");
-            println!();
-            println!("Held: Gye NOT entitled to terminate");
-            println!("      Rehearsals not fundamental to contract");
-            println!("      (Performances were the essence)");
-            println!();
-        }
-        _ => {}
+    if let Err(ContractError::BreachOfWarranty { term, .. }) = validate_breach(&warranty_breach) {
+        println!("Classification: WARRANTY (minor term)");
+        println!("Term: {}", term);
+        println!();
+        println!("❌ Limited Remedy:");
+        println!("  • DAMAGES only (compensation for loss)");
+        println!("  • CANNOT terminate contract");
+        println!();
+        println!("Held: Gye NOT entitled to terminate");
+        println!("      Rehearsals not fundamental to contract");
+        println!("      (Performances were the essence)");
+        println!();
     }
 
     println!("Innominate Terms (Hong Kong Fir Shipping [1962]):");

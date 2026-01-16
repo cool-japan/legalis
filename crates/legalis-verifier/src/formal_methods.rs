@@ -778,12 +778,14 @@ mod tests {
 
     #[test]
     fn test_formal_methods_verifier() {
-        let mut config = FormalMethodsConfig::default();
-        config.enabled_systems = vec![
-            ProofSystem::Coq,
-            ProofSystem::Lean4,
-            ProofSystem::IsabelleHOL,
-        ];
+        let config = FormalMethodsConfig {
+            enabled_systems: vec![
+                ProofSystem::Coq,
+                ProofSystem::Lean4,
+                ProofSystem::IsabelleHOL,
+            ],
+            ..Default::default()
+        };
 
         let verifier = FormalMethodsVerifier::new(config);
         let statute = create_test_statute();

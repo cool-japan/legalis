@@ -320,12 +320,12 @@ impl LinkValidator {
         }
     }
 
-    /// Validates all URIs (stub implementation - would need HTTP client in production).
+    /// Validates all URIs using local heuristics (no HTTP requests).
+    /// For production use with actual HTTP validation, use an HTTP client library.
     pub fn validate_all(&mut self) {
         for uri in &self.uris {
-            // In a real implementation, this would make HTTP HEAD requests
-            // For now, we mark all as skipped
-            self.results.insert(uri.clone(), ValidationResult::Skipped);
+            let result = validate_uri_locally(uri);
+            self.results.insert(uri.clone(), result);
         }
     }
 
@@ -348,6 +348,81 @@ impl Default for LinkValidator {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Validates a URI using local heuristics without making HTTP requests.
+fn validate_uri_locally(uri: &str) -> ValidationResult {
+    // Check for well-known valid domains
+    let trusted_domains = [
+        "w3.org",
+        "europa.eu",
+        "legislation.gov.uk",
+        "wikidata.org",
+        "dbpedia.org",
+        "creativecommons.org",
+        "purl.org",
+        "xmlns.com",
+        "schema.org",
+        "legalis.dev",
+    ];
+
+    // Check for obviously broken patterns
+    if uri.contains("localhost") || uri.contains("127.0.0.1") || uri.contains("example.com") {
+        return ValidationResult::Broken;
+    }
+
+    // Check for valid URL structure
+    if !uri.starts_with("http://") && !uri.starts_with("https://") {
+        return ValidationResult::Broken;
+    }
+
+    // Check for invalid characters
+    if uri.contains(' ') || uri.contains('\n') || uri.contains('\t') {
+        return ValidationResult::Broken;
+    }
+
+    // Extract domain
+    let domain = if let Some(domain_start) = uri.find("://") {
+        let after_protocol = &uri[domain_start + 3..];
+        if let Some(slash_pos) = after_protocol.find('/') {
+            &after_protocol[..slash_pos]
+        } else {
+            after_protocol
+        }
+    } else {
+        return ValidationResult::Broken;
+    };
+
+    // Remove port if present
+    let domain = if let Some(colon_pos) = domain.find(':') {
+        &domain[..colon_pos]
+    } else {
+        domain
+    };
+
+    // Check for trusted domains
+    for trusted in &trusted_domains {
+        if domain.ends_with(trusted) {
+            return ValidationResult::Valid;
+        }
+    }
+
+    // Check for basic domain validity
+    if domain.is_empty() || !domain.contains('.') {
+        return ValidationResult::Broken;
+    }
+
+    // Check for valid TLD (basic check)
+    if let Some(last_dot) = domain.rfind('.') {
+        let tld = &domain[last_dot + 1..];
+        if tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic()) {
+            // Looks like a valid domain structure
+            return ValidationResult::Valid;
+        }
+    }
+
+    // Default to broken if we can't determine validity
+    ValidationResult::Broken
 }
 
 /// Helper for RdfValue to string conversion in tests.

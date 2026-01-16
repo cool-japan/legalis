@@ -1,11 +1,12 @@
 //! Benchmarks for smart contract generation performance.
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use legalis_chain::{
     BatchOperationConfig, ContractGenerator, FormalVerificationConfig, MultiNetworkConfig,
     NetworkConfig, ProxyPattern, TargetPlatform, TestSuiteConfig,
 };
 use legalis_core::{Effect, EffectType, Statute};
+use std::hint::black_box;
 
 fn create_sample_statute(name: &str, _num_conditions: usize) -> Statute {
     Statute::new(

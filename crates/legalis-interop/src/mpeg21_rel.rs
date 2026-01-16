@@ -239,7 +239,7 @@ mod tests {
             Effect::new(EffectType::Grant, "copy"),
         );
 
-        let (exported, _) = exporter.export(&[original.clone()]).unwrap();
+        let (exported, _) = exporter.export(std::slice::from_ref(&original)).unwrap();
         let (imported, _) = importer.import(&exported).unwrap();
 
         assert_eq!(imported.len(), 1);

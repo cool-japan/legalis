@@ -6,6 +6,7 @@
 use crate::{LodError, LodResult, RdfValue, Triple};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// DID (Decentralized Identifier) representation.
 ///
@@ -40,14 +41,15 @@ impl Did {
         })
     }
 
-    /// Returns the string representation of the DID.
-    pub fn to_string(&self) -> String {
-        format!("did:{}:{}", self.method, self.identifier)
-    }
-
     /// Returns the URI form.
     pub fn to_uri(&self) -> String {
-        self.to_string()
+        format!("did:{}:{}", self.method, self.identifier)
+    }
+}
+
+impl fmt::Display for Did {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "did:{}:{}", self.method, self.identifier)
     }
 }
 
@@ -275,10 +277,7 @@ impl DidIpld {
     /// Extracts the CID from a DID.
     pub fn to_cid(did: &Did) -> LodResult<crate::ipld::Cid> {
         if did.method != "ipld" {
-            return Err(LodError::InvalidUri(format!(
-                "Not an IPLD DID: {}",
-                did.to_string()
-            )));
+            return Err(LodError::InvalidUri(format!("Not an IPLD DID: {}", did)));
         }
 
         Ok(crate::ipld::Cid::new(&did.identifier, "dag-json"))
@@ -297,10 +296,7 @@ impl DidWeb {
     /// Extracts the domain from a DID.
     pub fn to_domain(did: &Did) -> LodResult<String> {
         if did.method != "web" {
-            return Err(LodError::InvalidUri(format!(
-                "Not a web DID: {}",
-                did.to_string()
-            )));
+            return Err(LodError::InvalidUri(format!("Not a web DID: {}", did)));
         }
 
         Ok(did.identifier.clone())

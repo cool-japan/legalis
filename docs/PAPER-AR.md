@@ -21,7 +21,7 @@
 
 **المساهمات التقنية الرئيسية**:
 1. لغة خاصة بالمجال القانوني (DSL) وتنفيذ المحلل
-2. التحقق الرسمي باستخدام Z3 SMT solver
+2. التحقق الرسمي باستخدام OxiZ SMT solver (Pure Rust)
 3. محرك محاكاة بنمط ECS للتنبؤ بالتأثير الاجتماعي
 4. توليد العقود الذكية لأكثر من 25 منصة بلوكتشين
 5. تكامل Linked Open Data (RDF/TTL) للويب الدلالي
@@ -314,7 +314,7 @@ pub enum LegalResult<T> {
 }
 ```
 
-### 5.3 التحقق الرسمي باستخدام Z3 SMT Solver
+### 5.3 التحقق الرسمي باستخدام OxiZ SMT Solver (Pure Rust)
 
 **أهداف التحقق**:
 1. المراجع الدائرية
@@ -437,7 +437,7 @@ legalis export <file.dsl> --format solidity|catala|l4|rdf
 2. **نظام الأنواع**: منطق ثلاثي القيم عبر `LegalResult<T>`
 3. **هندسة معمارية متكاملة**: 7 طبقات و16 صندوق
 4. **التنفيذ**: حوالي 450,000 سطر من كود Rust
-5. **التحقق**: تكامل Z3 SMT solver
+5. **التحقق**: تكامل OxiZ SMT solver (Pure Rust)
 6. **المحاكاة**: محرك بنمط ECS (دعم تسريع GPU)
 7. **المخرجات**: 25+ بلوكتشين، RDF/TTL، صيغ متعددة
 
@@ -472,7 +472,7 @@ discretion   = "DISCRETION" string ;
 ```toml
 [legalis]
 default_jurisdiction = "SA"
-enable_z3 = true
+enable_smt = true
 enable_gpu = false
 log_level = "info"
 ```

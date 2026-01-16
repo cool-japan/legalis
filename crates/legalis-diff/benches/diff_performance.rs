@@ -1,8 +1,9 @@
 //! Performance benchmarks for diff operations.
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 use legalis_diff::{analysis::analyze_changes, diff};
+use std::hint::black_box;
 
 fn create_statute_with_preconditions(id: &str, title: &str, precondition_count: usize) -> Statute {
     let mut statute = Statute::new(id, title, Effect::new(EffectType::Grant, "Test effect"));

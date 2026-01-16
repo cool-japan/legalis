@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.2.3 | Status: Stable | Tests: 200 passing (195 with grpc feature) | Warnings: 0
+Version: 0.2.5 | Status: Stable | Tests: 249 passing (244 with grpc feature) | Warnings: 0
 
-All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. SDK generation and event-driven architecture planned for future releases.
+All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. Event-Driven Architecture (v0.2.4) is complete with event sourcing, CQRS patterns, event streaming (Kafka/NATS), event replay, and schema registry. Developer Experience (v0.2.5) is complete with API playground improvements, request mocking, API testing utilities, SDK auto-update notifications, and changelog generation.
 
 ---
 
@@ -207,18 +207,18 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC su
 - [x] Add service mesh integration (ServiceMesh with service discovery, mTLS, distributed tracing)
 
 ### Event-Driven Architecture (v0.2.4)
-- [ ] Add event sourcing endpoints
-- [ ] Implement CQRS patterns
-- [ ] Add event streaming (Kafka, NATS)
-- [ ] Create event replay capabilities
-- [ ] Add event schema registry
+- [x] Add event sourcing endpoints
+- [x] Implement CQRS patterns
+- [x] Add event streaming (Kafka, NATS)
+- [x] Create event replay capabilities
+- [x] Add event schema registry
 
 ### Developer Experience (v0.2.5)
-- [ ] Add API playground improvements
-- [ ] Implement request mocking
-- [ ] Add API testing utilities
-- [ ] Create SDK auto-update notifications
-- [ ] Add changelog generation
+- [x] Add API playground improvements
+- [x] Implement request mocking
+- [x] Add API testing utilities
+- [x] Create SDK auto-update notifications
+- [x] Add changelog generation
 
 ### Multi-Region Support (v0.2.6)
 - [ ] Add geo-distributed endpoints

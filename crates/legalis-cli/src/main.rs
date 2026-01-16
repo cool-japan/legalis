@@ -739,6 +739,209 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Team { operation } => {
+            use legalis::{AccessOperation, TeamOperation};
+            match operation {
+                TeamOperation::CreateWorkspace {
+                    name,
+                    description,
+                    members,
+                    output,
+                } => {
+                    commands::handle_team_create_workspace(
+                        name,
+                        description.as_deref(),
+                        members.as_deref(),
+                        output.as_deref(),
+                    )?;
+                }
+                TeamOperation::ListWorkspaces { verbose } => {
+                    commands::handle_team_list_workspaces(*verbose)?;
+                }
+                TeamOperation::JoinWorkspace { workspace, token } => {
+                    println!("Joining workspace: {}", workspace);
+                    if let Some(t) = token {
+                        println!("Using token: {}", t);
+                    }
+                    println!("Note: Join workspace is a placeholder for now");
+                }
+                TeamOperation::LeaveWorkspace { workspace, yes } => {
+                    println!("Leaving workspace: {}", workspace);
+                    if !yes {
+                        println!("Use --yes to confirm");
+                    }
+                    println!("Note: Leave workspace is a placeholder for now");
+                }
+                TeamOperation::SyncHistory {
+                    workspace,
+                    direction,
+                    dry_run,
+                } => {
+                    commands::handle_team_sync_history(workspace, direction, *dry_run)?;
+                }
+                TeamOperation::ShowHistory {
+                    workspace,
+                    limit,
+                    user,
+                } => {
+                    commands::handle_team_show_history(workspace, *limit, user.as_deref())?;
+                }
+                TeamOperation::StartSession {
+                    name,
+                    workspace,
+                    description,
+                    max_participants,
+                } => {
+                    commands::handle_team_start_session(
+                        name,
+                        workspace,
+                        description.as_deref(),
+                        *max_participants,
+                    )?;
+                }
+                TeamOperation::JoinSession { session, readonly } => {
+                    println!("Joining session: {}", session);
+                    println!("Read-only: {}", readonly);
+                    println!("Note: Join session is a placeholder for now");
+                }
+                TeamOperation::LeaveSession { session } => {
+                    println!("Leaving session: {}", session);
+                    println!("Note: Leave session is a placeholder for now");
+                }
+                TeamOperation::ListSessions { workspace, all } => {
+                    commands::handle_team_list_sessions(workspace.as_deref(), *all)?;
+                }
+                TeamOperation::Notify {
+                    workspace,
+                    message,
+                    users,
+                    priority,
+                } => {
+                    let priority_enum: legalis::team::Priority = match priority {
+                        legalis::NotificationPriority::Low => legalis::team::Priority::Low,
+                        legalis::NotificationPriority::Normal => legalis::team::Priority::Normal,
+                        legalis::NotificationPriority::High => legalis::team::Priority::High,
+                    };
+                    commands::handle_team_notify(
+                        workspace,
+                        message,
+                        users.as_deref(),
+                        &priority_enum,
+                    )?;
+                }
+                TeamOperation::ListNotifications {
+                    workspace,
+                    unread,
+                    limit,
+                } => {
+                    commands::handle_team_list_notifications(
+                        workspace.as_deref(),
+                        *unread,
+                        *limit,
+                    )?;
+                }
+                TeamOperation::MarkRead { ids } => {
+                    commands::handle_team_mark_read(ids)?;
+                }
+                TeamOperation::ManageAccess { operation } => match operation {
+                    AccessOperation::Grant {
+                        workspace,
+                        user,
+                        role,
+                    } => {
+                        let role_enum: legalis::team::Role = match role {
+                            legalis::TeamRole::Owner => legalis::team::Role::Owner,
+                            legalis::TeamRole::Admin => legalis::team::Role::Admin,
+                            legalis::TeamRole::Write => legalis::team::Role::Write,
+                            legalis::TeamRole::Read => legalis::team::Role::Read,
+                        };
+                        commands::handle_team_access_grant(workspace, user, &role_enum)?;
+                    }
+                    AccessOperation::Revoke {
+                        workspace,
+                        user,
+                        yes,
+                    } => {
+                        commands::handle_team_access_revoke(workspace, user, *yes)?;
+                    }
+                    AccessOperation::List { workspace, verbose } => {
+                        commands::handle_team_access_list(workspace, *verbose)?;
+                    }
+                    AccessOperation::Update {
+                        workspace,
+                        user,
+                        role,
+                    } => {
+                        let role_enum: legalis::team::Role = match role {
+                            legalis::TeamRole::Owner => legalis::team::Role::Owner,
+                            legalis::TeamRole::Admin => legalis::team::Role::Admin,
+                            legalis::TeamRole::Write => legalis::team::Role::Write,
+                            legalis::TeamRole::Read => legalis::team::Role::Read,
+                        };
+                        commands::handle_team_access_update(workspace, user, &role_enum)?;
+                    }
+                },
+            }
+        }
+        Commands::Perf { operation } => {
+            use legalis::PerfOperation;
+            match operation {
+                PerfOperation::Start { name } => {
+                    commands::handle_perf_start(name.as_deref())?;
+                }
+                PerfOperation::Stop { report } => {
+                    commands::handle_perf_stop(*report)?;
+                }
+                PerfOperation::Record {
+                    command,
+                    args,
+                    duration,
+                    memory,
+                } => {
+                    println!("Recording command: {}", command);
+                    println!("Args: {:?}", args);
+                    println!("Duration: {}ms", duration);
+                    if let Some(mem) = memory {
+                        println!("Memory: {} bytes", mem);
+                    }
+                    println!("Note: Record is a manual operation placeholder");
+                }
+                PerfOperation::List { verbose } => {
+                    commands::handle_perf_list(*verbose)?;
+                }
+                PerfOperation::Report {
+                    session,
+                    output,
+                    format,
+                } => {
+                    commands::handle_perf_report(session.as_deref(), output.as_deref(), format)?;
+                }
+                PerfOperation::Stats { session, command } => {
+                    commands::handle_perf_stats(session.as_deref(), command.as_deref())?;
+                }
+                PerfOperation::Bottlenecks {
+                    session,
+                    min_severity,
+                } => {
+                    commands::handle_perf_bottlenecks(session.as_deref(), min_severity.as_ref())?;
+                }
+                PerfOperation::Optimize {
+                    session,
+                    min_impact,
+                } => {
+                    commands::handle_perf_optimize(session.as_deref(), min_impact.as_ref())?;
+                }
+                PerfOperation::Enable => {
+                    commands::handle_perf_enable()?;
+                }
+                PerfOperation::Disable => {
+                    commands::handle_perf_disable()?;
+                }
+                PerfOperation::Status => {
+                    commands::handle_perf_status()?;
+                }
+            }
+        }
     }
 
     Ok(())
