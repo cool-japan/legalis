@@ -109,15 +109,14 @@ impl MindestlohnSimulator {
                 .get_attribute("employment_sector")
                 .unwrap_or_else(|| "regular".to_string());
 
-            if let Some(wage) = wage_opt {
-                if wage < self.config.proposed_minimum_wage
-                    && wage >= self.config.current_minimum_wage
-                {
-                    workers_affected += 1;
-                    let increase = self.config.proposed_minimum_wage - wage;
-                    total_wage_increase += increase;
-                    *sector_impact.entry(sector).or_insert(0.0) += increase;
-                }
+            if let Some(wage) = wage_opt
+                && wage < self.config.proposed_minimum_wage
+                && wage >= self.config.current_minimum_wage
+            {
+                workers_affected += 1;
+                let increase = self.config.proposed_minimum_wage - wage;
+                total_wage_increase += increase;
+                *sector_impact.entry(sector).or_insert(0.0) += increase;
             }
         }
 
@@ -437,13 +436,13 @@ impl ArbZGSimulator {
                 .get_attribute("industry")
                 .unwrap_or_else(|| "other".to_string());
 
-            if let Some(hours) = hours_opt {
-                if hours > self.config.max_weekly_hours as f64 {
-                    workers_exceeding += 1;
-                    let reduction = hours - self.config.max_weekly_hours as f64;
-                    total_hours_reduction += reduction;
-                    *industry_impact.entry(industry).or_insert(0.0) += reduction;
-                }
+            if let Some(hours) = hours_opt
+                && hours > self.config.max_weekly_hours as f64
+            {
+                workers_exceeding += 1;
+                let reduction = hours - self.config.max_weekly_hours as f64;
+                total_hours_reduction += reduction;
+                *industry_impact.entry(industry).or_insert(0.0) += reduction;
             }
         }
 
@@ -582,12 +581,11 @@ impl BUrlGSimulator {
                 .get_attribute("vacation_days")
                 .and_then(|s| s.parse().ok());
 
-            if let Some(days_granted) = days_granted_opt {
-                if days_granted < self.config.minimum_vacation_days as f64 {
-                    employers_not_meeting += 1;
-                    total_additional_days +=
-                        self.config.minimum_vacation_days as f64 - days_granted;
-                }
+            if let Some(days_granted) = days_granted_opt
+                && days_granted < self.config.minimum_vacation_days as f64
+            {
+                employers_not_meeting += 1;
+                total_additional_days += self.config.minimum_vacation_days as f64 - days_granted;
             }
         }
 

@@ -346,10 +346,10 @@ impl ProvenanceChain {
     /// Verifies the chain integrity.
     pub fn verify(&self) -> bool {
         // Check parent chain first
-        if let Some(ref parent) = self.parent_chain {
-            if !parent.verify() {
-                return false;
-            }
+        if let Some(ref parent) = self.parent_chain
+            && !parent.verify()
+        {
+            return false;
         }
 
         // Verify all anchors are in chronological order

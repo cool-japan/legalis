@@ -251,10 +251,10 @@ where
         request = request.operation_name(operation_name);
     }
 
-    if let Some(variables) = batched_query.variables {
-        if let Ok(vars) = serde_json::from_value(variables) {
-            request = request.variables(vars);
-        }
+    if let Some(variables) = batched_query.variables
+        && let Ok(vars) = serde_json::from_value(variables)
+    {
+        request = request.variables(vars);
     }
 
     let response: Response = schema.execute(request).await;

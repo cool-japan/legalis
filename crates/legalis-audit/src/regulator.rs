@@ -91,17 +91,17 @@ impl ExportConfig {
             .iter()
             .filter(|r| {
                 // Time range filter
-                if let Some((start, end)) = self.time_range {
-                    if r.timestamp < start || r.timestamp > end {
-                        return false;
-                    }
+                if let Some((start, end)) = self.time_range
+                    && (r.timestamp < start || r.timestamp > end)
+                {
+                    return false;
                 }
 
                 // Statute filter
-                if let Some(ref statutes) = self.statute_filter {
-                    if !statutes.contains(&r.statute_id) {
-                        return false;
-                    }
+                if let Some(ref statutes) = self.statute_filter
+                    && !statutes.contains(&r.statute_id)
+                {
+                    return false;
                 }
 
                 true

@@ -415,15 +415,15 @@ impl<P> CircuitBreaker<P> {
     async fn check_and_update_state(&self) -> Result<()> {
         let mut state = self.state.lock().await;
 
-        if state.state == CircuitState::Open {
-            if let Some(last_failure) = state.last_failure_time {
-                if last_failure.elapsed() >= self.config.timeout {
-                    tracing::info!("Circuit breaker transitioning to HalfOpen");
-                    state.state = CircuitState::HalfOpen;
-                    state.success_count = 0;
-                } else {
-                    return Err(anyhow!("Circuit breaker is open"));
-                }
+        if state.state == CircuitState::Open
+            && let Some(last_failure) = state.last_failure_time
+        {
+            if last_failure.elapsed() >= self.config.timeout {
+                tracing::info!("Circuit breaker transitioning to HalfOpen");
+                state.state = CircuitState::HalfOpen;
+                state.success_count = 0;
+            } else {
+                return Err(anyhow!("Circuit breaker is open"));
             }
         }
 

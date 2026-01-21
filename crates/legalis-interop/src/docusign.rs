@@ -235,12 +235,12 @@ impl FormatImporter for DocuSignImporter {
 
     fn validate(&self, source: &str) -> bool {
         // Try to parse as JSON and check for DocuSign specific fields
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source) {
-            if let Some(obj) = value.as_object() {
-                return obj.contains_key("envelopeId")
-                    && obj.contains_key("status")
-                    && obj.contains_key("recipients");
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source)
+            && let Some(obj) = value.as_object()
+        {
+            return obj.contains_key("envelopeId")
+                && obj.contains_key("status")
+                && obj.contains_key("recipients");
         }
         false
     }

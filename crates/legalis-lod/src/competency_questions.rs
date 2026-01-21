@@ -225,14 +225,14 @@ impl CompetencyQuestionTester {
             let result_count = self.estimate_result_count(question);
             result.result_count = Some(result_count);
 
-            if let Some(min_results) = question.min_results {
-                if result_count < min_results {
-                    result.passed = false;
-                    result = result.with_message(format!(
-                        "Expected at least {} results, got {}",
-                        min_results, result_count
-                    ));
-                }
+            if let Some(min_results) = question.min_results
+                && result_count < min_results
+            {
+                result.passed = false;
+                result = result.with_message(format!(
+                    "Expected at least {} results, got {}",
+                    min_results, result_count
+                ));
             }
         }
 

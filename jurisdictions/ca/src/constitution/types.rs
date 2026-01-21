@@ -138,7 +138,7 @@ impl CharterRight {
 // ============================================================================
 
 /// The Oakes test for justifying Charter limitations (s.1)
-/// From R v Oakes [1986] 1 SCR 103
+/// From R v Oakes \[1986\] 1 SCR 103
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OakesTest {
     /// Pressing and substantial objective
@@ -512,7 +512,7 @@ pub struct ConstitutionalCase {
 }
 
 impl ConstitutionalCase {
-    /// R v Oakes [1986] 1 SCR 103 (s.1 test)
+    /// R v Oakes \[1986\] 1 SCR 103 (s.1 test)
     pub fn oakes() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -546,7 +546,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// Haida Nation v BC [2004] 3 SCR 511 (duty to consult)
+    /// Haida Nation v BC \[2004\] 3 SCR 511 (duty to consult)
     pub fn haida_nation() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -564,7 +564,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// Tsilhqot'in Nation v BC [2014] 2 SCR 256 (Aboriginal title)
+    /// Tsilhqot'in Nation v BC \[2014\] 2 SCR 256 (Aboriginal title)
     pub fn tsilhqotin() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -581,7 +581,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// Reference re Secession of Quebec [1998] 2 SCR 217
+    /// Reference re Secession of Quebec \[1998\] 2 SCR 217
     pub fn secession_reference() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -598,7 +598,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// Carter v Canada [2015] 1 SCR 331 (medical assistance in dying)
+    /// Carter v Canada \[2015\] 1 SCR 331 (medical assistance in dying)
     pub fn carter() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -615,7 +615,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// Bedford v Canada [2013] 3 SCR 1101 (prostitution laws)
+    /// Bedford v Canada \[2013\] 3 SCR 1101 (prostitution laws)
     pub fn bedford() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -632,7 +632,7 @@ impl ConstitutionalCase {
         }
     }
 
-    /// R v Jordan [2016] 1 SCR 631 (trial delay)
+    /// R v Jordan \[2016\] 1 SCR 631 (trial delay)
     pub fn jordan() -> Self {
         Self {
             citation: CaseCitation::scc(

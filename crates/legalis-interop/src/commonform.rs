@@ -9,7 +9,7 @@
 //! - Definitions and references
 //! - Form composition from reusable components
 //!
-//! Reference: https://commonform.org/
+//! Reference: <https://commonform.org/>
 
 use crate::{
     ConversionReport, FormatExporter, FormatImporter, InteropError, InteropResult, LegalFormat,
@@ -102,15 +102,14 @@ impl CommonFormImporter {
                 r"(?:age|years)\s*(?:of\s*)?(?:at least|minimum|>=)\s*(\d+)",
             )
             .unwrap();
-            if let Some(cap) = re.captures(text) {
-                if let Some(age_str) = cap.get(1) {
-                    if let Ok(age_val) = age_str.as_str().parse::<u32>() {
-                        conditions.push(Condition::Age {
-                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                            value: age_val,
-                        });
-                    }
-                }
+            if let Some(cap) = re.captures(text)
+                && let Some(age_str) = cap.get(1)
+                && let Ok(age_val) = age_str.as_str().parse::<u32>()
+            {
+                conditions.push(Condition::Age {
+                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                    value: age_val,
+                });
             }
         }
 

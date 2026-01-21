@@ -232,16 +232,16 @@ impl PatternBasedExtractor {
         if text_lower.contains("refer") {
             // Extract article numbers (simplified)
             for word in text.split_whitespace() {
-                if word.to_lowercase().starts_with("article") {
-                    if let Some(evidence) = self.extract_context(text, word) {
-                        relations.push(ExtractedRelation {
-                            subject: "current-provision".to_string(),
-                            relation: RelationType::References,
-                            object: word.to_string(),
-                            confidence: 0.7,
-                            evidence: Some(evidence),
-                        });
-                    }
+                if word.to_lowercase().starts_with("article")
+                    && let Some(evidence) = self.extract_context(text, word)
+                {
+                    relations.push(ExtractedRelation {
+                        subject: "current-provision".to_string(),
+                        relation: RelationType::References,
+                        object: word.to_string(),
+                        confidence: 0.7,
+                        evidence: Some(evidence),
+                    });
                 }
             }
         }
@@ -339,16 +339,16 @@ impl PatternBasedExtractor {
                 let parts: Vec<&str> = text.split('"').collect();
                 for i in (1..parts.len()).step_by(2) {
                     let term = parts[i];
-                    if !term.is_empty() {
-                        if let Some(evidence) = self.extract_context(text, term) {
-                            relations.push(ExtractedRelation {
-                                subject: "current-provision".to_string(),
-                                relation: RelationType::Defines,
-                                object: term.to_string(),
-                                confidence: 0.8,
-                                evidence: Some(evidence),
-                            });
-                        }
+                    if !term.is_empty()
+                        && let Some(evidence) = self.extract_context(text, term)
+                    {
+                        relations.push(ExtractedRelation {
+                            subject: "current-provision".to_string(),
+                            relation: RelationType::Defines,
+                            object: term.to_string(),
+                            confidence: 0.8,
+                            evidence: Some(evidence),
+                        });
                     }
                 }
             }

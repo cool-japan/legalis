@@ -328,10 +328,10 @@ impl ZkProofVerifier {
         }
 
         // Verify record count is reasonable
-        if let Some(count_str) = proof.public_params.get("record_count") {
-            if count_str.parse::<usize>().is_err() {
-                return Ok(false);
-            }
+        if let Some(count_str) = proof.public_params.get("record_count")
+            && count_str.parse::<usize>().is_err()
+        {
+            return Ok(false);
         }
 
         Ok(true)

@@ -162,25 +162,22 @@ pub fn calculate_betweenness_centrality(
 
         // Calculate dependency scores
         for &target in entities {
-            if target != source {
-                if let Some(&target_paths) = paths_count.get(&target) {
-                    if target_paths > 0 {
-                        for &intermediate in entities {
-                            if intermediate != source && intermediate != target {
-                                if let Some(&int_dist) = distances.get(&intermediate) {
-                                    if let Some(&int_paths) = paths_count.get(&intermediate) {
-                                        // Check if intermediate is on a shortest path
-                                        if let Some(&target_dist) = distances.get(&target) {
-                                            if int_dist + 1 == target_dist {
-                                                let contribution =
-                                                    int_paths as f64 / target_paths as f64;
-                                                *centrality.entry(intermediate).or_insert(0.0) +=
-                                                    contribution;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+            if target != source
+                && let Some(&target_paths) = paths_count.get(&target)
+                && target_paths > 0
+            {
+                for &intermediate in entities {
+                    if intermediate != source
+                        && intermediate != target
+                        && let Some(&int_dist) = distances.get(&intermediate)
+                        && let Some(&int_paths) = paths_count.get(&intermediate)
+                    {
+                        // Check if intermediate is on a shortest path
+                        if let Some(&target_dist) = distances.get(&target)
+                            && int_dist + 1 == target_dist
+                        {
+                            let contribution = int_paths as f64 / target_paths as f64;
+                            *centrality.entry(intermediate).or_insert(0.0) += contribution;
                         }
                     }
                 }
@@ -488,11 +485,10 @@ pub fn detect_communities_label_propagation(
             // Find most common label
             if let Some((&most_common_label, _)) =
                 label_counts.iter().max_by_key(|&(_, &count)| count)
+                && communities[entity] != most_common_label
             {
-                if communities[entity] != most_common_label {
-                    communities.insert(*entity, most_common_label);
-                    changed = true;
-                }
+                communities.insert(*entity, most_common_label);
+                changed = true;
             }
         }
 

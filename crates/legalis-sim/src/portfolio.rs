@@ -392,19 +392,19 @@ impl PortfolioOptimizer {
         // Simple random search
         for _ in 0..num_samples {
             let weights = self.generate_random_weights();
-            if let Ok(metrics) = self.aggregate_metrics(&weights) {
-                if let Ok(risk_metrics) = RiskMetrics::calculate(std::slice::from_ref(&metrics)) {
-                    let sharpe = if risk_metrics.std_dev_deterministic > 0.0 {
-                        risk_metrics.mean_deterministic / risk_metrics.std_dev_deterministic
-                    } else {
-                        0.0
-                    };
+            if let Ok(metrics) = self.aggregate_metrics(&weights)
+                && let Ok(risk_metrics) = RiskMetrics::calculate(std::slice::from_ref(&metrics))
+            {
+                let sharpe = if risk_metrics.std_dev_deterministic > 0.0 {
+                    risk_metrics.mean_deterministic / risk_metrics.std_dev_deterministic
+                } else {
+                    0.0
+                };
 
-                    if sharpe > best_sharpe {
-                        best_sharpe = sharpe;
-                        best_weights = weights;
-                        best_metrics = metrics;
-                    }
+                if sharpe > best_sharpe {
+                    best_sharpe = sharpe;
+                    best_weights = weights;
+                    best_metrics = metrics;
                 }
             }
         }
@@ -436,17 +436,16 @@ impl PortfolioOptimizer {
         let mut aggregated = SimulationMetrics::new();
 
         for (statute_id, weight) in weights {
-            if let Some(metrics_list) = self.statute_metrics.get(statute_id) {
-                if let Some(metrics) = metrics_list.first() {
-                    // Weighted aggregation
-                    aggregated.total_applications +=
-                        (metrics.total_applications as f64 * weight) as usize;
-                    aggregated.deterministic_count +=
-                        (metrics.deterministic_count as f64 * weight) as usize;
-                    aggregated.discretion_count +=
-                        (metrics.discretion_count as f64 * weight) as usize;
-                    aggregated.void_count += (metrics.void_count as f64 * weight) as usize;
-                }
+            if let Some(metrics_list) = self.statute_metrics.get(statute_id)
+                && let Some(metrics) = metrics_list.first()
+            {
+                // Weighted aggregation
+                aggregated.total_applications +=
+                    (metrics.total_applications as f64 * weight) as usize;
+                aggregated.deterministic_count +=
+                    (metrics.deterministic_count as f64 * weight) as usize;
+                aggregated.discretion_count += (metrics.discretion_count as f64 * weight) as usize;
+                aggregated.void_count += (metrics.void_count as f64 * weight) as usize;
             }
         }
 

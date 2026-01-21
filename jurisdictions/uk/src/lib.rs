@@ -213,8 +213,8 @@ pub mod financial_services;
 /// Trust Law (Equity and Trustee Acts)
 ///
 /// Covers:
-/// - Three certainties (Knight v Knight [1840])
-/// - Trust constitution (Milroy v Lord [1862])
+/// - Three certainties (Knight v Knight \[1840\])
+/// - Trust constitution (Milroy v Lord \[1862\])
 /// - Trustee duties (Trustee Act 2000)
 /// - Breach of trust and remedies (tracing)
 /// - Third party liability (dishonest assistance, knowing receipt)

@@ -3,10 +3,11 @@ name = "legalis-eu"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "European Union jurisdiction support for Legalis-RS (GDPR, Consumer Rights, Competition, Treaties)"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+keywords = ["legalis", "eu", "gdpr", "european-union", "competition"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-eu"
 
 [dependencies]

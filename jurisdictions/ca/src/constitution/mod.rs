@@ -35,11 +35,11 @@
 //!
 //! # Key Cases
 //!
-//! - **R v Oakes** [1986] 1 SCR 103 - s.1 justification test
-//! - **Haida Nation v BC** [2004] 3 SCR 511 - Duty to consult
-//! - **Tsilhqot'in Nation v BC** [2014] 2 SCR 256 - Aboriginal title
-//! - **Reference re Secession of Quebec** [1998] 2 SCR 217 - Constitutional principles
-//! - **Carter v Canada** [2015] 1 SCR 331 - Medical assistance in dying
+//! - **R v Oakes** \[1986\] 1 SCR 103 - s.1 justification test
+//! - **Haida Nation v BC** \[2004\] 3 SCR 511 - Duty to consult
+//! - **Tsilhqot'in Nation v BC** \[2014\] 2 SCR 256 - Aboriginal title
+//! - **Reference re Secession of Quebec** \[1998\] 2 SCR 217 - Constitutional principles
+//! - **Carter v Canada** \[2015\] 1 SCR 331 - Medical assistance in dying
 //!
 //! # Example
 //!

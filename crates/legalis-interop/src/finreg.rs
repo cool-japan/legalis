@@ -302,10 +302,9 @@ impl FinRegExporter {
                 && key != "requirement_type"
                 && key != "version"
                 && key != "effective_date"
+                && let Ok(num) = value.parse::<f64>()
             {
-                if let Ok(num) = value.parse::<f64>() {
-                    thresholds.insert(key.clone(), num);
-                }
+                thresholds.insert(key.clone(), num);
             }
         }
 

@@ -4,6 +4,10 @@
 //! - Directors duties (Part 2D.1)
 //! - Insolvent trading (s.588G)
 //! - External administration
+//! - Company formation and registration (Chapter 2A)
+//! - Share capital (Chapter 2H)
+//! - Members' rights (Chapters 2F, 2G)
+//! - Oppression remedies (s.232-234)
 //!
 //! ## Key Legislation
 //!
@@ -12,9 +16,12 @@
 //!
 //! ## Key Cases
 //!
-//! - ASIC v Healey [2011] - Directors duty of care
+//! - ASIC v Healey \[2011\] - Directors duty of care
 //! - Shafron v ASIC (2012) - Officers duty
+//! - Re H R Harmer Ltd (1959) - Oppression remedy
+//! - Gambotto v WCP Ltd (1995) - Expropriation of minority
 
+pub mod company_law;
 pub mod corporations;
 pub mod types;
 
@@ -27,6 +34,55 @@ pub use types::{
     AsicPower, BusinessJudgmentElement, CompanySize, CompanyType, CorporateCase, DirectorsDuty,
     ExternalAdministration, InsolventTradingDefence, LiquidationPriority, TakeoverMethod,
     TakeoverThreshold,
+};
+
+// Re-export company_law types
+pub use company_law::{
+    // Company formation
+    AmendmentProvisions,
+    // Share capital
+    BuybackType,
+    BuybackValidation,
+    CapitalReduction,
+    CapitalReductionType,
+    ClassRightsVariation,
+    Company,
+    Constitution,
+    DirectorAppointmentMethod,
+    DirectorAppointmentRules,
+    DividendRights,
+    FinancialAssistance,
+    FinancialAssistanceExemption,
+    FinancialAssistanceType,
+    FinancialAssistanceValidation,
+    // Members' rights
+    MeetingBusiness,
+    MeetingProcedures,
+    MeetingType,
+    Member,
+    MemberType,
+    MembersMeeting,
+    // Oppression
+    OppressionApplicant,
+    OppressionClaim,
+    OppressionGround,
+    OppressionRemedy,
+    QuorumRequirement,
+    RegistrationStatus,
+    ReplaceableRuleCategory,
+    ResolutionResult,
+    ResolutionType,
+    ShareBuyback,
+    ShareClass,
+    ShareConsideration,
+    ShareIssue,
+    ShareIssueType,
+    ShareIssueValidation,
+    Shareholding,
+    // Validation functions
+    validate_buyback,
+    validate_financial_assistance,
+    validate_share_issue,
 };
 
 use legalis_core::{Effect, EffectType, Statute};

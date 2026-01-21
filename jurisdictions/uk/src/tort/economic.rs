@@ -1,14 +1,14 @@
 //! UK Economic Torts
 //!
 //! This module implements economic torts under common law:
-//! - Inducing breach of contract (OBG v Allan [2008] 1 AC 1)
+//! - Inducing breach of contract (OBG v Allan \[2008\] 1 AC 1)
 //! - Causing loss by unlawful means (OBG v Allan)
-//! - Unlawful means conspiracy (Revenue v Total Network [2008])
+//! - Unlawful means conspiracy (Revenue v Total Network \[2008\])
 //! - Lawful means conspiracy (Lonrho v Shell)
 //!
 //! Key cases:
-//! - OBG Ltd v Allan [2008] 1 AC 1 (restructuring of economic torts)
-//! - Revenue v Total Network [2008] 1 AC 1174 (unlawful means conspiracy)
+//! - OBG Ltd v Allan \[2008\] 1 AC 1 (restructuring of economic torts)
+//! - Revenue v Total Network \[2008\] 1 AC 1174 (unlawful means conspiracy)
 //! - Lumley v Gye (1853) 2 E&B 216 (inducing breach)
 
 use serde::{Deserialize, Serialize};

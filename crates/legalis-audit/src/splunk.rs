@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Configuration for Splunk HTTP Event Collector.
 #[derive(Debug, Clone)]
 pub struct SplunkConfig {
-    /// Splunk HEC endpoint URL (e.g., "https://splunk.example.com:8088/services/collector/event")
+    /// Splunk HEC endpoint URL (e.g., "<https://splunk.example.com:8088/services/collector/event>")
     pub hec_url: String,
     /// HEC authentication token
     pub hec_token: String,

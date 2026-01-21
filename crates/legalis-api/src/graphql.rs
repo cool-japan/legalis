@@ -51,10 +51,10 @@ impl Default for GraphQLState {
 /// Helper function to check permissions in GraphQL resolvers.
 /// Returns an error if the user doesn't have the required permission.
 fn check_permission(ctx: &Context<'_>, permission: Permission) -> FieldResult<()> {
-    if let Ok(auth_user) = ctx.data::<AuthUser>() {
-        if auth_user.has_permission(permission) {
-            return Ok(());
-        }
+    if let Ok(auth_user) = ctx.data::<AuthUser>()
+        && auth_user.has_permission(permission)
+    {
+        return Ok(());
     }
     Err("Insufficient permissions".into())
 }

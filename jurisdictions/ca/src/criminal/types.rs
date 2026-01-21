@@ -650,7 +650,7 @@ pub enum CriminalArea {
 }
 
 impl CriminalCase {
-    /// R v Woollin [1999] - oblique intention
+    /// R v Woollin \[1999\] - oblique intention
     pub fn woollin() -> Self {
         Self {
             citation: CaseCitation {
@@ -671,7 +671,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Sault Ste. Marie [1978] - regulatory offences
+    /// R v Sault Ste. Marie \[1978\] - regulatory offences
     pub fn sault_ste_marie() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -688,7 +688,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Martineau [1990] - murder mens rea
+    /// R v Martineau \[1990\] - murder mens rea
     pub fn martineau() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -704,7 +704,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Creighton [1993] - manslaughter
+    /// R v Creighton \[1993\] - manslaughter
     pub fn creighton() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -720,7 +720,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Daviault [1994] - extreme intoxication
+    /// R v Daviault \[1994\] - extreme intoxication
     pub fn daviault() -> Self {
         Self {
             citation: CaseCitation::scc("R v Daviault", 1994, 63, "Extreme intoxication defence"),
@@ -731,7 +731,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Grant [2009] - s.24(2) exclusion
+    /// R v Grant \[2009\] - s.24(2) exclusion
     pub fn grant() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -748,7 +748,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Jordan [2016] - trial delay
+    /// R v Jordan \[2016\] - trial delay
     pub fn jordan() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -764,7 +764,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Gladue [1999] - Indigenous sentencing
+    /// R v Gladue \[1999\] - Indigenous sentencing
     pub fn gladue() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -781,7 +781,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Ipeelee [2012] - Gladue factors
+    /// R v Ipeelee \[2012\] - Gladue factors
     pub fn ipeelee() -> Self {
         Self {
             citation: CaseCitation::scc("R v Ipeelee", 2012, 13, "Gladue applies to all offences"),
@@ -792,7 +792,7 @@ impl CriminalCase {
         }
     }
 
-    /// R v Perka [1984] - necessity
+    /// R v Perka \[1984\] - necessity
     pub fn perka() -> Self {
         Self {
             citation: CaseCitation::scc(

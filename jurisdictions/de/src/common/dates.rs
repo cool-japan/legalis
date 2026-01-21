@@ -334,12 +334,11 @@ impl GermanLegalCalendar {
                         return true;
                     }
                 }
-                if state.has_repentance_day() {
-                    if let Some(repentance) = calculate_repentance_day(date.year()) {
-                        if date == repentance {
-                            return true;
-                        }
-                    }
+                if state.has_repentance_day()
+                    && let Some(repentance) = calculate_repentance_day(date.year())
+                    && date == repentance
+                {
+                    return true;
                 }
             }
         }
@@ -456,22 +455,21 @@ impl GermanLegalCalendar {
                 return Some("Pfingstmontag");
             }
 
-            if let Some(state) = self.state {
-                if state.has_corpus_christi() && date == easter + chrono::Duration::days(60) {
-                    return Some("Fronleichnam");
-                }
+            if let Some(state) = self.state
+                && state.has_corpus_christi()
+                && date == easter + chrono::Duration::days(60)
+            {
+                return Some("Fronleichnam");
             }
         }
 
         // Buß- und Bettag (Saxony)
-        if let Some(state) = self.state {
-            if state.has_repentance_day() {
-                if let Some(repentance) = calculate_repentance_day(date.year()) {
-                    if date == repentance {
-                        return Some("Buß- und Bettag");
-                    }
-                }
-            }
+        if let Some(state) = self.state
+            && state.has_repentance_day()
+            && let Some(repentance) = calculate_repentance_day(date.year())
+            && date == repentance
+        {
+            return Some("Buß- und Bettag");
         }
 
         None

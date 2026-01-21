@@ -1,0 +1,22 @@
+[package]
+name = "legalis-cn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "China (中国) jurisdiction support for Legalis-RS - Socialist civil law with Chinese characteristics"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-cn"
+keywords = ["legalis", "china", "pipl", "civil-code", "cybersecurity"]
+categories = ["text-processing", "localization"]
+
+[dependencies]
+legalis-core.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

@@ -634,10 +634,10 @@ impl StatuteVerifier {
         let key = Self::cache_key(statute);
 
         // Check cache
-        if let Ok(cache) = self.cache.lock() {
-            if let Some(cached_result) = cache.get(&key) {
-                return cached_result.clone();
-            }
+        if let Ok(cache) = self.cache.lock()
+            && let Some(cached_result) = cache.get(&key)
+        {
+            return cached_result.clone();
         }
 
         // Compute result
@@ -668,28 +668,28 @@ impl StatuteVerifier {
         let mut cycles_found = HashSet::new();
 
         for statute in statutes {
-            if !visited.contains(statute.id.as_str()) {
-                if let Some(cycle) = Self::find_cycle_path(
+            if !visited.contains(statute.id.as_str())
+                && let Some(cycle) = Self::find_cycle_path(
                     &statute.id,
                     &graph,
                     &mut visited,
                     &mut rec_stack,
                     &mut Vec::new(),
-                ) {
-                    // Create a normalized cycle key to avoid duplicate reporting
-                    let mut cycle_sorted = cycle.clone();
-                    cycle_sorted.sort();
-                    let cycle_key = cycle_sorted.join("->");
+                )
+            {
+                // Create a normalized cycle key to avoid duplicate reporting
+                let mut cycle_sorted = cycle.clone();
+                cycle_sorted.sort();
+                let cycle_key = cycle_sorted.join("->");
 
-                    if cycles_found.insert(cycle_key) {
-                        errors.push(VerificationError::CircularReference {
-                            message: format!(
-                                "Circular reference detected: {} -> {}",
-                                cycle.join(" -> "),
-                                cycle[0]
-                            ),
-                        });
-                    }
+                if cycles_found.insert(cycle_key) {
+                    errors.push(VerificationError::CircularReference {
+                        message: format!(
+                            "Circular reference detected: {} -> {}",
+                            cycle.join(" -> "),
+                            cycle[0]
+                        ),
+                    });
                 }
             }
         }
@@ -982,17 +982,16 @@ impl StatuteVerifier {
                     // Check if condition i implies condition j
                     if let Ok(implies) =
                         smt_verifier.implies(&statute.preconditions[i], &statute.preconditions[j])
+                        && implies
                     {
-                        if implies {
-                            // Condition j is redundant
-                            let suggestion = format!(
-                                "In statute '{}': condition '{}' is redundant (implied by '{}')",
-                                statute.id,
-                                format!("{:?}", statute.preconditions[j]),
-                                format!("{:?}", statute.preconditions[i])
-                            );
-                            return VerificationResult::pass().with_suggestion(suggestion);
-                        }
+                        // Condition j is redundant
+                        let suggestion = format!(
+                            "In statute '{}': condition '{}' is redundant (implied by '{}')",
+                            statute.id,
+                            format!("{:?}", statute.preconditions[j]),
+                            format!("{:?}", statute.preconditions[i])
+                        );
+                        return VerificationResult::pass().with_suggestion(suggestion);
                     }
                 }
             }
@@ -1031,35 +1030,33 @@ impl StatuteVerifier {
             let mut smt_verifier = smt::SmtVerifier::new();
 
             // Check if this condition is unsatisfiable
-            if let Ok(satisfiable) = smt_verifier.is_satisfiable(condition) {
-                if !satisfiable {
-                    return Some(format!(
-                        "Unreachable branch: condition {:?} can never be satisfied",
-                        condition
-                    ));
-                }
+            if let Ok(satisfiable) = smt_verifier.is_satisfiable(condition)
+                && !satisfiable
+            {
+                return Some(format!(
+                    "Unreachable branch: condition {:?} can never be satisfied",
+                    condition
+                ));
             }
 
             // Check branches in logical operators
             match condition {
                 Condition::Or(left, right) => {
                     // Check if left branch is unsatisfiable
-                    if let Ok(left_sat) = smt_verifier.is_satisfiable(left) {
-                        if !left_sat {
-                            return Some(
-                                "Left branch of OR is always false, making it redundant"
-                                    .to_string(),
-                            );
-                        }
+                    if let Ok(left_sat) = smt_verifier.is_satisfiable(left)
+                        && !left_sat
+                    {
+                        return Some(
+                            "Left branch of OR is always false, making it redundant".to_string(),
+                        );
                     }
                     // Check if right branch is unsatisfiable
-                    if let Ok(right_sat) = smt_verifier.is_satisfiable(right) {
-                        if !right_sat {
-                            return Some(
-                                "Right branch of OR is always false, making it redundant"
-                                    .to_string(),
-                            );
-                        }
+                    if let Ok(right_sat) = smt_verifier.is_satisfiable(right)
+                        && !right_sat
+                    {
+                        return Some(
+                            "Right branch of OR is always false, making it redundant".to_string(),
+                        );
                     }
                     // Recursively check inner conditions
                     if let Some(msg) = self.find_unreachable_branch(left) {
@@ -1080,10 +1077,10 @@ impl StatuteVerifier {
                 }
                 Condition::Not(inner) => {
                     // Check if inner condition is a tautology (making NOT always false)
-                    if let Ok(is_tautology) = smt_verifier.is_tautology(inner) {
-                        if is_tautology {
-                            return Some("NOT of a tautology is always false".to_string());
-                        }
+                    if let Ok(is_tautology) = smt_verifier.is_tautology(inner)
+                        && is_tautology
+                    {
+                        return Some("NOT of a tautology is always false".to_string());
                     }
                     // Recursively check inner condition
                     if let Some(msg) = self.find_unreachable_branch(inner) {
@@ -1532,19 +1529,18 @@ pub fn check_retroactivity(statute: &Statute) -> PrincipleCheckResult {
             }
 
             // Check effect parameters for retroactive indicators
-            if let Some(retroactive_param) = statute.effect.parameters.get("retroactive") {
-                if retroactive_param.to_lowercase() == "true"
-                    || retroactive_param.to_lowercase() == "yes"
-                {
-                    issues.push(format!(
+            if let Some(retroactive_param) = statute.effect.parameters.get("retroactive")
+                && (retroactive_param.to_lowercase() == "true"
+                    || retroactive_param.to_lowercase() == "yes")
+            {
+                issues.push(format!(
                         "{:?} effect is marked as retroactive, which may violate ex post facto principles",
                         statute.effect.effect_type
                     ));
-                    suggestions.push(format!(
-                        "Ensure effective date ({}) is not applied to conduct before that date",
-                        effective_date
-                    ));
-                }
+                suggestions.push(format!(
+                    "Ensure effective date ({}) is not applied to conduct before that date",
+                    effective_date
+                ));
             }
 
             // Check for application_date that precedes effective_date
@@ -1552,16 +1548,14 @@ pub fn check_retroactivity(statute: &Statute) -> PrincipleCheckResult {
                 // Try to parse the application date
                 if let Ok(application_date) =
                     chrono::NaiveDate::parse_from_str(application_date_str, "%Y-%m-%d")
+                    && application_date < effective_date
                 {
-                    if application_date < effective_date {
-                        issues.push(format!(
+                    issues.push(format!(
                             "Application date ({}) precedes effective date ({}), creating retroactive effect",
                             application_date, effective_date
                         ));
-                        suggestions.push(
-                            "Align application date with or after effective date".to_string(),
-                        );
-                    }
+                    suggestions
+                        .push("Align application date with or after effective date".to_string());
                 }
             }
         }
@@ -1576,18 +1570,17 @@ pub fn check_retroactivity(statute: &Statute) -> PrincipleCheckResult {
                 || effect_desc_lower.contains("penalty")
                 || effect_desc_lower.contains("sanction");
 
-            if is_penalty {
-                if let Some(retroactive_param) = statute.effect.parameters.get("retroactive") {
-                    if retroactive_param.to_lowercase() == "true" {
-                        issues.push(
+            if is_penalty
+                && let Some(retroactive_param) = statute.effect.parameters.get("retroactive")
+                && retroactive_param.to_lowercase() == "true"
+            {
+                issues.push(
                             "Monetary penalty appears to apply retroactively, violating ex post facto principles".to_string(),
                         );
-                        suggestions.push(
-                            "Apply penalties only to violations occurring after the effective date"
-                                .to_string(),
-                        );
-                    }
-                }
+                suggestions.push(
+                    "Apply penalties only to violations occurring after the effective date"
+                        .to_string(),
+                );
             }
         }
     } else {
@@ -5726,10 +5719,10 @@ fn check_until(
 pub fn verify_ctl(system: &TransitionSystem, formula: &CtlFormula) -> bool {
     // Verify formula from all initial states
     for initial_id in &system.initial_states {
-        if let Some(initial_state) = system.states.get(initial_id) {
-            if !check_ctl_from_state(system, initial_state, formula) {
-                return false;
-            }
+        if let Some(initial_state) = system.states.get(initial_id)
+            && !check_ctl_from_state(system, initial_state, formula)
+        {
+            return false;
         }
     }
     true
@@ -6140,25 +6133,25 @@ pub fn verify_sequences(
 
     for constraint in constraints {
         for initial_id in &system.initial_states {
-            if let Some(initial_state) = system.states.get(initial_id) {
-                if !check_sequence(
+            if let Some(initial_state) = system.states.get(initial_id)
+                && !check_sequence(
                     system,
                     initial_state,
                     &constraint.events,
                     0,
                     constraint.strict,
                     &mut HashSet::new(),
-                ) {
-                    violations.push(SequenceViolation {
-                        constraint_id: constraint.id.clone(),
-                        description: format!(
-                            "Required event sequence {:?} was not followed",
-                            constraint.events
-                        ),
-                        violating_events: constraint.events.clone(),
-                    });
-                    break;
-                }
+                )
+            {
+                violations.push(SequenceViolation {
+                    constraint_id: constraint.id.clone(),
+                    description: format!(
+                        "Required event sequence {:?} was not followed",
+                        constraint.events
+                    ),
+                    violating_events: constraint.events.clone(),
+                });
+                break;
             }
         }
     }
@@ -6365,10 +6358,10 @@ impl std::fmt::Display for CtlStarPathFormula {
 /// arbitrary nesting of path quantifiers and temporal operators.
 pub fn verify_ctl_star(system: &TransitionSystem, formula: &CtlStarFormula) -> bool {
     for initial_id in &system.initial_states {
-        if let Some(initial_state) = system.states.get(initial_id) {
-            if !check_ctl_star_state(system, initial_state, formula, &mut HashSet::new()) {
-                return false;
-            }
+        if let Some(initial_state) = system.states.get(initial_id)
+            && !check_ctl_star_state(system, initial_state, formula, &mut HashSet::new())
+        {
+            return false;
         }
     }
     true
@@ -6815,10 +6808,10 @@ pub fn verify_timed_reachability(automaton: &TimedAutomaton, time_bound: u64) ->
             }
 
             // Check invariant
-            if let Some(ref invariant) = location.invariant {
-                if !invariant.satisfied(&config.valuations) {
-                    continue;
-                }
+            if let Some(ref invariant) = location.invariant
+                && !invariant.satisfied(&config.valuations)
+            {
+                continue;
             }
         }
 
@@ -6829,10 +6822,10 @@ pub fn verify_timed_reachability(automaton: &TimedAutomaton, time_bound: u64) ->
             }
 
             // Check guard
-            if let Some(ref guard) = transition.guard {
-                if !guard.satisfied(&config.valuations) {
-                    continue;
-                }
+            if let Some(ref guard) = transition.guard
+                && !guard.satisfied(&config.valuations)
+            {
+                continue;
             }
 
             // Apply transition
@@ -8989,10 +8982,10 @@ fn calculate_maintainability(statute: &Statute) -> f64 {
     }
 
     // Good documentation (discretion logic) (20 points)
-    if let Some(logic) = &statute.discretion_logic {
-        if !logic.is_empty() {
-            score += 20.0;
-        }
+    if let Some(logic) = &statute.discretion_logic
+        && !logic.is_empty()
+    {
+        score += 20.0;
     }
 
     // Reasonable number of preconditions (15 points)
@@ -9367,19 +9360,19 @@ pub fn detect_ambiguities(statute: &Statute) -> Vec<Ambiguity> {
 
     // Check for implicit assumptions in custom conditions
     for (idx, condition) in statute.preconditions.iter().enumerate() {
-        if let legalis_core::Condition::Custom { description } = condition {
-            if description.len() < 10 || contains_vague_terms(description) {
-                ambiguities.push(Ambiguity::new(
-                    AmbiguityType::ImplicitAssumption,
-                    format!("preconditions[{}]", idx),
-                    format!(
-                        "Custom condition may have implicit assumptions: '{}'",
-                        description
-                    ),
-                    "Replace custom condition with explicit, testable conditions",
-                    8,
-                ));
-            }
+        if let legalis_core::Condition::Custom { description } = condition
+            && (description.len() < 10 || contains_vague_terms(description))
+        {
+            ambiguities.push(Ambiguity::new(
+                AmbiguityType::ImplicitAssumption,
+                format!("preconditions[{}]", idx),
+                format!(
+                    "Custom condition may have implicit assumptions: '{}'",
+                    description
+                ),
+                "Replace custom condition with explicit, testable conditions",
+                8,
+            ));
         }
     }
 
@@ -10168,7 +10161,7 @@ pub fn analyze_statute_statistics(statutes: &[Statute]) -> StatuteStatistics {
     let total_preconditions: usize = precondition_counts.iter().sum();
     let avg_preconditions = total_preconditions as f64 / total_count as f64;
 
-    let median_preconditions = if precondition_counts.len() % 2 == 0 {
+    let median_preconditions = if precondition_counts.len().is_multiple_of(2) {
         let mid = precondition_counts.len() / 2;
         (precondition_counts[mid - 1] + precondition_counts[mid]) as f64 / 2.0
     } else {
@@ -14171,29 +14164,26 @@ pub fn analyze_enhanced_coverage_gaps(statutes: &[Statute]) -> Vec<EnhancedCover
         let (statute1, tv1) = temporal_ranges[i];
         let (statute2, tv2) = temporal_ranges[i + 1];
 
-        if let (Some(end1), Some(start2)) = (&tv1.expiry_date, &tv2.effective_date) {
-            if start2 > end1 {
-                let gap_days = (start2.signed_duration_since(*end1)).num_days();
-                if gap_days > 30 {
-                    gaps.push(EnhancedCoverageGap {
-                        gap_type: GapType::TemporalGap,
-                        description: format!("Temporal gap of {} days", gap_days),
-                        example_scenario: format!(
-                            "Period from {} to {} is not covered",
-                            end1, start2
-                        ),
-                        severity: if gap_days > 365 {
-                            Severity::Warning
-                        } else {
-                            Severity::Info
-                        },
-                        related_statutes: vec![statute1.id.clone(), statute2.id.clone()],
-                        suggested_coverage: format!(
-                            "Consider adding coverage for the period {} to {}",
-                            end1, start2
-                        ),
-                    });
-                }
+        if let (Some(end1), Some(start2)) = (&tv1.expiry_date, &tv2.effective_date)
+            && start2 > end1
+        {
+            let gap_days = (start2.signed_duration_since(*end1)).num_days();
+            if gap_days > 30 {
+                gaps.push(EnhancedCoverageGap {
+                    gap_type: GapType::TemporalGap,
+                    description: format!("Temporal gap of {} days", gap_days),
+                    example_scenario: format!("Period from {} to {} is not covered", end1, start2),
+                    severity: if gap_days > 365 {
+                        Severity::Warning
+                    } else {
+                        Severity::Info
+                    },
+                    related_statutes: vec![statute1.id.clone(), statute2.id.clone()],
+                    suggested_coverage: format!(
+                        "Consider adding coverage for the period {} to {}",
+                        end1, start2
+                    ),
+                });
             }
         }
     }
@@ -16407,11 +16397,11 @@ pub fn monte_carlo_verification(
 
         for _ in 0..max_steps {
             // Check if current state is accepting
-            if let Some(state) = chain.states.iter().find(|s| s.id == current_state) {
-                if state.accepting {
-                    reached_accepting = true;
-                    break;
-                }
+            if let Some(state) = chain.states.iter().find(|s| s.id == current_state)
+                && state.accepting
+            {
+                reached_accepting = true;
+                break;
             }
 
             // Get outgoing transitions

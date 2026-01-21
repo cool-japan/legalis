@@ -232,11 +232,11 @@ impl DistributedInference {
     /// Decrements active request count for a node.
     pub async fn decrement_active(&self, node_id: &str) {
         let mut nodes = self.nodes.write().await;
-        if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id) {
-            if node.active_requests > 0 {
-                node.active_requests -= 1;
-                node.load = node.active_requests as f64 / node.max_concurrent as f64;
-            }
+        if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id)
+            && node.active_requests > 0
+        {
+            node.active_requests -= 1;
+            node.load = node.active_requests as f64 / node.max_concurrent as f64;
         }
     }
 

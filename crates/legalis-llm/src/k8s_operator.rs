@@ -268,10 +268,10 @@ impl LLMOperator {
 
             for key in deployment_keys {
                 let parts: Vec<&str> = key.split('/').collect();
-                if parts.len() == 2 {
-                    if let Err(e) = self.reconcile(parts[0], parts[1]).await {
-                        eprintln!("Error reconciling {}: {}", key, e);
-                    }
+                if parts.len() == 2
+                    && let Err(e) = self.reconcile(parts[0], parts[1]).await
+                {
+                    eprintln!("Error reconciling {}: {}", key, e);
                 }
             }
 

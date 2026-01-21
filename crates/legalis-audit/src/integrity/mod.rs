@@ -293,10 +293,10 @@ impl BatchVerifier {
     /// Verifies all proofs in the batch.
     pub fn verify_all(&self, records: &[AuditRecord]) -> AuditResult<bool> {
         for record in records {
-            if let Some(proof) = self.proofs.get(&record.id) {
-                if !proof.verify_record(record) {
-                    return Ok(false);
-                }
+            if let Some(proof) = self.proofs.get(&record.id)
+                && !proof.verify_record(record)
+            {
+                return Ok(false);
             }
         }
         Ok(true)

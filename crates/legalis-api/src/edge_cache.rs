@@ -132,17 +132,17 @@ impl CacheKeyGenerator {
         }
 
         // Include Accept header for content negotiation
-        if let Some(accept) = req.headers().get(header::ACCEPT) {
-            if let Ok(accept_str) = accept.to_str() {
-                key_parts.push(format!("accept:{}", accept_str));
-            }
+        if let Some(accept) = req.headers().get(header::ACCEPT)
+            && let Ok(accept_str) = accept.to_str()
+        {
+            key_parts.push(format!("accept:{}", accept_str));
         }
 
         // Include Accept-Language for i18n
-        if let Some(lang) = req.headers().get(header::ACCEPT_LANGUAGE) {
-            if let Ok(lang_str) = lang.to_str() {
-                key_parts.push(format!("lang:{}", lang_str));
-            }
+        if let Some(lang) = req.headers().get(header::ACCEPT_LANGUAGE)
+            && let Ok(lang_str) = lang.to_str()
+        {
+            key_parts.push(format!("lang:{}", lang_str));
         }
 
         key_parts.join("|")

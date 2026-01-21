@@ -369,7 +369,7 @@ pub enum ContractArea {
 }
 
 impl ContractCase {
-    /// Hunter Engineering v Syncrude [1989] - exclusion clauses
+    /// Hunter Engineering v Syncrude \[1989\] - exclusion clauses
     pub fn hunter_engineering() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -386,7 +386,7 @@ impl ContractCase {
         }
     }
 
-    /// Tercon Contractors v BC [2010] - exclusion clauses
+    /// Tercon Contractors v BC \[2010\] - exclusion clauses
     pub fn tercon() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -402,7 +402,7 @@ impl ContractCase {
         }
     }
 
-    /// Bhasin v Hrynew [2014] - good faith
+    /// Bhasin v Hrynew \[2014\] - good faith
     pub fn bhasin() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -418,7 +418,7 @@ impl ContractCase {
         }
     }
 
-    /// C.M. Callow Inc v Zollinger [2020] - good faith
+    /// C.M. Callow Inc v Zollinger \[2020\] - good faith
     pub fn callow() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -454,7 +454,7 @@ impl ContractCase {
         }
     }
 
-    /// Fidler v Sun Life [2006] - mental distress damages
+    /// Fidler v Sun Life \[2006\] - mental distress damages
     pub fn fidler() -> Self {
         Self {
             citation: CaseCitation::scc(

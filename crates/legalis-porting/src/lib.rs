@@ -1954,10 +1954,9 @@ impl SemanticDistanceCalculator {
         if let Some(equiv) =
             self.concept_db
                 .best_match(source_jurisdiction, target_jurisdiction, source_concept)
+            && equiv.target_concept.eq_ignore_ascii_case(target_concept)
         {
-            if equiv.target_concept.eq_ignore_ascii_case(target_concept) {
-                return equiv.semantic_distance;
-            }
+            return equiv.semantic_distance;
         }
 
         // Fall back to simple string similarity
@@ -2747,13 +2746,12 @@ impl AgeOfMajorityMapper {
         if let (Some(source), Some(target)) = (
             self.get_age(source_jurisdiction),
             self.get_age(target_jurisdiction),
-        ) {
-            if source.age != target.age {
-                return Some(format!(
-                    "Age adjusted from {} to {} for {}",
-                    source.age, target.age, target_jurisdiction
-                ));
-            }
+        ) && source.age != target.age
+        {
+            return Some(format!(
+                "Age adjusted from {} to {} for {}",
+                source.age, target.age, target_jurisdiction
+            ));
         }
         None
     }
@@ -3036,22 +3034,21 @@ impl PortingEngine {
         let target_params = &self.target.cultural_params;
 
         // Check for age of majority differences
-        if source_params.age_of_majority != target_params.age_of_majority {
-            if let (Some(source_age), Some(target_age)) =
+        if source_params.age_of_majority != target_params.age_of_majority
+            && let (Some(source_age), Some(target_age)) =
                 (source_params.age_of_majority, target_params.age_of_majority)
-            {
-                // Would need to modify conditions here
-                changes.push(PortingChange {
-                    change_type: ChangeType::ValueAdaptation,
-                    description: "Age of majority adjusted".to_string(),
-                    original: Some(source_age.to_string()),
-                    adapted: Some(target_age.to_string()),
-                    reason: format!(
-                        "Target jurisdiction ({}) has different age of majority",
-                        self.target.id
-                    ),
-                });
-            }
+        {
+            // Would need to modify conditions here
+            changes.push(PortingChange {
+                change_type: ChangeType::ValueAdaptation,
+                description: "Age of majority adjusted".to_string(),
+                original: Some(source_age.to_string()),
+                adapted: Some(target_age.to_string()),
+                reason: format!(
+                    "Target jurisdiction ({}) has different age of majority",
+                    self.target.id
+                ),
+            });
         }
 
         // Check for cultural prohibitions
@@ -3212,19 +3209,18 @@ impl PortingEngine {
         if let (Some(target_age), Some(source_age)) = (
             self.target.cultural_params.age_of_majority,
             self.source.cultural_params.age_of_majority,
-        ) {
-            if target_age != source_age {
-                changes.push(PortingChange {
-                    change_type: ChangeType::ValueAdaptation,
-                    description: "Reverse age of majority adjustment".to_string(),
-                    original: Some(target_age.to_string()),
-                    adapted: Some(source_age.to_string()),
-                    reason: format!(
-                        "Reverting to source jurisdiction ({}) age of majority",
-                        self.source.id
-                    ),
-                });
-            }
+        ) && target_age != source_age
+        {
+            changes.push(PortingChange {
+                change_type: ChangeType::ValueAdaptation,
+                description: "Reverse age of majority adjustment".to_string(),
+                original: Some(target_age.to_string()),
+                adapted: Some(source_age.to_string()),
+                reason: format!(
+                    "Reverting to source jurisdiction ({}) age of majority",
+                    self.source.id
+                ),
+            });
         }
 
         // Check for prohibitions that would need to be lifted
@@ -3618,16 +3614,15 @@ impl PortingEngine {
         if let (Some(source_age), Some(target_age)) = (
             self.source.cultural_params.age_of_majority,
             self.target.cultural_params.age_of_majority,
-        ) {
-            if source_age != target_age {
-                adjustments.push(ContextualAdjustment {
-                    parameter: "age_of_majority".to_string(),
-                    original_value: source_age.to_string(),
-                    adjusted_value: target_age.to_string(),
-                    context: format!("Statute: {}", statute.id),
-                    rationale: "Age of majority differs between jurisdictions".to_string(),
-                });
-            }
+        ) && source_age != target_age
+        {
+            adjustments.push(ContextualAdjustment {
+                parameter: "age_of_majority".to_string(),
+                original_value: source_age.to_string(),
+                adjusted_value: target_age.to_string(),
+                context: format!("Statute: {}", statute.id),
+                rationale: "Age of majority differs between jurisdictions".to_string(),
+            });
         }
 
         // Check for currency adjustments (if statute involves monetary values)
@@ -6975,10 +6970,10 @@ impl ABTestingFramework {
 
     /// Gets the winning variant if available.
     pub fn get_winner(&self) -> Option<&PortingVariant> {
-        if let Some(results) = &self.results {
-            if let Some(winner_id) = &results.winner_id {
-                return self.variants.iter().find(|v| &v.id == winner_id);
-            }
+        if let Some(results) = &self.results
+            && let Some(winner_id) = &results.winner_id
+        {
+            return self.variants.iter().find(|v| &v.id == winner_id);
         }
         None
     }
@@ -7486,12 +7481,12 @@ impl SelfImprovingModel {
     /// Increments version number.
     fn increment_version(&mut self) -> String {
         let parts: Vec<&str> = self.version.split('.').collect();
-        if parts.len() == 3 {
-            if let Ok(patch) = parts[2].parse::<u32>() {
-                let new_version = format!("{}.{}.{}", parts[0], parts[1], patch + 1);
-                self.version = new_version.clone();
-                return new_version;
-            }
+        if parts.len() == 3
+            && let Ok(patch) = parts[2].parse::<u32>()
+        {
+            let new_version = format!("{}.{}.{}", parts[0], parts[1], patch + 1);
+            self.version = new_version.clone();
+            return new_version;
         }
         self.version.clone()
     }
@@ -16651,10 +16646,10 @@ impl RegressionTestManager {
         let mut all_results = Vec::new();
 
         for test_id in test_ids {
-            if let Some(ported) = results.get(&test_id) {
-                if let Ok(result) = self.run_test(&test_id, ported) {
-                    all_results.push(result);
-                }
+            if let Some(ported) = results.get(&test_id)
+                && let Ok(result) = self.run_test(&test_id, ported)
+            {
+                all_results.push(result);
             }
         }
 

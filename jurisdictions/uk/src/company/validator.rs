@@ -146,14 +146,14 @@ pub fn validate_company_name(name: &str, company_type: CompanyType) -> Result<()
 /// - Share arithmetic correctness
 pub fn validate_share_capital(capital: &ShareCapital, company_type: CompanyType) -> Result<()> {
     // Check minimum capital
-    if let Some(minimum) = company_type.minimum_share_capital() {
-        if capital.nominal_capital_gbp < minimum {
-            return Err(CompanyLawError::InsufficientShareCapital {
-                actual: capital.nominal_capital_gbp,
-                minimum,
-                company_type: format!("{:?}", company_type),
-            });
-        }
+    if let Some(minimum) = company_type.minimum_share_capital()
+        && capital.nominal_capital_gbp < minimum
+    {
+        return Err(CompanyLawError::InsufficientShareCapital {
+            actual: capital.nominal_capital_gbp,
+            minimum,
+            company_type: format!("{:?}", company_type),
+        });
     }
 
     // Check paid up capital for PLC (s.586: minimum 25%)

@@ -136,20 +136,20 @@ pub fn validate_cdd(cdd: &CustomerDueDiligence) -> Result<()> {
         }
 
         // Check source of wealth/funds are not empty strings
-        if let Some(ref sow) = cdd.source_of_wealth {
-            if sow.trim().is_empty() {
-                return Err(AmlCtfError::SourceOfWealthNotEstablished {
-                    pep_name: cdd.customer_name.clone(),
-                });
-            }
+        if let Some(ref sow) = cdd.source_of_wealth
+            && sow.trim().is_empty()
+        {
+            return Err(AmlCtfError::SourceOfWealthNotEstablished {
+                pep_name: cdd.customer_name.clone(),
+            });
         }
 
-        if let Some(ref sof) = cdd.source_of_funds {
-            if sof.trim().is_empty() {
-                return Err(AmlCtfError::SourceOfWealthNotEstablished {
-                    pep_name: cdd.customer_name.clone(),
-                });
-            }
+        if let Some(ref sof) = cdd.source_of_funds
+            && sof.trim().is_empty()
+        {
+            return Err(AmlCtfError::SourceOfWealthNotEstablished {
+                pep_name: cdd.customer_name.clone(),
+            });
         }
     }
 
@@ -221,12 +221,12 @@ pub fn validate_sar(sar: &SuspiciousActivityReport) -> Result<()> {
     }
 
     // Validate NCA reference is not empty
-    if let Some(ref nca_ref) = sar.nca_reference {
-        if nca_ref.trim().is_empty() {
-            return Err(AmlCtfError::SarIncomplete {
-                missing_fields: "NCA reference number is empty".to_string(),
-            });
-        }
+    if let Some(ref nca_ref) = sar.nca_reference
+        && nca_ref.trim().is_empty()
+    {
+        return Err(AmlCtfError::SarIncomplete {
+            missing_fields: "NCA reference number is empty".to_string(),
+        });
     }
 
     // Check subject name is not empty

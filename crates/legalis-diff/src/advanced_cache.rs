@@ -155,12 +155,12 @@ impl CacheManager {
         }
 
         // Try secondary cache if available
-        if self.config.secondary_backend.is_some() {
-            if let Some(entry) = self.get_from_secondary(key) {
-                // Promote to primary cache
-                self.put_to_primary(key, entry.diff.clone());
-                return Some(entry.diff);
-            }
+        if self.config.secondary_backend.is_some()
+            && let Some(entry) = self.get_from_secondary(key)
+        {
+            // Promote to primary cache
+            self.put_to_primary(key, entry.diff.clone());
+            return Some(entry.diff);
         }
 
         None

@@ -413,7 +413,7 @@ pub enum TortArea {
 }
 
 impl TortCase {
-    /// Donoghue v Stevenson [1932] - neighbour principle
+    /// Donoghue v Stevenson \[1932\] - neighbour principle
     pub fn donoghue_v_stevenson() -> Self {
         Self {
             citation: CaseCitation {
@@ -432,7 +432,7 @@ impl TortCase {
         }
     }
 
-    /// Anns v Merton [1978] - two-stage test
+    /// Anns v Merton \[1978\] - two-stage test
     pub fn anns_v_merton() -> Self {
         Self {
             citation: CaseCitation {
@@ -450,7 +450,7 @@ impl TortCase {
         }
     }
 
-    /// Cooper v Hobart [2001] SCC 79 - refined Anns test
+    /// Cooper v Hobart \[2001\] SCC 79 - refined Anns test
     pub fn cooper_v_hobart() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -467,7 +467,7 @@ impl TortCase {
         }
     }
 
-    /// Childs v Desormeaux [2006] SCC 18 - social host liability
+    /// Childs v Desormeaux \[2006\] SCC 18 - social host liability
     pub fn childs_v_desormeaux() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -483,7 +483,7 @@ impl TortCase {
         }
     }
 
-    /// Clements v Clements [2012] SCC 32 - material contribution
+    /// Clements v Clements \[2012\] SCC 32 - material contribution
     pub fn clements_v_clements() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -500,7 +500,7 @@ impl TortCase {
         }
     }
 
-    /// Mustapha v Culligan [2008] SCC 27 - psychological harm
+    /// Mustapha v Culligan \[2008\] SCC 27 - psychological harm
     pub fn mustapha_v_culligan() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -516,7 +516,7 @@ impl TortCase {
         }
     }
 
-    /// Andrews v Grand & Toy [1978] - non-pecuniary cap
+    /// Andrews v Grand & Toy \[1978\] - non-pecuniary cap
     pub fn andrews_v_grand_toy() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -532,7 +532,7 @@ impl TortCase {
         }
     }
 
-    /// Grant v Torstar [2009] SCC 61 - responsible communication
+    /// Grant v Torstar \[2009\] SCC 61 - responsible communication
     pub fn grant_v_torstar() -> Self {
         Self {
             citation: CaseCitation::scc(

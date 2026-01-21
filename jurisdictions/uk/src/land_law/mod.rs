@@ -13,19 +13,19 @@
 //!
 //! # Module Structure
 //!
-//! - [`types`] - Core types for estates, interests, and registration
-//! - [`error`] - Error types for land law operations
-//! - [`estates`] - Freehold, leasehold, and lease/licence analysis
-//! - [`interests`] - Easements, covenants, and mortgages
-//! - [`registration`] - LRA 2002 and unregistered land
+//! - `types` - Core types for estates, interests, and registration
+//! - `error` - Error types for land law operations
+//! - `estates` - Freehold, leasehold, and lease/licence analysis
+//! - `interests` - Easements, covenants, and mortgages
+//! - `registration` - LRA 2002 and unregistered land
 //!
 //! # Key Cases
 //!
-//! - **Street v Mountford** [1985] AC 809 - lease vs licence distinction
-//! - **Re Ellenborough Park** [1956] Ch 131 - easement requirements
+//! - **Street v Mountford** \[1985\] AC 809 - lease vs licence distinction
+//! - **Re Ellenborough Park** \[1956\] Ch 131 - easement requirements
 //! - **Tulk v Moxhay** (1848) 2 Ph 774 - restrictive covenants in equity
-//! - **Williams & Glyn's Bank v Boland** [1981] AC 487 - overriding interests
-//! - **City of London BS v Flegg** [1988] AC 54 - overreaching
+//! - **Williams & Glyn's Bank v Boland** \[1981\] AC 487 - overriding interests
+//! - **City of London BS v Flegg** \[1988\] AC 54 - overreaching
 //!
 //! # Example
 //!

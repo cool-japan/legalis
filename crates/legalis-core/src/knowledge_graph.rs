@@ -289,10 +289,10 @@ impl KnowledgeGraph {
         for edge in &self.edges {
             if edge.from == node_id {
                 if let Some(ref rel) = relation {
-                    if &edge.relation == rel {
-                        if let Some(node) = self.nodes.get(&edge.to) {
-                            result.push(node);
-                        }
+                    if &edge.relation == rel
+                        && let Some(node) = self.nodes.get(&edge.to)
+                    {
+                        result.push(node);
                     }
                 } else if let Some(node) = self.nodes.get(&edge.to) {
                     result.push(node);
@@ -415,17 +415,17 @@ impl<'a> GraphQuery<'a> {
 
         for node in self.graph.nodes.values() {
             // Check node type filter
-            if let Some(ref nt) = self.node_type_filter {
-                if &node.node_type != nt {
-                    continue;
-                }
+            if let Some(ref nt) = self.node_type_filter
+                && &node.node_type != nt
+            {
+                continue;
             }
 
             // Check label filter
-            if let Some(ref lf) = self.label_filter {
-                if !node.label.contains(lf) {
-                    continue;
-                }
+            if let Some(ref lf) = self.label_filter
+                && !node.label.contains(lf)
+            {
+                continue;
             }
 
             // Check property filters

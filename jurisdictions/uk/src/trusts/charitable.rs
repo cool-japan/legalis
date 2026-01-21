@@ -40,10 +40,10 @@
 //!
 //! ## Key Cases
 //!
-//! - **Oppenheim v Tobacco Securities Trust [1951]**: Personal nexus test
-//! - **Dingle v Turner [1972]**: Poverty exception to personal nexus
-//! - **ISC v Charity Commission [2012]**: Public benefit for fee-charging schools
-//! - **Attorney General v Charity Commission [2012]**: Preston Down Trust case
+//! - **Oppenheim v Tobacco Securities Trust \[1951\]**: Personal nexus test
+//! - **Dingle v Turner \[1972\]**: Poverty exception to personal nexus
+//! - **ISC v Charity Commission \[2012\]**: Public benefit for fee-charging schools
+//! - **Attorney General v Charity Commission \[2012\]**: Preston Down Trust case
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -150,7 +150,7 @@ impl CharitablePurpose {
     }
 
     /// Is poverty exception applicable (relaxed public benefit)?
-    /// Per Dingle v Turner [1972], poverty trusts can benefit a class defined by personal nexus
+    /// Per Dingle v Turner \[1972\], poverty trusts can benefit a class defined by personal nexus
     pub fn poverty_exception_applies(&self) -> bool {
         matches!(
             self,
@@ -655,10 +655,10 @@ pub fn check_registration_requirement(
     }
 
     // Excepted charities (income < £100,000 and in excepted class)
-    if let Some(class) = excepted {
-        if annual_income < 100_000.0 {
-            return RegistrationStatus::Excepted { class };
-        }
+    if let Some(class) = excepted
+        && annual_income < 100_000.0
+    {
+        return RegistrationStatus::Excepted { class };
     }
 
     // General registration threshold

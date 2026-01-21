@@ -10,7 +10,7 @@
 //! - Publication metadata
 //! - Citation and reference system
 //!
-//! Reference: https://op.europa.eu/en/web/eu-vocabularies/formex
+//! Reference: <https://op.europa.eu/en/web/eu-vocabularies/formex>
 
 use crate::{ConversionReport, FormatExporter, FormatImporter, InteropResult, LegalFormat};
 use legalis_core::{Condition, Effect, EffectType, Statute};
@@ -79,15 +79,14 @@ impl FormexImporter {
         // Look for condition patterns in content
         if text.contains("age") || text.contains("years") {
             let re = Regex::new(r"(?:age|years)\s*(?:of\s*)?(?:at least|minimum|>=|greater than or equal to)\s*(\d+)").unwrap();
-            if let Some(cap) = re.captures(text) {
-                if let Some(age_str) = cap.get(1) {
-                    if let Ok(age_val) = age_str.as_str().parse::<u32>() {
-                        conditions.push(Condition::Age {
-                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                            value: age_val,
-                        });
-                    }
-                }
+            if let Some(cap) = re.captures(text)
+                && let Some(age_str) = cap.get(1)
+                && let Ok(age_val) = age_str.as_str().parse::<u32>()
+            {
+                conditions.push(Condition::Age {
+                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                    value: age_val,
+                });
             }
         }
 

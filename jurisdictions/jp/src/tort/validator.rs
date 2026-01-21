@@ -301,16 +301,17 @@ pub fn validate_article_710(
 
     // Apply victim comparative fault if present
     let mut final_compensation = claim.consolation_money.unwrap_or(base_compensation);
-    if let Some(fault_pct) = claim.victim_comparative_fault {
-        if fault_pct > 0 && fault_pct <= 100 {
-            let reduction = (final_compensation as f64 * fault_pct as f64 / 100.0) as u64;
-            final_compensation = final_compensation.saturating_sub(reduction);
-            validation_details.push(format!(
-                "Victim comparative fault: {}% (reduction applied)",
-                fault_pct
-            ));
-            calculation_factors.push(format!("Comparative fault reduction: {}%", fault_pct));
-        }
+    if let Some(fault_pct) = claim.victim_comparative_fault
+        && fault_pct > 0
+        && fault_pct <= 100
+    {
+        let reduction = (final_compensation as f64 * fault_pct as f64 / 100.0) as u64;
+        final_compensation = final_compensation.saturating_sub(reduction);
+        validation_details.push(format!(
+            "Victim comparative fault: {}% (reduction applied)",
+            fault_pct
+        ));
+        calculation_factors.push(format!("Comparative fault reduction: {}%", fault_pct));
     }
 
     // Determine status

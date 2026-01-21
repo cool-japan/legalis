@@ -133,44 +133,44 @@ impl InMemoryCaseDatabase {
     /// Checks if a decision matches the query filters
     fn matches_query(decision: &CourtDecision, query: &CaseSearchQuery) -> bool {
         // Court level filter
-        if let Some(level) = query.court_level {
-            if decision.metadata.court.level != level {
-                return false;
-            }
+        if let Some(level) = query.court_level
+            && decision.metadata.court.level != level
+        {
+            return false;
         }
 
         // Legal area filter
-        if let Some(area) = query.legal_area {
-            if decision.metadata.legal_area != area {
-                return false;
-            }
+        if let Some(area) = query.legal_area
+            && decision.metadata.legal_area != area
+        {
+            return false;
         }
 
         // Date range filter
-        if let Some(date_from) = query.date_from {
-            if decision.metadata.decision_date < date_from {
-                return false;
-            }
+        if let Some(date_from) = query.date_from
+            && decision.metadata.decision_date < date_from
+        {
+            return false;
         }
 
-        if let Some(date_to) = query.date_to {
-            if decision.metadata.decision_date > date_to {
-                return false;
-            }
+        if let Some(date_to) = query.date_to
+            && decision.metadata.decision_date > date_to
+        {
+            return false;
         }
 
         // Cited statute filter
-        if let Some(statute) = &query.cited_statute {
-            if !decision.cites_statute(statute) {
-                return false;
-            }
+        if let Some(statute) = &query.cited_statute
+            && !decision.cites_statute(statute)
+        {
+            return false;
         }
 
         // Case outcome filter
-        if let Some(outcome) = query.outcome {
-            if decision.metadata.outcome != outcome {
-                return false;
-            }
+        if let Some(outcome) = query.outcome
+            && decision.metadata.outcome != outcome
+        {
+            return false;
         }
 
         // Keyword filter (must match at least one keyword if keywords are specified)
@@ -298,10 +298,10 @@ impl<D: CaseLawDatabase> CaseLawSearchEngine<D> {
     /// Validates the search query
     fn validate_query(&self, query: &CaseSearchQuery) -> Result<()> {
         // Check date range validity
-        if let (Some(from), Some(to)) = (query.date_from, query.date_to) {
-            if from > to {
-                return Err(CaseLawError::InvalidDateRange);
-            }
+        if let (Some(from), Some(to)) = (query.date_from, query.date_to)
+            && from > to
+        {
+            return Err(CaseLawError::InvalidDateRange);
         }
 
         // Check if keywords are not empty strings

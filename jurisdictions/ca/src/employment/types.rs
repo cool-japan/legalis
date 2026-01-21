@@ -404,7 +404,7 @@ pub enum EmploymentArea {
 }
 
 impl EmploymentCase {
-    /// Bardal v Globe & Mail [1960] - reasonable notice factors
+    /// Bardal v Globe & Mail \[1960\] - reasonable notice factors
     pub fn bardal() -> Self {
         Self {
             citation: CaseCitation {
@@ -425,7 +425,7 @@ impl EmploymentCase {
         }
     }
 
-    /// 671122 Ontario Ltd v Sagaz Industries [2001] SCC 59 - employee vs contractor
+    /// 671122 Ontario Ltd v Sagaz Industries \[2001\] SCC 59 - employee vs contractor
     pub fn sagaz() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -442,7 +442,7 @@ impl EmploymentCase {
         }
     }
 
-    /// McKinley v BC Tel [2001] SCC 38 - just cause and proportionality
+    /// McKinley v BC Tel \[2001\] SCC 38 - just cause and proportionality
     pub fn mckinley() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -458,7 +458,7 @@ impl EmploymentCase {
         }
     }
 
-    /// Wallace v United Grain Growers [1997] - bad faith damages
+    /// Wallace v United Grain Growers \[1997\] - bad faith damages
     pub fn wallace() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -474,7 +474,7 @@ impl EmploymentCase {
         }
     }
 
-    /// Keays v Honda Canada [2008] SCC 39 - aggravated damages
+    /// Keays v Honda Canada \[2008\] SCC 39 - aggravated damages
     pub fn keays_v_honda() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -490,7 +490,7 @@ impl EmploymentCase {
         }
     }
 
-    /// Potter v New Brunswick Legal Aid [2015] - constructive dismissal
+    /// Potter v New Brunswick Legal Aid \[2015\] - constructive dismissal
     pub fn potter() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -506,7 +506,7 @@ impl EmploymentCase {
         }
     }
 
-    /// British Columbia v BCGSEU (Meiorin) [1999] - duty to accommodate
+    /// British Columbia v BCGSEU (Meiorin) \[1999\] - duty to accommodate
     pub fn meiorin() -> Self {
         Self {
             citation: CaseCitation::scc(

@@ -185,24 +185,24 @@ impl ContractValidator {
                 }
 
                 // Validate nested object
-                if let Some(nested_schema) = &field_schema.nested_schema {
-                    if field_value.is_object() {
-                        let nested_violations = self.validate_schema(field_value, nested_schema);
-                        violations.extend(nested_violations);
-                    }
+                if let Some(nested_schema) = &field_schema.nested_schema
+                    && field_value.is_object()
+                {
+                    let nested_violations = self.validate_schema(field_value, nested_schema);
+                    violations.extend(nested_violations);
                 }
 
                 // Validate array items
-                if let Some(item_schema) = &field_schema.array_item_schema {
-                    if let Some(arr) = field_value.as_array() {
-                        for item in arr {
-                            if !self.matches_type(item, &item_schema.field_type) {
-                                violations.push(ViolationType::TypeMismatch {
-                                    field: format!("{}[]", field_name),
-                                    expected: item_schema.field_type.clone(),
-                                    actual: self.get_type_name(item),
-                                });
-                            }
+                if let Some(item_schema) = &field_schema.array_item_schema
+                    && let Some(arr) = field_value.as_array()
+                {
+                    for item in arr {
+                        if !self.matches_type(item, &item_schema.field_type) {
+                            violations.push(ViolationType::TypeMismatch {
+                                field: format!("{}[]", field_name),
+                                expected: item_schema.field_type.clone(),
+                                actual: self.get_type_name(item),
+                            });
                         }
                     }
                 }

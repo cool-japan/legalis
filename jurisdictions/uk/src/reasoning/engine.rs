@@ -52,21 +52,20 @@ impl LegalReasoningEngine {
         );
 
         // Check written particulars (ERA 1996 s.1)
-        if !contract.written_particulars_provided {
-            if let Some(months) = ctx.get_duration(legalis_core::DurationUnit::Months) {
-                if months >= 2 {
-                    analysis.add_violation(
-                        Violation::new(
-                            "ERA_s1",
-                            "Written Particulars of Employment",
-                            "Written particulars not provided within 2 months of start",
-                            ViolationSeverity::Moderate,
-                        )
-                        .with_legal_reference("ERA 1996 s.1")
-                        .with_remediation("Provide written statement of employment particulars"),
-                    );
-                }
-            }
+        if !contract.written_particulars_provided
+            && let Some(months) = ctx.get_duration(legalis_core::DurationUnit::Months)
+            && months >= 2
+        {
+            analysis.add_violation(
+                Violation::new(
+                    "ERA_s1",
+                    "Written Particulars of Employment",
+                    "Written particulars not provided within 2 months of start",
+                    ViolationSeverity::Moderate,
+                )
+                .with_legal_reference("ERA 1996 s.1")
+                .with_remediation("Provide written statement of employment particulars"),
+            );
         }
 
         // Check 48-hour limit compliance (WTR 1998 Reg 4)
@@ -143,20 +142,20 @@ impl LegalReasoningEngine {
         }
 
         // Check night work hours if applicable
-        if let Some(night_hours) = hours.night_work_hours {
-            if night_hours > 8 {
-                analysis.add_violation(
-                    Violation::new(
-                        "WTR_Reg6",
-                        "Night Work Limits",
-                        format!("Night work of {} hours exceeds 8-hour limit", night_hours),
-                        ViolationSeverity::Moderate,
-                    )
-                    .with_legal_reference("WTR 1998 Reg 6"),
-                );
-                if analysis.status == ComplianceStatus::Compliant {
-                    analysis.status = ComplianceStatus::PartiallyCompliant;
-                }
+        if let Some(night_hours) = hours.night_work_hours
+            && night_hours > 8
+        {
+            analysis.add_violation(
+                Violation::new(
+                    "WTR_Reg6",
+                    "Night Work Limits",
+                    format!("Night work of {} hours exceeds 8-hour limit", night_hours),
+                    ViolationSeverity::Moderate,
+                )
+                .with_legal_reference("WTR 1998 Reg 6"),
+            );
+            if analysis.status == ComplianceStatus::Compliant {
+                analysis.status = ComplianceStatus::PartiallyCompliant;
             }
         }
 

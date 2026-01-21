@@ -126,16 +126,16 @@ impl QueryPattern {
 
     /// Checks if a triple matches this pattern.
     pub fn matches(&self, triple: &Triple) -> bool {
-        if let Some(ref s) = self.subject {
-            if &triple.subject != s {
-                return false;
-            }
+        if let Some(ref s) = self.subject
+            && &triple.subject != s
+        {
+            return false;
         }
 
-        if let Some(ref p) = self.predicate {
-            if &triple.predicate != p {
-                return false;
-            }
+        if let Some(ref p) = self.predicate
+            && &triple.predicate != p
+        {
+            return false;
         }
 
         if let Some(ref o) = self.object {

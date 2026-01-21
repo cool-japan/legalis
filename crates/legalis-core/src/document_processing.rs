@@ -733,12 +733,12 @@ impl ClauseParser {
         let pattern = regex::Regex::new(r"(\d+)\.\s+([^0-9]+(?:[0-9]+[^0-9]+)*)").ok();
         if let Some(re) = pattern {
             for cap in re.captures_iter(text) {
-                if let (Some(num), Some(content)) = (cap.get(1), cap.get(2)) {
-                    if let Ok(number) = num.as_str().parse::<usize>() {
-                        let trimmed = content.as_str().trim();
-                        if trimmed.len() >= self.min_length {
-                            sections.push((number, trimmed.to_string()));
-                        }
+                if let (Some(num), Some(content)) = (cap.get(1), cap.get(2))
+                    && let Ok(number) = num.as_str().parse::<usize>()
+                {
+                    let trimmed = content.as_str().trim();
+                    if trimmed.len() >= self.min_length {
+                        sections.push((number, trimmed.to_string()));
                     }
                 }
             }

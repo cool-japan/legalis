@@ -139,10 +139,10 @@ impl DeltaLog {
         self.deltas.push(delta);
 
         // Trim if exceeds max size
-        if let Some(max) = self.max_size {
-            if self.deltas.len() > max {
-                self.deltas.drain(0..self.deltas.len() - max);
-            }
+        if let Some(max) = self.max_size
+            && self.deltas.len() > max
+        {
+            self.deltas.drain(0..self.deltas.len() - max);
         }
     }
 
@@ -255,12 +255,11 @@ impl CheckpointManager {
     /// Saves a checkpoint
     pub fn save(&mut self, checkpoint: Checkpoint) {
         // Remove oldest checkpoint if at max capacity
-        if let Some(max) = self.max_checkpoints {
-            if self.checkpoints.len() >= max {
-                if let Some(oldest_id) = self.oldest_checkpoint_id() {
-                    self.checkpoints.shift_remove(&oldest_id);
-                }
-            }
+        if let Some(max) = self.max_checkpoints
+            && self.checkpoints.len() >= max
+            && let Some(oldest_id) = self.oldest_checkpoint_id()
+        {
+            self.checkpoints.shift_remove(&oldest_id);
         }
 
         self.checkpoints.insert(checkpoint.id.clone(), checkpoint);

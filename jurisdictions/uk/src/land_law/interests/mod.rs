@@ -10,10 +10,10 @@
 //! - Land Charges Act 1972 (unregistered land)
 //!
 //! Key cases:
-//! - Re Ellenborough Park [1956] Ch 131 (easement requirements)
+//! - Re Ellenborough Park \[1956\] Ch 131 (easement requirements)
 //! - Tulk v Moxhay (1848) 2 Ph 774 (restrictive covenants in equity)
 //! - Wheeldon v Burrows (1879) 12 Ch D 31 (implied easements)
-//! - Etridge (No 2) [2001] UKHL 44 (undue influence in mortgages)
+//! - Etridge (No 2) \[2001\] UKHL 44 (undue influence in mortgages)
 
 #![allow(missing_docs)]
 

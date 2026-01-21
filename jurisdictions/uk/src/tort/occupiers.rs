@@ -5,9 +5,9 @@
 //! - Occupiers' Liability Act 1984 (trespassers and others)
 //!
 //! Key cases:
-//! - Wheat v E Lacon & Co Ltd [1966] AC 552 (multiple occupiers)
-//! - Roles v Nathan [1963] 1 WLR 1117 (skilled visitors)
-//! - Tomlinson v Congleton BC [2003] UKHL 47 (obvious risks)
+//! - Wheat v E Lacon & Co Ltd \[1966\] AC 552 (multiple occupiers)
+//! - Roles v Nathan \[1963\] 1 WLR 1117 (skilled visitors)
+//! - Tomlinson v Congleton BC \[2003\] UKHL 47 (obvious risks)
 
 use serde::{Deserialize, Serialize};
 
@@ -869,15 +869,15 @@ impl OccupiersLiabilityAnalyzer {
         }
 
         // Adequate warning
-        if let Some(ref warning) = common_duty.warning_analysis {
-            if warning.discharges_duty {
-                defences.push(OLADefence {
-                    defence_type: OLADefenceType::AdequateWarning,
-                    applies: true,
-                    effect: DefenceEffect::CompleteDefence,
-                    reasoning: "Adequate warning discharged duty (s.2(4)(a))".to_string(),
-                });
-            }
+        if let Some(ref warning) = common_duty.warning_analysis
+            && warning.discharges_duty
+        {
+            defences.push(OLADefence {
+                defence_type: OLADefenceType::AdequateWarning,
+                applies: true,
+                effect: DefenceEffect::CompleteDefence,
+                reasoning: "Adequate warning discharged duty (s.2(4)(a))".to_string(),
+            });
         }
 
         // Exclusion of liability

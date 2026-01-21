@@ -1,13 +1,13 @@
 //! UK Nuisance Law
 //!
 //! This module implements the law of nuisance including:
-//! - Private nuisance (Hunter v Canary Wharf [1997] AC 655)
-//! - Public nuisance (AG v PYA Quarries [1957] 2 QB 169)
+//! - Private nuisance (Hunter v Canary Wharf \[1997\] AC 655)
+//! - Public nuisance (AG v PYA Quarries \[1957\] 2 QB 169)
 //! - Rylands v Fletcher (1868) LR 3 HL 330 (strict liability)
 //!
 //! Key cases:
-//! - Sedleigh-Denfield v O'Callaghan [1940] AC 880 (adoption/continuation)
-//! - Transco v Stockport [2004] 2 AC 1 (modern Rylands)
+//! - Sedleigh-Denfield v O'Callaghan \[1940\] AC 880 (adoption/continuation)
+//! - Transco v Stockport \[2004\] 2 AC 1 (modern Rylands)
 
 use serde::{Deserialize, Serialize};
 

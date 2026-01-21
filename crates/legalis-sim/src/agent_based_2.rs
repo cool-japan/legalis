@@ -671,16 +671,14 @@ impl EmergentBehaviorDetector {
             let mut added_to_cluster = false;
 
             for cluster in &mut clusters {
-                if let Some(first_agent) = cluster.first() {
-                    if let Some((_, first_behavior)) =
+                if let Some(first_agent) = cluster.first()
+                    && let Some((_, first_behavior)) =
                         recent_behaviors.iter().find(|(id, _)| id == first_agent)
-                    {
-                        if Self::behavior_similarity(behavior, first_behavior) > self.threshold {
-                            cluster.push(*agent_id);
-                            added_to_cluster = true;
-                            break;
-                        }
-                    }
+                    && Self::behavior_similarity(behavior, first_behavior) > self.threshold
+                {
+                    cluster.push(*agent_id);
+                    added_to_cluster = true;
+                    break;
                 }
             }
 
@@ -862,15 +860,14 @@ impl SocialNetworkDynamics {
 
             // Collect opinions from neighbors
             for ((from, to), &edge_weight) in &self.edges {
-                if to == node_id {
-                    if let Some(neighbor) = self.nodes.get(from) {
-                        if let Some(&neighbor_opinion) = neighbor.opinions.get(topic) {
-                            let trust = node.trust.get(from).unwrap_or(&0.5);
-                            let weight = edge_weight * trust;
-                            weighted_opinions += neighbor_opinion * weight;
-                            total_weight += weight;
-                        }
-                    }
+                if to == node_id
+                    && let Some(neighbor) = self.nodes.get(from)
+                    && let Some(&neighbor_opinion) = neighbor.opinions.get(topic)
+                {
+                    let trust = node.trust.get(from).unwrap_or(&0.5);
+                    let weight = edge_weight * trust;
+                    weighted_opinions += neighbor_opinion * weight;
+                    total_weight += weight;
                 }
             }
 
@@ -1011,32 +1008,32 @@ impl CulturalEvolution {
                 // Transmit memes from neighbor
                 if let (Some(agent), Some(neighbor)) =
                     (self.agents.get(agent_id), self.agents.get(&neighbor_id))
+                    && !neighbor.memes.is_empty()
+                    && rng.random_range(0.0..1.0) < agent.openness
                 {
-                    if !neighbor.memes.is_empty() && rng.random_range(0.0..1.0) < agent.openness {
-                        let meme_idx = rng.random_range(0..neighbor.memes.len());
-                        let transmitted_meme = neighbor.memes[meme_idx].clone();
+                    let meme_idx = rng.random_range(0..neighbor.memes.len());
+                    let transmitted_meme = neighbor.memes[meme_idx].clone();
 
-                        // Acceptance based on fitness and selection pressure
-                        let acceptance_prob = 1.0
-                            / (1.0 + (-self.selection_pressure * transmitted_meme.fitness).exp());
+                    // Acceptance based on fitness and selection pressure
+                    let acceptance_prob =
+                        1.0 / (1.0 + (-self.selection_pressure * transmitted_meme.fitness).exp());
 
-                        if rng.random_range(0.0..1.0) < acceptance_prob {
-                            // Mutation
-                            let mut meme = transmitted_meme;
-                            if rng.random_range(0.0..1.0) < meme.mutation_rate {
-                                meme.id = Uuid::new_v4();
-                                meme.fitness += rng.random_range(-0.1..0.1);
-                                meme.fitness = meme.fitness.clamp(0.0, 1.0);
-                            }
+                    if rng.random_range(0.0..1.0) < acceptance_prob {
+                        // Mutation
+                        let mut meme = transmitted_meme;
+                        if rng.random_range(0.0..1.0) < meme.mutation_rate {
+                            meme.id = Uuid::new_v4();
+                            meme.fitness += rng.random_range(-0.1..0.1);
+                            meme.fitness = meme.fitness.clamp(0.0, 1.0);
+                        }
 
-                            // Add to agent's memes
-                            if let Some(agent_mut) = self.agents.get_mut(agent_id) {
-                                agent_mut.memes.push(meme.clone());
+                        // Add to agent's memes
+                        if let Some(agent_mut) = self.agents.get_mut(agent_id) {
+                            agent_mut.memes.push(meme.clone());
 
-                                // Add to global pool if new
-                                if !self.meme_pool.iter().any(|m| m.id == meme.id) {
-                                    self.meme_pool.push(meme);
-                                }
+                            // Add to global pool if new
+                            if !self.meme_pool.iter().any(|m| m.id == meme.id) {
+                                self.meme_pool.push(meme);
                             }
                         }
                     }

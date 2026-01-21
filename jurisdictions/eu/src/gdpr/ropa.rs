@@ -410,14 +410,14 @@ impl ProcessingRecord {
         }
 
         // Check if retention period is vague
-        if let Some(ref period) = self.retention_period {
-            if period.contains("indefinite") || period.contains("permanent") {
-                warnings.push(
-                    "Indefinite/permanent retention may violate storage limitation principle \
+        if let Some(ref period) = self.retention_period
+            && (period.contains("indefinite") || period.contains("permanent"))
+        {
+            warnings.push(
+                "Indefinite/permanent retention may violate storage limitation principle \
                      (Article 5(1)(e)) - consider specific retention criteria"
-                        .to_string(),
-                );
-            }
+                    .to_string(),
+            );
         }
 
         // Check if security measures are minimal

@@ -13,11 +13,11 @@
 //!
 //! # Key Cases
 //!
-//! - R v Ireland [1998] - Assault can be by words alone
-//! - R v Savage; DPP v Parmenter [1992] - ABH definition
-//! - R v Chan Fook [1994] - Psychiatric injury can be ABH
-//! - R v Burstow [1998] - GBH includes serious psychiatric injury
-//! - R v Dica [2004] - Transmission of disease as GBH
+//! - R v Ireland \[1998\] - Assault can be by words alone
+//! - R v Savage; DPP v Parmenter \[1992\] - ABH definition
+//! - R v Chan Fook \[1994\] - Psychiatric injury can be ABH
+//! - R v Burstow \[1998\] - GBH includes serious psychiatric injury
+//! - R v Dica \[2004\] - Transmission of disease as GBH
 
 // Allow missing docs on enum variant struct fields - these are self-documenting in context
 #![allow(missing_docs)]

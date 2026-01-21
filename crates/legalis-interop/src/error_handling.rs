@@ -408,13 +408,13 @@ impl ResilientConverter {
             }
 
             // Check max errors
-            if let Some(max) = self.config.max_errors {
-                if errors.len() >= max {
-                    return Err(InteropError::ConversionError(format!(
-                        "Maximum error count ({}) exceeded",
-                        max
-                    )));
-                }
+            if let Some(max) = self.config.max_errors
+                && errors.len() >= max
+            {
+                return Err(InteropError::ConversionError(format!(
+                    "Maximum error count ({}) exceeded",
+                    max
+                )));
             }
         }
 

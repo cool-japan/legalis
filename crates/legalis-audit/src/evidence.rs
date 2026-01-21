@@ -891,36 +891,36 @@ impl EvidenceSearchQuery {
             .iter()
             .filter(|pkg| {
                 // Case ID filter
-                if let Some(ref case_id) = self.case_id {
-                    if &pkg.case_id != case_id {
-                        return false;
-                    }
+                if let Some(ref case_id) = self.case_id
+                    && &pkg.case_id != case_id
+                {
+                    return false;
                 }
 
                 // Collector ID filter
-                if let Some(ref collector_id) = self.collector_id {
-                    if &pkg.collector.id != collector_id {
-                        return false;
-                    }
+                if let Some(ref collector_id) = self.collector_id
+                    && &pkg.collector.id != collector_id
+                {
+                    return false;
                 }
 
                 // Date range filter
-                if let Some(from) = self.date_from {
-                    if pkg.created_at < from {
-                        return false;
-                    }
+                if let Some(from) = self.date_from
+                    && pkg.created_at < from
+                {
+                    return false;
                 }
-                if let Some(to) = self.date_to {
-                    if pkg.created_at > to {
-                        return false;
-                    }
+                if let Some(to) = self.date_to
+                    && pkg.created_at > to
+                {
+                    return false;
                 }
 
                 // Sealed status filter
-                if let Some(sealed) = self.sealed {
-                    if pkg.sealed != sealed {
-                        return false;
-                    }
+                if let Some(sealed) = self.sealed
+                    && pkg.sealed != sealed
+                {
+                    return false;
                 }
 
                 // Text search filter

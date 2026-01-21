@@ -47,12 +47,11 @@ impl UnifiedDiffFormatter {
             diff.statute_id, diff.statute_id
         ));
 
-        if let Some(ref version_info) = diff.version_info {
-            if let (Some(old_ver), Some(new_ver)) =
+        if let Some(ref version_info) = diff.version_info
+            && let (Some(old_ver), Some(new_ver)) =
                 (version_info.old_version, version_info.new_version)
-            {
-                output.push_str(&format!("index {}..{}\n", old_ver, new_ver));
-            }
+        {
+            output.push_str(&format!("index {}..{}\n", old_ver, new_ver));
         }
 
         output.push_str(&format!("--- a/{}\n", diff.statute_id));

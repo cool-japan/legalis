@@ -127,20 +127,19 @@ impl VyperImporter {
         };
 
         // Extract version pragma
-        if let Some(version_line) = source.lines().find(|l| l.trim().starts_with("# @version ")) {
-            if let Some(version) = version_line.split("@version").nth(1) {
-                contract.version = version.trim().to_string();
-            }
+        if let Some(version_line) = source.lines().find(|l| l.trim().starts_with("# @version "))
+            && let Some(version) = version_line.split("@version").nth(1)
+        {
+            contract.version = version.trim().to_string();
         }
 
         // Extract license
         if let Some(license_line) = source
             .lines()
             .find(|l| l.contains("# @license ") || l.contains("#@license"))
+            && let Some(license) = license_line.split("@license").nth(1)
         {
-            if let Some(license) = license_line.split("@license").nth(1) {
-                contract.license = Some(license.trim().to_string());
-            }
+            contract.license = Some(license.trim().to_string());
         }
 
         // Extract contract name from first comment or use default
@@ -155,10 +154,10 @@ impl VyperImporter {
         // Extract events
         for line in source.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("event ") {
-                if let Some(event) = self.parse_event_declaration(trimmed) {
-                    contract.events.push(event);
-                }
+            if trimmed.starts_with("event ")
+                && let Some(event) = self.parse_event_declaration(trimmed)
+            {
+                contract.events.push(event);
             }
         }
 
@@ -169,10 +168,9 @@ impl VyperImporter {
                 && !trimmed.starts_with("def ")
                 && !trimmed.starts_with("#")
                 && (trimmed.starts_with("public(") || !trimmed.starts_with("@"))
+                && let Some(var) = self.parse_state_variable(trimmed)
             {
-                if let Some(var) = self.parse_state_variable(trimmed) {
-                    contract.state_variables.push(var);
-                }
+                contract.state_variables.push(var);
             }
         }
 
@@ -438,11 +436,10 @@ impl VyperExporter {
 
             // Add other modifiers
             for cond in &statute.preconditions {
-                if let Condition::Custom { description, .. } = cond {
-                    if description.starts_with("Modifier: ") {
-                        decorators
-                            .push(description.strip_prefix("Modifier: ").unwrap().to_string());
-                    }
+                if let Condition::Custom { description, .. } = cond
+                    && description.starts_with("Modifier: ")
+                {
+                    decorators.push(description.strip_prefix("Modifier: ").unwrap().to_string());
                 }
             }
 

@@ -12,19 +12,19 @@
 //! # Key Cases
 //!
 //! ## Judicial Review
-//! - Associated Provincial Picture Houses v Wednesbury [1948] - irrationality test
-//! - Council of Civil Service Unions v Minister [1985] (GCHQ) - three grounds
-//! - Anisminic v Foreign Compensation Commission [1969] - jurisdictional error
-//! - R v Secretary of State, ex parte Daly [2001] - proportionality
+//! - Associated Provincial Picture Houses v Wednesbury \[1948\] - irrationality test
+//! - Council of Civil Service Unions v Minister \[1985\] (GCHQ) - three grounds
+//! - Anisminic v Foreign Compensation Commission \[1969\] - jurisdictional error
+//! - R v Secretary of State, ex parte Daly \[2001\] - proportionality
 //!
 //! ## Human Rights
-//! - Ghaidan v Godin-Mendoza [2004] - HRA s.3 interpretation
-//! - YL v Birmingham City Council [2007] - public authority status
-//! - A v Secretary of State [2004] - Belmarsh detainees
+//! - Ghaidan v Godin-Mendoza \[2004\] - HRA s.3 interpretation
+//! - YL v Birmingham City Council \[2007\] - public authority status
+//! - A v Secretary of State \[2004\] - Belmarsh detainees
 //!
 //! ## Constitutional
-//! - R (Miller) v Secretary of State [2017] - Article 50
-//! - R (Miller) v The Prime Minister [2019] - prorogation
+//! - R (Miller) v Secretary of State \[2017\] - Article 50
+//! - R (Miller) v The Prime Minister \[2019\] - prorogation
 //! - Entick v Carrington (1765) - rule of law foundation
 //!
 //! # Example Usage

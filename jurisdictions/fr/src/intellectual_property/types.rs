@@ -136,10 +136,10 @@ impl PatentBuilder {
             IPLawError::PatentError(PatentErrorKind::MissingField("filing_date".to_string()))
         })?;
 
-        if let Some(grant_date) = self.grant_date {
-            if grant_date < filing_date {
-                return Err(IPLawError::PatentError(PatentErrorKind::InvalidGrantDate));
-            }
+        if let Some(grant_date) = self.grant_date
+            && grant_date < filing_date
+        {
+            return Err(IPLawError::PatentError(PatentErrorKind::InvalidGrantDate));
         }
 
         Ok(Patent {
@@ -289,12 +289,12 @@ impl CopyrightBuilder {
             IPLawError::CopyrightError(CopyrightErrorKind::MissingField("work_type".to_string()))
         })?;
 
-        if let Some(death_date) = self.author_death_date {
-            if death_date < creation_date {
-                return Err(IPLawError::CopyrightError(
-                    CopyrightErrorKind::InvalidDeathDate,
-                ));
-            }
+        if let Some(death_date) = self.author_death_date
+            && death_date < creation_date
+        {
+            return Err(IPLawError::CopyrightError(
+                CopyrightErrorKind::InvalidDeathDate,
+            ));
         }
 
         Ok(Copyright {

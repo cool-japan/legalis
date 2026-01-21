@@ -22,10 +22,10 @@
 //!
 //! ## Key Canadian Cases
 //!
-//! - **Bhasin v Hrynew [2014] SCC 71**: Duty of honest contractual performance
-//! - **CM Callow v Zollinger [2020] SCC 45**: Expanded good faith duty
-//! - **Tercon v BC [2010] SCC 4**: Three-step exclusion clause framework
-//! - **Hunter Engineering v Syncrude [1989] SCC 21**: Fundamental breach
+//! - **Bhasin v Hrynew \[2014\] SCC 71**: Duty of honest contractual performance
+//! - **CM Callow v Zollinger \[2020\] SCC 45**: Expanded good faith duty
+//! - **Tercon v BC \[2010\] SCC 4**: Three-step exclusion clause framework
+//! - **Hunter Engineering v Syncrude \[1989\] SCC 21**: Fundamental breach
 //!
 //! # Usage
 //!

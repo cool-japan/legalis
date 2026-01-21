@@ -3,10 +3,11 @@ name = "legalis-au"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "Australia jurisdiction support for Legalis-RS (Commonwealth Constitution, ACL, Fair Work, Mabo)"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+keywords = ["legalis", "australia", "common-law", "fair-work", "acl"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-au"
 
 [dependencies]

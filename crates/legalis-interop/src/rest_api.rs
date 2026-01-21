@@ -233,17 +233,17 @@ impl RestApiService {
             .map_err(ErrorResponse::from)?;
 
         // Check minimum confidence if specified
-        if let Some(min_conf) = request.options.min_confidence {
-            if report.confidence < min_conf {
-                return Err(ErrorResponse {
-                    error: format!(
-                        "Conversion confidence {:.2} below minimum threshold {:.2}",
-                        report.confidence, min_conf
-                    ),
-                    code: "low_confidence".to_string(),
-                    details: HashMap::new(),
-                });
-            }
+        if let Some(min_conf) = request.options.min_confidence
+            && report.confidence < min_conf
+        {
+            return Err(ErrorResponse {
+                error: format!(
+                    "Conversion confidence {:.2} below minimum threshold {:.2}",
+                    report.confidence, min_conf
+                ),
+                code: "low_confidence".to_string(),
+                details: HashMap::new(),
+            });
         }
 
         // Check fail on warnings
@@ -295,17 +295,17 @@ impl RestApiService {
         report.confidence = (report.confidence * export_report.confidence).max(0.0);
 
         // Check minimum confidence
-        if let Some(min_conf) = request.options.min_confidence {
-            if report.confidence < min_conf {
-                return Err(ErrorResponse {
-                    error: format!(
-                        "Conversion confidence {:.2} below minimum threshold {:.2}",
-                        report.confidence, min_conf
-                    ),
-                    code: "low_confidence".to_string(),
-                    details: HashMap::new(),
-                });
-            }
+        if let Some(min_conf) = request.options.min_confidence
+            && report.confidence < min_conf
+        {
+            return Err(ErrorResponse {
+                error: format!(
+                    "Conversion confidence {:.2} below minimum threshold {:.2}",
+                    report.confidence, min_conf
+                ),
+                code: "low_confidence".to_string(),
+                details: HashMap::new(),
+            });
         }
 
         Ok(ConvertResponse {

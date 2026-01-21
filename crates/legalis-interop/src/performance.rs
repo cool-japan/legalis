@@ -239,10 +239,10 @@ impl PersistentCache {
 
         if let Ok(mut cache) = self.memory_cache.lock() {
             // Evict oldest entry if cache is full
-            if cache.len() >= self.max_entries {
-                if let Some(oldest_key) = cache.keys().next().cloned() {
-                    cache.remove(&oldest_key);
-                }
+            if cache.len() >= self.max_entries
+                && let Some(oldest_key) = cache.keys().next().cloned()
+            {
+                cache.remove(&oldest_key);
             }
 
             let cached = CachedConversion {

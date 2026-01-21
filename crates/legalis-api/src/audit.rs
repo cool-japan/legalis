@@ -227,51 +227,51 @@ impl AuditLog {
             .iter()
             .filter(|entry| {
                 // Filter by user
-                if let Some(ref user_id) = filter.user_id {
-                    if &entry.user_id != user_id {
-                        return false;
-                    }
+                if let Some(ref user_id) = filter.user_id
+                    && &entry.user_id != user_id
+                {
+                    return false;
                 }
 
                 // Filter by event type
-                if let Some(ref event_type) = filter.event_type {
-                    if &entry.event_type != event_type {
-                        return false;
-                    }
+                if let Some(ref event_type) = filter.event_type
+                    && &entry.event_type != event_type
+                {
+                    return false;
                 }
 
                 // Filter by resource type
-                if let Some(ref resource_type) = filter.resource_type {
-                    if entry.resource_type.as_ref() != Some(resource_type) {
-                        return false;
-                    }
+                if let Some(ref resource_type) = filter.resource_type
+                    && entry.resource_type.as_ref() != Some(resource_type)
+                {
+                    return false;
                 }
 
                 // Filter by resource ID
-                if let Some(ref resource_id) = filter.resource_id {
-                    if entry.resource_id.as_ref() != Some(resource_id) {
-                        return false;
-                    }
+                if let Some(ref resource_id) = filter.resource_id
+                    && entry.resource_id.as_ref() != Some(resource_id)
+                {
+                    return false;
                 }
 
                 // Filter by result
-                if let Some(ref result) = filter.result {
-                    if &entry.result != result {
-                        return false;
-                    }
+                if let Some(ref result) = filter.result
+                    && &entry.result != result
+                {
+                    return false;
                 }
 
                 // Filter by time range
-                if let Some(start) = filter.start_time {
-                    if entry.timestamp < start {
-                        return false;
-                    }
+                if let Some(start) = filter.start_time
+                    && entry.timestamp < start
+                {
+                    return false;
                 }
 
-                if let Some(end) = filter.end_time {
-                    if entry.timestamp > end {
-                        return false;
-                    }
+                if let Some(end) = filter.end_time
+                    && entry.timestamp > end
+                {
+                    return false;
                 }
 
                 true
@@ -301,46 +301,46 @@ impl AuditLog {
         entries
             .iter()
             .filter(|entry| {
-                if let Some(ref user_id) = filter.user_id {
-                    if &entry.user_id != user_id {
-                        return false;
-                    }
+                if let Some(ref user_id) = filter.user_id
+                    && &entry.user_id != user_id
+                {
+                    return false;
                 }
 
-                if let Some(ref event_type) = filter.event_type {
-                    if &entry.event_type != event_type {
-                        return false;
-                    }
+                if let Some(ref event_type) = filter.event_type
+                    && &entry.event_type != event_type
+                {
+                    return false;
                 }
 
-                if let Some(ref resource_type) = filter.resource_type {
-                    if entry.resource_type.as_ref() != Some(resource_type) {
-                        return false;
-                    }
+                if let Some(ref resource_type) = filter.resource_type
+                    && entry.resource_type.as_ref() != Some(resource_type)
+                {
+                    return false;
                 }
 
-                if let Some(ref resource_id) = filter.resource_id {
-                    if entry.resource_id.as_ref() != Some(resource_id) {
-                        return false;
-                    }
+                if let Some(ref resource_id) = filter.resource_id
+                    && entry.resource_id.as_ref() != Some(resource_id)
+                {
+                    return false;
                 }
 
-                if let Some(ref result) = filter.result {
-                    if &entry.result != result {
-                        return false;
-                    }
+                if let Some(ref result) = filter.result
+                    && &entry.result != result
+                {
+                    return false;
                 }
 
-                if let Some(start) = filter.start_time {
-                    if entry.timestamp < start {
-                        return false;
-                    }
+                if let Some(start) = filter.start_time
+                    && entry.timestamp < start
+                {
+                    return false;
                 }
 
-                if let Some(end) = filter.end_time {
-                    if entry.timestamp > end {
-                        return false;
-                    }
+                if let Some(end) = filter.end_time
+                    && entry.timestamp > end
+                {
+                    return false;
                 }
 
                 true

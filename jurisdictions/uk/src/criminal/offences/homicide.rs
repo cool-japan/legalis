@@ -8,7 +8,7 @@
 //! ## Murder (Common Law)
 //! - Definition: Unlawful killing with malice aforethought (intent to kill or cause GBH)
 //! - Sentence: Mandatory life imprisonment
-//! - Key cases: R v Woollin [1999] (oblique intention), R v Cunningham [1982] (GBH rule)
+//! - Key cases: R v Woollin \[1999\] (oblique intention), R v Cunningham \[1982\] (GBH rule)
 //!
 //! ## Voluntary Manslaughter
 //! - Murder reduced by partial defence:
@@ -17,8 +17,8 @@
 //!   - Suicide pact (s.4 Homicide Act 1957)
 //!
 //! ## Involuntary Manslaughter
-//! - Unlawful Act Manslaughter (R v Church [1966], R v Newbury & Jones [1977])
-//! - Gross Negligence Manslaughter (R v Adomako [1995])
+//! - Unlawful Act Manslaughter (R v Church \[1966\], R v Newbury & Jones \[1977\])
+//! - Gross Negligence Manslaughter (R v Adomako \[1995\])
 //! - Reckless Manslaughter (rarely charged separately)
 //!
 //! ## Corporate Manslaughter
@@ -942,12 +942,12 @@ impl MurderAnalyzer {
 
         // Check partial defences
         for defence in partial_defences {
-            if defence.available {
-                if let Some(DefenceEffect::LesserOffence { offence: _ }) = &defence.effect {
-                    return HomicideVerdict::VoluntaryManslaughter {
-                        defence: format!("{:?}", defence.defence_type),
-                    };
-                }
+            if defence.available
+                && let Some(DefenceEffect::LesserOffence { offence: _ }) = &defence.effect
+            {
+                return HomicideVerdict::VoluntaryManslaughter {
+                    defence: format!("{:?}", defence.defence_type),
+                };
             }
         }
 
@@ -990,21 +990,21 @@ impl MurderAnalyzer {
 
     fn determine_starting_point(facts: &MurderFacts) -> Schedule21StartingPoint {
         // Check for whole life factors
-        if let Some(premediation) = &facts.defendant_conduct.premeditation {
-            if premediation.planning {
-                // Multiple killings + planning could indicate whole life
-            }
+        if let Some(premediation) = &facts.defendant_conduct.premeditation
+            && premediation.planning
+        {
+            // Multiple killings + planning could indicate whole life
         }
 
         // Check if weapon brought to scene
-        if let Some(weapon) = &facts.defendant_conduct.weapon {
-            if weapon.brought_to_scene {
-                match weapon.weapon_type {
-                    WeaponType::Knife | WeaponType::Firearm => {
-                        return Schedule21StartingPoint::TwentyFiveYears;
-                    }
-                    _ => {}
+        if let Some(weapon) = &facts.defendant_conduct.weapon
+            && weapon.brought_to_scene
+        {
+            match weapon.weapon_type {
+                WeaponType::Knife | WeaponType::Firearm => {
+                    return Schedule21StartingPoint::TwentyFiveYears;
                 }
+                _ => {}
             }
         }
 
@@ -1021,17 +1021,17 @@ impl MurderAnalyzer {
         }
 
         // Planning
-        if let Some(premediation) = &facts.defendant_conduct.premeditation {
-            if premediation.planning {
-                agg.push("Premeditation/planning".into());
-            }
+        if let Some(premediation) = &facts.defendant_conduct.premeditation
+            && premediation.planning
+        {
+            agg.push("Premeditation/planning".into());
         }
 
         // Weapon brought to scene
-        if let Some(weapon) = &facts.defendant_conduct.weapon {
-            if weapon.brought_to_scene {
-                agg.push("Weapon brought to scene".into());
-            }
+        if let Some(weapon) = &facts.defendant_conduct.weapon
+            && weapon.brought_to_scene
+        {
+            agg.push("Weapon brought to scene".into());
         }
 
         agg
@@ -1085,7 +1085,7 @@ pub struct UnlawfulActDetails {
     pub evidence: Vec<String>,
 }
 
-/// Dangerousness assessment (R v Church [1966])
+/// Dangerousness assessment (R v Church \[1966\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DangerousnessAssessment {
     /// Would sober and reasonable person recognize risk of some harm?

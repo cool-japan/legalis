@@ -328,11 +328,11 @@ pub fn create_partnership_comparison(tracker: &super::upa::UPATracker) -> Adopti
     }
 
     // Handle Louisiana (custom)
-    if let Some(la_adoption) = tracker.get_adoption("LA") {
-        if la_adoption.version == PartnershipActVersion::Custom {
-            comparison.add_state(AdoptionStatus::CustomLaw, "LA");
-            comparison.add_variation("Louisiana uses Civil Code for partnership law");
-        }
+    if let Some(la_adoption) = tracker.get_adoption("LA")
+        && la_adoption.version == PartnershipActVersion::Custom
+    {
+        comparison.add_state(AdoptionStatus::CustomLaw, "LA");
+        comparison.add_variation("Louisiana uses Civil Code for partnership law");
     }
 
     comparison.set_majority_version("RUPA (1997)");

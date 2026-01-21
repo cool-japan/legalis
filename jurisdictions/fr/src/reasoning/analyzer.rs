@@ -392,10 +392,10 @@ mod tests {
             let value_str = value.into();
 
             // Auto-populate duration_months if duration_months attribute is set
-            if key_str == "duration_months" {
-                if let Ok(months) = value_str.parse::<u32>() {
-                    self.duration_months = Some(months);
-                }
+            if key_str == "duration_months"
+                && let Ok(months) = value_str.parse::<u32>()
+            {
+                self.duration_months = Some(months);
             }
 
             self.attributes.insert(key_str, value_str);

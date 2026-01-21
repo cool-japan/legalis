@@ -260,73 +260,73 @@ impl TuiDashboard {
 
     /// Update details pane based on selected command.
     fn update_details(&mut self) {
-        if let Some(i) = self.selected_command.selected() {
-            if let Some(cmd) = self.commands.get(i) {
-                self.details = match cmd.split_whitespace().next().unwrap_or("") {
-                    "parse" => vec![
-                        "Parse Command".to_string(),
-                        "".to_string(),
-                        "Parse and validate Legalis statute files.".to_string(),
-                        "".to_string(),
-                        "Usage: legalis parse <file> [options]".to_string(),
-                        "".to_string(),
-                        "Options:".to_string(),
-                        "  --format <format>  Output format (json, yaml, toml)".to_string(),
-                        "  --output <file>    Output file path".to_string(),
-                    ],
-                    "verify" => vec![
-                        "Verify Command".to_string(),
-                        "".to_string(),
-                        "Verify statute consistency and correctness.".to_string(),
-                        "".to_string(),
-                        "Usage: legalis verify <file> [options]".to_string(),
-                        "".to_string(),
-                        "Options:".to_string(),
-                        "  --strict          Enable strict validation".to_string(),
-                        "  --format <format> Output format".to_string(),
-                    ],
-                    "viz" => vec![
-                        "Visualize Command".to_string(),
-                        "".to_string(),
-                        "Generate visual representations of statutes.".to_string(),
-                        "".to_string(),
-                        "Usage: legalis viz <file> -o <output> <format>".to_string(),
-                        "".to_string(),
-                        "Formats: mermaid, dot, ascii".to_string(),
-                    ],
-                    "ai" => vec![
-                        "AI Features".to_string(),
-                        "".to_string(),
-                        "AI-powered CLI assistance.".to_string(),
-                        "".to_string(),
-                        "Subcommands:".to_string(),
-                        "  parse   - Parse natural language commands".to_string(),
-                        "  intent  - Recognize command intent".to_string(),
-                        "  assist  - Get AI-powered help".to_string(),
-                        "  suggest - Get command suggestions".to_string(),
-                        "  complete - Autocomplete commands".to_string(),
-                    ],
-                    _ => vec![
-                        format!("Command: {}", cmd),
-                        "".to_string(),
-                        "Press Enter to execute this command".to_string(),
-                    ],
-                };
-            }
+        if let Some(i) = self.selected_command.selected()
+            && let Some(cmd) = self.commands.get(i)
+        {
+            self.details = match cmd.split_whitespace().next().unwrap_or("") {
+                "parse" => vec![
+                    "Parse Command".to_string(),
+                    "".to_string(),
+                    "Parse and validate Legalis statute files.".to_string(),
+                    "".to_string(),
+                    "Usage: legalis parse <file> [options]".to_string(),
+                    "".to_string(),
+                    "Options:".to_string(),
+                    "  --format <format>  Output format (json, yaml, toml)".to_string(),
+                    "  --output <file>    Output file path".to_string(),
+                ],
+                "verify" => vec![
+                    "Verify Command".to_string(),
+                    "".to_string(),
+                    "Verify statute consistency and correctness.".to_string(),
+                    "".to_string(),
+                    "Usage: legalis verify <file> [options]".to_string(),
+                    "".to_string(),
+                    "Options:".to_string(),
+                    "  --strict          Enable strict validation".to_string(),
+                    "  --format <format> Output format".to_string(),
+                ],
+                "viz" => vec![
+                    "Visualize Command".to_string(),
+                    "".to_string(),
+                    "Generate visual representations of statutes.".to_string(),
+                    "".to_string(),
+                    "Usage: legalis viz <file> -o <output> <format>".to_string(),
+                    "".to_string(),
+                    "Formats: mermaid, dot, ascii".to_string(),
+                ],
+                "ai" => vec![
+                    "AI Features".to_string(),
+                    "".to_string(),
+                    "AI-powered CLI assistance.".to_string(),
+                    "".to_string(),
+                    "Subcommands:".to_string(),
+                    "  parse   - Parse natural language commands".to_string(),
+                    "  intent  - Recognize command intent".to_string(),
+                    "  assist  - Get AI-powered help".to_string(),
+                    "  suggest - Get command suggestions".to_string(),
+                    "  complete - Autocomplete commands".to_string(),
+                ],
+                _ => vec![
+                    format!("Command: {}", cmd),
+                    "".to_string(),
+                    "Press Enter to execute this command".to_string(),
+                ],
+            };
         }
     }
 
     /// Execute selected command.
     fn execute_command(&mut self) {
-        if let Some(i) = self.selected_command.selected() {
-            if let Some(cmd) = self.commands.get(i) {
-                self.details = vec![
-                    format!("Executing: {}", cmd),
-                    "".to_string(),
-                    "This would execute the command in a real implementation.".to_string(),
-                    "For now, this is a demo mode.".to_string(),
-                ];
-            }
+        if let Some(i) = self.selected_command.selected()
+            && let Some(cmd) = self.commands.get(i)
+        {
+            self.details = vec![
+                format!("Executing: {}", cmd),
+                "".to_string(),
+                "This would execute the command in a real implementation.".to_string(),
+                "For now, this is a demo mode.".to_string(),
+            ];
         }
     }
 

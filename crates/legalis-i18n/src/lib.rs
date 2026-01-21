@@ -2310,10 +2310,10 @@ impl TranslationManager {
 
         // Check LRU cache first
         {
-            if let Ok(mut cache) = self.cache.write() {
-                if let Some(cached) = cache.get(&cache_key) {
-                    return Ok(cached.clone());
-                }
+            if let Ok(mut cache) = self.cache.write()
+                && let Some(cached) = cache.get(&cache_key)
+            {
+                return Ok(cached.clone());
             }
         }
 
@@ -2321,10 +2321,10 @@ impl TranslationManager {
         let result = self.translate_uncached(key, locale);
 
         // Cache the result if successful (LRU automatically evicts least recently used)
-        if let Ok(ref translation) = result {
-            if let Ok(mut cache) = self.cache.write() {
-                cache.put(cache_key, translation.clone());
-            }
+        if let Ok(ref translation) = result
+            && let Ok(mut cache) = self.cache.write()
+        {
+            cache.put(cache_key, translation.clone());
         }
 
         result
@@ -2333,26 +2333,25 @@ impl TranslationManager {
     /// Translates a key for a locale without using cache.
     fn translate_uncached(&self, key: &str, locale: &Locale) -> I18nResult<String> {
         // Try exact locale match
-        if let Some(dict) = self.dictionaries.get(&locale.tag()) {
-            if let Some(translation) = dict.translate(key) {
-                return Ok(translation.to_string());
-            }
+        if let Some(dict) = self.dictionaries.get(&locale.tag())
+            && let Some(translation) = dict.translate(key)
+        {
+            return Ok(translation.to_string());
         }
 
         // Try language-only match
-        if let Some(dict) = self.dictionaries.get(&locale.language) {
-            if let Some(translation) = dict.translate(key) {
-                return Ok(translation.to_string());
-            }
+        if let Some(dict) = self.dictionaries.get(&locale.language)
+            && let Some(translation) = dict.translate(key)
+        {
+            return Ok(translation.to_string());
         }
 
         // Try fallback
-        if let Some(ref fallback) = self.fallback_locale {
-            if let Some(dict) = self.dictionaries.get(&fallback.tag()) {
-                if let Some(translation) = dict.translate(key) {
-                    return Ok(translation.to_string());
-                }
-            }
+        if let Some(ref fallback) = self.fallback_locale
+            && let Some(dict) = self.dictionaries.get(&fallback.tag())
+            && let Some(translation) = dict.translate(key)
+        {
+            return Ok(translation.to_string());
         }
 
         Err(I18nError::TranslationMissing {
@@ -3960,23 +3959,23 @@ impl CitationValidationRule {
 
         // Validate pattern if value exists
         if let Some(val) = value {
-            if let Some(pattern) = &self.pattern {
-                if !Self::matches_pattern(val, pattern) {
-                    return Err(CitationError::InvalidFormat {
-                        field: self.field.clone(),
-                        reason: format!("Does not match pattern: {}", pattern),
-                    });
-                }
+            if let Some(pattern) = &self.pattern
+                && !Self::matches_pattern(val, pattern)
+            {
+                return Err(CitationError::InvalidFormat {
+                    field: self.field.clone(),
+                    reason: format!("Does not match pattern: {}", pattern),
+                });
             }
 
             // Custom validation
-            if let Some(validator) = self.validator {
-                if let Err(msg) = validator(val) {
-                    return Err(CitationError::InvalidFormat {
-                        field: self.field.clone(),
-                        reason: msg,
-                    });
-                }
+            if let Some(validator) = self.validator
+                && let Err(msg) = validator(val)
+            {
+                return Err(CitationError::InvalidFormat {
+                    field: self.field.clone(),
+                    reason: msg,
+                });
             }
         }
 
@@ -4080,22 +4079,22 @@ impl CitationParser {
         }
 
         // Extract year and court from parentheses
-        if let Some(paren_start) = citation.rfind('(') {
-            if let Some(paren_end) = citation.rfind(')') {
-                let paren_content = &citation[paren_start + 1..paren_end];
-                let paren_parts: Vec<&str> = paren_content.split_whitespace().collect();
+        if let Some(paren_start) = citation.rfind('(')
+            && let Some(paren_end) = citation.rfind(')')
+        {
+            let paren_content = &citation[paren_start + 1..paren_end];
+            let paren_parts: Vec<&str> = paren_content.split_whitespace().collect();
 
-                // Last token is usually the year
-                if let Some(year_str) = paren_parts.last() {
-                    if let Ok(year) = year_str.parse::<i32>() {
-                        components.year = Some(year);
-                    }
-                }
+            // Last token is usually the year
+            if let Some(year_str) = paren_parts.last()
+                && let Ok(year) = year_str.parse::<i32>()
+            {
+                components.year = Some(year);
+            }
 
-                // Other tokens are court
-                if paren_parts.len() > 1 {
-                    components.court = Some(paren_parts[..paren_parts.len() - 1].join(" "));
-                }
+            // Other tokens are court
+            if paren_parts.len() > 1 {
+                components.court = Some(paren_parts[..paren_parts.len() - 1].join(" "));
             }
         }
 
@@ -4115,22 +4114,22 @@ impl CitationParser {
         let title = parts[0].trim().to_string();
         let mut components = CitationComponents::new(title);
 
-        if parts.len() > 1 {
-            if let Some(year_end) = parts[1].find(']') {
-                let year_str = &parts[1][..year_end];
-                if let Ok(year) = year_str.parse::<i32>() {
-                    components.year = Some(year);
-                }
+        if parts.len() > 1
+            && let Some(year_end) = parts[1].find(']')
+        {
+            let year_str = &parts[1][..year_end];
+            if let Ok(year) = year_str.parse::<i32>() {
+                components.year = Some(year);
+            }
 
-                let rest = parts[1][year_end + 1..].trim();
-                let tokens: Vec<&str> = rest.split_whitespace().collect();
+            let rest = parts[1][year_end + 1..].trim();
+            let tokens: Vec<&str> = rest.split_whitespace().collect();
 
-                if !tokens.is_empty() {
-                    components.reporter = Some(tokens[0].to_string());
-                }
-                if tokens.len() > 1 {
-                    components.page = Some(tokens[1].to_string());
-                }
+            if !tokens.is_empty() {
+                components.reporter = Some(tokens[0].to_string());
+            }
+            if tokens.len() > 1 {
+                components.page = Some(tokens[1].to_string());
             }
         }
 
@@ -4203,11 +4202,11 @@ impl CitationParser {
         for word in &words {
             // Strip common punctuation and try to parse
             let cleaned_word = word.trim_matches(|c: char| !c.is_numeric());
-            if let Ok(year) = cleaned_word.parse::<i32>() {
-                if (1000..=9999).contains(&year) {
-                    components.year = Some(year);
-                    break;
-                }
+            if let Ok(year) = cleaned_word.parse::<i32>()
+                && (1000..=9999).contains(&year)
+            {
+                components.year = Some(year);
+                break;
             }
         }
 
@@ -4627,10 +4626,10 @@ impl CitationSuggester {
                 if components.year.is_none() {
                     suggestions.push("Add year in square brackets [Year]".to_string());
                 }
-                if let Some(title) = &components.title.chars().next() {
-                    if title.is_lowercase() {
-                        suggestions.push("Case name should start with capital letter".to_string());
-                    }
+                if let Some(title) = &components.title.chars().next()
+                    && title.is_lowercase()
+                {
+                    suggestions.push("Case name should start with capital letter".to_string());
                 }
             }
             CitationStyle::Japanese => {
@@ -7172,17 +7171,16 @@ impl TranslationMemory {
                 }
 
                 // If we have at least 2 tuvs, create a translation entry
-                if tuvs.len() >= 2 {
-                    if let (Ok(source_locale), Ok(target_locale)) =
+                if tuvs.len() >= 2
+                    && let (Ok(source_locale), Ok(target_locale)) =
                         (Locale::parse(&tuvs[0].0), Locale::parse(&tuvs[1].0))
-                    {
-                        self.add_translation(
-                            tuvs[0].1.clone(),
-                            source_locale,
-                            tuvs[1].1.clone(),
-                            target_locale,
-                        );
-                    }
+                {
+                    self.add_translation(
+                        tuvs[0].1.clone(),
+                        source_locale,
+                        tuvs[1].1.clone(),
+                        target_locale,
+                    );
                 }
 
                 pos = tu_end_abs;
@@ -8113,15 +8111,15 @@ pub fn is_valid_locale_tag(tag: &str) -> bool {
         if !is_valid_language_code(&locale.language) {
             return false;
         }
-        if let Some(ref country) = locale.country {
-            if !is_valid_country_code(country) {
-                return false;
-            }
+        if let Some(ref country) = locale.country
+            && !is_valid_country_code(country)
+        {
+            return false;
         }
-        if let Some(ref script) = locale.script {
-            if !is_valid_script_code(script) {
-                return false;
-            }
+        if let Some(ref script) = locale.script
+            && !is_valid_script_code(script)
+        {
+            return false;
         }
         true
     } else {
@@ -11653,21 +11651,21 @@ impl DeadlineExtractor {
     fn parse_date(&self, text: &str) -> Option<(i32, u32, u32)> {
         // Simple date parsing - look for MM/DD/YYYY format
         let parts: Vec<&str> = text.split('/').collect();
-        if parts.len() == 3 {
-            if let (Ok(month), Ok(day), Ok(year)) = (
+        if parts.len() == 3
+            && let (Ok(month), Ok(day), Ok(year)) = (
                 parts[0].trim().parse::<u32>(),
                 parts[1].trim().parse::<u32>(),
                 parts[2].trim().parse::<i32>(),
-            ) {
-                // Handle 2-digit years
-                let full_year = if year < 100 {
-                    if year > 50 { 1900 + year } else { 2000 + year }
-                } else {
-                    year
-                };
+            )
+        {
+            // Handle 2-digit years
+            let full_year = if year < 100 {
+                if year > 50 { 1900 + year } else { 2000 + year }
+            } else {
+                year
+            };
 
-                return Some((full_year, month, day));
-            }
+            return Some((full_year, month, day));
         }
 
         None
@@ -20924,17 +20922,17 @@ impl BCP47LanguageTag {
         }
 
         // Script must be 4 characters if present
-        if let Some(ref script) = self.script {
-            if script.len() != 4 {
-                return false;
-            }
+        if let Some(ref script) = self.script
+            && script.len() != 4
+        {
+            return false;
         }
 
         // Region must be 2-3 characters if present
-        if let Some(ref region) = self.region {
-            if region.len() < 2 || region.len() > 3 {
-                return false;
-            }
+        if let Some(ref region) = self.region
+            && (region.len() < 2 || region.len() > 3)
+        {
+            return false;
         }
 
         true
@@ -22992,10 +22990,10 @@ impl AccessibilitySubtitleGenerator {
 
                 let mut cue = SubtitleCue::new(line.clone(), start, end, segment.locale.clone());
 
-                if self.include_speakers {
-                    if let Some(ref speaker) = segment.speaker {
-                        cue = cue.with_speaker(speaker.clone());
-                    }
+                if self.include_speakers
+                    && let Some(ref speaker) = segment.speaker
+                {
+                    cue = cue.with_speaker(speaker.clone());
                 }
 
                 cues.push(cue);
@@ -26890,14 +26888,14 @@ impl ClauseClassifier {
 
         scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        if let Some((class, confidence)) = scores.first() {
-            if *confidence >= self.threshold {
-                let mut result = ClassifiedClause::new(clause, class.clone(), *confidence);
-                for (alt_class, alt_conf) in scores.iter().skip(1).take(2) {
-                    result = result.add_alternative(alt_class.clone(), *alt_conf);
-                }
-                return Some(result);
+        if let Some((class, confidence)) = scores.first()
+            && *confidence >= self.threshold
+        {
+            let mut result = ClassifiedClause::new(clause, class.clone(), *confidence);
+            for (alt_class, alt_conf) in scores.iter().skip(1).take(2) {
+                result = result.add_alternative(alt_class.clone(), *alt_conf);
             }
+            return Some(result);
         }
 
         None

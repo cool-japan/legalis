@@ -12,9 +12,9 @@
 //!
 //! ## Key Cases
 //!
-//! - **Windsurfing v Tabur Marine [1985]**: Four-step obviousness test
-//! - **Pozzoli v BDMO [2007]**: Restated Windsurfing test
-//! - **Actavis v Eli Lilly [2017]**: Purposive construction of claims
+//! - **Windsurfing v Tabur Marine \[1985\]**: Four-step obviousness test
+//! - **Pozzoli v BDMO \[2007\]**: Restated Windsurfing test
+//! - **Actavis v Eli Lilly \[2017\]**: Purposive construction of claims
 
 use super::error::{IpError, IpResult};
 use super::types::{IpOwner, PriorArt, RegistrationStatus};
@@ -125,7 +125,7 @@ pub struct InventiveStep {
     pub conclusion: String,
 }
 
-/// Pozzoli test for obviousness (Pozzoli v BDMO [2007])
+/// Pozzoli test for obviousness (Pozzoli v BDMO \[2007\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PozzoliTest {
     /// Step 1: Identify the notional skilled person
@@ -239,13 +239,13 @@ pub fn check_novelty(application: &PatentApplication, prior_art: &[PriorArt]) ->
 
     // Check if any prior art anticipates the invention
     for art in prior_art {
-        if let Some(pub_date) = art.publication_date {
-            if pub_date < priority_date {
-                // Prior art is earlier - check if it discloses all claim elements
-                // Simplified: in reality, this requires detailed comparison
-                if art.relevance.contains("discloses all elements") {
-                    anticipating_art.push(art.clone());
-                }
+        if let Some(pub_date) = art.publication_date
+            && pub_date < priority_date
+        {
+            // Prior art is earlier - check if it discloses all claim elements
+            // Simplified: in reality, this requires detailed comparison
+            if art.relevance.contains("discloses all elements") {
+                anticipating_art.push(art.clone());
             }
         }
     }
@@ -269,7 +269,7 @@ pub fn check_novelty(application: &PatentApplication, prior_art: &[PriorArt]) ->
 
 /// Assesses inventive step using Pozzoli test (Patents Act 1977 s.3)
 ///
-/// Pozzoli v BDMO [2007] restated the Windsurfing test:
+/// Pozzoli v BDMO \[2007\] restated the Windsurfing test:
 /// 1. Identify the notional skilled person and their common general knowledge
 /// 2. Identify the inventive concept of the claim
 /// 3. Identify differences between prior art and inventive concept

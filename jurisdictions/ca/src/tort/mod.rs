@@ -7,8 +7,8 @@
 //! Canadian tort law follows common law principles derived from England,
 //! with significant development through Canadian jurisprudence:
 //!
-//! - **Duty of Care**: Anns/Cooper two-stage test (Cooper v Hobart [2001])
-//! - **Causation**: But-for test with material contribution exception (Clements [2012])
+//! - **Duty of Care**: Anns/Cooper two-stage test (Cooper v Hobart \[2001\])
+//! - **Causation**: But-for test with material contribution exception (Clements \[2012\])
 //! - **Damages**: Non-pecuniary cap (trilogy cases, indexed from 1978)
 //!
 //! ## Quebec Civil Law
@@ -18,13 +18,13 @@
 //!
 //! # Key Canadian Cases
 //!
-//! - **Donoghue v Stevenson** [1932] (neighbour principle - applied in Canada)
-//! - **Cooper v Hobart** [2001] SCC 79 (refined Anns test)
-//! - **Childs v Desormeaux** [2006] SCC 18 (social host liability)
-//! - **Clements v Clements** [2012] SCC 32 (material contribution)
-//! - **Mustapha v Culligan** [2008] SCC 27 (psychological harm)
-//! - **Andrews v Grand & Toy** [1978] SCC (non-pecuniary cap)
-//! - **Grant v Torstar** [2009] SCC 61 (responsible communication)
+//! - **Donoghue v Stevenson** \[1932\] (neighbour principle - applied in Canada)
+//! - **Cooper v Hobart** \[2001\] SCC 79 (refined Anns test)
+//! - **Childs v Desormeaux** \[2006\] SCC 18 (social host liability)
+//! - **Clements v Clements** \[2012\] SCC 32 (material contribution)
+//! - **Mustapha v Culligan** \[2008\] SCC 27 (psychological harm)
+//! - **Andrews v Grand & Toy** \[1978\] SCC (non-pecuniary cap)
+//! - **Grant v Torstar** \[2009\] SCC 61 (responsible communication)
 //!
 //! # Usage
 //!

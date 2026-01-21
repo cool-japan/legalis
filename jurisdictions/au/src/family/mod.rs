@@ -13,9 +13,10 @@
 //!
 //! ## Key Cases
 //!
-//! - Stanford v Stanford [2012] HCA 52 - Property approach
+//! - Stanford v Stanford \[2012\] HCA 52 - Property approach
 //! - Mallet v Mallet (1984) - Homemaker contributions
 
+pub mod child_support;
 pub mod fla;
 pub mod types;
 
@@ -25,9 +26,50 @@ pub use fla::{
     ParentingResult, PropertyAnalyzer, PropertyFacts, PropertyResult,
 };
 pub use types::{
-    AdditionalConsideration, CareLevel, ContributionType, FamilyCase, FamilyViolenceType,
-    FutureNeedsFactor, ParentalResponsibility, ParentingOrderType, PrimaryConsideration,
-    ProtectionOrderType, RelationshipType, TimeArrangement,
+    AdditionalConsideration, ContributionType, FamilyCase, FamilyViolenceType, FutureNeedsFactor,
+    ParentalResponsibility, ParentingOrderType, PrimaryConsideration, ProtectionOrderType,
+    RelationshipType, TimeArrangement,
+};
+
+// Re-export child support types (uses its own CareLevel)
+pub use child_support::{
+    // Agreements
+    AgreementTerm,
+    AgreementType,
+    AgreementValidation,
+    AssessmentType,
+    CareLevel as ChildSupportCareLevel,
+    CarePercentage,
+    Child,
+    ChildAgeGroup,
+    ChildSupportAgreement,
+    ChildSupportCase,
+    // Collection
+    CollectionMethod,
+    CollectionStatus,
+    CostOfChildrenTable,
+    // Departure
+    DepartureApplication,
+    DepartureAssessment,
+    DepartureDecision,
+    DepartureGround,
+    DepartureOutcome,
+    EnforcementAction,
+    FormulaAssessment,
+    LegalAdviceRequirements,
+    // Objections
+    Objection,
+    ObjectionDecisionType,
+    ObjectionOutcome,
+    Parent,
+    ParentIncomeDetails,
+    PayerDetails,
+    PaymentFrequency,
+    TermType,
+    // Assessment
+    assess_departure,
+    calculate_formula_assessment,
+    validate_agreement,
 };
 
 use legalis_core::{Effect, EffectType, Statute};

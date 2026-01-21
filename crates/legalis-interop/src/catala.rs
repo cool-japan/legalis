@@ -117,10 +117,10 @@ impl CatalaImporter {
         // Also look for "definition ... under condition ... consequence exception"
         let exception_def_re = regex_lite::Regex::new(r"(?i)consequence\s+exception").ok();
 
-        if let Some(re) = exception_def_re {
-            if re.is_match(content) {
-                exceptions.push("Default logic exception".to_string());
-            }
+        if let Some(re) = exception_def_re
+            && re.is_match(content)
+        {
+            exceptions.push("Default logic exception".to_string());
         }
 
         exceptions

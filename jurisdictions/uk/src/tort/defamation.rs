@@ -5,9 +5,9 @@
 //! - Common law principles
 //!
 //! Key cases:
-//! - Lachaux v Independent Print [2019] UKSC 27 (serious harm)
-//! - Stocker v Stocker [2019] UKSC 17 (meaning)
-//! - Serafin v Malkiewicz [2020] UKSC 23 (honest opinion)
+//! - Lachaux v Independent Print \[2019\] UKSC 27 (serious harm)
+//! - Stocker v Stocker \[2019\] UKSC 17 (meaning)
+//! - Serafin v Malkiewicz \[2020\] UKSC 23 (honest opinion)
 
 use serde::{Deserialize, Serialize};
 

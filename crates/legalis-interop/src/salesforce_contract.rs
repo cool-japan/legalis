@@ -248,18 +248,18 @@ impl FormatImporter for SalesforceContractImporter {
 
     fn validate(&self, source: &str) -> bool {
         // Try to parse as JSON and check for Salesforce Contract specific fields
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source) {
-            if let Some(obj) = value.as_object() {
-                return obj.contains_key("Id")
-                    && obj.contains_key("ContractNumber")
-                    && obj.contains_key("AccountId")
-                    && obj
-                        .get("attributes")
-                        .and_then(|a| a.get("type"))
-                        .and_then(|t| t.as_str())
-                        .map(|t| t == "Contract")
-                        .unwrap_or(false);
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source)
+            && let Some(obj) = value.as_object()
+        {
+            return obj.contains_key("Id")
+                && obj.contains_key("ContractNumber")
+                && obj.contains_key("AccountId")
+                && obj
+                    .get("attributes")
+                    .and_then(|a| a.get("type"))
+                    .and_then(|t| t.as_str())
+                    .map(|t| t == "Contract")
+                    .unwrap_or(false);
         }
         false
     }

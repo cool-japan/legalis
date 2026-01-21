@@ -91,17 +91,16 @@ impl TemporalConsistencyChecker {
             for i in 0..triples.len() {
                 for j in (i + 1)..triples.len() {
                     if let (Some(vt1), Some(vt2)) = (&triples[i].valid_time, &triples[j].valid_time)
+                        && vt1.overlaps(vt2)
                     {
-                        if vt1.overlaps(vt2) {
-                            self.violations.push(Violation {
-                                rule: ConsistencyRule::NoOverlappingValidTimes,
-                                description: format!(
-                                    "Overlapping valid times for {} with values {:?} and {:?}",
-                                    key, triples[i].triple.object, triples[j].triple.object
-                                ),
-                                severity: Severity::Error,
-                            });
-                        }
+                        self.violations.push(Violation {
+                            rule: ConsistencyRule::NoOverlappingValidTimes,
+                            description: format!(
+                                "Overlapping valid times for {} with values {:?} and {:?}",
+                                key, triples[i].triple.object, triples[j].triple.object
+                            ),
+                            severity: Severity::Error,
+                        });
                     }
                 }
             }
@@ -139,14 +138,13 @@ impl TemporalConsistencyChecker {
             if let (Some(tt_prev), Some(tt_curr)) = (
                 &sorted_triples[i - 1].transaction_time,
                 &sorted_triples[i].transaction_time,
-            ) {
-                if tt_curr.start < tt_prev.start {
-                    self.violations.push(Violation {
-                        rule: ConsistencyRule::ChronologicalOrder,
-                        description: "Transaction times are not in chronological order".to_string(),
-                        severity: Severity::Error,
-                    });
-                }
+            ) && tt_curr.start < tt_prev.start
+            {
+                self.violations.push(Violation {
+                    rule: ConsistencyRule::ChronologicalOrder,
+                    description: "Transaction times are not in chronological order".to_string(),
+                    severity: Severity::Error,
+                });
             }
         }
     }
@@ -173,19 +171,14 @@ impl TemporalConsistencyChecker {
             for i in 1..triples.len() {
                 if let (Some(vt_prev), Some(vt_curr)) =
                     (&triples[i - 1].valid_time, &triples[i].valid_time)
+                    && let Some(prev_end) = vt_prev.end
+                    && vt_curr.start > prev_end
                 {
-                    if let Some(prev_end) = vt_prev.end {
-                        if vt_curr.start > prev_end {
-                            self.violations.push(Violation {
-                                rule: ConsistencyRule::NoGapsInCoverage,
-                                description: format!(
-                                    "Gap detected in temporal coverage for {}",
-                                    key
-                                ),
-                                severity: Severity::Warning,
-                            });
-                        }
-                    }
+                    self.violations.push(Violation {
+                        rule: ConsistencyRule::NoGapsInCoverage,
+                        description: format!("Gap detected in temporal coverage for {}", key),
+                        severity: Severity::Warning,
+                    });
                 }
             }
         }

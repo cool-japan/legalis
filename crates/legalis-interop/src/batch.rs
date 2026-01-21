@@ -361,11 +361,11 @@ impl BatchProcessor {
         } else {
             for file in &files {
                 // Skip if already processed (resume capability)
-                if let Some(ref checkpoint) = self.checkpoint {
-                    if checkpoint.completed_files.contains(file) {
-                        result.skipped += 1;
-                        continue;
-                    }
+                if let Some(ref checkpoint) = self.checkpoint
+                    && checkpoint.completed_files.contains(file)
+                {
+                    result.skipped += 1;
+                    continue;
                 }
 
                 let file_result = self.process_file(file)?;
@@ -528,12 +528,11 @@ impl BatchProcessor {
             }
 
             // Check pattern if specified
-            if let Some(ref pattern) = self.config.pattern {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if !Self::matches_pattern(filename, pattern) {
-                        continue;
-                    }
-                }
+            if let Some(ref pattern) = self.config.pattern
+                && let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                && !Self::matches_pattern(filename, pattern)
+            {
+                continue;
             }
 
             files.push(path.to_path_buf());
@@ -567,12 +566,12 @@ impl BatchProcessor {
         let extension = target_format.extension();
 
         // Preserve directory structure if processing recursively
-        if config.recursive {
-            if let Ok(relative) = source_file.strip_prefix(&config.source_dir) {
-                let mut output_path = config.output_dir.join(relative);
-                output_path.set_file_name(format!("{}.{}", filename, extension));
-                return output_path;
-            }
+        if config.recursive
+            && let Ok(relative) = source_file.strip_prefix(&config.source_dir)
+        {
+            let mut output_path = config.output_dir.join(relative);
+            output_path.set_file_name(format!("{}.{}", filename, extension));
+            return output_path;
         }
 
         config
@@ -649,12 +648,11 @@ impl WatchProcessor {
                 }
 
                 // Check pattern if specified
-                if let Some(ref pattern) = self.config.pattern {
-                    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                        if !BatchProcessor::matches_pattern(filename, pattern) {
-                            continue;
-                        }
-                    }
+                if let Some(ref pattern) = self.config.pattern
+                    && let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                    && !BatchProcessor::matches_pattern(filename, pattern)
+                {
+                    continue;
                 }
 
                 // Process file

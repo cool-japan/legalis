@@ -76,16 +76,16 @@ impl NLGenerator {
         }
 
         // Namespace
-        if let Some(namespace) = &doc.namespace {
-            if self.config.include_metadata {
-                writeln!(
-                    output,
-                    "This document belongs to the namespace: {}",
-                    namespace.path
-                )
-                .unwrap();
-                writeln!(output).unwrap();
-            }
+        if let Some(namespace) = &doc.namespace
+            && self.config.include_metadata
+        {
+            writeln!(
+                output,
+                "This document belongs to the namespace: {}",
+                namespace.path
+            )
+            .unwrap();
+            writeln!(output).unwrap();
         }
 
         // Imports

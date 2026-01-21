@@ -399,10 +399,10 @@ pub fn validate_marriage_conditions(marriage: &Marriage) -> FamilyLawResult<()> 
     }
 
     // Article 161: Banns publication (only if marriage date is set)
-    if marriage.marriage_date.is_some() {
-        if let Err(e) = validate_banns_publication(marriage) {
-            errors.push(e);
-        }
+    if marriage.marriage_date.is_some()
+        && let Err(e) = validate_banns_publication(marriage)
+    {
+        errors.push(e);
     }
 
     // Article 165: No oppositions

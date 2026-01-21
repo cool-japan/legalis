@@ -179,14 +179,14 @@ impl CacheBackend for RedisCacheBackend {
     async fn set(&self, key: String, entry: CacheEntry, ttl: Option<u64>) {
         use redis::AsyncCommands;
 
-        if let Some(mut conn) = self.get_connection().await {
-            if let Ok(serialized) = serde_json::to_vec(&entry) {
-                let _: Result<(), redis::RedisError> = if let Some(ttl_secs) = ttl {
-                    conn.set_ex(key, serialized, ttl_secs).await
-                } else {
-                    conn.set(key, serialized).await
-                };
-            }
+        if let Some(mut conn) = self.get_connection().await
+            && let Ok(serialized) = serde_json::to_vec(&entry)
+        {
+            let _: Result<(), redis::RedisError> = if let Some(ttl_secs) = ttl {
+                conn.set_ex(key, serialized, ttl_secs).await
+            } else {
+                conn.set(key, serialized).await
+            };
         }
     }
 
@@ -345,17 +345,16 @@ pub async fn etag_middleware(
     let cache_key = format!("{}:{}", req.method(), req.uri());
 
     // Check if client sent If-None-Match header
-    if let Some(if_none_match) = req.headers().get(header::IF_NONE_MATCH) {
-        if let Some(cached) = cache_store.get(&cache_key).await {
-            if if_none_match.to_str().ok() == Some(&cached.etag) {
-                // ETag matches - return 304 Not Modified
-                return Ok(Response::builder()
-                    .status(StatusCode::NOT_MODIFIED)
-                    .header(header::ETAG, cached.etag)
-                    .body(Body::empty())
-                    .unwrap());
-            }
-        }
+    if let Some(if_none_match) = req.headers().get(header::IF_NONE_MATCH)
+        && let Some(cached) = cache_store.get(&cache_key).await
+        && if_none_match.to_str().ok() == Some(&cached.etag)
+    {
+        // ETag matches - return 304 Not Modified
+        return Ok(Response::builder()
+            .status(StatusCode::NOT_MODIFIED)
+            .header(header::ETAG, cached.etag)
+            .body(Body::empty())
+            .unwrap());
     }
 
     // Process request

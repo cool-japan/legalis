@@ -36,11 +36,11 @@
 //!
 //! # Key Case Law
 //!
-//! - **White v White [2001]**: Yardstick of equality; discrimination against homemakers
-//! - **Miller v Miller; McFarlane v McFarlane [2006]**: Three strands: needs, compensation, sharing
-//! - **Charman v Charman [2007]**: Matrimonial vs non-matrimonial property
-//! - **Radmacher v Granatino [2010]**: Prenuptial agreements given weight if fair
-//! - **Waggott v Waggott [2018]**: No sharing of future earning capacity
+//! - **White v White \[2001\]**: Yardstick of equality; discrimination against homemakers
+//! - **Miller v Miller; McFarlane v McFarlane \[2006\]**: Three strands: needs, compensation, sharing
+//! - **Charman v Charman \[2007\]**: Matrimonial vs non-matrimonial property
+//! - **Radmacher v Granatino \[2010\]**: Prenuptial agreements given weight if fair
+//! - **Waggott v Waggott \[2018\]**: No sharing of future earning capacity
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -135,7 +135,7 @@ pub enum FactorImpact {
 // Financial Remedy Analysis
 // ============================================================================
 
-/// Three strands analysis (Miller v Miller; McFarlane v McFarlane [2006])
+/// Three strands analysis (Miller v Miller; McFarlane v McFarlane \[2006\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThreeStrandsAnalysis {
     /// Needs analysis
@@ -743,7 +743,7 @@ impl CleanBreakAnalysis {
 // Prenuptial Agreement Analysis
 // ============================================================================
 
-/// Prenuptial agreement analysis (Radmacher v Granatino [2010])
+/// Prenuptial agreement analysis (Radmacher v Granatino \[2010\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PrenupAnalysis {
     /// Agreement date

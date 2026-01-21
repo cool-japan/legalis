@@ -11,9 +11,9 @@
 //! - Landlord and Tenant Act 1954 Part II (business tenancies)
 //!
 //! Key cases:
-//! - Street v Mountford [1985] AC 809 (lease vs licence)
-//! - Lace v Chantler [1944] KB 368 (certainty of term)
-//! - Prudential Assurance v London Residuary Body [1992] (periodic tenancy)
+//! - Street v Mountford \[1985\] AC 809 (lease vs licence)
+//! - Lace v Chantler \[1944\] KB 368 (certainty of term)
+//! - Prudential Assurance v London Residuary Body \[1992\] (periodic tenancy)
 
 #![allow(missing_docs)]
 
@@ -357,12 +357,12 @@ impl LeaseholdAnalyzer {
         let years_remaining = Self::calculate_years_remaining(&facts.lease.duration);
 
         // Check if short lease
-        if let Some(years) = years_remaining {
-            if years < 80 && facts.use_type == LeaseUseType::Residential {
-                issues.push("Short lease - marriage value may apply".into());
-                recommendations
-                    .push("Consider lease extension under Leasehold Reform Act 1993".into());
-            }
+        if let Some(years) = years_remaining
+            && years < 80
+            && facts.use_type == LeaseUseType::Residential
+        {
+            issues.push("Short lease - marriage value may apply".into());
+            recommendations.push("Consider lease extension under Leasehold Reform Act 1993".into());
         }
 
         // LTA 1954 analysis for business tenancies

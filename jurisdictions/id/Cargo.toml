@@ -1,0 +1,19 @@
+[package]
+name = "legalis-id"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Indonesia jurisdiction support for Legalis-RS - Indonesian legal system with Civil Law + Islamic Law hybrid, PDP, Labor, Investment"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-id"
+keywords = ["legalis", "indonesia", "civil-law", "pdp", "omnibus-law"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []

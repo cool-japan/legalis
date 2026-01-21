@@ -19,13 +19,13 @@
 //!
 //! ## Key Cases
 //!
-//! - **Bardal v Globe & Mail** [1960]: Reasonable notice factors
-//! - **671122 Ontario v Sagaz** [2001] SCC 59: Employee vs. contractor test
-//! - **McKinley v BC Tel** [2001] SCC 38: Contextual approach to just cause
-//! - **Wallace v United Grain Growers** [1997]: Bad faith in dismissal
-//! - **Keays v Honda** [2008] SCC 39: Aggravated damages framework
-//! - **Potter v NB Legal Aid** [2015] SCC 10: Constructive dismissal
-//! - **BC v BCGSEU (Meiorin)** [1999] SCC 48: BFOR test
+//! - **Bardal v Globe & Mail** \[1960\]: Reasonable notice factors
+//! - **671122 Ontario v Sagaz** \[2001\] SCC 59: Employee vs. contractor test
+//! - **McKinley v BC Tel** \[2001\] SCC 38: Contextual approach to just cause
+//! - **Wallace v United Grain Growers** \[1997\]: Bad faith in dismissal
+//! - **Keays v Honda** \[2008\] SCC 39: Aggravated damages framework
+//! - **Potter v NB Legal Aid** \[2015\] SCC 10: Constructive dismissal
+//! - **BC v BCGSEU (Meiorin)** \[1999\] SCC 48: BFOR test
 
 mod error;
 mod termination;

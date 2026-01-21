@@ -229,10 +229,10 @@ impl FormatImporter for PdfLegalImporter {
 
     fn validate(&self, source: &str) -> bool {
         // Try to parse as JSON and check for PDF legal specific fields
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source) {
-            if let Some(obj) = value.as_object() {
-                return obj.contains_key("metadata") && obj.contains_key("annotations");
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source)
+            && let Some(obj) = value.as_object()
+        {
+            return obj.contains_key("metadata") && obj.contains_key("annotations");
         }
         false
     }

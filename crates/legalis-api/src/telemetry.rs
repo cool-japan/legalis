@@ -50,10 +50,10 @@ impl OtelConfig {
             config.otlp_endpoint = Some(endpoint);
         }
 
-        if let Ok(rate) = std::env::var("OTEL_TRACE_SAMPLE_RATE") {
-            if let Ok(r) = rate.parse::<f64>() {
-                config.sample_rate = r.clamp(0.0, 1.0);
-            }
+        if let Ok(rate) = std::env::var("OTEL_TRACE_SAMPLE_RATE")
+            && let Ok(r) = rate.parse::<f64>()
+        {
+            config.sample_rate = r.clamp(0.0, 1.0);
         }
 
         if let Ok(console) = std::env::var("OTEL_CONSOLE_EXPORTER") {

@@ -131,16 +131,16 @@ impl CadenceImporter {
         // Extract contract name
         for line in source.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("pub contract ") || trimmed.starts_with("access(all) contract ")
+            if (trimmed.starts_with("pub contract ")
+                || trimmed.starts_with("access(all) contract "))
+                && let Some(name_start) = trimmed.find("contract ")
             {
-                if let Some(name_start) = trimmed.find("contract ") {
-                    let name_start = name_start + "contract ".len();
-                    if let Some(name_end) = trimmed[name_start..]
-                        .find(|c: char| c.is_whitespace() || c == '{' || c == ':')
-                    {
-                        contract.name = trimmed[name_start..name_start + name_end].to_string();
-                        break;
-                    }
+                let name_start = name_start + "contract ".len();
+                if let Some(name_end) =
+                    trimmed[name_start..].find(|c: char| c.is_whitespace() || c == '{' || c == ':')
+                {
+                    contract.name = trimmed[name_start..name_start + name_end].to_string();
+                    break;
                 }
             }
         }
@@ -150,28 +150,26 @@ impl CadenceImporter {
             let trimmed = line.trim();
             if (trimmed.starts_with("pub fun ") || trimmed.starts_with("access("))
                 && trimmed.contains(" fun ")
+                && let Some(func) = self.parse_function_signature(trimmed)
             {
-                if let Some(func) = self.parse_function_signature(trimmed) {
-                    contract.functions.push(func);
-                }
+                contract.functions.push(func);
             }
         }
 
         // Extract resources (simplified)
         for line in source.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("pub resource ")
-                || (trimmed.starts_with("access(") && trimmed.contains(" resource "))
+            if (trimmed.starts_with("pub resource ")
+                || (trimmed.starts_with("access(") && trimmed.contains(" resource ")))
+                && let Some(resource_name) = self.extract_resource_name(trimmed)
             {
-                if let Some(resource_name) = self.extract_resource_name(trimmed) {
-                    contract.resources.push(CadenceResource {
-                        name: resource_name,
-                        access: "pub".to_string(),
-                        fields: Vec::new(),
-                        functions: Vec::new(),
-                        interfaces: Vec::new(),
-                    });
-                }
+                contract.resources.push(CadenceResource {
+                    name: resource_name,
+                    access: "pub".to_string(),
+                    fields: Vec::new(),
+                    functions: Vec::new(),
+                    interfaces: Vec::new(),
+                });
             }
         }
 

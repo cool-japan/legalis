@@ -255,33 +255,30 @@ impl DmsProvider for FileDmsProvider {
                     .file_name()
                     .and_then(|s| s.to_str())
                     .is_some_and(|s| s.ends_with(".meta.json"))
+                && let Ok(json) = std::fs::read_to_string(&path)
+                && let Ok(metadata) = serde_json::from_str::<DocumentMetadata>(&json)
             {
-                if let Ok(json) = std::fs::read_to_string(&path) {
-                    if let Ok(metadata) = serde_json::from_str::<DocumentMetadata>(&json) {
-                        // Apply filters
-                        if let Some(format) = query.format {
-                            if metadata.format != format {
-                                continue;
-                            }
-                        }
+                // Apply filters
+                if let Some(format) = query.format
+                    && metadata.format != format
+                {
+                    continue;
+                }
 
-                        if !query.tags.is_empty() {
-                            let has_all_tags =
-                                query.tags.iter().all(|tag| metadata.tags.contains(tag));
-                            if !has_all_tags {
-                                continue;
-                            }
-                        }
-
-                        if let Some(ref author) = query.author {
-                            if metadata.author.as_ref() != Some(author) {
-                                continue;
-                            }
-                        }
-
-                        results.push(metadata);
+                if !query.tags.is_empty() {
+                    let has_all_tags = query.tags.iter().all(|tag| metadata.tags.contains(tag));
+                    if !has_all_tags {
+                        continue;
                     }
                 }
+
+                if let Some(ref author) = query.author
+                    && metadata.author.as_ref() != Some(author)
+                {
+                    continue;
+                }
+
+                results.push(metadata);
             }
         }
 

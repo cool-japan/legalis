@@ -7,11 +7,11 @@
 //! - Royal prerogative
 //!
 //! Key cases:
-//! - R (Miller) v Secretary of State [2017] UKSC 5 (prorogation)
-//! - R (Miller) v The Prime Minister [2019] UKSC 41 (Miller II)
+//! - R (Miller) v Secretary of State \[2017\] UKSC 5 (prorogation)
+//! - R (Miller) v The Prime Minister \[2019\] UKSC 41 (Miller II)
 //! - Entick v Carrington (1765) 19 St Tr 1029 (rule of law)
-//! - Factortame (No 2) [1991] 1 AC 603 (EU law supremacy)
-//! - Jackson v Attorney General [2005] UKHL 56 (manner and form)
+//! - Factortame (No 2) \[1991\] 1 AC 603 (EU law supremacy)
+//! - Jackson v Attorney General \[2005\] UKHL 56 (manner and form)
 
 #![allow(missing_docs)]
 
@@ -938,17 +938,17 @@ impl ConstitutionalAnalyzer {
         );
 
         // Generate recommendations
-        if let Some(ref rol) = rule_of_law_analysis {
-            if rol.overall_assessment != RuleOfLawAssessment::Compliant {
-                recommendations.push("Review legal basis for action".into());
-                recommendations.push("Ensure access to courts is preserved".into());
-            }
+        if let Some(ref rol) = rule_of_law_analysis
+            && rol.overall_assessment != RuleOfLawAssessment::Compliant
+        {
+            recommendations.push("Review legal basis for action".into());
+            recommendations.push("Ensure access to courts is preserved".into());
         }
 
-        if let Some(ref sep) = separation_analysis {
-            if !sep.is_constitutionally_proper {
-                recommendations.push("Consider institutional boundaries".into());
-            }
+        if let Some(ref sep) = separation_analysis
+            && !sep.is_constitutionally_proper
+        {
+            recommendations.push("Consider institutional boundaries".into());
         }
 
         Ok(ConstitutionalAnalysis {
@@ -982,17 +982,17 @@ impl ConstitutionalAnalyzer {
         }
 
         // Check separation of powers
-        if let Some(sep) = separation {
-            if !sep.is_constitutionally_proper {
-                return ConstitutionalAssessment::SignificantIssues;
-            }
+        if let Some(sep) = separation
+            && !sep.is_constitutionally_proper
+        {
+            return ConstitutionalAssessment::SignificantIssues;
         }
 
         // Check prerogative
-        if let Some(pre) = prerogative {
-            if pre.has_been_abrogated {
-                return ConstitutionalAssessment::SignificantIssues;
-            }
+        if let Some(pre) = prerogative
+            && pre.has_been_abrogated
+        {
+            return ConstitutionalAssessment::SignificantIssues;
         }
 
         ConstitutionalAssessment::NoIssues

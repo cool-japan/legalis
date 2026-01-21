@@ -332,11 +332,11 @@ impl CompatibilityMatrix {
             return vec![from];
         }
 
-        if let Some(direct) = self.get_compatibility(from, to) {
-            if direct.level >= CompatibilityLevel::Medium {
-                // Direct conversion is good enough
-                return vec![from, to];
-            }
+        if let Some(direct) = self.get_compatibility(from, to)
+            && direct.level >= CompatibilityLevel::Medium
+        {
+            // Direct conversion is good enough
+            return vec![from, to];
         }
 
         // Try via Legalis

@@ -51,10 +51,10 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<()>
     validate_notice_period(&contract.notice_period, years_service)?;
 
     // Validate probation period
-    if let Some(months) = contract.probation_period_months {
-        if months > 6 {
-            return Err(EmploymentError::ProbationPeriodTooLong { months });
-        }
+    if let Some(months) = contract.probation_period_months
+        && months > 6
+    {
+        return Err(EmploymentError::ProbationPeriodTooLong { months });
     }
 
     // Validate minimum wage (if salary information available)

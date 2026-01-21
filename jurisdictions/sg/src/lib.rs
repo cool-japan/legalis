@@ -53,7 +53,7 @@
 //! - **Older Acts**: "Companies Act (Cap. 50), s. 145(1)" or "CA s. 145"
 //! - **Modern Acts**: "PDPA s. 13" (no Cap. for post-2000 acts)
 //! - **Subsidiary Legislation**: "Companies Regulations (Cap. 50, Rg 1)"
-//! - **Case Law**: "[2024] SGCA 15" (Court of Appeal), "[2023] SGHC 150" (High Court)
+//! - **Case Law**: "\[2024\] SGCA 15" (Court of Appeal), "\[2023\] SGHC 150" (High Court)
 //!
 //! ## Domain 1: Companies Act (Cap. 50)
 //!

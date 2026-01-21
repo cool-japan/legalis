@@ -10,7 +10,7 @@
 //! - Justice, emergency management, and other domains
 //! - Interoperability focus
 //!
-//! Reference: https://www.niem.gov/
+//! Reference: <https://www.niem.gov/>
 
 use crate::{ConversionReport, FormatExporter, FormatImporter, InteropResult, LegalFormat};
 use legalis_core::{Effect, EffectType, Statute};

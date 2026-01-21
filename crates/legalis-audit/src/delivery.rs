@@ -177,10 +177,10 @@ impl DeliveryService {
         }
 
         // Encrypt if requested
-        if config.encrypt {
-            if let Some(ref key) = config.encryption_key {
-                content = Self::encrypt_data(&content, key)?;
-            }
+        if config.encrypt
+            && let Some(ref key) = config.encryption_key
+        {
+            content = Self::encrypt_data(&content, key)?;
         }
 
         match &config.destination {

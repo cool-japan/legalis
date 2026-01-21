@@ -200,10 +200,10 @@ impl NaturalLanguageParser {
     /// Extract a file path from natural language input.
     fn extract_file_path(&self, input: &str) -> Option<String> {
         // Look for quoted strings
-        if let Some(start) = input.find('"') {
-            if let Some(end) = input[start + 1..].find('"') {
-                return Some(input[start + 1..start + 1 + end].to_string());
-            }
+        if let Some(start) = input.find('"')
+            && let Some(end) = input[start + 1..].find('"')
+        {
+            return Some(input[start + 1..start + 1 + end].to_string());
         }
 
         // Look for file extensions

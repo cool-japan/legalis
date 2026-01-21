@@ -7591,16 +7591,16 @@ contract {}ComparativeTest is Test {{
 
             if trimmed.starts_with("import ") {
                 // Extract contract name from import
-                if let Some(start) = trimmed.find('"') {
-                    if let Some(end) = trimmed[start + 1..].find('"') {
-                        let path = &trimmed[start + 1..start + 1 + end];
+                if let Some(start) = trimmed.find('"')
+                    && let Some(end) = trimmed[start + 1..].find('"')
+                {
+                    let path = &trimmed[start + 1..start + 1 + end];
 
-                        // Extract just the filename
-                        if let Some(filename) = path.split('/').next_back() {
-                            if let Some(name) = filename.strip_suffix(".sol") {
-                                deps.push(name.to_string());
-                            }
-                        }
+                    // Extract just the filename
+                    if let Some(filename) = path.split('/').next_back()
+                        && let Some(name) = filename.strip_suffix(".sol")
+                    {
+                        deps.push(name.to_string());
                     }
                 }
             }
@@ -7625,15 +7625,16 @@ contract {}ComparativeTest is Test {{
         for line in source.lines() {
             let trimmed = line.trim();
 
-            if trimmed.starts_with("contract ") && trimmed.contains(" is ") {
-                if let Some(is_pos) = trimmed.find(" is ") {
-                    let inheritance = &trimmed[is_pos + 4..];
+            if trimmed.starts_with("contract ")
+                && trimmed.contains(" is ")
+                && let Some(is_pos) = trimmed.find(" is ")
+            {
+                let inheritance = &trimmed[is_pos + 4..];
 
-                    for part in inheritance.split(',') {
-                        let name = part.split_whitespace().next().unwrap_or("");
-                        if !name.is_empty() {
-                            interfaces.push(name.to_string());
-                        }
+                for part in inheritance.split(',') {
+                    let name = part.split_whitespace().next().unwrap_or("");
+                    if !name.is_empty() {
+                        interfaces.push(name.to_string());
                     }
                 }
             }
@@ -7670,15 +7671,16 @@ contract {}ComparativeTest is Test {{
         for line in source.lines() {
             let trimmed = line.trim();
 
-            if trimmed.starts_with("contract ") && trimmed.contains(" is ") {
-                if let Some(is_pos) = trimmed.find(" is ") {
-                    let inheritance = &trimmed[is_pos + 4..];
+            if trimmed.starts_with("contract ")
+                && trimmed.contains(" is ")
+                && let Some(is_pos) = trimmed.find(" is ")
+            {
+                let inheritance = &trimmed[is_pos + 4..];
 
-                    for part in inheritance.split(',') {
-                        let name = part.split_whitespace().next().unwrap_or("").trim();
-                        if !name.is_empty() && name != "{" {
-                            parents.push(name.to_string());
-                        }
+                for part in inheritance.split(',') {
+                    let name = part.split_whitespace().next().unwrap_or("").trim();
+                    if !name.is_empty() && name != "{" {
+                        parents.push(name.to_string());
                     }
                 }
             }
@@ -11958,16 +11960,16 @@ contract {}ComparativeTest is Test {{
             source.push_str("        _grantRole(MINTER_ROLE, msg.sender);\n");
         }
 
-        if let Some(initial_supply) = config.initial_supply {
-            if matches!(
+        if let Some(initial_supply) = config.initial_supply
+            && matches!(
                 config.standard,
                 TokenStandard::Erc20 | TokenStandard::Erc20Extended
-            ) {
-                source.push_str(&format!(
-                    "        _mint(msg.sender, {} * 10 ** decimals());\n",
-                    initial_supply
-                ));
-            }
+            )
+        {
+            source.push_str(&format!(
+                "        _mint(msg.sender, {} * 10 ** decimals());\n",
+                initial_supply
+            ));
         }
 
         source.push_str("    }\n\n");
@@ -13852,16 +13854,14 @@ contract {}ComparativeTest is Test {{
                     if line.contains("function")
                         && !line.contains("internal")
                         && !line.contains("private")
+                        && let Some(name_start) = line.find("function")
+                        && let Some(name_end) = line[name_start..].find('(')
                     {
-                        if let Some(name_start) = line.find("function") {
-                            if let Some(name_end) = line[name_start..].find('(') {
-                                let func_name = &line[name_start + 9..name_start + name_end].trim();
-                                abi.push_str(&format!(
-                                    "  {{\"type\":\"function\",\"name\":\"{}\"}},\n",
-                                    func_name
-                                ));
-                            }
-                        }
+                        let func_name = &line[name_start + 9..name_start + name_end].trim();
+                        abi.push_str(&format!(
+                            "  {{\"type\":\"function\",\"name\":\"{}\"}},\n",
+                            func_name
+                        ));
                     }
                 }
 

@@ -1,16 +1,16 @@
 //! Trust Creation and Constitution
 //!
 //! This module implements the requirements for valid trust creation under English law,
-//! including the three certainties (Knight v Knight [1840]) and constitution requirements.
+//! including the three certainties (Knight v Knight \[1840\]) and constitution requirements.
 //!
-//! ## Three Certainties (Knight v Knight [1840])
+//! ## Three Certainties (Knight v Knight \[1840\])
 //!
 //! For a trust to be valid, there must be:
 //! 1. **Certainty of Intention** - Clear intent to create a trust, not a gift or loan
 //! 2. **Certainty of Subject Matter** - Clear identification of trust property and beneficial shares
 //! 3. **Certainty of Objects** - Clear identification of beneficiaries (or charitable purpose)
 //!
-//! ## Constitution of Trust (Milroy v Lord [1862])
+//! ## Constitution of Trust (Milroy v Lord \[1862\])
 //!
 //! A trust must be properly constituted through one of:
 //! - **Transfer to trustees** - Legal title must be properly transferred
@@ -18,9 +18,9 @@
 //! - **Disposition of equitable interest** - s.53(1)(c) LPA 1925 (must be in writing)
 //!
 //! "Equity will not perfect an imperfect gift" - but exceptions exist:
-//! - **Re Rose [1952]** - Settlor has done everything in their power
-//! - **Strong v Bird [1874]** - Imperfect gift perfected by vesting as executor
-//! - **Unconscionability** (Pennington v Waine [2002])
+//! - **Re Rose \[1952\]** - Settlor has done everything in their power
+//! - **Strong v Bird \[1874\]** - Imperfect gift perfected by vesting as executor
+//! - **Unconscionability** (Pennington v Waine \[2002\])
 //!
 //! ## Formality Requirements
 //!
@@ -348,12 +348,12 @@ pub enum ObjectsCertaintyTest {
     /// Fixed trust - complete list test (IRC v Broadway Cottages)
     /// Must be able to list ALL beneficiaries
     CompleteList,
-    /// Discretionary trust - is/is not test (McPhail v Doulton [1971])
+    /// Discretionary trust - is/is not test (McPhail v Doulton \[1971\])
     /// Must be able to say whether ANY GIVEN PERSON is/is not a beneficiary
     IsOrIsNot,
     /// Fiduciary power - is/is not test (same as discretionary)
     FiduciaryPower,
-    /// Mere power - "mere power" test (Re Gulbenkian [1970])
+    /// Mere power - "mere power" test (Re Gulbenkian \[1970\])
     /// Power valid if possible to say ONE person is within the class
     MerePower,
 }
@@ -571,7 +571,7 @@ impl CertaintyOfObjects {
 // Combined Three Certainties
 // ============================================================================
 
-/// Combined three certainties analysis (Knight v Knight [1840])
+/// Combined three certainties analysis (Knight v Knight \[1840\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThreeCertainties {
     /// Certainty of intention

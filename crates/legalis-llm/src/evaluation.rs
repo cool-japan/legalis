@@ -73,12 +73,12 @@ fn calculate_ngram_precision(candidate: &[String], references: &[Vec<String>], n
 
     for ngram in &candidate_ngrams {
         total += 1;
-        if let Some(&count) = reference_ngram_counts.get(ngram) {
-            if count > 0 {
-                matches += 1;
-                // Decrease count to handle clipping
-                reference_ngram_counts.insert(ngram.clone(), count - 1);
-            }
+        if let Some(&count) = reference_ngram_counts.get(ngram)
+            && count > 0
+        {
+            matches += 1;
+            // Decrease count to handle clipping
+            reference_ngram_counts.insert(ngram.clone(), count - 1);
         }
     }
 

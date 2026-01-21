@@ -168,13 +168,13 @@ impl Validator {
         }
 
         // Check for potential issues
-        if let Condition::Not(inner) = condition {
-            if matches!(**inner, Condition::Not(_)) {
-                validation.add_warning(format!(
-                    "Condition {} has double negation - consider simplifying",
-                    index
-                ));
-            }
+        if let Condition::Not(inner) = condition
+            && matches!(**inner, Condition::Not(_))
+        {
+            validation.add_warning(format!(
+                "Condition {} has double negation - consider simplifying",
+                index
+            ));
         }
 
         // Check for tautologies (A OR NOT A or NOT A OR A)

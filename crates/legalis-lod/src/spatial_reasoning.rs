@@ -112,30 +112,29 @@ impl SpatialReasoner {
         let mut conflicts = Vec::new();
 
         for rel in &self.relationships {
-            if rel.relation == SpatialRelation::Overlaps {
-                if let (Some(zone_a), Some(zone_b)) =
+            if rel.relation == SpatialRelation::Overlaps
+                && let (Some(zone_a), Some(zone_b)) =
                     (self.zones.get(&rel.subject), self.zones.get(&rel.object))
-                {
-                    // Check if zones have potentially conflicting regulations
-                    if !zone_a.regulations.is_empty() && !zone_b.regulations.is_empty() {
-                        // Simple conflict detection: if zones overlap and have different regulations
-                        let common_regs: Vec<_> = zone_a
-                            .regulations
-                            .iter()
-                            .filter(|r| zone_b.regulations.contains(r))
-                            .collect();
+            {
+                // Check if zones have potentially conflicting regulations
+                if !zone_a.regulations.is_empty() && !zone_b.regulations.is_empty() {
+                    // Simple conflict detection: if zones overlap and have different regulations
+                    let common_regs: Vec<_> = zone_a
+                        .regulations
+                        .iter()
+                        .filter(|r| zone_b.regulations.contains(r))
+                        .collect();
 
-                        if common_regs.is_empty() && zone_a.zone_type != zone_b.zone_type {
-                            conflicts.push(ZoneConflict {
-                                zone_a: zone_a.uri.clone(),
-                                zone_b: zone_b.uri.clone(),
-                                conflict_type: ConflictType::OverlappingRegulations,
-                                description: format!(
-                                    "Zones '{}' and '{}' overlap with different regulations",
-                                    zone_a.name, zone_b.name
-                                ),
-                            });
-                        }
+                    if common_regs.is_empty() && zone_a.zone_type != zone_b.zone_type {
+                        conflicts.push(ZoneConflict {
+                            zone_a: zone_a.uri.clone(),
+                            zone_b: zone_b.uri.clone(),
+                            conflict_type: ConflictType::OverlappingRegulations,
+                            description: format!(
+                                "Zones '{}' and '{}' overlap with different regulations",
+                                zone_a.name, zone_b.name
+                            ),
+                        });
                     }
                 }
             }

@@ -221,23 +221,22 @@ impl Extension for ApqExtensionImpl {
         next: NextParseQuery<'_>,
     ) -> async_graphql::ServerResult<ExecutableDocument> {
         // APQ protocol: check for hash in extensions
-        if let Ok(extensions) = ctx.data::<serde_json::Value>() {
-            if let Some(apq) = extensions.get("persistedQuery") {
-                if let Some(hash) = apq.get("sha256Hash").and_then(|h| h.as_str()) {
-                    // If query is empty, this is a persisted query request
-                    if query.is_empty() {
-                        if let Some(persisted) = self.store.get(hash).await {
-                            return next.run(ctx, &persisted.query, variables).await;
-                        } else {
-                            return Err(ServerError::new("PersistedQueryNotFound", None));
-                        }
-                    } else {
-                        // Client provided both hash and query - store it
-                        self.store
-                            .register(hash.to_string(), query.to_string(), None)
-                            .await;
-                    }
+        if let Ok(extensions) = ctx.data::<serde_json::Value>()
+            && let Some(apq) = extensions.get("persistedQuery")
+            && let Some(hash) = apq.get("sha256Hash").and_then(|h| h.as_str())
+        {
+            // If query is empty, this is a persisted query request
+            if query.is_empty() {
+                if let Some(persisted) = self.store.get(hash).await {
+                    return next.run(ctx, &persisted.query, variables).await;
+                } else {
+                    return Err(ServerError::new("PersistedQueryNotFound", None));
                 }
+            } else {
+                // Client provided both hash and query - store it
+                self.store
+                    .register(hash.to_string(), query.to_string(), None)
+                    .await;
             }
         }
 

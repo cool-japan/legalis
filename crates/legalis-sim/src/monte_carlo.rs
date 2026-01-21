@@ -74,13 +74,12 @@ impl MonteCarloRunner {
             results.push(extract_metrics(&metrics));
 
             // Check convergence if configured
-            if let Some(threshold) = self.config.convergence_threshold {
-                if run_idx >= self.config.min_runs_before_convergence
-                    && self.check_convergence(&results, threshold)
-                {
-                    converged = true;
-                    break;
-                }
+            if let Some(threshold) = self.config.convergence_threshold
+                && run_idx >= self.config.min_runs_before_convergence
+                && self.check_convergence(&results, threshold)
+            {
+                converged = true;
+                break;
             }
         }
 
@@ -156,12 +155,12 @@ impl MonteCarloRunner {
         let std_dev = calculate_std_dev(results, &mean);
 
         for (key, mean_val) in &mean {
-            if let Some(std_val) = std_dev.get(key) {
-                if mean_val.abs() > 1e-10 {
-                    let cv = std_val / mean_val.abs();
-                    if cv > threshold {
-                        return false;
-                    }
+            if let Some(std_val) = std_dev.get(key)
+                && mean_val.abs() > 1e-10
+            {
+                let cv = std_val / mean_val.abs();
+                if cv > threshold {
+                    return false;
                 }
             }
         }

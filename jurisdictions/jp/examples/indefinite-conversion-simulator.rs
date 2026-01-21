@@ -313,10 +313,9 @@ fn get_date() -> NaiveDate {
             year_input.trim().parse::<i32>(),
             month_input.trim().parse::<u32>(),
             day_input.trim().parse::<u32>(),
-        ) {
-            if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
-                return date;
-            }
+        ) && let Some(date) = NaiveDate::from_ymd_opt(year, month, day)
+        {
+            return date;
         }
         println!("❌ 無効な日付です。もう一度入力してください。");
     }

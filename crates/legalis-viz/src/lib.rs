@@ -1632,24 +1632,23 @@ impl DependencyGraph {
 
         // Draw edges first (so they appear behind nodes)
         for edge in self.graph.edge_indices() {
-            if let Some((source, target)) = self.graph.edge_endpoints(edge) {
-                if let (Some(&(x1, y1)), Some(&(x2, y2))) =
+            if let Some((source, target)) = self.graph.edge_endpoints(edge)
+                && let (Some(&(x1, y1)), Some(&(x2, y2))) =
                     (node_positions.get(&source), node_positions.get(&target))
-                {
-                    svg.push_str(&format!(
+            {
+                svg.push_str(&format!(
                         "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n",
                         x1, y1, x2, y2, theme.link_color
                     ));
 
-                    // Add edge label
-                    let label = &self.graph[edge];
-                    let mid_x = (x1 + x2) / 2;
-                    let mid_y = (y1 + y2) / 2;
-                    svg.push_str(&format!(
+                // Add edge label
+                let label = &self.graph[edge];
+                let mid_x = (x1 + x2) / 2;
+                let mid_y = (y1 + y2) / 2;
+                svg.push_str(&format!(
                         "  <text x=\"{}\" y=\"{}\" font-size=\"10\" fill=\"{}\" text-anchor=\"middle\">{}</text>\n",
                         mid_x, mid_y.saturating_sub(5), theme.text_color, label
                     ));
-                }
             }
         }
 
@@ -6108,16 +6107,16 @@ impl AIAnnotationGenerator {
         for node_idx in tree.graph.node_indices() {
             let out_degree = tree.graph.neighbors(node_idx).count();
 
-            if out_degree > 5 {
-                if let Some(_node) = tree.graph.node_weight(node_idx) {
-                    annotations.push(AIAnnotation {
-                        target_id: format!("node-{}", node_idx.index()),
-                        text: format!("High complexity: {} outgoing paths", out_degree),
-                        importance: 0.8,
-                        category: AnnotationCategory::Complexity,
-                        position: None,
-                    });
-                }
+            if out_degree > 5
+                && let Some(_node) = tree.graph.node_weight(node_idx)
+            {
+                annotations.push(AIAnnotation {
+                    target_id: format!("node-{}", node_idx.index()),
+                    text: format!("High complexity: {} outgoing paths", out_degree),
+                    importance: 0.8,
+                    category: AnnotationCategory::Complexity,
+                    position: None,
+                });
             }
         }
 
@@ -6130,18 +6129,18 @@ impl AIAnnotationGenerator {
         // Detect chains of discretionary decisions
         let mut discretion_chains = 0;
         for node_idx in tree.graph.node_indices() {
-            if let Some(node) = tree.graph.node_weight(node_idx) {
-                if matches!(node, DecisionNode::Discretion { .. }) {
-                    let has_discretion_child = tree.graph.neighbors(node_idx).any(|neighbor| {
-                        matches!(
-                            tree.graph.node_weight(neighbor),
-                            Some(DecisionNode::Discretion { .. })
-                        )
-                    });
+            if let Some(node) = tree.graph.node_weight(node_idx)
+                && matches!(node, DecisionNode::Discretion { .. })
+            {
+                let has_discretion_child = tree.graph.neighbors(node_idx).any(|neighbor| {
+                    matches!(
+                        tree.graph.node_weight(neighbor),
+                        Some(DecisionNode::Discretion { .. })
+                    )
+                });
 
-                    if has_discretion_child {
-                        discretion_chains += 1;
-                    }
+                if has_discretion_child {
+                    discretion_chains += 1;
                 }
             }
         }
@@ -6190,19 +6189,19 @@ impl AIAnnotationGenerator {
         for node_idx in graph.graph.node_indices() {
             let out_degree = graph.graph.neighbors(node_idx).count();
 
-            if out_degree > 5 {
-                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
-                    annotations.push(AIAnnotation {
-                        target_id: statute_id.clone(),
-                        text: format!(
-                            "Hub statute: {} dependencies - central to legal framework",
-                            out_degree
-                        ),
-                        importance: 0.85,
-                        category: AnnotationCategory::Complexity,
-                        position: None,
-                    });
-                }
+            if out_degree > 5
+                && let Some(statute_id) = graph.graph.node_weight(node_idx)
+            {
+                annotations.push(AIAnnotation {
+                    target_id: statute_id.clone(),
+                    text: format!(
+                        "Hub statute: {} dependencies - central to legal framework",
+                        out_degree
+                    ),
+                    importance: 0.85,
+                    category: AnnotationCategory::Complexity,
+                    position: None,
+                });
             }
         }
 
@@ -6522,15 +6521,15 @@ impl SmartDataHighlighter {
                 .count();
             let outgoing = graph.graph.neighbors(node_idx).count();
 
-            if incoming > 3 || outgoing > 3 {
-                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
-                    rules.push(HighlightRule {
-                        target_id: statute_id.clone(),
-                        color: "#9c27b0".to_string(),
-                        importance: 0.85,
-                        reason: format!("Hub statute ({} in, {} out)", incoming, outgoing),
-                    });
-                }
+            if (incoming > 3 || outgoing > 3)
+                && let Some(statute_id) = graph.graph.node_weight(node_idx)
+            {
+                rules.push(HighlightRule {
+                    target_id: statute_id.clone(),
+                    color: "#9c27b0".to_string(),
+                    importance: 0.85,
+                    reason: format!("Hub statute ({} in, {} out)", incoming, outgoing),
+                });
             }
         }
 
@@ -6621,23 +6620,24 @@ impl AnomalyDetector {
                 > 0;
             let is_root = Some(node_idx) == tree.root;
 
-            if !has_incoming && !is_root {
-                if let Some(node) = tree.graph.node_weight(node_idx) {
-                    let label = match node {
-                        DecisionNode::Root { statute_id, .. } => statute_id.clone(),
-                        DecisionNode::Condition { description, .. } => description.clone(),
-                        DecisionNode::Outcome { description } => description.clone(),
-                        DecisionNode::Discretion { issue, .. } => issue.clone(),
-                    };
+            if !has_incoming
+                && !is_root
+                && let Some(node) = tree.graph.node_weight(node_idx)
+            {
+                let label = match node {
+                    DecisionNode::Root { statute_id, .. } => statute_id.clone(),
+                    DecisionNode::Condition { description, .. } => description.clone(),
+                    DecisionNode::Outcome { description } => description.clone(),
+                    DecisionNode::Discretion { issue, .. } => issue.clone(),
+                };
 
-                    anomalies.push(Anomaly {
-                        anomaly_type: AnomalyType::OrphanedNode,
-                        severity: 0.8,
-                        description: format!("Orphaned node detected: {}", label),
-                        location: format!("node-{}", node_idx.index()),
-                        suggestion: "Connect this node to the tree or remove it".to_string(),
-                    });
-                }
+                anomalies.push(Anomaly {
+                    anomaly_type: AnomalyType::OrphanedNode,
+                    severity: 0.8,
+                    description: format!("Orphaned node detected: {}", label),
+                    location: format!("node-{}", node_idx.index()),
+                    suggestion: "Connect this node to the tree or remove it".to_string(),
+                });
             }
         }
 
@@ -6718,16 +6718,17 @@ impl AnomalyDetector {
                 .count();
             let outgoing = graph.graph.neighbors(node_idx).count();
 
-            if incoming == 0 && outgoing == 0 {
-                if let Some(statute_id) = graph.graph.node_weight(node_idx) {
-                    anomalies.push(Anomaly {
-                        anomaly_type: AnomalyType::IsolatedNode,
-                        severity: 0.6,
-                        description: format!("Isolated statute: {}", statute_id),
-                        location: statute_id.clone(),
-                        suggestion: "Consider if this statute should have dependencies".to_string(),
-                    });
-                }
+            if incoming == 0
+                && outgoing == 0
+                && let Some(statute_id) = graph.graph.node_weight(node_idx)
+            {
+                anomalies.push(Anomaly {
+                    anomaly_type: AnomalyType::IsolatedNode,
+                    severity: 0.6,
+                    description: format!("Isolated statute: {}", statute_id),
+                    location: statute_id.clone(),
+                    suggestion: "Consider if this statute should have dependencies".to_string(),
+                });
             }
         }
 
@@ -6743,23 +6744,19 @@ impl AnomalyDetector {
                 // Check if reverse edge exists
                 let has_reverse = graph.graph.edges_connecting(target, source).count() > 0;
 
-                if has_reverse {
-                    if let (Some(from_id), Some(to_id)) = (
+                if has_reverse
+                    && let (Some(from_id), Some(to_id)) = (
                         graph.graph.node_weight(source),
                         graph.graph.node_weight(target),
-                    ) {
-                        anomalies.push(Anomaly {
-                            anomaly_type: AnomalyType::BidirectionalDependency,
-                            severity: 0.75,
-                            description: format!(
-                                "Bidirectional dependency: {} <-> {}",
-                                from_id, to_id
-                            ),
-                            location: format!("{}-{}", from_id, to_id),
-                            suggestion: "Review if bidirectional dependency is intentional"
-                                .to_string(),
-                        });
-                    }
+                    )
+                {
+                    anomalies.push(Anomaly {
+                        anomaly_type: AnomalyType::BidirectionalDependency,
+                        severity: 0.75,
+                        description: format!("Bidirectional dependency: {} <-> {}", from_id, to_id),
+                        location: format!("{}-{}", from_id, to_id),
+                        suggestion: "Review if bidirectional dependency is intentional".to_string(),
+                    });
                 }
             }
         }
@@ -9339,14 +9336,13 @@ impl CourtHierarchyVisualizer {
                         node_id, court.name, court.jurisdiction
                     ));
 
-                    if i > 0 {
-                        if let Some(prev_level) = level_order.get(i - 1) {
-                            if let Some(prev_courts) = levels.get(*prev_level) {
-                                for prev_court in prev_courts {
-                                    let prev_id = prev_court.id.replace('-', "_");
-                                    diagram.push_str(&format!("\n    {} --> {}", prev_id, node_id));
-                                }
-                            }
+                    if i > 0
+                        && let Some(prev_level) = level_order.get(i - 1)
+                        && let Some(prev_courts) = levels.get(*prev_level)
+                    {
+                        for prev_court in prev_courts {
+                            let prev_id = prev_court.id.replace('-', "_");
+                            diagram.push_str(&format!("\n    {} --> {}", prev_id, node_id));
                         }
                     }
                     diagram.push('\n');
@@ -14945,19 +14941,25 @@ impl EducationalWalkthrough {
                 html.push_str("            </div>\n");
             }
 
-            if self.include_quiz {
-                if let Some(quiz) = &lesson.quiz_question {
-                    html.push_str("            <div class=\"quiz-section\">\n");
-                    html.push_str("                <div class=\"quiz-title\">Check Your Understanding</div>\n");
+            if self.include_quiz
+                && let Some(quiz) = &lesson.quiz_question
+            {
+                html.push_str("            <div class=\"quiz-section\">\n");
+                html.push_str(
+                    "                <div class=\"quiz-title\">Check Your Understanding</div>\n",
+                );
+                html.push_str(&format!(
+                    "                <div class=\"quiz-question\">{}</div>\n",
+                    quiz.question
+                ));
+                for (j, option) in quiz.options.iter().enumerate() {
                     html.push_str(&format!(
-                        "                <div class=\"quiz-question\">{}</div>\n",
-                        quiz.question
+                        "                <div class=\"quiz-option\" data-correct=\"{}\">{}</div>\n",
+                        j == quiz.correct_index,
+                        option
                     ));
-                    for (j, option) in quiz.options.iter().enumerate() {
-                        html.push_str(&format!("                <div class=\"quiz-option\" data-correct=\"{}\">{}</div>\n", j == quiz.correct_index, option));
-                    }
-                    html.push_str("            </div>\n");
                 }
+                html.push_str("            </div>\n");
             }
 
             if let Some(takeaway) = &lesson.key_takeaway {
@@ -16798,10 +16800,11 @@ impl ConceptHierarchyTree {
 
         // Find all IsA relationships where this concept is the parent
         for rel in &graph.relationships {
-            if rel.to_id == root_id && rel.relation_type == ConceptRelationType::IsA {
-                if let Some(child_tree) = Self::from_graph(graph, &rel.from_id) {
-                    tree.add_child(child_tree);
-                }
+            if rel.to_id == root_id
+                && rel.relation_type == ConceptRelationType::IsA
+                && let Some(child_tree) = Self::from_graph(graph, &rel.from_id)
+            {
+                tree.add_child(child_tree);
             }
         }
 

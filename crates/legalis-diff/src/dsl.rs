@@ -188,10 +188,10 @@ impl RuleEngine {
         let mut results = Vec::new();
 
         for rule in &self.rules {
-            if self.matches_conditions(diff, &rule.conditions, rule.match_all) {
-                if let Some(result) = self.execute_actions(diff, rule) {
-                    results.push(result);
-                }
+            if self.matches_conditions(diff, &rule.conditions, rule.match_all)
+                && let Some(result) = self.execute_actions(diff, rule)
+            {
+                results.push(result);
             }
         }
 

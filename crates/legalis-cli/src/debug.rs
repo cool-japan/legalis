@@ -102,16 +102,14 @@ impl DebugTrace {
                 ));
             }
 
-            if show_memory {
-                if let Some(delta) = step.memory_delta {
-                    let sign = if delta >= 0 { "+" } else { "" };
-                    report.push_str(&format!(
-                        "{}  Memory:  {}{}\n",
-                        indent,
-                        sign,
-                        format_bytes(delta.unsigned_abs())
-                    ));
-                }
+            if show_memory && let Some(delta) = step.memory_delta {
+                let sign = if delta >= 0 { "+" } else { "" };
+                report.push_str(&format!(
+                    "{}  Memory:  {}{}\n",
+                    indent,
+                    sign,
+                    format_bytes(delta.unsigned_abs())
+                ));
             }
 
             report.push('\n');
@@ -255,16 +253,16 @@ impl<'a> StepGuard<'a> {
         };
 
         // Update peak memory
-        if let Some(delta) = memory_delta {
-            if delta > 0 {
-                let current_mem = self.start_memory.unwrap_or(0) + delta as usize;
-                if let Some(ref mut peak) = self.debugger.trace.peak_memory {
-                    if current_mem > *peak {
-                        *peak = current_mem;
-                    }
-                } else {
-                    self.debugger.trace.peak_memory = Some(current_mem);
+        if let Some(delta) = memory_delta
+            && delta > 0
+        {
+            let current_mem = self.start_memory.unwrap_or(0) + delta as usize;
+            if let Some(ref mut peak) = self.debugger.trace.peak_memory {
+                if current_mem > *peak {
+                    *peak = current_mem;
                 }
+            } else {
+                self.debugger.trace.peak_memory = Some(current_mem);
             }
         }
 

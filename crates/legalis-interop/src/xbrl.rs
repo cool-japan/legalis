@@ -118,13 +118,12 @@ impl XbrlImporter {
         };
 
         // Extract entity ID if present
-        if let Some(start) = source.find("<identifier") {
-            if let Some(close) = source[start..].find('>') {
-                if let Some(end) = source[start + close..].find("</identifier>") {
-                    let content = &source[start + close + 1..start + close + end];
-                    instance.metadata.entity_id = content.trim().to_string();
-                }
-            }
+        if let Some(start) = source.find("<identifier")
+            && let Some(close) = source[start..].find('>')
+            && let Some(end) = source[start + close..].find("</identifier>")
+        {
+            let content = &source[start + close + 1..start + close + end];
+            instance.metadata.entity_id = content.trim().to_string();
         }
 
         // Create a default context
@@ -146,19 +145,18 @@ impl XbrlImporter {
         ];
 
         for (simple_name, concept) in &fact_patterns {
-            if let Some(start) = source.find(&format!("<{}", simple_name)) {
-                if let Some(close) = source[start..].find('>') {
-                    if let Some(end) = source[start + close..].find(&format!("</{}", simple_name)) {
-                        let content = &source[start + close + 1..start + close + end];
-                        instance.facts.push(XbrlFact {
-                            concept: concept.to_string(),
-                            context_ref: "default".to_string(),
-                            value: content.trim().to_string(),
-                            unit: Some("USD".to_string()),
-                            decimals: Some(0),
-                        });
-                    }
-                }
+            if let Some(start) = source.find(&format!("<{}", simple_name))
+                && let Some(close) = source[start..].find('>')
+                && let Some(end) = source[start + close..].find(&format!("</{}", simple_name))
+            {
+                let content = &source[start + close + 1..start + close + end];
+                instance.facts.push(XbrlFact {
+                    concept: concept.to_string(),
+                    context_ref: "default".to_string(),
+                    value: content.trim().to_string(),
+                    unit: Some("USD".to_string()),
+                    decimals: Some(0),
+                });
             }
         }
 

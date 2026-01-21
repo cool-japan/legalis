@@ -370,10 +370,10 @@ impl DefamationAnalyzer {
     fn check_responsible_communication(facts: &DefamationFacts) -> bool {
         // Need to check Grant v Torstar factors
         for claim in &facts.defences_claimed {
-            if matches!(claim.defence, DefamationDefence::ResponsibleCommunication) {
-                if let Some(factors) = &claim.responsible_communication {
-                    return factors.public_interest && factors.responsible_journalism;
-                }
+            if matches!(claim.defence, DefamationDefence::ResponsibleCommunication)
+                && let Some(factors) = &claim.responsible_communication
+            {
+                return factors.public_interest && factors.responsible_journalism;
             }
         }
         false

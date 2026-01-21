@@ -251,12 +251,12 @@ pub fn validate_post_marital_maintenance(maintenance: &PostMaritalMaintenance) -
     if maintenance.start_date > Utc::now().date_naive() {
         return Err(FamilyLawError::FutureDate);
     }
-    if let Some(end_date) = maintenance.end_date {
-        if end_date < maintenance.start_date {
-            return Err(FamilyLawError::InvalidDate {
-                date_type: "End date before start date".to_string(),
-            });
-        }
+    if let Some(end_date) = maintenance.end_date
+        && end_date < maintenance.start_date
+    {
+        return Err(FamilyLawError::InvalidDate {
+            date_type: "End date before start date".to_string(),
+        });
     }
 
     Ok(())
@@ -284,12 +284,12 @@ pub fn validate_maintenance_obligation(obligation: &MaintenanceObligation) -> Re
     if obligation.start_date > Utc::now().date_naive() {
         return Err(FamilyLawError::FutureDate);
     }
-    if let Some(end_date) = obligation.end_date {
-        if end_date < obligation.start_date {
-            return Err(FamilyLawError::InvalidDate {
-                date_type: "End date before start date".to_string(),
-            });
-        }
+    if let Some(end_date) = obligation.end_date
+        && end_date < obligation.start_date
+    {
+        return Err(FamilyLawError::InvalidDate {
+            date_type: "End date before start date".to_string(),
+        });
     }
 
     // Validate relationship-specific rules

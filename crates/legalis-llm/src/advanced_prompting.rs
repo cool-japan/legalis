@@ -458,26 +458,26 @@ impl MemoryAugmentedPrompt {
         let mut prompt = String::new();
 
         // Add memories if available
-        if let Some(store) = &self.memory_store {
-            if !store.is_empty() {
-                prompt.push_str("Relevant context from memory:\n\n");
+        if let Some(store) = &self.memory_store
+            && !store.is_empty()
+        {
+            prompt.push_str("Relevant context from memory:\n\n");
 
-                if self.include_all {
-                    // Include all memories
-                    for (key, value) in store.all_memories() {
+            if self.include_all {
+                // Include all memories
+                for (key, value) in store.all_memories() {
+                    prompt.push_str(&format!("[{}]: {}\n", key, value));
+                }
+            } else if let Some(keys) = &self.relevant_keys {
+                // Include only specified memories
+                for key in keys {
+                    if let Some(value) = store.get_memory(key) {
                         prompt.push_str(&format!("[{}]: {}\n", key, value));
                     }
-                } else if let Some(keys) = &self.relevant_keys {
-                    // Include only specified memories
-                    for key in keys {
-                        if let Some(value) = store.get_memory(key) {
-                            prompt.push_str(&format!("[{}]: {}\n", key, value));
-                        }
-                    }
                 }
-
-                prompt.push_str("\n---\n\n");
             }
+
+            prompt.push_str("\n---\n\n");
         }
 
         // Add the main prompt

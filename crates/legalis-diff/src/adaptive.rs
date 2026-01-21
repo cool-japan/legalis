@@ -180,10 +180,10 @@ impl AdaptiveDiffer {
     /// Computes a diff using the adaptive algorithm selection.
     pub fn diff(&self, old: &Statute, new: &Statute) -> Result<StatuteDiff, DiffError> {
         // Check cache first if enabled
-        if let Some(cache) = &self.cache {
-            if let Some(cached) = cache.get(old, new) {
-                return Ok(cached);
-            }
+        if let Some(cache) = &self.cache
+            && let Some(cached) = cache.get(old, new)
+        {
+            return Ok(cached);
         }
 
         // Perform the diff

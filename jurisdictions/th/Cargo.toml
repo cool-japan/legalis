@@ -1,0 +1,19 @@
+[package]
+name = "legalis-th"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thailand jurisdiction support for Legalis-RS - Thai legal system with Buddhist Era calendar, FBA, BOI, PDPA, Labor law"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-th"
+keywords = ["legalis", "thailand", "civil-law", "pdpa", "boi"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []

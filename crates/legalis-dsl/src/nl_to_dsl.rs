@@ -245,19 +245,19 @@ impl NLTranslator {
     pub fn translate_condition(&self, text: &str) -> Option<String> {
         // Try to match condition-specific patterns
         for pattern in &self.patterns {
-            if pattern.template.contains("WHEN") {
-                if let Some(captures) = pattern.pattern.captures(text) {
-                    let mut dsl = pattern.template.clone();
+            if pattern.template.contains("WHEN")
+                && let Some(captures) = pattern.pattern.captures(text)
+            {
+                let mut dsl = pattern.template.clone();
 
-                    for group_name in &pattern.groups {
-                        if let Some(capture) = captures.name(group_name) {
-                            let placeholder = format!("{{{{{}}}}}", group_name);
-                            dsl = dsl.replace(&placeholder, capture.as_str());
-                        }
+                for group_name in &pattern.groups {
+                    if let Some(capture) = captures.name(group_name) {
+                        let placeholder = format!("{{{{{}}}}}", group_name);
+                        dsl = dsl.replace(&placeholder, capture.as_str());
                     }
-
-                    return Some(dsl);
                 }
+
+                return Some(dsl);
             }
         }
         None
@@ -267,19 +267,19 @@ impl NLTranslator {
     pub fn translate_effect(&self, text: &str) -> Option<String> {
         // Try to match effect-specific patterns
         for pattern in &self.patterns {
-            if pattern.template.contains("THEN") {
-                if let Some(captures) = pattern.pattern.captures(text) {
-                    let mut dsl = pattern.template.clone();
+            if pattern.template.contains("THEN")
+                && let Some(captures) = pattern.pattern.captures(text)
+            {
+                let mut dsl = pattern.template.clone();
 
-                    for group_name in &pattern.groups {
-                        if let Some(capture) = captures.name(group_name) {
-                            let placeholder = format!("{{{{{}}}}}", group_name);
-                            dsl = dsl.replace(&placeholder, capture.as_str());
-                        }
+                for group_name in &pattern.groups {
+                    if let Some(capture) = captures.name(group_name) {
+                        let placeholder = format!("{{{{{}}}}}", group_name);
+                        dsl = dsl.replace(&placeholder, capture.as_str());
                     }
-
-                    return Some(dsl);
                 }
+
+                return Some(dsl);
             }
         }
         None

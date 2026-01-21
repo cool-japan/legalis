@@ -57,19 +57,19 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Try to extract tenant ID from header
-        if let Some(tenant_id) = parts.headers.get("X-Tenant-ID") {
-            if let Ok(tenant_id_str) = tenant_id.to_str() {
-                let tenant_name = parts
-                    .headers
-                    .get("X-Tenant-Name")
-                    .and_then(|v| v.to_str().ok())
-                    .map(String::from);
+        if let Some(tenant_id) = parts.headers.get("X-Tenant-ID")
+            && let Ok(tenant_id_str) = tenant_id.to_str()
+        {
+            let tenant_name = parts
+                .headers
+                .get("X-Tenant-Name")
+                .and_then(|v| v.to_str().ok())
+                .map(String::from);
 
-                return Ok(TenantContext {
-                    tenant_id: tenant_id_str.to_string(),
-                    tenant_name,
-                });
-            }
+            return Ok(TenantContext {
+                tenant_id: tenant_id_str.to_string(),
+                tenant_name,
+            });
         }
 
         // Default to "default" tenant if no header is provided

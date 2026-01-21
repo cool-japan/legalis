@@ -1,0 +1,19 @@
+[package]
+name = "legalis-za"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "South Africa jurisdiction support for Legalis-RS - Constitution, Companies Act, POPIA, Labour Relations"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-za"
+keywords = ["legalis", "south-africa", "mixed-law", "popia", "constitution"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []

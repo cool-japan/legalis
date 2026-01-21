@@ -111,25 +111,25 @@ impl EntityLinker {
     pub fn index_from_triples(&mut self, triples: &[Triple]) {
         for triple in triples {
             // Index entities with labels
-            if triple.predicate == "rdfs:label" || triple.predicate == "skos:prefLabel" {
-                if let RdfValue::Literal(ref label, _) = triple.object {
-                    let entity = EntityCandidate {
-                        uri: triple.subject.clone(),
-                        label: label.clone(),
-                        entity_type: None,
-                        similarity: 1.0,
-                        context: None,
-                    };
-                    self.add_entity(entity);
-                    self.add_alias(label.clone(), triple.subject.clone());
-                }
+            if (triple.predicate == "rdfs:label" || triple.predicate == "skos:prefLabel")
+                && let RdfValue::Literal(ref label, _) = triple.object
+            {
+                let entity = EntityCandidate {
+                    uri: triple.subject.clone(),
+                    label: label.clone(),
+                    entity_type: None,
+                    similarity: 1.0,
+                    context: None,
+                };
+                self.add_entity(entity);
+                self.add_alias(label.clone(), triple.subject.clone());
             }
 
             // Index alternative labels
-            if triple.predicate == "skos:altLabel" {
-                if let RdfValue::Literal(ref label, _) = triple.object {
-                    self.add_alias(label.clone(), triple.subject.clone());
-                }
+            if triple.predicate == "skos:altLabel"
+                && let RdfValue::Literal(ref label, _) = triple.object
+            {
+                self.add_alias(label.clone(), triple.subject.clone());
             }
         }
     }
@@ -173,10 +173,10 @@ impl EntityLinker {
 
     fn exact_match(&self, mention: &EntityMention) -> Option<EntityCandidate> {
         // Look up in aliases
-        if let Some(uris) = self.aliases.get(&mention.text) {
-            if let Some(uri) = uris.first() {
-                return self.entities.get(uri).cloned();
-            }
+        if let Some(uris) = self.aliases.get(&mention.text)
+            && let Some(uri) = uris.first()
+        {
+            return self.entities.get(uri).cloned();
         }
 
         // Direct entity lookup
@@ -194,12 +194,11 @@ impl EntityLinker {
 
             if similarity > 0.7 {
                 // Threshold for fuzzy matching
-                if let Some(uri) = uris.first() {
-                    if let Some(entity) = self.entities.get(uri) {
-                        if best_match.is_none() || similarity > best_match.as_ref().unwrap().1 {
-                            best_match = Some((entity.clone(), similarity));
-                        }
-                    }
+                if let Some(uri) = uris.first()
+                    && let Some(entity) = self.entities.get(uri)
+                    && (best_match.is_none() || similarity > best_match.as_ref().unwrap().1)
+                {
+                    best_match = Some((entity.clone(), similarity));
                 }
             }
         }

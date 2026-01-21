@@ -758,10 +758,10 @@ impl AttributeHistory {
         self.changes.push(change);
 
         // Trim history if needed
-        if let Some(max) = self.max_history {
-            if self.changes.len() > max {
-                self.changes.drain(0..(self.changes.len() - max));
-            }
+        if let Some(max) = self.max_history
+            && self.changes.len() > max
+        {
+            self.changes.drain(0..(self.changes.len() - max));
         }
     }
 

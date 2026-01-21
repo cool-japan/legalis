@@ -244,10 +244,11 @@ fn prompt_choice(
     loop {
         match editor.readline(&format!("{}: ", prompt)) {
             Ok(line) => {
-                if let Ok(num) = line.trim().parse::<usize>() {
-                    if num >= min && num <= max {
-                        return Ok(num);
-                    }
+                if let Ok(num) = line.trim().parse::<usize>()
+                    && num >= min
+                    && num <= max
+                {
+                    return Ok(num);
                 }
                 println!("Please enter a number between {} and {}", min, max);
             }

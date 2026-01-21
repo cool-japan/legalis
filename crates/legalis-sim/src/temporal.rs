@@ -603,24 +603,24 @@ impl TemporalSimEngine {
         if self.config.time_step == TimeStep::Year {
             let agents = self.agents.read().await;
             for (agent_id, state) in agents.iter() {
-                if let Some(age_str) = state.attributes.get("age") {
-                    if let Ok(age) = age_str.parse::<u32>() {
-                        let mut current = self.config.start_date;
-                        let mut current_age = age;
-                        while current <= self.config.end_date {
-                            current_age += 1;
-                            current += Duration::days(365);
-                            if current <= self.config.end_date {
-                                // Store events to schedule
-                                let event = TemporalEvent::AttributeChange {
-                                    agent_id: *agent_id,
-                                    date: current,
-                                    attribute: "age".to_string(),
-                                    old_value: Some((current_age - 1).to_string()),
-                                    new_value: current_age.to_string(),
-                                };
-                                self.scheduled_events.push((current, event));
-                            }
+                if let Some(age_str) = state.attributes.get("age")
+                    && let Ok(age) = age_str.parse::<u32>()
+                {
+                    let mut current = self.config.start_date;
+                    let mut current_age = age;
+                    while current <= self.config.end_date {
+                        current_age += 1;
+                        current += Duration::days(365);
+                        if current <= self.config.end_date {
+                            // Store events to schedule
+                            let event = TemporalEvent::AttributeChange {
+                                agent_id: *agent_id,
+                                date: current,
+                                attribute: "age".to_string(),
+                                old_value: Some((current_age - 1).to_string()),
+                                new_value: current_age.to_string(),
+                            };
+                            self.scheduled_events.push((current, event));
                         }
                     }
                 }
@@ -826,39 +826,39 @@ impl TemporalSimEngine {
                 }
 
                 // Age progression
-                if let Some(age_str) = agent.attributes.get("age") {
-                    if let Ok(age) = age_str.parse::<u32>() {
-                        let years_passed = if self.config.time_step == TimeStep::Year {
-                            1
-                        } else {
-                            0
-                        };
-                        if years_passed > 0 {
-                            let new_age = age + years_passed;
-                            agent.set_attribute("age", new_age.to_string(), current_date);
-                        }
+                if let Some(age_str) = agent.attributes.get("age")
+                    && let Ok(age) = age_str.parse::<u32>()
+                {
+                    let years_passed = if self.config.time_step == TimeStep::Year {
+                        1
+                    } else {
+                        0
+                    };
+                    if years_passed > 0 {
+                        let new_age = age + years_passed;
+                        agent.set_attribute("age", new_age.to_string(), current_date);
                     }
                 }
 
                 // Income projection
-                if let Some(income_str) = agent.attributes.get("income") {
-                    if let Ok(income) = income_str.parse::<f64>() {
-                        let projected_income = match &config.income_model {
-                            ProjectionModel::Exponential { rate } => {
-                                income * (1.0 + rate * time_step_years)
-                            }
-                            ProjectionModel::CustomRate { rate_per_step } => {
-                                income * (1.0 + rate_per_step)
-                            }
-                            _ => income,
-                        };
-                        if (projected_income - income).abs() > 0.01 {
-                            agent.set_attribute(
-                                "income",
-                                projected_income.round().to_string(),
-                                current_date,
-                            );
+                if let Some(income_str) = agent.attributes.get("income")
+                    && let Ok(income) = income_str.parse::<f64>()
+                {
+                    let projected_income = match &config.income_model {
+                        ProjectionModel::Exponential { rate } => {
+                            income * (1.0 + rate * time_step_years)
                         }
+                        ProjectionModel::CustomRate { rate_per_step } => {
+                            income * (1.0 + rate_per_step)
+                        }
+                        _ => income,
+                    };
+                    if (projected_income - income).abs() > 0.01 {
+                        agent.set_attribute(
+                            "income",
+                            projected_income.round().to_string(),
+                            current_date,
+                        );
                     }
                 }
             }

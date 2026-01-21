@@ -8,7 +8,7 @@
 //! A false statement of fact that induces the other party to enter the contract.
 //!
 //! ### Types (Misrepresentation Act 1967)
-//! - **Fraudulent**: Derry v Peek [1889] - knowing falsity or reckless disregard
+//! - **Fraudulent**: Derry v Peek \[1889\] - knowing falsity or reckless disregard
 //! - **Negligent**: s.2(1) MA 1967 - burden on representor to prove reasonable belief
 //! - **Innocent**: Genuine and reasonable belief in truth
 //!
@@ -18,19 +18,19 @@
 //!
 //! ## Mistake
 //!
-//! ### Common Mistake (Bell v Lever Bros [1932])
+//! ### Common Mistake (Bell v Lever Bros \[1932\])
 //! Both parties make same mistake. Void only if:
 //! - Res extincta (subject matter does not exist)
 //! - Res sua (ownership already acquired)
 //! - Fundamental quality (very limited - Great Peace Shipping)
 //!
-//! ### Mutual Mistake (Raffles v Wichelhaus [1864])
+//! ### Mutual Mistake (Raffles v Wichelhaus \[1864\])
 //! Parties at cross-purposes. No genuine agreement.
 //!
 //! ### Unilateral Mistake
 //! One party knows other is mistaken:
-//! - Identity (Shogun Finance v Hudson [2004])
-//! - Terms (Hartog v Colin & Shields [1939])
+//! - Identity (Shogun Finance v Hudson \[2004\])
+//! - Terms (Hartog v Colin & Shields \[1939\])
 //!
 //! ## Duress
 //!
@@ -38,12 +38,12 @@
 //! - Duress to person
 //! - Duress to goods
 //!
-//! ### Economic Duress (DSND Subsea v Petroleum Geo-Services [2000])
+//! ### Economic Duress (DSND Subsea v Petroleum Geo-Services \[2000\])
 //! - Illegitimate pressure
 //! - Pressure must be decisive cause
 //! - No reasonable alternative
 //!
-//! ## Undue Influence (Royal Bank of Scotland v Etridge [2002])
+//! ## Undue Influence (Royal Bank of Scotland v Etridge \[2002\])
 //!
 //! ### Class 1 - Actual Undue Influence
 //! Overt acts of improper pressure proved.
@@ -52,7 +52,7 @@
 //! - Class 2A: Automatic relationships (solicitor-client, parent-child)
 //! - Class 2B: Relationships of trust and confidence proved on facts
 //!
-//! ## Illegality (Patel v Mirza [2016])
+//! ## Illegality (Patel v Mirza \[2016\])
 //!
 //! Modern approach considers:
 //! - Underlying purpose of prohibition
@@ -241,7 +241,7 @@ impl MisrepresentationAnalysis {
 pub enum RescissionBar {
     /// Affirmation after discovering misrepresentation
     Affirmation,
-    /// Lapse of time (Leaf v International Galleries [1950])
+    /// Lapse of time (Leaf v International Galleries \[1950\])
     LapseOfTime,
     /// Third party acquired rights
     ThirdPartyRights,
@@ -502,7 +502,7 @@ impl DuressType {
     }
 }
 
-/// Elements of economic duress (DSND Subsea v Petroleum Geo-Services [2000])
+/// Elements of economic duress (DSND Subsea v Petroleum Geo-Services \[2000\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EconomicDuressElements {
     /// Description of the pressure
@@ -907,7 +907,7 @@ pub enum IllegalityType {
     Statutory,
 }
 
-/// Illegality analysis (Patel v Mirza [2016] approach)
+/// Illegality analysis (Patel v Mirza \[2016\] approach)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IllegalityAnalysis {
     /// Type of illegality
@@ -924,7 +924,7 @@ pub struct IllegalityAnalysis {
     pub analysis: String,
 }
 
-/// Patel v Mirza [2016] factors
+/// Patel v Mirza \[2016\] factors
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PatelVMirzaFactors {
     /// What is the underlying purpose of the prohibition?

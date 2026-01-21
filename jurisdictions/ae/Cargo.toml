@@ -1,0 +1,19 @@
+[package]
+name = "legalis-ae"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "UAE (United Arab Emirates) jurisdiction support for Legalis-RS - Federal Laws, Labor, Commercial Companies, Data Protection, Free Zones"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-ae"
+keywords = ["legalis", "uae", "emirates", "labor-law", "difc"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []

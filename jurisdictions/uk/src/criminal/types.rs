@@ -167,8 +167,8 @@ pub enum MaximumSentence {
 ///
 /// From highest to lowest culpability:
 /// 1. Direct Intention - purpose to bring about result
-/// 2. Oblique Intention - virtual certainty (R v Woollin [1999])
-/// 3. Subjective Recklessness - conscious risk-taking (R v Cunningham [1957])
+/// 2. Oblique Intention - virtual certainty (R v Woollin \[1999\])
+/// 3. Subjective Recklessness - conscious risk-taking (R v Cunningham \[1957\])
 /// 4. Objective Recklessness - obvious risk (now largely abandoned)
 /// 5. Negligence - failure to meet reasonable standard
 /// 6. Strict Liability - no mental element required
@@ -182,14 +182,14 @@ pub enum MensReaType {
 
     /// Oblique intention - virtual certainty test
     ///
-    /// From R v Woollin [1999] AC 82:
+    /// From R v Woollin \[1999\] AC 82:
     /// Jury may FIND intention where D foresaw consequence as virtually certain
     /// Note: "may find" not "must find" - remains jury question
     ObliqueIntention,
 
     /// Subjective recklessness - conscious risk-taking
     ///
-    /// From R v Cunningham [1957] 2 QB 396:
+    /// From R v Cunningham \[1957\] 2 QB 396:
     /// D is aware of an unjustifiable risk and takes it anyway
     /// Standard for most non-fatal offences
     SubjectiveRecklessness,
@@ -203,10 +203,10 @@ pub enum MensReaType {
     /// Belief - subjective state
     ///
     /// D believes something to be true
-    /// May be honest but unreasonable (DPP v Morgan [1976])
+    /// May be honest but unreasonable (DPP v Morgan \[1976\])
     Belief,
 
-    /// Dishonesty (Ivey v Genting Casinos [2017])
+    /// Dishonesty (Ivey v Genting Casinos \[2017\])
     ///
     /// Two-stage test:
     /// 1. What was D's actual state of knowledge/belief?
@@ -216,7 +216,7 @@ pub enum MensReaType {
     /// Negligence - failure to meet standard
     ///
     /// Objective standard - what reasonable person would do
-    /// Required for gross negligence manslaughter (R v Adomako [1995])
+    /// Required for gross negligence manslaughter (R v Adomako \[1995\])
     Negligence,
 
     /// Gross negligence - seriously below standard
@@ -297,7 +297,7 @@ pub struct RecklessnessAnalysis {
     pub awareness_evidence: Vec<String>,
 }
 
-/// Dishonesty analysis (Ivey v Genting Casinos [2017])
+/// Dishonesty analysis (Ivey v Genting Casinos \[2017\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DishonestyAnalysis {
     /// D's actual state of knowledge/belief
@@ -485,7 +485,7 @@ pub enum InterveningActType {
     /// Medical treatment
     ///
     /// Only breaks chain if "palpably wrong" treatment
-    /// R v Cheshire [1991], R v Jordan (1956)
+    /// R v Cheshire \[1991\], R v Jordan (1956)
     MedicalTreatment,
 
     /// Natural event
@@ -493,7 +493,7 @@ pub enum InterveningActType {
 
     /// Pre-existing condition of victim ("thin skull" rule)
     ///
-    /// D takes victim as found - R v Blaue [1975]
+    /// D takes victim as found - R v Blaue \[1975\]
     PreExistingCondition,
 }
 
@@ -546,7 +546,7 @@ pub enum SecondaryParticipation {
 ///
 /// # Post-Jogee Analysis
 ///
-/// R v Jogee [2016] UKSC 8 abolished "parasitic accessory liability"
+/// R v Jogee \[2016\] UKSC 8 abolished "parasitic accessory liability"
 /// Secondary party now requires intention to assist/encourage AND
 /// intention that P commit offence (or conditional intent)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

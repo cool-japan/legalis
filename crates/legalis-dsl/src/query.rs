@@ -172,70 +172,69 @@ impl StatuteQuery {
     /// Checks if a statute matches this query.
     fn matches(&self, statute: &StatuteNode) -> bool {
         // Check IDs
-        if let Some(ref ids) = self.ids {
-            if !ids.contains(&statute.id) {
-                return false;
-            }
+        if let Some(ref ids) = self.ids
+            && !ids.contains(&statute.id)
+        {
+            return false;
         }
 
         // Check title
-        if let Some(ref pattern) = self.title_contains {
-            if !statute
+        if let Some(ref pattern) = self.title_contains
+            && !statute
                 .title
                 .to_lowercase()
                 .contains(&pattern.to_lowercase())
-            {
-                return false;
-            }
+        {
+            return false;
         }
 
         // Check requires_any
-        if let Some(ref required) = self.requires_any {
-            if !statute.requires.iter().any(|r| required.contains(r)) {
-                return false;
-            }
+        if let Some(ref required) = self.requires_any
+            && !statute.requires.iter().any(|r| required.contains(r))
+        {
+            return false;
         }
 
         // Check requires_all
-        if let Some(ref required) = self.requires_all {
-            if !required.iter().all(|r| statute.requires.contains(r)) {
-                return false;
-            }
+        if let Some(ref required) = self.requires_all
+            && !required.iter().all(|r| statute.requires.contains(r))
+        {
+            return false;
         }
 
         // Check supersedes
-        if let Some(ref superseded) = self.supersedes {
-            if !statute.supersedes.iter().any(|s| superseded.contains(s)) {
-                return false;
-            }
+        if let Some(ref superseded) = self.supersedes
+            && !statute.supersedes.iter().any(|s| superseded.contains(s))
+        {
+            return false;
         }
 
         // Check discretion
-        if let Some(has) = self.has_discretion {
-            if has != statute.discretion.is_some() {
-                return false;
-            }
+        if let Some(has) = self.has_discretion
+            && has != statute.discretion.is_some()
+        {
+            return false;
         }
 
         // Check exceptions
-        if let Some(has) = self.has_exceptions {
-            if has == statute.exceptions.is_empty() {
-                return false;
-            }
+        if let Some(has) = self.has_exceptions
+            && has == statute.exceptions.is_empty()
+        {
+            return false;
         }
 
         // Check amendments
-        if let Some(has) = self.has_amendments {
-            if has == statute.amendments.is_empty() {
-                return false;
-            }
+        if let Some(has) = self.has_amendments
+            && has == statute.amendments.is_empty()
+        {
+            return false;
         }
 
         // Check minimum conditions
-        if let Some(min) = self.min_conditions {
-            if statute.conditions.len() < min {
-                return false;
-            }
+        if let Some(min) = self.min_conditions
+            && statute.conditions.len() < min
+        {
+            return false;
         }
 
         true

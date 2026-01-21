@@ -197,12 +197,12 @@ fn validate_license_status(provider: &PaymentServiceProvider) -> Result<()> {
     match provider.license_status {
         LicenseStatus::Active => {
             // Check expiry
-            if let Some(expiry) = provider.license_expiry {
-                if now >= expiry {
-                    return Err(PaymentError::LicenseExpired {
-                        expiry_date: expiry.format("%Y-%m-%d").to_string(),
-                    });
-                }
+            if let Some(expiry) = provider.license_expiry
+                && now >= expiry
+            {
+                return Err(PaymentError::LicenseExpired {
+                    expiry_date: expiry.format("%Y-%m-%d").to_string(),
+                });
             }
         }
         LicenseStatus::Suspended => {

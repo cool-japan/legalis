@@ -10,7 +10,7 @@ use std::collections::HashMap;
 /// Configuration for Datadog API.
 #[derive(Debug, Clone)]
 pub struct DatadogConfig {
-    /// Datadog API endpoint (e.g., "https://http-intake.logs.datadoghq.com")
+    /// Datadog API endpoint (e.g., "<https://http-intake.logs.datadoghq.com>")
     pub api_endpoint: String,
     /// Datadog API key
     pub api_key: String,

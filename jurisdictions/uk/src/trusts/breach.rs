@@ -16,29 +16,29 @@
 //! ## Personal Remedies
 //!
 //! Beneficiaries can claim:
-//! - **Compensation** for loss caused (Target Holdings v Redferns [1996])
+//! - **Compensation** for loss caused (Target Holdings v Redferns \[1996\])
 //! - **Account of profits** for unauthorized gains (Boardman v Phipps)
-//! - **Equitable compensation** (AIB v Mark Redler [2014])
+//! - **Equitable compensation** (AIB v Mark Redler \[2014\])
 //!
 //! ## Proprietary Remedies - Tracing
 //!
 //! ### Common Law Tracing
 //! - Follows legal title
-//! - Fails if property mixed (Taylor v Plumer [1815])
+//! - Fails if property mixed (Taylor v Plumer \[1815\])
 //!
 //! ### Equitable Tracing
-//! - Can trace through mixtures (Re Hallett's Estate [1880])
+//! - Can trace through mixtures (Re Hallett's Estate \[1880\])
 //! - Clayton's Case - first in, first out (but often disapplied)
-//! - Re Oatway [1903] - trustee deemed to spend own money first if dissipated
-//! - Foskett v McKeown [2001] - can trace into substitutes
+//! - Re Oatway \[1903\] - trustee deemed to spend own money first if dissipated
+//! - Foskett v McKeown \[2001\] - can trace into substitutes
 //!
 //! ## Third Party Liability
 //!
-//! ### Dishonest Assistance (Royal Brunei Airlines v Tan [1995])
+//! ### Dishonest Assistance (Royal Brunei Airlines v Tan \[1995\])
 //! - Assistance in breach of trust
-//! - Dishonesty (objective standard - Ivey v Genting Casinos [2017])
+//! - Dishonesty (objective standard - Ivey v Genting Casinos \[2017\])
 //!
-//! ### Knowing Receipt (BCCI v Akindele [2001])
+//! ### Knowing Receipt (BCCI v Akindele \[2001\])
 //! - Receipt of trust property
 //! - Beneficial receipt
 //! - Knowledge making retention unconscionable
@@ -500,7 +500,7 @@ pub enum AssistanceType {
     DealingWithProperty,
 }
 
-/// Dishonesty analysis (Ivey v Genting Casinos [2017])
+/// Dishonesty analysis (Ivey v Genting Casinos \[2017\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DishonestyAnalysis {
     /// Assister's subjective knowledge/belief
@@ -580,7 +580,7 @@ pub fn validate_dishonest_assistance(
     }
 }
 
-/// Knowing receipt claim (BCCI v Akindele [2001])
+/// Knowing receipt claim (BCCI v Akindele \[2001\])
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KnowingReceipt {
     /// The recipient

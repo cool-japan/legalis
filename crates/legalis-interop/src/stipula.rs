@@ -307,13 +307,13 @@ impl StipulaImporter {
         if let Some(pos) = expr.find(">=") {
             let field = expr[..pos].trim();
             let value = expr[pos + 2..].trim();
-            if field.to_lowercase().contains("age") {
-                if let Ok(v) = value.parse::<u32>() {
-                    return Some(Condition::Age {
-                        operator: ComparisonOp::GreaterOrEqual,
-                        value: v,
-                    });
-                }
+            if field.to_lowercase().contains("age")
+                && let Ok(v) = value.parse::<u32>()
+            {
+                return Some(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: v,
+                });
             }
             return Some(Condition::AttributeEquals {
                 key: field.to_string(),
@@ -322,13 +322,13 @@ impl StipulaImporter {
         } else if let Some(pos) = expr.find("<=") {
             let field = expr[..pos].trim();
             let value = expr[pos + 2..].trim();
-            if field.to_lowercase().contains("age") {
-                if let Ok(v) = value.parse::<u32>() {
-                    return Some(Condition::Age {
-                        operator: ComparisonOp::LessOrEqual,
-                        value: v,
-                    });
-                }
+            if field.to_lowercase().contains("age")
+                && let Ok(v) = value.parse::<u32>()
+            {
+                return Some(Condition::Age {
+                    operator: ComparisonOp::LessOrEqual,
+                    value: v,
+                });
             }
             return Some(Condition::AttributeEquals {
                 key: field.to_string(),

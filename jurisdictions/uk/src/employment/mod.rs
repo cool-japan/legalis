@@ -111,9 +111,9 @@
 //!
 //! # Module Structure
 //!
-//! - [`types`](types) - Core employment law types (contracts, dismissals, redundancy)
-//! - [`error`](error) - Employment law error types with statute references
-//! - [`validator`](validator) - Validation functions for ERA 1996, WTR 1998, NMWA 1998
+//! - `types` - Core employment law types (contracts, dismissals, redundancy)
+//! - `error` - Employment law error types with statute references
+//! - `validator` - Validation functions for ERA 1996, WTR 1998, NMWA 1998
 //!
 //! # Legal References
 //!

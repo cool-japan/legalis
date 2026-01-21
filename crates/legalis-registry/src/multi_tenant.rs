@@ -672,31 +672,31 @@ impl MultiTenantRegistry {
         let metadata = self.get_tenant(tenant_id)?;
         let usage = self.get_usage_metrics(tenant_id)?;
 
-        if let Some(max) = metadata.quotas.max_statutes {
-            if usage.statute_count >= max {
-                return Err(TenantError::QuotaExceeded {
-                    tenant_id: tenant_id.clone(),
-                    quota_type: "max_statutes".to_string(),
-                });
-            }
+        if let Some(max) = metadata.quotas.max_statutes
+            && usage.statute_count >= max
+        {
+            return Err(TenantError::QuotaExceeded {
+                tenant_id: tenant_id.clone(),
+                quota_type: "max_statutes".to_string(),
+            });
         }
 
-        if let Some(max) = metadata.quotas.max_storage_bytes {
-            if usage.storage_bytes >= max {
-                return Err(TenantError::QuotaExceeded {
-                    tenant_id: tenant_id.clone(),
-                    quota_type: "max_storage_bytes".to_string(),
-                });
-            }
+        if let Some(max) = metadata.quotas.max_storage_bytes
+            && usage.storage_bytes >= max
+        {
+            return Err(TenantError::QuotaExceeded {
+                tenant_id: tenant_id.clone(),
+                quota_type: "max_storage_bytes".to_string(),
+            });
         }
 
-        if let Some(max) = metadata.quotas.max_api_calls_per_day {
-            if usage.api_calls >= max {
-                return Err(TenantError::QuotaExceeded {
-                    tenant_id: tenant_id.clone(),
-                    quota_type: "max_api_calls_per_day".to_string(),
-                });
-            }
+        if let Some(max) = metadata.quotas.max_api_calls_per_day
+            && usage.api_calls >= max
+        {
+            return Err(TenantError::QuotaExceeded {
+                tenant_id: tenant_id.clone(),
+                quota_type: "max_api_calls_per_day".to_string(),
+            });
         }
 
         Ok(())

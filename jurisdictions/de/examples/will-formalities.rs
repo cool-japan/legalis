@@ -166,12 +166,12 @@ fn main() {
             println!("   - Declared before notary (§2232 BGB)");
             println!("   - Handwritten requirement: N/A (not required)");
             println!("   - More formal but clearer than holographic");
-            if let Some(beneficiary) = public_will.beneficiaries.first() {
-                if !beneficiary.conditions.is_empty() {
-                    println!("   - Conditions:");
-                    for condition in &beneficiary.conditions {
-                        println!("     - {}", condition);
-                    }
+            if let Some(beneficiary) = public_will.beneficiaries.first()
+                && !beneficiary.conditions.is_empty()
+            {
+                println!("   - Conditions:");
+                for condition in &beneficiary.conditions {
+                    println!("     - {}", condition);
                 }
             }
         }

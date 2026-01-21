@@ -162,27 +162,25 @@ impl ScriptEngine {
             if let Some(severity) = map
                 .get("severity")
                 .and_then(|v| v.clone().try_cast::<String>())
-            {
-                if let Some(message) = map
+                && let Some(message) = map
                     .get("message")
                     .and_then(|v| v.clone().try_cast::<String>())
-                {
-                    let finding_severity = match severity.to_lowercase().as_str() {
-                        "critical" => FindingSeverity::Critical,
-                        "high" => FindingSeverity::High,
-                        "medium" => FindingSeverity::Medium,
-                        "low" => FindingSeverity::Low,
-                        _ => FindingSeverity::Info,
-                    };
+            {
+                let finding_severity = match severity.to_lowercase().as_str() {
+                    "critical" => FindingSeverity::Critical,
+                    "high" => FindingSeverity::High,
+                    "medium" => FindingSeverity::Medium,
+                    "low" => FindingSeverity::Low,
+                    _ => FindingSeverity::Info,
+                };
 
-                    findings.push(Finding {
-                        severity: finding_severity,
-                        category: script_name.to_string(),
-                        message,
-                        location: None,
-                        suggestion: None,
-                    });
-                }
+                findings.push(Finding {
+                    severity: finding_severity,
+                    category: script_name.to_string(),
+                    message,
+                    location: None,
+                    suggestion: None,
+                });
             }
 
             if let Some(meta) = map

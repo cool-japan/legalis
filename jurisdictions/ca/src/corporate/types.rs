@@ -467,7 +467,7 @@ pub enum CorporateArea {
 }
 
 impl CorporateCase {
-    /// BCE Inc v 1976 Debentureholders [2008] - Stakeholder interests and oppression
+    /// BCE Inc v 1976 Debentureholders \[2008\] - Stakeholder interests and oppression
     pub fn bce() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -486,7 +486,7 @@ impl CorporateCase {
         }
     }
 
-    /// Peoples Department Stores v Wise [2004] - Duty of care and business judgment
+    /// Peoples Department Stores v Wise \[2004\] - Duty of care and business judgment
     pub fn peoples() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -505,7 +505,7 @@ impl CorporateCase {
         }
     }
 
-    /// Transamerica v Torstar [2005] - Oppression remedy scope
+    /// Transamerica v Torstar \[2005\] - Oppression remedy scope
     pub fn ebrahimi() -> Self {
         Self {
             citation: CaseCitation {
@@ -527,7 +527,7 @@ impl CorporateCase {
         }
     }
 
-    /// Kosmopoulos v Constitution Insurance [1987] - Corporate veil
+    /// Kosmopoulos v Constitution Insurance \[1987\] - Corporate veil
     pub fn kosmopoulos() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -545,7 +545,7 @@ impl CorporateCase {
         }
     }
 
-    /// UPM-Kymmene v UPM-Kymmene Miramichi [2004] - Oppression remedy
+    /// UPM-Kymmene v UPM-Kymmene Miramichi \[2004\] - Oppression remedy
     pub fn upm_kymmene() -> Self {
         Self {
             citation: CaseCitation {
@@ -567,7 +567,7 @@ impl CorporateCase {
         }
     }
 
-    /// Foss v Harbottle [1843] - Proper plaintiff rule
+    /// Foss v Harbottle \[1843\] - Proper plaintiff rule
     pub fn foss_v_harbottle() -> Self {
         Self {
             citation: CaseCitation {

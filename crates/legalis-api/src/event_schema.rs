@@ -103,17 +103,17 @@ impl EventSchema {
         // Simple validation: check if required fields are present
         // In a real implementation, you would use a JSON Schema validator library
 
-        if let Some(required) = self.schema["required"].as_array() {
-            if let Some(obj) = payload.as_object() {
-                for field in required {
-                    if let Some(field_name) = field.as_str() {
-                        if !obj.contains_key(field_name) {
-                            return Err(SchemaError::ValidationError(format!(
-                                "Missing required field: {}",
-                                field_name
-                            )));
-                        }
-                    }
+        if let Some(required) = self.schema["required"].as_array()
+            && let Some(obj) = payload.as_object()
+        {
+            for field in required {
+                if let Some(field_name) = field.as_str()
+                    && !obj.contains_key(field_name)
+                {
+                    return Err(SchemaError::ValidationError(format!(
+                        "Missing required field: {}",
+                        field_name
+                    )));
                 }
             }
         }
@@ -185,15 +185,14 @@ impl SchemaRegistry {
         }
 
         // Check compatibility with latest version
-        if schema.version > 1 {
-            if let Some(latest) = self.get_latest_version(&schema.name, versions) {
-                if !schema.is_compatible_with(&latest) {
-                    return Err(SchemaError::IncompatibleSchema(format!(
-                        "Schema {} v{} is not compatible with v{}",
-                        schema.name, schema.version, latest.version
-                    )));
-                }
-            }
+        if schema.version > 1
+            && let Some(latest) = self.get_latest_version(&schema.name, versions)
+            && !schema.is_compatible_with(&latest)
+        {
+            return Err(SchemaError::IncompatibleSchema(format!(
+                "Schema {} v{} is not compatible with v{}",
+                schema.name, schema.version, latest.version
+            )));
         }
 
         versions.insert(schema.version, schema);

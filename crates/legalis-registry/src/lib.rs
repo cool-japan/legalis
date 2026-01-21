@@ -1632,17 +1632,17 @@ impl StatuteRegistry {
                 }
 
                 // Jurisdiction filter
-                if let Some(jurisdiction) = &query.jurisdiction {
-                    if &entry.jurisdiction != jurisdiction {
-                        return false;
-                    }
+                if let Some(jurisdiction) = &query.jurisdiction
+                    && &entry.jurisdiction != jurisdiction
+                {
+                    return false;
                 }
 
                 // Status filter
-                if let Some(status) = &query.status {
-                    if &entry.status != status {
-                        return false;
-                    }
+                if let Some(status) = &query.status
+                    && &entry.status != status
+                {
+                    return false;
                 }
 
                 // Active only filter
@@ -8354,10 +8354,10 @@ impl StatuteRegistry {
         let mut consistency_score = 100.0;
 
         // Check if expiry date is after effective date
-        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date) {
-            if expiry <= effective {
-                consistency_score -= 30.0;
-            }
+        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date)
+            && expiry <= effective
+        {
+            consistency_score -= 30.0;
         }
 
         // Check if status matches dates
@@ -8441,11 +8441,11 @@ impl StatuteRegistry {
                 .with_suggestion("Add metadata fields like description, author, etc.".to_string());
         }
 
-        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date) {
-            if expiry <= effective {
-                assessment = assessment
-                    .with_issue("Expiry date is before or equal to effective date".to_string());
-            }
+        if let (Some(expiry), Some(effective)) = (entry.expiry_date, entry.effective_date)
+            && expiry <= effective
+        {
+            assessment = assessment
+                .with_issue("Expiry date is before or equal to effective date".to_string());
         }
 
         if entry.status == StatuteStatus::Repealed && entry.expiry_date.is_none() {
@@ -9010,10 +9010,9 @@ impl StatuteRegistry {
                     let suggestions: Vec<_> = high_confidence.into_iter().cloned().collect();
                     if let Ok(count) =
                         self.apply_enrichment(&statute_id, &suggestions, config.min_confidence)
+                        && count > 0
                     {
-                        if count > 0 {
-                            results.push((statute_id, count));
-                        }
+                        results.push((statute_id, count));
                     }
                 }
             }
@@ -9412,15 +9411,15 @@ impl PiiDetector {
         // Phone number detection (simple pattern for demonstration)
         for (idx, _) in content.match_indices(char::is_numeric) {
             let rest = &content[idx..];
-            if let Some(number) = Self::extract_phone_number(rest) {
-                if number.len() >= 10 {
-                    detections.push(PiiDetection::new(
-                        PiiFieldType::PhoneNumber,
-                        number.clone(),
-                        idx,
-                        0.8,
-                    ));
-                }
+            if let Some(number) = Self::extract_phone_number(rest)
+                && number.len() >= 10
+            {
+                detections.push(PiiDetection::new(
+                    PiiFieldType::PhoneNumber,
+                    number.clone(),
+                    idx,
+                    0.8,
+                ));
             }
         }
 
@@ -10638,10 +10637,10 @@ impl AccessControlManager {
         // Check policies
         for policy in &self.policies {
             // Check role requirement
-            if let Some(req_role) = policy.required_role {
-                if !user.role.is_at_least(req_role) {
-                    continue;
-                }
+            if let Some(req_role) = policy.required_role
+                && !user.role.is_at_least(req_role)
+            {
+                continue;
             }
 
             // Check ABAC conditions
@@ -13752,10 +13751,10 @@ pub mod version_control {
             );
 
             // Set parent to current head
-            if let Some(branch) = self.branches.get(&branch_name) {
-                if let Some(head) = branch.head_commit {
-                    commit = commit.with_parent(head);
-                }
+            if let Some(branch) = self.branches.get(&branch_name)
+                && let Some(head) = branch.head_commit
+            {
+                commit = commit.with_parent(head);
             }
 
             let commit_id = commit.commit_id;
@@ -13803,10 +13802,10 @@ pub mod version_control {
         /// Returns commits in chronological order (oldest first).
         pub fn get_commit_history(&self, branch_name: &str) -> Vec<&Commit> {
             let mut history = Vec::new();
-            if let Some(branch) = self.branches.get(branch_name) {
-                if let Some(head) = branch.head_commit {
-                    self.collect_commit_history(head, &mut history);
-                }
+            if let Some(branch) = self.branches.get(branch_name)
+                && let Some(head) = branch.head_commit
+            {
+                self.collect_commit_history(head, &mut history);
             }
             // History is collected in reverse order (newest first from recursion),
             // but we want chronological order (oldest first)
@@ -14030,10 +14029,10 @@ pub mod version_control {
             let merged_by_str = merged_by.into();
             let result = self.merge_branch(&source_branch, &target_branch, merged_by_str.clone());
 
-            if result.success {
-                if let Some(pr) = self.pull_requests.get_mut(&pr_id) {
-                    pr.mark_merged(merged_by_str);
-                }
+            if result.success
+                && let Some(pr) = self.pull_requests.get_mut(&pr_id)
+            {
+                pr.mark_merged(merged_by_str);
             }
 
             Ok(result)
@@ -15287,10 +15286,10 @@ pub mod event_sourcing_v2 {
                 }
 
                 // Apply statute filter
-                if let Some(ref statute_id) = query.statute_filter {
-                    if !self.event_matches_statute(event, statute_id) {
-                        continue;
-                    }
+                if let Some(ref statute_id) = query.statute_filter
+                    && !self.event_matches_statute(event, statute_id)
+                {
+                    continue;
                 }
 
                 // Apply event
@@ -27392,10 +27391,10 @@ pub mod realtime {
             let removed_count = to_remove.len();
 
             for id in to_remove {
-                if let Some(notification) = notifications.remove(&id) {
-                    if let Some(conflicts) = statute_conflicts.get_mut(&notification.statute_id) {
-                        conflicts.retain(|cid| *cid != id);
-                    }
+                if let Some(notification) = notifications.remove(&id)
+                    && let Some(conflicts) = statute_conflicts.get_mut(&notification.statute_id)
+                {
+                    conflicts.retain(|cid| *cid != id);
                 }
             }
 
@@ -28652,10 +28651,11 @@ pub mod enterprise_security {
                 }
 
                 // Verify signature if present
-                if let Some(key) = &self.signing_key {
-                    if entry.signature.is_some() && !entry.verify_signature(key) {
-                        invalid_entries.push(entry.entry_id);
-                    }
+                if let Some(key) = &self.signing_key
+                    && entry.signature.is_some()
+                    && !entry.verify_signature(key)
+                {
+                    invalid_entries.push(entry.entry_id);
                 }
             }
 

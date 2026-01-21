@@ -6,30 +6,30 @@
 //!
 //! Terms are classified by their importance:
 //!
-//! ### Conditions (Poussard v Spiers [1876])
+//! ### Conditions (Poussard v Spiers \[1876\])
 //! - Essential terms going to root of contract
 //! - Breach entitles innocent party to terminate and claim damages
 //!
-//! ### Warranties (Bettini v Gye [1876])
+//! ### Warranties (Bettini v Gye \[1876\])
 //! - Minor terms collateral to main purpose
 //! - Breach entitles only to damages, not termination
 //!
-//! ### Innominate Terms (Hong Kong Fir Shipping v Kawasaki [1962])
+//! ### Innominate Terms (Hong Kong Fir Shipping v Kawasaki \[1962\])
 //! - Terms of uncertain importance
 //! - Effect of breach depends on seriousness of breach
 //! - If breach deprives innocent party of substantially whole benefit → terminate
 //!
 //! ## Incorporation of Terms
 //!
-//! ### By Signature (L'Estrange v Graucob [1934])
+//! ### By Signature (L'Estrange v Graucob \[1934\])
 //! - Signed document binds signer to all terms
 //! - Exception: Non est factum (very narrow)
 //!
-//! ### By Notice (Parker v South Eastern Railway [1877])
+//! ### By Notice (Parker v South Eastern Railway \[1877\])
 //! - Reasonable steps to bring terms to attention
-//! - More onerous terms require more notice (Interfoto v Stiletto [1989])
+//! - More onerous terms require more notice (Interfoto v Stiletto \[1989\])
 //!
-//! ### By Course of Dealing (Spurling v Bradshaw [1956])
+//! ### By Course of Dealing (Spurling v Bradshaw \[1956\])
 //! - Consistent previous dealings incorporating terms
 //! - Must be regular and consistent
 //!
@@ -46,7 +46,7 @@
 //!
 //! ## Implied Terms
 //!
-//! ### Common Law (The Moorcock [1889])
+//! ### Common Law (The Moorcock \[1889\])
 //! - Business efficacy test
 //! - Officious bystander test (Shirlaw v Southern Foundries)
 //!

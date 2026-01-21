@@ -75,13 +75,13 @@ fn calculate_share_par_value(share: &Share) -> u64 {
 /// Validate individual share
 fn validate_share(share: &Share, total_capital: &Capital) -> Result<()> {
     // Validate par value for par value shares
-    if let ShareType::ParValue { par_value_cents } = share.share_type {
-        if par_value_cents < 100 {
-            // €1 minimum
-            return Err(AktGError::ParValueTooLow {
-                par_value: (par_value_cents as f64) / 100.0,
-            });
-        }
+    if let ShareType::ParValue { par_value_cents } = share.share_type
+        && par_value_cents < 100
+    {
+        // €1 minimum
+        return Err(AktGError::ParValueTooLow {
+            par_value: (par_value_cents as f64) / 100.0,
+        });
     }
 
     // For no-par shares, validate notional value
@@ -231,7 +231,7 @@ pub fn validate_supervisory_board(board: &SupervisoryBoard) -> Result<()> {
     }
 
     // Board size must be divisible by 3 (§95, §101 AktG)
-    if board.members.len() % 3 != 0 {
+    if !board.members.len().is_multiple_of(3) {
         return Err(AktGError::SupervisoryBoardSizeNotDivisibleByThree {
             size: board.members.len(),
         });
@@ -245,12 +245,12 @@ pub fn validate_supervisory_board(board: &SupervisoryBoard) -> Result<()> {
     }
 
     // Validate deputy chairman if specified
-    if let Some(deputy) = &board.deputy_chairman_name {
-        if !board.members.iter().any(|m| &m.name == deputy) {
-            return Err(AktGError::DeputyChairmanNotMember {
-                deputy: deputy.clone(),
-            });
-        }
+    if let Some(deputy) = &board.deputy_chairman_name
+        && !board.members.iter().any(|m| &m.name == deputy)
+    {
+        return Err(AktGError::DeputyChairmanNotMember {
+            deputy: deputy.clone(),
+        });
     }
 
     // Validate each member

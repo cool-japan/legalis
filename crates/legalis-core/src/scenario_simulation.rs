@@ -333,14 +333,14 @@ impl SimulationComparison {
 
             // Compare attributes
             for (key, value1) in state1.all_attributes() {
-                if let Some(value2) = state2.get_attribute(key) {
-                    if value1 != value2 {
-                        differences.push(StateDifference::AttributeChanged {
-                            key: key.clone(),
-                            old_value: value1.clone(),
-                            new_value: value2.clone(),
-                        });
-                    }
+                if let Some(value2) = state2.get_attribute(key)
+                    && value1 != value2
+                {
+                    differences.push(StateDifference::AttributeChanged {
+                        key: key.clone(),
+                        old_value: value1.clone(),
+                        new_value: value2.clone(),
+                    });
                 }
             }
         }

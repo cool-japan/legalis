@@ -241,33 +241,32 @@ impl UkLegalCalendar {
     /// Checks if date is a movable bank holiday (Easter-based and Monday bank holidays).
     fn is_movable_bank_holiday(&self, date: NaiveDate) -> bool {
         // Good Friday
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return true;
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return true;
         }
 
         // Easter Monday (not Scotland)
-        if !matches!(self.region, UkRegion::Scotland) {
-            if let Some(em) = self.easter_monday {
-                if date == em {
-                    return true;
-                }
-            }
+        if !matches!(self.region, UkRegion::Scotland)
+            && let Some(em) = self.easter_monday
+            && date == em
+        {
+            return true;
         }
 
         // Early May Bank Holiday (first Monday in May)
-        if let Some(early_may) = nth_weekday_of_month(date.year(), 5, Weekday::Mon, 1) {
-            if date == early_may {
-                return true;
-            }
+        if let Some(early_may) = nth_weekday_of_month(date.year(), 5, Weekday::Mon, 1)
+            && date == early_may
+        {
+            return true;
         }
 
         // Spring Bank Holiday (last Monday in May)
-        if let Some(spring) = last_weekday_of_month(date.year(), 5, Weekday::Mon) {
-            if date == spring {
-                return true;
-            }
+        if let Some(spring) = last_weekday_of_month(date.year(), 5, Weekday::Mon)
+            && date == spring
+        {
+            return true;
         }
 
         // Summer Bank Holiday
@@ -278,10 +277,10 @@ impl UkLegalCalendar {
             // England/Wales/NI: last Monday in August
             last_weekday_of_month(date.year(), 8, Weekday::Mon)
         };
-        if let Some(summer_date) = summer {
-            if date == summer_date {
-                return true;
-            }
+        if let Some(summer_date) = summer
+            && date == summer_date
+        {
+            return true;
         }
 
         false
@@ -328,28 +327,25 @@ impl UkLegalCalendar {
         }
 
         // Region-specific substitute days
-        if self.region.has_st_patricks_day() {
-            if let Some(st_pat) = NaiveDate::from_ymd_opt(date.year(), 3, 17) {
-                if is_weekend_substitute(st_pat, date) {
-                    return true;
-                }
-            }
+        if self.region.has_st_patricks_day()
+            && let Some(st_pat) = NaiveDate::from_ymd_opt(date.year(), 3, 17)
+            && is_weekend_substitute(st_pat, date)
+        {
+            return true;
         }
 
-        if self.region.has_battle_of_boyne() {
-            if let Some(boyne) = NaiveDate::from_ymd_opt(date.year(), 7, 12) {
-                if is_weekend_substitute(boyne, date) {
-                    return true;
-                }
-            }
+        if self.region.has_battle_of_boyne()
+            && let Some(boyne) = NaiveDate::from_ymd_opt(date.year(), 7, 12)
+            && is_weekend_substitute(boyne, date)
+        {
+            return true;
         }
 
-        if self.region.has_st_andrews_day() {
-            if let Some(st_and) = NaiveDate::from_ymd_opt(date.year(), 11, 30) {
-                if is_weekend_substitute(st_and, date) {
-                    return true;
-                }
-            }
+        if self.region.has_st_andrews_day()
+            && let Some(st_and) = NaiveDate::from_ymd_opt(date.year(), 11, 30)
+            && is_weekend_substitute(st_and, date)
+        {
+            return true;
         }
 
         false
@@ -433,28 +429,29 @@ impl UkLegalCalendar {
         }
 
         // Movable holidays
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return Some("Good Friday");
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return Some("Good Friday");
         }
 
-        if let Some(em) = self.easter_monday {
-            if date == em && !matches!(self.region, UkRegion::Scotland) {
-                return Some("Easter Monday");
-            }
+        if let Some(em) = self.easter_monday
+            && date == em
+            && !matches!(self.region, UkRegion::Scotland)
+        {
+            return Some("Easter Monday");
         }
 
-        if let Some(early_may) = nth_weekday_of_month(date.year(), 5, Weekday::Mon, 1) {
-            if date == early_may {
-                return Some("Early May Bank Holiday");
-            }
+        if let Some(early_may) = nth_weekday_of_month(date.year(), 5, Weekday::Mon, 1)
+            && date == early_may
+        {
+            return Some("Early May Bank Holiday");
         }
 
-        if let Some(spring) = last_weekday_of_month(date.year(), 5, Weekday::Mon) {
-            if date == spring {
-                return Some("Spring Bank Holiday");
-            }
+        if let Some(spring) = last_weekday_of_month(date.year(), 5, Weekday::Mon)
+            && date == spring
+        {
+            return Some("Spring Bank Holiday");
         }
 
         let summer = if matches!(self.region, UkRegion::Scotland) {
@@ -462,10 +459,10 @@ impl UkLegalCalendar {
         } else {
             last_weekday_of_month(date.year(), 8, Weekday::Mon)
         };
-        if let Some(summer_date) = summer {
-            if date == summer_date {
-                return Some("Summer Bank Holiday");
-            }
+        if let Some(summer_date) = summer
+            && date == summer_date
+        {
+            return Some("Summer Bank Holiday");
         }
 
         // Substitute days

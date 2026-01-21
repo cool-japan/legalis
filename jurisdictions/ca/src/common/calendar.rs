@@ -60,15 +60,15 @@ impl CanadianCalendar {
         });
 
         // Good Friday - varies (Friday before Easter)
-        if let Some(easter) = Self::easter_date(year) {
-            if let Some(good_friday) = easter.pred_opt().and_then(|d| d.pred_opt()) {
-                holidays.push(Holiday {
-                    name: "Good Friday".to_string(),
-                    date: good_friday,
-                    federal: true,
-                    provinces: Province::all().to_vec(),
-                });
-            }
+        if let Some(easter) = Self::easter_date(year)
+            && let Some(good_friday) = easter.pred_opt().and_then(|d| d.pred_opt())
+        {
+            holidays.push(Holiday {
+                name: "Good Friday".to_string(),
+                date: good_friday,
+                federal: true,
+                provinces: Province::all().to_vec(),
+            });
         }
 
         // Victoria Day - Monday before May 25

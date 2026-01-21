@@ -20,11 +20,11 @@
 //!
 //! ## Key Cases
 //!
-//! - **Gordon v Goertz** [1996] SCC 52: Relocation test
-//! - **Moge v Moge** [1992] SCC: Compensatory spousal support
-//! - **Bracklow v Bracklow** [1999] SCC 14: Three bases for support
-//! - **DBS v SRG** [2006] SCC 37: Retroactive child support
-//! - **Contino v Leonelli-Contino** [2005] SCC 63: Shared custody support
+//! - **Gordon v Goertz** \[1996\] SCC 52: Relocation test
+//! - **Moge v Moge** \[1992\] SCC: Compensatory spousal support
+//! - **Bracklow v Bracklow** \[1999\] SCC 14: Three bases for support
+//! - **DBS v SRG** \[2006\] SCC 37: Retroactive child support
+//! - **Contino v Leonelli-Contino** \[2005\] SCC 63: Shared custody support
 
 mod error;
 mod parenting;

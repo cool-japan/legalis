@@ -200,14 +200,14 @@ pub fn validate_target_market_match(
     }
 
     // Check minimum investment amount
-    if let Some(min_amount) = target_market.min_investment_amount {
-        if investment_amount < min_amount {
-            return Err(Mifid2Error::SoldOutsideTargetMarket {
-                product_name: "Product".to_string(),
-                client_profile: format!("Investment amount: £{:.2}", investment_amount),
-                target_market: format!("Minimum investment: £{:.2}", min_amount),
-            });
-        }
+    if let Some(min_amount) = target_market.min_investment_amount
+        && investment_amount < min_amount
+    {
+        return Err(Mifid2Error::SoldOutsideTargetMarket {
+            product_name: "Product".to_string(),
+            client_profile: format!("Investment amount: £{:.2}", investment_amount),
+            target_market: format!("Minimum investment: £{:.2}", min_amount),
+        });
     }
 
     Ok(())

@@ -123,12 +123,12 @@ impl MoveImporter {
         // Extract module declaration
         for line in source.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("module ") {
-                if let Some(parts) = self.parse_module_declaration(trimmed) {
-                    module.address = parts.0;
-                    module.name = parts.1;
-                    break;
-                }
+            if trimmed.starts_with("module ")
+                && let Some(parts) = self.parse_module_declaration(trimmed)
+            {
+                module.address = parts.0;
+                module.name = parts.1;
+                break;
             }
         }
 
@@ -153,10 +153,9 @@ impl MoveImporter {
                 || trimmed.starts_with("public(")
                 || trimmed.starts_with("fun "))
                 && trimmed.contains(" fun ")
+                && let Some(func) = self.parse_function_signature(trimmed)
             {
-                if let Some(func) = self.parse_function_signature(trimmed) {
-                    module.functions.push(func);
-                }
+                module.functions.push(func);
             }
         }
 

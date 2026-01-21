@@ -2194,43 +2194,42 @@ impl LegalDslParser {
 
         while let Some(ch) = chars.next() {
             position += 1;
-            if ch == '/' {
-                if let Some(&next) = chars.peek() {
-                    if next == '/' {
-                        // Line comment: skip until newline
+            if ch == '/'
+                && let Some(&next) = chars.peek()
+            {
+                if next == '/' {
+                    // Line comment: skip until newline
+                    chars.next();
+                    while let Some(&c) = chars.peek() {
+                        if c == '\n' {
+                            break;
+                        }
                         chars.next();
-                        while let Some(&c) = chars.peek() {
-                            if c == '\n' {
-                                break;
-                            }
-                            chars.next();
-                        }
-                        result.push('\n');
-                        continue;
-                    } else if next == '*' {
-                        // Block comment: skip until */
-                        chars.next();
-                        let comment_start = position;
-                        let mut found_end = false;
-                        while let Some(c) = chars.next() {
-                            if c == '*' {
-                                if let Some(&next_c) = chars.peek() {
-                                    if next_c == '/' {
-                                        chars.next();
-                                        found_end = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if !found_end {
-                            return Err(DslError::UnclosedComment(Some(
-                                SourceLocation::from_offset(comment_start, input),
-                            )));
-                        }
-                        result.push(' ');
-                        continue;
                     }
+                    result.push('\n');
+                    continue;
+                } else if next == '*' {
+                    // Block comment: skip until */
+                    chars.next();
+                    let comment_start = position;
+                    let mut found_end = false;
+                    while let Some(c) = chars.next() {
+                        if c == '*'
+                            && let Some(&next_c) = chars.peek()
+                            && next_c == '/'
+                        {
+                            chars.next();
+                            found_end = true;
+                            break;
+                        }
+                    }
+                    if !found_end {
+                        return Err(DslError::UnclosedComment(Some(
+                            SourceLocation::from_offset(comment_start, input),
+                        )));
+                    }
+                    result.push(' ');
+                    continue;
                 }
             }
             result.push(ch);
@@ -2469,13 +2468,13 @@ impl LegalDslParser {
                     chars.next();
                     offset += 1;
                     column += 1;
-                    if let Some(&next) = chars.peek() {
-                        if next == '=' {
-                            op.push(next);
-                            chars.next();
-                            offset += 1;
-                            column += 1;
-                        }
+                    if let Some(&next) = chars.peek()
+                        && next == '='
+                    {
+                        op.push(next);
+                        chars.next();
+                        offset += 1;
+                        column += 1;
                     }
                     tokens.push(SpannedToken::new(Token::Operator(op), token_start));
                 }

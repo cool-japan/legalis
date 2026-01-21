@@ -5,9 +5,13 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
+
 /// EU27 member states + EEA countries
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum MemberState {
     // EU27 Member States
     Austria,

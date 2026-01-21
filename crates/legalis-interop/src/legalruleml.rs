@@ -222,13 +222,13 @@ impl LegalRuleMLImporter {
         if let Some(pos) = premise.find(">=") {
             let field = premise[..pos].trim();
             let value = premise[pos + 2..].trim();
-            if field.to_lowercase().contains("age") {
-                if let Ok(v) = value.parse::<u32>() {
-                    return Some(Condition::Age {
-                        operator: ComparisonOp::GreaterOrEqual,
-                        value: v,
-                    });
-                }
+            if field.to_lowercase().contains("age")
+                && let Ok(v) = value.parse::<u32>()
+            {
+                return Some(Condition::Age {
+                    operator: ComparisonOp::GreaterOrEqual,
+                    value: v,
+                });
             }
         }
 
@@ -236,13 +236,13 @@ impl LegalRuleMLImporter {
         if let Some(pos) = premise.find('<') {
             let field = premise[..pos].trim();
             let value = premise[pos + 1..].trim();
-            if field.to_lowercase().contains("income") {
-                if let Ok(v) = value.parse::<u64>() {
-                    return Some(Condition::Income {
-                        operator: ComparisonOp::LessThan,
-                        value: v,
-                    });
-                }
+            if field.to_lowercase().contains("income")
+                && let Ok(v) = value.parse::<u64>()
+            {
+                return Some(Condition::Income {
+                    operator: ComparisonOp::LessThan,
+                    value: v,
+                });
             }
         }
 

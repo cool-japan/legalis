@@ -316,16 +316,16 @@ impl FormatImporter for SapLegalImporter {
 
     fn validate(&self, source: &str) -> bool {
         // Try to parse as JSON and check for SAP Legal specific fields
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source) {
-            if let Some(obj) = value.as_object() {
-                return obj.contains_key("metadata")
-                    && obj.contains_key("obligations")
-                    && obj.contains_key("clauses")
-                    && obj
-                        .get("metadata")
-                        .and_then(|m| m.get("document_id"))
-                        .is_some();
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source)
+            && let Some(obj) = value.as_object()
+        {
+            return obj.contains_key("metadata")
+                && obj.contains_key("obligations")
+                && obj.contains_key("clauses")
+                && obj
+                    .get("metadata")
+                    .and_then(|m| m.get("document_id"))
+                    .is_some();
         }
         false
     }

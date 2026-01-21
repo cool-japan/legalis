@@ -18,10 +18,10 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<()>
     }
 
     // Probation period max 6 months (§622 Abs. 3 BGB)
-    if let Some(months) = contract.probation_period_months {
-        if months > 6 {
-            return Err(LaborLawError::ProbationTooLong);
-        }
+    if let Some(months) = contract.probation_period_months
+        && months > 6
+    {
+        return Err(LaborLawError::ProbationTooLong);
     }
 
     // Validate contract type specific rules
@@ -261,12 +261,12 @@ pub fn validate_collective_agreement(agreement: &CollectiveBargainingAgreement) 
     }
 
     // Effective date must be before expiry date if expiry is set
-    if let Some(expiry) = agreement.expiry_date {
-        if expiry <= agreement.effective_date {
-            return Err(LaborLawError::InvalidValue {
-                reason: "Expiry date must be after effective date".to_string(),
-            });
-        }
+    if let Some(expiry) = agreement.expiry_date
+        && expiry <= agreement.effective_date
+    {
+        return Err(LaborLawError::InvalidValue {
+            reason: "Expiry date must be after effective date".to_string(),
+        });
     }
 
     // Must have at least one normative provision (§1 TVG)

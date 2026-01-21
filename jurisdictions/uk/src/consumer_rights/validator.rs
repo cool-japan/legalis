@@ -66,13 +66,13 @@ pub fn validate_services_contract(contract: &ServicesContract) -> Result<()> {
     }
 
     // Validate price if specified
-    if let Some(price) = contract.price_gbp {
-        if price < 0.0 {
-            return Err(ConsumerRightsError::invalid_value(
-                "price_gbp",
-                "Price cannot be negative",
-            ));
-        }
+    if let Some(price) = contract.price_gbp
+        && price < 0.0
+    {
+        return Err(ConsumerRightsError::invalid_value(
+            "price_gbp",
+            "Price cannot be negative",
+        ));
     }
 
     if contract.statutory_rights.is_empty() {

@@ -56,17 +56,17 @@ pub fn validate_succession(succession: &Succession) -> InheritanceLawResult<()> 
     }
 
     // If will exists, validate it
-    if let Some(ref will) = succession.will {
-        if let Err(e) = validate_will(will) {
-            errors.push(e);
-        }
+    if let Some(ref will) = succession.will
+        && let Err(e) = validate_will(will)
+    {
+        errors.push(e);
     }
 
     // If heirs exist, validate their shares
-    if !succession.heirs.is_empty() {
-        if let Err(e) = validate_heir_shares(&succession.heirs) {
-            errors.push(e);
-        }
+    if !succession.heirs.is_empty()
+        && let Err(e) = validate_heir_shares(&succession.heirs)
+    {
+        errors.push(e);
     }
 
     if errors.is_empty() {
@@ -292,15 +292,13 @@ pub fn validate_reserved_portion(
             super::types::Relationship::Child
                 | super::types::Relationship::Grandchild
                 | super::types::Relationship::GreatGrandchild
-        ) {
-            if let Some(reserved) = heir.reserved_portion {
-                if heir.actual_share < reserved {
-                    return Err(InheritanceLawError::ReservedPortionViolation {
-                        allocated: heir.actual_share,
-                        required: reserved,
-                    });
-                }
-            }
+        ) && let Some(reserved) = heir.reserved_portion
+            && heir.actual_share < reserved
+        {
+            return Err(InheritanceLawError::ReservedPortionViolation {
+                allocated: heir.actual_share,
+                required: reserved,
+            });
         }
     }
 

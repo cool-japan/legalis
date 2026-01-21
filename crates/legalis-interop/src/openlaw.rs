@@ -9,7 +9,7 @@
 //! - Conditionals: <% if condition %>...<% else %>...<% endif %>
 //! - Smart contract integration capabilities
 //!
-//! Reference: https://docs.openlaw.io/
+//! Reference: <https://docs.openlaw.io/>
 
 use crate::{ConversionReport, FormatExporter, FormatImporter, InteropResult, LegalFormat};
 use legalis_core::{Condition, Effect, EffectType, Statute};
@@ -46,13 +46,13 @@ impl OpenLawImporter {
                         let var_name = parts[0].trim();
                         let value = parts[1].trim();
 
-                        if var_name.to_lowercase().contains("age") {
-                            if let Ok(age_val) = value.parse::<u32>() {
-                                conditions.push(Condition::Age {
-                                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                                    value: age_val,
-                                });
-                            }
+                        if var_name.to_lowercase().contains("age")
+                            && let Ok(age_val) = value.parse::<u32>()
+                        {
+                            conditions.push(Condition::Age {
+                                operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                                value: age_val,
+                            });
                         }
                     }
                 }

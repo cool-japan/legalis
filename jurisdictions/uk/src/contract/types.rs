@@ -12,11 +12,11 @@
 //!
 //! # Key Case Law
 //!
-//! - **Carlill v Carbolic Smoke Ball Co [1893]**: Unilateral contracts
-//! - **Adams v Lindsell [1818]**: Postal rule
-//! - **Hyde v Wrench [1840]**: Counter-offer destroys original offer
-//! - **Hadley v Baxendale [1854]**: Remoteness of damages
-//! - **Williams v Roffey Bros [1991]**: Practical benefit as consideration
+//! - **Carlill v Carbolic Smoke Ball Co \[1893\]**: Unilateral contracts
+//! - **Adams v Lindsell \[1818\]**: Postal rule
+//! - **Hyde v Wrench \[1840\]**: Counter-offer destroys original offer
+//! - **Hadley v Baxendale \[1854\]**: Remoteness of damages
+//! - **Williams v Roffey Bros \[1991\]**: Practical benefit as consideration
 
 #![allow(missing_docs)]
 
@@ -77,7 +77,7 @@ pub enum OfferType {
     Bilateral,
 
     /// Unilateral offer (promise for act)
-    /// See: Carlill v Carbolic Smoke Ball Co [1893]
+    /// See: Carlill v Carbolic Smoke Ball Co \[1893\]
     Unilateral,
 
     /// Invitation to treat (not an offer)
@@ -111,7 +111,7 @@ pub enum AcceptanceMethod {
     Written,
 
     /// Acceptance by post
-    /// Postal rule applies: Adams v Lindsell [1818]
+    /// Postal rule applies: Adams v Lindsell \[1818\]
     /// Acceptance complete when posted, not when received
     Post,
 
@@ -135,11 +135,11 @@ pub struct Consideration {
     pub consideration_type: ConsiderationType,
 
     /// Whether consideration is sufficient
-    /// Chappell v Nestlé [1960]: Must be sufficient but need not be adequate
+    /// Chappell v Nestlé \[1960\]: Must be sufficient but need not be adequate
     pub sufficient: bool,
 
     /// Whether consideration is past
-    /// Re McArdle [1951]: Past consideration is not valid
+    /// Re McArdle \[1951\]: Past consideration is not valid
     pub is_past: bool,
 }
 
@@ -159,7 +159,7 @@ pub enum ConsiderationType {
     Forbearance,
 
     /// Practical benefit
-    /// Williams v Roffey Bros [1991]
+    /// Williams v Roffey Bros \[1991\]
     PracticalBenefit,
 }
 
@@ -183,11 +183,11 @@ pub struct IntentionToCreateLegalRelations {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgreementContext {
     /// Commercial/business context
-    /// Presumption: Intention exists (Esso v Commissioners [1976])
+    /// Presumption: Intention exists (Esso v Commissioners \[1976\])
     Commercial,
 
     /// Domestic/social context
-    /// Presumption: No intention (Balfour v Balfour [1919])
+    /// Presumption: No intention (Balfour v Balfour \[1919\])
     Domestic,
 
     /// Social context
@@ -282,15 +282,15 @@ pub struct ContractTerm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TermClassification {
     /// Condition: Essential term, breach allows termination
-    /// Poussard v Spiers [1876]
+    /// Poussard v Spiers \[1876\]
     Condition,
 
     /// Warranty: Minor term, breach allows damages only
-    /// Bettini v Gye [1876]
+    /// Bettini v Gye \[1876\]
     Warranty,
 
     /// Innominate term: Depends on consequences of breach
-    /// Hong Kong Fir Shipping v Kawasaki [1962]
+    /// Hong Kong Fir Shipping v Kawasaki \[1962\]
     InnominateTerm,
 }
 
@@ -301,7 +301,7 @@ pub enum TermSource {
     Express,
 
     /// Implied by fact (necessary to give business efficacy)
-    /// The Moorcock [1889]
+    /// The Moorcock \[1889\]
     ImpliedInFact,
 
     /// Implied by law (statutory)
@@ -342,7 +342,7 @@ pub enum BreachType {
     Minor,
 
     /// Anticipatory breach
-    /// Hochster v De La Tour [1853]
+    /// Hochster v De La Tour \[1853\]
     Anticipatory,
 }
 
@@ -384,7 +384,7 @@ pub enum RemedyType {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DamagesType {
     /// Expectation damages (put in position as if contract performed)
-    /// Robinson v Harman [1848]
+    /// Robinson v Harman \[1848\]
     Expectation,
 
     /// Reliance damages (restore to pre-contract position)
@@ -410,7 +410,7 @@ pub struct RemotenessTest {
     pub loss_amount: f64,
 
     /// Whether loss passes remoteness test
-    /// Hadley v Baxendale [1854] two limbs:
+    /// Hadley v Baxendale \[1854\] two limbs:
     /// 1. Arising naturally from breach
     /// 2. Reasonably in contemplation of both parties
     pub passes_test: bool,
@@ -419,7 +419,7 @@ pub struct RemotenessTest {
     pub limb: HadleyLimb,
 }
 
-/// Hadley v Baxendale [1854] limbs
+/// Hadley v Baxendale \[1854\] limbs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HadleyLimb {
     /// First limb: Loss arising naturally in ordinary course
@@ -437,10 +437,10 @@ impl Offer {
             return false;
         }
 
-        if let Some(expiry) = self.expiry_date {
-            if Utc::now() > expiry {
-                return false;
-            }
+        if let Some(expiry) = self.expiry_date
+            && Utc::now() > expiry
+        {
+            return false;
         }
 
         true
@@ -459,7 +459,7 @@ impl Acceptance {
     }
 
     /// Check if acceptance creates counter-offer
-    /// Hyde v Wrench [1840]
+    /// Hyde v Wrench \[1840\]
     pub fn is_counter_offer(&self) -> bool {
         !self.modifications.is_empty()
     }

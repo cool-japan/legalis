@@ -300,14 +300,14 @@ impl DelimiterInserter {
         }
 
         // If we found a closing delimiter but expected something else
-        if Self::is_closing_delimiter(found) {
-            if let Some(open) = Self::detect_missing_open(found) {
-                return Some(format!(
-                    "Missing opening '{}' for closing '{}'",
-                    Self::token_symbol(&open),
-                    Self::token_symbol(found)
-                ));
-            }
+        if Self::is_closing_delimiter(found)
+            && let Some(open) = Self::detect_missing_open(found)
+        {
+            return Some(format!(
+                "Missing opening '{}' for closing '{}'",
+                Self::token_symbol(&open),
+                Self::token_symbol(found)
+            ));
         }
 
         None

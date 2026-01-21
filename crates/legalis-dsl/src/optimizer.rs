@@ -238,10 +238,11 @@ impl Optimizer {
                 value,
             } => {
                 // Detect always-false conditions like age < 0
-                if (field == "age" || field == "AGE") && operator == "<" {
-                    if let ConditionValue::Number(n) = value {
-                        return *n == 0;
-                    }
+                if (field == "age" || field == "AGE")
+                    && operator == "<"
+                    && let ConditionValue::Number(n) = value
+                {
+                    return *n == 0;
                 }
                 false
             }

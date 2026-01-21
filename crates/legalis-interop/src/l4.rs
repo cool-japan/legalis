@@ -417,13 +417,13 @@ impl L4Importer {
                 let value = expr[pos + op_str.len()..].trim();
 
                 // Check if it's an age field
-                if field.to_lowercase().contains("age") {
-                    if let Ok(v) = value.parse::<u32>() {
-                        return Some(Condition::Age {
-                            operator: op,
-                            value: v,
-                        });
-                    }
+                if field.to_lowercase().contains("age")
+                    && let Ok(v) = value.parse::<u32>()
+                {
+                    return Some(Condition::Age {
+                        operator: op,
+                        value: v,
+                    });
                 }
 
                 return Some(Condition::AttributeEquals {
@@ -454,14 +454,15 @@ impl FormatImporter for L4Importer {
         let mut statutes = Vec::new();
 
         // Extract decision tables if enabled
-        if self.convert_decision_tables && source.to_uppercase().contains("DECIDE") {
-            if let Some(table) = self.parse_decision_table(source) {
-                report.add_warning(format!(
-                    "Converted decision table '{}' with {} rows",
-                    table.name,
-                    table.rows.len()
-                ));
-            }
+        if self.convert_decision_tables
+            && source.to_uppercase().contains("DECIDE")
+            && let Some(table) = self.parse_decision_table(source)
+        {
+            report.add_warning(format!(
+                "Converted decision table '{}' with {} rows",
+                table.name,
+                table.rows.len()
+            ));
         }
 
         // Extract temporal operators if enabled

@@ -161,10 +161,10 @@ impl StreamingSparqlProcessor {
             }
             TimeWindow::Session { .. } => {
                 // For session windows, keep until gap is exceeded
-                if let Some(front) = buffer.front() {
-                    if *current_time - front.timestamp > window_size {
-                        buffer.clear();
-                    }
+                if let Some(front) = buffer.front()
+                    && *current_time - front.timestamp > window_size
+                {
+                    buffer.clear();
                 }
             }
         }

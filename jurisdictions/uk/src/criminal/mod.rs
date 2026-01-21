@@ -5,12 +5,12 @@
 //!
 //! # Modules
 //!
-//! - [`types`] - Core criminal law type definitions
-//! - [`error`] - Error types for criminal law operations
-//! - [`offences`] - Criminal offences (homicide, assault, theft, fraud)
-//! - [`defences`] - Criminal defences (self-defence, duress, insanity)
-//! - [`sentencing`] - Sentencing guidelines and dangerous offenders
-//! - [`procedure`] - Criminal procedure (PACE, arrest, detention)
+//! - `types` - Core criminal law type definitions
+//! - `error` - Error types for criminal law operations
+//! - `offences` - Criminal offences (homicide, assault, theft, fraud)
+//! - `defences` - Criminal defences (self-defence, duress, insanity)
+//! - `sentencing` - Sentencing guidelines and dangerous offenders
+//! - `procedure` - Criminal procedure (PACE, arrest, detention)
 //!
 //! # Example
 //!

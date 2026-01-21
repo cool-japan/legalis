@@ -214,41 +214,41 @@ impl GdprFineSimulator {
         fines_by_tier.insert("HigherTier".to_string(), 0.0);
 
         for company in &companies {
-            if let Some(has_violation) = company.get_attribute("has_violation") {
-                if has_violation == "true" {
-                    companies_with_violations += 1;
+            if let Some(has_violation) = company.get_attribute("has_violation")
+                && has_violation == "true"
+            {
+                companies_with_violations += 1;
 
-                    let fine = self.calculate_fine(company);
-                    total_fines += fine;
-                    if fine > max_fine {
-                        max_fine = fine;
+                let fine = self.calculate_fine(company);
+                total_fines += fine;
+                if fine > max_fine {
+                    max_fine = fine;
+                }
+
+                // Track by violation type
+                if let Some(violation_type) = company.get_attribute("violation_type") {
+                    *fines_by_violation
+                        .entry(violation_type.clone())
+                        .or_insert(0.0) += fine;
+
+                    // Determine tier
+                    let violation = self
+                        .violations
+                        .iter()
+                        .find(|v| v.id == violation_type)
+                        .cloned();
+                    if let Some(v) = violation {
+                        let tier_key = match v.tier {
+                            GdprFineTier::LowerTier => "LowerTier",
+                            GdprFineTier::HigherTier => "HigherTier",
+                        };
+                        *fines_by_tier.entry(tier_key.to_string()).or_insert(0.0) += fine;
                     }
+                }
 
-                    // Track by violation type
-                    if let Some(violation_type) = company.get_attribute("violation_type") {
-                        *fines_by_violation
-                            .entry(violation_type.clone())
-                            .or_insert(0.0) += fine;
-
-                        // Determine tier
-                        let violation = self
-                            .violations
-                            .iter()
-                            .find(|v| v.id == violation_type)
-                            .cloned();
-                        if let Some(v) = violation {
-                            let tier_key = match v.tier {
-                                GdprFineTier::LowerTier => "LowerTier",
-                                GdprFineTier::HigherTier => "HigherTier",
-                            };
-                            *fines_by_tier.entry(tier_key.to_string()).or_insert(0.0) += fine;
-                        }
-                    }
-
-                    // Track by company size
-                    if let Some(size) = company.get_attribute("company_size") {
-                        *affected_by_size.entry(size.clone()).or_insert(0) += 1;
-                    }
+                // Track by company size
+                if let Some(size) = company.get_attribute("company_size") {
+                    *affected_by_size.entry(size.clone()).or_insert(0) += 1;
                 }
             }
         }

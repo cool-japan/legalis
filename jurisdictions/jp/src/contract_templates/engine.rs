@@ -82,13 +82,13 @@ impl TemplateEngine {
         // Check for unresolved placeholders
         if result.contains("{{") && result.contains("}}") {
             // Extract unresolved placeholder
-            if let Some(start) = result.find("{{") {
-                if let Some(end) = result[start..].find("}}") {
-                    let placeholder = &result[start + 2..start + end];
-                    return Err(TemplateError::TemplateRenderingError {
-                        reason: format!("Unresolved placeholder: {}", placeholder),
-                    });
-                }
+            if let Some(start) = result.find("{{")
+                && let Some(end) = result[start..].find("}}")
+            {
+                let placeholder = &result[start + 2..start + end];
+                return Err(TemplateError::TemplateRenderingError {
+                    reason: format!("Unresolved placeholder: {}", placeholder),
+                });
             }
         }
 

@@ -175,10 +175,10 @@ impl NeuralSymbolicReasoner {
         binding2: &HashMap<String, String>,
     ) -> bool {
         for (var, val1) in binding1 {
-            if let Some(val2) = binding2.get(var) {
-                if val1 != val2 {
-                    return false;
-                }
+            if let Some(val2) = binding2.get(var)
+                && val1 != val2
+            {
+                return false;
             }
         }
         true

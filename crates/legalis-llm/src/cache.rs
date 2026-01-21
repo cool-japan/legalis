@@ -607,11 +607,10 @@ impl InvalidatableCache {
                 let current_version = self.current_version.lock().unwrap();
                 if let (Some(entry_version), Some(curr_version)) =
                     (&entry.version, &*current_version)
+                    && entry_version != curr_version
                 {
-                    if entry_version != curr_version {
-                        cache.remove(&key);
-                        return None;
-                    }
+                    cache.remove(&key);
+                    return None;
                 }
             }
 
@@ -992,16 +991,15 @@ impl AsyncCache {
         let mut cache = self.cache.write().await;
 
         // Evict oldest entry if cache is full
-        if cache.len() >= self.config.max_entries {
-            if let Some(oldest_key) = cache
+        if cache.len() >= self.config.max_entries
+            && let Some(oldest_key) = cache
                 .iter()
                 .min_by_key(|(_, v)| v.created_at)
                 .map(|(k, _)| *k)
-            {
-                cache.remove(&oldest_key);
-                let mut stats = self.stats.write().await;
-                stats.evictions += 1;
-            }
+        {
+            cache.remove(&oldest_key);
+            let mut stats = self.stats.write().await;
+            stats.evictions += 1;
         }
 
         let cached = CachedResponse::new(response, self.config.default_ttl);

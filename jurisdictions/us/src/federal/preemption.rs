@@ -385,40 +385,40 @@ impl PreemptionAnalysis {
         }
 
         // 2. Check for field preemption
-        if let Some(field) = &self.field_analysis {
-            if field.is_field_preempted() {
-                reasons.push("Federal law occupies entire field:".to_string());
-                if field.comprehensive_federal_scheme {
-                    reasons.push("  - Comprehensive federal regulatory scheme".to_string());
-                }
-                if field.congressional_intent_to_occupy {
-                    reasons.push("  - Congressional intent to occupy field".to_string());
-                }
-                if field.traditionally_federal_domain {
-                    reasons.push("  - Traditionally exclusive federal domain".to_string());
-                }
-                if field.exclusive_federal_agency {
-                    reasons.push("  - Exclusive federal agency authority".to_string());
-                }
-
-                for note in &field.notes {
-                    reasons.push(format!("  - {note}"));
-                }
-
-                let confidence = if self.presumption_against {
-                    0.70 // Lower confidence with presumption against
-                } else {
-                    0.85
-                };
-
-                return PreemptionResult {
-                    preemption_type: PreemptionType::ImpliedField,
-                    preempted: true,
-                    confidence,
-                    reasoning: reasons,
-                    presumption_against_applied: self.presumption_against,
-                };
+        if let Some(field) = &self.field_analysis
+            && field.is_field_preempted()
+        {
+            reasons.push("Federal law occupies entire field:".to_string());
+            if field.comprehensive_federal_scheme {
+                reasons.push("  - Comprehensive federal regulatory scheme".to_string());
             }
+            if field.congressional_intent_to_occupy {
+                reasons.push("  - Congressional intent to occupy field".to_string());
+            }
+            if field.traditionally_federal_domain {
+                reasons.push("  - Traditionally exclusive federal domain".to_string());
+            }
+            if field.exclusive_federal_agency {
+                reasons.push("  - Exclusive federal agency authority".to_string());
+            }
+
+            for note in &field.notes {
+                reasons.push(format!("  - {note}"));
+            }
+
+            let confidence = if self.presumption_against {
+                0.70 // Lower confidence with presumption against
+            } else {
+                0.85
+            };
+
+            return PreemptionResult {
+                preemption_type: PreemptionType::ImpliedField,
+                preempted: true,
+                confidence,
+                reasoning: reasons,
+                presumption_against_applied: self.presumption_against,
+            };
         }
 
         // 3. Check for conflict preemption

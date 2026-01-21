@@ -88,10 +88,10 @@ impl FileWatcher {
     pub fn initialize(&mut self) -> DslResult<()> {
         for path in &self.config.paths.clone() {
             if path.is_file() {
-                if let Ok(metadata) = fs::metadata(path) {
-                    if let Ok(modified) = metadata.modified() {
-                        self.file_states.insert(path.clone(), modified);
-                    }
+                if let Ok(metadata) = fs::metadata(path)
+                    && let Ok(modified) = metadata.modified()
+                {
+                    self.file_states.insert(path.clone(), modified);
                 }
             } else if path.is_dir() {
                 self.scan_directory(path)?;
@@ -108,16 +108,13 @@ impl FileWatcher {
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    if ext == "dsl" || ext == "legalis" {
-                        if let Ok(metadata) = fs::metadata(&path) {
-                            if let Ok(modified) = metadata.modified() {
-                                self.file_states.insert(path, modified);
-                            }
-                        }
-                    }
-                }
+            if path.is_file()
+                && let Some(ext) = path.extension()
+                && (ext == "dsl" || ext == "legalis")
+                && let Ok(metadata) = fs::metadata(&path)
+                && let Ok(modified) = metadata.modified()
+            {
+                self.file_states.insert(path, modified);
             }
         }
         Ok(())
@@ -180,33 +177,33 @@ impl FileWatcher {
 
     /// Checks if a specific file has changed and validates it if so.
     fn check_file_changed(&mut self, path: &Path) -> Option<ValidationResult> {
-        if let Ok(metadata) = fs::metadata(path) {
-            if let Ok(modified) = metadata.modified() {
-                let is_new = !self.file_states.contains_key(path);
-                let has_changed = self
-                    .file_states
-                    .get(path)
-                    .map(|last_modified| modified > *last_modified)
-                    .unwrap_or(true);
+        if let Ok(metadata) = fs::metadata(path)
+            && let Ok(modified) = metadata.modified()
+        {
+            let is_new = !self.file_states.contains_key(path);
+            let has_changed = self
+                .file_states
+                .get(path)
+                .map(|last_modified| modified > *last_modified)
+                .unwrap_or(true);
 
-                if is_new || has_changed {
-                    self.file_states.insert(path.to_path_buf(), modified);
+            if is_new || has_changed {
+                self.file_states.insert(path.to_path_buf(), modified);
 
-                    let result = match self.validate_file(path) {
-                        Ok(()) => ValidationResult {
-                            path: path.to_path_buf(),
-                            success: true,
-                            errors: Vec::new(),
-                        },
-                        Err(e) => ValidationResult {
-                            path: path.to_path_buf(),
-                            success: false,
-                            errors: vec![e.to_string()],
-                        },
-                    };
+                let result = match self.validate_file(path) {
+                    Ok(()) => ValidationResult {
+                        path: path.to_path_buf(),
+                        success: true,
+                        errors: Vec::new(),
+                    },
+                    Err(e) => ValidationResult {
+                        path: path.to_path_buf(),
+                        success: false,
+                        errors: vec![e.to_string()],
+                    },
+                };
 
-                    return Some(result);
-                }
+                return Some(result);
             }
         }
         None
@@ -218,10 +215,10 @@ impl FileWatcher {
         if self.config.validate_on_start {
             println!("Validating files on startup...");
             for path in &self.config.paths.clone() {
-                if path.is_file() {
-                    if let Err(e) = self.validate_file(path) {
-                        eprintln!("✗ {}: {}", path.display(), e);
-                    }
+                if path.is_file()
+                    && let Err(e) = self.validate_file(path)
+                {
+                    eprintln!("✗ {}: {}", path.display(), e);
                 }
             }
         }

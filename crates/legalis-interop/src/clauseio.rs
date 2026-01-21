@@ -10,7 +10,7 @@
 //! - Repeating sections
 //! - Template metadata and versioning
 //!
-//! Reference: https://clause.io/
+//! Reference: <https://clause.io/>
 
 use crate::{
     ConversionReport, FormatExporter, FormatImporter, InteropError, InteropResult, LegalFormat,
@@ -72,19 +72,18 @@ impl ClauseIoImporter {
 
         // Extract conditions from section conditions
         for section in &template.sections {
-            if let Some(cond) = &section.condition {
-                if cond.contains("age") {
-                    let re = regex_lite::Regex::new(r"age\s*>=\s*(\d+)").unwrap();
-                    if let Some(cap) = re.captures(cond) {
-                        if let Some(age_str) = cap.get(1) {
-                            if let Ok(age_val) = age_str.as_str().parse::<u32>() {
-                                conditions.push(Condition::Age {
-                                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                                    value: age_val,
-                                });
-                            }
-                        }
-                    }
+            if let Some(cond) = &section.condition
+                && cond.contains("age")
+            {
+                let re = regex_lite::Regex::new(r"age\s*>=\s*(\d+)").unwrap();
+                if let Some(cap) = re.captures(cond)
+                    && let Some(age_str) = cap.get(1)
+                    && let Ok(age_val) = age_str.as_str().parse::<u32>()
+                {
+                    conditions.push(Condition::Age {
+                        operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                        value: age_val,
+                    });
                 }
             }
         }

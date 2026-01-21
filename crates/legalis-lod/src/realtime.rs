@@ -250,16 +250,16 @@ impl RulePattern {
 
     /// Checks if a triple matches this pattern.
     pub fn matches(&self, triple: &Triple) -> bool {
-        if let Some(ref s_pattern) = self.subject_pattern {
-            if !triple.subject.contains(s_pattern) {
-                return false;
-            }
+        if let Some(ref s_pattern) = self.subject_pattern
+            && !triple.subject.contains(s_pattern)
+        {
+            return false;
         }
 
-        if let Some(ref p_pattern) = self.predicate_pattern {
-            if !triple.predicate.contains(p_pattern) {
-                return false;
-            }
+        if let Some(ref p_pattern) = self.predicate_pattern
+            && !triple.predicate.contains(p_pattern)
+        {
+            return false;
         }
 
         true

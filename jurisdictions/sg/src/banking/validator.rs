@@ -163,12 +163,12 @@ fn validate_license_status(bank: &Bank) -> Result<()> {
     match bank.license_status {
         LicenseStatus::Active => {
             // Check expiry
-            if let Some(expiry) = bank.license_expiry {
-                if now >= expiry {
-                    return Err(BankingError::LicenseExpired {
-                        expiry_date: expiry.format("%Y-%m-%d").to_string(),
-                    });
-                }
+            if let Some(expiry) = bank.license_expiry
+                && now >= expiry
+            {
+                return Err(BankingError::LicenseExpired {
+                    expiry_date: expiry.format("%Y-%m-%d").to_string(),
+                });
             }
         }
         LicenseStatus::Suspended => {

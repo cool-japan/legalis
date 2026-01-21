@@ -337,7 +337,7 @@ pub enum PropertyArea {
 }
 
 impl PropertyCase {
-    /// Tsilhqot'in Nation v BC [2014] - Aboriginal title test
+    /// Tsilhqot'in Nation v BC \[2014\] - Aboriginal title test
     pub fn tsilhqotin() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -356,7 +356,7 @@ impl PropertyCase {
         }
     }
 
-    /// Haida Nation v BC [2004] - Duty to consult
+    /// Haida Nation v BC \[2004\] - Duty to consult
     pub fn haida() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -374,7 +374,7 @@ impl PropertyCase {
         }
     }
 
-    /// Delgamuukw v BC [1997] - Aboriginal title content
+    /// Delgamuukw v BC \[1997\] - Aboriginal title content
     pub fn delgamuukw() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -392,7 +392,7 @@ impl PropertyCase {
         }
     }
 
-    /// R v Sparrow [1990] - Aboriginal rights framework
+    /// R v Sparrow \[1990\] - Aboriginal rights framework
     pub fn sparrow() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -410,7 +410,7 @@ impl PropertyCase {
         }
     }
 
-    /// CIBC Mortgages v Rowatt [2002] - Priority of mortgages
+    /// CIBC Mortgages v Rowatt \[2002\] - Priority of mortgages
     pub fn cibc_mortgages() -> Self {
         Self {
             citation: CaseCitation {
@@ -430,7 +430,7 @@ impl PropertyCase {
         }
     }
 
-    /// Stack v Dowden [2007] - Beneficial interests (UK persuasive)
+    /// Stack v Dowden \[2007\] - Beneficial interests (UK persuasive)
     pub fn stack_v_dowden() -> Self {
         Self {
             citation: CaseCitation {

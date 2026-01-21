@@ -300,23 +300,22 @@ impl AutoFixer {
 
                     // Special handling for reversed BETWEEN range
                     if pattern.description.contains("BETWEEN range") {
-                        if let (Some(min_cap), Some(max_cap)) = (captures.get(1), captures.get(2)) {
-                            if let (Ok(min), Ok(max)) = (
+                        if let (Some(min_cap), Some(max_cap)) = (captures.get(1), captures.get(2))
+                            && let (Ok(min), Ok(max)) = (
                                 min_cap.as_str().parse::<i64>(),
                                 max_cap.as_str().parse::<i64>(),
-                            ) {
-                                if min > max {
-                                    replacement = format!("BETWEEN {} AND {}", max, min);
-                                    fixes.push(Fix {
-                                        description: pattern.description.clone(),
-                                        original: original.clone(),
-                                        replacement,
-                                        location: Some(line_num + 1),
-                                        category: pattern.category,
-                                        confidence: pattern.confidence,
-                                    });
-                                }
-                            }
+                            )
+                            && min > max
+                        {
+                            replacement = format!("BETWEEN {} AND {}", max, min);
+                            fixes.push(Fix {
+                                description: pattern.description.clone(),
+                                original: original.clone(),
+                                replacement,
+                                location: Some(line_num + 1),
+                                category: pattern.category,
+                                confidence: pattern.confidence,
+                            });
                         }
                         continue;
                     }

@@ -18,6 +18,7 @@
 //! - Breskvar v Wall (1971) - Indefeasibility
 
 pub mod native_title;
+pub mod strata;
 pub mod torrens;
 pub mod types;
 
@@ -34,6 +35,60 @@ pub use types::{
     CovenantType, DeterminationType, EasementType, Estate, FutureActType, IndefeasibilityException,
     LandInterest, LandTenure, NativeTitleRight, OverridingInterest, PropertyCase, StrataLotType,
     TorrensPrinciple,
+};
+
+// Re-export strata types
+pub use strata::{
+    // Meetings
+    AgendaItem,
+    BuildingClass,
+    BuildingDefect,
+    BuildingDetails,
+    ByLaw,
+    ByLawCategory,
+    ByLawValidity,
+    ClaimUrgency,
+    // Owners corporation
+    CommitteeMember,
+    CommitteePosition,
+    CommonFacility,
+    CommonProperty,
+    DefectClaimAssessment,
+    DefectLocation,
+    DefectRemedy,
+    DefectSeverity,
+    DefectType,
+    ExclusiveUseArea,
+    ExclusiveUseType,
+    FinancialYearEnd,
+    GeneralMeeting,
+    InsuranceDetails,
+    LevyCalculation,
+    LevyStructure,
+    LotOwner,
+    LotType,
+    MeetingType,
+    OwnersCorporation,
+    OwnershipType,
+    PaymentFrequency,
+    ResolutionCheck,
+    ResolutionResult,
+    ResolutionType,
+    // Warranty
+    ResponsibleParty,
+    SpecialLevy,
+    StrataJurisdiction,
+    StrataLot,
+    StrataManager,
+    StrataScheme,
+    StrataSchemeType,
+    WarrantyStatus,
+    WarrantyType,
+    // Scheme structure
+    assess_defect_claim,
+    calculate_lot_levy,
+    check_resolution_threshold,
+    validate_bylaw,
 };
 
 use legalis_core::{Effect, EffectType, Statute};

@@ -3,10 +3,11 @@ name = "legalis-fr"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "French jurisdiction support for Legalis-RS (Code civil, Code de commerce, Code du travail)"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+keywords = ["legalis", "france", "civil-law", "code-civil", "droit"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-fr"
 
 [dependencies]

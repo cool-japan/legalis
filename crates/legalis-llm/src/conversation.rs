@@ -438,10 +438,10 @@ impl Conversation {
         // Find first non-system message
         let pos = self.messages.iter().position(|m| m.role != Role::System);
 
-        if let Some(pos) = pos {
-            if let Some(removed) = self.messages.remove(pos) {
-                self.total_tokens = self.total_tokens.saturating_sub(removed.estimate_tokens());
-            }
+        if let Some(pos) = pos
+            && let Some(removed) = self.messages.remove(pos)
+        {
+            self.total_tokens = self.total_tokens.saturating_sub(removed.estimate_tokens());
         }
     }
 
@@ -641,10 +641,10 @@ impl ConversationStore for FileStore {
         let mut entries = tokio::fs::read_dir(&self.base_path).await?;
 
         while let Some(entry) = entries.next_entry().await? {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(".json") {
-                    ids.push(name.trim_end_matches(".json").to_string());
-                }
+            if let Some(name) = entry.file_name().to_str()
+                && name.ends_with(".json")
+            {
+                ids.push(name.trim_end_matches(".json").to_string());
             }
         }
 

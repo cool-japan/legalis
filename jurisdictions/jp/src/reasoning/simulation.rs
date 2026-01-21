@@ -457,13 +457,13 @@ impl WorkStyleReformSimulator {
                 .get_attribute("industry")
                 .unwrap_or_else(|| "other".to_string());
 
-            if let Some(overtime) = overtime_opt {
-                if overtime > self.config.annual_overtime_limit as f64 {
-                    workers_exceeding += 1;
-                    let reduction = overtime - self.config.annual_overtime_limit as f64;
-                    total_overtime_reduction += reduction;
-                    *industry_impact.entry(industry).or_insert(0.0) += reduction;
-                }
+            if let Some(overtime) = overtime_opt
+                && overtime > self.config.annual_overtime_limit as f64
+            {
+                workers_exceeding += 1;
+                let reduction = overtime - self.config.annual_overtime_limit as f64;
+                total_overtime_reduction += reduction;
+                *industry_impact.entry(industry).or_insert(0.0) += reduction;
             }
         }
 
@@ -596,11 +596,11 @@ impl PaidLeaveSimulator {
                 .get_attribute("leave_days_taken")
                 .and_then(|s| s.parse().ok());
 
-            if let Some(days_taken) = days_taken_opt {
-                if days_taken < self.config.mandatory_days as f64 {
-                    workers_not_meeting += 1;
-                    total_additional_days += self.config.mandatory_days as f64 - days_taken;
-                }
+            if let Some(days_taken) = days_taken_opt
+                && days_taken < self.config.mandatory_days as f64
+            {
+                workers_not_meeting += 1;
+                total_additional_days += self.config.mandatory_days as f64 - days_taken;
             }
         }
 

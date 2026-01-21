@@ -447,17 +447,17 @@ impl ConstraintSolver {
             .iter()
             .find(|v| !assignment.contains_key(*v));
 
-        if let Some(var) = var {
-            if let Some(domain) = self.problem.domains.get(var) {
-                for value in domain {
-                    assignment.insert(var.clone(), value.clone());
+        if let Some(var) = var
+            && let Some(domain) = self.problem.domains.get(var)
+        {
+            for value in domain {
+                assignment.insert(var.clone(), value.clone());
 
-                    if self.is_consistent(assignment) && self.backtrack(assignment) {
-                        return true;
-                    }
-
-                    assignment.remove(var);
+                if self.is_consistent(assignment) && self.backtrack(assignment) {
+                    return true;
                 }
+
+                assignment.remove(var);
             }
         }
 

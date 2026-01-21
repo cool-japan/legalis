@@ -268,14 +268,13 @@ impl ConsensusManager {
         let mut timed_out = Vec::new();
 
         for (proposal_id, proposal) in &self.active_proposals {
-            if now.signed_duration_since(proposal.timestamp) > timeout_duration {
-                if let Some(result) = self.consensus_results.get_mut(proposal_id) {
-                    if result.status == ConsensusStatus::Pending {
-                        result.status = ConsensusStatus::Timeout;
-                        result.decided_at = now;
-                        timed_out.push(*proposal_id);
-                    }
-                }
+            if now.signed_duration_since(proposal.timestamp) > timeout_duration
+                && let Some(result) = self.consensus_results.get_mut(proposal_id)
+                && result.status == ConsensusStatus::Pending
+            {
+                result.status = ConsensusStatus::Timeout;
+                result.decided_at = now;
+                timed_out.push(*proposal_id);
             }
         }
 

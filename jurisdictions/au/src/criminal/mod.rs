@@ -19,6 +19,7 @@
 //! - Veen v R (No 2) (1988) - Sentencing proportionality
 
 pub mod commonwealth;
+pub mod defences;
 pub mod sentencing;
 pub mod types;
 
@@ -33,6 +34,70 @@ pub use types::{
     AggravatingFactor, AssaultGrade, CriminalCase, CriminalJurisdiction, Defence, DrugOffenceType,
     ElementType, FaultElement, FraudType, MitigatingFactor, OffenceCategory, OffenceType,
     PhysicalElement, SentenceType, SentencingPurpose, SexualOffenceType,
+};
+
+// Re-export defence types
+pub use defences::{
+    // Mistake and automatism
+    AutomatismCause,
+    AutomatismDefence,
+    AutomatismEvidence,
+    AutomatismType,
+    BeliefBasis,
+    BeliefSource,
+    CurrentMentalState,
+    // Assessment
+    DefenceAssessment,
+    DefenceLikelihood,
+    DefenceRecommendation,
+    DefenceType,
+    DefensiveResponse,
+    DisabilitySeverity,
+    DuressClaim,
+    DuressOffenceType,
+    DuressThrea,
+    EmergencySituation,
+    EmergencyType,
+    ExpertEvidence,
+    FitnessToPlead,
+    ForceLevel,
+    HarmCaused,
+    ImpairmentNature,
+    ImpairmentOpinion,
+    IntoxicationApplicability,
+    IntoxicationDefence,
+    IntoxicationEffect,
+    IntoxicationLevel,
+    IntoxicationType,
+    MNaghtenElements,
+    MentalCondition,
+    MentalImpairmentDefence,
+    MistakeFaultElement,
+    MistakeOfFactDefence,
+    MistakenBelief,
+    NecessityClaim,
+    PersonAtRisk,
+    PressleyCriteria,
+    ProportionalityAssessment,
+    ProportionalityFactor,
+    ResponseType,
+    SelfDefenceClaim,
+    Substance,
+    ThreatBelief,
+    ThreatImminence,
+    ThreatNature,
+    ThreatSeverity,
+    ThreatType,
+    UnfitnessDisposition,
+    WeaponType,
+    // Duress and necessity
+    assess_duress,
+    // Intoxication
+    assess_intoxication,
+    // Mental impairment
+    assess_mental_impairment,
+    // Self-defence
+    assess_self_defence,
 };
 
 use legalis_core::{Effect, EffectType, Statute};

@@ -5,6 +5,44 @@ All notable changes to Legalis-RS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-01-21
+
+### New Jurisdictions
+- **legalis-ae**: United Arab Emirates (Federal Law, Commercial, Labor, PDPL, Free Zones)
+- **legalis-au**: Australia (Contract, Corporate, Criminal, Consumer, Family, Immigration, IP, Mining, Privacy, Property, Superannuation, Tax, Tort)
+- **legalis-br**: Brazil (Civil Code, Consumer Protection, Data Protection (LGPD), Labor Law (CLT), Tax)
+- **legalis-ca**: Canada (Federal, Charter, Employment Standards, Privacy, Indigenous)
+- **legalis-cn**: China (Civil Code, Contract, Corporate, Data Protection, IP, Labor)
+- **legalis-id**: Indonesia (Civil Code, Investment, Labor, Tax)
+- **legalis-in**: India (Constitution, Contract, Criminal (IPC/BNS), Data Protection (DPDP), Consumer Protection, Corporate, IP, Labor, Tax)
+- **legalis-la**: Laos (Civil Code, Investment, Labor)
+- **legalis-th**: Thailand (Civil Code, Labor, Investment, Data Protection)
+- **legalis-vn**: Vietnam (Civil Code, Investment, Labor, Cybersecurity)
+- **legalis-za**: South Africa (Companies Act, Labor (LRA/BCEA), POPIA, BBBEE)
+
+### Fixed
+- **legalis-in**: Fixed boolean logic bug in criminal/validator.rs (clippy error)
+- **legalis-au**: Fixed rustdoc broken intra-doc links in consumer_law/types.rs
+- **legalis-br**: Fixed doc test failures (CNPJ validation, currency format, severance calculation)
+- **legalis-eu**: Fixed always-true assertions in unfair_practices.rs tests
+- **legalis-id**: Fixed useless vec! in civil_code/types.rs
+- **Code Quality**: Fixed 20+ clippy warnings across multiple jurisdiction crates
+
+### Changed
+- **Jurisdictions**: Expanded from 8 to 18 jurisdictions (AU, AE, BR, CA, CN, EU, DE, FR, ID, IN, JP, LA, SG, TH, UK, US, VN, ZA)
+- **Tests**: 13,083 tests passing across all features (up from 11,365)
+- **Documentation**: Fixed doc tests and rustdoc strict mode compliance
+- **Build**: All crates compile with zero clippy warnings
+
+### Statistics
+- **Crates**: 41 (17 core + 24 jurisdictions)
+- **Rust Files**: 1,651
+- **Lines of Code**: 863,282
+- **Tests**: 13,083 passing
+- **Jurisdictions**: 18
+
+[0.1.3]: https://github.com/cool-japan/legalis-rs/compare/v0.1.2...v0.1.3
+
 ## [0.1.2] - 2026-01-15
 
 ### Fixed

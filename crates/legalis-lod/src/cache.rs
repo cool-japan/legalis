@@ -75,11 +75,12 @@ impl<K: Clone + Eq + Hash, V: Clone> ExportCache<K, V> {
         }
 
         // Evict least recently used if at capacity
-        if self.cache.len() >= self.max_size && !self.cache.contains_key(&key) {
-            if let Some(lru_key) = self.access_order.first().cloned() {
-                self.cache.remove(&lru_key);
-                self.access_order.remove(0);
-            }
+        if self.cache.len() >= self.max_size
+            && !self.cache.contains_key(&key)
+            && let Some(lru_key) = self.access_order.first().cloned()
+        {
+            self.cache.remove(&lru_key);
+            self.access_order.remove(0);
         }
 
         // Insert new entry

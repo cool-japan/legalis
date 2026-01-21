@@ -180,16 +180,16 @@ fn main() {
             // Display wage scale
             println!("   Wage Scale (Entgeltgruppen):");
             for provision in &agreement.normative_provisions {
-                if matches!(provision.provision_type, ProvisionType::Compensation) {
-                    if let ProvisionDetails::WageScale { grades } = &provision.details {
-                        for grade in grades {
-                            println!(
-                                "     - Grade {}: {} - €{:.2}/month",
-                                grade.grade,
-                                grade.description,
-                                grade.monthly_wage.to_euros()
-                            );
-                        }
+                if matches!(provision.provision_type, ProvisionType::Compensation)
+                    && let ProvisionDetails::WageScale { grades } = &provision.details
+                {
+                    for grade in grades {
+                        println!(
+                            "     - Grade {}: {} - €{:.2}/month",
+                            grade.grade,
+                            grade.description,
+                            grade.monthly_wage.to_euros()
+                        );
                     }
                 }
             }

@@ -451,14 +451,14 @@ impl LoadBalancer {
                 .collect();
 
             for partition in node_partitions {
-                if let Some(underloaded_node) = underloaded.first() {
-                    if overloaded_node.load - underloaded_node.load > self.min_imbalance {
-                        moves.push((partition.id, overloaded_node.id, underloaded_node.id));
+                if let Some(underloaded_node) = underloaded.first()
+                    && overloaded_node.load - underloaded_node.load > self.min_imbalance
+                {
+                    moves.push((partition.id, overloaded_node.id, underloaded_node.id));
 
-                        // Update for next iteration (simplified)
-                        if underloaded.len() > 1 {
-                            underloaded.remove(0);
-                        }
+                    // Update for next iteration (simplified)
+                    if underloaded.len() > 1 {
+                        underloaded.remove(0);
                     }
                 }
             }

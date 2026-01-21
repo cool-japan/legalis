@@ -244,23 +244,21 @@ impl PayoffMatrix {
 
         // Check if player 1 has incentive to deviate
         for i in 0..self.player1_actions.len() {
-            if i != p1_action {
-                if let Some((alt_p1_payoff, _)) = self.get_payoff(i, p2_action) {
-                    if alt_p1_payoff > p1_payoff {
-                        return false;
-                    }
-                }
+            if i != p1_action
+                && let Some((alt_p1_payoff, _)) = self.get_payoff(i, p2_action)
+                && alt_p1_payoff > p1_payoff
+            {
+                return false;
             }
         }
 
         // Check if player 2 has incentive to deviate
         for j in 0..self.player2_actions.len() {
-            if j != p2_action {
-                if let Some((_, alt_p2_payoff)) = self.get_payoff(p1_action, j) {
-                    if alt_p2_payoff > p2_payoff {
-                        return false;
-                    }
-                }
+            if j != p2_action
+                && let Some((_, alt_p2_payoff)) = self.get_payoff(p1_action, j)
+                && alt_p2_payoff > p2_payoff
+            {
+                return false;
             }
         }
 

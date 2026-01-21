@@ -501,10 +501,10 @@ impl LegalConverter {
         format: LegalFormat,
     ) -> InteropResult<(Vec<Statute>, ConversionReport)> {
         // Check cache first
-        if let Some(cache) = &mut self.cache {
-            if let Some(cached) = cache.get_import(source, format) {
-                return Ok(cached);
-            }
+        if let Some(cache) = &mut self.cache
+            && let Some(cached) = cache.get_import(source, format)
+        {
+            return Ok(cached);
         }
 
         let importer = self
@@ -546,10 +546,10 @@ impl LegalConverter {
         to: LegalFormat,
     ) -> InteropResult<(String, ConversionReport)> {
         // Check cache first
-        if let Some(cache) = &mut self.cache {
-            if let Some(cached) = cache.get_export(source, from, to) {
-                return Ok(cached);
-            }
+        if let Some(cache) = &mut self.cache
+            && let Some(cached) = cache.get_export(source, from, to)
+        {
+            return Ok(cached);
         }
 
         let (statutes, mut import_report) = self.import(source, from)?;

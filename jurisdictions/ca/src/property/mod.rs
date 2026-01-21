@@ -21,10 +21,10 @@
 //!
 //! ## Key Cases
 //!
-//! - **Tsilhqot'in Nation v BC** [2014] SCC 44: Aboriginal title test
-//! - **Haida Nation v BC** [2004] SCC 73: Duty to consult
-//! - **Delgamuukw v BC** [1997] SCC: Aboriginal title content
-//! - **R v Sparrow** [1990] SCC: Aboriginal rights framework
+//! - **Tsilhqot'in Nation v BC** \[2014\] SCC 44: Aboriginal title test
+//! - **Haida Nation v BC** \[2004\] SCC 73: Duty to consult
+//! - **Delgamuukw v BC** \[1997\] SCC: Aboriginal title content
+//! - **R v Sparrow** \[1990\] SCC: Aboriginal rights framework
 
 mod aboriginal;
 mod error;

@@ -420,12 +420,12 @@ impl CitationNetwork {
             let mut jurisdictions = HashMap::new();
 
             for citation in incoming {
-                if let Some(citing_case) = self.get_case(&citation.citing_case) {
-                    if citing_case.jurisdiction != case.jurisdiction {
-                        *jurisdictions
-                            .entry(citing_case.jurisdiction.clone())
-                            .or_insert(0) += 1;
-                    }
+                if let Some(citing_case) = self.get_case(&citation.citing_case)
+                    && citing_case.jurisdiction != case.jurisdiction
+                {
+                    *jurisdictions
+                        .entry(citing_case.jurisdiction.clone())
+                        .or_insert(0) += 1;
                 }
             }
 

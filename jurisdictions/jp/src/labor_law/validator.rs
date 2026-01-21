@@ -424,22 +424,18 @@ pub fn analyze_harassment_report(report: &HarassmentReport) -> Result<()> {
     }
 
     // Check for power imbalance in power harassment cases
-    if report.harassment_type == HarassmentType::PowerHarassment {
-        if let (Some(perp_pos), Some(victim_pos)) =
+    if report.harassment_type == HarassmentType::PowerHarassment
+        && let (Some(perp_pos), Some(victim_pos)) =
             (&report.perpetrator_position, &report.victim_position)
+    {
+        // Simple check: if perpetrator is in management position
+        if perp_pos.to_lowercase().contains("manager")
+            || perp_pos.to_lowercase().contains("director")
+            || perp_pos.to_lowercase().contains("chief")
         {
-            // Simple check: if perpetrator is in management position
-            if perp_pos.to_lowercase().contains("manager")
-                || perp_pos.to_lowercase().contains("director")
-                || perp_pos.to_lowercase().contains("chief")
-            {
-                return Err(LaborLawError::PowerHarassmentDetected {
-                    description: format!(
-                        "Power imbalance detected: {} to {}",
-                        perp_pos, victim_pos
-                    ),
-                });
-            }
+            return Err(LaborLawError::PowerHarassmentDetected {
+                description: format!("Power imbalance detected: {} to {}", perp_pos, victim_pos),
+            });
         }
     }
 

@@ -367,10 +367,10 @@ impl SparqlStarExecutor {
         // Match predicate (must be URI in practice)
         if let PatternNode::Variable(v) = &pattern.predicate {
             bindings.insert(v.clone(), RdfStarNode::uri(&triple.predicate));
-        } else if let PatternNode::Uri(uri) = &pattern.predicate {
-            if uri != &triple.predicate {
-                return None;
-            }
+        } else if let PatternNode::Uri(uri) = &pattern.predicate
+            && uri != &triple.predicate
+        {
+            return None;
         }
 
         // Match object

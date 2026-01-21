@@ -150,10 +150,10 @@ impl SummarizationEngine {
         let cache_key = format!("{}:{:?}", statute.statute.id, length);
 
         // Check cache
-        if self.config.cache_enabled {
-            if let Some(cached) = self.cache.get(&cache_key) {
-                return Ok(cached.clone());
-            }
+        if self.config.cache_enabled
+            && let Some(cached) = self.cache.get(&cache_key)
+        {
+            return Ok(cached.clone());
         }
 
         // Generate summary based on provider

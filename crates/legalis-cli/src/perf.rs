@@ -576,12 +576,11 @@ impl PerformanceProfiler {
         if self.base_dir.exists() {
             for entry in fs::read_dir(&self.base_dir)? {
                 let entry = entry?;
-                if entry.file_type()?.is_file() {
-                    if let Some(filename) = entry.file_name().to_str() {
-                        if filename.ends_with(".json") {
-                            sessions.push(filename.trim_end_matches(".json").to_string());
-                        }
-                    }
+                if entry.file_type()?.is_file()
+                    && let Some(filename) = entry.file_name().to_str()
+                    && filename.ends_with(".json")
+                {
+                    sessions.push(filename.trim_end_matches(".json").to_string());
                 }
             }
         }

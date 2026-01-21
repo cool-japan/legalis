@@ -32,19 +32,19 @@
 //!
 //! # Key Cases
 //!
-//! - Donoghue v Stevenson [1932] AC 562 (neighbour principle)
-//! - Caparo Industries v Dickman [1990] 2 AC 605 (three-stage test)
-//! - Bolam v Friern Hospital [1957] 1 WLR 582 (professional standard)
-//! - Bolitho v City & Hackney HA [1998] AC 232 (logical Bolam)
-//! - Alcock v Chief Constable [1992] 1 AC 310 (psychiatric injury)
-//! - Hedley Byrne v Heller [1964] AC 465 (negligent misstatement)
-//! - Murphy v Brentwood [1991] 1 AC 398 (pure economic loss)
-//! - Wheat v E Lacon [1966] AC 552 (occupier definition)
-//! - Tomlinson v Congleton [2003] UKHL 47 (obvious risks)
-//! - Hunter v Canary Wharf [1997] AC 655 (nuisance standing)
-//! - Transco v Stockport [2004] 2 AC 1 (Rylands v Fletcher)
-//! - Lachaux v Independent Print [2019] UKSC 27 (serious harm)
-//! - OBG Ltd v Allan [2008] 1 AC 1 (economic torts)
+//! - Donoghue v Stevenson \[1932\] AC 562 (neighbour principle)
+//! - Caparo Industries v Dickman \[1990\] 2 AC 605 (three-stage test)
+//! - Bolam v Friern Hospital \[1957\] 1 WLR 582 (professional standard)
+//! - Bolitho v City & Hackney HA \[1998\] AC 232 (logical Bolam)
+//! - Alcock v Chief Constable \[1992\] 1 AC 310 (psychiatric injury)
+//! - Hedley Byrne v Heller \[1964\] AC 465 (negligent misstatement)
+//! - Murphy v Brentwood \[1991\] 1 AC 398 (pure economic loss)
+//! - Wheat v E Lacon \[1966\] AC 552 (occupier definition)
+//! - Tomlinson v Congleton \[2003\] UKHL 47 (obvious risks)
+//! - Hunter v Canary Wharf \[1997\] AC 655 (nuisance standing)
+//! - Transco v Stockport \[2004\] 2 AC 1 (Rylands v Fletcher)
+//! - Lachaux v Independent Print \[2019\] UKSC 27 (serious harm)
+//! - OBG Ltd v Allan \[2008\] 1 AC 1 (economic torts)
 //!
 //! # Example
 //!

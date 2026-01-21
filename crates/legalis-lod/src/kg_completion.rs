@@ -305,20 +305,20 @@ impl RuleBasedCompletion {
         let mut predictions = Vec::new();
 
         for triple in &self.kg.triples {
-            if triple.predicate == relation {
-                if let RdfValue::Uri(ref b) = triple.object {
-                    // Find (B, r, C)
-                    for c in self.kg.get_objects(b, relation) {
-                        // Skip if already exists
-                        if !self.kg.get_objects(&triple.subject, relation).contains(&c) {
-                            predictions.push(PredictedTriple {
-                                subject: triple.subject.clone(),
-                                relation: relation.to_string(),
-                                object: c.to_string(),
-                                confidence,
-                                explanation: format!("Transitive inference via {}", rule_name),
-                            });
-                        }
+            if triple.predicate == relation
+                && let RdfValue::Uri(ref b) = triple.object
+            {
+                // Find (B, r, C)
+                for c in self.kg.get_objects(b, relation) {
+                    // Skip if already exists
+                    if !self.kg.get_objects(&triple.subject, relation).contains(&c) {
+                        predictions.push(PredictedTriple {
+                            subject: triple.subject.clone(),
+                            relation: relation.to_string(),
+                            object: c.to_string(),
+                            confidence,
+                            explanation: format!("Transitive inference via {}", rule_name),
+                        });
                     }
                 }
             }
@@ -336,22 +336,22 @@ impl RuleBasedCompletion {
         let mut predictions = Vec::new();
 
         for triple in &self.kg.triples {
-            if triple.predicate == relation {
-                if let RdfValue::Uri(ref obj) = triple.object {
-                    // Check if reverse doesn't exist
-                    if !self
-                        .kg
-                        .get_objects(obj, relation)
-                        .contains(&triple.subject.as_str())
-                    {
-                        predictions.push(PredictedTriple {
-                            subject: obj.clone(),
-                            relation: relation.to_string(),
-                            object: triple.subject.clone(),
-                            confidence,
-                            explanation: format!("Symmetric inference via {}", rule_name),
-                        });
-                    }
+            if triple.predicate == relation
+                && let RdfValue::Uri(ref obj) = triple.object
+            {
+                // Check if reverse doesn't exist
+                if !self
+                    .kg
+                    .get_objects(obj, relation)
+                    .contains(&triple.subject.as_str())
+                {
+                    predictions.push(PredictedTriple {
+                        subject: obj.clone(),
+                        relation: relation.to_string(),
+                        object: triple.subject.clone(),
+                        confidence,
+                        explanation: format!("Symmetric inference via {}", rule_name),
+                    });
                 }
             }
         }
@@ -369,22 +369,22 @@ impl RuleBasedCompletion {
         let mut predictions = Vec::new();
 
         for triple in &self.kg.triples {
-            if triple.predicate == relation1 {
-                if let RdfValue::Uri(ref obj) = triple.object {
-                    // Check if inverse doesn't exist
-                    if !self
-                        .kg
-                        .get_objects(obj, relation2)
-                        .contains(&triple.subject.as_str())
-                    {
-                        predictions.push(PredictedTriple {
-                            subject: obj.clone(),
-                            relation: relation2.to_string(),
-                            object: triple.subject.clone(),
-                            confidence,
-                            explanation: format!("Inverse inference via {}", rule_name),
-                        });
-                    }
+            if triple.predicate == relation1
+                && let RdfValue::Uri(ref obj) = triple.object
+            {
+                // Check if inverse doesn't exist
+                if !self
+                    .kg
+                    .get_objects(obj, relation2)
+                    .contains(&triple.subject.as_str())
+                {
+                    predictions.push(PredictedTriple {
+                        subject: obj.clone(),
+                        relation: relation2.to_string(),
+                        object: triple.subject.clone(),
+                        confidence,
+                        explanation: format!("Inverse inference via {}", rule_name),
+                    });
                 }
             }
         }
@@ -403,24 +403,24 @@ impl RuleBasedCompletion {
         let mut predictions = Vec::new();
 
         for triple in &self.kg.triples {
-            if triple.predicate == relation1 {
-                if let RdfValue::Uri(ref b) = triple.object {
-                    // Find (B, r2, C)
-                    for c in self.kg.get_objects(b, relation2) {
-                        // Check if result doesn't exist
-                        if !self
-                            .kg
-                            .get_objects(&triple.subject, result_relation)
-                            .contains(&c)
-                        {
-                            predictions.push(PredictedTriple {
-                                subject: triple.subject.clone(),
-                                relation: result_relation.to_string(),
-                                object: c.to_string(),
-                                confidence,
-                                explanation: format!("Composition inference via {}", rule_name),
-                            });
-                        }
+            if triple.predicate == relation1
+                && let RdfValue::Uri(ref b) = triple.object
+            {
+                // Find (B, r2, C)
+                for c in self.kg.get_objects(b, relation2) {
+                    // Check if result doesn't exist
+                    if !self
+                        .kg
+                        .get_objects(&triple.subject, result_relation)
+                        .contains(&c)
+                    {
+                        predictions.push(PredictedTriple {
+                            subject: triple.subject.clone(),
+                            relation: result_relation.to_string(),
+                            object: c.to_string(),
+                            confidence,
+                            explanation: format!("Composition inference via {}", rule_name),
+                        });
                     }
                 }
             }

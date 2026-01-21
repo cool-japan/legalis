@@ -59,12 +59,10 @@ impl BitemporalDatabase {
         for bitemp in &mut self.triples {
             if bitemp.temporal.triple.subject == subject
                 && bitemp.temporal.triple.predicate == predicate
+                && let Some(ref mut tt) = bitemp.temporal.transaction_time
+                && tt.end.is_none()
             {
-                if let Some(ref mut tt) = bitemp.temporal.transaction_time {
-                    if tt.end.is_none() {
-                        tt.end = Some(now);
-                    }
-                }
+                tt.end = Some(now);
             }
         }
 

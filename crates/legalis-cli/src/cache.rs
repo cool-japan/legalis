@@ -165,15 +165,14 @@ impl CacheManager {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(cache_entry) = serde_json::from_str::<CacheEntry>(&content) {
-                        if now - cache_entry.timestamp > self.max_age_seconds {
-                            fs::remove_file(path)?;
-                            count += 1;
-                        }
-                    }
-                }
+            if path.is_file()
+                && path.extension().is_some_and(|ext| ext == "json")
+                && let Ok(content) = fs::read_to_string(&path)
+                && let Ok(cache_entry) = serde_json::from_str::<CacheEntry>(&content)
+                && now - cache_entry.timestamp > self.max_age_seconds
+            {
+                fs::remove_file(path)?;
+                count += 1;
             }
         }
 
@@ -201,14 +200,14 @@ impl CacheManager {
                     stats.total_size += metadata.len();
                 }
 
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(cache_entry) = serde_json::from_str::<CacheEntry>(&content) {
-                        if now - cache_entry.timestamp > self.max_age_seconds {
-                            stats.expired_entries += 1;
-                        }
-
-                        *stats.commands.entry(cache_entry.command).or_insert(0) += 1;
+                if let Ok(content) = fs::read_to_string(&path)
+                    && let Ok(cache_entry) = serde_json::from_str::<CacheEntry>(&content)
+                {
+                    if now - cache_entry.timestamp > self.max_age_seconds {
+                        stats.expired_entries += 1;
                     }
+
+                    *stats.commands.entry(cache_entry.command).or_insert(0) += 1;
                 }
             }
         }

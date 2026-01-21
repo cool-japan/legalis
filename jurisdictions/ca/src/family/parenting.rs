@@ -304,29 +304,29 @@ impl BestInterestsAnalyzer {
 
         // Child views (if applicable)
         for child in &facts.children {
-            if child.age >= 12 {
-                if let Some(views) = &child.views {
-                    analyses.push(FactorAnalysis {
-                        factor: BestInterestsFactor::ChildViews {
-                            age: child.age,
-                            maturity_level: format!("{:?}", views.maturity),
-                        },
-                        weight: if child.age >= 14 {
-                            FactorWeight::High
-                        } else {
-                            FactorWeight::Moderate
-                        },
-                        favors: if views.give_weight {
-                            Some(views.preference.clone())
-                        } else {
-                            None
-                        },
-                        analysis: format!(
-                            "Child age {} expressed preference: {}",
-                            child.age, views.preference
-                        ),
-                    });
-                }
+            if child.age >= 12
+                && let Some(views) = &child.views
+            {
+                analyses.push(FactorAnalysis {
+                    factor: BestInterestsFactor::ChildViews {
+                        age: child.age,
+                        maturity_level: format!("{:?}", views.maturity),
+                    },
+                    weight: if child.age >= 14 {
+                        FactorWeight::High
+                    } else {
+                        FactorWeight::Moderate
+                    },
+                    favors: if views.give_weight {
+                        Some(views.preference.clone())
+                    } else {
+                        None
+                    },
+                    analysis: format!(
+                        "Child age {} expressed preference: {}",
+                        child.age, views.preference
+                    ),
+                });
             }
         }
 
@@ -357,23 +357,22 @@ impl BestInterestsAnalyzer {
         }
 
         // Stability
-        if let Some(current) = &facts.current_arrangement {
-            if current.duration_months >= 6
-                && matches!(
-                    current.functioning,
-                    ArrangementFunctioning::WorkingWell | ArrangementFunctioning::MinorIssues
-                )
-            {
-                analyses.push(FactorAnalysis {
-                    factor: BestInterestsFactor::Stability,
-                    weight: FactorWeight::High,
-                    favors: None,
-                    analysis: format!(
-                        "Current arrangement in place for {} months and functioning",
-                        current.duration_months
-                    ),
-                });
-            }
+        if let Some(current) = &facts.current_arrangement
+            && current.duration_months >= 6
+            && matches!(
+                current.functioning,
+                ArrangementFunctioning::WorkingWell | ArrangementFunctioning::MinorIssues
+            )
+        {
+            analyses.push(FactorAnalysis {
+                factor: BestInterestsFactor::Stability,
+                weight: FactorWeight::High,
+                favors: None,
+                analysis: format!(
+                    "Current arrangement in place for {} months and functioning",
+                    current.duration_months
+                ),
+            });
         }
 
         analyses
@@ -450,13 +449,13 @@ impl BestInterestsAnalyzer {
         violence_impact: &Option<ViolenceImpact>,
     ) -> (ParentingArrangement, ParentingTimeSchedule) {
         // If violence, restrict accordingly
-        if let Some(impact) = violence_impact {
-            if !impact.safety_measures.is_empty() {
-                return (
-                    ParentingArrangement::SupervisedParentingTime,
-                    ParentingTimeSchedule::SupervisedOnly,
-                );
-            }
+        if let Some(impact) = violence_impact
+            && !impact.safety_measures.is_empty()
+        {
+            return (
+                ParentingArrangement::SupervisedParentingTime,
+                ParentingTimeSchedule::SupervisedOnly,
+            );
         }
 
         // Check cooperation

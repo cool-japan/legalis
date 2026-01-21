@@ -348,7 +348,7 @@ pub enum FamilyArea {
 }
 
 impl FamilyCase {
-    /// Gordon v Goertz [1996] - relocation test
+    /// Gordon v Goertz \[1996\] - relocation test
     pub fn gordon_v_goertz() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -364,7 +364,7 @@ impl FamilyCase {
         }
     }
 
-    /// Young v Young [1993] - religious upbringing
+    /// Young v Young \[1993\] - religious upbringing
     pub fn young_v_young() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -380,7 +380,7 @@ impl FamilyCase {
         }
     }
 
-    /// Bracklow v Bracklow [1999] - spousal support bases
+    /// Bracklow v Bracklow \[1999\] - spousal support bases
     pub fn bracklow() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -397,7 +397,7 @@ impl FamilyCase {
         }
     }
 
-    /// Moge v Moge [1992] - compensatory support
+    /// Moge v Moge \[1992\] - compensatory support
     pub fn moge() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -414,7 +414,7 @@ impl FamilyCase {
         }
     }
 
-    /// DBS v SRG [2006] - child support guidelines
+    /// DBS v SRG \[2006\] - child support guidelines
     pub fn dbs_v_srg() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -431,7 +431,7 @@ impl FamilyCase {
         }
     }
 
-    /// Contino v Leonelli-Contino [2005] - shared custody support
+    /// Contino v Leonelli-Contino \[2005\] - shared custody support
     pub fn contino() -> Self {
         Self {
             citation: CaseCitation::scc(
@@ -448,7 +448,7 @@ impl FamilyCase {
         }
     }
 
-    /// Michel v Graydon [2020] - 2019 Divorce Act amendments
+    /// Michel v Graydon \[2020\] - 2019 Divorce Act amendments
     pub fn michel_v_graydon() -> Self {
         Self {
             citation: CaseCitation::scc(

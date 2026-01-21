@@ -2532,11 +2532,12 @@ impl ConditionCache {
     /// Stores an evaluation result in the cache.
     pub fn insert(&mut self, condition_key: String, result: bool) {
         // Evict oldest entry if at capacity
-        if self.cache.len() >= self.max_capacity && !self.cache.contains_key(&condition_key) {
-            if let Some(oldest_key) = self.access_order.first().cloned() {
-                self.cache.remove(&oldest_key);
-                self.access_order.remove(0);
-            }
+        if self.cache.len() >= self.max_capacity
+            && !self.cache.contains_key(&condition_key)
+            && let Some(oldest_key) = self.access_order.first().cloned()
+        {
+            self.cache.remove(&oldest_key);
+            self.access_order.remove(0);
         }
 
         self.cache.insert(condition_key.clone(), result);
@@ -4526,10 +4527,10 @@ impl AbductiveReasoner {
 
         // Find all statutes that produce this effect
         for statute in &self.statutes {
-            if self.effects_match(&statute.effect, &target_effect) {
-                if let Some(explanation) = self.explain_statute(statute, context) {
-                    explanations.push(explanation);
-                }
+            if self.effects_match(&statute.effect, &target_effect)
+                && let Some(explanation) = self.explain_statute(statute, context)
+            {
+                explanations.push(explanation);
             }
         }
 
@@ -4666,12 +4667,12 @@ impl AbductiveReasoner {
 
         // Find statutes that could produce this effect but didn't
         for statute in &self.statutes {
-            if self.effects_match(&statute.effect, &target_effect) {
-                if let Some(explanation) = self.explain_statute(statute, context) {
-                    // Only include if statute didn't apply (confidence < 1.0)
-                    if explanation.confidence < 1.0 {
-                        explanations.push(explanation);
-                    }
+            if self.effects_match(&statute.effect, &target_effect)
+                && let Some(explanation) = self.explain_statute(statute, context)
+            {
+                // Only include if statute didn't apply (confidence < 1.0)
+                if explanation.confidence < 1.0 {
+                    explanations.push(explanation);
                 }
             }
         }
@@ -4700,10 +4701,10 @@ impl AbductiveReasoner {
         let mut alternatives = Vec::new();
 
         for statute in &self.statutes {
-            if self.effects_match(&statute.effect, &target_effect) {
-                if let Some(explanation) = self.explain_statute(statute, context) {
-                    alternatives.push(explanation);
-                }
+            if self.effects_match(&statute.effect, &target_effect)
+                && let Some(explanation) = self.explain_statute(statute, context)
+            {
+                alternatives.push(explanation);
             }
         }
 
@@ -5956,10 +5957,10 @@ impl TemporalEffect {
         if date < self.start_date {
             return false;
         }
-        if let Some(end) = self.end_date {
-            if date > end {
-                return false;
-            }
+        if let Some(end) = self.end_date
+            && date > end
+        {
+            return false;
         }
 
         // Check recurrence pattern if present
@@ -6059,10 +6060,10 @@ impl RecurrencePattern {
 
         // Search up to 1 year ahead
         for _ in 0..365 {
-            if let Some(end_date) = end {
-                if candidate > end_date {
-                    return None;
-                }
+            if let Some(end_date) = end
+                && candidate > end_date
+            {
+                return None;
             }
             if candidate >= start && self.matches(candidate, start) {
                 return Some(candidate);
@@ -6930,13 +6931,12 @@ impl Statute {
         if let (Some(eff), Some(exp)) = (
             self.temporal_validity.effective_date,
             self.temporal_validity.expiry_date,
-        ) {
-            if exp < eff {
-                errors.push(ValidationError::ExpiryBeforeEffective {
-                    effective: eff,
-                    expiry: exp,
-                });
-            }
+        ) && exp < eff
+        {
+            errors.push(ValidationError::ExpiryBeforeEffective {
+                effective: eff,
+                expiry: exp,
+            });
         }
 
         // Validate preconditions

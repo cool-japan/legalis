@@ -305,16 +305,14 @@ impl CostAnalyzer {
         }
 
         // Check for pagination arguments that might reduce cost
-        if query.contains("first:") {
-            if let Some(first_str) = query.split("first:").nth(1) {
-                if let Some(num_str) = first_str.split(|c: char| !c.is_ascii_digit()).next() {
-                    if let Ok(num) = num_str.parse::<u32>() {
-                        if num > 0 && num < 100 {
-                            multiplier *= (num as f64) / 10.0;
-                        }
-                    }
-                }
-            }
+        if query.contains("first:")
+            && let Some(first_str) = query.split("first:").nth(1)
+            && let Some(num_str) = first_str.split(|c: char| !c.is_ascii_digit()).next()
+            && let Ok(num) = num_str.parse::<u32>()
+            && num > 0
+            && num < 100
+        {
+            multiplier *= (num as f64) / 10.0;
         }
 
         multiplier

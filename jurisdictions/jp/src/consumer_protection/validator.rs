@@ -55,20 +55,19 @@ pub fn validate_consumer_contract(contract: &ConsumerContract) -> Result<()> {
     }
 
     // Check cancellation policy if present (Article 9)
-    if let Some(cancellation) = &contract.cancellation_policy {
-        if cancellation.is_fee_excessive(contract.contract_amount_jpy) {
-            let percentage = if let Some(pct) = cancellation.cancellation_fee_percentage {
-                pct * 100.0
-            } else {
-                (cancellation.cancellation_fee_jpy as f64 / contract.contract_amount_jpy as f64)
-                    * 100.0
-            };
+    if let Some(cancellation) = &contract.cancellation_policy
+        && cancellation.is_fee_excessive(contract.contract_amount_jpy)
+    {
+        let percentage = if let Some(pct) = cancellation.cancellation_fee_percentage {
+            pct * 100.0
+        } else {
+            (cancellation.cancellation_fee_jpy as f64 / contract.contract_amount_jpy as f64) * 100.0
+        };
 
-            return Err(ConsumerProtectionError::ExcessiveCancellationFee {
-                fee: cancellation.cancellation_fee_jpy,
-                percentage,
-            });
-        }
+        return Err(ConsumerProtectionError::ExcessiveCancellationFee {
+            fee: cancellation.cancellation_fee_jpy,
+            percentage,
+        });
     }
 
     // Check penalty clause if present (Article 9)
@@ -105,32 +104,30 @@ pub fn validate_contract_term(term: &ContractTerm) -> Result<()> {
     }
 
     // Check if term is marked as potentially unfair
-    if term.potentially_unfair {
-        if let Some(unfair_type) = term.unfair_type {
-            return match unfair_type {
-                UnfairTermType::FullExemption => {
-                    Err(ConsumerProtectionError::FullExemptionClause {
-                        description: format!("Term {}: {}", term.term_number, term.text),
-                    })
-                }
-                UnfairTermType::PartialExemption => {
-                    Err(ConsumerProtectionError::PartialExemptionClause {
-                        description: format!("Term {}: {}", term.term_number, term.text),
-                    })
-                }
-                UnfairTermType::ConsumerDisadvantage => {
-                    Err(ConsumerProtectionError::ConsumerDisadvantageClause {
-                        description: format!("Term {}: {}", term.term_number, term.text),
-                    })
-                }
-                UnfairTermType::UnreasonableBurden => {
-                    Err(ConsumerProtectionError::UnreasonableBurden {
-                        description: format!("Term {}: {}", term.term_number, term.text),
-                    })
-                }
-                _ => Ok(()), // Already handled via other checks
-            };
-        }
+    if term.potentially_unfair
+        && let Some(unfair_type) = term.unfair_type
+    {
+        return match unfair_type {
+            UnfairTermType::FullExemption => Err(ConsumerProtectionError::FullExemptionClause {
+                description: format!("Term {}: {}", term.term_number, term.text),
+            }),
+            UnfairTermType::PartialExemption => {
+                Err(ConsumerProtectionError::PartialExemptionClause {
+                    description: format!("Term {}: {}", term.term_number, term.text),
+                })
+            }
+            UnfairTermType::ConsumerDisadvantage => {
+                Err(ConsumerProtectionError::ConsumerDisadvantageClause {
+                    description: format!("Term {}: {}", term.term_number, term.text),
+                })
+            }
+            UnfairTermType::UnreasonableBurden => {
+                Err(ConsumerProtectionError::UnreasonableBurden {
+                    description: format!("Term {}: {}", term.term_number, term.text),
+                })
+            }
+            _ => Ok(()), // Already handled via other checks
+        };
     }
 
     // Check risk score

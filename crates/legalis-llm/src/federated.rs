@@ -359,19 +359,19 @@ impl FederatedCoordinator {
             let mut initialized = false;
 
             for update in updates {
-                if let Some(params) = update.parameters.get(&key) {
-                    if let Some(node) = nodes.get(&update.node_id) {
-                        let weight = node.reputation / total_weight;
+                if let Some(params) = update.parameters.get(&key)
+                    && let Some(node) = nodes.get(&update.node_id)
+                {
+                    let weight = node.reputation / total_weight;
 
-                        if !initialized {
-                            aggregated = vec![0.0; params.len()];
-                            initialized = true;
-                        }
+                    if !initialized {
+                        aggregated = vec![0.0; params.len()];
+                        initialized = true;
+                    }
 
-                        for (i, &val) in params.iter().enumerate() {
-                            if i < aggregated.len() {
-                                aggregated[i] += val * weight;
-                            }
+                    for (i, &val) in params.iter().enumerate() {
+                        if i < aggregated.len() {
+                            aggregated[i] += val * weight;
                         }
                     }
                 }

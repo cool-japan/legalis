@@ -363,14 +363,14 @@ impl VersionHistory {
         });
 
         // Current version
-        if let Some(ref current) = self.current_version {
-            if let Some(version) = self.get_version(current) {
-                triples.push(Triple {
-                    subject: self.dataset_uri.clone(),
-                    predicate: "dcterms:hasVersion".to_string(),
-                    object: RdfValue::Uri(version.uri.clone()),
-                });
-            }
+        if let Some(ref current) = self.current_version
+            && let Some(version) = self.get_version(current)
+        {
+            triples.push(Triple {
+                subject: self.dataset_uri.clone(),
+                predicate: "dcterms:hasVersion".to_string(),
+                object: RdfValue::Uri(version.uri.clone()),
+            });
         }
 
         // All versions

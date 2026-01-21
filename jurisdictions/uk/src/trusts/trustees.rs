@@ -10,27 +10,27 @@
 //!
 //! Trustees owe fiduciary duties to beneficiaries:
 //!
-//! ### 1. Duty of Care (Speight v Gaunt [1883])
+//! ### 1. Duty of Care (Speight v Gaunt \[1883\])
 //! Common law: Standard of an ordinary prudent business person
 //! Statutory: TA 2000 s.1 duty when exercising specified powers
 //!
-//! ### 2. Duty of Loyalty - No Conflict (Keech v Sandford [1726])
+//! ### 2. Duty of Loyalty - No Conflict (Keech v Sandford \[1726\])
 //! "Inflexible rule" - trustee cannot put themselves in position of conflict
 //! - Self-dealing rule: Cannot purchase trust property
 //! - Fair-dealing rule: Can deal with beneficiary if full disclosure
 //!
-//! ### 3. Duty Not to Profit (Boardman v Phipps [1967])
+//! ### 3. Duty Not to Profit (Boardman v Phipps \[1967\])
 //! No unauthorized profit from trust position
 //! Profit must be authorized by:
 //! - Trust instrument
 //! - Court order
 //! - Beneficiary consent (all beneficiaries, fully informed, sui juris)
 //!
-//! ### 4. Duty of Impartiality (Nestle v National Westminster Bank [1993])
+//! ### 4. Duty of Impartiality (Nestle v National Westminster Bank \[1993\])
 //! Fair treatment between life tenant and remainderman
 //! Must balance income vs capital preservation
 //!
-//! ## Irreducible Core (Armitage v Nurse [1998])
+//! ## Irreducible Core (Armitage v Nurse \[1998\])
 //!
 //! Trustee exemption clauses cannot exclude:
 //! - Duty to perform trust honestly and in good faith

@@ -151,17 +151,16 @@ impl SolidityImporter {
         if let Some(license_line) = source
             .lines()
             .find(|l| l.contains("SPDX-License-Identifier"))
+            && let Some(license) = license_line.split(':').nth(1)
         {
-            if let Some(license) = license_line.split(':').nth(1) {
-                contract.license = Some(license.trim().to_string());
-            }
+            contract.license = Some(license.trim().to_string());
         }
 
         // Extract pragma version
-        if let Some(pragma_line) = source.lines().find(|l| l.contains("pragma solidity")) {
-            if let Some(version) = pragma_line.split("solidity").nth(1) {
-                contract.solidity_version = version.trim().trim_end_matches(';').to_string();
-            }
+        if let Some(pragma_line) = source.lines().find(|l| l.contains("pragma solidity"))
+            && let Some(version) = pragma_line.split("solidity").nth(1)
+        {
+            contract.solidity_version = version.trim().trim_end_matches(';').to_string();
         }
 
         // Extract contract name
@@ -181,10 +180,11 @@ impl SolidityImporter {
         // Extract functions (simplified)
         for line in source.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("function ") && !trimmed.contains(';') {
-                if let Some(func) = self.parse_function_signature(trimmed) {
-                    contract.functions.push(func);
-                }
+            if trimmed.starts_with("function ")
+                && !trimmed.contains(';')
+                && let Some(func) = self.parse_function_signature(trimmed)
+            {
+                contract.functions.push(func);
             }
         }
 

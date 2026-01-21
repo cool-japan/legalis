@@ -124,8 +124,8 @@ pub fn validate_offer(offer: &Offer) -> Result<()> {
 /// Common law rule: Acceptance must be unqualified and match offer exactly.
 ///
 /// Case law:
-/// - Hyde v Wrench [1840]: Counter-offer destroys original offer
-/// - Adams v Lindsell [1818]: Postal rule - acceptance complete when posted
+/// - Hyde v Wrench \[1840\]: Counter-offer destroys original offer
+/// - Adams v Lindsell \[1818\]: Postal rule - acceptance complete when posted
 pub fn validate_acceptance(acceptance: &Acceptance, offer: &Offer) -> Result<()> {
     // Mirror image rule: acceptance must be unqualified
     if !acceptance.is_valid_acceptance() {
@@ -148,11 +148,11 @@ pub fn validate_acceptance(acceptance: &Acceptance, offer: &Offer) -> Result<()>
 /// Validate consideration
 ///
 /// Requirements:
-/// - Must be sufficient (but need not be adequate) - Chappell v Nestlé [1960]
-/// - Must not be past - Re McArdle [1951]
-/// - Must move from promisee - Tweddle v Atkinson [1861]
+/// - Must be sufficient (but need not be adequate) - Chappell v Nestlé \[1960\]
+/// - Must not be past - Re McArdle \[1951\]
+/// - Must move from promisee - Tweddle v Atkinson \[1861\]
 ///
-/// Exception: Practical benefit may suffice - Williams v Roffey Bros [1991]
+/// Exception: Practical benefit may suffice - Williams v Roffey Bros \[1991\]
 pub fn validate_consideration(consideration: &Consideration) -> Result<()> {
     // Check for past consideration
     if consideration.is_past {
@@ -180,8 +180,8 @@ pub fn validate_consideration(consideration: &Consideration) -> Result<()> {
 /// Validate intention to create legal relations
 ///
 /// Presumptions:
-/// - Commercial context: Intention presumed (Esso v Commissioners [1976])
-/// - Domestic/social context: No intention presumed (Balfour v Balfour [1919])
+/// - Commercial context: Intention presumed (Esso v Commissioners \[1976\])
+/// - Domestic/social context: No intention presumed (Balfour v Balfour \[1919\])
 ///
 /// Presumptions are rebuttable with evidence
 pub fn validate_intention(intention: &IntentionToCreateLegalRelations) -> Result<()> {
@@ -301,7 +301,7 @@ pub fn validate_breach(breach: &ContractBreach) -> Result<()> {
 
 /// Validate remoteness of damages (Hadley v Baxendale test)
 ///
-/// Case law: Hadley v Baxendale [1854]
+/// Case law: Hadley v Baxendale \[1854\]
 /// Two limbs:
 /// 1. Loss arising naturally in ordinary course
 /// 2. Loss reasonably in contemplation of both parties

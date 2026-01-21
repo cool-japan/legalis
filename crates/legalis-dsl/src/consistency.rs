@@ -163,15 +163,15 @@ impl ConsistencyChecker {
                     let statute_jurisdiction = self.extract_jurisdiction(statute);
                     let required_jurisdiction = self.extract_jurisdiction(required_statute);
 
-                    if let (Some(j1), Some(j2)) = (statute_jurisdiction, required_jurisdiction) {
-                        if j1 != j2 {
-                            self.issues.push(ConsistencyIssue::JurisdictionMismatch {
-                                statute: id.clone(),
-                                jurisdiction: j1,
-                                dependent: required.clone(),
-                                dependent_jurisdiction: j2,
-                            });
-                        }
+                    if let (Some(j1), Some(j2)) = (statute_jurisdiction, required_jurisdiction)
+                        && j1 != j2
+                    {
+                        self.issues.push(ConsistencyIssue::JurisdictionMismatch {
+                            statute: id.clone(),
+                            jurisdiction: j1,
+                            dependent: required.clone(),
+                            dependent_jurisdiction: j2,
+                        });
                     }
                 }
             }
@@ -217,23 +217,23 @@ impl ConsistencyChecker {
 
         // Check for contradictions
         for (field, (op1, val1)) in &fields1 {
-            if let Some((op2, val2)) = fields2.get(field) {
-                if self.are_contradictory(op1, val1, op2, val2) {
-                    self.issues.push(ConsistencyIssue::ContradictoryConditions {
-                        statute1: s1.id.clone(),
-                        statute2: s2.id.clone(),
-                        field: field.clone(),
-                        description: format!(
-                            "{} requires {} {} but {} requires {} {}",
-                            s1.id,
-                            field,
-                            self.format_condition(op1, val1),
-                            s2.id,
-                            field,
-                            self.format_condition(op2, val2)
-                        ),
-                    });
-                }
+            if let Some((op2, val2)) = fields2.get(field)
+                && self.are_contradictory(op1, val1, op2, val2)
+            {
+                self.issues.push(ConsistencyIssue::ContradictoryConditions {
+                    statute1: s1.id.clone(),
+                    statute2: s2.id.clone(),
+                    field: field.clone(),
+                    description: format!(
+                        "{} requires {} {} but {} requires {} {}",
+                        s1.id,
+                        field,
+                        self.format_condition(op1, val1),
+                        s2.id,
+                        field,
+                        self.format_condition(op2, val2)
+                    ),
+                });
             }
         }
     }

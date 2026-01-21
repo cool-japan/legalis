@@ -10,7 +10,7 @@
 //! - Defective performance
 //! - Incomplete performance
 //!
-//! ### Anticipatory Breach (Hochster v De La Tour [1853])
+//! ### Anticipatory Breach (Hochster v De La Tour \[1853\])
 //! Breach occurs before performance due when party:
 //! - Expressly renounces obligations
 //! - By conduct renders performance impossible
@@ -27,7 +27,7 @@
 //!
 //! ## Election
 //!
-//! When repudiatory breach occurs, innocent party must elect (Vitol v Norelf [1996]):
+//! When repudiatory breach occurs, innocent party must elect (Vitol v Norelf \[1996\]):
 //!
 //! ### Terminate
 //! - Accept repudiation
@@ -38,14 +38,14 @@
 //! ### Affirm
 //! - Continue with contract
 //! - Await performance/further breach
-//! - Contract remains alive for both parties (White & Carter v McGregor [1962])
+//! - Contract remains alive for both parties (White & Carter v McGregor \[1962\])
 //!
 //! ## Affirmation
 //!
 //! Once elected to affirm, cannot later terminate for same breach:
 //! - Must have knowledge of breach and right to terminate
 //! - Conduct must be unequivocal
-//! - Mere lapse of time may indicate affirmation (Yukong Line v Rendsburg [1998])
+//! - Mere lapse of time may indicate affirmation (Yukong Line v Rendsburg \[1998\])
 
 use serde::{Deserialize, Serialize};
 

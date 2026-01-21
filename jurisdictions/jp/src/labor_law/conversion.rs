@@ -218,16 +218,16 @@ impl IndefiniteConversionBuilder {
     /// ```
     pub fn build(self) -> Result<EmploymentContract> {
         // Check for adverse changes (不利益変更チェック)
-        if let Some(new_wage) = self.new_base_wage {
-            if new_wage < self.original_contract.base_wage_jpy {
-                return Err(LaborLawError::AdverseChange {
-                    field: "base_wage_jpy".to_string(),
-                    reason: format!(
-                        "New wage ¥{} is lower than original ¥{}",
-                        new_wage, self.original_contract.base_wage_jpy
-                    ),
-                });
-            }
+        if let Some(new_wage) = self.new_base_wage
+            && new_wage < self.original_contract.base_wage_jpy
+        {
+            return Err(LaborLawError::AdverseChange {
+                field: "base_wage_jpy".to_string(),
+                reason: format!(
+                    "New wage ¥{} is lower than original ¥{}",
+                    new_wage, self.original_contract.base_wage_jpy
+                ),
+            });
         }
 
         // Create new indefinite-term contract

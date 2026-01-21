@@ -245,29 +245,29 @@ impl TaintAnalyzer {
             | ConditionNode::Matches { field, .. }
             | ConditionNode::InRange { field, .. }
             | ConditionNode::NotInRange { field, .. } => {
-                if let Some(categories) = self.config.tainted_fields.get(field) {
-                    if seen.insert(field.clone()) {
-                        let mut sources = HashSet::new();
-                        sources.insert(statute_id.to_string());
-                        taints.push(TaintInfo {
-                            field: field.clone(),
-                            categories: categories.clone(),
-                            sources,
-                        });
-                    }
+                if let Some(categories) = self.config.tainted_fields.get(field)
+                    && seen.insert(field.clone())
+                {
+                    let mut sources = HashSet::new();
+                    sources.insert(statute_id.to_string());
+                    taints.push(TaintInfo {
+                        field: field.clone(),
+                        categories: categories.clone(),
+                        sources,
+                    });
                 }
             }
             ConditionNode::HasAttribute { key } => {
-                if let Some(categories) = self.config.tainted_fields.get(key) {
-                    if seen.insert(key.clone()) {
-                        let mut sources = HashSet::new();
-                        sources.insert(statute_id.to_string());
-                        taints.push(TaintInfo {
-                            field: key.clone(),
-                            categories: categories.clone(),
-                            sources,
-                        });
-                    }
+                if let Some(categories) = self.config.tainted_fields.get(key)
+                    && seen.insert(key.clone())
+                {
+                    let mut sources = HashSet::new();
+                    sources.insert(statute_id.to_string());
+                    taints.push(TaintInfo {
+                        field: key.clone(),
+                        categories: categories.clone(),
+                        sources,
+                    });
                 }
             }
             ConditionNode::And(left, right) | ConditionNode::Or(left, right) => {

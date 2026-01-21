@@ -333,10 +333,10 @@ impl RbacManager {
 
     /// Removes a role.
     pub fn remove_role(&mut self, role_id: &str) -> Result<(), String> {
-        if let Some(role) = self.roles.get(role_id) {
-            if role.system_role {
-                return Err("Cannot remove system role".to_string());
-            }
+        if let Some(role) = self.roles.get(role_id)
+            && role.system_role
+        {
+            return Err("Cannot remove system role".to_string());
         }
 
         self.roles.remove(role_id);
@@ -430,10 +430,10 @@ impl RbacManager {
 
         // Check role permissions (fallback)
         for role_id in &all_roles {
-            if let Some(role) = self.roles.get(role_id) {
-                if role.has_permission(permission) {
-                    return true;
-                }
+            if let Some(role) = self.roles.get(role_id)
+                && role.has_permission(permission)
+            {
+                return true;
             }
         }
 

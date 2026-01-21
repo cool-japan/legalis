@@ -105,10 +105,10 @@ impl RegMLImporter {
         };
 
         // Extract title
-        if let Some(start) = source.find("<title>") {
-            if let Some(end) = source[start..].find("</title>") {
-                doc.metadata.title = source[start + 7..start + end].trim().to_string();
-            }
+        if let Some(start) = source.find("<title>")
+            && let Some(end) = source[start..].find("</title>")
+        {
+            doc.metadata.title = source[start + 7..start + end].trim().to_string();
         }
 
         // Extract provisions
@@ -128,20 +128,19 @@ impl RegMLImporter {
                 };
 
                 // Extract ID
-                if let Some(id_start) = prov_content.find("id=\"") {
-                    if let Some(id_end) = prov_content[id_start + 4..].find('"') {
-                        provision.id =
-                            prov_content[id_start + 4..id_start + 4 + id_end].to_string();
-                    }
+                if let Some(id_start) = prov_content.find("id=\"")
+                    && let Some(id_end) = prov_content[id_start + 4..].find('"')
+                {
+                    provision.id = prov_content[id_start + 4..id_start + 4 + id_end].to_string();
                 }
 
                 // Extract text
-                if let Some(text_start) = prov_content.find("<text>") {
-                    if let Some(text_end) = prov_content[text_start..].find("</text>") {
-                        provision.text = prov_content[text_start + 6..text_start + text_end]
-                            .trim()
-                            .to_string();
-                    }
+                if let Some(text_start) = prov_content.find("<text>")
+                    && let Some(text_end) = prov_content[text_start..].find("</text>")
+                {
+                    provision.text = prov_content[text_start + 6..text_start + text_end]
+                        .trim()
+                        .to_string();
                 }
 
                 doc.provisions.push(provision);

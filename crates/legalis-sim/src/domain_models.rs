@@ -390,14 +390,14 @@ impl BenefitPreset {
             ));
         }
 
-        if let Some(asset_limit) = self.asset_threshold {
-            if assets > asset_limit {
-                eligible = false;
-                reasons.push(format!(
-                    "Assets ${} exceed threshold ${}",
-                    assets, asset_limit
-                ));
-            }
+        if let Some(asset_limit) = self.asset_threshold
+            && assets > asset_limit
+        {
+            eligible = false;
+            reasons.push(format!(
+                "Assets ${} exceed threshold ${}",
+                assets, asset_limit
+            ));
         }
 
         let benefit_amount = if eligible {

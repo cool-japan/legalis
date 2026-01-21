@@ -206,12 +206,12 @@ pub fn validate_copyrighted_work(work: &CopyrightedWork) -> Result<()> {
     }
 
     // Validate dates
-    if let Some(pub_date) = work.first_publication_date {
-        if pub_date < work.creation_date {
-            return Err(IntellectualPropertyError::InvalidDate {
-                reason: "Publication date cannot be before creation date".to_string(),
-            });
-        }
+    if let Some(pub_date) = work.first_publication_date
+        && pub_date < work.creation_date
+    {
+        return Err(IntellectualPropertyError::InvalidDate {
+            reason: "Publication date cannot be before creation date".to_string(),
+        });
     }
 
     Ok(())

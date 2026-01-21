@@ -152,11 +152,11 @@ impl AmendmentChain {
             }
 
             // Add diff summary if not the first version
-            if i > 0 {
-                if let Ok(d) = diff(&self.versions[i - 1].statute, &self.versions[i].statute) {
-                    output.push_str(&format!("  │ Changes: {}\n", d.changes.len()));
-                    output.push_str(&format!("  │ Severity: {:?}\n", d.impact.severity));
-                }
+            if i > 0
+                && let Ok(d) = diff(&self.versions[i - 1].statute, &self.versions[i].statute)
+            {
+                output.push_str(&format!("  │ Changes: {}\n", d.changes.len()));
+                output.push_str(&format!("  │ Severity: {:?}\n", d.impact.severity));
             }
 
             if i < self.versions.len() - 1 {

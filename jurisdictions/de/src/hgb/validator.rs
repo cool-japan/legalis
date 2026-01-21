@@ -103,14 +103,14 @@ pub fn validate_partner(partner: &Partner) -> Result<()> {
     }
 
     // Validate contribution amounts if specified
-    if let (Some(contribution), Some(paid)) = (&partner.contribution, &partner.contribution_paid) {
-        if paid.amount_cents > contribution.amount_cents {
-            return Err(HGBError::ContributionPaidExceedsObligation {
-                name: partner.name.clone(),
-                paid: paid.to_euros(),
-                contribution: contribution.to_euros(),
-            });
-        }
+    if let (Some(contribution), Some(paid)) = (&partner.contribution, &partner.contribution_paid)
+        && paid.amount_cents > contribution.amount_cents
+    {
+        return Err(HGBError::ContributionPaidExceedsObligation {
+            name: partner.name.clone(),
+            paid: paid.to_euros(),
+            contribution: contribution.to_euros(),
+        });
     }
 
     Ok(())

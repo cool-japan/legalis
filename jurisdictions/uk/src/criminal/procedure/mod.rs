@@ -599,11 +599,11 @@ impl InterviewAnalyzer {
             }
         }
 
-        if let Some(aa) = &facts.appropriate_adult {
-            if !aa.present {
-                grounds.push(ExclusionGround::CodeBreach { code: "C".into() });
-                parts.push("Appropriate adult NOT present (BREACH)".into());
-            }
+        if let Some(aa) = &facts.appropriate_adult
+            && !aa.present
+        {
+            grounds.push(ExclusionGround::CodeBreach { code: "C".into() });
+            parts.push("Appropriate adult NOT present (BREACH)".into());
         }
 
         parts.join("; ")

@@ -227,17 +227,17 @@ impl ResponseValidator {
         schema: &serde_json::Value,
     ) -> TestResult<()> {
         // Simple schema validation
-        if let Some(required) = schema.get("required") {
-            if let Some(required_fields) = required.as_array() {
-                for field in required_fields {
-                    if let Some(field_name) = field.as_str() {
-                        if response.get(field_name).is_none() {
-                            return Err(TestError::ValidationFailed(format!(
-                                "Missing required field: {}",
-                                field_name
-                            )));
-                        }
-                    }
+        if let Some(required) = schema.get("required")
+            && let Some(required_fields) = required.as_array()
+        {
+            for field in required_fields {
+                if let Some(field_name) = field.as_str()
+                    && response.get(field_name).is_none()
+                {
+                    return Err(TestError::ValidationFailed(format!(
+                        "Missing required field: {}",
+                        field_name
+                    )));
                 }
             }
         }

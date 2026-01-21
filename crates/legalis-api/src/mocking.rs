@@ -101,17 +101,17 @@ impl RequestMatcher {
         body: Option<&serde_json::Value>,
     ) -> bool {
         // Check path
-        if let Some(pattern) = &self.path {
-            if !self.path_matches(pattern, path) {
-                return false;
-            }
+        if let Some(pattern) = &self.path
+            && !self.path_matches(pattern, path)
+        {
+            return false;
         }
 
         // Check method
-        if let Some(expected_method) = &self.method {
-            if expected_method != method {
-                return false;
-            }
+        if let Some(expected_method) = &self.method
+            && expected_method != method
+        {
+            return false;
         }
 
         // Check headers

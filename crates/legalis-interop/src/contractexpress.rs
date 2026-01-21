@@ -10,7 +10,7 @@
 //! - Data questionnaires
 //! - Answer files (XML)
 //!
-//! Reference: https://www.contractexpress.com/
+//! Reference: <https://www.contractexpress.com/>
 
 use crate::{ConversionReport, FormatExporter, FormatImporter, InteropResult, LegalFormat};
 use legalis_core::{Condition, Effect, EffectType, Statute};
@@ -80,15 +80,14 @@ impl ContractExpressImporter {
                 // Parse age conditions
                 if cond_str.to_lowercase().contains("age") {
                     let age_re = Regex::new(r"age\s*>=\s*(\d+)").unwrap();
-                    if let Some(age_cap) = age_re.captures(cond_str) {
-                        if let Some(age_str) = age_cap.get(1) {
-                            if let Ok(age_val) = age_str.as_str().parse::<u32>() {
-                                conditions.push(Condition::Age {
-                                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                                    value: age_val,
-                                });
-                            }
-                        }
+                    if let Some(age_cap) = age_re.captures(cond_str)
+                        && let Some(age_str) = age_cap.get(1)
+                        && let Ok(age_val) = age_str.as_str().parse::<u32>()
+                    {
+                        conditions.push(Condition::Age {
+                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                            value: age_val,
+                        });
                     }
                 }
             }

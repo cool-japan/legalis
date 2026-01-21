@@ -166,10 +166,10 @@ pub fn validate_company_formation(company: &Company) -> Result<ValidationReport>
             .nric_fin
             .clone()
             .or_else(|| director.passport.clone());
-        if let Some(id) = id {
-            if !director_ids.insert(id.clone()) {
-                report.add_error(format!("Duplicate director identification: '{}'", id));
-            }
+        if let Some(id) = id
+            && !director_ids.insert(id.clone())
+        {
+            report.add_error(format!("Duplicate director identification: '{}'", id));
         }
     }
 
@@ -179,15 +179,15 @@ pub fn validate_company_formation(company: &Company) -> Result<ValidationReport>
     }
 
     // 8. Validate shareholder count for private limited companies
-    if let Some(max) = company.company_type.max_shareholders() {
-        if company.shareholder_count() > max {
-            report.add_error(format!(
-                "Too many shareholders: {} (max: {}) (CA s. 18(1))",
-                company.shareholder_count(),
-                max
-            ));
-            report.add_legal_reference("CA s. 18(1)");
-        }
+    if let Some(max) = company.company_type.max_shareholders()
+        && company.shareholder_count() > max
+    {
+        report.add_error(format!(
+            "Too many shareholders: {} (max: {}) (CA s. 18(1))",
+            company.shareholder_count(),
+            max
+        ));
+        report.add_legal_reference("CA s. 18(1)");
     }
 
     // 9. Validate share capital consistency
@@ -434,15 +434,14 @@ pub fn validate_share_capital(share_capital: &ShareCapital) -> Result<()> {
     }
 
     // Check authorized capital (if par value shares)
-    if share_capital.has_par_value {
-        if let Some(authorized) = share_capital.authorized_capital_cents {
-            if share_capital.paid_up_capital_cents > authorized {
-                return Err(CompaniesError::AllotmentExceedsAuthorized {
-                    allotment: share_capital.paid_up_sgd(),
-                    authorized: authorized as f64 / 100.0,
-                });
-            }
-        }
+    if share_capital.has_par_value
+        && let Some(authorized) = share_capital.authorized_capital_cents
+        && share_capital.paid_up_capital_cents > authorized
+    {
+        return Err(CompaniesError::AllotmentExceedsAuthorized {
+            allotment: share_capital.paid_up_sgd(),
+            authorized: authorized as f64 / 100.0,
+        });
     }
 
     // Validate share classes

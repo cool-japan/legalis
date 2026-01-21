@@ -167,14 +167,16 @@ impl HomicideAnalyzer {
 
         if murder_mens_rea {
             // Check provocation (reduces murder to manslaughter)
-            if let Some(prov) = &facts.provocation {
-                if prov.sudden && prov.objective_test && prov.subjective_test {
-                    return (
-                        Some(HomicideType::Manslaughter),
-                        true,
-                        "Murder reduced to manslaughter by provocation (s.232)".to_string(),
-                    );
-                }
+            if let Some(prov) = &facts.provocation
+                && prov.sudden
+                && prov.objective_test
+                && prov.subjective_test
+            {
+                return (
+                    Some(HomicideType::Manslaughter),
+                    true,
+                    "Murder reduced to manslaughter by provocation (s.232)".to_string(),
+                );
             }
 
             // Check for first degree murder
@@ -221,10 +223,11 @@ impl HomicideAnalyzer {
     /// Determine if first degree murder
     fn is_first_degree(facts: &HomicideFacts) -> bool {
         // Planned and deliberate
-        if let Some(pd) = &facts.planned_deliberate {
-            if pd.time_to_reflect && !pd.planning_evidence.is_empty() {
-                return true;
-            }
+        if let Some(pd) = &facts.planned_deliberate
+            && pd.time_to_reflect
+            && !pd.planning_evidence.is_empty()
+        {
+            return true;
         }
 
         // Statutory first degree factors

@@ -74,12 +74,12 @@ impl<T: Clone> ParseCache<T> {
     pub fn get(&mut self, key: &CacheKey) -> Option<T> {
         if let Some(entry) = self.cache.get_mut(key) {
             // Check if entry has expired
-            if let Some(max_age) = self.max_age {
-                if entry.created_at.elapsed() > max_age {
-                    self.cache.remove(key);
-                    self.misses += 1;
-                    return None;
-                }
+            if let Some(max_age) = self.max_age
+                && entry.created_at.elapsed() > max_age
+            {
+                self.cache.remove(key);
+                self.misses += 1;
+                return None;
             }
 
             // Update access count

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Configuration for ServiceNow API.
 #[derive(Debug, Clone, Default)]
 pub struct ServiceNowConfig {
-    /// ServiceNow instance URL (e.g., "https://instance.service-now.com")
+    /// ServiceNow instance URL (e.g., "<https://instance.service-now.com>")
     pub instance_url: String,
     /// Username for basic authentication
     pub username: String,

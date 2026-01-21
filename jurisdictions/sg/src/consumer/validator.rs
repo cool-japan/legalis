@@ -95,24 +95,24 @@ pub fn detect_unfair_practices(contract: &ConsumerContract) -> Vec<UnfairPractic
 /// Validates a sale of goods contract
 pub fn validate_sale_of_goods(sale: &SaleOfGoods) -> Result<()> {
     // Check if goods are defective
-    if sale.is_defective {
-        if let Some(ref defect) = sale.defect_description {
-            // Check if Lemon Law applies
-            if sale.is_lemon_law_applicable() {
-                return Err(ConsumerError::DefectDiscovered {
-                    description: defect.clone(),
-                });
-            }
+    if sale.is_defective
+        && let Some(ref defect) = sale.defect_description
+    {
+        // Check if Lemon Law applies
+        if sale.is_lemon_law_applicable() {
+            return Err(ConsumerError::DefectDiscovered {
+                description: defect.clone(),
+            });
+        }
 
-            // Check implied terms
-            if sale
-                .implied_terms
-                .contains(&ImpliedTerm::MerchantableQuality)
-            {
-                return Err(ConsumerError::NotMerchantable {
-                    description: defect.clone(),
-                });
-            }
+        // Check implied terms
+        if sale
+            .implied_terms
+            .contains(&ImpliedTerm::MerchantableQuality)
+        {
+            return Err(ConsumerError::NotMerchantable {
+                description: defect.clone(),
+            });
         }
     }
 

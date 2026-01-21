@@ -26,6 +26,7 @@
 pub mod defamation;
 pub mod error;
 pub mod negligence;
+pub mod product_liability;
 pub mod types;
 
 pub use defamation::{
@@ -43,6 +44,44 @@ pub use types::{
     ImputationType, MentalHarmCategory, NovusActus, NuisanceDefence, NuisanceInterference,
     NuisanceType, ObviousRisk, RecognizedDuty, SalientFeature, StandardOfCareFactor,
     TortDamagesType,
+};
+
+// Re-export product liability types
+pub use product_liability::{
+    ContributoryNegligence,
+    DamagesAssessment,
+    DefectAssessment,
+    // Defect
+    DefectType,
+    // Harm
+    HarmSuffered,
+    HarmType,
+    Injury,
+    InjurySeverity,
+    // Parties
+    LiabilityBasis,
+    // Limitation
+    LimitationAnalysis,
+    // Product
+    ManufacturerDetails,
+    PlaintiffDetails,
+    PotentialDefendant,
+    Product,
+    ProductCategory,
+    ProductDefect,
+    ProductLiabilityAssessment,
+    ProductLiabilityDefence,
+    ProductLiabilityElements,
+    ProductLiabilityFacts,
+    PropertyDamage,
+    RecoverableLoss,
+    SafetyExpectation,
+    SafetyFactor,
+    SafetyStandard,
+    SupplyChainRole,
+    // Assessment
+    assess_product_defect,
+    assess_product_liability,
 };
 
 use crate::common::StateTerritory;

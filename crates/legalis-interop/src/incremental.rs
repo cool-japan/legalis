@@ -221,54 +221,55 @@ impl IncrementalConverter {
         let (new_statutes, mut import_report) = self.converter.import(source, source_format)?;
 
         // Check if we have previous state
-        if let Some(state) = &self.state {
-            if state.source_format == source_format && state.target_format == target_format {
-                // Compute diff
-                let diff = StatuteDiff::compute(&state.last_statutes, &new_statutes);
+        if let Some(state) = &self.state
+            && state.source_format == source_format
+            && state.target_format == target_format
+        {
+            // Compute diff
+            let diff = StatuteDiff::compute(&state.last_statutes, &new_statutes);
 
-                if !diff.has_changes() {
-                    // No changes, return cached output
-                    return Ok((state.last_output.clone(), state.last_report.clone(), diff));
-                }
-
-                // Only convert changed statutes
-                let changed_statutes: Vec<_> = diff
-                    .changes
-                    .iter()
-                    .filter_map(|change| match change.change_type {
-                        ChangeType::Added | ChangeType::Modified => change.new_statute.clone(),
-                        _ => None,
-                    })
-                    .collect();
-
-                // Convert changed statutes
-                let (_partial_output, export_report) =
-                    self.converter.export(&changed_statutes, target_format)?;
-
-                // Merge reports
-                import_report.target_format = Some(target_format);
-                import_report
-                    .unsupported_features
-                    .extend(export_report.unsupported_features);
-                import_report.warnings.extend(export_report.warnings);
-                import_report.confidence =
-                    (import_report.confidence * export_report.confidence).max(0.0);
-
-                // For now, we do a full conversion of all statutes
-                // A more sophisticated implementation would merge the partial output
-                let (full_output, _) = self.converter.export(&new_statutes, target_format)?;
-
-                // Update state
-                self.state = Some(IncrementalState::new(
-                    source_format,
-                    target_format,
-                    new_statutes,
-                    full_output.clone(),
-                    import_report.clone(),
-                ));
-
-                return Ok((full_output, import_report, diff));
+            if !diff.has_changes() {
+                // No changes, return cached output
+                return Ok((state.last_output.clone(), state.last_report.clone(), diff));
             }
+
+            // Only convert changed statutes
+            let changed_statutes: Vec<_> = diff
+                .changes
+                .iter()
+                .filter_map(|change| match change.change_type {
+                    ChangeType::Added | ChangeType::Modified => change.new_statute.clone(),
+                    _ => None,
+                })
+                .collect();
+
+            // Convert changed statutes
+            let (_partial_output, export_report) =
+                self.converter.export(&changed_statutes, target_format)?;
+
+            // Merge reports
+            import_report.target_format = Some(target_format);
+            import_report
+                .unsupported_features
+                .extend(export_report.unsupported_features);
+            import_report.warnings.extend(export_report.warnings);
+            import_report.confidence =
+                (import_report.confidence * export_report.confidence).max(0.0);
+
+            // For now, we do a full conversion of all statutes
+            // A more sophisticated implementation would merge the partial output
+            let (full_output, _) = self.converter.export(&new_statutes, target_format)?;
+
+            // Update state
+            self.state = Some(IncrementalState::new(
+                source_format,
+                target_format,
+                new_statutes,
+                full_output.clone(),
+                import_report.clone(),
+            ));
+
+            return Ok((full_output, import_report, diff));
         }
 
         // No previous state or format mismatch - do full conversion

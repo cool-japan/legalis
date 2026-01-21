@@ -1,0 +1,22 @@
+[package]
+name = "legalis-br"
+version.workspace = true
+description = "Brazilian law library - CDC, CLT, LGPD, Civil Code, Corporate Law"
+edition.workspace = true
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-br"
+keywords = ["legalis", "brazil", "civil-law", "cdc", "lgpd"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []
+
+[dev-dependencies]

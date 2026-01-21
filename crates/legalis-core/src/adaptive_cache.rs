@@ -340,7 +340,11 @@ where
 
     /// Checks if the policy should be adapted based on performance.
     fn maybe_adapt_policy(&mut self) {
-        if self.stats.total_requests() % self.adaptation_threshold != 0 {
+        if !self
+            .stats
+            .total_requests()
+            .is_multiple_of(self.adaptation_threshold)
+        {
             return;
         }
 

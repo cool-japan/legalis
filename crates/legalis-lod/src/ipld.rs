@@ -186,19 +186,18 @@ impl IpldStore {
             IpldData::Graph { triples } => {
                 let mut result = Vec::new();
                 for triple_cid in triples {
-                    if let Some(triple_node) = self.get(triple_cid) {
-                        if let IpldData::Triple {
+                    if let Some(triple_node) = self.get(triple_cid)
+                        && let IpldData::Triple {
                             subject,
                             predicate,
                             object,
                         } = &triple_node.data
-                        {
-                            result.push(Triple {
-                                subject: subject.clone(),
-                                predicate: predicate.clone(),
-                                object: ipld_value_to_rdf(object),
-                            });
-                        }
+                    {
+                        result.push(Triple {
+                            subject: subject.clone(),
+                            predicate: predicate.clone(),
+                            object: ipld_value_to_rdf(object),
+                        });
                     }
                 }
                 Ok(result)

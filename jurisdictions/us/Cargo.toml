@@ -3,10 +3,11 @@ name = "legalis-us"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "United States jurisdiction support for Legalis-RS (Common Law)"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+keywords = ["legalis", "usa", "common-law", "constitution", "ucc"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-us"
 
 [dependencies]
@@ -16,6 +17,7 @@ legalis-sim.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 uuid.workspace = true
 

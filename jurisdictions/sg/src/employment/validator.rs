@@ -78,10 +78,10 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<Val
     let mut report = ValidationReport::new();
 
     // 1. Validate contract dates
-    if let Some(end_date) = contract.end_date {
-        if end_date <= contract.start_date {
-            return Err(EmploymentError::InvalidContractDates);
-        }
+    if let Some(end_date) = contract.end_date
+        && end_date <= contract.start_date
+    {
+        return Err(EmploymentError::InvalidContractDates);
     }
 
     // 2. Set EA coverage from contract

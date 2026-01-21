@@ -271,14 +271,13 @@ impl SemanticValidator {
             ConditionNode::Between { min, max, .. } => {
                 if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) =
                     (min, max)
+                    && min_val >= max_val
                 {
-                    if min_val >= max_val {
-                        return Err(ValidationError::InvalidNumericRange {
-                            statute_id: statute_id.to_string(),
-                            min: *min_val,
-                            max: *max_val,
-                        });
-                    }
+                    return Err(ValidationError::InvalidNumericRange {
+                        statute_id: statute_id.to_string(),
+                        min: *min_val,
+                        max: *max_val,
+                    });
                 }
                 Ok(())
             }
@@ -291,16 +290,14 @@ impl SemanticValidator {
             } => {
                 if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) =
                     (min, max)
+                    && ((*inclusive_min && *inclusive_max && min_val >= max_val)
+                        || (!*inclusive_min && !*inclusive_max && *min_val >= max_val - 1))
                 {
-                    if (*inclusive_min && *inclusive_max && min_val >= max_val)
-                        || (!*inclusive_min && !*inclusive_max && *min_val >= max_val - 1)
-                    {
-                        return Err(ValidationError::InvalidNumericRange {
-                            statute_id: statute_id.to_string(),
-                            min: *min_val,
-                            max: *max_val,
-                        });
-                    }
+                    return Err(ValidationError::InvalidNumericRange {
+                        statute_id: statute_id.to_string(),
+                        min: *min_val,
+                        max: *max_val,
+                    });
                 }
                 Ok(())
             }
@@ -329,10 +326,10 @@ impl SemanticValidator {
         }
 
         // Validate date if present
-        if let Some(date_str) = &amendment.date {
-            if NaiveDate::parse_from_str(date_str, "%Y-%m-%d").is_err() {
-                // Just a warning, not a hard error
-            }
+        if let Some(date_str) = &amendment.date
+            && NaiveDate::parse_from_str(date_str, "%Y-%m-%d").is_err()
+        {
+            // Just a warning, not a hard error
         }
 
         Ok(())
@@ -597,15 +594,15 @@ impl DeadCodeDetector {
                     value: v2,
                 },
             ) => {
-                if f1 == f2 {
-                    if let (ConditionValue::Number(n1), ConditionValue::Number(n2)) = (v1, v2) {
-                        // Check for contradictions like (x > 5) AND (x < 3)
-                        if (op1 == ">" || op1 == ">=") && (op2 == "<" || op2 == "<=") {
-                            return n1 >= n2;
-                        }
-                        if (op1 == "<" || op1 == "<=") && (op2 == ">" || op2 == ">=") {
-                            return n1 <= n2;
-                        }
+                if f1 == f2
+                    && let (ConditionValue::Number(n1), ConditionValue::Number(n2)) = (v1, v2)
+                {
+                    // Check for contradictions like (x > 5) AND (x < 3)
+                    if (op1 == ">" || op1 == ">=") && (op2 == "<" || op2 == "<=") {
+                        return n1 >= n2;
+                    }
+                    if (op1 == "<" || op1 == "<=") && (op2 == ">" || op2 == ">=") {
+                        return n1 <= n2;
                     }
                 }
                 false

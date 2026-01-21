@@ -109,13 +109,14 @@ impl NationalLivingWageSimulator {
                 .get_attribute("region")
                 .unwrap_or_else(|| "england".to_string());
 
-            if let Some(wage) = wage_opt {
-                if wage < self.config.proposed_nlw && wage >= self.config.current_nlw {
-                    workers_affected += 1;
-                    let increase = self.config.proposed_nlw - wage;
-                    total_wage_increase += increase;
-                    *regional_impact.entry(region).or_insert(0.0) += increase;
-                }
+            if let Some(wage) = wage_opt
+                && wage < self.config.proposed_nlw
+                && wage >= self.config.current_nlw
+            {
+                workers_affected += 1;
+                let increase = self.config.proposed_nlw - wage;
+                total_wage_increase += increase;
+                *regional_impact.entry(region).or_insert(0.0) += increase;
             }
         }
 
@@ -418,13 +419,13 @@ impl WTRSimulator {
                 .get_attribute("sector")
                 .unwrap_or_else(|| "other".to_string());
 
-            if let Some(hours) = hours_opt {
-                if hours > self.config.max_weekly_hours as f64 {
-                    workers_exceeding += 1;
-                    let reduction = hours - self.config.max_weekly_hours as f64;
-                    total_hours_reduction += reduction;
-                    *sector_impact.entry(sector).or_insert(0.0) += reduction;
-                }
+            if let Some(hours) = hours_opt
+                && hours > self.config.max_weekly_hours as f64
+            {
+                workers_exceeding += 1;
+                let reduction = hours - self.config.max_weekly_hours as f64;
+                total_hours_reduction += reduction;
+                *sector_impact.entry(sector).or_insert(0.0) += reduction;
             }
         }
 
@@ -564,12 +565,12 @@ impl AnnualLeaveSimulator {
                 .get_attribute("leave_weeks")
                 .and_then(|s| s.parse().ok());
 
-            if let Some(weeks_granted) = weeks_granted_opt {
-                if weeks_granted < self.config.statutory_minimum_weeks {
-                    employers_not_meeting += 1;
-                    let additional_weeks = self.config.statutory_minimum_weeks - weeks_granted;
-                    total_additional_days += additional_weeks * 5.0; // Convert to days (5-day week)
-                }
+            if let Some(weeks_granted) = weeks_granted_opt
+                && weeks_granted < self.config.statutory_minimum_weeks
+            {
+                employers_not_meeting += 1;
+                let additional_weeks = self.config.statutory_minimum_weeks - weeks_granted;
+                total_additional_days += additional_weeks * 5.0; // Convert to days (5-day week)
             }
         }
 

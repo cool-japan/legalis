@@ -367,11 +367,11 @@ impl AuditStorage for PartitionedStorage {
         let mut latest_timestamp = None;
 
         for partition in self.partitions.values() {
-            if let Some(last_record) = partition.records.last() {
-                if latest_timestamp.is_none() || last_record.timestamp > latest_timestamp.unwrap() {
-                    latest_timestamp = Some(last_record.timestamp);
-                    last_hash = partition.last_hash.clone();
-                }
+            if let Some(last_record) = partition.records.last()
+                && (latest_timestamp.is_none() || last_record.timestamp > latest_timestamp.unwrap())
+            {
+                latest_timestamp = Some(last_record.timestamp);
+                last_hash = partition.last_hash.clone();
             }
         }
 

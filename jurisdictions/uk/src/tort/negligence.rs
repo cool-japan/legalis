@@ -1,10 +1,10 @@
 //! UK Negligence Law
 //!
 //! This module implements the law of negligence under common law, including:
-//! - Donoghue v Stevenson [1932] AC 562 (neighbour principle)
-//! - Caparo Industries v Dickman [1990] 2 AC 605 (three-stage test)
-//! - Bolam v Friern Hospital [1957] 1 WLR 582 (professional standard)
-//! - Bolitho v City and Hackney HA [1998] AC 232 (logical Bolam)
+//! - Donoghue v Stevenson \[1932\] AC 562 (neighbour principle)
+//! - Caparo Industries v Dickman \[1990\] 2 AC 605 (three-stage test)
+//! - Bolam v Friern Hospital \[1957\] 1 WLR 582 (professional standard)
+//! - Bolitho v City and Hackney HA \[1998\] AC 232 (logical Bolam)
 //! - Psychiatric injury (Alcock control mechanisms)
 //! - Pure economic loss (Hedley Byrne, Murphy)
 
@@ -114,16 +114,17 @@ impl NegligenceClaimAnalysis {
     /// Analyze the complete claim
     pub fn analyze(mut self) -> Result<Self, TortError> {
         // Check limitation first
-        if let Some(ref limitation) = self.limitation {
-            if limitation.time_barred && !limitation.section_33_discretion {
-                return Err(TortError::LimitationExpired {
-                    period: format!("{:?}", limitation.limitation_period),
-                    expired_date: limitation
-                        .accrual_date
-                        .map(|d| d.to_string())
-                        .unwrap_or_else(|| "unknown".to_string()),
-                });
-            }
+        if let Some(ref limitation) = self.limitation
+            && limitation.time_barred
+            && !limitation.section_33_discretion
+        {
+            return Err(TortError::LimitationExpired {
+                period: format!("{:?}", limitation.limitation_period),
+                expired_date: limitation
+                    .accrual_date
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+            });
         }
 
         // Check duty of care
@@ -149,18 +150,17 @@ impl NegligenceClaimAnalysis {
                     alternative_cause: self.causation.factual_causation.reasoning.clone(),
                 });
             }
-            if self.causation.chain_broken() {
-                if let Some(act) = self
+            if self.causation.chain_broken()
+                && let Some(act) = self
                     .causation
                     .intervening_acts
                     .iter()
                     .find(|a| a.breaks_chain)
-                {
-                    return Err(TortError::ChainOfCausationBroken {
-                        intervening_act: format!("{:?}", act.act_type),
-                        explanation: act.reasoning.clone(),
-                    });
-                }
+            {
+                return Err(TortError::ChainOfCausationBroken {
+                    intervening_act: format!("{:?}", act.act_type),
+                    explanation: act.reasoning.clone(),
+                });
             }
             if !self.causation.legal_causation.remoteness_satisfied {
                 return Err(TortError::DamageTooRemote {
@@ -202,13 +202,11 @@ impl NegligenceClaimAnalysis {
 
         // Apply contributory negligence reduction
         for defence in &self.defences {
-            if let DefenceType::ContributoryNegligence = defence.defence_type {
-                if defence.applies {
-                    if let super::types::DefenceEffect::ReducesDamages(percentage) = defence.effect
-                    {
-                        total_damages *= 1.0 - percentage;
-                    }
-                }
+            if let DefenceType::ContributoryNegligence = defence.defence_type
+                && defence.applies
+                && let super::types::DefenceEffect::ReducesDamages(percentage) = defence.effect
+            {
+                total_damages *= 1.0 - percentage;
             }
         }
 

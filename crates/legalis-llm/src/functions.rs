@@ -472,10 +472,10 @@ impl FunctionOrchestrator {
 
         for (name, mut args) in chain {
             // If args contains a special "$prev" key, replace it with the last result
-            if let Some(obj) = args.as_object_mut() {
-                if obj.contains_key("$prev") {
-                    obj.insert("$prev".to_string(), last_result.clone());
-                }
+            if let Some(obj) = args.as_object_mut()
+                && obj.contains_key("$prev")
+            {
+                obj.insert("$prev".to_string(), last_result.clone());
             }
 
             last_result = self.execute(&name, args)?;

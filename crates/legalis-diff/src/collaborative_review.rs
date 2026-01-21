@@ -451,10 +451,10 @@ impl NotificationSystem {
 
     /// Marks a notification as read.
     pub fn mark_read(&mut self, user_id: &str, notification_id: &str) {
-        if let Some(notifications) = self.notifications.get_mut(user_id) {
-            if let Some(notif) = notifications.iter_mut().find(|n| n.id == notification_id) {
-                notif.read = true;
-            }
+        if let Some(notifications) = self.notifications.get_mut(user_id)
+            && let Some(notif) = notifications.iter_mut().find(|n| n.id == notification_id)
+        {
+            notif.read = true;
         }
     }
 }

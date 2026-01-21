@@ -146,15 +146,15 @@ impl VersionHistory {
     /// Checks if a version was active on a specific date.
     pub fn is_active_on(&self, version_number: u32, date: &NaiveDate) -> bool {
         if let Some(version) = self.get_version(version_number) {
-            if let Some(effective) = &version.effective_date {
-                if date < effective {
-                    return false;
-                }
+            if let Some(effective) = &version.effective_date
+                && date < effective
+            {
+                return false;
             }
-            if let Some(expiry) = &version.expiry_date {
-                if date > expiry {
-                    return false;
-                }
+            if let Some(expiry) = &version.expiry_date
+                && date > expiry
+            {
+                return false;
             }
             true
         } else {

@@ -80,22 +80,21 @@ pub fn extract_version_from_request(req: &Request<Body>) -> ApiVersion {
     }
 
     // Try header-based versioning
-    if let Some(header_version) = req.headers().get("X-API-Version") {
-        if let Ok(version_str) = header_version.to_str() {
-            if let Ok(version) = ApiVersion::from_str(version_str) {
-                return version;
-            }
-        }
+    if let Some(header_version) = req.headers().get("X-API-Version")
+        && let Ok(version_str) = header_version.to_str()
+        && let Ok(version) = ApiVersion::from_str(version_str)
+    {
+        return version;
     }
 
     // Try Accept header versioning (e.g., application/vnd.legalis.v1+json)
-    if let Some(accept) = req.headers().get(header::ACCEPT) {
-        if let Ok(accept_str) = accept.to_str() {
-            if accept_str.contains(".v1+") {
-                return ApiVersion::V1;
-            } else if accept_str.contains(".v2+") {
-                return ApiVersion::V2;
-            }
+    if let Some(accept) = req.headers().get(header::ACCEPT)
+        && let Ok(accept_str) = accept.to_str()
+    {
+        if accept_str.contains(".v1+") {
+            return ApiVersion::V1;
+        } else if accept_str.contains(".v2+") {
+            return ApiVersion::V2;
         }
     }
 
@@ -109,10 +108,10 @@ fn extract_version_from_path(path: &str) -> Option<ApiVersion> {
     let parts: Vec<&str> = path.split('/').collect();
 
     for part in parts {
-        if part.starts_with('v') || part.starts_with('V') {
-            if let Ok(version) = ApiVersion::from_str(part) {
-                return Some(version);
-            }
+        if (part.starts_with('v') || part.starts_with('V'))
+            && let Ok(version) = ApiVersion::from_str(part)
+        {
+            return Some(version);
         }
     }
 
@@ -144,10 +143,10 @@ pub async fn version_headers_middleware(
                 .insert(header::WARNING, warning_value);
         }
 
-        if let Some(sunset) = version.sunset_date() {
-            if let Ok(sunset_value) = HeaderValue::from_str(sunset) {
-                response.headers_mut().insert("Sunset", sunset_value);
-            }
+        if let Some(sunset) = version.sunset_date()
+            && let Ok(sunset_value) = HeaderValue::from_str(sunset)
+        {
+            response.headers_mut().insert("Sunset", sunset_value);
         }
     }
 

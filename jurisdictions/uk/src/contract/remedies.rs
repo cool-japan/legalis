@@ -6,18 +6,18 @@
 //!
 //! The primary remedy for breach of contract.
 //!
-//! ### Purpose (Robinson v Harman [1848])
+//! ### Purpose (Robinson v Harman \[1848\])
 //! Put the claimant in the position they would have been in had the contract
 //! been properly performed (expectation interest).
 //!
-//! ### Remoteness (Hadley v Baxendale [1854])
+//! ### Remoteness (Hadley v Baxendale \[1854\])
 //! Damages only recoverable for losses that:
 //! - **Limb 1**: Arise naturally from the breach (in usual course of things)
 //! - **Limb 2**: Were in the reasonable contemplation of both parties at contract formation
 //!
 //! ### Mitigation
 //! Claimant must take reasonable steps to mitigate loss
-//! (British Westinghouse v Underground Electric Railways [1912])
+//! (British Westinghouse v Underground Electric Railways \[1912\])
 //!
 //! ### Measure of Damages
 //! - **Expectation**: What claimant expected to receive

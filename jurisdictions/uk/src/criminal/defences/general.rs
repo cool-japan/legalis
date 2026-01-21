@@ -8,8 +8,8 @@
 //! ## Complete Defences
 //! - Self-defence / Defence of another (common law + s.76 CJIA 2008)
 //! - Prevention of crime (s.3 CLA 1967)
-//! - Duress by threats (R v Hasan [2005])
-//! - Duress of circumstances (R v Conway [1989])
+//! - Duress by threats (R v Hasan \[2005\])
+//! - Duress of circumstances (R v Conway \[1989\])
 //! - Necessity (limited recognition)
 //! - Consent (limited application)
 //! - Automatism (non-insane)
@@ -423,30 +423,30 @@ impl DuressAnalyzer {
         }
 
         // Check voluntary association
-        if let Some(va) = &facts.voluntary_association {
-            if va.associated && va.foresaw_compulsion_risk {
-                case_law.push(CaseCitation::new(
-                    "R v Sharp",
-                    1987,
-                    "QB 853",
-                    "Duress unavailable where D voluntarily joins criminal gang",
-                ));
-                return Ok(DuressResult {
-                    available: false,
-                    unavailable_reason: Some(
-                        "D voluntarily associated with criminals and foresaw risk of compulsion"
-                            .into(),
-                    ),
-                    threat_analysis,
-                    response_analysis,
-                    test_findings: DuressTestFindings {
-                        subjectively_compelled: true,
-                        objectively_reasonable: false,
-                        immediacy_satisfied: facts.threat.imminent,
-                    },
-                    case_law,
-                });
-            }
+        if let Some(va) = &facts.voluntary_association
+            && va.associated
+            && va.foresaw_compulsion_risk
+        {
+            case_law.push(CaseCitation::new(
+                "R v Sharp",
+                1987,
+                "QB 853",
+                "Duress unavailable where D voluntarily joins criminal gang",
+            ));
+            return Ok(DuressResult {
+                available: false,
+                unavailable_reason: Some(
+                    "D voluntarily associated with criminals and foresaw risk of compulsion".into(),
+                ),
+                threat_analysis,
+                response_analysis,
+                test_findings: DuressTestFindings {
+                    subjectively_compelled: true,
+                    objectively_reasonable: false,
+                    immediacy_satisfied: facts.threat.imminent,
+                },
+                case_law,
+            });
         }
 
         // Graham/Hasan test
@@ -1095,16 +1095,16 @@ impl ConsentDefenceAnalyzer {
         }
 
         // Check if fraud vitiates consent
-        if let Some(fraud) = &facts.validity.fraud {
-            if matches!(fraud, ConsentFraud::NatureOfAct | ConsentFraud::Identity) {
-                return Ok(ConsentDefenceResult {
-                    available: false,
-                    harm_finding: String::new(),
-                    activity_finding: String::new(),
-                    validity_finding: format!("Consent vitiated by fraud: {:?}", fraud),
-                    case_law,
-                });
-            }
+        if let Some(fraud) = &facts.validity.fraud
+            && matches!(fraud, ConsentFraud::NatureOfAct | ConsentFraud::Identity)
+        {
+            return Ok(ConsentDefenceResult {
+                available: false,
+                harm_finding: String::new(),
+                activity_finding: String::new(),
+                validity_finding: format!("Consent vitiated by fraud: {:?}", fraud),
+                case_law,
+            });
         }
 
         // Check recognized categories

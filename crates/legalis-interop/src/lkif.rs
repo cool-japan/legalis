@@ -144,11 +144,11 @@ impl FormatImporter for LkifImporter {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"rule" {
-                        if let Some(statute) = self.parse_rule(&mut reader, &mut report)? {
-                            statutes.push(statute);
-                            report.statutes_converted += 1;
-                        }
+                    if e.name().as_ref() == b"rule"
+                        && let Some(statute) = self.parse_rule(&mut reader, &mut report)?
+                    {
+                        statutes.push(statute);
+                        report.statutes_converted += 1;
                     }
                 }
                 Ok(Event::Eof) => break,

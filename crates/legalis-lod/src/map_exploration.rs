@@ -172,10 +172,10 @@ fn parse_wkt_point(wkt: &str) -> GeoJsonGeometry {
         .trim_matches(|c| c == '(' || c == ')');
     let parts: Vec<&str> = coords_str.split_whitespace().collect();
 
-    if parts.len() >= 2 {
-        if let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-            return GeoJsonGeometry::point(lon, lat);
-        }
+    if parts.len() >= 2
+        && let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+    {
+        return GeoJsonGeometry::point(lon, lat);
     }
 
     GeoJsonGeometry::point(0.0, 0.0)
@@ -227,10 +227,10 @@ fn parse_coordinate_pairs(s: &str) -> Vec<[f64; 2]> {
     s.split(", ")
         .filter_map(|pair| {
             let parts: Vec<&str> = pair.split_whitespace().collect();
-            if parts.len() >= 2 {
-                if let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                    return Some([lon, lat]);
-                }
+            if parts.len() >= 2
+                && let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+            {
+                return Some([lon, lat]);
             }
             None
         })

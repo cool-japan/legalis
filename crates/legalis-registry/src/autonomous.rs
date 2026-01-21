@@ -899,10 +899,10 @@ impl IntrusionDetector {
             events.pop_front();
         }
 
-        if let Some(anomaly) = &detection {
-            if anomaly.is_anomaly {
-                self.anomalies.lock().unwrap().push(anomaly.clone());
-            }
+        if let Some(anomaly) = &detection
+            && anomaly.is_anomaly
+        {
+            self.anomalies.lock().unwrap().push(anomaly.clone());
         }
 
         detection

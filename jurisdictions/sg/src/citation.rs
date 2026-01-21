@@ -24,10 +24,10 @@
 //! ### Case Law
 //!
 //! Singapore courts use a neutral citation system:
-//! - **Court of Appeal**: "[2024] SGCA 15" (year, court, number)
-//! - **High Court**: "[2023] SGHC 150"
-//! - **District Court**: "[2023] SGDC 42"
-//! - **Magistrates' Court**: "[2023] SGMC 10"
+//! - **Court of Appeal**: "\[2024\] SGCA 15" (year, court, number)
+//! - **High Court**: "\[2023\] SGHC 150"
+//! - **District Court**: "\[2023\] SGDC 42"
+//! - **Magistrates' Court**: "\[2023\] SGMC 10"
 //!
 //! ## Examples
 //!
@@ -250,7 +250,7 @@ pub enum SingaporeCitation {
     /// Statute citation (e.g., Companies Act Cap. 50 s. 145)
     Statute(StatuteSection),
 
-    /// Case law citation (e.g., [2024] SGCA 15)
+    /// Case law citation (e.g., \[2024\] SGCA 15)
     Case {
         /// Year of decision
         year: u32,

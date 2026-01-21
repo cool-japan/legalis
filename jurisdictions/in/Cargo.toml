@@ -1,0 +1,33 @@
+[package]
+name = "legalis-in"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors = ["COOLJAPAN OU (Team Kitasan)"]
+description = "India jurisdiction support for Legalis-RS - comprehensive modeling of Indian law"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-in"
+keywords = ["legalis", "india", "common-law", "dpdpa", "companies-act"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+# Workspace dependencies
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+indexmap.workspace = true
+
+# Internal dependencies
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[features]
+default = []
+full = []

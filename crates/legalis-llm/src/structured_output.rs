@@ -884,10 +884,10 @@ Extract the relevant information and fill the form fields. Respond with JSON:
 
             // Apply validation rules
             for rule in &template.validation_rules {
-                if let Some(value) = filled_fields.get(&rule.field_name) {
-                    if !self.validate_field(value, rule) {
-                        errors.push(rule.error_message.clone());
-                    }
+                if let Some(value) = filled_fields.get(&rule.field_name)
+                    && !self.validate_field(value, rule)
+                {
+                    errors.push(rule.error_message.clone());
                 }
             }
         }

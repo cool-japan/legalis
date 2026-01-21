@@ -58,15 +58,15 @@ impl AIFormatDetector {
         let pattern_scores = self.pattern_based_detection(content);
 
         // If we have high confidence from pattern matching, use that
-        if let Some((format, score)) = pattern_scores.first() {
-            if *score >= 0.9 {
-                return Ok(AIFormatDetection {
-                    format: *format,
-                    confidence: *score,
-                    reasoning: "High-confidence pattern match".to_string(),
-                    alternatives: pattern_scores[1..].iter().take(3).copied().collect(),
-                });
-            }
+        if let Some((format, score)) = pattern_scores.first()
+            && *score >= 0.9
+        {
+            return Ok(AIFormatDetection {
+                format: *format,
+                confidence: *score,
+                reasoning: "High-confidence pattern match".to_string(),
+                alternatives: pattern_scores[1..].iter().take(3).copied().collect(),
+            });
         }
 
         // For lower confidence, use AI-enhanced detection
@@ -321,10 +321,10 @@ impl LossyConversionRecovery {
         // Simple pattern matching to recover common metadata
         for statute in statutes.iter_mut() {
             // Try to find jurisdiction
-            if statute.jurisdiction.is_none() {
-                if let Some(jurisdiction) = self.extract_jurisdiction(source) {
-                    statute.jurisdiction = Some(jurisdiction);
-                }
+            if statute.jurisdiction.is_none()
+                && let Some(jurisdiction) = self.extract_jurisdiction(source)
+            {
+                statute.jurisdiction = Some(jurisdiction);
             }
 
             // Try to find effective date

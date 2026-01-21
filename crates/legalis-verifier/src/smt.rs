@@ -145,14 +145,12 @@ impl SmtVerifier {
                 if let Some(model) = model {
                     // Extract values for integer variables
                     for (name, var) in &self.int_vars {
-                        if let Some(value_term) = model.get(*var) {
-                            if let Some(term) = self.tm.get(value_term) {
-                                if let TermKind::IntConst(ref val) = term.kind {
-                                    if let Some(i) = val.to_i64() {
-                                        result.insert(name.clone(), i);
-                                    }
-                                }
-                            }
+                        if let Some(value_term) = model.get(*var)
+                            && let Some(term) = self.tm.get(value_term)
+                            && let TermKind::IntConst(ref val) = term.kind
+                            && let Some(i) = val.to_i64()
+                        {
+                            result.insert(name.clone(), i);
                         }
                     }
                 }
@@ -215,10 +213,10 @@ impl SmtVerifier {
                 if let Some(core) = self.solver.get_unsat_core() {
                     // Use the names to find tracking literals
                     for name in &core.names {
-                        if let Some(idx_str) = name.strip_prefix("track_") {
-                            if let Ok(idx) = idx_str.parse::<usize>() {
-                                core_indices.push(idx);
-                            }
+                        if let Some(idx_str) = name.strip_prefix("track_")
+                            && let Ok(idx) = idx_str.parse::<usize>()
+                        {
+                            core_indices.push(idx);
                         }
                     }
                 }

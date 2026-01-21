@@ -33,18 +33,17 @@ pub fn validate_pollution_prevention_agreement(
     for limit in &agreement.emission_limits {
         if let Some(legal_limit) =
             get_legal_emission_limit(&limit.pollutant, &agreement.facility_type)
+            && limit.limit_value > legal_limit
         {
-            if limit.limit_value > legal_limit {
-                report.add_error(format!(
-                    "{:?} limit {} {} exceeds legal limit {} {} ({})",
-                    limit.pollutant,
-                    limit.limit_value,
-                    limit.unit,
-                    legal_limit,
-                    limit.unit,
-                    limit.legal_basis
-                ));
-            }
+            report.add_error(format!(
+                "{:?} limit {} {} exceeds legal limit {} {} ({})",
+                limit.pollutant,
+                limit.limit_value,
+                limit.unit,
+                legal_limit,
+                limit.unit,
+                limit.legal_basis
+            ));
         }
     }
 

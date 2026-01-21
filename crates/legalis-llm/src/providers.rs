@@ -2084,10 +2084,10 @@ fn parse_anthropic_sse_stream(
                     match serde_json::from_str::<AnthropicStreamEvent>(data) {
                         Ok(event) => {
                             if event.event_type == "content_block_delta" {
-                                if let Some(delta) = event.delta {
-                                    if let Some(text) = delta.text {
-                                        chunks.push(Ok(StreamChunk::new(text)));
-                                    }
+                                if let Some(delta) = event.delta
+                                    && let Some(text) = delta.text
+                                {
+                                    chunks.push(Ok(StreamChunk::new(text)));
                                 }
                             } else if event.event_type == "message_stop" {
                                 chunks.push(Ok(StreamChunk::final_chunk("")));
@@ -2159,12 +2159,11 @@ fn parse_gemini_stream(
                 // Parse the JSON response
                 match serde_json::from_str::<GeminiResponse>(&line) {
                     Ok(response) => {
-                        if let Some(candidate) = response.candidates.first() {
-                            if let Some(part) = candidate.content.parts.first() {
-                                if !part.text.is_empty() {
-                                    chunks.push(Ok(StreamChunk::new(part.text.clone())));
-                                }
-                            }
+                        if let Some(candidate) = response.candidates.first()
+                            && let Some(part) = candidate.content.parts.first()
+                            && !part.text.is_empty()
+                        {
+                            chunks.push(Ok(StreamChunk::new(part.text.clone())));
                         }
                     }
                     Err(e) => {
@@ -2198,12 +2197,11 @@ fn extract_json(text: &str) -> Option<&str> {
     }
 
     // Try to find raw JSON object
-    if let Some(start) = text.find('{') {
-        if let Some(end) = text.rfind('}') {
-            if end > start {
-                return Some(&text[start..=end]);
-            }
-        }
+    if let Some(start) = text.find('{')
+        && let Some(end) = text.rfind('}')
+        && end > start
+    {
+        return Some(&text[start..=end]);
     }
 
     None

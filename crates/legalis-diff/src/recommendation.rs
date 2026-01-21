@@ -296,10 +296,11 @@ fn analyze_historical_patterns(
 
     // Check if current changes align with historical patterns
     for change in &diff.changes {
-        if let Some(&count) = change_type_counts.get(&change.change_type) {
-            if count > 5 {
-                // Frequent change type
-                recommendations.push(
+        if let Some(&count) = change_type_counts.get(&change.change_type)
+            && count > 5
+        {
+            // Frequent change type
+            recommendations.push(
                     Recommendation::new(
                         RecommendationPriority::Low,
                         RecommendationCategory::BestPractice,
@@ -314,7 +315,6 @@ fn analyze_historical_patterns(
                     )
                     .with_confidence(0.6),
                 );
-            }
         }
     }
 

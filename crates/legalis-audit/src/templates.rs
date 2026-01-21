@@ -147,10 +147,10 @@ impl FieldFormat {
             },
         };
 
-        if let Some(len) = self.truncate {
-            if value.len() > len {
-                return format!("{}...", &value[..len.saturating_sub(3)]);
-            }
+        if let Some(len) = self.truncate
+            && value.len() > len
+        {
+            return format!("{}...", &value[..len.saturating_sub(3)]);
         }
 
         value
@@ -343,19 +343,19 @@ impl ReportTemplate {
 
         // Sort records if requested
         let mut sorted_records = records.to_vec();
-        if let Some(sort_index) = self.sort_by {
-            if sort_index < self.fields.len() {
-                let field = &self.fields[sort_index];
-                sorted_records.sort_by(|a, b| {
-                    let val_a = field.extract(a);
-                    let val_b = field.extract(b);
-                    if self.sort_reverse {
-                        val_b.cmp(&val_a)
-                    } else {
-                        val_a.cmp(&val_b)
-                    }
-                });
-            }
+        if let Some(sort_index) = self.sort_by
+            && sort_index < self.fields.len()
+        {
+            let field = &self.fields[sort_index];
+            sorted_records.sort_by(|a, b| {
+                let val_a = field.extract(a);
+                let val_b = field.extract(b);
+                if self.sort_reverse {
+                    val_b.cmp(&val_a)
+                } else {
+                    val_a.cmp(&val_b)
+                }
+            });
         }
 
         // Add rows
@@ -397,19 +397,19 @@ impl ReportTemplate {
 
         // Sort records if requested
         let mut sorted_records = records.to_vec();
-        if let Some(sort_index) = self.sort_by {
-            if sort_index < self.fields.len() {
-                let field = &self.fields[sort_index];
-                sorted_records.sort_by(|a, b| {
-                    let val_a = field.extract(a);
-                    let val_b = field.extract(b);
-                    if self.sort_reverse {
-                        val_b.cmp(&val_a)
-                    } else {
-                        val_a.cmp(&val_b)
-                    }
-                });
-            }
+        if let Some(sort_index) = self.sort_by
+            && sort_index < self.fields.len()
+        {
+            let field = &self.fields[sort_index];
+            sorted_records.sort_by(|a, b| {
+                let val_a = field.extract(a);
+                let val_b = field.extract(b);
+                if self.sort_reverse {
+                    val_b.cmp(&val_a)
+                } else {
+                    val_a.cmp(&val_b)
+                }
+            });
         }
 
         // Add table

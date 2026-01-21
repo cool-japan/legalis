@@ -10,7 +10,7 @@ pub enum TortError {
     // ========================================================================
     // Negligence Errors
     // ========================================================================
-    /// No duty of care exists - Caparo v Dickman [1990] 2 AC 605
+    /// No duty of care exists - Caparo v Dickman \[1990\] 2 AC 605
     NoDutyOfCare {
         /// Reason duty does not exist
         reason: String,
@@ -18,7 +18,7 @@ pub enum TortError {
         missing_element: String,
     },
 
-    /// Harm was not reasonably foreseeable - Donoghue v Stevenson [1932] AC 562
+    /// Harm was not reasonably foreseeable - Donoghue v Stevenson \[1932\] AC 562
     HarmNotForeseeable {
         /// Type of harm
         harm_type: String,
@@ -62,7 +62,7 @@ pub enum TortError {
         alternative_cause: String,
     },
 
-    /// Damage too remote - The Wagon Mound [1961] AC 388
+    /// Damage too remote - The Wagon Mound \[1961\] AC 388
     DamageTooRemote {
         /// Type of harm
         harm_type: String,
@@ -89,7 +89,7 @@ pub enum TortError {
     // ========================================================================
     // Psychiatric Injury Errors
     // ========================================================================
-    /// Psychiatric injury claim fails - Alcock v Chief Constable [1992] 1 AC 310
+    /// Psychiatric injury claim fails - Alcock v Chief Constable \[1992\] 1 AC 310
     PsychiatricInjuryClaimFails {
         /// Missing Alcock requirement
         missing_requirement: String,
@@ -110,7 +110,7 @@ pub enum TortError {
     // ========================================================================
     // Pure Economic Loss Errors
     // ========================================================================
-    /// Pure economic loss not recoverable - Murphy v Brentwood [1991] 1 AC 398
+    /// Pure economic loss not recoverable - Murphy v Brentwood \[1991\] 1 AC 398
     PureEconomicLossNotRecoverable {
         /// Type of economic loss
         loss_type: String,
@@ -118,7 +118,7 @@ pub enum TortError {
         reason: String,
     },
 
-    /// Hedley Byrne requirements not met - Hedley Byrne v Heller [1964] AC 465
+    /// Hedley Byrne requirements not met - Hedley Byrne v Heller \[1964\] AC 465
     HedleyByrneNotMet {
         /// Missing requirement
         missing_requirement: String,
@@ -166,13 +166,13 @@ pub enum TortError {
     // ========================================================================
     // Nuisance Errors
     // ========================================================================
-    /// No interest in land for private nuisance - Hunter v Canary Wharf [1997] AC 655
+    /// No interest in land for private nuisance - Hunter v Canary Wharf \[1997\] AC 655
     NoInterestInLand {
         /// Claimant's status
         status: String,
     },
 
-    /// Interference is reasonable - Sedleigh-Denfield v O'Callaghan [1940] AC 880
+    /// Interference is reasonable - Sedleigh-Denfield v O'Callaghan \[1940\] AC 880
     ReasonableUseOfLand {
         /// Why use is reasonable
         reason: String,
@@ -193,7 +193,7 @@ pub enum TortError {
     // ========================================================================
     // Rylands v Fletcher Errors
     // ========================================================================
-    /// Not a non-natural use - Transco v Stockport [2004] 2 AC 1
+    /// Not a non-natural use - Transco v Stockport \[2004\] 2 AC 1
     NaturalUseOfLand {
         /// Why use is natural
         reason: String,
@@ -273,7 +273,7 @@ pub enum TortError {
     // ========================================================================
     // Economic Torts Errors
     // ========================================================================
-    /// Inducing breach of contract fails - OBG v Allan [2008] 1 AC 1
+    /// Inducing breach of contract fails - OBG v Allan \[2008\] 1 AC 1
     InducingBreachFails {
         /// Missing element
         missing_element: String,
@@ -314,7 +314,7 @@ pub enum TortError {
         consent: String,
     },
 
-    /// Ex turpi causa applies - Patel v Mirza [2016] UKSC 42
+    /// Ex turpi causa applies - Patel v Mirza \[2016\] UKSC 42
     ExTurpiApplies {
         /// Illegality
         illegality: String,

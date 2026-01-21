@@ -447,10 +447,10 @@ impl TeamManager {
             let entry = entry?;
             if entry.file_type()?.is_file() {
                 let json_str = fs::read_to_string(entry.path())?;
-                if let Ok(session) = serde_json::from_str::<Session>(&json_str) {
-                    if include_ended || session.status != SessionStatus::Ended {
-                        sessions.push(session);
-                    }
+                if let Ok(session) = serde_json::from_str::<Session>(&json_str)
+                    && (include_ended || session.status != SessionStatus::Ended)
+                {
+                    sessions.push(session);
                 }
             }
         }

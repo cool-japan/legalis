@@ -7,7 +7,7 @@
 //! A trust is an equitable obligation binding a trustee to deal with property
 //! for the benefit of beneficiaries or for a charitable purpose.
 //!
-//! ## Three Certainties (Knight v Knight [1840])
+//! ## Three Certainties (Knight v Knight \[1840\])
 //!
 //! A trust is only valid if there are three certainties:
 //! 1. **Certainty of Intention** - Clear intent to create a trust
@@ -24,9 +24,9 @@
 //! ## Trustee Duties
 //!
 //! ### Fiduciary Duties
-//! - **Duty of care** (Speight v Gaunt [1883]) - Standard of ordinary prudent business person
-//! - **Duty of undivided loyalty** - No conflict of interest (Keech v Sandford [1726])
-//! - **Duty not to profit** - No unauthorized profit from trust (Boardman v Phipps [1967])
+//! - **Duty of care** (Speight v Gaunt \[1883\]) - Standard of ordinary prudent business person
+//! - **Duty of undivided loyalty** - No conflict of interest (Keech v Sandford \[1726\])
+//! - **Duty not to profit** - No unauthorized profit from trust (Boardman v Phipps \[1967\])
 //! - **Duty of impartiality** - Fair treatment of beneficiaries
 //!
 //! ### Statutory Duties (Trustee Act 2000)
@@ -35,7 +35,7 @@
 //! - **Duty to review investments** - Regular review required
 //! - **Duty to obtain advice** - Investment advice requirement
 //!
-//! ## Irreducible Core of Trustee Obligations (Armitage v Nurse [1998])
+//! ## Irreducible Core of Trustee Obligations (Armitage v Nurse \[1998\])
 //!
 //! Cannot exclude:
 //! - Duty to perform trust honestly and in good faith
@@ -43,13 +43,13 @@
 //!
 //! ## Key Cases
 //!
-//! - **Knight v Knight [1840]**: Three certainties
-//! - **Keech v Sandford [1726]**: No conflict rule
-//! - **Speight v Gaunt [1883]**: Trustee standard of care
-//! - **Boardman v Phipps [1967]**: No unauthorized profit
-//! - **Armitage v Nurse [1998]**: Irreducible core
-//! - **Nestle v National Westminster Bank [1993]**: Investment duty
-//! - **Pitt v Holt [2013]**: Mistake and setting aside
+//! - **Knight v Knight \[1840\]**: Three certainties
+//! - **Keech v Sandford \[1726\]**: No conflict rule
+//! - **Speight v Gaunt \[1883\]**: Trustee standard of care
+//! - **Boardman v Phipps \[1967\]**: No unauthorized profit
+//! - **Armitage v Nurse \[1998\]**: Irreducible core
+//! - **Nestle v National Westminster Bank \[1993\]**: Investment duty
+//! - **Pitt v Holt \[2013\]**: Mistake and setting aside
 //!
 //! ## Example Usage
 //!

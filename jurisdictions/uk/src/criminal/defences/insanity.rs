@@ -14,10 +14,10 @@
 //!
 //! ## Key Cases
 //! - M'Naghten's Case (1843) - Foundation of insanity defence
-//! - R v Kemp [1957] - "Disease of mind" broadly interpreted
-//! - R v Sullivan [1984] - Epilepsy can be disease of mind
-//! - R v Burgess [1991] - Sleepwalking = disease of mind
-//! - R v Hennessy [1989] - Hyperglycaemia = disease of mind
+//! - R v Kemp \[1957\] - "Disease of mind" broadly interpreted
+//! - R v Sullivan \[1984\] - Epilepsy can be disease of mind
+//! - R v Burgess \[1991\] - Sleepwalking = disease of mind
+//! - R v Hennessy \[1989\] - Hyperglycaemia = disease of mind
 //!
 //! ## Verdict and Consequences
 //! - Special verdict: "Not guilty by reason of insanity"

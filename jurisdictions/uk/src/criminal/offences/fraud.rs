@@ -17,7 +17,7 @@
 //! # Key Features
 //!
 //! - Conduct crime: no need to prove actual loss or gain
-//! - Dishonesty test: Ivey v Genting Casinos [2017]
+//! - Dishonesty test: Ivey v Genting Casinos \[2017\]
 //! - Replaced old deception offences under Theft Acts
 
 // Allow missing docs on enum variant struct fields - these are self-documenting in context

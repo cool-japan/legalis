@@ -14,10 +14,10 @@
 //!
 //! # Key Cases
 //!
-//! - Associated Provincial Picture Houses v Wednesbury [1948] (unreasonableness)
-//! - Council of Civil Service Unions v Minister [1985] (GCHQ - grounds)
-//! - Anisminic v Foreign Compensation Commission [1969] (error of law)
-//! - R v Secretary of State ex p Daly [2001] (proportionality)
+//! - Associated Provincial Picture Houses v Wednesbury \[1948\] (unreasonableness)
+//! - Council of Civil Service Unions v Minister \[1985\] (GCHQ - grounds)
+//! - Anisminic v Foreign Compensation Commission \[1969\] (error of law)
+//! - R v Secretary of State ex p Daly \[2001\] (proportionality)
 //! - R (Miller) v Secretary of State [2017, 2019] (constitutional review)
 
 // Allow missing docs on enum variant struct fields
@@ -782,12 +782,12 @@ impl RemediesAnalyzer {
             )
         });
 
-        if let Some(damages) = &facts.damages_claimed {
-            if damages_available {
-                remedies.push(JrRemedy::Damages {
-                    basis: damages.basis.clone(),
-                });
-            }
+        if let Some(damages) = &facts.damages_claimed
+            && damages_available
+        {
+            remedies.push(JrRemedy::Damages {
+                basis: damages.basis.clone(),
+            });
         }
 
         let analysis = format!(

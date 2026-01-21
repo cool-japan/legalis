@@ -76,13 +76,13 @@ pub fn validate_open_banking_consent(
     }
 
     // Check consent not expired (PSR 2017 Reg 67(3) - max 90 days for AIS)
-    if let Some(expiry) = consent.expiry_date {
-        if current_date > expiry {
-            return Err(PaymentServicesError::ConsentExpired {
-                consent_id: consent.consent_id.clone(),
-                expiry_date: expiry.to_string(),
-            });
-        }
+    if let Some(expiry) = consent.expiry_date
+        && current_date > expiry
+    {
+        return Err(PaymentServicesError::ConsentExpired {
+            consent_id: consent.consent_id.clone(),
+            expiry_date: expiry.to_string(),
+        });
     }
 
     // Check permissions granted

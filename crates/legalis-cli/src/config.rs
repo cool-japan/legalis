@@ -262,20 +262,20 @@ impl Config {
             self.jurisdiction = Some(jur);
         }
 
-        if let Ok(strict) = std::env::var("LEGALIS_VERIFY_STRICT") {
-            if let Ok(value) = strict.parse::<bool>() {
-                self.verification.strict = value;
-            }
+        if let Ok(strict) = std::env::var("LEGALIS_VERIFY_STRICT")
+            && let Ok(value) = strict.parse::<bool>()
+        {
+            self.verification.strict = value;
         }
 
         if let Ok(format) = std::env::var("LEGALIS_OUTPUT_FORMAT") {
             self.output.format = format;
         }
 
-        if let Ok(colored) = std::env::var("LEGALIS_OUTPUT_COLORED") {
-            if let Ok(value) = colored.parse::<bool>() {
-                self.output.colored = value;
-            }
+        if let Ok(colored) = std::env::var("LEGALIS_OUTPUT_COLORED")
+            && let Ok(value) = colored.parse::<bool>()
+        {
+            self.output.colored = value;
         }
     }
 
@@ -429,10 +429,10 @@ impl Config {
         let mut warnings = Vec::new();
 
         // Check if active profile exists
-        if let Some(ref profile_name) = self.active_profile {
-            if !self.profiles.contains_key(profile_name) {
-                warnings.push(format!("Active profile '{}' is not defined", profile_name));
-            }
+        if let Some(ref profile_name) = self.active_profile
+            && !self.profiles.contains_key(profile_name)
+        {
+            warnings.push(format!("Active profile '{}' is not defined", profile_name));
         }
 
         // Check for circular parent references

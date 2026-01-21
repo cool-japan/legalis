@@ -260,7 +260,7 @@ pub struct CaseCitation {
     pub year: u32,
     /// Neutral citation (e.g., "2001 SCC 79")
     pub neutral_citation: Option<String>,
-    /// Report citation (e.g., "[2001] 3 SCR 537")
+    /// Report citation (e.g., `[2001] 3 SCR 537`)
     pub report_citation: Option<String>,
     /// Court that decided the case
     pub court: Court,

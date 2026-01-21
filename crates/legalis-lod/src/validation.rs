@@ -247,13 +247,13 @@ impl RdfValidator {
             subjects.insert(triple.subject.clone());
 
             // Track types
-            if triple.predicate == "rdf:type" {
-                if let RdfValue::Uri(ref type_uri) = triple.object {
-                    subject_types
-                        .entry(triple.subject.clone())
-                        .or_default()
-                        .push(type_uri.clone());
-                }
+            if triple.predicate == "rdf:type"
+                && let RdfValue::Uri(ref type_uri) = triple.object
+            {
+                subject_types
+                    .entry(triple.subject.clone())
+                    .or_default()
+                    .push(type_uri.clone());
             }
 
             // Track properties
@@ -272,13 +272,13 @@ impl RdfValidator {
             }
 
             // Check for empty literals
-            if let RdfValue::Literal(ref s, _) = triple.object {
-                if s.is_empty() {
-                    issues.push(ValidationIssue::EmptyLiteral {
-                        subject: triple.subject.clone(),
-                        predicate: triple.predicate.clone(),
-                    });
-                }
+            if let RdfValue::Literal(ref s, _) = triple.object
+                && s.is_empty()
+            {
+                issues.push(ValidationIssue::EmptyLiteral {
+                    subject: triple.subject.clone(),
+                    predicate: triple.predicate.clone(),
+                });
             }
         }
 
@@ -332,13 +332,14 @@ impl RdfValidator {
             }
 
             // Check object URI
-            if let RdfValue::Uri(ref uri) = triple.object {
-                if !is_valid_uri(uri) && !uri.contains(':') {
-                    issues.push(ValidationIssue::InvalidUri {
-                        uri: uri.clone(),
-                        reason: "Invalid URI format or missing namespace".to_string(),
-                    });
-                }
+            if let RdfValue::Uri(ref uri) = triple.object
+                && !is_valid_uri(uri)
+                && !uri.contains(':')
+            {
+                issues.push(ValidationIssue::InvalidUri {
+                    uri: uri.clone(),
+                    reason: "Invalid URI format or missing namespace".to_string(),
+                });
             }
         }
 
@@ -349,37 +350,37 @@ impl RdfValidator {
 
             for triple in triples {
                 // Check property domain constraints
-                if let Some(expected_domains) = self.property_domains.get(&triple.predicate) {
-                    if let Some(types) = subject_types.get(&triple.subject) {
-                        let has_valid_domain = types.iter().any(|t| expected_domains.contains(t));
-                        if !has_valid_domain {
-                            issues.push(ValidationIssue::OntologyInconsistency {
+                if let Some(expected_domains) = self.property_domains.get(&triple.predicate)
+                    && let Some(types) = subject_types.get(&triple.subject)
+                {
+                    let has_valid_domain = types.iter().any(|t| expected_domains.contains(t));
+                    if !has_valid_domain {
+                        issues.push(ValidationIssue::OntologyInconsistency {
                                 subject: triple.subject.clone(),
                                 issue: format!(
                                     "Property '{}' used with subject of type {:?}, expected one of {:?}",
                                     triple.predicate, types, expected_domains
                                 ),
                             });
-                        }
                     }
                 }
 
                 // Check property range constraints
-                if let Some(expected_ranges) = self.property_ranges.get(&triple.predicate) {
-                    if let RdfValue::Uri(ref object_uri) = triple.object {
-                        // Find the object's types
-                        if let Some(object_types) = subject_types.get(object_uri) {
-                            let has_valid_range =
-                                object_types.iter().any(|t| expected_ranges.contains(t));
-                            if !has_valid_range {
-                                issues.push(ValidationIssue::OntologyInconsistency {
-                                    subject: triple.subject.clone(),
-                                    issue: format!(
-                                        "Property '{}' has object of type {:?}, expected one of {:?}",
-                                        triple.predicate, object_types, expected_ranges
-                                    ),
-                                });
-                            }
+                if let Some(expected_ranges) = self.property_ranges.get(&triple.predicate)
+                    && let RdfValue::Uri(ref object_uri) = triple.object
+                {
+                    // Find the object's types
+                    if let Some(object_types) = subject_types.get(object_uri) {
+                        let has_valid_range =
+                            object_types.iter().any(|t| expected_ranges.contains(t));
+                        if !has_valid_range {
+                            issues.push(ValidationIssue::OntologyInconsistency {
+                                subject: triple.subject.clone(),
+                                issue: format!(
+                                    "Property '{}' has object of type {:?}, expected one of {:?}",
+                                    triple.predicate, object_types, expected_ranges
+                                ),
+                            });
                         }
                     }
                 }
@@ -407,24 +408,17 @@ impl RdfValidator {
 
             // Check for cyclic references in condition hierarchies
             for triple in triples {
-                if triple.predicate == "legalis:leftOperand"
-                    || triple.predicate == "legalis:rightOperand"
+                if (triple.predicate == "legalis:leftOperand"
+                    || triple.predicate == "legalis:rightOperand")
+                    && let RdfValue::Uri(ref target) = triple.object
                 {
-                    if let RdfValue::Uri(ref target) = triple.object {
-                        let mut visited = HashSet::new();
-                        let mut path = vec![triple.subject.clone()];
-                        if Self::has_cycle(
-                            triples,
-                            &triple.subject,
-                            target,
-                            &mut visited,
-                            &mut path,
-                        ) {
-                            issues.push(ValidationIssue::CyclicReference {
-                                subject: triple.subject.clone(),
-                                path,
-                            });
-                        }
+                    let mut visited = HashSet::new();
+                    let mut path = vec![triple.subject.clone()];
+                    if Self::has_cycle(triples, &triple.subject, target, &mut visited, &mut path) {
+                        issues.push(ValidationIssue::CyclicReference {
+                            subject: triple.subject.clone(),
+                            path,
+                        });
                     }
                 }
             }
@@ -460,12 +454,10 @@ impl RdfValidator {
             if triple.subject == current
                 && (triple.predicate == "legalis:leftOperand"
                     || triple.predicate == "legalis:rightOperand")
+                && let RdfValue::Uri(ref next) = triple.object
+                && Self::has_cycle(triples, start, next, visited, path)
             {
-                if let RdfValue::Uri(ref next) = triple.object {
-                    if Self::has_cycle(triples, start, next, visited, path) {
-                        return true;
-                    }
-                }
+                return true;
             }
         }
 

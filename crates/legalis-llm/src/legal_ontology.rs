@@ -225,11 +225,11 @@ impl LegalOntology {
             visited.insert(current_id);
 
             for relation in self.get_relations_from(current_id) {
-                if relation.relation_type == RelationType::IsA {
-                    if let Some(ancestor) = self.get_concept(&relation.to) {
-                        ancestors.push(ancestor);
-                        queue.push(&relation.to);
-                    }
+                if relation.relation_type == RelationType::IsA
+                    && let Some(ancestor) = self.get_concept(&relation.to)
+                {
+                    ancestors.push(ancestor);
+                    queue.push(&relation.to);
                 }
             }
         }
@@ -250,11 +250,11 @@ impl LegalOntology {
             visited.insert(current_id);
 
             for relation in self.get_relations_to(current_id) {
-                if relation.relation_type == RelationType::IsA {
-                    if let Some(descendant) = self.get_concept(&relation.from) {
-                        descendants.push(descendant);
-                        queue.push(&relation.from);
-                    }
+                if relation.relation_type == RelationType::IsA
+                    && let Some(descendant) = self.get_concept(&relation.from)
+                {
+                    descendants.push(descendant);
+                    queue.push(&relation.from);
                 }
             }
         }

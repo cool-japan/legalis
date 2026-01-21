@@ -163,17 +163,17 @@ impl PredictiveAnalyzer {
         let mut predictions = Vec::new();
 
         // Check for excessive override rate trend
-        if self.config.enable_pattern_based {
-            if let Some(pred) = self.predict_excessive_overrides(current_records, stats)? {
-                predictions.push(pred);
-            }
+        if self.config.enable_pattern_based
+            && let Some(pred) = self.predict_excessive_overrides(current_records, stats)?
+        {
+            predictions.push(pred);
         }
 
         // Check for abnormal volume trends
-        if self.config.enable_time_series {
-            if let Some(pred) = self.predict_abnormal_volume(current_records, stats)? {
-                predictions.push(pred);
-            }
+        if self.config.enable_time_series
+            && let Some(pred) = self.predict_abnormal_volume(current_records, stats)?
+        {
+            predictions.push(pred);
         }
 
         // Check for bias patterns
@@ -320,10 +320,10 @@ impl PredictiveAnalyzer {
                 .or_insert((0, 0));
 
             *total += 1;
-            if let crate::DecisionResult::Deterministic { effect_applied, .. } = &record.result {
-                if effect_applied.contains("approve") {
-                    *approved += 1;
-                }
+            if let crate::DecisionResult::Deterministic { effect_applied, .. } = &record.result
+                && effect_applied.contains("approve")
+            {
+                *approved += 1;
             }
         }
 

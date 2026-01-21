@@ -410,11 +410,11 @@ impl GpuMemoryPool {
     /// Allocate memory
     pub fn allocate(&mut self, size: usize) -> SimResult<usize> {
         // Check if we have a free block of this size
-        if let Some(blocks) = self.free_blocks.get_mut(&size) {
-            if let Some(block_id) = blocks.pop() {
-                self.allocated_blocks.insert(block_id, size);
-                return Ok(block_id);
-            }
+        if let Some(blocks) = self.free_blocks.get_mut(&size)
+            && let Some(block_id) = blocks.pop()
+        {
+            self.allocated_blocks.insert(block_id, size);
+            return Ok(block_id);
         }
 
         // Allocate new block

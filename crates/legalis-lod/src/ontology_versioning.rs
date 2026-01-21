@@ -357,13 +357,13 @@ impl OntologyDiff {
             .collect();
 
         for (sp, from_triple) in &from_by_sp {
-            if let Some(to_triple) = to_by_sp.get(sp) {
-                if from_triple.object != to_triple.object {
-                    modified.push(((*from_triple).clone(), (*to_triple).clone()));
-                    // Remove from added/removed since they're modifications
-                    added.retain(|t| t != *to_triple);
-                    removed.retain(|t| t != *from_triple);
-                }
+            if let Some(to_triple) = to_by_sp.get(sp)
+                && from_triple.object != to_triple.object
+            {
+                modified.push(((*from_triple).clone(), (*to_triple).clone()));
+                // Remove from added/removed since they're modifications
+                added.retain(|t| t != *to_triple);
+                removed.retain(|t| t != *from_triple);
             }
         }
 

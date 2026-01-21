@@ -16,10 +16,10 @@
 //!
 //! # Key Cases
 //!
-//! - Ghaidan v Godin-Mendoza [2004] (s.3 interpretation)
-//! - R (Daly) v Secretary of State [2001] (proportionality)
-//! - YL v Birmingham City Council [2007] (s.6 public authority)
-//! - Rabone v Pennine Care NHS Trust [2012] (operational duty)
+//! - Ghaidan v Godin-Mendoza \[2004\] (s.3 interpretation)
+//! - R (Daly) v Secretary of State \[2001\] (proportionality)
+//! - YL v Birmingham City Council \[2007\] (s.6 public authority)
+//! - Rabone v Pennine Care NHS Trust \[2012\] (operational duty)
 
 // Allow missing docs on enum variant struct fields
 #![allow(missing_docs)]

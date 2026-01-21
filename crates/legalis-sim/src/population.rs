@@ -232,11 +232,11 @@ impl PopulationGenerator {
                 entity.set_attribute("region", region.id.clone());
 
                 // Adjust income based on region
-                if let Some(income_str) = entity.get_attribute("income") {
-                    if let Ok(income) = income_str.parse::<u64>() {
-                        let adjusted = ((income as f64) * region.income_multiplier).round() as u64;
-                        entity.set_attribute("income", adjusted.to_string());
-                    }
+                if let Some(income_str) = entity.get_attribute("income")
+                    && let Ok(income) = income_str.parse::<u64>()
+                {
+                    let adjusted = ((income as f64) * region.income_multiplier).round() as u64;
+                    entity.set_attribute("income", adjusted.to_string());
                 }
             }
 

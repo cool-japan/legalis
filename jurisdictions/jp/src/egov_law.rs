@@ -150,13 +150,13 @@ impl EGovLawParser {
                             }
                         }
                         "ParagraphSentence" | "Sentence" => {
-                            if let Some(ref mut para) = current_paragraph {
-                                if !current_text.trim().is_empty() {
-                                    if para.text.is_empty() {
-                                        para.text = current_text.trim().to_string();
-                                    } else {
-                                        para.text.push_str(current_text.trim());
-                                    }
+                            if let Some(ref mut para) = current_paragraph
+                                && !current_text.trim().is_empty()
+                            {
+                                if para.text.is_empty() {
+                                    para.text = current_text.trim().to_string();
+                                } else {
+                                    para.text.push_str(current_text.trim());
                                 }
                             }
                         }
@@ -166,17 +166,17 @@ impl EGovLawParser {
                             }
                         }
                         "Item" => {
-                            if let Some(item) = current_item.take() {
-                                if let Some(ref mut para) = current_paragraph {
-                                    para.items.push(item);
-                                }
+                            if let Some(item) = current_item.take()
+                                && let Some(ref mut para) = current_paragraph
+                            {
+                                para.items.push(item);
                             }
                         }
                         "Paragraph" => {
-                            if let Some(para) = current_paragraph.take() {
-                                if let Some(ref mut article) = current_article {
-                                    article.paragraphs.push(para);
-                                }
+                            if let Some(para) = current_paragraph.take()
+                                && let Some(ref mut article) = current_article
+                            {
+                                article.paragraphs.push(para);
                             }
                         }
                         "Article" => {

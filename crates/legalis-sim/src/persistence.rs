@@ -150,11 +150,11 @@ impl CheckpointStore {
                 SimulationError::Checkpoint(format!("Failed to read directory entry: {}", e))
             })?;
 
-            if let Some(file_name) = entry.file_name().to_str() {
-                if file_name.ends_with(".json") {
-                    let id = file_name.trim_end_matches(".json");
-                    checkpoint_ids.push(id.to_string());
-                }
+            if let Some(file_name) = entry.file_name().to_str()
+                && file_name.ends_with(".json")
+            {
+                let id = file_name.trim_end_matches(".json");
+                checkpoint_ids.push(id.to_string());
             }
         }
 

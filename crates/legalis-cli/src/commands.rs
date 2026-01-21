@@ -1461,10 +1461,10 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
     let mut last_modified = std::collections::HashMap::new();
 
     for input in inputs {
-        if let Ok(metadata) = fs::metadata(input) {
-            if let Ok(modified) = metadata.modified() {
-                last_modified.insert(input.clone(), modified);
-            }
+        if let Ok(metadata) = fs::metadata(input)
+            && let Ok(modified) = metadata.modified()
+        {
+            last_modified.insert(input.clone(), modified);
         }
     }
 
@@ -1472,39 +1472,28 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
         sleep(Duration::from_secs(1)).await;
 
         for input in inputs {
-            if let Ok(metadata) = fs::metadata(input) {
-                if let Ok(modified) = metadata.modified() {
-                    if let Some(&last_mod) = last_modified.get(input) {
-                        if modified > last_mod {
-                            println!("\n{} changed, running {:?}...", input, command);
-                            match command {
-                                WatchCommand::Verify => {
-                                    let _ = handle_verify(
-                                        std::slice::from_ref(input),
-                                        false,
-                                        &OutputFormat::Text,
-                                    );
-                                }
-                                WatchCommand::Lint => {
-                                    let _ = handle_lint(std::slice::from_ref(input), false, false);
-                                }
-                                WatchCommand::Test => {
-                                    println!("Test command not yet implemented");
-                                }
-                                WatchCommand::Format => {
-                                    let _ = handle_format(
-                                        input,
-                                        None,
-                                        true,
-                                        &FormatStyle::Default,
-                                        false,
-                                    );
-                                }
-                            }
-                            last_modified.insert(input.clone(), modified);
-                        }
+            if let Ok(metadata) = fs::metadata(input)
+                && let Ok(modified) = metadata.modified()
+                && let Some(&last_mod) = last_modified.get(input)
+                && modified > last_mod
+            {
+                println!("\n{} changed, running {:?}...", input, command);
+                match command {
+                    WatchCommand::Verify => {
+                        let _ =
+                            handle_verify(std::slice::from_ref(input), false, &OutputFormat::Text);
+                    }
+                    WatchCommand::Lint => {
+                        let _ = handle_lint(std::slice::from_ref(input), false, false);
+                    }
+                    WatchCommand::Test => {
+                        println!("Test command not yet implemented");
+                    }
+                    WatchCommand::Format => {
+                        let _ = handle_format(input, None, true, &FormatStyle::Default, false);
                     }
                 }
+                last_modified.insert(input.clone(), modified);
             }
         }
     }
@@ -2846,12 +2835,11 @@ pub fn handle_outdated(directory: &str, _registry_path: &str, show_all: bool) ->
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().and_then(|s| s.to_str()) == Some("legal") {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(statute) = parser.parse_statute(&content) {
-                    statutes.push((path.clone(), statute));
-                }
-            }
+        if path.extension().and_then(|s| s.to_str()) == Some("legal")
+            && let Ok(content) = fs::read_to_string(&path)
+            && let Ok(statute) = parser.parse_statute(&content)
+        {
+            statutes.push((path.clone(), statute));
         }
     }
 
@@ -5741,10 +5729,10 @@ pub fn handle_workflow_run(
             task_result.duration_ms,
             task_result.retry_count
         );
-        if !task_result.success {
-            if let Some(error) = &task_result.error {
-                println!("      Error: {}", error.red());
-            }
+        if !task_result.success
+            && let Some(error) = &task_result.error
+        {
+            println!("      Error: {}", error.red());
         }
     }
 
@@ -7314,10 +7302,10 @@ pub fn handle_perf_stats(session_id: Option<&str>, command_filter: Option<&str>)
         ]);
 
     for (command, stats) in &report.command_stats {
-        if let Some(filter) = command_filter {
-            if !command.contains(filter) {
-                continue;
-            }
+        if let Some(filter) = command_filter
+            && !command.contains(filter)
+        {
+            continue;
         }
 
         table.add_row(vec![

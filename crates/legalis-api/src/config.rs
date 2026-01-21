@@ -65,10 +65,10 @@ impl Config {
             config.host = host;
         }
 
-        if let Ok(port) = env::var("LEGALIS_API_PORT") {
-            if let Ok(p) = port.parse::<u16>() {
-                config.port = p;
-            }
+        if let Ok(port) = env::var("LEGALIS_API_PORT")
+            && let Ok(p) = port.parse::<u16>()
+        {
+            config.port = p;
         }
 
         if let Ok(structured) = env::var("LEGALIS_API_STRUCTURED_LOGGING") {
@@ -83,16 +83,16 @@ impl Config {
             config.cors_origins = Some(origins);
         }
 
-        if let Ok(size) = env::var("LEGALIS_API_MAX_BODY_SIZE") {
-            if let Ok(s) = size.parse::<usize>() {
-                config.max_body_size = s;
-            }
+        if let Ok(size) = env::var("LEGALIS_API_MAX_BODY_SIZE")
+            && let Ok(s) = size.parse::<usize>()
+        {
+            config.max_body_size = s;
         }
 
-        if let Ok(timeout) = env::var("LEGALIS_API_REQUEST_TIMEOUT") {
-            if let Ok(t) = timeout.parse::<u64>() {
-                config.request_timeout_secs = t;
-            }
+        if let Ok(timeout) = env::var("LEGALIS_API_REQUEST_TIMEOUT")
+            && let Ok(t) = timeout.parse::<u64>()
+        {
+            config.request_timeout_secs = t;
         }
 
         // Cache configuration
@@ -111,10 +111,10 @@ impl Config {
             config.redis_url = Some(url);
         }
 
-        if let Ok(ttl) = env::var("LEGALIS_API_CACHE_TTL") {
-            if let Ok(t) = ttl.parse::<u64>() {
-                config.cache_default_ttl = t;
-            }
+        if let Ok(ttl) = env::var("LEGALIS_API_CACHE_TTL")
+            && let Ok(t) = ttl.parse::<u64>()
+        {
+            config.cache_default_ttl = t;
         }
 
         if let Ok(compression) = env::var("LEGALIS_API_CACHE_COMPRESSION") {

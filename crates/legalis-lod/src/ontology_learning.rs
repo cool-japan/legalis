@@ -392,26 +392,26 @@ impl PatternBasedLearner {
             let after = &sentence[pos + pattern.len()..];
 
             // Extract subject and object
-            if let Some(subject) = before.split_whitespace().last() {
-                if let Some(object) = after.split_whitespace().next() {
-                    self.add_property(
-                        prop_name.to_string(),
-                        prop_name.to_string(),
-                        Some(subject.to_string()),
-                        Some(object.to_string()),
-                        PropertyType::ObjectProperty,
-                        confidence,
-                    );
-                }
+            if let Some(subject) = before.split_whitespace().last()
+                && let Some(object) = after.split_whitespace().next()
+            {
+                self.add_property(
+                    prop_name.to_string(),
+                    prop_name.to_string(),
+                    Some(subject.to_string()),
+                    Some(object.to_string()),
+                    PropertyType::ObjectProperty,
+                    confidence,
+                );
             }
         }
     }
 
     fn extract_quoted(&self, text: &str) -> Option<String> {
-        if let Some(start) = text.find('"') {
-            if let Some(end) = text[start + 1..].find('"') {
-                return Some(text[start + 1..start + 1 + end].to_string());
-            }
+        if let Some(start) = text.find('"')
+            && let Some(end) = text[start + 1..].find('"')
+        {
+            return Some(text[start + 1..start + 1 + end].to_string());
         }
         None
     }

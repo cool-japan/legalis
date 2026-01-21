@@ -89,10 +89,10 @@ pub fn validate_offer(offer: &Offer) -> Result<()> {
     }
 
     // Check acceptance deadline
-    if let Some(deadline) = offer.acceptance_deadline {
-        if Utc::now() > deadline {
-            return Err(SchuldrechtError::AcceptanceDeadlineExpired);
-        }
+    if let Some(deadline) = offer.acceptance_deadline
+        && Utc::now() > deadline
+    {
+        return Err(SchuldrechtError::AcceptanceDeadlineExpired);
     }
 
     // Check if offer is binding
@@ -147,12 +147,12 @@ pub fn validate_acceptance(acceptance: &Acceptance, offer: &Offer) -> Result<()>
     }
 
     // Check for modifications (§150 Abs. 2 BGB - counts as rejection + counter-offer)
-    if let Some(ref mods) = acceptance.modifications {
-        if !mods.is_empty() {
-            return Err(SchuldrechtError::AcceptanceWithModifications {
-                modifications: mods.clone(),
-            });
-        }
+    if let Some(ref mods) = acceptance.modifications
+        && !mods.is_empty()
+    {
+        return Err(SchuldrechtError::AcceptanceWithModifications {
+            modifications: mods.clone(),
+        });
     }
 
     // Ensure offer is still valid

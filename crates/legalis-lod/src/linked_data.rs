@@ -312,10 +312,10 @@ impl LinkValidator {
     /// Extracts URIs from triples for validation.
     pub fn extract_uris_from_triples(&mut self, triples: &[Triple]) {
         for triple in triples {
-            if let RdfValue::Uri(uri) = &triple.object {
-                if uri.starts_with("http://") || uri.starts_with("https://") {
-                    self.uris.push(uri.clone());
-                }
+            if let RdfValue::Uri(uri) = &triple.object
+                && (uri.starts_with("http://") || uri.starts_with("https://"))
+            {
+                self.uris.push(uri.clone());
             }
         }
     }

@@ -9,7 +9,7 @@
 //! - Clause templates with embedded logic
 //! - Smart contract integration (Ergo logic language)
 //!
-//! Reference: https://accordproject.org/
+//! Reference: <https://accordproject.org/>
 
 use crate::{ConversionReport, FormatExporter, FormatImporter, InteropResult, LegalFormat};
 use legalis_core::{Condition, Effect, EffectType, Statute};
@@ -45,15 +45,14 @@ impl CiceroImporter {
         // Parse condition patterns from text
         if text.contains("age") || text.contains("Age") {
             let re = Regex::new(r"(?:age|Age)\s*(?:>=|≥|at least|minimum of)\s*(\d+)").unwrap();
-            if let Some(cap) = re.captures(text) {
-                if let Some(age_str) = cap.get(1) {
-                    if let Ok(age_val) = age_str.as_str().parse::<u32>() {
-                        conditions.push(Condition::Age {
-                            operator: legalis_core::ComparisonOp::GreaterOrEqual,
-                            value: age_val,
-                        });
-                    }
-                }
+            if let Some(cap) = re.captures(text)
+                && let Some(age_str) = cap.get(1)
+                && let Ok(age_val) = age_str.as_str().parse::<u32>()
+            {
+                conditions.push(Condition::Age {
+                    operator: legalis_core::ComparisonOp::GreaterOrEqual,
+                    value: age_val,
+                });
             }
         }
 

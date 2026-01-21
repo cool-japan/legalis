@@ -77,13 +77,13 @@ fn validate_required_fields(app: &EgovApplication, report: &mut ValidationReport
             ));
         } else if let Some(value) = app.form_data.get(field) {
             // Check if value is empty for text fields
-            if let Some(text) = value.as_text() {
-                if text.trim().is_empty() {
-                    report.add_error(format!(
-                        "Required field '{}' is empty (必須項目が空)",
-                        field
-                    ));
-                }
+            if let Some(text) = value.as_text()
+                && text.trim().is_empty()
+            {
+                report.add_error(format!(
+                    "Required field '{}' is empty (必須項目が空)",
+                    field
+                ));
             }
         }
     }
@@ -155,30 +155,30 @@ fn validate_form_data(app: &EgovApplication, report: &mut ValidationReport) {
         }
 
         // Validate number fields
-        if let Some(num) = value.as_number() {
-            if num < 0 {
-                report.add_warning(format!(
-                    "Field '{}' has negative value: {} (負の値)",
-                    key, num
-                ));
-            }
+        if let Some(num) = value.as_number()
+            && num < 0
+        {
+            report.add_warning(format!(
+                "Field '{}' has negative value: {} (負の値)",
+                key, num
+            ));
         }
 
         // Validate nested objects
-        if let Some(obj) = value.as_object() {
-            if obj.is_empty() {
-                report.add_warning(format!(
-                    "Field '{}' is an empty object (空のオブジェクト)",
-                    key
-                ));
-            }
+        if let Some(obj) = value.as_object()
+            && obj.is_empty()
+        {
+            report.add_warning(format!(
+                "Field '{}' is an empty object (空のオブジェクト)",
+                key
+            ));
         }
 
         // Validate lists
-        if let Some(list) = value.as_list() {
-            if list.is_empty() {
-                report.add_warning(format!("Field '{}' is an empty list (空のリスト)", key));
-            }
+        if let Some(list) = value.as_list()
+            && list.is_empty()
+        {
+            report.add_warning(format!("Field '{}' is an empty list (空のリスト)", key));
         }
     }
 }

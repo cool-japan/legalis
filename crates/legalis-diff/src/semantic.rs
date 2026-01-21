@@ -849,17 +849,16 @@ fn classify_breaking_changes(
     for change in &diff.changes {
         if matches!(change.target, ChangeTarget::Effect)
             && change.change_type == ChangeType::Modified
+            && let (Some(old), Some(new)) = (&change.old_value, &change.new_value)
         {
-            if let (Some(old), Some(new)) = (&change.old_value, &change.new_value) {
-                if old.contains("Grant") != new.contains("Grant")
-                    || old.contains("Revoke") != new.contains("Revoke")
-                {
-                    breaking_types.push(BreakingType::EffectTypeChange);
-                    severity_score += 1.0;
-                } else {
-                    breaking_types.push(BreakingType::OutcomeChange);
-                    severity_score += 0.6;
-                }
+            if old.contains("Grant") != new.contains("Grant")
+                || old.contains("Revoke") != new.contains("Revoke")
+            {
+                breaking_types.push(BreakingType::EffectTypeChange);
+                severity_score += 1.0;
+            } else {
+                breaking_types.push(BreakingType::OutcomeChange);
+                severity_score += 0.6;
             }
         }
     }

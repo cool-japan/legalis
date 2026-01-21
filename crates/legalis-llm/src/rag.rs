@@ -483,10 +483,10 @@ where
             .map(|(i, retrieved)| {
                 let mut context = format!("[{}] {}", i + 1, retrieved.chunk.content);
 
-                if self.config.include_metadata {
-                    if let Some(ref metadata) = retrieved.chunk.metadata {
-                        context.push_str(&format!("\n(Metadata: {})", metadata));
-                    }
+                if self.config.include_metadata
+                    && let Some(ref metadata) = retrieved.chunk.metadata
+                {
+                    context.push_str(&format!("\n(Metadata: {})", metadata));
                 }
 
                 context
@@ -1171,15 +1171,11 @@ pub mod rag_v2 {
 
         /// Generates a citation for a chunk.
         fn generate_citation(&self, chunk: &DocumentChunk, citation_num: usize) -> String {
-            if self.include_full_metadata {
-                if let Some(ref metadata) = chunk.metadata {
-                    if let Some(title) = metadata.get("title").and_then(|v| v.as_str()) {
-                        return format!(
-                            "[{}] {}, chunk {}",
-                            citation_num, title, chunk.chunk_index
-                        );
-                    }
-                }
+            if self.include_full_metadata
+                && let Some(ref metadata) = chunk.metadata
+                && let Some(title) = metadata.get("title").and_then(|v| v.as_str())
+            {
+                return format!("[{}] {}, chunk {}", citation_num, title, chunk.chunk_index);
             }
             format!(
                 "[{}] Document {}, chunk {}",

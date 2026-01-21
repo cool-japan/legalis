@@ -154,34 +154,34 @@ impl AuditFilter {
 
     /// Checks if an event matches this filter.
     pub fn matches(&self, event: &AuditEvent) -> bool {
-        if let Some(ref user_id) = self.user_id {
-            if &event.user_id != user_id {
-                return false;
-            }
+        if let Some(ref user_id) = self.user_id
+            && &event.user_id != user_id
+        {
+            return false;
         }
 
-        if let Some(action) = self.action {
-            if event.action != action {
-                return false;
-            }
+        if let Some(action) = self.action
+            && event.action != action
+        {
+            return false;
         }
 
-        if let Some(ref start) = self.start_time {
-            if event.timestamp < *start {
-                return false;
-            }
+        if let Some(ref start) = self.start_time
+            && event.timestamp < *start
+        {
+            return false;
         }
 
-        if let Some(ref end) = self.end_time {
-            if event.timestamp > *end {
-                return false;
-            }
+        if let Some(ref end) = self.end_time
+            && event.timestamp > *end
+        {
+            return false;
         }
 
-        if let Some(success) = self.success {
-            if event.success != success {
-                return false;
-            }
+        if let Some(success) = self.success
+            && event.success != success
+        {
+            return false;
         }
 
         true

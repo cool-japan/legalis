@@ -3,10 +3,9 @@ name = "legalis-sim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "Simulation engine for Legalis-RS"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-sim"
 
 [dependencies]

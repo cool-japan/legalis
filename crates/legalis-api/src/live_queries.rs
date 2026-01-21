@@ -347,10 +347,10 @@ impl LiveQueryManager {
             request = request.operation_name(operation_name);
         }
 
-        if let Some(ref variables) = query.variables {
-            if let Ok(vars) = serde_json::from_value(variables.clone()) {
-                request = request.variables(vars);
-            }
+        if let Some(ref variables) = query.variables
+            && let Ok(vars) = serde_json::from_value(variables.clone())
+        {
+            request = request.variables(vars);
         }
 
         schema.execute(request).await

@@ -184,15 +184,15 @@ impl QueryBuilder {
         }
 
         // Check time range
-        if let Some(start) = self.start_time {
-            if record.timestamp < start {
-                return false;
-            }
+        if let Some(start) = self.start_time
+            && record.timestamp < start
+        {
+            return false;
         }
-        if let Some(end) = self.end_time {
-            if record.timestamp > end {
-                return false;
-            }
+        if let Some(end) = self.end_time
+            && record.timestamp > end
+        {
+            return false;
         }
 
         true

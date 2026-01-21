@@ -1224,40 +1224,40 @@ impl<'a> CaseQuery<'a> {
 
     /// Checks if a case matches all filters.
     fn matches(&self, case: &Case) -> bool {
-        if let Some(ref j) = self.jurisdiction {
-            if &case.jurisdiction != j {
-                return false;
-            }
+        if let Some(ref j) = self.jurisdiction
+            && &case.jurisdiction != j
+        {
+            return false;
         }
 
-        if let Some(ref c) = self.court {
-            if &case.court != c {
-                return false;
-            }
+        if let Some(ref c) = self.court
+            && &case.court != c
+        {
+            return false;
         }
 
-        if let Some(min) = self.year_min {
-            if case.year < min {
-                return false;
-            }
+        if let Some(min) = self.year_min
+            && case.year < min
+        {
+            return false;
         }
 
-        if let Some(max) = self.year_max {
-            if case.year > max {
-                return false;
-            }
+        if let Some(max) = self.year_max
+            && case.year > max
+        {
+            return false;
         }
 
-        if let Some(min) = self.date_min {
-            if case.date < min {
-                return false;
-            }
+        if let Some(min) = self.date_min
+            && case.date < min
+        {
+            return false;
         }
 
-        if let Some(max) = self.date_max {
-            if case.date > max {
-                return false;
-            }
+        if let Some(max) = self.date_max
+            && case.date > max
+        {
+            return false;
         }
 
         if self.only_not_overruled && case.overruled {
@@ -1269,22 +1269,22 @@ impl<'a> CaseQuery<'a> {
         }
 
         // Full-text search filters
-        if let Some(ref query) = self.search_facts {
-            if !case.facts.to_lowercase().contains(query) {
-                return false;
-            }
+        if let Some(ref query) = self.search_facts
+            && !case.facts.to_lowercase().contains(query)
+        {
+            return false;
         }
 
-        if let Some(ref query) = self.search_holding {
-            if !case.holding.to_lowercase().contains(query) {
-                return false;
-            }
+        if let Some(ref query) = self.search_holding
+            && !case.holding.to_lowercase().contains(query)
+        {
+            return false;
         }
 
-        if let Some(ref query) = self.search_ratio {
-            if !case.ratio.to_lowercase().contains(query) {
-                return false;
-            }
+        if let Some(ref query) = self.search_ratio
+            && !case.ratio.to_lowercase().contains(query)
+        {
+            return false;
         }
 
         if let Some(ref query) = self.search_all {

@@ -5,7 +5,7 @@
 //!
 //! ## Catala Integration
 //!
-//! Catala (https://catala-lang.org/) is specifically designed for French legislation
+//! Catala (<https://catala-lang.org/>) is specifically designed for French legislation
 //! including:
 //! - Code général des impôts (Tax Code)
 //! - Code de la sécurité sociale (Social Security Code)

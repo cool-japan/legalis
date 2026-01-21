@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Configuration for Jira API.
 #[derive(Debug, Clone)]
 pub struct JiraConfig {
-    /// Jira base URL (e.g., "https://company.atlassian.net")
+    /// Jira base URL (e.g., "<https://company.atlassian.net>")
     pub base_url: String,
     /// Username or email for authentication
     pub username: String,

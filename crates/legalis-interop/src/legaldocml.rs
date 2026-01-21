@@ -93,13 +93,13 @@ impl LegalDocMLImporter {
 
         // Look for age conditions
         let age_re = regex_lite::Regex::new(r"(?:age|years?)\s+(?:of\s+)?(\d+)").ok()?;
-        if let Some(cap) = age_re.captures(&text_lower) {
-            if let Ok(age) = cap.get(1)?.as_str().parse::<u32>() {
-                return Some(Condition::Age {
-                    operator: ComparisonOp::GreaterOrEqual,
-                    value: age,
-                });
-            }
+        if let Some(cap) = age_re.captures(&text_lower)
+            && let Ok(age) = cap.get(1)?.as_str().parse::<u32>()
+        {
+            return Some(Condition::Age {
+                operator: ComparisonOp::GreaterOrEqual,
+                value: age,
+            });
         }
 
         None

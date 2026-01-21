@@ -21,10 +21,10 @@
 //!
 //! ## Key Cases
 //!
-//! - **BCE Inc v 1976 Debentureholders** [2008] SCC 69: Stakeholder interests
-//! - **Peoples v Wise** [2004] SCC 68: Business judgment rule
-//! - **Kosmopoulos v Constitution Insurance** [1987] SCC: Corporate veil
-//! - **Ebrahimi v Westbourne Galleries** [1973]: Quasi-partnership
+//! - **BCE Inc v 1976 Debentureholders** \[2008\] SCC 69: Stakeholder interests
+//! - **Peoples v Wise** \[2004\] SCC 68: Business judgment rule
+//! - **Kosmopoulos v Constitution Insurance** \[1987\] SCC: Corporate veil
+//! - **Ebrahimi v Westbourne Galleries** \[1973\]: Quasi-partnership
 
 mod directors;
 mod error;

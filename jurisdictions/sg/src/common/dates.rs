@@ -165,34 +165,34 @@ impl SingaporeLegalCalendar {
             }
         }
 
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return true;
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return true;
         }
 
-        if let Some(vesak) = self.vesak_day {
-            if date == vesak || is_substitute_holiday(vesak, date) {
-                return true;
-            }
+        if let Some(vesak) = self.vesak_day
+            && (date == vesak || is_substitute_holiday(vesak, date))
+        {
+            return true;
         }
 
-        if let Some(hrp) = self.hari_raya_puasa {
-            if date == hrp || is_substitute_holiday(hrp, date) {
-                return true;
-            }
+        if let Some(hrp) = self.hari_raya_puasa
+            && (date == hrp || is_substitute_holiday(hrp, date))
+        {
+            return true;
         }
 
-        if let Some(hrh) = self.hari_raya_haji {
-            if date == hrh || is_substitute_holiday(hrh, date) {
-                return true;
-            }
+        if let Some(hrh) = self.hari_raya_haji
+            && (date == hrh || is_substitute_holiday(hrh, date))
+        {
+            return true;
         }
 
-        if let Some(dv) = self.deepavali {
-            if date == dv || is_substitute_holiday(dv, date) {
-                return true;
-            }
+        if let Some(dv) = self.deepavali
+            && (date == dv || is_substitute_holiday(dv, date))
+        {
+            return true;
         }
 
         // Check substitute holidays for fixed holidays
@@ -298,34 +298,34 @@ impl SingaporeLegalCalendar {
             }
         }
 
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return Some("Good Friday");
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return Some("Good Friday");
         }
 
-        if let Some(vesak) = self.vesak_day {
-            if date == vesak {
-                return Some("Vesak Day");
-            }
+        if let Some(vesak) = self.vesak_day
+            && date == vesak
+        {
+            return Some("Vesak Day");
         }
 
-        if let Some(hrp) = self.hari_raya_puasa {
-            if date == hrp {
-                return Some("Hari Raya Puasa");
-            }
+        if let Some(hrp) = self.hari_raya_puasa
+            && date == hrp
+        {
+            return Some("Hari Raya Puasa");
         }
 
-        if let Some(hrh) = self.hari_raya_haji {
-            if date == hrh {
-                return Some("Hari Raya Haji");
-            }
+        if let Some(hrh) = self.hari_raya_haji
+            && date == hrh
+        {
+            return Some("Hari Raya Haji");
         }
 
-        if let Some(dv) = self.deepavali {
-            if date == dv {
-                return Some("Deepavali");
-            }
+        if let Some(dv) = self.deepavali
+            && date == dv
+        {
+            return Some("Deepavali");
         }
 
         // Check substitute holidays
@@ -349,40 +349,40 @@ impl SingaporeLegalCalendar {
         }
 
         // Movable holidays
-        if let Some((cny1, cny2)) = self.chinese_new_year {
-            if date == cny1 || date == cny2 {
-                return Some("农历新年");
-            }
+        if let Some((cny1, cny2)) = self.chinese_new_year
+            && (date == cny1 || date == cny2)
+        {
+            return Some("农历新年");
         }
 
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return Some("耶稣受难日");
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return Some("耶稣受难日");
         }
 
-        if let Some(vesak) = self.vesak_day {
-            if date == vesak {
-                return Some("卫塞节");
-            }
+        if let Some(vesak) = self.vesak_day
+            && date == vesak
+        {
+            return Some("卫塞节");
         }
 
-        if let Some(hrp) = self.hari_raya_puasa {
-            if date == hrp {
-                return Some("开斋节");
-            }
+        if let Some(hrp) = self.hari_raya_puasa
+            && date == hrp
+        {
+            return Some("开斋节");
         }
 
-        if let Some(hrh) = self.hari_raya_haji {
-            if date == hrh {
-                return Some("哈芝节");
-            }
+        if let Some(hrh) = self.hari_raya_haji
+            && date == hrh
+        {
+            return Some("哈芝节");
         }
 
-        if let Some(dv) = self.deepavali {
-            if date == dv {
-                return Some("屠妖节");
-            }
+        if let Some(dv) = self.deepavali
+            && date == dv
+        {
+            return Some("屠妖节");
         }
 
         None
@@ -401,40 +401,40 @@ impl SingaporeLegalCalendar {
         }
 
         // Movable holidays
-        if let Some((cny1, cny2)) = self.chinese_new_year {
-            if date == cny1 || date == cny2 {
-                return Some("Tahun Baru Cina");
-            }
+        if let Some((cny1, cny2)) = self.chinese_new_year
+            && (date == cny1 || date == cny2)
+        {
+            return Some("Tahun Baru Cina");
         }
 
-        if let Some(gf) = self.good_friday {
-            if date == gf {
-                return Some("Jumaat Agung");
-            }
+        if let Some(gf) = self.good_friday
+            && date == gf
+        {
+            return Some("Jumaat Agung");
         }
 
-        if let Some(vesak) = self.vesak_day {
-            if date == vesak {
-                return Some("Hari Wesak");
-            }
+        if let Some(vesak) = self.vesak_day
+            && date == vesak
+        {
+            return Some("Hari Wesak");
         }
 
-        if let Some(hrp) = self.hari_raya_puasa {
-            if date == hrp {
-                return Some("Hari Raya Puasa");
-            }
+        if let Some(hrp) = self.hari_raya_puasa
+            && date == hrp
+        {
+            return Some("Hari Raya Puasa");
         }
 
-        if let Some(hrh) = self.hari_raya_haji {
-            if date == hrh {
-                return Some("Hari Raya Haji");
-            }
+        if let Some(hrh) = self.hari_raya_haji
+            && date == hrh
+        {
+            return Some("Hari Raya Haji");
         }
 
-        if let Some(dv) = self.deepavali {
-            if date == dv {
-                return Some("Deepavali");
-            }
+        if let Some(dv) = self.deepavali
+            && date == dv
+        {
+            return Some("Deepavali");
         }
 
         None
@@ -444,10 +444,10 @@ impl SingaporeLegalCalendar {
     #[must_use]
     pub fn holiday_name_tamil(&self, date: NaiveDate) -> Option<&'static str> {
         // Movable holidays with Tamil names
-        if let Some(dv) = self.deepavali {
-            if date == dv {
-                return Some("தீபாவளி");
-            }
+        if let Some(dv) = self.deepavali
+            && date == dv
+        {
+            return Some("தீபாவளி");
         }
 
         // For other holidays, return None (can be extended)

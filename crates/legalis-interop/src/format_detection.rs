@@ -404,10 +404,10 @@ impl MixedFormatHandler {
         let sections = self.split_into_sections(content);
 
         for (start, end, section) in sections {
-            if let Ok(result) = detector.detect(section) {
-                if result.confidence > 0.3 {
-                    formats.push((result.format, start, end));
-                }
+            if let Ok(result) = detector.detect(section)
+                && result.confidence > 0.3
+            {
+                formats.push((result.format, start, end));
             }
         }
 

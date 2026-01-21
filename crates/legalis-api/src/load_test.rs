@@ -131,10 +131,10 @@ impl LoadTester {
 
         while request_count < total_requests {
             // Check if duration limit reached
-            if let Some(duration) = self.config.duration {
-                if start_time.elapsed() >= duration {
-                    break;
-                }
+            if let Some(duration) = self.config.duration
+                && start_time.elapsed() >= duration
+            {
+                break;
             }
 
             let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -157,10 +157,10 @@ impl LoadTester {
             request_count += 1;
 
             // Apply ramp-up delay
-            if let Some(delay_ms) = ramp_up_delay {
-                if request_count < self.config.concurrent_users {
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                }
+            if let Some(delay_ms) = ramp_up_delay
+                && request_count < self.config.concurrent_users
+            {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
         }
 
@@ -373,7 +373,7 @@ mod tests {
                 let counter = counter.clone();
                 async move {
                     let count = counter.fetch_add(1, Ordering::SeqCst);
-                    let should_fail = count % 3 == 0;
+                    let should_fail = count.is_multiple_of(3);
                     RequestResult {
                         duration: Duration::from_millis(5),
                         status_code: if should_fail { 500 } else { 200 },

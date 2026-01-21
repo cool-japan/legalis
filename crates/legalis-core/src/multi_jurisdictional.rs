@@ -261,11 +261,11 @@ impl JurisdictionConflictResolver {
         let mut winner = None;
 
         for &id in statute_ids {
-            if let Some(&level) = self.levels.get(id) {
-                if max_level.is_none() || level.precedence() > max_level.unwrap().precedence() {
-                    max_level = Some(level);
-                    winner = Some(id);
-                }
+            if let Some(&level) = self.levels.get(id)
+                && (max_level.is_none() || level.precedence() > max_level.unwrap().precedence())
+            {
+                max_level = Some(level);
+                winner = Some(id);
             }
         }
 
@@ -293,11 +293,11 @@ impl JurisdictionConflictResolver {
         let mut winner = None;
 
         for &id in statute_ids {
-            if let Some(statute) = self.statutes.get(id) {
-                if statute.version > latest_version {
-                    latest_version = statute.version;
-                    winner = Some(id);
-                }
+            if let Some(statute) = self.statutes.get(id)
+                && statute.version > latest_version
+            {
+                latest_version = statute.version;
+                winner = Some(id);
             }
         }
 
@@ -696,12 +696,11 @@ impl HierarchyManager {
         let mut highest: Option<(String, JurisdictionLevel)> = None;
 
         for &id in statute_ids {
-            if let Some((_, level)) = self.statutes.get(id) {
-                if highest.is_none()
-                    || level.precedence() > highest.as_ref().unwrap().1.precedence()
-                {
-                    highest = Some((id.to_string(), *level));
-                }
+            if let Some((_, level)) = self.statutes.get(id)
+                && (highest.is_none()
+                    || level.precedence() > highest.as_ref().unwrap().1.precedence())
+            {
+                highest = Some((id.to_string(), *level));
             }
         }
 

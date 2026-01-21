@@ -3,10 +3,11 @@ name = "legalis-jp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
 description = "Japanese jurisdiction support for Legalis-RS"
-repository = "https://github.com/cool-japan/legalis"
-homepage = "https://github.com/cool-japan/legalis"
+repository.workspace = true
+keywords = ["legalis", "japan", "civil-law", "minpo", "kenpo"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
 documentation = "https://docs.rs/legalis-jp"
 
 [dependencies]

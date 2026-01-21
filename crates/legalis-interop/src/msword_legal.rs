@@ -202,15 +202,15 @@ impl FormatImporter for MsWordLegalImporter {
 
     fn validate(&self, source: &str) -> bool {
         // Try to parse as JSON and check for MS Word legal specific fields
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source) {
-            if let Some(obj) = value.as_object() {
-                return obj.contains_key("metadata")
-                    && obj.contains_key("sections")
-                    && obj
-                        .get("metadata")
-                        .and_then(|m| m.get("document_type"))
-                        .is_some();
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(source)
+            && let Some(obj) = value.as_object()
+        {
+            return obj.contains_key("metadata")
+                && obj.contains_key("sections")
+                && obj
+                    .get("metadata")
+                    .and_then(|m| m.get("document_type"))
+                    .is_some();
         }
         false
     }

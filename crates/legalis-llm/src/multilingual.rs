@@ -603,13 +603,13 @@ impl JurisdictionTranslator {
         let mut translation = self.base_translator.translate(term, source, target)?;
 
         // Apply jurisdiction-specific overrides
-        if let Some(rules) = self.jurisdiction_rules.get(&jurisdiction.country) {
-            if let Some(override_term) = rules.term_overrides.get(term) {
-                translation.term = override_term.clone();
-                translation
-                    .jurisdiction_variations
-                    .insert(jurisdiction.country.clone(), override_term.clone());
-            }
+        if let Some(rules) = self.jurisdiction_rules.get(&jurisdiction.country)
+            && let Some(override_term) = rules.term_overrides.get(term)
+        {
+            translation.term = override_term.clone();
+            translation
+                .jurisdiction_variations
+                .insert(jurisdiction.country.clone(), override_term.clone());
         }
 
         Ok(translation)

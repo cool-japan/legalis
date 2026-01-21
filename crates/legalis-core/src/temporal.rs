@@ -429,17 +429,17 @@ impl EventCalculus {
             }
 
             // Check if this event initiates the fluent
-            if let Some(initiated) = self.initiates.get(&event.id) {
-                if initiated.contains(fluent) {
-                    holds = true;
-                }
+            if let Some(initiated) = self.initiates.get(&event.id)
+                && initiated.contains(fluent)
+            {
+                holds = true;
             }
 
             // Check if this event terminates the fluent
-            if let Some(terminated) = self.terminates.get(&event.id) {
-                if terminated.contains(fluent) {
-                    holds = false;
-                }
+            if let Some(terminated) = self.terminates.get(&event.id)
+                && terminated.contains(fluent)
+            {
+                holds = false;
             }
         }
 
@@ -578,13 +578,13 @@ impl Timeline {
             let current = &window[0].interval;
             let next = &window[1].interval;
 
-            if current.end < next.start {
-                if let Some(gap) = TimeInterval::try_new(
+            if current.end < next.start
+                && let Some(gap) = TimeInterval::try_new(
                     current.end.succ_opt().unwrap_or(current.end),
                     next.start.pred_opt().unwrap_or(next.start),
-                ) {
-                    gaps.push(gap);
-                }
+                )
+            {
+                gaps.push(gap);
             }
         }
 

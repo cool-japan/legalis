@@ -115,11 +115,11 @@ impl LineageGraph {
             visited.insert(current);
 
             for edge in &self.edges {
-                if edge.from == current {
-                    if let Some(node) = self.nodes.iter().find(|n| n.id == edge.to) {
-                        descendants.push(node);
-                        queue.push(edge.to);
-                    }
+                if edge.from == current
+                    && let Some(node) = self.nodes.iter().find(|n| n.id == edge.to)
+                {
+                    descendants.push(node);
+                    queue.push(edge.to);
                 }
             }
         }
@@ -140,11 +140,11 @@ impl LineageGraph {
             visited.insert(current);
 
             for edge in &self.edges {
-                if edge.to == current {
-                    if let Some(node) = self.nodes.iter().find(|n| n.id == edge.from) {
-                        ancestors.push(node);
-                        queue.push(edge.from);
-                    }
+                if edge.to == current
+                    && let Some(node) = self.nodes.iter().find(|n| n.id == edge.from)
+                {
+                    ancestors.push(node);
+                    queue.push(edge.from);
                 }
             }
         }

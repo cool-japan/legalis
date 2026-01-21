@@ -94,22 +94,22 @@ impl LegalReasoningEngine {
 
         // Check probation period (max 6 months)
         // Probezeit prüfen (max. 6 Monate)
-        if let Some(months) = contract.probation_period_months {
-            if months > 6 {
-                analysis.add_violation(
-                    Violation::new(
-                        "BGB_§622",
-                        "Probezeit / Probation Period",
-                        format!(
-                            "Probezeit {} Monate übersteigt 6 Monate / {} months exceeds 6-month limit",
-                            months, months
-                        ),
-                        ViolationSeverity::Moderate,
-                    )
-                    .with_legal_reference("§622 Abs. 3 BGB")
-                    .with_remediation("Probezeit auf maximal 6 Monate begrenzen"),
-                );
-            }
+        if let Some(months) = contract.probation_period_months
+            && months > 6
+        {
+            analysis.add_violation(
+                Violation::new(
+                    "BGB_§622",
+                    "Probezeit / Probation Period",
+                    format!(
+                        "Probezeit {} Monate übersteigt 6 Monate / {} months exceeds 6-month limit",
+                        months, months
+                    ),
+                    ViolationSeverity::Moderate,
+                )
+                .with_legal_reference("§622 Abs. 3 BGB")
+                .with_remediation("Probezeit auf maximal 6 Monate begrenzen"),
+            );
         }
 
         // Update overall status

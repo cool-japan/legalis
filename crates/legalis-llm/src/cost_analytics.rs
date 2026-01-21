@@ -389,10 +389,11 @@ impl CostOptimizer {
         let mut recommendations = Vec::new();
 
         // Recommendation: Switch expensive models
-        if let Some((model, cost)) = analytics.most_expensive_model() {
-            if cost > &100.0 {
-                // If spending more than $100 on a model
-                recommendations.push(OptimizationRecommendation {
+        if let Some((model, cost)) = analytics.most_expensive_model()
+            && cost > &100.0
+        {
+            // If spending more than $100 on a model
+            recommendations.push(OptimizationRecommendation {
                     recommendation_type: RecommendationType::ModelSwitch {
                         from: model.clone(),
                         to: "Consider cheaper alternatives".to_string(),
@@ -409,7 +410,6 @@ impl CostOptimizer {
                         "Implement routing to use cheaper models when appropriate".to_string(),
                     ],
                 });
-            }
         }
 
         // Recommendation: Improve caching

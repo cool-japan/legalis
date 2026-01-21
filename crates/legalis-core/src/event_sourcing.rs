@@ -383,11 +383,11 @@ impl SnapshotStore {
 
     /// Prune old snapshots (keep only last N)
     pub fn prune(&mut self, entity_id: &str, keep_last: usize) {
-        if let Some(snapshots) = self.snapshots.get_mut(entity_id) {
-            if snapshots.len() > keep_last {
-                let to_remove = snapshots.len() - keep_last;
-                snapshots.drain(0..to_remove);
-            }
+        if let Some(snapshots) = self.snapshots.get_mut(entity_id)
+            && snapshots.len() > keep_last
+        {
+            let to_remove = snapshots.len() - keep_last;
+            snapshots.drain(0..to_remove);
         }
     }
 }

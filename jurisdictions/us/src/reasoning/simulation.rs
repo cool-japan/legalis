@@ -96,13 +96,12 @@ impl FlsaMinimumWageSimulator {
             let wage_opt: Option<f64> = worker
                 .get_attribute("hourly_wage")
                 .and_then(|s| s.parse().ok());
-            if let Some(wage) = wage_opt {
-                if wage < self.config.proposed_minimum_wage
-                    && wage >= self.config.current_minimum_wage
-                {
-                    workers_affected += 1;
-                    total_wage_increase += self.config.proposed_minimum_wage - wage;
-                }
+            if let Some(wage) = wage_opt
+                && wage < self.config.proposed_minimum_wage
+                && wage >= self.config.current_minimum_wage
+            {
+                workers_affected += 1;
+                total_wage_increase += self.config.proposed_minimum_wage - wage;
             }
         }
 

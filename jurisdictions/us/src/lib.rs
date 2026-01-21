@@ -91,6 +91,19 @@ pub mod legislative;
 // ===== Legal Reasoning Engine (Phase 6) =====
 pub mod reasoning;
 
+// ===== Phase 1B: Jurisdiction Expansion =====
+// Securities Law (Securities Act 1933, Securities Exchange Act 1934)
+pub mod securities;
+
+// Bankruptcy Law (Bankruptcy Code Title 11)
+pub mod bankruptcy;
+
+// Immigration Law (Immigration and Nationality Act)
+pub mod immigration;
+
+// Antitrust Law (Sherman Act, Clayton Act, FTC Act)
+pub mod antitrust;
+
 // ===== Re-exports for Convenience =====
 
 // Common Law cases
@@ -184,6 +197,32 @@ pub use reasoning::{
     ComplianceStatus, LegalAnalysis, LegalReasoningEngine, ReasoningError, ReasoningResult,
     ReasoningStep, RiskLevel, UsEvaluationContext, Violation, ViolationSeverity,
     all_federal_statutes, employment_statutes, tax_statutes,
+};
+
+// Securities law
+pub use securities::{
+    AccreditationBasis, AccreditedInvestor, BlueSkyCompliance, Exemption, HoweyTestAnalysis,
+    Issuer, IssuerType, Offering, OfferingType, QualifiedInstitutionalBuyer, RegistrationStatus,
+    RegulationDRule, SecuritiesError, Security, SecurityType, validate_accredited_investor,
+    validate_howey_test, validate_registration, validate_regulation_d,
+};
+
+// Bankruptcy law
+pub use bankruptcy::{
+    BankruptcyCase, BankruptcyChapter, BankruptcyError, ClaimPriority, ClaimType, Creditor, Debtor,
+    DebtorType, Discharge,
+};
+
+// Immigration law
+pub use immigration::{
+    GreenCardApplication, ImmigrationStatus, NaturalizationApplication, VisaCategory,
+    validate_naturalization_5year,
+};
+
+// Antitrust law
+pub use antitrust::{
+    AntitrustViolation, CompetitiveConcern, ConcentrationLevel, HsrFiling, MarketPower,
+    MergerAnalysis, MonopolyAnalysis,
 };
 
 #[cfg(test)]

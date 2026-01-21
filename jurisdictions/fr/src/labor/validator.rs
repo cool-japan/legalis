@@ -144,13 +144,13 @@ pub fn validate_working_hours(hours: &WorkingHours) -> ValidationResult<()> {
     }
 
     // Article L3121-18: Maximum 10 hours per day
-    if let Some(daily) = hours.daily_hours {
-        if daily > WorkingHours::MAX_DAILY_HOURS {
-            return Err(LaborLawError::DailyHoursExceeded {
-                max: WorkingHours::MAX_DAILY_HOURS,
-                actual: daily,
-            });
-        }
+    if let Some(daily) = hours.daily_hours
+        && daily > WorkingHours::MAX_DAILY_HOURS
+    {
+        return Err(LaborLawError::DailyHoursExceeded {
+            max: WorkingHours::MAX_DAILY_HOURS,
+            actual: daily,
+        });
     }
 
     Ok(())

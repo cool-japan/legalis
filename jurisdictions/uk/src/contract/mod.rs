@@ -23,21 +23,21 @@
 //!
 //! 1. **Offer** - Definite promise to be bound
 //!    - Must be distinguished from invitation to treat
-//!    - Case: Pharmaceutical Society v Boots [1953]
+//!    - Case: Pharmaceutical Society v Boots \[1953\]
 //!
 //! 2. **Acceptance** - Unqualified agreement (mirror image rule)
 //!    - Must match offer exactly
-//!    - Case: Hyde v Wrench [1840] - counter-offer destroys offer
-//!    - Case: Adams v Lindsell [1818] - postal rule
+//!    - Case: Hyde v Wrench \[1840\] - counter-offer destroys offer
+//!    - Case: Adams v Lindsell \[1818\] - postal rule
 //!
 //! 3. **Consideration** - Something of value exchanged
 //!    - Must be sufficient (not necessarily adequate)
 //!    - Must not be past
-//!    - Cases: Chappell v Nestlé [1960], Re McArdle [1951]
+//!    - Cases: Chappell v Nestlé \[1960\], Re McArdle \[1951\]
 //!
 //! 4. **Intention to create legal relations**
-//!    - Commercial: Presumed (Esso v Commissioners [1976])
-//!    - Domestic: Not presumed (Balfour v Balfour [1919])
+//!    - Commercial: Presumed (Esso v Commissioners \[1976\])
+//!    - Domestic: Not presumed (Balfour v Balfour \[1919\])
 //!
 //! 5. **Capacity** - Legal ability to contract
 //!    - Minors, mental incapacity, intoxication
@@ -45,30 +45,30 @@
 //! # Key Case Law
 //!
 //! ## Formation
-//! - **Carlill v Carbolic Smoke Ball Co [1893]**: Unilateral contracts
-//! - **Adams v Lindsell [1818]**: Postal rule
-//! - **Hyde v Wrench [1840]**: Counter-offer destroys offer
-//! - **Pharmaceutical Society v Boots [1953]**: Invitation to treat
+//! - **Carlill v Carbolic Smoke Ball Co \[1893\]**: Unilateral contracts
+//! - **Adams v Lindsell \[1818\]**: Postal rule
+//! - **Hyde v Wrench \[1840\]**: Counter-offer destroys offer
+//! - **Pharmaceutical Society v Boots \[1953\]**: Invitation to treat
 //!
 //! ## Consideration
-//! - **Chappell v Nestlé [1960]**: Sufficient but need not be adequate
-//! - **Re McArdle [1951]**: Past consideration invalid
-//! - **Tweddle v Atkinson [1861]**: Must move from promisee
-//! - **Williams v Roffey Bros [1991]**: Practical benefit
+//! - **Chappell v Nestlé \[1960\]**: Sufficient but need not be adequate
+//! - **Re McArdle \[1951\]**: Past consideration invalid
+//! - **Tweddle v Atkinson \[1861\]**: Must move from promisee
+//! - **Williams v Roffey Bros \[1991\]**: Practical benefit
 //!
 //! ## Terms
-//! - **Poussard v Spiers [1876]**: Condition (essential term)
-//! - **Bettini v Gye [1876]**: Warranty (minor term)
-//! - **Hong Kong Fir Shipping v Kawasaki [1962]**: Innominate term
+//! - **Poussard v Spiers \[1876\]**: Condition (essential term)
+//! - **Bettini v Gye \[1876\]**: Warranty (minor term)
+//! - **Hong Kong Fir Shipping v Kawasaki \[1962\]**: Innominate term
 //!
 //! ## Damages
-//! - **Hadley v Baxendale [1854]**: Remoteness test (two limbs)
-//! - **Robinson v Harman [1848]**: Expectation damages
-//! - **British Westinghouse v Underground Electric Railways [1912]**: Duty to mitigate
+//! - **Hadley v Baxendale \[1854\]**: Remoteness test (two limbs)
+//! - **Robinson v Harman \[1848\]**: Expectation damages
+//! - **British Westinghouse v Underground Electric Railways \[1912\]**: Duty to mitigate
 //!
 //! ## Intention
-//! - **Balfour v Balfour [1919]**: Domestic agreements
-//! - **Esso v Commissioners [1976]**: Commercial agreements
+//! - **Balfour v Balfour \[1919\]**: Domestic agreements
+//! - **Esso v Commissioners \[1976\]**: Commercial agreements
 //!
 //! # Example Usage
 //!

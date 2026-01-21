@@ -272,10 +272,10 @@ impl EgovJsonFormatter {
                 attachment = attachment.with_description(description);
             }
 
-            if let Some(required) = obj.get("required").and_then(|v| v.as_bool()) {
-                if required {
-                    attachment = attachment.required();
-                }
+            if let Some(required) = obj.get("required").and_then(|v| v.as_bool())
+                && required
+            {
+                attachment = attachment.required();
             }
 
             attachments.push(attachment);

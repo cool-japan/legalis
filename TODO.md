@@ -1,8 +1,10 @@
 # Legalis-RS TODO
 
-## Project Status Summary
+## Project Status Summary (v0.1.3)
 
-All 23 crates (16 core + 7 jurisdictions) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
+All 65 crates (17 core + 18 jurisdictions + 30 examples) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
+
+**Statistics**: 1,651 Rust files | 863k LoC | 13,083 tests passing | 18 jurisdictions
 
 ### Core Crates (16)
 
@@ -25,19 +27,28 @@ All 23 crates (16 core + 7 jurisdictions) compile cleanly with no warnings. The 
 | legalis-api | 0.2.3 | Stable | 200 passing |
 | legalis (CLI) | 0.2.3 | Stable | Passing |
 
-### Jurisdiction Crates (9)
+### Jurisdiction Crates (18)
 
 | Crate | Version | Status | Tests |
 |-------|---------|--------|-------|
-| legalis-jp | 0.1.2 | Stable | Passing |
-| legalis-de | 0.1.2 | Stable | Passing |
-| legalis-fr | 0.1.2 | Stable | Passing |
-| legalis-us | 0.1.2 | Stable | Passing |
-| legalis-eu | 0.1.2 | Stable | Passing |
-| legalis-sg | 0.1.2 | Stable | Passing |
-| legalis-uk | 0.1.2 | Stable | Passing |
-| legalis-ca | 0.1.2 | Stable | 238 passing |
-| legalis-au | 0.1.2 | Stable | 168 passing |
+| legalis-ae | 0.1.3 | Stable | Passing |
+| legalis-au | 0.1.3 | Stable | Passing |
+| legalis-br | 0.1.3 | Stable | Passing |
+| legalis-ca | 0.1.3 | Stable | Passing |
+| legalis-cn | 0.1.3 | Stable | Passing |
+| legalis-de | 0.1.3 | Stable | Passing |
+| legalis-eu | 0.1.3 | Stable | Passing |
+| legalis-fr | 0.1.3 | Stable | Passing |
+| legalis-id | 0.1.3 | Stable | Passing |
+| legalis-in | 0.1.3 | Stable | Passing |
+| legalis-jp | 0.1.3 | Stable | Passing |
+| legalis-la | 0.1.3 | Stable | Passing |
+| legalis-sg | 0.1.3 | Stable | Passing |
+| legalis-th | 0.1.3 | Stable | Passing |
+| legalis-uk | 0.1.3 | Stable | Passing |
+| legalis-us | 0.1.3 | Stable | Passing |
+| legalis-vn | 0.1.3 | Stable | Passing |
+| legalis-za | 0.1.3 | Stable | Passing |
 
 ### Jurisdiction Integration Improvements
 

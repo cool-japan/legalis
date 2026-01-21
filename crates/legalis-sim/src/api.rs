@@ -212,11 +212,11 @@ impl JobQueue {
 
     /// Cancel a job by ID
     pub fn cancel(&mut self, id: &Uuid) -> bool {
-        if let Some(job) = self.jobs.get_mut(id) {
-            if job.status == JobStatus::Queued {
-                job.cancel();
-                return true;
-            }
+        if let Some(job) = self.jobs.get_mut(id)
+            && job.status == JobStatus::Queued
+        {
+            job.cancel();
+            return true;
         }
         false
     }
@@ -689,13 +689,13 @@ impl SimulationAPI {
         // Queue webhook notification
         {
             let queue = self.job_queue.lock().unwrap();
-            if let Some(job) = queue.get(&job_id) {
-                if let Some(ref webhook_url) = job.webhook_url {
-                    let notification = WebhookNotification::new(job_id, JobStatus::Completed)
-                        .with_result_id(result_id);
-                    let mut delivery = self.webhook_delivery.lock().unwrap();
-                    delivery.queue(webhook_url.clone(), notification);
-                }
+            if let Some(job) = queue.get(&job_id)
+                && let Some(ref webhook_url) = job.webhook_url
+            {
+                let notification = WebhookNotification::new(job_id, JobStatus::Completed)
+                    .with_result_id(result_id);
+                let mut delivery = self.webhook_delivery.lock().unwrap();
+                delivery.queue(webhook_url.clone(), notification);
             }
         }
 
@@ -717,13 +717,13 @@ impl SimulationAPI {
         // Queue webhook notification
         {
             let queue = self.job_queue.lock().unwrap();
-            if let Some(job) = queue.get(&job_id) {
-                if let Some(ref webhook_url) = job.webhook_url {
-                    let notification =
-                        WebhookNotification::new(job_id, JobStatus::Failed).with_error(error_msg);
-                    let mut delivery = self.webhook_delivery.lock().unwrap();
-                    delivery.queue(webhook_url.clone(), notification);
-                }
+            if let Some(job) = queue.get(&job_id)
+                && let Some(ref webhook_url) = job.webhook_url
+            {
+                let notification =
+                    WebhookNotification::new(job_id, JobStatus::Failed).with_error(error_msg);
+                let mut delivery = self.webhook_delivery.lock().unwrap();
+                delivery.queue(webhook_url.clone(), notification);
             }
         }
 

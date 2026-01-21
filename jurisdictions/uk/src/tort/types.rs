@@ -119,7 +119,7 @@ pub enum ProfessionalCapacity {
 // Negligence Types
 // ============================================================================
 
-/// Duty of care analysis under Caparo v Dickman [1990] 2 AC 605
+/// Duty of care analysis under Caparo v Dickman \[1990\] 2 AC 605
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DutyOfCareAnalysis {
     /// Was harm reasonably foreseeable?

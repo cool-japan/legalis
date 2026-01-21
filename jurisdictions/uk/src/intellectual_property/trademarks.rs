@@ -380,15 +380,15 @@ pub fn validate_trademark(application: &TradeMarkApplication) -> IpResult<()> {
         });
     }
 
-    if let Some(confusion) = relative.likelihood_of_confusion {
-        if matches!(
+    if let Some(confusion) = relative.likelihood_of_confusion
+        && matches!(
             confusion.likelihood,
             ConfusionLikelihood::High | ConfusionLikelihood::Certain
-        ) {
-            return Err(IpError::LikelihoodOfConfusion {
-                earlier_mark: confusion.earlier_mark,
-            });
-        }
+        )
+    {
+        return Err(IpError::LikelihoodOfConfusion {
+            earlier_mark: confusion.earlier_mark,
+        });
     }
 
     Ok(())

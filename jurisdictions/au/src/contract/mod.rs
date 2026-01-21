@@ -6,6 +6,8 @@
 //! - Australian Consumer Law (ACL) consumer guarantees and protections
 //! - Breach and remedies (damages, specific performance, termination)
 //! - Vitiating factors (misrepresentation, mistake, duress, unconscionability)
+//! - Unconscionable conduct (common law and statutory under ACL ss.20-22)
+//! - Building contracts (Home Building Act, statutory warranties, defects liability)
 //!
 //! ## Key Features
 //!
@@ -14,19 +16,32 @@
 //! - Consumer guarantees (ss.54-65)
 //! - Protection against misleading conduct (s.18)
 //! - Unfair contract terms provisions (Pt 2-3)
-//! - Unconscionable conduct provisions (ss.50-51)
+//! - Unconscionable conduct provisions (ss.20-22)
+//!
+//! ### Building and Construction
+//! Building contract law coverage:
+//! - Home Building Act statutory warranties
+//! - Progress payments and Security of Payment
+//! - Practical completion (Multiplex v Honeywell)
+//! - Defects liability periods
 //!
 //! ### Key Cases
 //! - Waltons Stores v Maher (1988) - Proprietary estoppel
 //! - Ermogenous v Greek Orthodox (2002) - Intention
 //! - Hungry Jack's v Burger King (2001) - Good faith
-//! - ACCC v CG Berbatis (2003) - Unconscionability
+//! - ACCC v CG Berbatis (2003) - Statutory unconscionability
+//! - Blomley v Ryan (1956) - Common law unconscionability
+//! - Commercial Bank v Amadio (1983) - Special disadvantage
+//! - Bellgrove v Eldridge (1954) - Cost of rectification
+//! - Multiplex v Honeywell (2007) - Practical completion
 
 pub mod acl;
 pub mod breach;
+pub mod building;
 pub mod error;
 pub mod formation;
 pub mod types;
+pub mod unconscionable;
 
 pub use acl::{
     ConsumerAnalyzer, ConsumerBasis, ConsumerRemedy, ConsumerStatusFacts, ConsumerStatusResult,
@@ -36,6 +51,14 @@ pub use acl::{
 };
 pub use breach::{
     BreachAnalyzer, BreachFacts, BreachResult, DamagesAnalyzer, DamagesFacts, DamagesResult,
+};
+pub use building::{
+    BuildingContractAnalyzer, BuildingContractFacts, BuildingContractResult, BuildingContractType,
+    BuildingRemedy, ComplianceIssue, DefectClassification, DefectsLiabilityAnalyzer,
+    DefectsLiabilityFacts, DefectsLiabilityResult, PaymentClaimStatus, PracticalCompletionAnalyzer,
+    PracticalCompletionFacts, PracticalCompletionResult, PracticalCompletionStatus,
+    ProgressPaymentAnalyzer, ProgressPaymentBasis, ProgressPaymentFacts, ProgressPaymentResult,
+    StatutoryWarranty, StatutoryWarrantyAnalyzer, WarrantyBreachFacts, WarrantyBreachResult,
 };
 pub use error::{ContractError, ContractResult};
 pub use formation::{
@@ -47,6 +70,13 @@ pub use types::{
     DuressType, ExclusionClauseStatus, FormationElement, MisrepresentationType, MistakeType,
     OfferType, ProhibitedConduct, TermClassification, TermType, UndueInfluenceType, UnfairTermType,
     VitiatingFactor,
+};
+pub use unconscionable::{
+    CommonLawUnconscionabilityAnalyzer, CommonLawUnconscionabilityFacts,
+    CommonLawUnconscionabilityResult, PowerImbalance, ProceduralFactor, SmallBusinessConsideration,
+    SpecialDisadvantage, StatutoryUnconscionabilityAnalyzer, StatutoryUnconscionabilityFacts,
+    StatutoryUnconscionabilityResult, SubstantiveFactor, UnconscionabilityAnalysisResult,
+    UnconscionabilityAnalyzer, UnconscionabilityType, UnconscionableElement, UnconscionableRemedy,
 };
 
 use crate::common::StateTerritory;

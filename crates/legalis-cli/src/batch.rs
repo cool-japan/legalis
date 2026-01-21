@@ -273,10 +273,10 @@ impl BatchProcessor {
             tasks.push(task);
 
             // Limit concurrent tasks
-            if tasks.len() >= self.workers {
-                if let Some(task) = tasks.pop() {
-                    let _ = task.await;
-                }
+            if tasks.len() >= self.workers
+                && let Some(task) = tasks.pop()
+            {
+                let _ = task.await;
             }
         }
 
@@ -330,12 +330,11 @@ pub fn expand_glob_pattern(pattern: &str) -> Result<Vec<PathBuf>> {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let file_path = entry.path();
-            if file_path.is_file() {
-                if let Some(ext) = file_path.extension() {
-                    if ext == "ldsl" || ext == "leg" {
-                        files.push(file_path);
-                    }
-                }
+            if file_path.is_file()
+                && let Some(ext) = file_path.extension()
+                && (ext == "ldsl" || ext == "leg")
+            {
+                files.push(file_path);
             }
         }
     } else {

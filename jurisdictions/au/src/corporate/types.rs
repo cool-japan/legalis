@@ -11,13 +11,19 @@ use serde::{Deserialize, Serialize};
 /// Company type
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompanyType {
-    /// Proprietary company limited by shares
+    /// Proprietary company limited by shares (Pty Ltd)
     ProprietaryLimited,
+    /// Proprietary unlimited company
+    ProprietaryUnlimited,
     /// Public company limited by shares
     PublicLimited,
-    /// Company limited by guarantee
+    /// Public unlimited company
+    PublicUnlimited,
+    /// Company limited by guarantee (public)
+    PublicLimitedByGuarantee,
+    /// Company limited by guarantee (general)
     LimitedByGuarantee,
-    /// Unlimited company
+    /// Unlimited company (general)
     Unlimited,
     /// No liability company (mining)
     NoLiability,

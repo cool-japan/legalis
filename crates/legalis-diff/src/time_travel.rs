@@ -72,17 +72,17 @@ impl TemporalStatute {
         }
 
         // Must be before superseded date (if any)
-        if let Some(superseded) = self.superseded_date {
-            if time >= superseded {
-                return false;
-            }
+        if let Some(superseded) = self.superseded_date
+            && time >= superseded
+        {
+            return false;
         }
 
         // Must be before sunset date (if any)
-        if let Some(sunset) = self.sunset_date {
-            if time >= sunset {
-                return false;
-            }
+        if let Some(sunset) = self.sunset_date
+            && time >= sunset
+        {
+            return false;
         }
 
         true

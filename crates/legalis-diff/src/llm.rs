@@ -102,10 +102,10 @@ impl LlmAnalyzer {
     pub fn explain_diff(&mut self, diff: &StatuteDiff) -> DiffResult<String> {
         let cache_key = format!("explain-{}", diff.statute_id);
 
-        if self.config.cache_responses {
-            if let Some(cached) = self.cache.get(&cache_key) {
-                return Ok(cached.clone());
-            }
+        if self.config.cache_responses
+            && let Some(cached) = self.cache.get(&cache_key)
+        {
+            return Ok(cached.clone());
         }
 
         let explanation = self.generate_explanation(diff);
@@ -203,10 +203,10 @@ impl LlmAnalyzer {
     pub fn detect_intent(&mut self, diff: &StatuteDiff) -> DiffResult<String> {
         let cache_key = format!("intent-{}", diff.statute_id);
 
-        if self.config.cache_responses {
-            if let Some(cached) = self.cache.get(&cache_key) {
-                return Ok(cached.clone());
-            }
+        if self.config.cache_responses
+            && let Some(cached) = self.cache.get(&cache_key)
+        {
+            return Ok(cached.clone());
         }
 
         let intent = self.analyze_intent(diff);

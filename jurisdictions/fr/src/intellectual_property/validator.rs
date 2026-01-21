@@ -44,10 +44,10 @@ pub fn validate_patent(patent: &Patent, current_date: NaiveDate) -> IPLawResult<
     }
 
     // Validate grant date is after filing date
-    if let Some(grant_date) = patent.grant_date {
-        if grant_date < patent.filing_date {
-            return Err(IPLawError::PatentError(PatentErrorKind::InvalidGrantDate));
-        }
+    if let Some(grant_date) = patent.grant_date
+        && grant_date < patent.filing_date
+    {
+        return Err(IPLawError::PatentError(PatentErrorKind::InvalidGrantDate));
     }
 
     Ok(())
@@ -119,12 +119,12 @@ pub fn validate_copyright(copyright: &Copyright, current_date: NaiveDate) -> IPL
     }
 
     // Validate death date is after creation date
-    if let Some(death_date) = copyright.author_death_date {
-        if death_date < copyright.creation_date {
-            return Err(IPLawError::CopyrightError(
-                CopyrightErrorKind::InvalidDeathDate,
-            ));
-        }
+    if let Some(death_date) = copyright.author_death_date
+        && death_date < copyright.creation_date
+    {
+        return Err(IPLawError::CopyrightError(
+            CopyrightErrorKind::InvalidDeathDate,
+        ));
     }
 
     Ok(())

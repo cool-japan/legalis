@@ -156,13 +156,13 @@ impl InferenceRule for TransitivityRule {
 
             // Build graph
             for triple in triples {
-                if triple.predicate == prop {
-                    if let RdfValue::Uri(obj) = &triple.object {
-                        graph
-                            .entry(triple.subject.clone())
-                            .or_default()
-                            .push(obj.clone());
-                    }
+                if triple.predicate == prop
+                    && let RdfValue::Uri(obj) = &triple.object
+                {
+                    graph
+                        .entry(triple.subject.clone())
+                        .or_default()
+                        .push(obj.clone());
                 }
             }
 
@@ -172,18 +172,18 @@ impl InferenceRule for TransitivityRule {
                 let mut stack = vec![start.clone()];
 
                 while let Some(current) = stack.pop() {
-                    if visited.insert(current.clone()) {
-                        if let Some(neighbors) = graph.get(&current) {
-                            for neighbor in neighbors {
-                                // Add transitive triple
-                                if neighbor != start && !visited.contains(neighbor) {
-                                    inferred.push(Triple {
-                                        subject: start.clone(),
-                                        predicate: prop.to_string(),
-                                        object: RdfValue::Uri(neighbor.clone()),
-                                    });
-                                    stack.push(neighbor.clone());
-                                }
+                    if visited.insert(current.clone())
+                        && let Some(neighbors) = graph.get(&current)
+                    {
+                        for neighbor in neighbors {
+                            // Add transitive triple
+                            if neighbor != start && !visited.contains(neighbor) {
+                                inferred.push(Triple {
+                                    subject: start.clone(),
+                                    predicate: prop.to_string(),
+                                    object: RdfValue::Uri(neighbor.clone()),
+                                });
+                                stack.push(neighbor.clone());
                             }
                         }
                     }
@@ -223,14 +223,14 @@ impl InferenceRule for SymmetricPropertyRule {
         let symmetric_set: HashSet<&str> = symmetric_props.iter().copied().collect();
 
         for triple in triples {
-            if symmetric_set.contains(triple.predicate.as_str()) {
-                if let RdfValue::Uri(obj) = &triple.object {
-                    inferred.push(Triple {
-                        subject: obj.clone(),
-                        predicate: triple.predicate.clone(),
-                        object: RdfValue::Uri(triple.subject.clone()),
-                    });
-                }
+            if symmetric_set.contains(triple.predicate.as_str())
+                && let RdfValue::Uri(obj) = &triple.object
+            {
+                inferred.push(Triple {
+                    subject: obj.clone(),
+                    predicate: triple.predicate.clone(),
+                    object: RdfValue::Uri(triple.subject.clone()),
+                });
             }
         }
 
@@ -285,29 +285,28 @@ impl InferenceRule for SubClassRule {
         // Build subclass hierarchy
         let mut subclass_map: HashMap<String, Vec<String>> = HashMap::new();
         for triple in triples {
-            if triple.predicate == "rdfs:subClassOf" {
-                if let RdfValue::Uri(superclass) = &triple.object {
-                    subclass_map
-                        .entry(triple.subject.clone())
-                        .or_default()
-                        .push(superclass.clone());
-                }
+            if triple.predicate == "rdfs:subClassOf"
+                && let RdfValue::Uri(superclass) = &triple.object
+            {
+                subclass_map
+                    .entry(triple.subject.clone())
+                    .or_default()
+                    .push(superclass.clone());
             }
         }
 
         // Apply subclass inference
         for triple in triples {
-            if triple.predicate == "rdf:type" {
-                if let RdfValue::Uri(class) = &triple.object {
-                    if let Some(superclasses) = subclass_map.get(class) {
-                        for superclass in superclasses {
-                            inferred.push(Triple {
-                                subject: triple.subject.clone(),
-                                predicate: "rdf:type".to_string(),
-                                object: RdfValue::Uri(superclass.clone()),
-                            });
-                        }
-                    }
+            if triple.predicate == "rdf:type"
+                && let RdfValue::Uri(class) = &triple.object
+                && let Some(superclasses) = subclass_map.get(class)
+            {
+                for superclass in superclasses {
+                    inferred.push(Triple {
+                        subject: triple.subject.clone(),
+                        predicate: "rdf:type".to_string(),
+                        object: RdfValue::Uri(superclass.clone()),
+                    });
                 }
             }
         }
@@ -343,13 +342,13 @@ impl InferenceRule for SubPropertyRule {
         // Build subproperty hierarchy
         let mut subprop_map: HashMap<String, Vec<String>> = HashMap::new();
         for triple in triples {
-            if triple.predicate == "rdfs:subPropertyOf" {
-                if let RdfValue::Uri(superprop) = &triple.object {
-                    subprop_map
-                        .entry(triple.subject.clone())
-                        .or_default()
-                        .push(superprop.clone());
-                }
+            if triple.predicate == "rdfs:subPropertyOf"
+                && let RdfValue::Uri(superprop) = &triple.object
+            {
+                subprop_map
+                    .entry(triple.subject.clone())
+                    .or_default()
+                    .push(superprop.clone());
             }
         }
 
@@ -392,25 +391,25 @@ impl InferenceRule for LegalInheritanceRule {
 
         // Find statute references
         for triple in triples {
-            if triple.predicate == "legalis:references" || triple.predicate == "dcterms:references"
+            if (triple.predicate == "legalis:references"
+                || triple.predicate == "dcterms:references")
+                && let RdfValue::Uri(referenced) = &triple.object
             {
-                if let RdfValue::Uri(referenced) = &triple.object {
-                    // Inherit jurisdiction
-                    for t in triples {
-                        if t.subject == *referenced && t.predicate == "eli:jurisdiction" {
-                            // Add inferred jurisdiction if not explicitly set
-                            let has_jurisdiction = triples.iter().any(|existing| {
-                                existing.subject == triple.subject
-                                    && existing.predicate == "eli:jurisdiction"
-                            });
+                // Inherit jurisdiction
+                for t in triples {
+                    if t.subject == *referenced && t.predicate == "eli:jurisdiction" {
+                        // Add inferred jurisdiction if not explicitly set
+                        let has_jurisdiction = triples.iter().any(|existing| {
+                            existing.subject == triple.subject
+                                && existing.predicate == "eli:jurisdiction"
+                        });
 
-                            if !has_jurisdiction {
-                                inferred.push(Triple {
-                                    subject: triple.subject.clone(),
-                                    predicate: "eli:jurisdiction".to_string(),
-                                    object: t.object.clone(),
-                                });
-                            }
+                        if !has_jurisdiction {
+                            inferred.push(Triple {
+                                subject: triple.subject.clone(),
+                                predicate: "eli:jurisdiction".to_string(),
+                                object: t.object.clone(),
+                            });
                         }
                     }
                 }

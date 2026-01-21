@@ -147,13 +147,13 @@ impl JsonSchema {
 
         // Check optional fields if present
         for (field, expected_type) in &self.optional_fields {
-            if let Some(field_value) = obj.get(field) {
-                if !self.check_type(field_value, expected_type) {
-                    warnings.push(format!(
-                        "Optional field '{}' has wrong type (expected {:?})",
-                        field, expected_type
-                    ));
-                }
+            if let Some(field_value) = obj.get(field)
+                && !self.check_type(field_value, expected_type)
+            {
+                warnings.push(format!(
+                    "Optional field '{}' has wrong type (expected {:?})",
+                    field, expected_type
+                ));
             }
         }
 
@@ -420,29 +420,28 @@ pub mod rules {
         fn validate(&self, value: &Value) -> Vec<String> {
             let mut errors = Vec::new();
 
-            if let Some(obj) = value.as_object() {
-                if let Some(field_value) = obj.get(&self.field) {
-                    if let Some(s) = field_value.as_str() {
-                        let len = s.len();
+            if let Some(obj) = value.as_object()
+                && let Some(field_value) = obj.get(&self.field)
+                && let Some(s) = field_value.as_str()
+            {
+                let len = s.len();
 
-                        if let Some(min) = self.min_length {
-                            if len < min {
-                                errors.push(format!(
-                                    "Field '{}' is too short: {} < {}",
-                                    self.field, len, min
-                                ));
-                            }
-                        }
+                if let Some(min) = self.min_length
+                    && len < min
+                {
+                    errors.push(format!(
+                        "Field '{}' is too short: {} < {}",
+                        self.field, len, min
+                    ));
+                }
 
-                        if let Some(max) = self.max_length {
-                            if len > max {
-                                errors.push(format!(
-                                    "Field '{}' is too long: {} > {}",
-                                    self.field, len, max
-                                ));
-                            }
-                        }
-                    }
+                if let Some(max) = self.max_length
+                    && len > max
+                {
+                    errors.push(format!(
+                        "Field '{}' is too long: {} > {}",
+                        self.field, len, max
+                    ));
                 }
             }
 
@@ -492,27 +491,26 @@ pub mod rules {
         fn validate(&self, value: &Value) -> Vec<String> {
             let mut errors = Vec::new();
 
-            if let Some(obj) = value.as_object() {
-                if let Some(field_value) = obj.get(&self.field) {
-                    if let Some(num) = field_value.as_f64() {
-                        if let Some(min) = self.min {
-                            if num < min {
-                                errors.push(format!(
-                                    "Field '{}' is below minimum: {} < {}",
-                                    self.field, num, min
-                                ));
-                            }
-                        }
+            if let Some(obj) = value.as_object()
+                && let Some(field_value) = obj.get(&self.field)
+                && let Some(num) = field_value.as_f64()
+            {
+                if let Some(min) = self.min
+                    && num < min
+                {
+                    errors.push(format!(
+                        "Field '{}' is below minimum: {} < {}",
+                        self.field, num, min
+                    ));
+                }
 
-                        if let Some(max) = self.max {
-                            if num > max {
-                                errors.push(format!(
-                                    "Field '{}' exceeds maximum: {} > {}",
-                                    self.field, num, max
-                                ));
-                            }
-                        }
-                    }
+                if let Some(max) = self.max
+                    && num > max
+                {
+                    errors.push(format!(
+                        "Field '{}' exceeds maximum: {} > {}",
+                        self.field, num, max
+                    ));
                 }
             }
 
@@ -562,29 +560,28 @@ pub mod rules {
         fn validate(&self, value: &Value) -> Vec<String> {
             let mut errors = Vec::new();
 
-            if let Some(obj) = value.as_object() {
-                if let Some(field_value) = obj.get(&self.field) {
-                    if let Some(arr) = field_value.as_array() {
-                        let len = arr.len();
+            if let Some(obj) = value.as_object()
+                && let Some(field_value) = obj.get(&self.field)
+                && let Some(arr) = field_value.as_array()
+            {
+                let len = arr.len();
 
-                        if let Some(min) = self.min_items {
-                            if len < min {
-                                errors.push(format!(
-                                    "Field '{}' has too few items: {} < {}",
-                                    self.field, len, min
-                                ));
-                            }
-                        }
+                if let Some(min) = self.min_items
+                    && len < min
+                {
+                    errors.push(format!(
+                        "Field '{}' has too few items: {} < {}",
+                        self.field, len, min
+                    ));
+                }
 
-                        if let Some(max) = self.max_items {
-                            if len > max {
-                                errors.push(format!(
-                                    "Field '{}' has too many items: {} > {}",
-                                    self.field, len, max
-                                ));
-                            }
-                        }
-                    }
+                if let Some(max) = self.max_items
+                    && len > max
+                {
+                    errors.push(format!(
+                        "Field '{}' has too many items: {} > {}",
+                        self.field, len, max
+                    ));
                 }
             }
 
@@ -616,17 +613,16 @@ pub mod rules {
         fn validate(&self, value: &Value) -> Vec<String> {
             let mut errors = Vec::new();
 
-            if let Some(obj) = value.as_object() {
-                if let Some(field_value) = obj.get(&self.field) {
-                    if let Some(s) = field_value.as_str() {
-                        // Simple pattern matching (not full regex)
-                        if !s.contains(&self.pattern) {
-                            errors.push(format!(
-                                "Field '{}' does not match pattern '{}'",
-                                self.field, self.pattern
-                            ));
-                        }
-                    }
+            if let Some(obj) = value.as_object()
+                && let Some(field_value) = obj.get(&self.field)
+                && let Some(s) = field_value.as_str()
+            {
+                // Simple pattern matching (not full regex)
+                if !s.contains(&self.pattern) {
+                    errors.push(format!(
+                        "Field '{}' does not match pattern '{}'",
+                        self.field, self.pattern
+                    ));
                 }
             }
 
@@ -656,19 +652,19 @@ pub mod rules {
         fn validate(&self, value: &Value) -> Vec<String> {
             let mut errors = Vec::new();
 
-            if let Some(obj) = value.as_object() {
-                if let Some(field_value) = obj.get(&self.field) {
-                    let is_empty = match field_value {
-                        Value::String(s) => s.is_empty(),
-                        Value::Array(a) => a.is_empty(),
-                        Value::Object(o) => o.is_empty(),
-                        Value::Null => true,
-                        _ => false,
-                    };
+            if let Some(obj) = value.as_object()
+                && let Some(field_value) = obj.get(&self.field)
+            {
+                let is_empty = match field_value {
+                    Value::String(s) => s.is_empty(),
+                    Value::Array(a) => a.is_empty(),
+                    Value::Object(o) => o.is_empty(),
+                    Value::Null => true,
+                    _ => false,
+                };
 
-                    if is_empty {
-                        errors.push(format!("Field '{}' must not be empty", self.field));
-                    }
+                if is_empty {
+                    errors.push(format!("Field '{}' must not be empty", self.field));
                 }
             }
 

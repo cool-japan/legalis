@@ -22,13 +22,13 @@
 //!
 //! ## Key Cases
 //!
-//! - **R v Woollin** [1999]: Oblique intention - virtual certainty test
-//! - **R v Martineau** [1990] SCC: Subjective foresight for murder
-//! - **R v Creighton** [1993] SCC: Objective foreseeability for manslaughter
-//! - **R v Grant** [2009] SCC: Section 24(2) exclusion framework
-//! - **R v Jordan** [2016] SCC: Trial delay presumptive ceilings
-//! - **R v Gladue** [1999] SCC: Indigenous sentencing under s.718.2(e)
-//! - **Perka v The Queen** [1984] SCC: Necessity defence elements
+//! - **R v Woollin** \[1999\]: Oblique intention - virtual certainty test
+//! - **R v Martineau** \[1990\] SCC: Subjective foresight for murder
+//! - **R v Creighton** \[1993\] SCC: Objective foreseeability for manslaughter
+//! - **R v Grant** \[2009\] SCC: Section 24(2) exclusion framework
+//! - **R v Jordan** \[2016\] SCC: Trial delay presumptive ceilings
+//! - **R v Gladue** \[1999\] SCC: Indigenous sentencing under s.718.2(e)
+//! - **Perka v The Queen** \[1984\] SCC: Necessity defence elements
 
 mod error;
 mod offences;

@@ -1,0 +1,29 @@
+[package]
+name = "legalis-la"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lao PDR jurisdiction support for Legalis-RS - Civil Code 2020 with comparative law analysis"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-la"
+keywords = ["legalis", "laos", "civil-law", "lao-pdr", "oda"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-sim.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+
+[features]
+default = []
+serde = []
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

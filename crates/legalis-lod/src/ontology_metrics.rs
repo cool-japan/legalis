@@ -310,28 +310,28 @@ impl OntologyAnalyzer {
 
         for triple in &self.triples {
             // Count classes
-            if triple.predicate == "rdf:type" {
-                if let RdfValue::Uri(ref type_uri) = triple.object {
-                    if type_uri.contains("Class") {
-                        classes.insert(triple.subject.clone());
-                    } else if type_uri.contains("ObjectProperty") {
-                        object_properties.insert(triple.subject.clone());
-                    } else if type_uri.contains("DatatypeProperty") {
-                        datatype_properties.insert(triple.subject.clone());
-                    } else {
-                        individuals.insert(triple.subject.clone());
-                    }
+            if triple.predicate == "rdf:type"
+                && let RdfValue::Uri(ref type_uri) = triple.object
+            {
+                if type_uri.contains("Class") {
+                    classes.insert(triple.subject.clone());
+                } else if type_uri.contains("ObjectProperty") {
+                    object_properties.insert(triple.subject.clone());
+                } else if type_uri.contains("DatatypeProperty") {
+                    datatype_properties.insert(triple.subject.clone());
+                } else {
+                    individuals.insert(triple.subject.clone());
                 }
             }
 
             // Track subclass relations
-            if triple.predicate == "rdfs:subClassOf" {
-                if let RdfValue::Uri(ref superclass) = triple.object {
-                    subclass_relations
-                        .entry(superclass.clone())
-                        .or_default()
-                        .push(triple.subject.clone());
-                }
+            if triple.predicate == "rdfs:subClassOf"
+                && let RdfValue::Uri(ref superclass) = triple.object
+            {
+                subclass_relations
+                    .entry(superclass.clone())
+                    .or_default()
+                    .push(triple.subject.clone());
             }
         }
 

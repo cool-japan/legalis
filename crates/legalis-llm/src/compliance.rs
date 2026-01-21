@@ -420,12 +420,12 @@ impl<P: LLMProvider> ComplianceProvider<P> {
 impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
     async fn generate_text(&self, prompt: &str) -> Result<String> {
         // Check for sensitive information in input
-        if let Some(ref protector) = self.confidentiality_protector {
-            if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!(
-                    "Input contains sensitive information that must be redacted"
-                ));
-            }
+        if let Some(ref protector) = self.confidentiality_protector
+            && protector.contains_sensitive_info(prompt)
+        {
+            return Err(anyhow!(
+                "Input contains sensitive information that must be redacted"
+            ));
         }
 
         // Generate response
@@ -437,10 +437,10 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
         }
 
         // Apply disclaimer
-        if let Some(ref disclaimer) = self.disclaimer {
-            if disclaimer.required {
-                response = disclaimer.apply(&response);
-            }
+        if let Some(ref disclaimer) = self.disclaimer
+            && disclaimer.required
+        {
+            response = disclaimer.apply(&response);
         }
 
         // Audit log
@@ -463,12 +463,12 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
         prompt: &str,
     ) -> Result<T> {
         // Similar checks as generate_text
-        if let Some(ref protector) = self.confidentiality_protector {
-            if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!(
-                    "Input contains sensitive information that must be redacted"
-                ));
-            }
+        if let Some(ref protector) = self.confidentiality_protector
+            && protector.contains_sensitive_info(prompt)
+        {
+            return Err(anyhow!(
+                "Input contains sensitive information that must be redacted"
+            ));
         }
 
         let response = self.provider.generate_structured(prompt).await?;
@@ -490,12 +490,12 @@ impl<P: LLMProvider> LLMProvider for ComplianceProvider<P> {
 
     async fn generate_text_stream(&self, prompt: &str) -> Result<crate::TextStream> {
         // Check for sensitive information
-        if let Some(ref protector) = self.confidentiality_protector {
-            if protector.contains_sensitive_info(prompt) {
-                return Err(anyhow!(
-                    "Input contains sensitive information that must be redacted"
-                ));
-            }
+        if let Some(ref protector) = self.confidentiality_protector
+            && protector.contains_sensitive_info(prompt)
+        {
+            return Err(anyhow!(
+                "Input contains sensitive information that must be redacted"
+            ));
         }
 
         self.provider.generate_text_stream(prompt).await

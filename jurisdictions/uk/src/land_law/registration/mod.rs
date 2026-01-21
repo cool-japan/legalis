@@ -11,8 +11,8 @@
 //! - Alteration and indemnity (LRA 2002 Sch 4, 8)
 //!
 //! Key cases:
-//! - Williams & Glyn's Bank v Boland [1981] (actual occupation)
-//! - City of London BS v Flegg [1988] (overreaching)
+//! - Williams & Glyn's Bank v Boland \[1981\] (actual occupation)
+//! - City of London BS v Flegg \[1988\] (overreaching)
 
 #![allow(missing_docs)]
 

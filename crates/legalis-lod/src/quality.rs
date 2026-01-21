@@ -344,31 +344,31 @@ impl QualityAnalyzer {
             let mut is_accurate = true;
 
             // Check for empty literals
-            if let crate::RdfValue::Literal(s, _) = &triple.object {
-                if s.trim().is_empty() {
-                    is_accurate = false;
-                    issues.push(QualityIssue {
-                        issue_type: QualityIssueType::EmptyValue,
-                        severity: Severity::High,
-                        description: "Empty literal value".to_string(),
-                        subject: Some(triple.subject.clone()),
-                        property: Some(triple.predicate.clone()),
-                    });
-                }
+            if let crate::RdfValue::Literal(s, _) = &triple.object
+                && s.trim().is_empty()
+            {
+                is_accurate = false;
+                issues.push(QualityIssue {
+                    issue_type: QualityIssueType::EmptyValue,
+                    severity: Severity::High,
+                    description: "Empty literal value".to_string(),
+                    subject: Some(triple.subject.clone()),
+                    property: Some(triple.predicate.clone()),
+                });
             }
 
             // Check for invalid URIs
-            if let crate::RdfValue::Uri(uri) = &triple.object {
-                if !self.is_valid_uri(uri) {
-                    is_accurate = false;
-                    issues.push(QualityIssue {
-                        issue_type: QualityIssueType::InvalidUri,
-                        severity: Severity::High,
-                        description: format!("Invalid URI: {}", uri),
-                        subject: Some(triple.subject.clone()),
-                        property: Some(triple.predicate.clone()),
-                    });
-                }
+            if let crate::RdfValue::Uri(uri) = &triple.object
+                && !self.is_valid_uri(uri)
+            {
+                is_accurate = false;
+                issues.push(QualityIssue {
+                    issue_type: QualityIssueType::InvalidUri,
+                    severity: Severity::High,
+                    description: format!("Invalid URI: {}", uri),
+                    subject: Some(triple.subject.clone()),
+                    property: Some(triple.predicate.clone()),
+                });
             }
 
             if is_accurate {

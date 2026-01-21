@@ -392,11 +392,11 @@ impl InflationAdjuster {
         self.cpi_by_year.insert(year, cpi);
 
         // Calculate inflation rate if previous year exists
-        if year > self.base_year {
-            if let Some(prev_cpi) = self.cpi_by_year.get(&(year - 1)) {
-                let inflation = ((cpi - prev_cpi) / prev_cpi) * 100.0;
-                self.inflation_by_year.insert(year, inflation);
-            }
+        if year > self.base_year
+            && let Some(prev_cpi) = self.cpi_by_year.get(&(year - 1))
+        {
+            let inflation = ((cpi - prev_cpi) / prev_cpi) * 100.0;
+            self.inflation_by_year.insert(year, inflation);
         }
     }
 
