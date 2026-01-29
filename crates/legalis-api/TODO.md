@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.2.5 | Status: Stable | Tests: 249 passing (244 with grpc feature) | Warnings: 0
+Version: 0.2.5 | Status: Stable | Tests: 262 passing (257 with grpc feature) | Warnings: 0
 
-All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. Event-Driven Architecture (v0.2.4) is complete with event sourcing, CQRS patterns, event streaming (Kafka/NATS), event replay, and schema registry. Developer Experience (v0.2.5) is complete with API playground improvements, request mocking, API testing utilities, SDK auto-update notifications, and changelog generation.
+All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Generation (v0.1.7 and v0.2.0) is complete with TypeScript and Python generators supporting authentication, retry logic, streaming, and comprehensive testing. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. Event-Driven Architecture (v0.2.4) is complete with event sourcing, CQRS patterns, event streaming (Kafka/NATS), event replay, and schema registry. Developer Experience (v0.2.5) is complete with API playground improvements, request mocking, API testing utilities, SDK auto-update notifications, and changelog generation.
 
 ---
 
@@ -63,7 +63,7 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC su
 - [x] Add OpenAPI/Swagger documentation (comprehensive with examples)
 - [x] Create interactive API explorer (Swagger UI)
 - [x] Add request/response examples
-- [ ] Create SDK generation from OpenAPI
+- [x] Create SDK generation from OpenAPI (TypeScript and Python with auth, retry, tests)
 
 ## Real-time
 
@@ -156,11 +156,11 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC su
 - [x] Add SLO/SLI tracking (availability, latency, error rate, throughput with error budgets)
 
 ### SDK Generation (v0.1.7)
-- [ ] Generate TypeScript SDK from OpenAPI
-- [ ] Generate Python SDK from OpenAPI
-- [ ] Generate Go SDK from OpenAPI
-- [ ] Generate Rust SDK from OpenAPI
-- [ ] Add SDK versioning and compatibility
+- [x] Generate TypeScript SDK from OpenAPI (with auth, retry, streaming, tests)
+- [x] Generate Python SDK from OpenAPI (with auth, retry, async support, tests)
+- [ ] Generate Go SDK from OpenAPI (planned)
+- [ ] Generate Rust SDK from OpenAPI (planned)
+- [x] Add SDK versioning and compatibility (via config)
 
 ### Federation (v0.1.8)
 - [ ] Add GraphQL federation support
@@ -179,11 +179,11 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. gRPC su
 ## Roadmap for 0.2.0 Series
 
 ### SDK Generation (v0.2.0)
-- [ ] Generate TypeScript/JavaScript SDK from OpenAPI
-- [ ] Generate Python SDK with type hints
-- [ ] Generate Go SDK with idiomatic patterns
-- [ ] Generate Rust SDK with async support
-- [ ] Generate Java/Kotlin SDK for Android
+- [x] Generate TypeScript/JavaScript SDK from OpenAPI (comprehensive with fetch, auth handlers, retry logic)
+- [x] Generate Python SDK with type hints (async/await, httpx, dataclasses)
+- [ ] Generate Go SDK with idiomatic patterns (planned)
+- [ ] Generate Rust SDK with async support (planned)
+- [ ] Generate Java/Kotlin SDK for Android (planned)
 
 ### gRPC Support (v0.2.1)
 - [x] Add gRPC service definitions (proto files with comprehensive service and message types)

@@ -219,7 +219,7 @@ pub fn interactive_new_statute() -> Result<(String, String, Option<String>)> {
     let template = templates[template_idx]
         .split(" - ")
         .next()
-        .unwrap()
+        .expect("Template string should have at least one part")
         .to_string();
 
     let output = prompt.prompt_optional_string("Output directory", Some("."))?;
@@ -267,7 +267,11 @@ pub fn interactive_export() -> Result<(String, String, String)> {
     ];
 
     let format_idx = prompt.prompt_select("Select export format", &formats)?;
-    let format = formats[format_idx].split(" - ").next().unwrap().to_string();
+    let format = formats[format_idx]
+        .split(" - ")
+        .next()
+        .expect("Format string should have at least one part")
+        .to_string();
 
     let output = prompt.prompt_string("Output file path")?;
 
@@ -318,7 +322,7 @@ pub fn interactive_statute_builder() -> Result<StatuteBuilderResult> {
         let cond_type = condition_type_options[cond_idx]
             .split(" - ")
             .next()
-            .unwrap();
+            .expect("Condition type option string should have at least one part");
 
         let condition = match cond_type {
             "age" => {
@@ -409,7 +413,7 @@ pub fn interactive_statute_builder() -> Result<StatuteBuilderResult> {
     let outcome_type = outcome_type_options[outcome_idx]
         .split(" - ")
         .next()
-        .unwrap()
+        .expect("Outcome type option string should have at least one part")
         .to_string();
 
     let outcome_value = if outcome_type == "benefit" || outcome_type == "penalty" {
@@ -492,7 +496,7 @@ pub fn interactive_diff_viewer(old_path: &str, new_path: &str) -> Result<DiffVie
     let action = action_options[action_idx]
         .split(" - ")
         .next()
-        .unwrap()
+        .expect("Action option string should have at least one part")
         .to_string();
 
     let should_backup = if action == "accept" || action == "merge" {
@@ -559,7 +563,7 @@ pub fn interactive_simulation_tuning() -> Result<SimulationParams> {
     let output_format = output_format_options[format_idx]
         .split(" - ")
         .next()
-        .unwrap()
+        .expect("Output format option string should have at least one part")
         .to_string();
 
     let output_path = prompt
@@ -628,7 +632,7 @@ pub fn interactive_conflict_resolution(
         let resolution_type = resolution_options[resolution_idx]
             .split(" - ")
             .next()
-            .unwrap()
+            .expect("Resolution option string should have at least one part")
             .to_string();
 
         let custom_value = if resolution_type == "custom" {

@@ -292,6 +292,12 @@ pub enum SchuldrechtError {
     UnknownContractType,
 
     #[error(
+        "Ungültige Vertragsbedingungen: {reason}\n\
+         Invalid contract terms: {reason}"
+    )]
+    InvalidContractTerms { reason: String },
+
+    #[error(
         "Mehrere Fehler: {errors:?}\n\
          Multiple errors: {errors:?}"
     )]
@@ -346,6 +352,7 @@ impl SchuldrechtError {
             Self::SubjectMatterUnclear => "§154 Abs. 1 BGB",
             Self::ConsiderationMissing => "General",
             Self::UnknownContractType => "General",
+            Self::InvalidContractTerms { .. } => "General",
             Self::MultipleErrors { .. } => "Multiple",
         }
     }

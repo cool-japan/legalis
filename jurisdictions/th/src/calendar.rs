@@ -83,7 +83,7 @@ pub fn be_to_ce(be_year: i32) -> i32 {
     be_year - BE_CE_OFFSET
 }
 
-/// Formats a Buddhist Era year in Thai format: "พ.ศ. [year]"
+/// Formats a Buddhist Era year in Thai format: "พ.ศ. \[year\]"
 ///
 /// # Examples
 ///
@@ -97,7 +97,7 @@ pub fn format_buddhist_year(be_year: i32) -> String {
     format!("พ.ศ. {}", be_year)
 }
 
-/// Formats a Buddhist Era year in English format: "B.E. [year]"
+/// Formats a Buddhist Era year in English format: "B.E. \[year\]"
 ///
 /// # Examples
 ///
@@ -156,12 +156,12 @@ impl BuddhistYear {
         be_to_ce(self.be_year)
     }
 
-    /// Formats the year in Thai format: "พ.ศ. [year]"
+    /// Formats the year in Thai format: "พ.ศ. \[year\]"
     pub fn format_th(&self) -> String {
         format_buddhist_year(self.be_year)
     }
 
-    /// Formats the year in English format: "B.E. [year]"
+    /// Formats the year in English format: "B.E. \[year\]"
     pub fn format_en(&self) -> String {
         format_buddhist_year_en(self.be_year)
     }
@@ -311,7 +311,7 @@ impl BuddhistDate {
         Self::from_datetime(&Utc::now())
     }
 
-    /// Formats the date in Thai format: "วันที่ [day] เดือน[month] พ.ศ. [year]"
+    /// Formats the date in Thai format: "วันที่ \[day\] เดือน\[month\] พ.ศ. \[year\]"
     ///
     /// # Examples
     ///
@@ -330,7 +330,7 @@ impl BuddhistDate {
         )
     }
 
-    /// Formats the date in English format: "[day] [month] B.E. [year]"
+    /// Formats the date in English format: "\[day\] \[month\] B.E. \[year\]"
     pub fn format_en(&self) -> String {
         format!(
             "{} {} B.E. {}",

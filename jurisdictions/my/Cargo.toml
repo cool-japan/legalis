@@ -1,0 +1,25 @@
+[package]
+name = "legalis-my"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Malaysia jurisdiction support for Legalis-RS - Malaysian legal system with Common Law + Islamic Law hybrid, PDPA 2010, Companies Act 2016, Employment Act 1955"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-my"
+keywords = ["legalis", "malaysia", "common-law", "pdpa", "islamic-law"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-interop.workspace = true
+chrono.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio.workspace = true

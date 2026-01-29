@@ -1,0 +1,15 @@
+[package]
+name = "executable-law"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "executable-law"
+path = "src/main.rs"
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex = "1.12"

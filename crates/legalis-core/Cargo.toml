@@ -22,16 +22,16 @@ serde_json = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
 toml = { version = "0.9", optional = true }
 schemars = { version = "1.2", features = ["uuid1", "chrono04"], optional = true }
-rayon = { version = "1.11", optional = true }
+rayon = { workspace = true, optional = true }
 uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
-regex = "1.12"
+regex.workspace = true
 sha2 = "0.10"
 
 [dev-dependencies]
-proptest = "1.9"
-criterion = "0.8"
+proptest.workspace = true
+criterion.workspace = true
 
 [[bench]]
 name = "core_benchmarks"

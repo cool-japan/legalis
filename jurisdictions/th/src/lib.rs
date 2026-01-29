@@ -110,11 +110,39 @@
 //!
 //! ## Module Structure
 //!
+//! ### Core Infrastructure
 //! - [`calendar`] - Buddhist Era calendar system
 //! - [`citation`] - Thai legal citation formatting
-//! - [`labor_law`] - Labor Protection Act
-//! - [`data_protection`] - PDPA
-//! - [`foreign_business`] - Foreign Business Act
+//!
+//! ### Civil and Commercial Law
+//! - [`civil_commercial_code`] - CCC Books I-VI (General, Obligations, Contracts, Commercial, Family, Succession)
+//!
+//! ### Business and Investment
+//! - [`company_act`] - Public Limited Companies Act
+//! - [`foreign_business`] - Foreign Business Act (FBA)
+//! - [`investment_promotion`] - Board of Investment (BOI)
+//! - [`land_code`] - Land Code and property rights
+//! - [`competition_law`] - Trade Competition Act
+//!
+//! ### Labor and Employment
+//! - [`labor_law`] - Labor Protection Act (LPA)
+//!
+//! ### Data and Consumer Protection
+//! - [`data_protection`] - Personal Data Protection Act (PDPA)
+//! - [`consumer_protection`] - Consumer Protection Act
+//!
+//! ### Tax and Customs
+//! - [`tax_law`] - Revenue Code (CIT, PIT, VAT) and Customs
+//!
+//! ### Criminal and Procedural Law
+//! - [`criminal_code`] - Criminal Code
+//! - [`arbitration`] - Arbitration Act
+//! - [`bankruptcy`] - Bankruptcy Act
+//!
+//! ### Regulatory and Specialized Law
+//! - [`immigration`] - Immigration Act (visas, work permits)
+//! - [`intellectual_property`] - IP Law (patents, trademarks, copyrights)
+//! - [`securities_law`] - Securities and Exchange Act
 //!
 //! ## Bilingual Support
 //!
@@ -136,11 +164,39 @@
 //! - [Department of Labour Protection](https://www.labour.go.th/)
 //! - [PDPC - Personal Data Protection Committee](https://www.pdpc.or.th/)
 
+// Core infrastructure
 pub mod calendar;
 pub mod citation;
-pub mod data_protection;
+
+// Civil and Commercial Law
+pub mod civil_commercial_code;
+
+// Business and Investment
+pub mod company_act;
+pub mod competition_law;
 pub mod foreign_business;
+pub mod investment_promotion;
+pub mod land_code;
+
+// Labor and Employment
 pub mod labor_law;
+
+// Data and Consumer Protection
+pub mod consumer_protection;
+pub mod data_protection;
+
+// Tax and Customs
+pub mod tax_law;
+
+// Criminal and Procedural Law
+pub mod arbitration;
+pub mod bankruptcy;
+pub mod criminal_code;
+
+// Regulatory and Specialized Law
+pub mod immigration;
+pub mod intellectual_property;
+pub mod securities_law;
 
 // Re-export calendar types
 pub use calendar::{
@@ -170,6 +226,74 @@ pub use foreign_business::{
 pub use labor_law::{
     EmploymentContract, EmploymentType, LaborCompliance, LpaError, LpaResult, Severance,
     TerminationType, WorkingHours,
+};
+
+// Re-export Civil and Commercial Code types
+pub use civil_commercial_code::{
+    AdoptionRequirement, AgentType, BuyerObligation, CommercialAct, CommercialBusiness,
+    CommercialRegistrationType, Contract, ContractRemedy, ContractRequirement, DamagesType,
+    DisinheritanceGround, DivorceGround, DomicileType, Estate, HeirClass, InterpretationPrinciple,
+    JuristicActValidity, LeaseContract, LeaseType, LegalCapacity, LimitationPeriod, Marriage,
+    MarriageRequirement, ObligationPerformance, ObligationSource, Person, PropertyRegime,
+    SaleContract, SecurityType, SellerObligation, SpecificContract, SpouseShare, TortLiability,
+    VoidableGround, WillType,
+};
+
+// Re-export Criminal Code types
+pub use criminal_code::{
+    AggravatingCircumstance, CriminalResponsibility, MitigatingCircumstance, OffenseCategory,
+    Punishment, StatuteOfLimitations,
+};
+
+// Re-export Tax Law types
+pub use tax_law::{
+    CITRate, CustomsDutyType, CustomsProcedure, FilingPeriod, PITBracket, PreferentialScheme,
+    TaxType, VAT_REGISTRATION_THRESHOLD, VATRate, ValuationMethod,
+};
+
+// Re-export Investment Promotion types
+pub use investment_promotion::{BOIIncentive, EECZone, InvestmentZone, PromotionCategory};
+
+// Re-export IP types
+pub use intellectual_property::{
+    CopyrightWork, IPType, InfringementType, PatentType, TrademarkClass,
+};
+
+// Re-export Immigration types
+pub use immigration::{
+    ExtensionType, NINETY_DAY_REPORTING_REQUIRED, OverstayPenalty, VisaType, WorkPermitCategory,
+};
+
+// Re-export Land Code types
+pub use land_code::{
+    CONDO_FOREIGN_QUOTA_PERCENT, ForeignOwnershipRule, LandDocument, LandRight, LandUseZone,
+    MAX_LEASE_RENEWALS, MAX_LEASE_TERM_YEARS,
+};
+
+// Re-export Company Act types
+pub use company_act::{
+    CompanyType, DirectorType, MIN_PAID_UP_CAPITAL_PERCENT, MIN_PUBLIC_COMPANY_CAPITAL,
+    MeetingType, QuorumRequirement, ShareholderRight,
+};
+
+// Re-export Securities Law types
+pub use securities_law::{DisclosureType, MarketType, ProhibitedAct, SecuritiesType};
+
+// Re-export Consumer Protection types
+pub use consumer_protection::{ConsumerRight, ProductStandard, UnfairTerm};
+
+// Re-export Bankruptcy types
+pub use bankruptcy::{ActOfBankruptcy, BankruptcyType, CreditorPriority, MIN_DEBT_THRESHOLD};
+
+// Re-export Arbitration types
+pub use arbitration::{
+    ArbitrationInstitution, ArbitrationType, NEW_YORK_CONVENTION_RATIFIED, SetAsideGround,
+};
+
+// Re-export Competition Law types
+pub use competition_law::{
+    AbuseOfDominance, MARKET_DOMINANCE_THRESHOLD_PERCENT, MERGER_NOTIFICATION_THRESHOLD_THB,
+    ProhibitedPractice,
 };
 
 #[cfg(test)]

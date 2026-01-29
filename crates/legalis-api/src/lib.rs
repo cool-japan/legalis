@@ -57,6 +57,7 @@ pub mod event_streaming;
 pub mod changelog;
 pub mod mocking;
 pub mod playground;
+pub mod sdk_generator;
 pub mod sdk_notifications;
 pub mod test_utils;
 
@@ -124,7 +125,7 @@ struct ErrorResponse {
 }
 
 /// Success response wrapper.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiResponse<T> {
     pub data: T,
     pub meta: Option<ResponseMeta>,
@@ -142,7 +143,7 @@ impl<T> ApiResponse<T> {
 }
 
 /// Response metadata.
-#[derive(Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResponseMeta {
     pub total: Option<usize>,
     pub page: Option<usize>,
@@ -153,7 +154,7 @@ pub struct ResponseMeta {
 }
 
 /// Verification job result.
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerificationJobResult {
     pub passed: bool,
     pub errors: Vec<String>,
@@ -162,7 +163,7 @@ pub struct VerificationJobResult {
 }
 
 /// Saved simulation result.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedSimulation {
     pub id: String,
     pub name: String,

@@ -1,0 +1,29 @@
+[package]
+name = "legalis-ru"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Russian Federation jurisdiction support for Legalis-RS"
+repository.workspace = true
+keywords = ["legalis", "russia", "civil-law", "russian-law", "grazhdanskiy-kodeks"]
+categories = ["text-processing", "localization", "internationalization"]
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-ru"
+
+[dependencies]
+legalis-core.workspace = true
+legalis-i18n.workspace = true
+legalis-verifier.workspace = true
+legalis-sim.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+
+[features]
+default = []
+serde = []
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

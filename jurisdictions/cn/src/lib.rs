@@ -106,12 +106,12 @@ pub mod data_protection;
 pub mod i18n;
 pub mod labor_contract;
 
-// Placeholder modules (to be implemented)
-// pub mod civil_code;
-// pub mod data_security;
-// pub mod foreign_investment;
-// pub mod antitrust;
-// pub mod reasoning;
+// New modules
+pub mod antitrust;
+pub mod civil_code;
+pub mod data_security;
+pub mod foreign_investment;
+pub mod reasoning;
 
 // Re-export commonly used types
 pub use citation::{Citation, cite, laws};
@@ -282,6 +282,156 @@ pub use labor_contract::{
 pub use common::currency::CnyAmount;
 pub use common::dates::{DeadlineType, PublicHoliday};
 pub use common::names::{ChineseName, CompanyName, OrganizationForm};
+
+// Re-export civil code types
+pub use civil_code::{
+    // General Provisions
+    ActNature,
+    ActValidity,
+    // Marriage and Family
+    Adoption,
+    Agency,
+    AgencyType,
+    // Contracts
+    BreachOfContract,
+    BreachRemedy,
+    BreachType,
+    // Property Rights
+    ConstructionLandTerm,
+    ConstructionLandUseRight,
+    Contract,
+    ContractFormationStatus,
+    ContractType as CivilContractType,
+    ContractValidityStatus,
+    ContractsError,
+    ContractsResult,
+    // Succession
+    DisinheritanceReason,
+    DivorceGrounds,
+    DivorceType,
+    // Tort Liability
+    EnvironmentalPollution,
+    Estate,
+    GeneralProvisionsError,
+    GeneralProvisionsResult,
+    Heir,
+    HeirType,
+    HighlyDangerousActivity,
+    // Personality Rights
+    ImageUse,
+    IntestateSuccessionOrder,
+    JuristicAct,
+    LandContractualManagementRight,
+    LeaseContract,
+    LegalCapacity,
+    LegalPerson,
+    LegalPersonType,
+    LiabilityPrinciple,
+    Lien,
+    LimitationPeriod,
+    MaritalPropertyRegime,
+    Marriage,
+    MarriageFamilyError,
+    MarriageFamilyResult,
+    MarriageRequirements,
+    MedicalMalpractice,
+    Mortgage,
+    NaturalPerson,
+    OwnershipType,
+    ParentChildRelationship,
+    PerformancePeriod,
+    PersonalInfoProcessingPrinciple,
+    PersonalInformation,
+    PersonalityRight,
+    PersonalityRightsError,
+    PersonalityRightsResult,
+    Pledge,
+    PrivacyInfringement,
+    PrivacyInfringementMethod,
+    PrivacyScope,
+    ProductDefectType,
+    ProductsLiability,
+    Property,
+    PropertyRightType,
+    PropertyRightsError,
+    PropertyRightsResult,
+    ReputationInfringement,
+    ReputationInfringementType,
+    ResidentialLandUseRight,
+    SaleContract,
+    SuccessionError,
+    SuccessionResult,
+    SuccessionType,
+    SupportObligation,
+    Tort,
+    TortDefense,
+    TortLiabilityError,
+    TortLiabilityResult,
+    TortType,
+    UnincorporatedOrganization,
+    Will,
+    WillType,
+    calculate_damages,
+    calculate_damages_with_defense,
+    calculate_intestate_shares,
+    calculate_security_interest_priority,
+    check_disinheritance,
+    check_limitation_period,
+    check_privacy_infringement,
+    check_reputation_infringement,
+    determine_breach_remedies,
+    validate_adoption,
+    validate_agency,
+    validate_construction_land_use_right,
+    validate_contract_formation,
+    validate_contract_validity,
+    validate_divorce_by_mutual_consent,
+    validate_image_use,
+    validate_juristic_act,
+    validate_lease_term,
+    validate_marriage_eligibility,
+    validate_medical_malpractice,
+    validate_mortgage,
+    validate_personal_info_processing,
+    validate_pledge,
+    validate_products_liability,
+    validate_tort_liability,
+    validate_will,
+};
+
+// Re-export data security types
+pub use data_security::{
+    CrossBorderDataTransfer as DataSecurityCrossBorderTransfer, DataClassification,
+    DataProcessingActivity, DataProcessingRecord, DataProcessor, DataSecurityError,
+    DataSecurityObligation, DataSecurityResult, DataSecurityReview, ReviewResult, ReviewStatus,
+    determine_data_classification, requires_security_review,
+    validate_cross_border_transfer as validate_data_security_cross_border_transfer,
+    validate_data_processor,
+};
+
+// Re-export foreign investment types
+pub use foreign_investment::{
+    ForeignInvestedEnterprise, ForeignInvestmentError, ForeignInvestmentProject,
+    ForeignInvestmentResult, ForeignInvestor, ForeignInvestorType, InvestmentForm,
+    NegativeListCategory, Sector, SecurityReview, SecurityReviewResult, SecurityReviewStatus,
+    check_sector_openness, validate_fie_compliance, validate_foreign_investment_project,
+};
+
+// Re-export antitrust types
+pub use antitrust::{
+    AbuseOfDominance, AbuseType, AntitrustError, AntitrustResult, ConcentrationReviewDecision,
+    ConcentrationTransaction, ConcentrationType, MarketDominance, MonopolisticConductType,
+    MonopolyAgreement, MonopolyAgreementType, validate_abuse_of_dominance,
+    validate_concentration_transaction, validate_monopoly_agreement,
+};
+
+// Re-export reasoning types
+pub use reasoning::{
+    ConflictResolutionRule, GuidingCase, InterpretationMethod, LegalAnalysis, LegalConclusion,
+    LegalFact, LegalHierarchy, LegalIssue, LegalProvision, ReasoningError, ReasoningResult,
+    apply_analogical_reasoning, build_argument_chain, find_applicable_provisions, resolve_conflict,
+    validate_reasoning,
+};
 
 use legalis_core::{Effect, EffectType, Statute};
 

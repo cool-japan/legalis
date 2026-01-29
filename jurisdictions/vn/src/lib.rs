@@ -109,18 +109,35 @@
 //! | 59/2020/QH14 | Luật Doanh nghiệp | Enterprise Law |
 //! | 61/2020/QH14 | Luật Đầu tư | Investment Law |
 //! | 91/2015/QH13 | Bộ luật Dân sự | Civil Code |
+//! | 100/2015/QH13 | Bộ luật Hình sự | Criminal Code |
 //! | 45/2013/QH13 | Luật Đất đai | Land Law |
+//! | 50/2014/QH13 | Luật Xây dựng | Construction Law |
+//! | 50/2005/QH11 | Luật Sở hữu trí tuệ | Intellectual Property Law |
+//! | 23/2018/QH14 | Luật Cạnh tranh | Competition Law |
+//! | 24/2018/QH14 | Luật An ninh mạng | Cybersecurity Law |
+//! | 47/2010/QH12 | Luật các Tổ chức tín dụng | Law on Credit Institutions |
+//! | 59/2010/QH12 | Luật Bảo vệ quyền lợi người tiêu dùng | Consumer Protection Law |
 //!
 //! ## Disclaimer
 //!
 //! This library is for educational and informational purposes. For legal matters,
 //! consult qualified Vietnamese legal professionals (luật sư).
 
+pub mod banking_law;
 pub mod citation;
+pub mod civil_code;
 pub mod common;
+pub mod competition_law;
+pub mod construction_law;
+pub mod consumer_protection;
+pub mod criminal_code;
+pub mod cybersecurity_law;
 pub mod enterprise;
+pub mod intellectual_property;
 pub mod investment;
 pub mod labor_code;
+pub mod land_law;
+pub mod tax_law;
 
 // Re-export commonly used items
 pub use citation::{
@@ -148,6 +165,67 @@ pub use investment::{
     InvestmentError, InvestmentIncentive, InvestmentProject, InvestmentResult, InvestmentSector,
     SpecialEconomicZone, check_sector_eligibility, get_investment_checklist,
     validate_investment_project,
+};
+
+pub use civil_code::{
+    CivilCapacity, CivilCodeError, CivilCodePart, CivilCodeResult,
+    ContractType as CivilContractType, InheritancePriority, InheritanceType, PropertyType,
+    StatuteOfLimitations, calculate_statutory_inheritance_share, get_civil_code_checklist,
+    validate_civil_capacity, validate_statute_of_limitations,
+};
+
+pub use criminal_code::{
+    AggravatingCircumstance, CrimeSeverity, CriminalAge, CriminalCodeError, CriminalCodeResult,
+    MitigatingCircumstance, Penalty, SupplementaryPenalty, calculate_adjusted_penalty,
+    get_criminal_code_checklist, validate_criminal_liability, validate_penalty,
+};
+
+pub use tax_law::{
+    CitRate, CitResult, CitTaxableIncome, PersonalDeduction, PitBracket, PitCalculation,
+    PitIncomeType, PitResult, VatDeclaration, VatRate, VatResult, calculate_progressive_pit,
+    calculate_vat, determine_cit_rate, get_cit_checklist, get_pit_checklist, get_vat_checklist,
+};
+
+pub use cybersecurity_law::{
+    ContentModerationRequirement, CybersecurityEntity, CybersecurityResult,
+    DataLocalizationCompliance, LocalizedDataType, ProhibitedContent, get_cybersecurity_checklist,
+    validate_content_removal_deadline, validate_data_localization,
+};
+
+pub use competition_law::{
+    AntiCompetitiveAgreement, CompetitionResult, MarketPosition, MarketShareLevel, MergerThreshold,
+    MergerTransaction, get_competition_checklist, validate_merger_transaction,
+    validate_no_abuse_of_dominance,
+};
+
+pub use intellectual_property::{
+    CopyrightSubject, IpInfringement, IpRegistration, IpResult, IpRightType, PatentRequirements,
+    TrademarkType, check_protection_expired, get_ip_checklist, validate_patent_requirements,
+};
+
+pub use land_law::{
+    AgriculturalLandType, LandCategory, LandCertificateType, LandCompensation, LandResult,
+    LandUseDuration, LandUseRight, NonAgriculturalLandType, can_foreigners_acquire,
+    get_land_law_checklist, validate_land_use_duration,
+};
+
+pub use construction_law::{
+    ComponentType, ConstructionActivity, ConstructionClass, ConstructionCompliance,
+    ConstructionPermitType, ConstructionResult, FireSafetyRank, QualityControlLevel,
+    WarrantyPeriod, get_construction_checklist, validate_construction_compliance,
+    validate_warranty_period,
+};
+
+pub use consumer_protection::{
+    ConsumerComplaint, ConsumerProtectionResult, ConsumerRight, ProductRecall, ProductWarranty,
+    RecallReason, RemedyType, UnfairPractice, get_consumer_protection_checklist,
+    validate_product_recall, validate_warranty,
+};
+
+pub use banking_law::{
+    BankingActivity, BankingResult, CapitalAdequacyRatio, CreditInstitutionType, LendingLimit,
+    LoanClassification, ReserveRequirement, get_banking_checklist, validate_car,
+    validate_charter_capital, validate_lending_limit,
 };
 
 #[cfg(test)]

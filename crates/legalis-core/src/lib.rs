@@ -353,6 +353,12 @@ pub mod realtime_sync;
 pub mod scenario_simulation;
 pub mod time_travel;
 
+// Quantum-Ready Legal Logic (v0.3.3)
+pub mod quantum;
+
+// Autonomous Legal Agents (v0.3.4)
+pub mod autonomous_agents;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;
@@ -1687,6 +1693,21 @@ impl Condition {
                 // Simple substring matching (can be extended with regex crate if needed)
                 let matches = attr_value.contains(pattern);
                 Ok(if *negated { !matches } else { matches })
+            }
+            Self::ResidencyDuration { operator, months } => {
+                let residency_str = ctx.attributes.get("residency_months").ok_or_else(|| {
+                    ConditionError::MissingAttribute {
+                        key: "residency_months".to_string(),
+                    }
+                })?;
+                let residency: u32 =
+                    residency_str
+                        .parse()
+                        .map_err(|_| ConditionError::TypeMismatch {
+                            expected: "u32".to_string(),
+                            actual: residency_str.clone(),
+                        })?;
+                Ok(operator.compare_u32(residency, *months))
             }
             // For other conditions, return Ok(true) as a placeholder
             // (implementation depends on specific evaluation logic)

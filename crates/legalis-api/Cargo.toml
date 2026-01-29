@@ -63,6 +63,10 @@ tonic-reflection = { version = "0.14", optional = true }
 tonic-health = { version = "0.14", optional = true }
 tonic-web = { version = "0.14", optional = true }
 
+[dev-dependencies]
+proptest = "1.9"
+tokio-test = "0.4"
+
 [build-dependencies]
 tonic-build = "0.14"
 tonic-prost-build = "0.14"

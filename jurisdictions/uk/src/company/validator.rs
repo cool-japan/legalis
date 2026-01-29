@@ -322,7 +322,7 @@ pub fn validate_director_duties(duties: &DirectorDutiesCompliance) -> Result<()>
     }
 
     if !errors.is_empty() {
-        return Err(errors.into_iter().next().unwrap());
+        return Err(errors.into_iter().next().expect("errors vec is non-empty"));
     }
 
     Ok(())

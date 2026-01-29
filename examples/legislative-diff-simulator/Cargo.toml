@@ -1,0 +1,18 @@
+[package]
+name = "legislative-diff-simulator"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "legislative-diff-simulator"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-diff = { path = "../../crates/legalis-diff" }
+legalis-registry = { path = "../../crates/legalis-registry" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex = "1.12"

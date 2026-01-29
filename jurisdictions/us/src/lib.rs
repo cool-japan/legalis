@@ -87,6 +87,7 @@ pub mod tax;
 
 // ===== Legislative Tracking (Phase 5) =====
 pub mod legislative;
+pub mod legislative_tracking;
 
 // ===== Legal Reasoning Engine (Phase 6) =====
 pub mod reasoning;
@@ -190,6 +191,14 @@ pub use legislative::{
         cannabis_status, comprehensive_privacy_laws, has_comprehensive_privacy_law,
         right_to_repair_status, states_with_recreational_cannabis,
     },
+};
+
+// Legislative tracking system (bills, amendments, committees)
+pub use legislative_tracking::{
+    Amendment, AmendmentBuilder, AmendmentStatus, AmendmentType, Bill, BillBuilder, BillPriority,
+    BillSimilarity, BillStatus, Chamber, Committee, CommitteeBuilder, CommitteeHearing,
+    CommitteeReport, CommitteeType, LegislativeSession, LegislativeSessionBuilder, Legislator,
+    SessionType, StateLegislativeComparator, UniformLawAdoption,
 };
 
 // Legal reasoning engine

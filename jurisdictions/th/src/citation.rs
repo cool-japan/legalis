@@ -142,12 +142,12 @@ impl ThaiAct {
         }
     }
 
-    /// Formats the act in Thai format: "พ.ร.บ. [name] พ.ศ. [year]"
+    /// Formats the act in Thai format: "พ.ร.บ. \[name\] พ.ศ. \[year\]"
     pub fn format_th(&self) -> String {
         format!("พ.ร.บ. {} พ.ศ. {}", self.name_th, self.year.be_year)
     }
 
-    /// Formats the act in English format: "[name] B.E. [year] ([CE year])"
+    /// Formats the act in English format: "\[name\] B.E. \[year\] (\[CE year\])"
     pub fn format_en(&self) -> String {
         format!(
             "{} B.E. {} ({})",

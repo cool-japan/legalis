@@ -15,10 +15,13 @@ pub use smt::SmtVerifier;
 
 pub mod autonomous_agents;
 pub mod certification_framework;
+pub mod cross_domain_verification;
 pub mod distributed_verification;
 pub mod formal_methods;
 pub mod ml_verification;
 pub mod quantum_verification;
+pub mod realtime_verification;
+pub mod self_healing;
 
 use legalis_core::{EffectType, Statute};
 use std::collections::{HashMap, HashSet};

@@ -127,6 +127,14 @@
 //! - [`consumer_protection`] - CDC consumer defense code
 //! - [`labor_law`] - CLT labor regulations
 //! - [`data_protection`] - LGPD data protection
+//! - [`civil_code`] - Código Civil (Lei 10.406/2002)
+//! - [`criminal_code`] - Código Penal (Decreto-Lei 2.848/1940)
+//! - [`tax_law`] - Tax system (ICMS, ISS, IPI, IRPF, IRPJ)
+//! - [`corporate_law`] - Corporations, limited liability, CVM
+//! - [`bankruptcy_law`] - Insolvency and reorganization (Lei 11.101/2005)
+//! - [`intellectual_property`] - IP rights (Lei 9.279/1996)
+//! - [`environmental_law`] - Environmental legislation
+//! - [`banking_law`] - Banking and financial system regulations
 //!
 //! ## References
 //!
@@ -139,11 +147,19 @@
 // #![warn(missing_docs)]
 // #![warn(rustdoc::missing_crate_level_docs)]
 
+pub mod banking_law;
+pub mod bankruptcy_law;
 pub mod citation;
+pub mod civil_code;
 pub mod common;
 pub mod consumer_protection;
+pub mod corporate_law;
+pub mod criminal_code;
 pub mod data_protection;
+pub mod environmental_law;
+pub mod intellectual_property;
 pub mod labor_law;
+pub mod tax_law;
 
 // Re-export citation types
 pub use citation::{
@@ -175,6 +191,57 @@ pub use data_protection::{
 pub use labor_law::{
     CltError, CltResult, EmploymentContract, EmploymentType, LaborCompliance, LaborRight,
     Severance, TerminationType, WorkingHours,
+};
+
+// Re-export civil code types
+pub use civil_code::{
+    CivilCodeError, CivilCodeResult, Contract, ContractError, ContractResult, FamilyError,
+    FamilyResult, Inheritance, LegalAct, LegalActType, LegalPerson, LegalPersonType, Marriage,
+    NaturalPerson, Obligation, ObligationType, ObligationsError, ObligationsResult, Ownership,
+    Possession, PossessionType, PropertyError, PropertyKind, PropertyRegime, PropertyResult,
+    StableUnion, SuccessionError, SuccessionResult, SuccessionType,
+};
+
+// Re-export criminal code types
+pub use criminal_code::{
+    Crime, CrimeCategory, CriminalCodeError, CriminalCodeResult, CriminalProcedure, Penalty,
+    PenaltyType,
+};
+
+// Re-export tax law types
+pub use tax_law::{
+    IcmsError, IcmsResult, IcmsTransaction, IpiError, IpiResult, IpiTransaction, IrpfCalculation,
+    IrpfError, IrpfResult, IrpjCalculation, IrpjError, IrpjResult, IssError, IssResult,
+    IssTransaction, TaxError, TaxResult,
+};
+
+// Re-export corporate law types
+pub use corporate_law::{
+    Corporation, CorporationType, CorporationsError, CorporationsResult, CvmError, CvmResult,
+    LimitedLiabilityCompany, LimitedLiabilityError, LimitedLiabilityResult, Partner,
+    PublicOffering, Security, SecurityType,
+};
+
+// Re-export bankruptcy law types
+pub use bankruptcy_law::{
+    BankruptcyError, BankruptcyResult, CreditClass, Creditor, InsolvencyProceeding, ProceedingType,
+    ReorganizationPlan,
+};
+
+// Re-export intellectual property types
+pub use intellectual_property::{
+    IntellectualProperty, IpError, IpResult, IpType, PatentabilityCheck, TrademarkType,
+};
+
+// Re-export environmental law types
+pub use environmental_law::{
+    EnvironmentalError, EnvironmentalLicense, EnvironmentalResult, ForestReserve, LicenseType,
+};
+
+// Re-export banking law types
+pub use banking_law::{
+    BankingError, BankingOperation, BankingResult, FinancialInstitution, InstitutionType,
+    OperationType,
 };
 
 #[cfg(test)]

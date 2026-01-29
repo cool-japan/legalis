@@ -388,6 +388,330 @@ fn bench_verification_budget(c: &mut Criterion) {
     });
 }
 
+/// Benchmark report generation
+fn bench_report_generation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("report_generation");
+    let verifier = StatuteVerifier::new();
+
+    for size in [10, 50, 100].iter() {
+        let statutes: Vec<_> = (0..*size)
+            .map(|i| create_complex_statute(&format!("stat-{}", i)))
+            .collect();
+
+        let result = verifier.verify(&statutes);
+
+        group.bench_with_input(
+            BenchmarkId::new("json_report", size),
+            &result,
+            |b, result| {
+                b.iter(|| {
+                    let json = serde_json::to_string(result).unwrap();
+                    black_box(json)
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("format_errors", size),
+            &result,
+            |b, result| {
+                b.iter(|| {
+                    let formatted: Vec<_> =
+                        result.errors.iter().map(|e| format!("{}", e)).collect();
+                    black_box(formatted)
+                })
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark SMT solver operations
+#[cfg(feature = "smt-solver")]
+fn bench_smt_solver(c: &mut Criterion) {
+    use legalis_verifier::SmtVerifier;
+
+    let mut group = c.benchmark_group("smt_solver");
+
+    let simple_statute = create_simple_statute("smt-simple");
+    let complex_statute = create_complex_statute("smt-complex");
+
+    group.bench_function("smt_verify_simple", |b| {
+        b.iter(|| {
+            let mut verifier = SmtVerifier::new();
+            if let Some(precondition) = &simple_statute.precondition {
+                black_box(verifier.is_satisfiable(precondition))
+            } else {
+                Ok(true)
+            }
+        })
+    });
+
+    group.bench_function("smt_verify_complex", |b| {
+        b.iter(|| {
+            let mut verifier = SmtVerifier::new();
+            if let Some(precondition) = &complex_statute.precondition {
+                black_box(verifier.is_satisfiable(precondition))
+            } else {
+                Ok(true)
+            }
+        })
+    });
+
+    // Benchmark satisfiability checking
+    group.bench_function("smt_check_satisfiability", |b| {
+        b.iter(|| {
+            let mut verifier = SmtVerifier::new();
+            if let Some(precondition) = &complex_statute.precondition {
+                black_box(verifier.is_satisfiable(precondition))
+            } else {
+                Ok(true)
+            }
+        })
+    });
+
+    group.finish();
+}
+
+/// Benchmark parallel verification
+fn bench_parallel_verification(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parallel_verification");
+
+    for size in [50, 100, 250].iter() {
+        let statutes: Vec<_> = (0..*size)
+            .map(|i| create_simple_statute(&format!("parallel-{}", i)))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("sequential", size),
+            &statutes,
+            |b, stats| {
+                let verifier = StatuteVerifier::new();
+                b.iter(|| {
+                    for stat in stats {
+                        verifier.verify(std::slice::from_ref(stat));
+                    }
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("batch_parallel", size),
+            &statutes,
+            |b, stats| {
+                let verifier = StatuteVerifier::new();
+                b.iter(|| black_box(batch_verify(stats, &verifier)))
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark verification with different error counts
+fn bench_error_accumulation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("error_accumulation");
+
+    // Create statutes with intentional errors
+    for error_count in [0, 5, 10, 25].iter() {
+        let mut statutes = vec![create_simple_statute("base")];
+
+        // Add statutes with circular references (errors)
+        for i in 0..*error_count {
+            let stat = Statute::new(
+                format!("error-{}", i),
+                "Error Statute",
+                Effect::new(EffectType::Grant, "Grant"),
+            )
+            .with_precondition(Condition::custom(format!(
+                "statute:error-{}",
+                (i + 1) % error_count
+            )))
+            .with_version(1);
+            statutes.push(stat);
+        }
+
+        group.bench_with_input(
+            BenchmarkId::new("verify_with_errors", error_count),
+            &statutes,
+            |b, stats| {
+                let verifier = StatuteVerifier::new();
+                b.iter(|| black_box(verifier.verify(stats)))
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark incremental verification
+fn bench_incremental_verification(c: &mut Criterion) {
+    let verifier = StatuteVerifier::new().with_caching();
+    let base_statutes: Vec<_> = (0..50)
+        .map(|i| create_simple_statute(&format!("base-{}", i)))
+        .collect();
+
+    // Prime the cache
+    verifier.verify(&base_statutes);
+
+    c.bench_function("incremental_single_change", |b| {
+        b.iter(|| {
+            let mut modified = base_statutes.clone();
+            modified.push(create_simple_statute("new-statute"));
+            black_box(verifier.verify(&modified))
+        })
+    });
+
+    c.bench_function("incremental_multiple_changes", |b| {
+        b.iter(|| {
+            let mut modified = base_statutes.clone();
+            for i in 0..5 {
+                modified.push(create_simple_statute(&format!("new-{}", i)));
+            }
+            black_box(verifier.verify(&modified))
+        })
+    });
+}
+
+/// Benchmark verification result operations
+fn bench_result_operations(c: &mut Criterion) {
+    let verifier = StatuteVerifier::new();
+    let statute = create_complex_statute("result-test");
+    let result = verifier.verify(std::slice::from_ref(&statute));
+
+    c.bench_function("result_clone", |b| b.iter(|| black_box(result.clone())));
+
+    c.bench_function("result_error_count", |b| {
+        b.iter(|| black_box(result.errors.len()))
+    });
+
+    c.bench_function("result_warning_count", |b| {
+        b.iter(|| black_box(result.warnings.len()))
+    });
+}
+
+/// Benchmark verification metrics
+fn bench_verification_metrics(c: &mut Criterion) {
+    let statutes: Vec<_> = (0..100)
+        .map(|i| {
+            if i % 3 == 0 {
+                create_simple_statute(&format!("stat-{}", i))
+            } else {
+                create_complex_statute(&format!("stat-{}", i))
+            }
+        })
+        .collect();
+
+    c.bench_function("calculate_metrics", |b| {
+        b.iter(|| {
+            let stats = analyze_statute_statistics(&statutes);
+            black_box(stats)
+        })
+    });
+
+    c.bench_function("calculate_coverage", |b| {
+        b.iter(|| {
+            let coverage = analyze_coverage(&statutes);
+            black_box(coverage)
+        })
+    });
+}
+
+/// Benchmark deep dependency analysis
+fn bench_dependency_analysis(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dependency_analysis");
+
+    for depth in [2, 5, 10].iter() {
+        // Create statutes with dependency chains
+        let mut statutes = Vec::new();
+        for i in 0..*depth {
+            let precond = if i == 0 {
+                Condition::age(ComparisonOp::GreaterThan, 18)
+            } else {
+                Condition::custom(format!("statute:dep-{}", i - 1))
+            };
+
+            let stat = Statute::new(
+                format!("dep-{}", i),
+                format!("Dependent Statute {}", i),
+                Effect::grant("Permission"),
+            )
+            .with_precondition(precond)
+            .with_version(1);
+
+            statutes.push(stat);
+        }
+
+        group.bench_with_input(
+            BenchmarkId::new("analyze_dependencies", depth),
+            &statutes,
+            |b, stats| {
+                let verifier = StatuteVerifier::new();
+                b.iter(|| black_box(verifier.verify(stats)))
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark verification with different complexity levels
+fn bench_complexity_levels(c: &mut Criterion) {
+    let mut group = c.benchmark_group("complexity_levels");
+
+    let simple = create_simple_statute("simple");
+    let medium = Statute::new("medium", "Medium", Effect::grant("Permission"))
+        .with_precondition(
+            Condition::age(ComparisonOp::GreaterThan, 18)
+                .and(Condition::income(ComparisonOp::LessThan, 50000)),
+        )
+        .with_version(1);
+    let complex = create_complex_statute("complex");
+
+    group.bench_function("verify_simple", |b| {
+        let verifier = StatuteVerifier::new();
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&simple))))
+    });
+
+    group.bench_function("verify_medium", |b| {
+        let verifier = StatuteVerifier::new();
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&medium))))
+    });
+
+    group.bench_function("verify_complex", |b| {
+        let verifier = StatuteVerifier::new();
+        b.iter(|| black_box(verifier.verify(std::slice::from_ref(&complex))))
+    });
+
+    group.finish();
+}
+
+/// Benchmark cross-statute analysis
+fn bench_cross_statute_analysis(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cross_statute_analysis");
+
+    for size in [10, 25, 50].iter() {
+        let statutes: Vec<_> = (0..*size)
+            .map(|i| create_complex_statute(&format!("stat-{}", i)))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("detect_all_conflicts", size),
+            &statutes,
+            |b, stats| b.iter(|| black_box(detect_statute_conflicts(stats))),
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("find_all_duplicates", size),
+            &statutes,
+            |b, stats| b.iter(|| black_box(detect_duplicates(stats, 0.8))),
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_statute_verification,
@@ -406,5 +730,22 @@ criterion_group!(
     bench_statistics_analysis,
     bench_integrity_verification,
     bench_verification_budget,
+    bench_report_generation,
+    bench_parallel_verification,
+    bench_error_accumulation,
+    bench_incremental_verification,
+    bench_result_operations,
+    bench_verification_metrics,
+    bench_dependency_analysis,
+    bench_complexity_levels,
+    bench_cross_statute_analysis,
 );
+
+#[cfg(feature = "smt-solver")]
+criterion_group!(smt_benches, bench_smt_solver);
+
+#[cfg(feature = "smt-solver")]
+criterion_main!(benches, smt_benches);
+
+#[cfg(not(feature = "smt-solver"))]
 criterion_main!(benches);

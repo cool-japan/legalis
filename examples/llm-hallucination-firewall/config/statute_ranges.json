@@ -1,0 +1,39 @@
+{
+  "jurisdictions": {
+    "japan": {
+      "name": "Japan (日本)",
+      "statutes": {
+        "民法": { "min_article": 1, "max_article": 1050, "note": "As of 2018 inheritance law reform" },
+        "刑法": { "min_article": 1, "max_article": 264 },
+        "商法": { "min_article": 1, "max_article": 851 },
+        "会社法": { "min_article": 1, "max_article": 979 },
+        "民事訴訟法": { "min_article": 1, "max_article": 403 },
+        "刑事訴訟法": { "min_article": 1, "max_article": 507 },
+        "憲法": { "min_article": 1, "max_article": 103 },
+        "日本国憲法": { "min_article": 1, "max_article": 103 },
+        "借地借家法": { "min_article": 1, "max_article": 61 },
+        "消費者契約法": { "min_article": 1, "max_article": 41 },
+        "不動産登記法": { "min_article": 1, "max_article": 164 },
+        "労働基準法": { "min_article": 1, "max_article": 121 }
+      }
+    },
+    "germany": {
+      "name": "Germany (Deutschland)",
+      "statutes": {
+        "BGB": { "min_article": 1, "max_article": 2385, "note": "Bürgerliches Gesetzbuch (Civil Code)" },
+        "StGB": { "min_article": 1, "max_article": 358, "note": "Strafgesetzbuch (Criminal Code)" },
+        "GG": { "min_article": 1, "max_article": 146, "note": "Grundgesetz (Basic Law / Constitution)" },
+        "HGB": { "min_article": 1, "max_article": 905, "note": "Handelsgesetzbuch (Commercial Code)" },
+        "ZPO": { "min_article": 1, "max_article": 1066, "note": "Zivilprozessordnung (Civil Procedure Code)" }
+      }
+    },
+    "usa": {
+      "name": "United States (Federal)",
+      "statutes": {
+        "USC Title 15": { "min_article": 1, "max_article": 8000, "note": "Commerce and Trade (approx)" },
+        "USC Title 26": { "min_article": 1, "max_article": 9000, "note": "Internal Revenue Code (approx)" },
+        "USC Title 42": { "min_article": 1, "max_article": 18000, "note": "Public Health and Welfare (approx)" }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[package]
+name = "legalis-mx"
+version.workspace = true
+description = "Mexican law library - Federal Civil Code, CLT, LFPDPPP, Tax Code, Corporate Law"
+edition.workspace = true
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-mx"
+keywords = ["legalis", "mexico", "civil-law", "labor-law", "tax-law"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []
+
+[dev-dependencies]

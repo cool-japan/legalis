@@ -15200,6 +15200,14 @@ pub mod global_network;
 pub mod autonomous;
 
 // ============================================================================
+// Legal Knowledge Base Module (v0.3.2)
+// ============================================================================
+
+/// Legal Knowledge Base: Statute-concept linking, legal ontology integration,
+/// case law cross-references, knowledge graph visualization, and AI-powered legal research.
+pub mod knowledge_base;
+
+// ============================================================================
 // Event Sourcing 2.0 Module (v0.2.6)
 // ============================================================================
 

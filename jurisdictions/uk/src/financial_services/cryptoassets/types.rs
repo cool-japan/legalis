@@ -204,12 +204,13 @@ impl CryptoassetPromotion {
     /// Check if compliant with FSMA s.21 financial promotions regime (post Oct 8, 2023)
     pub fn is_compliant(&self) -> bool {
         // From Oct 8, 2023, cryptoasset promotions must be approved
-        let approval_compliant =
-            if self.promotion_date >= NaiveDate::from_ymd_opt(2023, 10, 8).unwrap() {
-                self.approved_by_authorized_person && self.approver_frn.is_some()
-            } else {
-                true // Before Oct 8, 2023, approval not required
-            };
+        let approval_compliant = if self.promotion_date
+            >= NaiveDate::from_ymd_opt(2023, 10, 8).expect("valid date constant: October 8, 2023")
+        {
+            self.approved_by_authorized_person && self.approver_frn.is_some()
+        } else {
+            true // Before Oct 8, 2023, approval not required
+        };
 
         approval_compliant
             && self.risk_warning_included

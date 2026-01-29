@@ -15,13 +15,13 @@ serde_json.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
-rayon = { version = "1.11", optional = true }
+rayon = { workspace = true, optional = true }
 printpdf = { workspace = true, optional = true }
 notify = { version = "8.2", optional = true }
 crossbeam-channel = { version = "0.5", optional = true }
-rand = "0.9.2"
+rand.workspace = true
 md5 = "0.8"
-uuid = { version = "1.19", features = ["v4"] }
+uuid.workspace = true
 
 # SMT Solver (OxiZ - Pure Rust Z3 alternative)
 oxiz-solver = { workspace = true, optional = true }
@@ -29,7 +29,8 @@ oxiz-core = { workspace = true, optional = true }
 num-bigint = { workspace = true, optional = true }
 
 [dev-dependencies]
-criterion = "0.8"
+criterion.workspace = true
+proptest.workspace = true
 
 [features]
 default = []

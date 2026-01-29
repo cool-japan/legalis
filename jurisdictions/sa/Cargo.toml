@@ -1,0 +1,19 @@
+[package]
+name = "legalis-sa"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Saudi Arabia jurisdiction support for Legalis-RS - Basic Law, Sharia, Labor, Companies, Tax (VAT/Zakat), Capital Markets, PDPL"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-sa"
+keywords = ["legalis", "saudi-arabia", "sharia", "islamic-law", "ksa"]
+categories = ["text-processing", "localization", "internationalization"]
+
+[dependencies]
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+
+[features]
+default = []

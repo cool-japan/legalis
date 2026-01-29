@@ -1,0 +1,22 @@
+[package]
+name = "legalis-kr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "South Korea (대한민국) jurisdiction support for Legalis-RS - Civil law system with Korean characteristics"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/legalis-kr"
+keywords = ["legalis", "korea", "civil-code", "labor-law", "pipa"]
+categories = ["text-processing", "localization"]
+
+[dependencies]
+legalis-core.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

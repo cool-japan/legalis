@@ -79,7 +79,7 @@ impl fmt::Display for ChineseName {
 ///
 /// # 公司名称 / Company Name
 ///
-/// Format: [区域] + 字号 + [行业] + 组织形式
+/// Format: \[区域\] + 字号 + \[行业\] + 组织形式
 /// Example: 北京字节跳动科技有限公司
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompanyName {

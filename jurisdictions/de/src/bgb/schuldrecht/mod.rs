@@ -226,6 +226,12 @@ pub mod error;
 pub mod types;
 pub mod validator;
 
+// Specific contract types (Besonderer Teil)
+pub mod lease; // Mietvertrag (§§535-580a BGB)
+pub mod sales; // Kaufvertrag (§§433-479 BGB)
+pub mod service; // Dienstvertrag (§§611-630 BGB)
+pub mod work; // Werkvertrag (§§631-651 BGB)
+
 // Re-exports for convenience
 pub use error::{Result, SchuldrechtError};
 pub use types::*;

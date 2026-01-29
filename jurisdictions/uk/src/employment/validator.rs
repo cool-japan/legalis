@@ -47,7 +47,8 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<()>
     validate_working_hours(&contract.working_hours)?;
 
     // Validate notice period (ERA 1996 s.86)
-    let years_service = contract.years_of_service(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    let years_service = contract
+        .years_of_service(NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date constant"));
     validate_notice_period(&contract.notice_period, years_service)?;
 
     // Validate probation period
@@ -64,7 +65,7 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<()>
             .gross_hourly(contract.working_hours.hours_per_week);
         let age = contract
             .employee
-            .age_at(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+            .age_at(NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date constant"));
 
         let assessment = MinimumWageAssessment {
             age,

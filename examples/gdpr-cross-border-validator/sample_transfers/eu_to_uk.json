@@ -1,0 +1,12 @@
+{
+  "transfer_id": "TRF-2026-005",
+  "origin": "EU-Ireland",
+  "destination_country": "United Kingdom",
+  "adequate_destination": "UnitedKingdom",
+  "data_categories": ["Healthcare records", "Medical history"],
+  "purpose": "Medical research",
+  "legal_basis": "GDPR Article 45 - Adequacy Decision (2021, post-Brexit)",
+  "expected_result": "ALLOWED",
+  "note": "UK adequacy decision granted June 2021, subject to periodic review",
+  "monitoring_required": "Monitor European Commission adequacy decision updates"
+}

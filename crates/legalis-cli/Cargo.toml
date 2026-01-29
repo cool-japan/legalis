@@ -47,22 +47,22 @@ comfy-table = "7.2"
 rustyline = "17.0"
 indicatif = "0.18"
 csv = "1.4"
-rayon = "1.11"
+rayon.workspace = true
 glob = "0.3"
 num_cpus = "1.17"
 terminal_size = "0.4"
 mlua = { version = "0.11", features = ["lua54", "vendored", "serialize"] }
 ratatui = "0.30"
 crossterm = "0.29"
-uuid = { version = "1.19", features = ["v4", "serde"] }
+uuid.workspace = true
 whoami = "1.6"
 
 [dev-dependencies]
 assert_cmd = "2.1"
 predicates = "3.1"
-tempfile = "3.24"
+tempfile.workspace = true
 insta = { version = "1.46", features = ["yaml"] }
-criterion = { version = "0.8", features = ["html_reports"] }
+criterion = { workspace = true, features = ["html_reports"] }
 
 [[bench]]
 name = "cli_benchmarks"

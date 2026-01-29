@@ -345,6 +345,308 @@ fn bench_entity_operations(c: &mut Criterion) {
     c.bench_function("entity_new", |b| b.iter(|| black_box(BasicEntity::new())));
 }
 
+/// Benchmark statute serialization/deserialization
+#[cfg(feature = "serde")]
+fn bench_serialization(c: &mut Criterion) {
+    let simple_statute = Statute::new(
+        "serialize-test",
+        "Serialization Test",
+        Effect::grant("Test permission"),
+    )
+    .with_version(1);
+
+    let complex_statute = Statute::new(
+        "complex-serialize",
+        "Complex Serialization Test",
+        Effect::obligation("Must comply"),
+    )
+    .with_precondition(
+        Condition::age(ComparisonOp::GreaterThan, 18)
+            .and(Condition::income(ComparisonOp::LessThan, 50000)),
+    )
+    .with_temporal_validity(
+        TemporalValidity::new().with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+    )
+    .with_jurisdiction("US")
+    .with_version(1);
+
+    c.bench_function("serialize_statute_simple", |b| {
+        b.iter(|| black_box(serde_json::to_string(&simple_statute).unwrap()))
+    });
+
+    c.bench_function("serialize_statute_complex", |b| {
+        b.iter(|| black_box(serde_json::to_string(&complex_statute).unwrap()))
+    });
+
+    let simple_json = serde_json::to_string(&simple_statute).unwrap();
+    let complex_json = serde_json::to_string(&complex_statute).unwrap();
+
+    c.bench_function("deserialize_statute_simple", |b| {
+        b.iter(|| black_box(serde_json::from_str::<Statute>(&simple_json).unwrap()))
+    });
+
+    c.bench_function("deserialize_statute_complex", |b| {
+        b.iter(|| black_box(serde_json::from_str::<Statute>(&complex_json).unwrap()))
+    });
+}
+
+/// Benchmark statute cloning
+fn bench_statute_clone(c: &mut Criterion) {
+    let simple =
+        Statute::new("clone-test", "Clone Test", Effect::grant("Permission")).with_version(1);
+
+    let complex = Statute::new(
+        "complex-clone",
+        "Complex Clone",
+        Effect::obligation("Comply"),
+    )
+    .with_precondition(
+        Condition::age(ComparisonOp::GreaterThan, 18)
+            .and(Condition::income(ComparisonOp::LessThan, 50000))
+            .or(Condition::has_attribute("exempt")),
+    )
+    .with_temporal_validity(
+        TemporalValidity::new().with_effective_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+    )
+    .with_jurisdiction("US")
+    .with_version(1);
+
+    c.bench_function("clone_statute_simple", |b| {
+        b.iter(|| black_box(simple.clone()))
+    });
+
+    c.bench_function("clone_statute_complex", |b| {
+        b.iter(|| black_box(complex.clone()))
+    });
+}
+
+/// Benchmark condition evaluation depth
+fn bench_condition_depth(c: &mut Criterion) {
+    let mut group = c.benchmark_group("condition_depth");
+
+    for depth in [2, 5, 10, 15].iter() {
+        let mut cond = Condition::age(ComparisonOp::GreaterThan, 18);
+        for i in 0..*depth {
+            cond = cond.and(Condition::income(ComparisonOp::LessThan, 50000 + i * 1000));
+        }
+
+        group.bench_with_input(BenchmarkId::new("depth", depth), depth, |b, _| {
+            b.iter(|| black_box(cond.depth()))
+        });
+
+        group.bench_with_input(BenchmarkId::new("count", depth), depth, |b, _| {
+            b.iter(|| black_box(cond.count_conditions()))
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark effect composition
+fn bench_effect_composition(c: &mut Criterion) {
+    c.bench_function("effect_with_multiple_parameters", |b| {
+        b.iter(|| {
+            black_box(
+                Effect::grant("Benefit")
+                    .with_parameter("amount", "1000")
+                    .with_parameter("currency", "USD")
+                    .with_parameter("year", "2025")
+                    .with_parameter("category", "tax_credit")
+                    .with_parameter("subsection", "401k"),
+            )
+        })
+    });
+
+    let effect = Effect::grant("Test")
+        .with_parameter("p1", "v1")
+        .with_parameter("p2", "v2")
+        .with_parameter("p3", "v3")
+        .with_parameter("p4", "v4")
+        .with_parameter("p5", "v5");
+
+    c.bench_function("effect_iterate_parameters", |b| {
+        b.iter(|| {
+            let count = effect.parameters.len();
+            black_box(count)
+        })
+    });
+}
+
+/// Benchmark statute version operations
+fn bench_statute_versions(c: &mut Criterion) {
+    let statute =
+        Statute::new("version-test", "Version Test", Effect::grant("Permission")).with_version(1);
+
+    c.bench_function("statute_with_version", |b| {
+        b.iter(|| black_box(statute.clone().with_version(42)))
+    });
+
+    c.bench_function("statute_version_check", |b| {
+        b.iter(|| black_box(statute.version))
+    });
+}
+
+/// Benchmark jurisdiction operations
+fn bench_jurisdiction_ops(c: &mut Criterion) {
+    let statute = Statute::new("jurisdiction-test", "Test", Effect::grant("Permission"))
+        .with_jurisdiction("US")
+        .with_version(1);
+
+    c.bench_function("statute_with_jurisdiction", |b| {
+        b.iter(|| black_box(statute.clone().with_jurisdiction("JP")))
+    });
+
+    c.bench_function("statute_check_jurisdiction", |b| {
+        b.iter(|| black_box(statute.jurisdiction.as_ref()))
+    });
+
+    c.bench_function("statute_version_check_multiple", |b| {
+        b.iter(|| {
+            let v1 = statute.version;
+            let v2 = statute.version;
+            black_box((v1, v2))
+        })
+    });
+}
+
+/// Benchmark complex condition patterns
+fn bench_complex_conditions(c: &mut Criterion) {
+    // Deeply nested AND conditions
+    let deeply_nested_and = Condition::age(ComparisonOp::GreaterThan, 18)
+        .and(Condition::income(ComparisonOp::LessThan, 50000))
+        .and(Condition::has_attribute("citizen"))
+        .and(Condition::attribute_equals("status", "active"))
+        .and(Condition::has_attribute("employed"));
+
+    c.bench_function("condition_deeply_nested_and", |b| {
+        b.iter(|| black_box(deeply_nested_and.clone()))
+    });
+
+    // Deeply nested OR conditions
+    let deeply_nested_or = Condition::age(ComparisonOp::LessThan, 25)
+        .or(Condition::has_attribute("student"))
+        .or(Condition::has_attribute("veteran"))
+        .or(Condition::has_attribute("disabled"))
+        .or(Condition::income(ComparisonOp::LessThan, 20000));
+
+    c.bench_function("condition_deeply_nested_or", |b| {
+        b.iter(|| black_box(deeply_nested_or.clone()))
+    });
+
+    // Mixed AND/OR conditions
+    let mixed = Condition::age(ComparisonOp::GreaterThan, 18)
+        .and(
+            Condition::income(ComparisonOp::LessThan, 50000).or(Condition::has_attribute("exempt")),
+        )
+        .and(
+            Condition::attribute_equals("status", "active")
+                .or(Condition::attribute_equals("status", "pending")),
+        );
+
+    c.bench_function("condition_mixed_and_or", |b| {
+        b.iter(|| black_box(mixed.clone()))
+    });
+
+    // Negated conditions
+    let negated = Condition::has_attribute("criminal_record")
+        .not()
+        .and(Condition::has_attribute("good_standing").not().not());
+
+    c.bench_function("condition_negated", |b| {
+        b.iter(|| black_box(negated.clone()))
+    });
+}
+
+/// Benchmark multiple statute operations
+fn bench_statute_collection_ops(c: &mut Criterion) {
+    let mut group = c.benchmark_group("statute_collections");
+
+    for size in [10, 100, 500, 1000].iter() {
+        let statutes: Vec<_> = (0..*size)
+            .map(|i| {
+                Statute::new(
+                    format!("statute-{}", i),
+                    format!("Statute {}", i),
+                    Effect::grant("Permission"),
+                )
+                .with_jurisdiction(if i % 2 == 0 { "US" } else { "JP" })
+                .with_version(1)
+            })
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("filter_by_jurisdiction", size),
+            &statutes,
+            |b, stats| {
+                b.iter(|| {
+                    let filtered: Vec<_> = stats
+                        .iter()
+                        .filter(|s| s.jurisdiction.as_deref() == Some("US"))
+                        .collect();
+                    black_box(filtered)
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("find_by_id", size),
+            &statutes,
+            |b, stats| {
+                b.iter(|| {
+                    let found = stats.iter().find(|s| s.id == "statute-500");
+                    black_box(found)
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("validate_all", size),
+            &statutes,
+            |b, stats| {
+                b.iter(|| {
+                    let results: Vec<_> = stats.iter().map(|s| s.validate()).collect();
+                    black_box(results)
+                })
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark temporal validity complex scenarios
+fn bench_temporal_complex(c: &mut Criterion) {
+    let validity_with_both = TemporalValidity::new()
+        .with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap())
+        .with_expiry_date(NaiveDate::from_ymd_opt(2030, 12, 31).unwrap());
+
+    let validity_no_expiry =
+        TemporalValidity::new().with_effective_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap());
+
+    let validity_no_effective =
+        TemporalValidity::new().with_expiry_date(NaiveDate::from_ymd_opt(2030, 12, 31).unwrap());
+
+    c.bench_function("temporal_is_active_with_both", |b| {
+        b.iter(|| {
+            black_box(validity_with_both.is_active(NaiveDate::from_ymd_opt(2025, 6, 15).unwrap()))
+        })
+    });
+
+    c.bench_function("temporal_is_active_no_expiry", |b| {
+        b.iter(|| {
+            black_box(validity_no_expiry.is_active(NaiveDate::from_ymd_opt(2025, 6, 15).unwrap()))
+        })
+    });
+
+    c.bench_function("temporal_is_active_no_effective", |b| {
+        b.iter(|| {
+            black_box(
+                validity_no_effective.is_active(NaiveDate::from_ymd_opt(2025, 6, 15).unwrap()),
+            )
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_statute_validate,
@@ -356,5 +658,14 @@ criterion_group!(
     bench_temporal_validity,
     bench_effect_operations,
     bench_entity_operations,
+    bench_serialization,
+    bench_statute_clone,
+    bench_condition_depth,
+    bench_effect_composition,
+    bench_statute_versions,
+    bench_jurisdiction_ops,
+    bench_complex_conditions,
+    bench_statute_collection_ops,
+    bench_temporal_complex,
 );
 criterion_main!(benches);

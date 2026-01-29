@@ -129,7 +129,7 @@ impl Default for EmploymentContract {
             employee: Employee::default(),
             employer: Employer::default(),
             contract_type: ContractType::Permanent,
-            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date constant"),
             end_date: None,
             probation_period_months: None,
             salary: Salary::default(),

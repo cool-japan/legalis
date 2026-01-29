@@ -1,0 +1,16 @@
+[package]
+name = "gdpr-cross-border-validator"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "gdpr-cross-border-validator"
+path = "src/main.rs"
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-eu = { path = "../../jurisdictions/eu" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

@@ -291,6 +291,181 @@ fn bench_diamond_pattern(c: &mut Criterion) {
     });
 }
 
+/// Benchmark code size analysis
+fn bench_code_analysis(c: &mut Criterion) {
+    let mut group = c.benchmark_group("code_analysis");
+
+    let statute = create_sample_statute("analysis-test", 10);
+    let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    let contract = generator.generate(&statute).unwrap();
+
+    group.bench_function("measure_source_length", |b| {
+        b.iter(|| black_box(contract.source.len()))
+    });
+
+    group.bench_function("count_lines", |b| {
+        b.iter(|| black_box(contract.source.lines().count()))
+    });
+
+    group.finish();
+}
+
+/// Benchmark multi-platform compilation comparison
+fn bench_platform_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("platform_comparison");
+
+    let statute = create_sample_statute("platform-test", 5);
+
+    let platforms = vec![
+        ("solidity", TargetPlatform::Solidity),
+        ("vyper", TargetPlatform::Vyper),
+        ("rust_wasm", TargetPlatform::RustWasm),
+        ("move", TargetPlatform::Move),
+        ("cairo", TargetPlatform::Cairo),
+        ("cosmwasm", TargetPlatform::CosmWasm),
+        ("ton", TargetPlatform::Ton),
+        ("teal", TargetPlatform::Teal),
+    ];
+
+    for (name, platform) in platforms {
+        group.bench_with_input(
+            BenchmarkId::new("generate", name),
+            &platform,
+            |b, &platform| {
+                let generator = ContractGenerator::new(platform);
+                b.iter(|| black_box(generator.generate(&statute).unwrap()))
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark contract size analysis
+fn bench_contract_size(c: &mut Criterion) {
+    let mut group = c.benchmark_group("contract_size");
+
+    for num_conditions in [1, 5, 10, 25, 50].iter() {
+        let statute =
+            create_sample_statute(&format!("size-test-{}", num_conditions), *num_conditions);
+        let generator = ContractGenerator::new(TargetPlatform::Solidity);
+        let contract = generator.generate(&statute).unwrap();
+
+        group.bench_with_input(
+            BenchmarkId::new("measure_size", num_conditions),
+            &contract,
+            |b, contract| b.iter(|| black_box(contract.source.len())),
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark ABI operations
+fn bench_abi_operations(c: &mut Criterion) {
+    let statute = create_sample_statute("abi-test", 5);
+    let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    let contract = generator.generate(&statute).unwrap();
+
+    c.bench_function("check_abi_presence", |b| {
+        b.iter(|| black_box(contract.abi.is_some()))
+    });
+
+    if let Some(ref abi) = contract.abi {
+        c.bench_function("clone_abi", |b| b.iter(|| black_box(abi.clone())));
+    }
+}
+
+/// Benchmark deployment operations
+fn bench_deployment_operations(c: &mut Criterion) {
+    let statute = create_sample_statute("deploy-test", 5);
+    let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    let contract = generator.generate(&statute).unwrap();
+
+    c.bench_function("check_deployment_script", |b| {
+        b.iter(|| black_box(contract.deployment_script.is_some()))
+    });
+
+    c.bench_function("clone_contract", |b| b.iter(|| black_box(contract.clone())));
+}
+
+/// Benchmark contract metadata operations
+fn bench_contract_metadata(c: &mut Criterion) {
+    let statute = create_sample_statute("metadata-test", 5);
+    let generator = ContractGenerator::new(TargetPlatform::Solidity);
+    let contract = generator.generate(&statute).unwrap();
+
+    c.bench_function("check_contract_name", |b| {
+        b.iter(|| black_box(&contract.name))
+    });
+
+    c.bench_function("check_platform", |b| {
+        b.iter(|| black_box(contract.platform))
+    });
+}
+
+/// Benchmark contract string operations
+fn bench_contract_strings(c: &mut Criterion) {
+    let mut group = c.benchmark_group("contract_strings");
+
+    for num_conditions in [1, 5, 10, 20].iter() {
+        let statute =
+            create_sample_statute(&format!("string-test-{}", num_conditions), *num_conditions);
+        let generator = ContractGenerator::new(TargetPlatform::Solidity);
+        let contract = generator.generate(&statute).unwrap();
+
+        group.bench_with_input(
+            BenchmarkId::new("source_contains", num_conditions),
+            &contract,
+            |b, contract| b.iter(|| black_box(contract.source.contains("function"))),
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("source_split_lines", num_conditions),
+            &contract,
+            |b, contract| b.iter(|| black_box(contract.source.lines().count())),
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark parallel contract generation
+fn bench_parallel_generation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parallel_generation");
+
+    for count in [10, 25, 50].iter() {
+        let statutes: Vec<_> = (0..*count)
+            .map(|i| create_sample_statute(&format!("parallel-{}", i), 3))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("sequential", count),
+            &statutes,
+            |b, stats| {
+                let generator = ContractGenerator::new(TargetPlatform::Solidity);
+                b.iter(|| {
+                    let _: Vec<_> = stats
+                        .iter()
+                        .map(|s| generator.generate(s).unwrap())
+                        .collect();
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("parallel", count),
+            &statutes,
+            |b, stats| {
+                let generator = ContractGenerator::new(TargetPlatform::Solidity);
+                b.iter(|| black_box(generator.generate_batch(stats)))
+            },
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_solidity_generation,
@@ -312,6 +487,14 @@ criterion_group!(
     bench_modular_generation,
     bench_inheritance_generation,
     bench_diamond_pattern,
+    bench_code_analysis,
+    bench_platform_comparison,
+    bench_contract_size,
+    bench_abi_operations,
+    bench_deployment_operations,
+    bench_contract_metadata,
+    bench_contract_strings,
+    bench_parallel_generation,
 );
 
 criterion_main!(benches);

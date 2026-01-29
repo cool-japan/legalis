@@ -19,11 +19,11 @@ tokio.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
-uuid = { version = "1.19", features = ["v4", "serde"] }
+uuid.workspace = true
 
 [dev-dependencies]
-criterion = { version = "0.8", features = ["async_tokio"] }
-proptest = "1.9"
+criterion = { workspace = true, features = ["async_tokio"] }
+proptest.workspace = true
 
 [[bench]]
 name = "porting"

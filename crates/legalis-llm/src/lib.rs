@@ -12,6 +12,7 @@
 //! This crate provides an abstraction layer for LLM providers,
 //! enabling pluggable AI models (OpenAI, Anthropic, Gemini, Local LLMs).
 
+mod advanced_prompt_engineering;
 mod advanced_prompting;
 mod adversarial;
 mod autonomous;
@@ -53,6 +54,7 @@ mod multilingual;
 mod multimodal;
 mod neuro_symbolic;
 mod observability;
+mod performance;
 mod prompt_chain;
 mod providers;
 mod quantization;
@@ -64,6 +66,7 @@ mod resilience;
 mod router;
 mod safety;
 mod safety_compliance;
+mod security_privacy;
 mod simulation;
 mod structured_output;
 mod templates;
@@ -72,6 +75,7 @@ mod testing;
 mod token_tracker;
 mod validation;
 
+pub use advanced_prompt_engineering::*;
 pub use advanced_prompting::*;
 pub use adversarial::*;
 pub use autonomous::*;
@@ -113,6 +117,7 @@ pub use multilingual::*;
 pub use multimodal::*;
 pub use neuro_symbolic::*;
 pub use observability::*;
+pub use performance::*;
 pub use prompt_chain::*;
 pub use providers::*;
 pub use quantization::*;
@@ -124,6 +129,7 @@ pub use resilience::*;
 pub use router::*;
 pub use safety::*;
 pub use safety_compliance::*;
+pub use security_privacy::*;
 pub use simulation::*;
 pub use structured_output::*;
 pub use templates::*;

@@ -46,3 +46,9 @@ all-formats = ["yaml", "csv-export", "compression", "akoma-ntoso"]
 
 [dev-dependencies]
 criterion = "0.8"
+proptest = "1.9"
+tokio-test = "0.4"
+
+[[bench]]
+name = "registry_benchmarks"
+harness = false

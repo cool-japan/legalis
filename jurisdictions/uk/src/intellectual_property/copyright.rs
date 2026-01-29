@@ -210,7 +210,8 @@ pub fn calculate_copyright_duration(
 
     // Calculate end date (end of calendar year, not exact date)
     let end_year = protection_start.year() + duration_years as i32;
-    let protection_end = NaiveDate::from_ymd_opt(end_year, 12, 31).unwrap();
+    let protection_end = NaiveDate::from_ymd_opt(end_year, 12, 31)
+        .expect("valid date constant: December 31st is always valid");
 
     let today = chrono::Local::now().date_naive();
     let still_valid = today <= protection_end;

@@ -1,0 +1,25 @@
+{
+  "transfer_id": "TRF-2026-003",
+  "origin": "EU-Netherlands",
+  "destination_country": "United States",
+  "adequate_destination": null,
+  "safeguards": [
+    {
+      "type": "StandardContractualClauses",
+      "version": "2021",
+      "clauses_signed": true
+    }
+  ],
+  "data_categories": ["Customer data"],
+  "purpose": "Cloud storage (AWS)",
+  "legal_basis": "GDPR Article 46(2)(c) - Standard Contractual Clauses",
+  "expected_result": "CONDITIONAL",
+  "additional_requirements": [
+    "Transfer Impact Assessment (TIA) required - Schrems II",
+    "Verify AWS Data Privacy Framework (DPF) certification",
+    "Assess US government surveillance laws impact",
+    "Implement supplementary measures (encryption, pseudonymization)",
+    "Document TIA results"
+  ],
+  "schrems_ii_impact": "USA lacks adequacy decision. TIA mandatory."
+}

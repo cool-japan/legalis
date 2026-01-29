@@ -1,0 +1,16 @@
+[package]
+name = "cross-jurisdiction-demo"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "cross-jurisdiction-demo"
+path = "src/main.rs"
+
+[dependencies]
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-jp = { path = "../../jurisdictions/jp" }
+legalis-de = { path = "../../jurisdictions/de" }
+legalis-us = { path = "../../jurisdictions/us" }
+legalis-eu = { path = "../../jurisdictions/eu" }
+anyhow.workspace = true

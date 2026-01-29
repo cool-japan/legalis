@@ -61,7 +61,7 @@ pub fn handle_verify(inputs: &[String], strict: bool, format: &OutputFormat) -> 
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
-                .unwrap()
+                .expect("Failed to create progress bar template")
                 .progress_chars("=>-"),
         );
         Some(pb)
@@ -668,7 +668,7 @@ pub async fn handle_simulate(
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.green/blue} {pos}/{len} {msg}")
-            .unwrap()
+            .expect("Failed to create progress bar template")
             .progress_chars("##-"),
     );
     pb.set_message("Generating population...");
@@ -684,7 +684,7 @@ pub async fn handle_simulate(
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} [{elapsed_precise}] {msg}")
-            .unwrap(),
+            .expect("Failed to create progress spinner template"),
     );
     spinner.set_message("Running simulation...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -2072,7 +2072,10 @@ pub fn handle_repl(load: Option<&str>, no_color: bool) -> Result<()> {
                         }
                     }
                     cmd if cmd.starts_with("load ") => {
-                        let path = cmd.strip_prefix("load ").unwrap().trim();
+                        let path = cmd
+                            .strip_prefix("load ")
+                            .expect("Command starts with 'load '")
+                            .trim();
                         match fs::read_to_string(path) {
                             Ok(content) => match parser.parse_statute(&content) {
                                 Ok(statute) => {
@@ -2112,7 +2115,10 @@ pub fn handle_repl(load: Option<&str>, no_color: bool) -> Result<()> {
                         }
                     }
                     cmd if cmd.starts_with("save ") => {
-                        let path = cmd.strip_prefix("save ").unwrap().trim();
+                        let path = cmd
+                            .strip_prefix("save ")
+                            .expect("Command starts with 'save '")
+                            .trim();
                         if let Some(ref statute) = current_statute {
                             match serde_json::to_string_pretty(statute) {
                                 Ok(json) => match fs::write(path, json) {
@@ -2565,7 +2571,7 @@ pub fn handle_add(statute_id: &str, _registry_path: &str, config_path: &str) -> 
         })];
         config
             .as_mapping_mut()
-            .unwrap()
+            .expect("Config should be a mapping")
             .insert("dependencies".into(), deps_array.into());
     }
 
@@ -2882,7 +2888,12 @@ pub fn handle_outdated(directory: &str, _registry_path: &str, show_all: bool) ->
                 Cell::new(&statute.id),
                 Cell::new(current_version.to_string()).fg(Color::Yellow),
                 Cell::new(latest_version.to_string()).fg(Color::Green),
-                Cell::new(path.file_name().unwrap().to_string_lossy().as_ref()),
+                Cell::new(
+                    path.file_name()
+                        .expect("Path should have a filename")
+                        .to_string_lossy()
+                        .as_ref(),
+                ),
             ]);
         }
 
@@ -2906,7 +2917,12 @@ pub fn handle_outdated(directory: &str, _registry_path: &str, show_all: bool) ->
             table.add_row(vec![
                 Cell::new(&statute.id),
                 Cell::new(version.to_string()),
-                Cell::new(path.file_name().unwrap().to_string_lossy().as_ref()),
+                Cell::new(
+                    path.file_name()
+                        .expect("Path should have a filename")
+                        .to_string_lossy()
+                        .as_ref(),
+                ),
             ]);
         }
 

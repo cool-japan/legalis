@@ -68,6 +68,69 @@
 //! - Legal capacity
 //! - Obligations and property
 //!
+//! ### [`criminal_code`] - KUHP
+//!
+//! Indonesian Criminal Code:
+//! - Crimes (Kejahatan) and Misdemeanors (Pelanggaran)
+//! - Criminal liability and penalties
+//! - New KUHP (UU 1/2023) provisions
+//!
+//! ### [`company_law`] - UU No. 40/2007
+//!
+//! Limited Liability Companies (PT):
+//! - Company formation and structure
+//! - Share capital requirements
+//! - Corporate governance (Directors, Commissioners, GMS)
+//!
+//! ### [`tax_law`] - Indonesian Taxation
+//!
+//! Tax laws including:
+//! - Income Tax (PPh) - Progressive and corporate rates
+//! - Value Added Tax (PPN) - 11%-12% standard rate
+//! - Tax administration and compliance
+//!
+//! ### [`capital_markets`] - UU No. 8/1995
+//!
+//! Capital markets regulation:
+//! - Securities trading (stocks, bonds)
+//! - Public offerings (IPO)
+//! - Market participants and OJK oversight
+//!
+//! ### [`banking_law`] - UU No. 7/1992
+//!
+//! Banking regulation:
+//! - Commercial and rural banks
+//! - Capital adequacy requirements
+//! - Banking secrecy provisions
+//!
+//! ### [`intellectual_property`] - IP Laws
+//!
+//! Intellectual property protection:
+//! - Copyright, Patent, Trademark
+//! - Registration and enforcement
+//! - DJKI administration
+//!
+//! ### [`land_law`] - UU No. 5/1960 (UUPA)
+//!
+//! Agrarian/land law:
+//! - Land rights (Hak Milik, HGU, HGB, Hak Pakai)
+//! - Land registration and certification
+//! - BPN/ATR administration
+//!
+//! ### [`construction_law`] - UU No. 2/2017
+//!
+//! Construction services:
+//! - Construction contracts
+//! - Business entity classification
+//! - K3 (safety and health) requirements
+//!
+//! ### [`omnibus_law`] - UU Cipta Kerja
+//!
+//! Job Creation Law (UU 6/2023) reforms:
+//! - Investment liberalization and OSS
+//! - Labor law amendments
+//! - Tax incentives and super deductions
+//!
 //! ## Key Legal Concepts
 //!
 //! ### Pancasila (Five Principles)
@@ -127,8 +190,16 @@
 //! | UU 25/2007 | Penanaman Modal | Investment |
 //! | UU 6/2023 | Cipta Kerja (Omnibus) | Job Creation |
 //! | UU 40/2007 | Perseroan Terbatas | Limited Liability Company |
-//! | UU 21/2008 | Perbankan Syariah | Islamic Banking |
+//! | UU 7/1992 | Perbankan | Banking |
+//! | UU 8/1995 | Pasar Modal | Capital Markets |
+//! | UU 7/2021 | Harmonisasi Peraturan Perpajakan | Tax Harmonization |
+//! | UU 28/2014 | Hak Cipta | Copyright |
+//! | UU 13/2016 | Paten | Patent |
+//! | UU 20/2016 | Merek dan Indikasi Geografis | Trademark |
+//! | UU 5/1960 | Pokok Agraria (UUPA) | Basic Agrarian Law |
+//! | UU 2/2017 | Jasa Konstruksi | Construction Services |
 //! | KUHPerdata | Kitab UU Hukum Perdata | Civil Code |
+//! | KUHP | Kitab UU Hukum Pidana | Criminal Code |
 //!
 //! ## Bilingual Support
 //!
@@ -140,12 +211,21 @@
 //! This library is for educational and informational purposes. For legal matters,
 //! consult qualified Indonesian legal professionals (advokat/pengacara).
 
+pub mod banking_law;
+pub mod capital_markets;
 pub mod citation;
 pub mod civil_code;
 pub mod common;
+pub mod company_law;
+pub mod construction_law;
+pub mod criminal_code;
 pub mod data_protection;
+pub mod intellectual_property;
 pub mod investment;
 pub mod labor_law;
+pub mod land_law;
+pub mod omnibus_law;
+pub mod tax_law;
 
 // Re-export commonly used items
 pub use citation::{CodeType, IndonesianCitation, LegalInstrumentType, Ministry, common_citations};

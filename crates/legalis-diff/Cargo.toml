@@ -14,14 +14,14 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
-rayon = "1.11"
+rayon.workspace = true
 rhai = { version = "1.24", features = ["serde", "sync"] }
 lru = "0.16"
-uuid = { version = "1.19", features = ["v4", "serde"] }
+uuid.workspace = true
 
 [dev-dependencies]
-criterion = "0.8"
-proptest = "1.9"
+criterion.workspace = true
+proptest.workspace = true
 
 [[bench]]
 name = "diff_performance"

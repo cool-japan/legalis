@@ -46,7 +46,7 @@ impl BatchJournal {
         let mut entries = HashMap::new();
         let started_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs();
 
         for file in files {
@@ -96,7 +96,7 @@ impl BatchJournal {
             entry.status = EntryStatus::Completed;
             entry.timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX_EPOCH")
                 .as_secs();
             self.completed_files += 1;
         }
@@ -109,7 +109,7 @@ impl BatchJournal {
             entry.error = Some(error);
             entry.timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX_EPOCH")
                 .as_secs();
             self.failed_files += 1;
         }
@@ -121,7 +121,7 @@ impl BatchJournal {
             entry.status = EntryStatus::InProgress;
             entry.timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX_EPOCH")
                 .as_secs();
         }
     }
@@ -140,7 +140,7 @@ impl BatchJournal {
         self.completed_at = Some(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX_EPOCH")
                 .as_secs(),
         );
     }
@@ -214,7 +214,7 @@ impl BatchProcessor {
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} (ETA: {eta})")
-                .unwrap()
+                .expect("Failed to create progress bar template")
                 .progress_chars("=>-"),
         );
 
@@ -241,7 +241,9 @@ impl BatchProcessor {
 
                 // Mark as in progress
                 {
-                    let mut j = journal_clone.lock().unwrap();
+                    let mut j = journal_clone
+                        .lock()
+                        .expect("Failed to acquire journal lock");
                     j.mark_in_progress(&file_str);
                     let _ = j.save(&journal_path_clone);
                 }
@@ -251,7 +253,9 @@ impl BatchProcessor {
 
                 // Update journal
                 {
-                    let mut j = journal_clone.lock().unwrap();
+                    let mut j = journal_clone
+                        .lock()
+                        .expect("Failed to acquire journal lock");
                     match &result {
                         Ok(_) => j.mark_completed(&file_str),
                         Err(e) => j.mark_failed(&file_str, e.to_string()),
@@ -261,7 +265,9 @@ impl BatchProcessor {
 
                 // Store result
                 {
-                    let mut r = results_clone.lock().unwrap();
+                    let mut r = results_clone
+                        .lock()
+                        .expect("Failed to acquire results lock");
                     r.push((file_clone.clone(), result));
                 }
 
@@ -287,7 +293,7 @@ impl BatchProcessor {
 
         // Complete journal
         {
-            let mut j = journal_arc.lock().unwrap();
+            let mut j = journal_arc.lock().expect("Failed to acquire journal lock");
             j.complete();
             j.save(journal_path)?;
         }
@@ -297,7 +303,10 @@ impl BatchProcessor {
         let elapsed = start_time.elapsed();
         println!("\nBatch operation completed in {:?}", elapsed);
 
-        let final_results = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
+        let final_results = Arc::try_unwrap(results)
+            .map_err(|_| anyhow::anyhow!("Failed to unwrap Arc"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire mutex: {:?}", e))?;
 
         Ok(final_results)
     }
@@ -311,7 +320,7 @@ impl BatchProcessor {
                     "[{{elapsed_precise}}] {{bar:40.cyan/blue}} {{pos}}/{{len}} {} (ETA: {{eta}})",
                     message
                 ))
-                .unwrap()
+                .expect("Failed to create progress bar template")
                 .progress_chars("=>-"),
         );
         pb.enable_steady_tick(Duration::from_millis(100));

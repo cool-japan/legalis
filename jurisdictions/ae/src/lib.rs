@@ -117,11 +117,21 @@
 //! This library is for educational and informational purposes. For legal matters,
 //! consult qualified UAE legal professionals (محامي).
 
+pub mod arbitration;
+pub mod banking_finance;
 pub mod citation;
+pub mod civil_code;
 pub mod commercial_companies;
 pub mod common;
+pub mod criminal_code;
+pub mod cybercrime;
 pub mod data_protection;
+pub mod free_zones;
+pub mod intellectual_property;
+pub mod islamic_law;
 pub mod labor_law;
+pub mod real_estate;
+pub mod tax_law;
 
 // Re-export citation types
 pub use citation::{Emirate, LegalInstrumentType, UaeCitation, common_citations};
@@ -149,6 +159,98 @@ pub use data_protection::{
     DataCategory, DataProtectionAssessment, DataProtectionError, DataProtectionResult,
     DataSubjectRight, FreeZoneFramework, LegalBasis, RiskLevel, SensitiveDataType,
     TransferMechanism, get_pdpl_checklist, validate_processing, validate_transfer,
+};
+
+// Re-export Islamic law types
+pub use islamic_law::{
+    HeritageRelationship, InheritanceShare, IslamicFinanceContract, IslamicLawError,
+    IslamicLawResult, MadhabSchool, Waqf, WaqfType, calculate_simple_inheritance, check_riba,
+    get_sharia_compliance_checklist,
+};
+
+// Re-export free zone types
+pub use free_zones::{
+    // ADGM
+    AdgmCompanyType,
+    AdgmCourtJurisdiction,
+    AdgmDataProtection,
+    AdgmEmployment,
+    AdgmError,
+    AdgmFinancialActivity,
+    AdgmResult,
+    // DIFC
+    DifcCompanyType,
+    DifcCourtJurisdiction,
+    DifcEmployment,
+    DifcError,
+    DifcFinancialActivity,
+    DifcResult,
+    // JAFZA
+    JafzaActivity,
+    JafzaCompanyType,
+    JafzaError,
+    JafzaLicenseType,
+    JafzaOfficeType,
+    JafzaRegistration,
+    JafzaResult,
+    estimate_setup_cost,
+    get_adgm_benefits,
+    get_difc_benefits,
+    get_jafza_benefits,
+    validate_adgm_registration,
+    validate_difc_registration,
+};
+
+// Re-export tax law types
+pub use tax_law::{
+    CorporateTax, CorporateTaxRate, TaxError, TaxResult, VatRate, VatRegistration,
+    VatRegistrationStatus, VatSupplyCategory, get_corporate_tax_checklist, get_vat_checklist,
+    validate_trn,
+};
+
+// Re-export civil code types
+pub use civil_code::{
+    CivilCodeError, CivilCodeResult, Compensation, ContractFormation,
+    ContractType as CivilContractType, InvalidityGround, LimitationPeriod, TortLiability,
+    get_civil_code_checklist, validate_contract_formation,
+};
+
+// Re-export criminal code types
+pub use criminal_code::{
+    Circumstance, CircumstanceType, CrimeClassification, CriminalLawError, CriminalLawResult,
+    CriminalOffense, Penalty, ProceduralRights, get_common_offenses,
+    get_criminal_procedure_checklist,
+};
+
+// Re-export real estate types
+pub use real_estate::{
+    EscrowAccount, FreeholdArea, OwnershipType, PropertyType, RealEstateError, RealEstateResult,
+    RentalContract, StrataProperty, TransferCosts, get_transaction_checklist,
+};
+
+// Re-export banking and finance types
+pub use banking_finance::{
+    AmlCompliance, BankingError, BankingResult, ConsumerProtection, FinancialInstitution,
+    RegulatoryCompliance, get_banking_checklist,
+};
+
+// Re-export intellectual property types
+pub use intellectual_property::{
+    CopyrightWork, EnforcementAction, IpError, IpResult, IpType, Patent, PatentType, Trademark,
+    get_ip_checklist,
+};
+
+// Re-export cybercrime types
+pub use cybercrime::{
+    CybercrimeError, CybercrimeResult, CybercrimeType, CybersecurityCompliance,
+    DataBreachNotification, ElectronicEvidence, get_common_cybercrimes,
+    get_cybersecurity_checklist,
+};
+
+// Re-export arbitration types
+pub use arbitration::{
+    ArbitrationAgreement, ArbitrationCosts, ArbitrationError, ArbitrationInstitution,
+    ArbitrationResult, ArbitrationType, ChallengeGround, get_arbitration_checklist,
 };
 
 #[cfg(test)]

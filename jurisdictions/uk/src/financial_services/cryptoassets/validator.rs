@@ -122,7 +122,9 @@ pub fn validate_stablecoin(stablecoin: &Stablecoin) -> Result<()> {
 /// - Fair, clear and not misleading
 pub fn validate_cryptoasset_promotion(promotion: &CryptoassetPromotion) -> Result<()> {
     // Check approval requirement (from Oct 8, 2023)
-    if promotion.promotion_date >= NaiveDate::from_ymd_opt(2023, 10, 8).unwrap() {
+    if promotion.promotion_date
+        >= NaiveDate::from_ymd_opt(2023, 10, 8).expect("valid date constant: October 8, 2023")
+    {
         if !promotion.approved_by_authorized_person {
             return Err(CryptoassetsError::PromotionNotApproved {
                 promotion_date: promotion.promotion_date.to_string(),

@@ -171,6 +171,24 @@ pub mod gst;
 pub mod it_act;
 pub mod labour_codes;
 
+// Procedure codes
+pub mod civil_procedure_code;
+pub mod criminal_procedure_code;
+pub mod evidence_act;
+
+// Commercial law
+pub mod arbitration_act;
+pub mod competition_law;
+pub mod insolvency_code;
+
+// Regulatory law
+pub mod environmental_law;
+pub mod fema;
+pub mod securities_law;
+
+// Intellectual property
+pub mod intellectual_property;
+
 // Re-export citation types
 pub use citation::{Citation, CitationType, Court, acts, cite};
 
@@ -594,6 +612,61 @@ pub use constitution::{
     validate_legislative_competence,
     validate_pil_maintainability,
     validate_writ_petition,
+};
+
+// Re-export Civil Procedure Code types
+pub use civil_procedure_code::{
+    AppealStatus as CpcAppealStatus, AppealType as CpcAppealType, CivilSuit, CourtFees,
+    CourtType as CpcCourtType, CpcComplianceReport, CpcError, CpcResult, ExecutionMode,
+    ExecutionProceeding, ExecutionStatus, JurisdictionBasis,
+    LimitationPeriod as CpcLimitationPeriod, OrderType, PecuniaryJurisdiction, PleadingType,
+    SuitStatus, SuitType, calculate_appeal_court_fees, calculate_days_between,
+    get_appeal_limitation as get_cpc_appeal_limitation, get_pecuniary_jurisdiction,
+    is_order_appealable, is_within_limitation as is_within_cpc_limitation,
+    validate_appeal_compliance as validate_cpc_appeal_compliance, validate_execution_compliance,
+    validate_plaint, validate_suit_compliance, validate_territorial_jurisdiction,
+};
+
+// Re-export Criminal Procedure Code types
+pub use criminal_procedure_code::{
+    AppealType as CrpcAppealType, ArrestType, BailApplication, BailStatus as CrpcBailStatus,
+    BailType, Chargesheet, CompoundableOffence, CriminalAppeal, CrpcComplianceReport, CrpcError,
+    CrpcResult, InvestigationStage, PoliceRemand, TrialProceedings, TrialStage, Verdict,
+    check_default_bail_eligibility, get_appeal_limitation_days as get_crpc_appeal_limitation_days,
+    validate_appeal_limitation, validate_bail_application, validate_chargesheet_timing,
+};
+
+// Re-export Evidence Act types
+pub use evidence_act::{
+    Admissibility, BurdenOfProof, Evidence, EvidenceActError, EvidenceActResult,
+    EvidenceComplianceReport, EvidenceType, Presumption, check_hearsay_exception,
+    validate_electronic_evidence, validate_evidence_admissibility,
+};
+
+// Re-export Arbitration Act types
+pub use arbitration_act::{ArbitralAward, ArbitrationAgreement, ArbitrationType, AwardType};
+
+// Re-export Insolvency Code types
+pub use insolvency_code::{
+    CorporateInsolvencyProcess, Creditor, CreditorType, IbcStage, InsolvencyProcessType,
+};
+
+// Re-export Competition Law types
+pub use competition_law::{
+    AbuseOfDominance, AntiCompetitiveAgreement, AntiCompetitiveAgreementType,
+    CombinationNotification,
+};
+
+// Re-export Environmental Law types
+pub use environmental_law::{
+    EnvironmentalClearance, EnvironmentalClearanceType, PollutionControlCompliance, PollutionType,
+    ProjectCategory,
+};
+
+// Re-export FEMA types
+pub use fema::{
+    AccountType as FemaAccountType, FdiRoute, FemaViolationType, ForeignInvestment,
+    RemittanceTransaction,
 };
 
 #[cfg(test)]

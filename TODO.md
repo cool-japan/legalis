@@ -1,10 +1,16 @@
 # Legalis-RS TODO
 
-## Project Status Summary (v0.1.3)
+## Project Status Summary (v0.1.4)
 
-All 65 crates (17 core + 18 jurisdictions + 30 examples) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
+All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
 
-**Statistics**: 1,651 Rust files | 863k LoC | 13,083 tests passing | 18 jurisdictions
+**Statistics**: 2,012 Rust files | 787k LoC (code) | 944k LoC (total with comments/blanks) | 16,171+ tests | 23 jurisdictions
+
+### Recent Additions (v0.1.4)
+- **5 New Jurisdictions**: South Korea (KR), Mexico (MX), Malaysia (MY), Russia (RU), Saudi Arabia (SA)
+- **Advanced Verification Features**: Real-Time Verification, Cross-Domain Verification, Self-Healing Legal Systems
+- **6 New Example Applications**: Cross-Jurisdiction Demo, Executable Law, GDPR Cross-Border Validator, Judgment Anonymization, Legislative Diff Simulator, LLM Hallucination Firewall
+- **Comprehensive Jurisdiction Implementations**: AE, BR, CN, ID, IN, TH, VN, ZA with full civil/criminal/commercial/tax law coverage
 
 ### Core Crates (16)
 
@@ -27,28 +33,33 @@ All 65 crates (17 core + 18 jurisdictions + 30 examples) compile cleanly with no
 | legalis-api | 0.2.3 | Stable | 200 passing |
 | legalis (CLI) | 0.2.3 | Stable | Passing |
 
-### Jurisdiction Crates (18)
+### Jurisdiction Crates (23)
 
-| Crate | Version | Status | Tests |
-|-------|---------|--------|-------|
-| legalis-ae | 0.1.3 | Stable | Passing |
-| legalis-au | 0.1.3 | Stable | Passing |
-| legalis-br | 0.1.3 | Stable | Passing |
-| legalis-ca | 0.1.3 | Stable | Passing |
-| legalis-cn | 0.1.3 | Stable | Passing |
-| legalis-de | 0.1.3 | Stable | Passing |
-| legalis-eu | 0.1.3 | Stable | Passing |
-| legalis-fr | 0.1.3 | Stable | Passing |
-| legalis-id | 0.1.3 | Stable | Passing |
-| legalis-in | 0.1.3 | Stable | Passing |
-| legalis-jp | 0.1.3 | Stable | Passing |
-| legalis-la | 0.1.3 | Stable | Passing |
-| legalis-sg | 0.1.3 | Stable | Passing |
-| legalis-th | 0.1.3 | Stable | Passing |
-| legalis-uk | 0.1.3 | Stable | Passing |
-| legalis-us | 0.1.3 | Stable | Passing |
-| legalis-vn | 0.1.3 | Stable | Passing |
-| legalis-za | 0.1.3 | Stable | Passing |
+| Crate | Version | Status | Tests | Coverage |
+|-------|---------|--------|-------|----------|
+| legalis-ae | 0.1.4 | Stable | 700+ | Civil Code, Criminal Code, Commercial Companies, Labor Law, Tax Law, Data Protection, Cybercrime, Banking/Finance, IP, Real Estate, Islamic Law, Arbitration, Free Zones |
+| legalis-au | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-br | 0.1.4 | Stable | 800+ | Civil Code (Obligations, Contracts, Property, Family), Corporate Law (Governance, M&A), Tax Law (Income, ICMS, IPI, PIS/COFINS), Criminal Code, Environmental Law, Banking Law, Bankruptcy Law, IP |
+| legalis-ca | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-cn | 0.1.4 | Stable | 900+ | Civil Code (Personality Rights, Marriage, Succession, Property, Contracts, Torts), Foreign Investment, Data Security, Antitrust |
+| legalis-de | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-eu | 0.1.4 | Stable | Passing | Constitutional, Treaties |
+| legalis-fr | 0.1.4 | Stable | Passing | Civil Code, Criminal Code, Labor Code |
+| legalis-id | 0.1.4 | Stable | 1,000+ | Company Law, Tax Law (Income, VAT, WHT, PBB), Omnibus Law (Cipta Kerja, Investment, Labor), Banking Law, Capital Markets, Land Law, Construction Law, Criminal Code, IP |
+| legalis-in | 0.1.4 | Stable | 1,200+ | Arbitration Act, Civil/Criminal Procedure Code, Competition Law, Environmental Law, Evidence Act, FEMA, Insolvency Code, IP (Patents, Trademarks), Securities Law |
+| legalis-jp | 0.1.4 | Stable | Passing | Civil Code, Criminal Code, Labor Law |
+| legalis-kr | 0.1.4 | Stable | 1,500+ | Civil Code (General, Property, Obligations, Family, Succession), Commercial Code, Criminal Code, Labor Law, Tax Law (Income, Corporate, VAT), Data Protection, Competition Law, IP, Financial Services, Real Estate, Procedure Law |
+| legalis-la | 0.1.4 | Stable | Passing | Civil Code |
+| legalis-mx | 0.1.4 | Stable | 800+ | Civil Code, Commercial Code, Criminal Code, Labor Law, Tax Law, Constitutional Law |
+| legalis-my | 0.1.4 | Stable | 600+ | Companies Act, Contract Law, Employment Law, Tax Law, Islamic Law, Land Law, IP |
+| legalis-ru | 0.1.4 | Stable | 900+ | Civil Code, Commercial Law, Criminal Code, Labor Law, Tax Law, Administrative Law, Constitutional Law |
+| legalis-sa | 0.1.4 | Stable | 700+ | Islamic Law (Sharia, Hanbali School), Commercial Code, Labor Law, Tax Law (Zakat, VAT, Income), Corporate Governance, Real Estate Law, IP |
+| legalis-sg | 0.1.4 | Stable | Passing | Companies Act, Employment Act, PDPA |
+| legalis-th | 0.1.4 | Stable | 1,100+ | Civil/Commercial Code (Property, Obligations, Family, Succession), Company Act, Securities Law, Tax Law (Income, VAT, WHT), Criminal Code, Labor Law, IP, Competition Law, Bankruptcy, Investment Promotion, Land Code, Immigration, Consumer Protection, Arbitration |
+| legalis-uk | 0.1.4 | Stable | Passing | Common Law, Employment Law |
+| legalis-us | 0.1.4 | Stable | Passing | Constitutional, Employment Law, Environmental |
+| legalis-vn | 0.1.4 | Stable | 1,000+ | Civil Code (Property, Obligations, Inheritance), Company Law, Tax Law (VAT, CIT, PIT, SCT), Banking Law, Competition Law, Construction Law, Consumer Protection, Criminal Code, Cybersecurity Law, IP, Land Law |
+| legalis-za | 0.1.4 | Stable | 900+ | Constitution, Constitutional Court, Criminal Law, Property Law (Common Law, Deeds Registration, MPRDA), Competition Law, Environmental Law, Financial Services, Insolvency, IP, Tax Law, Customary Law |
 
 ### Jurisdiction Integration Improvements
 
@@ -249,7 +260,10 @@ The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis
 - [x] Machine learning verification (v0.2.7)
 - [x] Distributed verification (v0.2.8)
 - [x] Certification framework (ISO 27001, SOC 2, GDPR) (v0.2.9)
-- [x] Comprehensive roadmap through v0.2.9 (see crate TODO.md)
+- [x] **Real-Time Verification (v0.3.2)** - Stream-based verification, live monitoring, WebSocket updates, circuit breaking
+- [x] **Cross-Domain Verification (v0.3.3)** - Multi-jurisdictional coherence, treaty compliance, harmonization gap detection, cross-border analysis
+- [x] **Self-Healing Legal Systems (v0.3.4)** - Automatic conflict resolution, predictive violation prevention, adaptive compliance, statute optimization
+- [x] Comprehensive roadmap through v0.3.4 (see crate TODO.md)
 
 ---
 

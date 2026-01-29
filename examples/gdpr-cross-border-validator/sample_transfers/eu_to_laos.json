@@ -1,0 +1,14 @@
+{
+  "transfer_id": "TRF-2026-002",
+  "origin": "EU-France",
+  "destination_country": "Laos",
+  "adequate_destination": null,
+  "safeguards": [],
+  "derogation": null,
+  "data_categories": ["User profiles", "Behavioral data"],
+  "purpose": "Analytics processing",
+  "legal_basis": "NONE",
+  "expected_result": "FORBIDDEN",
+  "violation": "GDPR Chapter V - No adequacy decision, no appropriate safeguards",
+  "potential_fine": "Up to 4% of global annual turnover (Article 83)"
+}

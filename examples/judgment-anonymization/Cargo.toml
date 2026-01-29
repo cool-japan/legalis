@@ -1,0 +1,19 @@
+[package]
+name = "judgment-anonymization"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# NOTE: This example requires MeCab dictionary to be installed.
+# It is excluded from workspace tests as it has external dependencies.
+
+[dependencies]
+mecrab = "0.1"
+legalis-core = { path = "../../crates/legalis-core" }
+legalis-jp = { path = "../../jurisdictions/jp" }
+anyhow = "1.0"
+
+[[bin]]
+name = "judgment-anonymization"
+path = "src/main.rs"
+test = false  # Exclude from test runs

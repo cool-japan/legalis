@@ -1,0 +1,10 @@
+{
+  "transfer_id": "TRF-2026-001",
+  "origin": "EU-Germany",
+  "destination_country": "Japan",
+  "adequate_destination": "Japan",
+  "data_categories": ["Customer names", "Email addresses", "Purchase history"],
+  "purpose": "E-commerce order fulfillment",
+  "legal_basis": "GDPR Article 45 - Adequacy Decision (2019)",
+  "expected_result": "ALLOWED"
+}

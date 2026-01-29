@@ -117,7 +117,7 @@ pub fn validate_principles_compliance(principles: &PrinciplesCompliance) -> Resu
     }
 
     if !errors.is_empty() {
-        return Err(errors.into_iter().next().unwrap());
+        return Err(errors.into_iter().next().expect("errors vec is non-empty"));
     }
 
     Ok(())

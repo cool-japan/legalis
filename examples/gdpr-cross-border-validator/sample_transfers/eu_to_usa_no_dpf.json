@@ -1,0 +1,16 @@
+{
+  "transfer_id": "TRF-2026-004",
+  "origin": "EU-Spain",
+  "destination_country": "United States",
+  "adequate_destination": null,
+  "safeguards": [],
+  "derogation": null,
+  "data_categories": ["Employee records"],
+  "purpose": "Payroll processing",
+  "legal_basis": "NONE",
+  "expected_result": "FORBIDDEN",
+  "violation": "GDPR Article 45/46 - No adequacy decision, no safeguards",
+  "schrems_ii_impact": "Post-Schrems II, USA transfers require SCCs + TIA minimum",
+  "potential_fine": "Up to €20 million or 4% of global turnover",
+  "recommended_action": "Implement SCCs or migrate to EU/UK data center"
+}
