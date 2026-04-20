@@ -242,7 +242,7 @@ impl InMemoryStreamProducer {
     pub fn get_messages(&self, topic: &str) -> Vec<StreamMessage> {
         self.messages
             .read()
-            .unwrap()
+            .expect("rwlock read poisoned")
             .get(topic)
             .cloned()
             .unwrap_or_default()
@@ -304,7 +304,10 @@ impl InMemoryStreamConsumer {
 
     /// Get subscribed topics
     pub fn get_subscriptions(&self) -> Vec<String> {
-        self.subscriptions.read().unwrap().clone()
+        self.subscriptions
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 }
 
@@ -400,7 +403,7 @@ impl DeadLetterQueue {
 
     /// Get all messages in the DLQ
     pub fn get_all(&self) -> Vec<(StreamMessage, String)> {
-        self.messages.read().unwrap().clone()
+        self.messages.read().expect("rwlock read poisoned").clone()
     }
 
     /// Clear the DLQ
@@ -437,13 +440,17 @@ impl EventRouter {
 
     /// Add a routing rule
     pub fn add_rule(&self, event_type: String, topic: String) {
-        let mut rules = self.rules.write().unwrap();
+        let mut rules = self.rules.write().expect("rwlock write poisoned");
         rules.insert(event_type, topic);
     }
 
     /// Get topic for an event type
     pub fn get_topic(&self, event_type: &str) -> Option<String> {
-        self.rules.read().unwrap().get(event_type).cloned()
+        self.rules
+            .read()
+            .expect("rwlock read poisoned")
+            .get(event_type)
+            .cloned()
     }
 
     /// Route an event to the appropriate topic

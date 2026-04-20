@@ -904,40 +904,44 @@ mod tests {
         assert_eq!(partitions.len(), 1);
     }
 
+    fn unique_temp_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("legalis-lod-{}-{}", uuid::Uuid::new_v4(), name))
+    }
+
     #[test]
     fn test_save_and_load_ntriples() {
         let store = TripleStore::from_triples(sample_triples());
-        let temp_file = "/tmp/test_store.nt";
+        let temp_file = unique_temp_path("test_store.nt");
 
         // Save
-        store.save_to_file(temp_file).unwrap();
+        store.save_to_file(&temp_file).expect("save");
 
         // Load
-        let loaded_store = TripleStore::load_from_file(temp_file).unwrap();
+        let loaded_store = TripleStore::load_from_file(&temp_file).expect("load");
 
         assert_eq!(loaded_store.len(), store.len());
         assert_eq!(loaded_store.subjects().len(), store.subjects().len());
 
         // Cleanup
-        std::fs::remove_file(temp_file).ok();
+        std::fs::remove_file(&temp_file).ok();
     }
 
     #[test]
     fn test_save_and_load_json() {
         let store = TripleStore::from_triples(sample_triples());
-        let temp_file = "/tmp/test_store.json";
+        let temp_file = unique_temp_path("test_store.json");
 
         // Save
-        store.save_to_json(temp_file).unwrap();
+        store.save_to_json(&temp_file).expect("save json");
 
         // Load
-        let loaded_store = TripleStore::load_from_json(temp_file).unwrap();
+        let loaded_store = TripleStore::load_from_json(&temp_file).expect("load json");
 
         assert_eq!(loaded_store.len(), store.len());
         assert_eq!(loaded_store.subjects().len(), store.subjects().len());
 
         // Cleanup
-        std::fs::remove_file(temp_file).ok();
+        std::fs::remove_file(&temp_file).ok();
     }
 
     #[test]
@@ -949,12 +953,12 @@ mod tests {
             object: RdfValue::Literal("Line 1\nLine 2\t\"quoted\"".to_string(), None),
         });
 
-        let temp_file = "/tmp/test_special_chars.nt";
-        store.save_to_file(temp_file).unwrap();
-        let loaded = TripleStore::load_from_file(temp_file).unwrap();
+        let temp_file = unique_temp_path("test_special_chars.nt");
+        store.save_to_file(&temp_file).expect("save");
+        let loaded = TripleStore::load_from_file(&temp_file).expect("load");
 
         assert_eq!(loaded.len(), 1);
-        std::fs::remove_file(temp_file).ok();
+        std::fs::remove_file(&temp_file).ok();
     }
 
     #[test]
@@ -966,23 +970,23 @@ mod tests {
             object: RdfValue::Literal("Hello".to_string(), Some("en".to_string())),
         });
 
-        let temp_file = "/tmp/test_lang.json";
-        store.save_to_json(temp_file).unwrap();
-        let loaded = TripleStore::load_from_json(temp_file).unwrap();
+        let temp_file = unique_temp_path("test_lang.json");
+        store.save_to_json(&temp_file).expect("save json");
+        let loaded = TripleStore::load_from_json(&temp_file).expect("load json");
 
         assert_eq!(loaded.len(), 1);
-        std::fs::remove_file(temp_file).ok();
+        std::fs::remove_file(&temp_file).ok();
     }
 
     #[test]
     fn test_empty_store_persistence() {
         let store = TripleStore::new();
-        let temp_file = "/tmp/test_empty.nt";
+        let temp_file = unique_temp_path("test_empty.nt");
 
-        store.save_to_file(temp_file).unwrap();
-        let loaded = TripleStore::load_from_file(temp_file).unwrap();
+        store.save_to_file(&temp_file).expect("save");
+        let loaded = TripleStore::load_from_file(&temp_file).expect("load");
 
         assert!(loaded.is_empty());
-        std::fs::remove_file(temp_file).ok();
+        std::fs::remove_file(&temp_file).ok();
     }
 }

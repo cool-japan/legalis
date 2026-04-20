@@ -333,7 +333,7 @@ assert_eq!(corporate_tax.amount(), 200_000_00); // 200,000 RUB
 
 ## License
 
-Licensed under either of MIT or Apache-2.0 at your option.
+Licensed under the Apache License, Version 2.0.
 
 ## Disclaimer
 

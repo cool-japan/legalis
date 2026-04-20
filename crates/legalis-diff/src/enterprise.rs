@@ -451,7 +451,7 @@ pub fn generate_dashboard_data(archive: &DiffArchive, trail: &AuditTrail) -> Das
         *contributor_counts.entry(entry.user.clone()).or_insert(0) += 1;
     }
     let mut top_contributors: Vec<(String, usize)> = contributor_counts.into_iter().collect();
-    top_contributors.sort_by(|a, b| b.1.cmp(&a.1));
+    top_contributors.sort_by_key(|b| std::cmp::Reverse(b.1));
     top_contributors.truncate(5);
 
     DashboardData {

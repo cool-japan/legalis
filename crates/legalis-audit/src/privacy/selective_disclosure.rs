@@ -82,7 +82,10 @@ impl SelectiveDisclosure {
             }
 
             let computed_commitment = self.commit_field(field_name, field_value);
-            if &computed_commitment != expected_commitment.unwrap() {
+            if &computed_commitment
+                != expected_commitment
+                    .expect("invariant: expected_commitment is Some (checked is_none above)")
+            {
                 return Ok(false);
             }
         }
@@ -137,8 +140,16 @@ impl SelectiveDisclosure {
                         commitment: self.commit_statistic(statistic, 0.0),
                     });
                 }
-                let first_time = records.first().unwrap().timestamp.timestamp();
-                let last_time = records.last().unwrap().timestamp.timestamp();
+                let first_time = records
+                    .first()
+                    .expect("invariant: records is non-empty (checked is_empty above)")
+                    .timestamp
+                    .timestamp();
+                let last_time = records
+                    .last()
+                    .expect("invariant: records is non-empty (checked is_empty above)")
+                    .timestamp
+                    .timestamp();
                 let span = (last_time - first_time) as f64;
                 Ok(StatisticDisclosure {
                     statistic_type: statistic,

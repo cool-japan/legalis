@@ -124,7 +124,13 @@ impl MerkleTree {
         }
 
         Self {
-            root: Some(nodes.into_iter().next().unwrap()),
+            // while loop above terminates with nodes.len() == 1
+            root: Some(
+                nodes
+                    .into_iter()
+                    .next()
+                    .expect("invariant: loop reduces nodes to exactly one root"),
+            ),
             record_count: records.len(),
         }
     }

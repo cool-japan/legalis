@@ -163,7 +163,9 @@ impl ContractValidator {
             return violations;
         }
 
-        let obj = value.as_object().unwrap();
+        let obj = value
+            .as_object()
+            .expect("invariant: value is an object (checked is_object above)");
 
         // Check required fields
         for field_schema in &schema.fields {

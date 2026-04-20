@@ -114,4 +114,4 @@ The crate includes intelligent JSON extraction that handles:
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0

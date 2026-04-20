@@ -41,7 +41,7 @@ setup(
     install_requires=REQUIRES,
     packages=find_packages(exclude=["test", "tests"]),
     include_package_data=True,
-    license="MIT OR Apache-2.0",
+    license="Apache-2.0",
     long_description_content_type='text/markdown',
     long_description="""\
     REST API for the Legalis-RS legal framework. Provides CRUD operations for statutes, verification, and simulation endpoints.

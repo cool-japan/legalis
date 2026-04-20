@@ -14,12 +14,13 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
-lru = "0.16"
-rayon = "1.11"
+lru.workspace = true
+rayon = "1.12"
 once_cell = "1.21"
 
 [dev-dependencies]
-criterion = "0.8"
+criterion.workspace = true
+tempfile.workspace = true
 
 [[bench]]
 name = "i18n_benchmarks"

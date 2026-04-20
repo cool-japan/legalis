@@ -405,7 +405,9 @@ impl IncrementalCompilationCache {
             self.cache.insert(statute.id.clone(), metadata);
         }
 
-        self.cache.get(&statute.id).unwrap()
+        self.cache
+            .get(&statute.id)
+            .expect("invariant: statute.id was just inserted into cache")
     }
 
     /// Performs a quick diff using precompiled metadata.

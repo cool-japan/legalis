@@ -187,18 +187,22 @@ impl TokenTracker {
 
     /// Records token usage for a model.
     pub fn record_usage(&self, model: &str, usage: TokenUsage) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().expect("mutex poisoned");
         stats.entry(model.to_string()).or_default().update(&usage);
     }
 
     /// Gets statistics for a specific model.
     pub fn get_stats(&self, model: &str) -> Option<TokenStats> {
-        self.stats.lock().unwrap().get(model).cloned()
+        self.stats
+            .lock()
+            .expect("mutex poisoned")
+            .get(model)
+            .cloned()
     }
 
     /// Gets statistics for all models.
     pub fn get_all_stats(&self) -> HashMap<String, TokenStats> {
-        self.stats.lock().unwrap().clone()
+        self.stats.lock().expect("mutex poisoned").clone()
     }
 
     /// Estimates cost for a specific model based on recorded usage.
@@ -210,7 +214,7 @@ impl TokenTracker {
 
     /// Estimates total cost across all models.
     pub fn estimate_total_cost_all(&self) -> f64 {
-        let stats = self.stats.lock().unwrap();
+        let stats = self.stats.lock().expect("mutex poisoned");
         let mut total_cost = 0.0;
 
         for (model, model_stats) in stats.iter() {
@@ -224,12 +228,12 @@ impl TokenTracker {
 
     /// Resets all statistics.
     pub fn reset(&self) {
-        self.stats.lock().unwrap().clear();
+        self.stats.lock().expect("mutex poisoned").clear();
     }
 
     /// Generates a usage report for all models.
     pub fn generate_report(&self) -> String {
-        let stats = self.stats.lock().unwrap();
+        let stats = self.stats.lock().expect("mutex poisoned");
         let mut report = String::from("Token Usage Report\n");
         report.push_str("==================\n\n");
 
@@ -440,7 +444,7 @@ impl BudgetTracker {
                 return Some(alert);
             } else if percentage >= (limit.alert_threshold * 100.0) {
                 // Only trigger warning once
-                let mut triggered = self.alert_triggered.lock().unwrap();
+                let mut triggered = self.alert_triggered.lock().expect("mutex poisoned");
                 if !*triggered {
                     let alert = BudgetAlert::Warning {
                         current_cost,
@@ -526,7 +530,7 @@ impl BudgetTracker {
     /// Resets the budget tracker.
     pub fn reset(&self) {
         self.tracker.reset();
-        *self.alert_triggered.lock().unwrap() = false;
+        *self.alert_triggered.lock().expect("mutex poisoned") = false;
     }
 
     /// Gets the underlying token tracker.

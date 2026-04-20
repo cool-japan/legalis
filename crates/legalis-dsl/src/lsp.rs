@@ -661,8 +661,10 @@ impl LanguageServer for LegalisLspBackend {
                             tags: None,
                             deprecated: None,
                             location: Location {
-                                uri: Url::parse(uri_str)
-                                    .unwrap_or_else(|_| Url::parse("file:///").unwrap()),
+                                uri: Url::parse(uri_str).unwrap_or_else(|_| {
+                                    Url::parse("file:///")
+                                        .expect("invariant: file:/// is a valid URL")
+                                }),
                                 range: Range {
                                     start: Position {
                                         line: 0,
@@ -754,8 +756,9 @@ impl LanguageServer for LegalisLspBackend {
                             kind: SymbolKind::FUNCTION,
                             tags: None,
                             detail: Some(statute.title.clone()),
-                            uri: Url::parse(uri_str)
-                                .unwrap_or_else(|_| Url::parse("file:///").unwrap()),
+                            uri: Url::parse(uri_str).unwrap_or_else(|_| {
+                                Url::parse("file:///").expect("invariant: file:/// is a valid URL")
+                            }),
                             range: Range {
                                 start: Position {
                                     line: 0,

@@ -235,19 +235,23 @@ impl DiffCache {
     fn new() -> Self {
         Self {
             cache: std::sync::Mutex::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(100).unwrap(),
+                std::num::NonZeroUsize::new(100).expect("invariant: 100 is non-zero"),
             )),
         }
     }
 
     fn get(&self, old: &Statute, new: &Statute) -> Option<StatuteDiff> {
         let key = Self::compute_key(old, new);
-        self.cache.lock().unwrap().get(&key).cloned()
+        self.cache
+            .lock()
+            .expect("mutex poisoned")
+            .get(&key)
+            .cloned()
     }
 
     fn insert(&self, old: &Statute, new: &Statute, diff: StatuteDiff) {
         let key = Self::compute_key(old, new);
-        self.cache.lock().unwrap().put(key, diff);
+        self.cache.lock().expect("mutex poisoned").put(key, diff);
     }
 
     fn compute_key(old: &Statute, new: &Statute) -> u64 {

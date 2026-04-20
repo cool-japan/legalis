@@ -354,7 +354,7 @@ pub async fn etag_middleware(
             .status(StatusCode::NOT_MODIFIED)
             .header(header::ETAG, cached.etag)
             .body(Body::empty())
-            .unwrap());
+            .expect("building a NOT_MODIFIED response with empty body should not fail"));
     }
 
     // Process request

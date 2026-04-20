@@ -2,7 +2,7 @@
 
 use crate::{AuditError, AuditRecord, AuditResult};
 use chrono::{DateTime, Utc};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, types::Type};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -10,6 +10,23 @@ use uuid::Uuid;
 /// SQLite-based audit storage.
 pub struct SqliteStorage {
     conn: Arc<Mutex<Connection>>,
+}
+
+/// Helper: parse a Uuid from a String inside a rusqlite closure.
+fn parse_uuid(col: usize, s: String) -> rusqlite::Result<Uuid> {
+    Uuid::parse_str(&s)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(col, Type::Text, Box::new(e)))
+}
+
+/// Helper: parse a DateTime<Utc> from a unix-timestamp i64 inside a rusqlite closure.
+fn parse_timestamp(col: usize, ts: i64) -> rusqlite::Result<DateTime<Utc>> {
+    DateTime::from_timestamp(ts, 0).ok_or_else(|| rusqlite::Error::IntegralValueOutOfRange(col, ts))
+}
+
+/// Helper: deserialise JSON from a String inside a rusqlite closure.
+fn from_json<T: serde::de::DeserializeOwned>(col: usize, s: &str) -> rusqlite::Result<T> {
+    serde_json::from_str(s)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(col, Type::Text, Box::new(e)))
 }
 
 impl SqliteStorage {
@@ -150,14 +167,14 @@ impl super::AuditStorage for SqliteStorage {
                 let result_str: String = row.get(7)?;
 
                 Ok(AuditRecord {
-                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
-                    timestamp: DateTime::from_timestamp(timestamp, 0).unwrap(),
-                    event_type: serde_json::from_str(&event_type_str).unwrap(),
-                    actor: serde_json::from_str(&actor_str).unwrap(),
+                    id: parse_uuid(0, row.get::<_, String>(0)?)?,
+                    timestamp: parse_timestamp(1, timestamp)?,
+                    event_type: from_json(2, &event_type_str)?,
+                    actor: from_json(3, &actor_str)?,
                     statute_id: row.get(4)?,
-                    subject_id: Uuid::parse_str(&row.get::<_, String>(5)?).unwrap(),
-                    context: serde_json::from_str(&context_str).unwrap(),
-                    result: serde_json::from_str(&result_str).unwrap(),
+                    subject_id: parse_uuid(5, row.get::<_, String>(5)?)?,
+                    context: from_json(6, &context_str)?,
+                    result: from_json(7, &result_str)?,
                     previous_hash: row.get(8)?,
                     record_hash: row.get(9)?,
                 })
@@ -189,14 +206,14 @@ impl super::AuditStorage for SqliteStorage {
                 let result_str: String = row.get(7)?;
 
                 Ok(AuditRecord {
-                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
-                    timestamp: DateTime::from_timestamp(timestamp, 0).unwrap(),
-                    event_type: serde_json::from_str(&event_type_str).unwrap(),
-                    actor: serde_json::from_str(&actor_str).unwrap(),
+                    id: parse_uuid(0, row.get::<_, String>(0)?)?,
+                    timestamp: parse_timestamp(1, timestamp)?,
+                    event_type: from_json(2, &event_type_str)?,
+                    actor: from_json(3, &actor_str)?,
                     statute_id: row.get(4)?,
-                    subject_id: Uuid::parse_str(&row.get::<_, String>(5)?).unwrap(),
-                    context: serde_json::from_str(&context_str).unwrap(),
-                    result: serde_json::from_str(&result_str).unwrap(),
+                    subject_id: parse_uuid(5, row.get::<_, String>(5)?)?,
+                    context: from_json(6, &context_str)?,
+                    result: from_json(7, &result_str)?,
                     previous_hash: row.get(8)?,
                     record_hash: row.get(9)?,
                 })
@@ -229,14 +246,14 @@ impl super::AuditStorage for SqliteStorage {
                 let result_str: String = row.get(7)?;
 
                 Ok(AuditRecord {
-                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
-                    timestamp: DateTime::from_timestamp(timestamp, 0).unwrap(),
-                    event_type: serde_json::from_str(&event_type_str).unwrap(),
-                    actor: serde_json::from_str(&actor_str).unwrap(),
+                    id: parse_uuid(0, row.get::<_, String>(0)?)?,
+                    timestamp: parse_timestamp(1, timestamp)?,
+                    event_type: from_json(2, &event_type_str)?,
+                    actor: from_json(3, &actor_str)?,
                     statute_id: row.get(4)?,
-                    subject_id: Uuid::parse_str(&row.get::<_, String>(5)?).unwrap(),
-                    context: serde_json::from_str(&context_str).unwrap(),
-                    result: serde_json::from_str(&result_str).unwrap(),
+                    subject_id: parse_uuid(5, row.get::<_, String>(5)?)?,
+                    context: from_json(6, &context_str)?,
+                    result: from_json(7, &result_str)?,
                     previous_hash: row.get(8)?,
                     record_hash: row.get(9)?,
                 })
@@ -269,14 +286,14 @@ impl super::AuditStorage for SqliteStorage {
                 let result_str: String = row.get(7)?;
 
                 Ok(AuditRecord {
-                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
-                    timestamp: DateTime::from_timestamp(timestamp, 0).unwrap(),
-                    event_type: serde_json::from_str(&event_type_str).unwrap(),
-                    actor: serde_json::from_str(&actor_str).unwrap(),
+                    id: parse_uuid(0, row.get::<_, String>(0)?)?,
+                    timestamp: parse_timestamp(1, timestamp)?,
+                    event_type: from_json(2, &event_type_str)?,
+                    actor: from_json(3, &actor_str)?,
                     statute_id: row.get(4)?,
-                    subject_id: Uuid::parse_str(&row.get::<_, String>(5)?).unwrap(),
-                    context: serde_json::from_str(&context_str).unwrap(),
-                    result: serde_json::from_str(&result_str).unwrap(),
+                    subject_id: parse_uuid(5, row.get::<_, String>(5)?)?,
+                    context: from_json(6, &context_str)?,
+                    result: from_json(7, &result_str)?,
                     previous_hash: row.get(8)?,
                     record_hash: row.get(9)?,
                 })
@@ -313,14 +330,14 @@ impl super::AuditStorage for SqliteStorage {
                 let result_str: String = row.get(7)?;
 
                 Ok(AuditRecord {
-                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
-                    timestamp: DateTime::from_timestamp(timestamp, 0).unwrap(),
-                    event_type: serde_json::from_str(&event_type_str).unwrap(),
-                    actor: serde_json::from_str(&actor_str).unwrap(),
+                    id: parse_uuid(0, row.get::<_, String>(0)?)?,
+                    timestamp: parse_timestamp(1, timestamp)?,
+                    event_type: from_json(2, &event_type_str)?,
+                    actor: from_json(3, &actor_str)?,
                     statute_id: row.get(4)?,
-                    subject_id: Uuid::parse_str(&row.get::<_, String>(5)?).unwrap(),
-                    context: serde_json::from_str(&context_str).unwrap(),
-                    result: serde_json::from_str(&result_str).unwrap(),
+                    subject_id: parse_uuid(5, row.get::<_, String>(5)?)?,
+                    context: from_json(6, &context_str)?,
+                    result: from_json(7, &result_str)?,
                     previous_hash: row.get(8)?,
                     record_hash: row.get(9)?,
                 })

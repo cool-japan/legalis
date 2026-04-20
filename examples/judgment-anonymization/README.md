@@ -214,7 +214,7 @@ Support court systems in preparing judgments for public disclosure under transpa
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
 
 Copyright 2026 COOLJAPAN OU (Team Kitasan)
 

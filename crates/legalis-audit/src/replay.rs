@@ -47,8 +47,17 @@ impl DecisionReplayer {
             )));
         }
 
-        let first_seen = subject_records.iter().map(|r| r.timestamp).min().unwrap();
-        let last_seen = subject_records.iter().map(|r| r.timestamp).max().unwrap();
+        // subject_records is non-empty (checked above)
+        let first_seen = subject_records
+            .iter()
+            .map(|r| r.timestamp)
+            .min()
+            .expect("invariant: subject_records is non-empty");
+        let last_seen = subject_records
+            .iter()
+            .map(|r| r.timestamp)
+            .max()
+            .expect("invariant: subject_records is non-empty");
 
         Ok(SubjectHistory {
             subject_id,
@@ -77,8 +86,17 @@ impl DecisionReplayer {
             )));
         }
 
-        let first_applied = statute_records.iter().map(|r| r.timestamp).min().unwrap();
-        let last_applied = statute_records.iter().map(|r| r.timestamp).max().unwrap();
+        // statute_records is non-empty (checked above)
+        let first_applied = statute_records
+            .iter()
+            .map(|r| r.timestamp)
+            .min()
+            .expect("invariant: statute_records is non-empty");
+        let last_applied = statute_records
+            .iter()
+            .map(|r| r.timestamp)
+            .max()
+            .expect("invariant: statute_records is non-empty");
 
         let subjects_affected = Self::count_unique_subjects(&statute_records);
 

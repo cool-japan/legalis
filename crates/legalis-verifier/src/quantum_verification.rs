@@ -27,7 +27,7 @@
 //! ```
 
 use legalis_core::Statute;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

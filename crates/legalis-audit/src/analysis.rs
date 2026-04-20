@@ -186,8 +186,17 @@ impl DecisionAnalyzer {
             return Vec::new();
         }
 
-        let min_time = records.iter().map(|r| r.timestamp).min().unwrap();
-        let max_time = records.iter().map(|r| r.timestamp).max().unwrap();
+        // Safety: records is non-empty (checked above)
+        let min_time = records
+            .iter()
+            .map(|r| r.timestamp)
+            .min()
+            .expect("invariant: records is non-empty");
+        let max_time = records
+            .iter()
+            .map(|r| r.timestamp)
+            .max()
+            .expect("invariant: records is non-empty");
 
         let duration = max_time.signed_duration_since(min_time);
         let bucket_duration = duration / bucket_count as i32;
@@ -258,7 +267,7 @@ impl DecisionAnalyzer {
             .collect();
 
         // Sort by count descending
-        entries.sort_by(|a, b| b.count.cmp(&a.count));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.count));
         entries
     }
 }
@@ -333,7 +342,11 @@ impl AnomalyDetector {
             }
         }
 
-        anomalies.sort_by(|a, b| b.override_rate.partial_cmp(&a.override_rate).unwrap());
+        anomalies.sort_by(|a, b| {
+            b.override_rate
+                .partial_cmp(&a.override_rate)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         anomalies
     }
 }

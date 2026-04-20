@@ -271,7 +271,7 @@ fn anonymize_judgment(text: &str, mecrab: &MeCrab) -> Result<(String, Anonymizat
 
     // Sort by length (descending) to avoid partial replacements
     let mut sorted_entities = entities;
-    sorted_entities.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    sorted_entities.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
 
     println!("\n🔍 Named Entities Detected: {}", sorted_entities.len());
 

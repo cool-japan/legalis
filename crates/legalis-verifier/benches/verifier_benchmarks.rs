@@ -440,7 +440,7 @@ fn bench_smt_solver(c: &mut Criterion) {
     group.bench_function("smt_verify_simple", |b| {
         b.iter(|| {
             let mut verifier = SmtVerifier::new();
-            if let Some(precondition) = &simple_statute.precondition {
+            if let Some(precondition) = simple_statute.preconditions.first() {
                 black_box(verifier.is_satisfiable(precondition))
             } else {
                 Ok(true)
@@ -451,7 +451,7 @@ fn bench_smt_solver(c: &mut Criterion) {
     group.bench_function("smt_verify_complex", |b| {
         b.iter(|| {
             let mut verifier = SmtVerifier::new();
-            if let Some(precondition) = &complex_statute.precondition {
+            if let Some(precondition) = complex_statute.preconditions.first() {
                 black_box(verifier.is_satisfiable(precondition))
             } else {
                 Ok(true)
@@ -463,7 +463,7 @@ fn bench_smt_solver(c: &mut Criterion) {
     group.bench_function("smt_check_satisfiability", |b| {
         b.iter(|| {
             let mut verifier = SmtVerifier::new();
-            if let Some(precondition) = &complex_statute.precondition {
+            if let Some(precondition) = complex_statute.preconditions.first() {
                 black_box(verifier.is_satisfiable(precondition))
             } else {
                 Ok(true)

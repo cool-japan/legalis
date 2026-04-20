@@ -58,7 +58,7 @@ impl UpdatePublisher {
 
     /// Subscribes to all updates.
     pub fn subscribe(&mut self, id: impl Into<String>, subscriber: Box<dyn UpdateSubscriber>) {
-        let mut subscribers = self.subscribers.lock().unwrap();
+        let mut subscribers = self.subscribers.lock().expect("mutex poisoned");
         subscribers.insert(id.into(), subscriber);
     }
 
@@ -73,24 +73,24 @@ impl UpdatePublisher {
         let subscriber_id = subscriber_id.into();
 
         // Add to subscribers
-        let mut subscribers = self.subscribers.lock().unwrap();
+        let mut subscribers = self.subscribers.lock().expect("mutex poisoned");
         subscribers.insert(subscriber_id.clone(), subscriber);
         drop(subscribers);
 
         // Add to topic mapping
-        let mut topic_subs = self.topic_subscribers.lock().unwrap();
+        let mut topic_subs = self.topic_subscribers.lock().expect("mutex poisoned");
         topic_subs.entry(topic).or_default().push(subscriber_id);
     }
 
     /// Unsubscribes a subscriber.
     pub fn unsubscribe(&mut self, id: &str) -> bool {
-        let mut subscribers = self.subscribers.lock().unwrap();
+        let mut subscribers = self.subscribers.lock().expect("mutex poisoned");
         subscribers.remove(id).is_some()
     }
 
     /// Publishes an update to all subscribers.
     pub fn publish(&self, update: &GraphUpdate) {
-        let subscribers = self.subscribers.lock().unwrap();
+        let subscribers = self.subscribers.lock().expect("mutex poisoned");
         for subscriber in subscribers.values() {
             subscriber.on_update(update);
         }
@@ -98,9 +98,9 @@ impl UpdatePublisher {
 
     /// Publishes an update to topic subscribers.
     pub fn publish_topic(&self, topic: &str, update: &GraphUpdate) {
-        let topic_subs = self.topic_subscribers.lock().unwrap();
+        let topic_subs = self.topic_subscribers.lock().expect("mutex poisoned");
         if let Some(subscriber_ids) = topic_subs.get(topic) {
-            let subscribers = self.subscribers.lock().unwrap();
+            let subscribers = self.subscribers.lock().expect("mutex poisoned");
             for id in subscriber_ids {
                 if let Some(subscriber) = subscribers.get(id) {
                     subscriber.on_update(update);
@@ -111,7 +111,7 @@ impl UpdatePublisher {
 
     /// Returns the number of subscribers.
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.lock().unwrap().len()
+        self.subscribers.lock().expect("mutex poisoned").len()
     }
 }
 
@@ -152,7 +152,7 @@ impl IncrementalMaterializer {
                 let derived = rule.derive(triple);
                 for t in derived {
                     let mt = MaterializedTriple::from(&t);
-                    let mut materialized = self.materialized.lock().unwrap();
+                    let mut materialized = self.materialized.lock().expect("mutex poisoned");
                     if materialized.insert(mt) {
                         new_triples.push(t);
                     }
@@ -168,7 +168,7 @@ impl IncrementalMaterializer {
         let mut removed_triples = Vec::new();
         let mt = MaterializedTriple::from(triple);
 
-        let mut materialized = self.materialized.lock().unwrap();
+        let mut materialized = self.materialized.lock().expect("mutex poisoned");
         if materialized.remove(&mt) {
             removed_triples.push(triple.clone());
         }
@@ -178,7 +178,7 @@ impl IncrementalMaterializer {
 
     /// Returns the count of materialized triples.
     pub fn materialized_count(&self) -> usize {
-        self.materialized.lock().unwrap().len()
+        self.materialized.lock().expect("mutex poisoned").len()
     }
 }
 
@@ -386,13 +386,16 @@ mod tests {
 
         #[allow(dead_code)]
         fn update_count(&self) -> usize {
-            self.updates.lock().unwrap().len()
+            self.updates.lock().expect("mutex poisoned").len()
         }
     }
 
     impl UpdateSubscriber for TestSubscriber {
         fn on_update(&self, update: &GraphUpdate) {
-            self.updates.lock().unwrap().push(update.clone());
+            self.updates
+                .lock()
+                .expect("mutex poisoned")
+                .push(update.clone());
         }
     }
 

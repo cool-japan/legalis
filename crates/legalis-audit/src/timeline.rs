@@ -77,11 +77,22 @@ impl Timeline {
         }
 
         // Sort by timestamp
-        self.events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        self.events.sort_by_key(|a| a.timestamp);
 
         // Update metadata
-        self.start_time = Some(self.events.first().unwrap().timestamp);
-        self.end_time = Some(self.events.last().unwrap().timestamp);
+        // events is non-empty (checked at the top of this method)
+        self.start_time = Some(
+            self.events
+                .first()
+                .expect("invariant: events is non-empty")
+                .timestamp,
+        );
+        self.end_time = Some(
+            self.events
+                .last()
+                .expect("invariant: events is non-empty")
+                .timestamp,
+        );
 
         if let (Some(start), Some(end)) = (self.start_time, self.end_time) {
             self.duration_seconds = Some(end.signed_duration_since(start).num_seconds());

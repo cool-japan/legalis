@@ -447,7 +447,7 @@ pub mod ab_testing {
             });
             self.stats
                 .lock()
-                .unwrap()
+                .expect("mutex poisoned")
                 .insert(variant_name, VariantStats::default());
             self
         }
@@ -483,7 +483,7 @@ pub mod ab_testing {
 
         /// Records a successful request for a variant.
         pub fn record_success(&self, variant_name: &str, latency_ms: u128) {
-            let mut stats = self.stats.lock().unwrap();
+            let mut stats = self.stats.lock().expect("mutex poisoned");
             if let Some(variant_stats) = stats.get_mut(variant_name) {
                 variant_stats.requests += 1;
                 variant_stats.successes += 1;
@@ -493,7 +493,7 @@ pub mod ab_testing {
 
         /// Records a failed request for a variant.
         pub fn record_failure(&self, variant_name: &str, latency_ms: u128) {
-            let mut stats = self.stats.lock().unwrap();
+            let mut stats = self.stats.lock().expect("mutex poisoned");
             if let Some(variant_stats) = stats.get_mut(variant_name) {
                 variant_stats.requests += 1;
                 variant_stats.failures += 1;
@@ -503,12 +503,12 @@ pub mod ab_testing {
 
         /// Gets statistics for all variants.
         pub fn get_stats(&self) -> HashMap<String, VariantStats> {
-            self.stats.lock().unwrap().clone()
+            self.stats.lock().expect("mutex poisoned").clone()
         }
 
         /// Gets the winning variant based on success rate.
         pub fn get_winner(&self) -> Option<(String, VariantStats)> {
-            let stats = self.stats.lock().unwrap();
+            let stats = self.stats.lock().expect("mutex poisoned");
             stats
                 .iter()
                 .max_by(|a, b| {
@@ -525,7 +525,7 @@ pub mod ab_testing {
             report.push_str("=".repeat(50).as_str());
             report.push('\n');
 
-            let stats = self.stats.lock().unwrap();
+            let stats = self.stats.lock().expect("mutex poisoned");
 
             for (variant_name, variant_stats) in stats.iter() {
                 report.push_str(&format!("\nVariant: {}\n", variant_name));

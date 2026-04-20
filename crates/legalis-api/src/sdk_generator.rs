@@ -657,7 +657,7 @@ impl SdkGenerator for TypeScriptSdkGenerator {
             },
             "keywords": ["sdk", "api", "legalis", "typescript"],
             "author": "COOLJAPAN OU (Team Kitasan)",
-            "license": "MIT OR Apache-2.0",
+            "license": "Apache-2.0",
             "dependencies": self.get_dependencies(),
             "devDependencies": {
                 "@types/node": "^20.0.0",
@@ -750,7 +750,7 @@ impl SdkGenerator for TypeScriptSdkGenerator {
         readme.push_str("```\n\n");
 
         readme.push_str("## License\n\n");
-        readme.push_str("MIT OR Apache-2.0\n");
+        readme.push_str("Apache-2.0\n");
 
         Ok(readme)
     }
@@ -1335,7 +1335,7 @@ impl SdkGenerator for PythonSdkGenerator {
             config.package_name
         ));
         setup.push_str("    author='COOLJAPAN OU (Team Kitasan)',\n");
-        setup.push_str("    license='MIT OR Apache-2.0',\n");
+        setup.push_str("    license='Apache-2.0',\n");
         setup.push_str("    packages=find_packages(),\n");
         setup.push_str("    install_requires=[\n");
         for (name, version) in self.get_dependencies() {
@@ -1346,7 +1346,7 @@ impl SdkGenerator for PythonSdkGenerator {
         setup.push_str("    classifiers=[\n");
         setup.push_str("        'Development Status :: 4 - Beta',\n");
         setup.push_str("        'Intended Audience :: Developers',\n");
-        setup.push_str("        'License :: OSI Approved :: MIT License',\n");
+        setup.push_str("        'License :: OSI Approved :: Apache Software License',\n");
         setup.push_str("        'License :: OSI Approved :: Apache Software License',\n");
         setup.push_str("        'Programming Language :: Python :: 3',\n");
         setup.push_str("        'Programming Language :: Python :: 3.8',\n");
@@ -1435,7 +1435,7 @@ impl SdkGenerator for PythonSdkGenerator {
         readme.push_str("```\n\n");
 
         readme.push_str("## License\n\n");
-        readme.push_str("MIT OR Apache-2.0\n");
+        readme.push_str("Apache-2.0\n");
 
         Ok(readme)
     }
@@ -1663,14 +1663,13 @@ version = "{}"
 description = "Python SDK for Legalis API"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {{text = "MIT OR Apache-2.0"}}
+license = {{text = "Apache-2.0"}}
 authors = [
     {{name = "COOLJAPAN OU (Team Kitasan)"}}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",

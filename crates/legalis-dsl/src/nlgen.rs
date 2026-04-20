@@ -71,8 +71,8 @@ impl NLGenerator {
 
         // Document header
         if self.config.verbosity != Verbosity::Brief {
-            writeln!(output, "# Legal Document").unwrap();
-            writeln!(output).unwrap();
+            writeln!(output, "# Legal Document").expect("writing to String is infallible");
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Namespace
@@ -84,37 +84,39 @@ impl NLGenerator {
                 "This document belongs to the namespace: {}",
                 namespace.path
             )
-            .unwrap();
-            writeln!(output).unwrap();
+            .expect("writing to String is infallible");
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Imports
         if !doc.imports.is_empty() && self.config.include_metadata {
-            writeln!(output, "## Dependencies").unwrap();
+            writeln!(output, "## Dependencies").expect("writing to String is infallible");
             for import in &doc.imports {
-                writeln!(output, "- {}", self.generate_import(import)).unwrap();
+                writeln!(output, "- {}", self.generate_import(import))
+                    .expect("writing to String is infallible");
             }
-            writeln!(output).unwrap();
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Statutes
         if !doc.statutes.is_empty() {
             if self.config.verbosity != Verbosity::Brief {
-                writeln!(output, "## Statutes").unwrap();
-                writeln!(output).unwrap();
+                writeln!(output, "## Statutes").expect("writing to String is infallible");
+                writeln!(output).expect("writing to String is infallible");
             }
 
             for statute in &doc.statutes {
                 output.push_str(&self.generate_statute(statute));
-                writeln!(output).unwrap();
+                writeln!(output).expect("writing to String is infallible");
             }
         }
 
         // Exports
         if !doc.exports.is_empty() && self.config.include_metadata {
-            writeln!(output, "## Public Exports").unwrap();
+            writeln!(output, "## Public Exports").expect("writing to String is infallible");
             for export in &doc.exports {
-                writeln!(output, "- {}", self.generate_export(export)).unwrap();
+                writeln!(output, "- {}", self.generate_export(export))
+                    .expect("writing to String is infallible");
             }
         }
 
@@ -128,11 +130,12 @@ impl NLGenerator {
         // Title
         match self.config.verbosity {
             Verbosity::Brief => {
-                write!(output, "{}: ", statute.title).unwrap();
+                write!(output, "{}: ", statute.title).expect("writing to String is infallible");
             }
             _ => {
-                writeln!(output, "### {} (ID: {})", statute.title, statute.id).unwrap();
-                writeln!(output).unwrap();
+                writeln!(output, "### {} (ID: {})", statute.title, statute.id)
+                    .expect("writing to String is infallible");
+                writeln!(output).expect("writing to String is infallible");
             }
         }
 
@@ -140,14 +143,16 @@ impl NLGenerator {
         if self.config.include_metadata
             && statute.visibility != crate::module_system::Visibility::Public
         {
-            writeln!(output, "*This statute is private and not exported.*").unwrap();
-            writeln!(output).unwrap();
+            writeln!(output, "*This statute is private and not exported.*")
+                .expect("writing to String is infallible");
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Priority
         if let Some(priority) = statute.priority {
-            writeln!(output, "**Priority:** {}", priority).unwrap();
-            writeln!(output).unwrap();
+            writeln!(output, "**Priority:** {}", priority)
+                .expect("writing to String is infallible");
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Scope
@@ -157,16 +162,16 @@ impl NLGenerator {
                 "**Scope:** Applies to entities of type: {}",
                 scope.entity_types.join(", ")
             )
-            .unwrap();
+            .expect("writing to String is infallible");
             if let Some(desc) = &scope.description {
-                writeln!(output, "  {}", desc).unwrap();
+                writeln!(output, "  {}", desc).expect("writing to String is infallible");
             }
-            writeln!(output).unwrap();
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Defaults
         if !statute.defaults.is_empty() && self.config.verbosity != Verbosity::Brief {
-            writeln!(output, "**Default Values:**").unwrap();
+            writeln!(output, "**Default Values:**").expect("writing to String is infallible");
             for default in &statute.defaults {
                 writeln!(
                     output,
@@ -174,9 +179,9 @@ impl NLGenerator {
                     default.field,
                     self.value_to_string(&default.value)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(output).unwrap();
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Main rule
@@ -191,9 +196,10 @@ impl NLGenerator {
 
         // Discretion
         if let Some(discretion) = &statute.discretion {
-            writeln!(output, "**Discretionary Considerations:**").unwrap();
-            writeln!(output, "- {}", discretion).unwrap();
-            writeln!(output).unwrap();
+            writeln!(output, "**Discretionary Considerations:**")
+                .expect("writing to String is infallible");
+            writeln!(output, "- {}", discretion).expect("writing to String is infallible");
+            writeln!(output).expect("writing to String is infallible");
         }
 
         // Amendments
@@ -224,44 +230,47 @@ impl NLGenerator {
 
         if statute.conditions.is_empty() {
             // Unconditional effects
-            writeln!(output, "This statute provides:").unwrap();
+            writeln!(output, "This statute provides:").expect("writing to String is infallible");
             for effect in &statute.effects {
-                writeln!(output, "- {}", self.generate_effect(effect)).unwrap();
+                writeln!(output, "- {}", self.generate_effect(effect))
+                    .expect("writing to String is infallible");
             }
         } else {
             // Conditional effects
             match self.config.verbosity {
                 Verbosity::Brief => {
-                    write!(output, "If ").unwrap();
+                    write!(output, "If ").expect("writing to String is infallible");
                     output.push_str(&self.generate_conditions(&statute.conditions, true));
-                    write!(output, ", then ").unwrap();
+                    write!(output, ", then ").expect("writing to String is infallible");
                     if statute.effects.len() == 1 {
                         output.push_str(&self.generate_effect(&statute.effects[0]));
                     } else {
-                        write!(output, "{} outcomes apply", statute.effects.len()).unwrap();
+                        write!(output, "{} outcomes apply", statute.effects.len())
+                            .expect("writing to String is infallible");
                     }
                 }
                 _ => {
-                    writeln!(output, "**Conditions:**").unwrap();
+                    writeln!(output, "**Conditions:**").expect("writing to String is infallible");
                     writeln!(
                         output,
                         "{}",
                         self.generate_conditions(&statute.conditions, false)
                     )
-                    .unwrap();
-                    writeln!(output).unwrap();
+                    .expect("writing to String is infallible");
+                    writeln!(output).expect("writing to String is infallible");
 
                     if !statute.effects.is_empty() {
-                        writeln!(output, "**Then:**").unwrap();
+                        writeln!(output, "**Then:**").expect("writing to String is infallible");
                         for effect in &statute.effects {
-                            writeln!(output, "- {}", self.generate_effect(effect)).unwrap();
+                            writeln!(output, "- {}", self.generate_effect(effect))
+                                .expect("writing to String is infallible");
                         }
                     }
                 }
             }
         }
 
-        writeln!(output).unwrap();
+        writeln!(output).expect("writing to String is infallible");
         output
     }
 
@@ -441,20 +450,20 @@ impl NLGenerator {
     fn generate_exceptions(&self, exceptions: &[ExceptionNode]) -> String {
         let mut output = String::new();
 
-        writeln!(output, "**Exceptions:**").unwrap();
+        writeln!(output, "**Exceptions:**").expect("writing to String is infallible");
         for (i, exception) in exceptions.iter().enumerate() {
-            write!(output, "{}. ", i + 1).unwrap();
+            write!(output, "{}. ", i + 1).expect("writing to String is infallible");
             if !exception.conditions.is_empty() {
                 write!(
                     output,
                     "When {}, ",
                     self.generate_conditions(&exception.conditions, true)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(output, "{}", exception.description).unwrap();
+            writeln!(output, "{}", exception.description).expect("writing to String is infallible");
         }
-        writeln!(output).unwrap();
+        writeln!(output).expect("writing to String is infallible");
 
         output
     }
@@ -462,18 +471,20 @@ impl NLGenerator {
     fn generate_amendments(&self, amendments: &[AmendmentNode]) -> String {
         let mut output = String::new();
 
-        writeln!(output, "**Amendment History:**").unwrap();
+        writeln!(output, "**Amendment History:**").expect("writing to String is infallible");
         for amendment in amendments {
-            write!(output, "- Amends statute '{}'", amendment.target_id).unwrap();
+            write!(output, "- Amends statute '{}'", amendment.target_id)
+                .expect("writing to String is infallible");
             if let Some(version) = amendment.version {
-                write!(output, " (version {})", version).unwrap();
+                write!(output, " (version {})", version).expect("writing to String is infallible");
             }
             if let Some(date) = &amendment.date {
-                write!(output, " effective {}", date).unwrap();
+                write!(output, " effective {}", date).expect("writing to String is infallible");
             }
-            writeln!(output, ": {}", amendment.description).unwrap();
+            writeln!(output, ": {}", amendment.description)
+                .expect("writing to String is infallible");
         }
-        writeln!(output).unwrap();
+        writeln!(output).expect("writing to String is infallible");
 
         output
     }
@@ -481,20 +492,22 @@ impl NLGenerator {
     fn generate_delegates(&self, delegates: &[DelegateNode]) -> String {
         let mut output = String::new();
 
-        writeln!(output, "**Delegation:**").unwrap();
+        writeln!(output, "**Delegation:**").expect("writing to String is infallible");
         for delegate in delegates {
-            write!(output, "- Delegates to statute '{}'", delegate.target_id).unwrap();
+            write!(output, "- Delegates to statute '{}'", delegate.target_id)
+                .expect("writing to String is infallible");
             if !delegate.conditions.is_empty() {
                 write!(
                     output,
                     " when {}",
                     self.generate_conditions(&delegate.conditions, true)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(output, ": {}", delegate.description).unwrap();
+            writeln!(output, ": {}", delegate.description)
+                .expect("writing to String is infallible");
         }
-        writeln!(output).unwrap();
+        writeln!(output).expect("writing to String is infallible");
 
         output
     }
@@ -502,21 +515,21 @@ impl NLGenerator {
     fn generate_constraints(&self, constraints: &[ConstraintNode]) -> String {
         let mut output = String::new();
 
-        writeln!(output, "**Constraints:**").unwrap();
+        writeln!(output, "**Constraints:**").expect("writing to String is infallible");
         for constraint in constraints {
-            write!(output, "- {}: ", constraint.name).unwrap();
+            write!(output, "- {}: ", constraint.name).expect("writing to String is infallible");
             write!(
                 output,
                 "{}",
                 self.generate_condition(&constraint.condition, true)
             )
-            .unwrap();
+            .expect("writing to String is infallible");
             if let Some(desc) = &constraint.description {
-                write!(output, " ({})", desc).unwrap();
+                write!(output, " ({})", desc).expect("writing to String is infallible");
             }
-            writeln!(output).unwrap();
+            writeln!(output).expect("writing to String is infallible");
         }
-        writeln!(output).unwrap();
+        writeln!(output).expect("writing to String is infallible");
 
         output
     }
@@ -526,17 +539,19 @@ impl NLGenerator {
         let mut has_relationships = false;
 
         if !statute.requires.is_empty() {
-            writeln!(output, "**Requires:** {}", statute.requires.join(", ")).unwrap();
+            writeln!(output, "**Requires:** {}", statute.requires.join(", "))
+                .expect("writing to String is infallible");
             has_relationships = true;
         }
 
         if !statute.supersedes.is_empty() {
-            writeln!(output, "**Supersedes:** {}", statute.supersedes.join(", ")).unwrap();
+            writeln!(output, "**Supersedes:** {}", statute.supersedes.join(", "))
+                .expect("writing to String is infallible");
             has_relationships = true;
         }
 
         if has_relationships {
-            writeln!(output).unwrap();
+            writeln!(output).expect("writing to String is infallible");
         }
 
         output

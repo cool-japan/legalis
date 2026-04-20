@@ -434,10 +434,14 @@ impl ReferenceResolver {
         if let Some(re) = section_pattern {
             for cap in re.captures_iter(text) {
                 if let Some(section_num) = cap.get(1) {
-                    let reference =
-                        LegalReference::new(cap.get(0).unwrap().as_str(), ReferenceType::Internal)
-                            .with_section(section_num.as_str())
-                            .with_confidence(0.8);
+                    let reference = LegalReference::new(
+                        cap.get(0)
+                            .expect("invariant: capture group 0 (full match) always exists")
+                            .as_str(),
+                        ReferenceType::Internal,
+                    )
+                    .with_section(section_num.as_str())
+                    .with_confidence(0.8);
                     references.push(reference);
                 }
             }

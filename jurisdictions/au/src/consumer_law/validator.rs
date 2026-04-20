@@ -428,10 +428,10 @@ pub fn validate_country_of_origin_claim(
                     );
                 }
             }
-            CountryOfOriginClaim::ProductOf => {
-                if claim.australian_ingredient_percentage != Some(100.0) {
-                    issues.push("Product of claim requires 100% Australian origin".to_string());
-                }
+            CountryOfOriginClaim::ProductOf
+                if claim.australian_ingredient_percentage != Some(100.0) =>
+            {
+                issues.push("Product of claim requires 100% Australian origin".to_string());
             }
             _ => {}
         }

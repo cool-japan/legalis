@@ -138,21 +138,24 @@ impl AdversarialDetector {
         // Prompt injection patterns
         self.patterns.push(DetectionPattern {
             name: "Ignore previous".to_string(),
-            regex: Regex::new(r"(?i)ignore\s+(previous|all\s+previous|above|earlier)").unwrap(),
+            regex: Regex::new(r"(?i)ignore\s+(previous|all\s+previous|above|earlier)")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::PromptInjection,
             severity: 0.9,
         });
 
         self.patterns.push(DetectionPattern {
             name: "Disregard instructions".to_string(),
-            regex: Regex::new(r"(?i)disregard\s+(instructions|previous|all)").unwrap(),
+            regex: Regex::new(r"(?i)disregard\s+(instructions|previous|all)")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::InstructionOverride,
             severity: 0.95,
         });
 
         self.patterns.push(DetectionPattern {
             name: "New instructions".to_string(),
-            regex: Regex::new(r"(?i)(new|different|alternate)\s+instructions").unwrap(),
+            regex: Regex::new(r"(?i)(new|different|alternate)\s+instructions")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::InstructionOverride,
             severity: 0.8,
         });
@@ -160,7 +163,8 @@ impl AdversarialDetector {
         // Jailbreak patterns
         self.patterns.push(DetectionPattern {
             name: "DAN jailbreak".to_string(),
-            regex: Regex::new(r"(?i)(do\s+anything\s+now|DAN\s+mode)").unwrap(),
+            regex: Regex::new(r"(?i)(do\s+anything\s+now|DAN\s+mode)")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::Jailbreak,
             severity: 1.0,
         });
@@ -170,7 +174,7 @@ impl AdversarialDetector {
             regex: Regex::new(
                 r"(?i)(pretend|act\s+as|you\s+are\s+now)\s+(a\s+)?(?:evil|unethical|unrestricted)",
             )
-            .unwrap(),
+            .expect("regex pattern is valid"),
             attack_type: AttackType::RoleConfusion,
             severity: 0.85,
         });
@@ -181,7 +185,7 @@ impl AdversarialDetector {
             regex: Regex::new(
                 r"(?i)(show|reveal|tell\s+me)\s+(the\s+)?(system\s+prompt|initial\s+instructions)",
             )
-            .unwrap(),
+            .expect("regex pattern is valid"),
             attack_type: AttackType::ContextManipulation,
             severity: 0.9,
         });
@@ -192,7 +196,7 @@ impl AdversarialDetector {
             regex: Regex::new(
                 r"(?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?",
             )
-            .unwrap(),
+            .expect("regex pattern is valid"),
             attack_type: AttackType::EncodingEvasion,
             severity: 0.6,
         });
@@ -200,7 +204,8 @@ impl AdversarialDetector {
         // Goal hijacking
         self.patterns.push(DetectionPattern {
             name: "Goal override".to_string(),
-            regex: Regex::new(r"(?i)your\s+(new\s+)?(goal|purpose|objective)\s+is").unwrap(),
+            regex: Regex::new(r"(?i)your\s+(new\s+)?(goal|purpose|objective)\s+is")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::GoalHijacking,
             severity: 0.9,
         });
@@ -338,7 +343,7 @@ impl AdversarialDetector {
 
         // Remove blocked phrases
         for phrase in &self.blocked_phrases {
-            let re = Regex::new(&regex::escape(phrase)).unwrap();
+            let re = Regex::new(&regex::escape(phrase)).expect("regex pattern is valid");
             sanitized = re.replace_all(&sanitized, "[FILTERED]").to_string();
         }
 
@@ -410,14 +415,16 @@ impl LegalAdversarialProtection {
         // Add legal-specific patterns
         detector.add_pattern(DetectionPattern {
             name: "Legal advice override".to_string(),
-            regex: Regex::new(r"(?i)(ignore|forget)\s+(legal\s+)?disclaimers?").unwrap(),
+            regex: Regex::new(r"(?i)(ignore|forget)\s+(legal\s+)?disclaimers?")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::InstructionOverride,
             severity: 0.95,
         });
 
         detector.add_pattern(DetectionPattern {
             name: "Unauthorized practice bypass".to_string(),
-            regex: Regex::new(r"(?i)act\s+as\s+(my\s+)?(lawyer|attorney|legal\s+counsel)").unwrap(),
+            regex: Regex::new(r"(?i)act\s+as\s+(my\s+)?(lawyer|attorney|legal\s+counsel)")
+                .expect("regex pattern is valid"),
             attack_type: AttackType::RoleConfusion,
             severity: 1.0,
         });

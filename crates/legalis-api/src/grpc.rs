@@ -106,12 +106,22 @@ pub mod service {
                     effective_from: statute
                         .temporal_validity
                         .effective_date
-                        .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp())
+                        .map(|d| {
+                            d.and_hms_opt(0, 0, 0)
+                                .expect("invariant: 0,0,0 is a valid time")
+                                .and_utc()
+                                .timestamp()
+                        })
                         .unwrap_or(0),
                     effective_until: statute
                         .temporal_validity
                         .expiry_date
-                        .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp())
+                        .map(|d| {
+                            d.and_hms_opt(0, 0, 0)
+                                .expect("invariant: 0,0,0 is a valid time")
+                                .and_utc()
+                                .timestamp()
+                        })
                         .unwrap_or(0),
                     temporal_modifiers: vec![], // Simplified for now
                 }),
@@ -567,7 +577,7 @@ pub mod service {
         let reflection_service = ReflectionBuilder::configure()
             .register_encoded_file_descriptor_set(pb::FILE_DESCRIPTOR_SET)
             .build_v1()
-            .unwrap();
+            .expect("gRPC reflection service build should not fail with valid file descriptor set");
 
         Ok(Server::builder()
             .add_service(service)

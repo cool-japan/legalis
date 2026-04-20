@@ -389,7 +389,7 @@ pub mod progress {
             let wrapped_stream = stream.map(move |result| {
                 match &result {
                     Ok(chunk) => {
-                        let mut size = total_size.lock().unwrap();
+                        let mut size = total_size.lock().expect("mutex poisoned");
                         *size += chunk.content.len();
                         if let Some(ref cb) = callback {
                             cb(ProgressEvent::ChunkReceived {

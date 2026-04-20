@@ -75,7 +75,7 @@ Contributions are welcome! Please see the [Legalis-RS repository](https://github
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ---
 

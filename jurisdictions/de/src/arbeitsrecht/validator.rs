@@ -58,14 +58,13 @@ fn validate_contract_type(
                 }
             }
         }
-        ContractType::Unlimited => {
+        ContractType::Unlimited
             // Unlimited should not have end date
-            if end_date.is_some() {
+            if end_date.is_some() => {
                 return Err(LaborLawError::InvalidValue {
                     reason: "Unlimited contract cannot have end date".to_string(),
                 });
             }
-        }
         _ => {}
     }
     Ok(())

@@ -47,10 +47,11 @@ pub fn export_to_graphviz(
 ) -> String {
     let mut dot = String::new();
 
-    writeln!(dot, "digraph Relationships {{").unwrap();
-    writeln!(dot, "  rankdir={};", options.rankdir).unwrap();
-    writeln!(dot, "  node [shape={}];", options.node_shape).unwrap();
-    writeln!(dot).unwrap();
+    writeln!(dot, "digraph Relationships {{").expect("writing to String is infallible");
+    writeln!(dot, "  rankdir={};", options.rankdir).expect("writing to String is infallible");
+    writeln!(dot, "  node [shape={}];", options.node_shape)
+        .expect("writing to String is infallible");
+    writeln!(dot).expect("writing to String is infallible");
 
     // Add nodes
     for entity in entities {
@@ -66,10 +67,11 @@ pub fn export_to_graphviz(
             }
         }
 
-        writeln!(dot, "  \"{}\" [label=\"{}\"];", id, label).unwrap();
+        writeln!(dot, "  \"{}\" [label=\"{}\"];", id, label)
+            .expect("writing to String is infallible");
     }
 
-    writeln!(dot).unwrap();
+    writeln!(dot).expect("writing to String is infallible");
 
     // Add edges from graph
     for rel in graph.all_relationships() {
@@ -79,10 +81,11 @@ pub fn export_to_graphviz(
             String::new()
         };
 
-        writeln!(dot, "  \"{}\" -> \"{}\"{};", rel.from, rel.to, edge_label).unwrap();
+        writeln!(dot, "  \"{}\" -> \"{}\"{};", rel.from, rel.to, edge_label)
+            .expect("writing to String is infallible");
     }
 
-    writeln!(dot, "}}").unwrap();
+    writeln!(dot, "}}").expect("writing to String is infallible");
     dot
 }
 

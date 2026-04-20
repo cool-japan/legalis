@@ -224,11 +224,11 @@ impl ModelRegistry {
 
         self.versions
             .lock()
-            .unwrap()
+            .expect("versions mutex poisoned")
             .insert(version_id.clone(), version);
 
         if is_active {
-            *self.active_version_id.lock().unwrap() = Some(version_id);
+            *self.active_version_id.lock().expect("mutex poisoned") = Some(version_id);
         }
     }
 
@@ -256,7 +256,11 @@ impl ModelRegistry {
     /// assert!(retrieved.is_some());
     /// ```
     pub fn get_version(&self, version_id: &str) -> Option<ModelVersion> {
-        self.versions.lock().unwrap().get(version_id).cloned()
+        self.versions
+            .lock()
+            .expect("mutex poisoned")
+            .get(version_id)
+            .cloned()
     }
 
     /// Gets the currently active model version.
@@ -283,7 +287,11 @@ impl ModelRegistry {
     /// assert!(active.is_some());
     /// ```
     pub fn get_active_version(&self) -> Option<ModelVersion> {
-        let active_id = self.active_version_id.lock().unwrap().clone()?;
+        let active_id = self
+            .active_version_id
+            .lock()
+            .expect("mutex poisoned")
+            .clone()?;
         self.get_version(&active_id)
     }
 
@@ -311,7 +319,7 @@ impl ModelRegistry {
     /// assert!(registry.get_active_version().is_some());
     /// ```
     pub fn activate_version(&self, version_id: &str) {
-        let mut versions = self.versions.lock().unwrap();
+        let mut versions = self.versions.lock().expect("mutex poisoned");
 
         // Deactivate all versions
         for version in versions.values_mut() {
@@ -321,7 +329,7 @@ impl ModelRegistry {
         // Activate the specified version
         if let Some(version) = versions.get_mut(version_id) {
             version.is_active = true;
-            *self.active_version_id.lock().unwrap() = Some(version_id.to_string());
+            *self.active_version_id.lock().expect("mutex poisoned") = Some(version_id.to_string());
         }
     }
 
@@ -391,7 +399,12 @@ impl ModelRegistry {
     /// assert_eq!(versions.len(), 1);
     /// ```
     pub fn list_versions(&self) -> Vec<ModelVersion> {
-        self.versions.lock().unwrap().values().cloned().collect()
+        self.versions
+            .lock()
+            .expect("mutex poisoned")
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Deletes a model version.
@@ -418,12 +431,19 @@ impl ModelRegistry {
     /// assert_eq!(registry.list_versions().len(), 0);
     /// ```
     pub fn delete_version(&self, version_id: &str) {
-        self.versions.lock().unwrap().remove(version_id);
+        self.versions
+            .lock()
+            .expect("mutex poisoned")
+            .remove(version_id);
 
         // If this was the active version, clear the active version
-        let active_id = self.active_version_id.lock().unwrap().clone();
+        let active_id = self
+            .active_version_id
+            .lock()
+            .expect("mutex poisoned")
+            .clone();
         if active_id.as_deref() == Some(version_id) {
-            *self.active_version_id.lock().unwrap() = None;
+            *self.active_version_id.lock().expect("mutex poisoned") = None;
         }
     }
 }
@@ -638,7 +658,7 @@ impl ABTestManager {
         self.registry
             .ab_tests
             .lock()
-            .unwrap()
+            .expect("ab_tests mutex poisoned")
             .insert(test_id.to_string(), config.clone());
 
         config
@@ -657,7 +677,7 @@ impl ABTestManager {
     /// assert_eq!(results.test_id, "test-1");
     /// ```
     pub fn end_test(&self, test_id: &str) -> ABTestResults {
-        let mut tests = self.registry.ab_tests.lock().unwrap();
+        let mut tests = self.registry.ab_tests.lock().expect("mutex poisoned");
 
         if let Some(config) = tests.get_mut(test_id) {
             config.is_active = false;
@@ -701,7 +721,12 @@ impl ABTestManager {
     /// assert!(status.is_some());
     /// ```
     pub fn get_test_status(&self, test_id: &str) -> Option<ABTestConfig> {
-        self.registry.ab_tests.lock().unwrap().get(test_id).cloned()
+        self.registry
+            .ab_tests
+            .lock()
+            .expect("mutex poisoned")
+            .get(test_id)
+            .cloned()
     }
 }
 

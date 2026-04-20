@@ -59,7 +59,7 @@ pub fn aggregate_metrics_parallel(metrics_list: &[SimulationMetrics]) -> Simulat
                 let agg = Arc::clone(&aggregated);
                 s.spawn(move || {
                     let chunk_agg = aggregate_metrics(chunk);
-                    let mut locked = agg.lock().unwrap();
+                    let mut locked = agg.lock().expect("mutex poisoned");
                     locked.total_applications += chunk_agg.total_applications;
                     locked.deterministic_count += chunk_agg.deterministic_count;
                     locked.discretion_count += chunk_agg.discretion_count;
@@ -87,7 +87,7 @@ pub fn aggregate_metrics_parallel(metrics_list: &[SimulationMetrics]) -> Simulat
     let mut result = Arc::try_unwrap(aggregated)
         .unwrap_or_else(|_| panic!("Failed to unwrap Arc"))
         .into_inner()
-        .unwrap();
+        .expect("aggregated mutex poisoned");
 
     // Remove duplicate discretion agents
     result.discretion_agents.sort();

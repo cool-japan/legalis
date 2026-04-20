@@ -1778,15 +1778,11 @@ impl DefenceAnalyzer {
                         parts.push("Advice not genuinely independent".to_string());
                     }
                 }
-                UnconscionabilityDefence::FullDisclosure => {
-                    if facts.disclosure_complete {
-                        parts.push("Full disclosure made".to_string());
-                    }
+                UnconscionabilityDefence::FullDisclosure if facts.disclosure_complete => {
+                    parts.push("Full disclosure made".to_string());
                 }
-                UnconscionabilityDefence::FairDealing => {
-                    if facts.no_pressure_tactics {
-                        parts.push("Fair dealing demonstrated".to_string());
-                    }
+                UnconscionabilityDefence::FairDealing if facts.no_pressure_tactics => {
+                    parts.push("Fair dealing demonstrated".to_string());
                 }
                 UnconscionabilityDefence::AdequateTime => {
                     parts.push("Adequate time provided to consider".to_string());

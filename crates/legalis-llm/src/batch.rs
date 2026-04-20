@@ -108,7 +108,10 @@ impl<P: LLMProvider + Send + Sync> BatchProcessor<P> {
                 let prompt = prompt.clone();
 
                 async move {
-                    let _permit = semaphore.acquire().await.unwrap();
+                    let _permit = semaphore
+                        .acquire()
+                        .await
+                        .expect("semaphore acquire failed (closed)");
                     provider.generate_text(&prompt).await
                 }
             })
@@ -131,7 +134,10 @@ impl<P: LLMProvider + Send + Sync> BatchProcessor<P> {
                 let prompt = prompt.clone();
 
                 async move {
-                    let _permit = semaphore.acquire().await.unwrap();
+                    let _permit = semaphore
+                        .acquire()
+                        .await
+                        .expect("semaphore acquire failed (closed)");
                     provider.generate_text(&prompt).await
                 }
             })
@@ -155,7 +161,10 @@ impl<P: LLMProvider + Send + Sync> BatchProcessor<P> {
                 let prompt = prompt.clone();
 
                 async move {
-                    let _permit = semaphore.acquire().await.unwrap();
+                    let _permit = semaphore
+                        .acquire()
+                        .await
+                        .expect("semaphore acquire failed (closed)");
                     provider.generate_structured::<T>(&prompt).await
                 }
             })
@@ -255,7 +264,10 @@ where
             let prompt = prompt.clone();
 
             async move {
-                let _permit = semaphore.acquire().await.unwrap();
+                let _permit = semaphore
+                    .acquire()
+                    .await
+                    .expect("semaphore acquire failed (closed)");
                 provider_ref
                     .generate_text(&prompt)
                     .await

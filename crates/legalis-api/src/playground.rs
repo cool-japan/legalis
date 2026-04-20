@@ -422,7 +422,12 @@ impl PlaygroundManager {
 
     /// List all collections
     pub fn list_collections(&self) -> Vec<RequestCollection> {
-        self.collections.read().unwrap().values().cloned().collect()
+        self.collections
+            .read()
+            .expect("rwlock read poisoned")
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Delete a collection
@@ -468,7 +473,7 @@ impl PlaygroundManager {
     pub fn list_environments(&self) -> Vec<Environment> {
         self.environments
             .read()
-            .unwrap()
+            .expect("rwlock read poisoned")
             .values()
             .cloned()
             .collect()

@@ -312,7 +312,7 @@ impl NeuralLinkPredictor {
 
         // Deduplicate and sort by confidence
         self.predictions
-            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         self.predictions.dedup_by(|a, b| {
             a.0.subject == b.0.subject
                 && a.0.predicate == b.0.predicate

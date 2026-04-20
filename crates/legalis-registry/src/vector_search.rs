@@ -304,7 +304,7 @@ impl HnswIndex {
         }
 
         // Sort by similarity (descending)
-        candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         // Take top k
         candidates.truncate(k);
@@ -329,7 +329,11 @@ impl HnswIndex {
         }
 
         // Sort by similarity (descending)
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Take top k
         results.truncate(k);
@@ -507,7 +511,11 @@ impl HybridSearch {
 
         // Sort by combined score
         let mut results: Vec<HybridSearchResult> = combined_results.into_values().collect();
-        results.sort_by(|a, b| b.combined_score.partial_cmp(&a.combined_score).unwrap());
+        results.sort_by(|a, b| {
+            b.combined_score
+                .partial_cmp(&a.combined_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Take top k
         results.truncate(self.config.top_k);
@@ -623,7 +631,11 @@ impl DeduplicationEngine {
         }
 
         // Sort by similarity (descending)
-        duplicates.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        duplicates.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         duplicates
     }

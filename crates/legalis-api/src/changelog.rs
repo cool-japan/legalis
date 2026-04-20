@@ -210,7 +210,7 @@ impl Changelog {
     /// Add release
     pub fn add_release(&mut self, release: Release) {
         self.releases.push(release);
-        self.releases.sort_by(|a, b| b.date.cmp(&a.date));
+        self.releases.sort_by_key(|b| std::cmp::Reverse(b.date));
     }
 
     /// Get latest release

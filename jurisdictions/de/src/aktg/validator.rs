@@ -90,14 +90,13 @@ fn validate_share(share: &Share, total_capital: &Capital) -> Result<()> {
         // For simplicity, we check that notional value >= €1
         // This would need the total count of all no-par shares in practice
         let total_shares = share.quantity;
-        if total_shares > 0 {
-            let notional_value_cents = total_capital.amount_cents / total_shares;
-            if notional_value_cents < 100 {
-                // €1 minimum
-                return Err(AktGError::NotionalValueTooLow {
-                    notional_value: (notional_value_cents as f64) / 100.0,
-                });
-            }
+        if let Some(notional_value_cents) = total_capital.amount_cents.checked_div(total_shares)
+            && notional_value_cents < 100
+        {
+            // €1 minimum
+            return Err(AktGError::NotionalValueTooLow {
+                notional_value: (notional_value_cents as f64) / 100.0,
+            });
         }
     }
 

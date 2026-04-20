@@ -568,7 +568,7 @@ mod tests {
 
         {
             let mut file = File::create(&temp_file).unwrap();
-            write!(file, "Hello, World!").unwrap();
+            write!(file, "Hello, World!").expect("writing to String is infallible");
         }
 
         let reader = MmapFileReader::open(&temp_file).unwrap();
@@ -586,7 +586,7 @@ mod tests {
 
         {
             let mut file = File::create(&temp_file).unwrap();
-            write!(file, "Test content").unwrap();
+            write!(file, "Test content").expect("writing to String is infallible");
         }
 
         let reader = MmapFileReader::open(&temp_file).unwrap();
@@ -788,7 +788,7 @@ mod tests {
 
         {
             let mut file = File::create(&temp_file).unwrap();
-            write!(file, "0123456789").unwrap();
+            write!(file, "0123456789").expect("writing to String is infallible");
         }
 
         let reader = MmapFileReader::open(&temp_file).unwrap();

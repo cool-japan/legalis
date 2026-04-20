@@ -5,7 +5,7 @@
 //! multi-agent negotiation, contract scenarios, regulatory compliance, and what-if analysis.
 
 use anyhow::{Result, anyhow};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -141,7 +141,7 @@ impl CaseOutcomePredictor {
             .map(|hist| (self.calculate_similarity(&hist.features, case), hist))
             .collect();
 
-        scored_cases.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        scored_cases.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scored_cases
             .into_iter()
             .take(limit)
@@ -1534,13 +1534,13 @@ impl WhatIfAnalyzer {
         let best_probability = alternatives
             .iter()
             .map(|a| a.success_probability)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or(base.success_probability);
 
         let best_value = alternatives
             .iter()
             .map(|a| a.estimated_value)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or(base.estimated_value);
 
         if best_probability > base.success_probability {

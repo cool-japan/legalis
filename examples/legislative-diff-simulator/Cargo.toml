@@ -2,6 +2,7 @@
 name = "legislative-diff-simulator"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [[bin]]
 name = "legislative-diff-simulator"

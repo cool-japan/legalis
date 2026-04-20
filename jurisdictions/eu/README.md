@@ -689,7 +689,7 @@ All EU legal instruments integrate with `legalis-core`:
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Contributing
 

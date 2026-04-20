@@ -146,7 +146,10 @@ impl<P: LLMProvider> HierarchicalSummarizer<P> {
         Box::pin(async move {
             if nodes.len() == 1 {
                 // Base case: single node
-                let mut node = *nodes.into_iter().next().unwrap();
+                let mut node = *nodes
+                    .into_iter()
+                    .next()
+                    .expect("invariant: nodes.len() == 1 checked above");
                 node.level = level;
                 return Ok(node);
             }
@@ -341,7 +344,11 @@ impl ContextPruner {
         scored_chunks.retain(|chunk| chunk.score >= self.min_importance);
 
         // Sort by importance (descending)
-        scored_chunks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        scored_chunks.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Take chunks until token limit
         let mut total_tokens = 0;
@@ -413,7 +420,11 @@ impl<P: LLMProvider + Clone> RagContextBuilder<P> {
         let mut scored_chunks = scorer.score_chunks(&chunks, query).await?;
 
         // Sort by score and take top chunks
-        scored_chunks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        scored_chunks.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored_chunks.truncate(self.max_context_chunks);
 
         // Build context from top chunks

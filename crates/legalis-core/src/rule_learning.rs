@@ -289,7 +289,11 @@ impl CaseBasedReasoner {
             .collect();
 
         // Sort by similarity (highest first)
-        similarities.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        similarities.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Return top k
         similarities.into_iter().take(k).collect()

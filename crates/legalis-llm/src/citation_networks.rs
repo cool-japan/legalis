@@ -276,7 +276,7 @@ impl CitationNetwork {
             .map(|(id, &score)| (id.clone(), score))
             .collect();
 
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scores.truncate(n);
         scores
     }
@@ -464,7 +464,7 @@ impl CitationNetwork {
         }
 
         let mut recommendations: Vec<(String, usize)> = candidates.into_iter().collect();
-        recommendations.sort_by(|a, b| b.1.cmp(&a.1));
+        recommendations.sort_by_key(|b| std::cmp::Reverse(b.1));
         recommendations.truncate(n);
 
         recommendations.into_iter().map(|(id, _)| id).collect()

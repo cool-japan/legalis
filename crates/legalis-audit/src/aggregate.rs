@@ -65,14 +65,14 @@ impl AggregationResult {
     /// Gets the top N entries by value.
     pub fn top(&self, n: usize) -> Vec<(String, usize)> {
         let mut entries: Vec<_> = self.values.iter().map(|(k, v)| (k.clone(), *v)).collect();
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.1));
         entries.into_iter().take(n).collect()
     }
 
     /// Gets the bottom N entries by value.
     pub fn bottom(&self, n: usize) -> Vec<(String, usize)> {
         let mut entries: Vec<_> = self.values.iter().map(|(k, v)| (k.clone(), *v)).collect();
-        entries.sort_by(|a, b| a.1.cmp(&b.1));
+        entries.sort_by_key(|a| a.1);
         entries.into_iter().take(n).collect()
     }
 

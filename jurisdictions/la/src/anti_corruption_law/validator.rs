@@ -50,36 +50,30 @@ pub fn validate_corruption_offense(offense: &CorruptionOffense) -> AntiCorruptio
 
     // Validate specific offense types
     match &offense.offense_type {
-        CorruptionOffenseType::Bribery { amount_lak, .. } => {
-            if *amount_lak == 0 {
-                return Err(AntiCorruptionLawError::BriberyOffense {
-                    article: 25,
-                    message_lao: "ຈຳນວນເງິນສິນບົນຕ້ອງລະບຸ".to_string(),
-                    message_en: "Bribery amount must be specified".to_string(),
-                });
-            }
+        CorruptionOffenseType::Bribery { amount_lak, .. } if *amount_lak == 0 => {
+            return Err(AntiCorruptionLawError::BriberyOffense {
+                article: 25,
+                message_lao: "ຈຳນວນເງິນສິນບົນຕ້ອງລະບຸ".to_string(),
+                message_en: "Bribery amount must be specified".to_string(),
+            });
         }
-        CorruptionOffenseType::Embezzlement { amount_lak, .. } => {
-            if *amount_lak == 0 {
-                return Err(AntiCorruptionLawError::EmbezzlementOffense {
-                    article: 28,
-                    message_lao: "ຈຳນວນເງິນສໍ້ໂກງຕ້ອງລະບຸ".to_string(),
-                    message_en: "Embezzlement amount must be specified".to_string(),
-                });
-            }
+        CorruptionOffenseType::Embezzlement { amount_lak, .. } if *amount_lak == 0 => {
+            return Err(AntiCorruptionLawError::EmbezzlementOffense {
+                article: 28,
+                message_lao: "ຈຳນວນເງິນສໍ້ໂກງຕ້ອງລະບຸ".to_string(),
+                message_en: "Embezzlement amount must be specified".to_string(),
+            });
         }
         CorruptionOffenseType::IllicitEnrichment {
             unexplained_assets_lak,
             declared_income_lak,
-        } => {
-            if *unexplained_assets_lak <= *declared_income_lak {
-                return Err(AntiCorruptionLawError::IllicitEnrichment {
-                    article: 42,
-                    message_lao: "ຊັບສິນທີ່ບໍ່ສາມາດອະທິບາຍໄດ້ຕ້ອງເກີນລາຍຮັບທີ່ປະກາດ".to_string(),
-                    message_en: "Unexplained assets must exceed declared income".to_string(),
-                    unexplained_wealth_lak: *unexplained_assets_lak,
-                });
-            }
+        } if *unexplained_assets_lak <= *declared_income_lak => {
+            return Err(AntiCorruptionLawError::IllicitEnrichment {
+                article: 42,
+                message_lao: "ຊັບສິນທີ່ບໍ່ສາມາດອະທິບາຍໄດ້ຕ້ອງເກີນລາຍຮັບທີ່ປະກາດ".to_string(),
+                message_en: "Unexplained assets must exceed declared income".to_string(),
+                unexplained_wealth_lak: *unexplained_assets_lak,
+            });
         }
         _ => {}
     }
@@ -420,15 +414,13 @@ pub fn validate_penalty(
                 });
             }
         }
-        PenaltyType::AssetForfeiture { .. } => {
-            if !range.asset_forfeiture_applicable {
-                return Err(AntiCorruptionLawError::DisproportionatePenalty {
-                    message_lao: "ການຍຶດຊັບສິນບໍ່ນຳໃຊ້ກັບຄວາມຜິດຂະໜາດນ້ອຍ".to_string(),
-                    message_en: "Asset forfeiture not applicable for minor offenses".to_string(),
-                    severity: range.severity.lao_name().to_string(),
-                    amount_lak: offense.offense_type.amount_involved().unwrap_or(0),
-                });
-            }
+        PenaltyType::AssetForfeiture { .. } if !range.asset_forfeiture_applicable => {
+            return Err(AntiCorruptionLawError::DisproportionatePenalty {
+                message_lao: "ການຍຶດຊັບສິນບໍ່ນຳໃຊ້ກັບຄວາມຜິດຂະໜາດນ້ອຍ".to_string(),
+                message_en: "Asset forfeiture not applicable for minor offenses".to_string(),
+                severity: range.severity.lao_name().to_string(),
+                amount_lak: offense.offense_type.amount_involved().unwrap_or(0),
+            });
         }
         PenaltyType::Dismissal => {
             // Dismissal is always valid for corruption

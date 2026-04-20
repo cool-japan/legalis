@@ -360,7 +360,11 @@ pub fn analyze_complexity(doc: &LegalDocument) -> Vec<ComplexityMetrics> {
         .collect();
 
     // Sort by complexity score (descending)
-    metrics.sort_by(|a, b| b.complexity_score.partial_cmp(&a.complexity_score).unwrap());
+    metrics.sort_by(|a, b| {
+        b.complexity_score
+            .partial_cmp(&a.complexity_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     metrics
 }

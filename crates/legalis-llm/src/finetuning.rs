@@ -459,7 +459,7 @@ impl MetricsHistory {
         self.metrics
             .iter()
             .filter_map(|m| m.validation_loss)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
     }
 
     /// Saves the history to a JSON file.

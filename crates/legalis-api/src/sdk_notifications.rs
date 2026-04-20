@@ -339,7 +339,7 @@ impl SdkRegistry {
     pub fn get_all_versions(&self, platform: SdkPlatform) -> Vec<SdkVersion> {
         self.versions
             .read()
-            .unwrap()
+            .expect("rwlock read poisoned")
             .get(&platform)
             .cloned()
             .unwrap_or_default()
@@ -366,7 +366,7 @@ impl SdkRegistry {
             // Store notification
             self.notifications
                 .write()
-                .unwrap()
+                .expect("rwlock write poisoned")
                 .push(notification.clone());
 
             Ok(Some(notification))
@@ -377,14 +377,17 @@ impl SdkRegistry {
 
     /// Get all notifications
     pub fn get_notifications(&self) -> Vec<UpdateNotification> {
-        self.notifications.read().unwrap().clone()
+        self.notifications
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 
     /// Get unacknowledged notifications
     pub fn get_unacknowledged_notifications(&self) -> Vec<UpdateNotification> {
         self.notifications
             .read()
-            .unwrap()
+            .expect("rwlock read poisoned")
             .iter()
             .filter(|n| !n.acknowledged)
             .cloned()

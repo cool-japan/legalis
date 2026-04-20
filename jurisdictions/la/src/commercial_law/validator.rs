@@ -270,26 +270,26 @@ pub fn validate_restricted_sector(
 ) -> Result<()> {
     match sector {
         // Banking, Insurance, Telecom: max 49% foreign ownership
-        BusinessSector::Finance | BusinessSector::Telecommunications => {
-            if foreign_ownership_percentage > 49.0 {
-                return Err(CommercialLawError::restricted_sector_violation(
-                    format!(
-                        "{:?} sector allows maximum 49% foreign ownership, got {:.2}%",
-                        sector, foreign_ownership_percentage
-                    ),
-                    format!(
-                        "ຂະແໜງ {:?} ອະນຸຍາດການຖືຮຸ້ນຂອງຕ່າງປະເທດສູງສຸດ 49%, ໄດ້ {:.2}%",
-                        sector, foreign_ownership_percentage
-                    ),
-                ));
-            }
+        BusinessSector::Finance | BusinessSector::Telecommunications
+            if foreign_ownership_percentage > 49.0 =>
+        {
+            return Err(CommercialLawError::restricted_sector_violation(
+                format!(
+                    "{:?} sector allows maximum 49% foreign ownership, got {:.2}%",
+                    sector, foreign_ownership_percentage
+                ),
+                format!(
+                    "ຂະແໜງ {:?} ອະນຸຍາດການຖືຮຸ້ນຂອງຕ່າງປະເທດສູງສຸດ 49%, ໄດ້ {:.2}%",
+                    sector, foreign_ownership_percentage
+                ),
+            ));
         }
 
         // Education and Healthcare: require special approval
-        BusinessSector::Education | BusinessSector::Healthcare => {
-            if foreign_ownership_percentage > 0.0 {
-                // Special approval required - checked in validate_foreign_investment
-            }
+        BusinessSector::Education | BusinessSector::Healthcare
+            if foreign_ownership_percentage > 0.0 =>
+        {
+            // Special approval required - checked in validate_foreign_investment
         }
 
         // Other sectors: generally open to foreign investment

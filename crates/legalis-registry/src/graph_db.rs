@@ -669,7 +669,10 @@ impl DependencyAnalyzer {
     ) {
         if path.contains(&node.to_string()) {
             // Found a cycle
-            let cycle_start = path.iter().position(|n| n == node).unwrap();
+            let cycle_start = path
+                .iter()
+                .position(|n| n == node)
+                .expect("invariant: path.contains() guarantees node is in path");
             let cycle_nodes = path[cycle_start..].to_vec();
             let cycle_edges = edges[cycle_start..].to_vec();
             cycles.push(GraphPath::new(cycle_nodes, cycle_edges));

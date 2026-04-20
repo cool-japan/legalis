@@ -138,28 +138,35 @@ impl CompilationCache {
     /// Gets a cached statute by text hash.
     pub fn get(&self, text: &str) -> Option<Statute> {
         let key = Self::hash_text(text);
-        self.cache.lock().unwrap().get(&key).cloned()
+        self.cache
+            .lock()
+            .expect("mutex poisoned")
+            .get(&key)
+            .cloned()
     }
 
     /// Stores a compiled statute in the cache.
     pub fn put(&self, text: &str, statute: Statute) {
         let key = Self::hash_text(text);
-        self.cache.lock().unwrap().insert(key, statute);
+        self.cache
+            .lock()
+            .expect("mutex poisoned")
+            .insert(key, statute);
     }
 
     /// Clears the cache.
     pub fn clear(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock().expect("mutex poisoned").clear();
     }
 
     /// Gets the cache size.
     pub fn len(&self) -> usize {
-        self.cache.lock().unwrap().len()
+        self.cache.lock().expect("mutex poisoned").len()
     }
 
     /// Checks if the cache is empty.
     pub fn is_empty(&self) -> bool {
-        self.cache.lock().unwrap().is_empty()
+        self.cache.lock().expect("mutex poisoned").is_empty()
     }
 
     fn hash_text(text: &str) -> String {
@@ -342,7 +349,7 @@ pub mod incremental {
                 // Update cache
                 self.compiled_sections
                     .lock()
-                    .unwrap()
+                    .expect("mutex poisoned")
                     .insert(id.clone(), statute);
             }
 
@@ -355,14 +362,17 @@ pub mod incremental {
                 // Update cache
                 self.compiled_sections
                     .lock()
-                    .unwrap()
+                    .expect("mutex poisoned")
                     .insert(id.clone(), statute);
             }
 
             // Remove deleted sections
             for id in &changes.deleted {
                 tracing::debug!("Removing deleted section: {}", id);
-                self.compiled_sections.lock().unwrap().remove(id);
+                self.compiled_sections
+                    .lock()
+                    .expect("mutex poisoned")
+                    .remove(id);
             }
 
             Ok(results)
@@ -370,17 +380,27 @@ pub mod incremental {
 
         /// Gets a compiled section by ID.
         pub fn get_section(&self, id: &str) -> Option<Statute> {
-            self.compiled_sections.lock().unwrap().get(id).cloned()
+            self.compiled_sections
+                .lock()
+                .expect("mutex poisoned")
+                .get(id)
+                .cloned()
         }
 
         /// Gets all compiled sections.
         pub fn get_all_sections(&self) -> HashMap<String, Statute> {
-            self.compiled_sections.lock().unwrap().clone()
+            self.compiled_sections
+                .lock()
+                .expect("mutex poisoned")
+                .clone()
         }
 
         /// Clears all cached sections.
         pub fn clear(&self) {
-            self.compiled_sections.lock().unwrap().clear();
+            self.compiled_sections
+                .lock()
+                .expect("mutex poisoned")
+                .clear();
         }
     }
 }

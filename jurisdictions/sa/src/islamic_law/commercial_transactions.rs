@@ -166,21 +166,19 @@ impl CommercialTransaction {
         // Check for Riba (interest/usury)
         if let Some(margin) = self.profit_margin {
             match self.contract_type {
-                IslamicFinanceContract::QardHasan => {
-                    if margin > 0.0 {
+                IslamicFinanceContract::QardHasan
+                    if margin > 0.0 => {
                         return Err(CommercialTransactionError::ContainsRiba {
                             description: "Qard Hasan cannot have profit margin".to_string(),
                         });
                     }
-                }
-                IslamicFinanceContract::Murabaha => {
+                IslamicFinanceContract::Murabaha
                     // Murabaha profit must be disclosed and fixed at contract time
-                    if margin <= 0.0 {
+                    if margin <= 0.0 => {
                         return Err(CommercialTransactionError::InvalidContract {
                             reason: "Murabaha must have positive disclosed profit".to_string(),
                         });
                     }
-                }
                 _ => {}
             }
         }

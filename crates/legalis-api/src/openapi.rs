@@ -75,7 +75,7 @@ pub fn generate_spec() -> Value {
                 "name": "Legalis-RS Project"
             },
             "license": {
-                "name": "MIT OR Apache-2.0"
+                "name": "Apache-2.0"
             }
         },
         "servers": [

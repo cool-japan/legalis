@@ -1099,7 +1099,7 @@ impl StatuteOptimizer {
 
     /// Calculate statute complexity (0.0-1.0)
     fn calculate_complexity(&self, statute: &Statute) -> f64 {
-        let mut complexity = 0.0;
+        let mut complexity: f64 = 0.0;
 
         // Length factor
         complexity += (statute.title.len() as f64 / 200.0).min(0.3);

@@ -122,16 +122,20 @@ impl TimeSeries {
 
     /// Gets the peak (maximum) value.
     pub fn peak(&self) -> Option<&TimeSeriesPoint> {
-        self.points
-            .iter()
-            .max_by(|a, b| a.value.partial_cmp(&b.value).unwrap())
+        self.points.iter().max_by(|a, b| {
+            a.value
+                .partial_cmp(&b.value)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Gets the valley (minimum) value.
     pub fn valley(&self) -> Option<&TimeSeriesPoint> {
-        self.points
-            .iter()
-            .min_by(|a, b| a.value.partial_cmp(&b.value).unwrap())
+        self.points.iter().min_by(|a, b| {
+            a.value
+                .partial_cmp(&b.value)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Calculates average value across all points.
@@ -256,7 +260,7 @@ impl TimeSeriesQuery {
             .collect();
 
         // Sort by timestamp
-        points.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        points.sort_by_key(|a| a.timestamp);
 
         Ok(TimeSeries {
             bucket: self.bucket,

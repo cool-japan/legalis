@@ -106,7 +106,11 @@ impl SearchQuery {
     #[allow(clippy::should_implement_trait)]
     pub fn not(mut self) -> Self {
         let existing = if self.terms.len() == 1 {
-            self.terms.into_iter().next().unwrap()
+            // terms.len() == 1 is checked above
+            self.terms
+                .into_iter()
+                .next()
+                .expect("invariant: terms.len() == 1")
         } else {
             SearchTerm::And(self.terms)
         };
@@ -133,7 +137,11 @@ impl SearchQuery {
             .collect();
 
         // Sort by score descending
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Limit results
         results.truncate(self.limit);

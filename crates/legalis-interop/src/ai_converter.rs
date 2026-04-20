@@ -132,7 +132,7 @@ impl AIFormatDetector {
         }
 
         // Sort by confidence descending
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scores
     }
 
@@ -154,7 +154,7 @@ impl AIFormatDetector {
         }
 
         // Re-sort after boosting
-        final_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        final_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         if let Some((format, confidence)) = final_scores.first() {
             Ok(AIFormatDetection {
@@ -230,10 +230,10 @@ impl AIFormatDetector {
                     boost += 0.3;
                 }
             }
-            LegalFormat::Cicero | LegalFormat::CommonForm | LegalFormat::OpenLaw => {
-                if features.contains(&"contractual-elements".to_string()) {
-                    boost += 0.3;
-                }
+            LegalFormat::Cicero | LegalFormat::CommonForm | LegalFormat::OpenLaw
+                if features.contains(&"contractual-elements".to_string()) =>
+            {
+                boost += 0.3;
             }
             _ => {}
         }
@@ -577,7 +577,11 @@ impl FormatMigrationSuggester {
         }
 
         // Sort by confidence
-        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        suggestions.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         suggestions
     }
 }

@@ -120,19 +120,15 @@ pub fn validate_business_license(license: &BusinessLicense) -> InvestmentResult<
 
     // Check certificates for medium/high risk
     match license.risk_level {
-        BusinessRisk::MediumLow | BusinessRisk::MediumHigh => {
-            if license.certificates.is_empty() {
-                return Err(InvestmentError::MissingCertificate {
-                    risk_level: format!("{:?}", license.risk_level),
-                });
-            }
+        BusinessRisk::MediumLow | BusinessRisk::MediumHigh if license.certificates.is_empty() => {
+            return Err(InvestmentError::MissingCertificate {
+                risk_level: format!("{:?}", license.risk_level),
+            });
         }
-        BusinessRisk::High => {
-            if license.certificates.is_empty() {
-                return Err(InvestmentError::MissingCertificate {
-                    risk_level: "High".to_string(),
-                });
-            }
+        BusinessRisk::High if license.certificates.is_empty() => {
+            return Err(InvestmentError::MissingCertificate {
+                risk_level: "High".to_string(),
+            });
         }
         _ => {}
     }

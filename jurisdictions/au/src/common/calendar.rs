@@ -301,7 +301,7 @@ impl AustralianCalendar {
     pub fn all_holidays(year: i32, state: StateTerritory) -> Vec<AustralianHoliday> {
         let mut holidays = Self::national_holidays(year);
         holidays.extend(Self::state_holidays(year, state));
-        holidays.sort_by(|a, b| a.date.cmp(&b.date));
+        holidays.sort_by_key(|a| a.date);
         holidays
     }
 

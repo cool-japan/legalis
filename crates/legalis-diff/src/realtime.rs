@@ -190,7 +190,7 @@ impl RealtimeDiffServer {
 
         self.sessions
             .lock()
-            .unwrap()
+            .expect("sessions mutex poisoned")
             .insert(session_id.clone(), session);
         session_id
     }
@@ -208,7 +208,7 @@ impl RealtimeDiffServer {
     /// assert!(result.is_ok());
     /// ```
     pub fn join_session(&self, session_id: &str, user_id: &str) -> DiffResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get_mut(session_id) {
             if !session.active_users.contains(&user_id.to_string()) {
                 session.active_users.push(user_id.to_string());
@@ -236,7 +236,7 @@ impl RealtimeDiffServer {
     /// assert!(result.is_ok());
     /// ```
     pub fn leave_session(&self, session_id: &str, user_id: &str) -> DiffResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get_mut(session_id) {
             session.active_users.retain(|u| u != user_id);
             Ok(())
@@ -276,7 +276,7 @@ impl RealtimeDiffServer {
         user_id: &str,
         change: Change,
     ) -> DiffResult<DiffUpdate> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get_mut(session_id) {
             // Check for conflicts
             let conflict = self.detect_conflict(&session.pending_changes, &change);
@@ -390,7 +390,7 @@ impl RealtimeDiffServer {
         update_id: &str,
         resolution: ConflictResolution,
     ) -> DiffResult<DiffUpdate> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get_mut(session_id) {
             // Find the conflicting update
             if let Some(conflicting_update) = session
@@ -455,7 +455,7 @@ impl RealtimeDiffServer {
     /// let history = server.get_history(&session_id).unwrap();
     /// ```
     pub fn get_history(&self, session_id: &str) -> DiffResult<Vec<DiffUpdate>> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get(session_id) {
             Ok(session.history.clone())
         } else {
@@ -480,7 +480,7 @@ impl RealtimeDiffServer {
     /// assert_eq!(users.len(), 1);
     /// ```
     pub fn get_active_users(&self, session_id: &str) -> DiffResult<Vec<String>> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().expect("mutex poisoned");
         if let Some(session) = sessions.get(session_id) {
             Ok(session.active_users.clone())
         } else {
@@ -504,7 +504,7 @@ impl RealtimeDiffServer {
     /// assert!(result.is_ok());
     /// ```
     pub fn end_session(&self, session_id: &str) -> DiffResult<DiffUpdate> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().expect("mutex poisoned");
         if sessions.remove(session_id).is_some() {
             Ok(DiffUpdate {
                 update_id: Uuid::new_v4().to_string(),
@@ -576,7 +576,7 @@ impl ServerSentEvents {
     /// ```
     pub fn subscribe(&self, statute_id: &str) -> String {
         let subscriber_id = Uuid::new_v4().to_string();
-        let mut subscribers = self.subscribers.lock().unwrap();
+        let mut subscribers = self.subscribers.lock().expect("mutex poisoned");
         subscribers
             .entry(statute_id.to_string())
             .or_default()
@@ -596,7 +596,7 @@ impl ServerSentEvents {
     /// sse.unsubscribe("statute-123", &subscriber_id);
     /// ```
     pub fn unsubscribe(&self, statute_id: &str, subscriber_id: &str) {
-        let mut subscribers = self.subscribers.lock().unwrap();
+        let mut subscribers = self.subscribers.lock().expect("mutex poisoned");
         if let Some(subs) = subscribers.get_mut(statute_id) {
             subs.retain(|s| s != subscriber_id);
         }
@@ -626,7 +626,7 @@ impl ServerSentEvents {
     /// let count = sse.notify("statute-123", &update);
     /// ```
     pub fn notify(&self, statute_id: &str, _update: &DiffUpdate) -> usize {
-        let subscribers = self.subscribers.lock().unwrap();
+        let subscribers = self.subscribers.lock().expect("mutex poisoned");
         if let Some(subs) = subscribers.get(statute_id) {
             // In a real implementation, this would send the update to each subscriber
             // For now, we just return the count
@@ -648,7 +648,7 @@ impl ServerSentEvents {
     /// assert_eq!(sse.subscriber_count("statute-123"), 1);
     /// ```
     pub fn subscriber_count(&self, statute_id: &str) -> usize {
-        let subscribers = self.subscribers.lock().unwrap();
+        let subscribers = self.subscribers.lock().expect("mutex poisoned");
         subscribers.get(statute_id).map(|s| s.len()).unwrap_or(0)
     }
 }
@@ -753,7 +753,7 @@ fn current_timestamp() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("SystemTime should be after UNIX_EPOCH")
         .as_millis() as u64
 }
 

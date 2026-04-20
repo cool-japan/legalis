@@ -388,7 +388,14 @@ impl CadenceExporter {
                     .find_map(|cond| {
                         if let Condition::Custom { description, .. } = cond {
                             if description.starts_with("Access: ") {
-                                Some(description.strip_prefix("Access: ").unwrap().to_string())
+                                Some(
+                                    description
+                                        .strip_prefix("Access: ")
+                                        .expect(
+                                            "invariant: starts_with checked before strip_prefix",
+                                        )
+                                        .to_string(),
+                                )
                             } else {
                                 None
                             }
@@ -407,7 +414,9 @@ impl CadenceExporter {
                                 Some(
                                     description
                                         .strip_prefix("Precondition: ")
-                                        .unwrap()
+                                        .expect(
+                                            "invariant: starts_with checked before strip_prefix",
+                                        )
                                         .to_string(),
                                 )
                             } else {

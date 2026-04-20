@@ -414,7 +414,7 @@ pub fn filter_by_category(
 
 /// Sorts recommendations by priority (highest first).
 pub fn sort_by_priority(recommendations: &mut [Recommendation]) {
-    recommendations.sort_by(|a, b| b.priority.cmp(&a.priority));
+    recommendations.sort_by_key(|b| std::cmp::Reverse(b.priority));
 }
 
 #[cfg(test)]

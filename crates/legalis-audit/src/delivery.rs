@@ -3,7 +3,7 @@
 //! This module provides functionality for delivering generated reports
 //! through various channels: email, S3, webhooks, and local file system.
 
-use crate::AuditResult;
+use crate::{AuditError, AuditResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -215,7 +215,17 @@ impl DeliveryService {
                 ..
             } => {
                 // Simulate S3 upload (actual implementation would use AWS SDK)
-                let filename = report_path.file_name().unwrap().to_str().unwrap();
+                let filename = report_path
+                    .file_name()
+                    .ok_or_else(|| {
+                        AuditError::ExportError("report path has no filename".to_string())
+                    })?
+                    .to_str()
+                    .ok_or_else(|| {
+                        AuditError::ExportError(
+                            "report path filename is not valid UTF-8".to_string(),
+                        )
+                    })?;
                 let s3_key = format!("{}/{}", key_prefix, filename);
                 tracing::info!("S3 upload to s3://{}/{}", bucket, s3_key);
                 Ok(DeliveryResult {
@@ -282,13 +292,10 @@ impl DeliveryService {
     }
 
     fn compress_data(data: &[u8]) -> AuditResult<Vec<u8>> {
-        use flate2::Compression;
-        use flate2::write::GzEncoder;
-        use std::io::Write;
+        use oxiarc_deflate::gzip::gzip_compress;
 
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(data)?;
-        Ok(encoder.finish()?)
+        gzip_compress(data, 6)
+            .map_err(|e| crate::AuditError::StorageError(format!("Gzip compression failed: {e}")))
     }
 
     fn encrypt_data(data: &[u8], _key: &str) -> AuditResult<Vec<u8>> {
@@ -431,7 +438,7 @@ mod tests {
     #[test]
     fn test_delivery_config() {
         let config = DeliveryConfig::new(DeliveryDestination::LocalFile {
-            path: PathBuf::from("/tmp/report.pdf"),
+            path: std::env::temp_dir().join("legalis-audit-delivery-report.pdf"),
         })
         .with_compression(true)
         .with_retry(5, 10);
@@ -444,7 +451,7 @@ mod tests {
     #[test]
     fn test_delivery_builder() {
         let configs = DeliveryBuilder::new()
-            .add_local(PathBuf::from("/tmp/report.pdf"))
+            .add_local(std::env::temp_dir().join("legalis-audit-delivery-builder-report.pdf"))
             .add_slack(
                 "https://hooks.slack.com/services/XXX".to_string(),
                 Some("#audit".to_string()),

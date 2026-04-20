@@ -203,9 +203,11 @@ impl MultiObjectiveOptimizer {
 
     /// Get the best overall result by total score
     pub fn best_result(&self) -> Option<&MultiObjectiveResult> {
-        self.results
-            .iter()
-            .max_by(|a, b| a.total_score.partial_cmp(&b.total_score).unwrap())
+        self.results.iter().max_by(|a, b| {
+            a.total_score
+                .partial_cmp(&b.total_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 }
 
@@ -264,7 +266,9 @@ impl PolicySensitivity {
         let baseline = self.points.iter().min_by(|a, b| {
             let diff_a = (a.parameter_value - self.baseline_value).abs();
             let diff_b = (b.parameter_value - self.baseline_value).abs();
-            diff_a.partial_cmp(&diff_b).unwrap()
+            diff_a
+                .partial_cmp(&diff_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         })?;
 
         let baseline_metric = baseline.metrics.get(metric_name)?;
@@ -407,15 +411,35 @@ impl StakeholderMatrix {
         }
 
         winners.sort_by(|a, b| {
-            let score_a = self.impacts.get(a).unwrap().overall_score;
-            let score_b = self.impacts.get(b).unwrap().overall_score;
-            score_b.partial_cmp(&score_a).unwrap()
+            let score_a = self
+                .impacts
+                .get(a)
+                .expect("invariant: a was collected from self.impacts")
+                .overall_score;
+            let score_b = self
+                .impacts
+                .get(b)
+                .expect("invariant: b was collected from self.impacts")
+                .overall_score;
+            score_b
+                .partial_cmp(&score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         losers.sort_by(|a, b| {
-            let score_a = self.impacts.get(a).unwrap().overall_score;
-            let score_b = self.impacts.get(b).unwrap().overall_score;
-            score_a.partial_cmp(&score_b).unwrap()
+            let score_a = self
+                .impacts
+                .get(a)
+                .expect("invariant: a was collected from self.impacts")
+                .overall_score;
+            let score_b = self
+                .impacts
+                .get(b)
+                .expect("invariant: b was collected from self.impacts")
+                .overall_score;
+            score_a
+                .partial_cmp(&score_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         (winners, losers)

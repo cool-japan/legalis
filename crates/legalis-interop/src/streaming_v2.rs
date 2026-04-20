@@ -226,7 +226,9 @@ impl ParallelFormatProcessor {
                 for (format, output, report) in format_results {
                     let output_path = output_dir.join(format!(
                         "{}.{}",
-                        path.file_stem().unwrap().to_string_lossy(),
+                        path.file_stem()
+                            .expect("path has a file stem")
+                            .to_string_lossy(),
                         format.extension()
                     ));
 
@@ -435,7 +437,10 @@ impl ResumableJob {
 
             let output_path = output_dir.join(format!(
                 "{}.{}",
-                input_path.file_stem().unwrap().to_string_lossy(),
+                input_path
+                    .file_stem()
+                    .expect("path has a file stem")
+                    .to_string_lossy(),
                 target_format.extension()
             ));
 
@@ -524,14 +529,14 @@ impl ProgressTracker {
 
     /// Increments the processed item count
     pub fn increment(&self) {
-        let mut processed = self.processed_items.lock().unwrap();
+        let mut processed = self.processed_items.lock().expect("mutex poisoned");
         *processed += 1;
-        *self.last_update.lock().unwrap() = Instant::now();
+        *self.last_update.lock().expect("mutex poisoned") = Instant::now();
     }
 
     /// Returns current progress (0.0 - 1.0)
     pub fn progress(&self) -> f64 {
-        let processed = *self.processed_items.lock().unwrap();
+        let processed = *self.processed_items.lock().expect("mutex poisoned");
         if self.total_items == 0 {
             return 1.0;
         }
@@ -540,7 +545,7 @@ impl ProgressTracker {
 
     /// Returns number of items processed
     pub fn processed(&self) -> usize {
-        *self.processed_items.lock().unwrap()
+        *self.processed_items.lock().expect("mutex poisoned")
     }
 
     /// Returns total number of items
@@ -555,7 +560,7 @@ impl ProgressTracker {
 
     /// Estimates remaining time
     pub fn estimated_remaining(&self) -> Option<Duration> {
-        let processed = *self.processed_items.lock().unwrap();
+        let processed = *self.processed_items.lock().expect("mutex poisoned");
         if processed == 0 {
             return None;
         }
@@ -569,7 +574,7 @@ impl ProgressTracker {
 
     /// Returns estimated total time
     pub fn estimated_total(&self) -> Option<Duration> {
-        let processed = *self.processed_items.lock().unwrap();
+        let processed = *self.processed_items.lock().expect("mutex poisoned");
         if processed == 0 {
             return None;
         }
@@ -584,7 +589,7 @@ impl ProgressTracker {
 
     /// Returns current throughput (items per second)
     pub fn throughput(&self) -> f64 {
-        let processed = *self.processed_items.lock().unwrap();
+        let processed = *self.processed_items.lock().expect("mutex poisoned");
         let elapsed = self.elapsed().as_secs_f64();
 
         if elapsed == 0.0 {

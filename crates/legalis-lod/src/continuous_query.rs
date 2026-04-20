@@ -40,7 +40,7 @@ impl ContinuousQuery {
     where
         F: Fn(&[QueryResult]) + Send + Sync + 'static,
     {
-        let mut callbacks = self.callbacks.lock().unwrap();
+        let mut callbacks = self.callbacks.lock().expect("mutex poisoned");
         callbacks.push(Box::new(callback));
     }
 
@@ -49,7 +49,7 @@ impl ContinuousQuery {
         if self.pattern.matches(triple) {
             let result = self.pattern.extract_bindings(triple);
 
-            let mut results = self.results.lock().unwrap();
+            let mut results = self.results.lock().expect("mutex poisoned");
             if !results.iter().any(|r| r.bindings == result.bindings) {
                 results.push(result);
                 drop(results);
@@ -63,7 +63,7 @@ impl ContinuousQuery {
     pub fn remove_triple(&mut self, triple: &Triple) -> LodResult<()> {
         let result = self.pattern.extract_bindings(triple);
 
-        let mut results = self.results.lock().unwrap();
+        let mut results = self.results.lock().expect("mutex poisoned");
         if let Some(pos) = results.iter().position(|r| r.bindings == result.bindings) {
             results.remove(pos);
             drop(results);
@@ -74,13 +74,13 @@ impl ContinuousQuery {
 
     /// Returns the current results.
     pub fn get_results(&self) -> Vec<QueryResult> {
-        self.results.lock().unwrap().clone()
+        self.results.lock().expect("mutex poisoned").clone()
     }
 
     /// Notifies all registered callbacks.
     fn notify_callbacks(&self) -> LodResult<()> {
-        let results = self.results.lock().unwrap().clone();
-        let callbacks = self.callbacks.lock().unwrap();
+        let results = self.results.lock().expect("mutex poisoned").clone();
+        let callbacks = self.callbacks.lock().expect("mutex poisoned");
 
         for callback in callbacks.iter() {
             callback(&results);
@@ -90,7 +90,7 @@ impl ContinuousQuery {
 
     /// Returns the number of current results.
     pub fn result_count(&self) -> usize {
-        self.results.lock().unwrap().len()
+        self.results.lock().expect("mutex poisoned").len()
     }
 }
 
@@ -445,13 +445,13 @@ mod tests {
         let called_clone = called.clone();
 
         query.on_update(move |_results| {
-            *called_clone.lock().unwrap() = true;
+            *called_clone.lock().expect("mutex poisoned") = true;
         });
 
         let triple = sample_triple();
         query.add_triple(&triple).unwrap();
 
-        assert!(*called.lock().unwrap());
+        assert!(*called.lock().expect("mutex poisoned"));
     }
 
     #[test]

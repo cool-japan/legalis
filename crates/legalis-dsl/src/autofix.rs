@@ -287,7 +287,11 @@ impl AutoFixer {
         for (line_num, line) in code.lines().enumerate() {
             for pattern in &self.patterns {
                 if let Some(captures) = pattern.matcher.captures(line) {
-                    let original = captures.get(0).unwrap().as_str().to_string();
+                    let original = captures
+                        .get(0)
+                        .expect("invariant: capture group 0 (full match) always exists")
+                        .as_str()
+                        .to_string();
                     let mut replacement = pattern.fix_template.clone();
 
                     // Replace capture groups
@@ -432,7 +436,7 @@ impl AutoFixer {
             .into_iter()
             .filter(|f| f.confidence >= min_confidence)
             .collect();
-        sorted_fixes.sort_by(|a, b| b.location.cmp(&a.location));
+        sorted_fixes.sort_by_key(|b| std::cmp::Reverse(b.location));
 
         for fix in sorted_fixes {
             result = result.replace(&fix.original, &fix.replacement);

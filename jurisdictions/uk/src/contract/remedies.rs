@@ -393,12 +393,11 @@ impl SpecificPerformanceAnalysis {
 
         // Subject matter considerations
         match subject_matter {
-            SubjectMatter::Land => {
+            SubjectMatter::Land
                 // Traditionally available for land (each piece unique)
-                if bars.is_empty() && !requires_supervision {
+                if bars.is_empty() && !requires_supervision => {
                     available = true;
                 }
-            }
             SubjectMatter::UniqueGoods => {
                 // Available if goods genuinely unique
                 available = !damages_adequate && bars.is_empty();

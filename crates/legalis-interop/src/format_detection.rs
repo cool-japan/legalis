@@ -220,7 +220,7 @@ impl FormatDetector {
             .collect();
 
         // Sort by confidence (highest first)
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         if scores.is_empty() || scores[0].1 < 0.1 {
             return Err(InteropError::UnsupportedFormat(

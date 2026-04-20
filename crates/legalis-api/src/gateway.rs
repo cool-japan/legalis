@@ -496,14 +496,14 @@ impl LoadBalancer {
                 backend
             }
             LoadBalancingStrategy::Random => {
-                use rand::Rng;
+                use rand::RngExt;
                 let idx = rand::rng().random_range(0..healthy_backends.len());
                 healthy_backends[idx]
             }
             LoadBalancingStrategy::LeastConnections => healthy_backends
                 .iter()
                 .min_by_key(|b| b.connections)
-                .unwrap(),
+                .expect("invariant: healthy_backends is non-empty (checked is_empty above)"),
             LoadBalancingStrategy::WeightedRoundRobin => {
                 // Simplified weighted selection
                 let total_weight: u32 = healthy_backends.iter().map(|b| b.weight).sum();
@@ -518,7 +518,7 @@ impl LoadBalancer {
                         cumulative += b.weight;
                         cumulative > target
                     })
-                    .unwrap()
+                    .expect("invariant: healthy_backends is non-empty and weighted selection finds a backend")
             }
         };
 

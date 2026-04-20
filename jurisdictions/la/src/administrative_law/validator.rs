@@ -256,26 +256,24 @@ pub fn validate_license_application(
 
     // Additional validation for specific license types
     match license_type {
-        LicenseType::MiningLicense | LicenseType::FinancialServicesLicense => {
+        LicenseType::MiningLicense | LicenseType::FinancialServicesLicense
             // These require central authority only
-            if !matches!(issuing_authority, AdministrativeLevel::Central { .. }) {
+            if !matches!(issuing_authority, AdministrativeLevel::Central { .. }) => {
                 return Err(LicenseError::UnauthorizedAuthority {
                     authority: issuing_authority.entity_name().to_string(),
                     license_type: license_type.name_en(),
                 }
                 .into());
             }
-        }
-        LicenseType::EnvironmentalLicense => {
+        LicenseType::EnvironmentalLicense
             // Environmental licenses require provincial or higher
-            if authority_level > 1 {
+            if authority_level > 1 => {
                 return Err(LicenseError::UnauthorizedAuthority {
                     authority: issuing_authority.entity_name().to_string(),
                     license_type: license_type.name_en(),
                 }
                 .into());
             }
-        }
         _ => {}
     }
 
@@ -470,27 +468,25 @@ fn validate_sanction_type(
                 .into());
             }
         }
-        SanctionType::LicenseSuspension { duration_days } => {
-            if *duration_days > MAXIMUM_SUSPENSION_DAYS {
+        SanctionType::LicenseSuspension { duration_days }
+            if *duration_days > MAXIMUM_SUSPENSION_DAYS => {
                 return Err(SanctionError::SuspensionExceedsMaximum {
                     days: *duration_days,
                     max_days: MAXIMUM_SUSPENSION_DAYS,
                 }
                 .into());
             }
-        }
         SanctionType::LicenseRevocation
         | SanctionType::BusinessClosure {
             temporary: false, ..
-        } => {
+        }
             // These severe sanctions require at least provincial authority
-            if authority.hierarchy_level() > 1 {
+            if authority.hierarchy_level() > 1 => {
                 return Err(SanctionError::UnauthorizedAuthority {
                     authority: authority.entity_name().to_string(),
                 }
                 .into());
             }
-        }
         _ => {}
     }
 
@@ -531,16 +527,15 @@ pub fn validate_proportionality(
         SanctionType::LicenseRevocation
         | SanctionType::BusinessClosure {
             temporary: false, ..
-        } => {
+        }
             // These require serious violations
-            if violation_severity < 4 {
+            if violation_severity < 4 => {
                 return Err(SanctionError::Disproportionate {
                     severity,
                     violation: violation_description.to_string(),
                 }
                 .into());
             }
-        }
         _ => {}
     }
 
@@ -659,15 +654,13 @@ fn validate_appeal_ground(ground: &AppealGround) -> AdministrativeLawResult<()> 
         AppealGround::ProceduralError { description }
         | AppealGround::FactualError { description }
         | AppealGround::LegalError { description }
-        | AppealGround::NewEvidence { description } => {
-            if description.trim().is_empty() {
-                return Err(AppealError::InsufficientGrounds.into());
-            }
+        | AppealGround::NewEvidence { description }
+            if description.trim().is_empty() =>
+        {
+            return Err(AppealError::InsufficientGrounds.into());
         }
-        AppealGround::ViolationOfRights { right } => {
-            if right.trim().is_empty() {
-                return Err(AppealError::InsufficientGrounds.into());
-            }
+        AppealGround::ViolationOfRights { right } if right.trim().is_empty() => {
+            return Err(AppealError::InsufficientGrounds.into());
         }
         _ => {}
     }
@@ -681,14 +674,12 @@ fn validate_appeal_level(level: &AppealLevel) -> AdministrativeLawResult<()> {
             // Court appeals have longer deadlines
             // In real implementation, would check if administrative remedies exhausted
         }
-        AppealLevel::SuperiorAuthority { authority } => {
-            if authority.trim().is_empty() {
-                return Err(AppealError::WrongLevel {
-                    attempted_level: "SuperiorAuthority".to_string(),
-                    correct_level: "Must specify superior authority".to_string(),
-                }
-                .into());
+        AppealLevel::SuperiorAuthority { authority } if authority.trim().is_empty() => {
+            return Err(AppealError::WrongLevel {
+                attempted_level: "SuperiorAuthority".to_string(),
+                correct_level: "Must specify superior authority".to_string(),
             }
+            .into());
         }
         _ => {}
     }

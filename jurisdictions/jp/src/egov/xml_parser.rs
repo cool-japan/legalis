@@ -73,24 +73,20 @@ impl EgovXmlParser {
                         "metadata" => in_metadata = true,
                         "form_data" => in_form_data = true,
                         "attachments" => in_attachments = true,
-                        "field" => {
-                            if in_form_data {
-                                // Get key attribute
-                                for attr in e.attributes().flatten() {
-                                    if attr.key.as_ref() == b"key" {
-                                        current_field_key =
-                                            String::from_utf8_lossy(&attr.value).to_string();
-                                    }
+                        "field" if in_form_data => {
+                            // Get key attribute
+                            for attr in e.attributes().flatten() {
+                                if attr.key.as_ref() == b"key" {
+                                    current_field_key =
+                                        String::from_utf8_lossy(&attr.value).to_string();
                                 }
                             }
                         }
-                        "attachment" => {
-                            if in_attachments {
-                                current_attachment_id.clear();
-                                current_attachment_filename.clear();
-                                current_attachment_mime.clear();
-                                current_attachment_size = 0;
-                            }
+                        "attachment" if in_attachments => {
+                            current_attachment_id.clear();
+                            current_attachment_filename.clear();
+                            current_attachment_mime.clear();
+                            current_attachment_size = 0;
                         }
                         _ => {}
                     }
@@ -194,15 +190,13 @@ impl EgovXmlParser {
                         "field" => {
                             current_field_key.clear();
                         }
-                        "attachment" => {
-                            if !current_attachment_id.is_empty() {
-                                attachments.push(Attachment::new(
-                                    current_attachment_id.clone(),
-                                    current_attachment_filename.clone(),
-                                    current_attachment_mime.clone(),
-                                    current_attachment_size,
-                                ));
-                            }
+                        "attachment" if !current_attachment_id.is_empty() => {
+                            attachments.push(Attachment::new(
+                                current_attachment_id.clone(),
+                                current_attachment_filename.clone(),
+                                current_attachment_mime.clone(),
+                                current_attachment_size,
+                            ));
                         }
                         _ => {}
                     }

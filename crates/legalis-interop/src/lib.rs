@@ -1430,7 +1430,7 @@ declaration scope AdultRights:
         assert!(validation.confidence <= 1.0);
     }
 
-    // Tests for new formats (v0.1.1)
+    // Tests for new formats (v0.1.5)
 
     #[test]
     fn test_legalcite_export_import_roundtrip() {

@@ -20,3 +20,7 @@ thiserror.workspace = true
 default = []
 
 [dev-dependencies]
+
+[[example]]
+name = "company_formation_mx"
+path = "examples/company_formation.rs"

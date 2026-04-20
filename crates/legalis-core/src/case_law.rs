@@ -108,7 +108,8 @@ impl Case {
             cited_cases: Vec::new(),
             overruled: false,
             overruled_by: None,
-            date: NaiveDate::from_ymd_opt(year as i32, 1, 1).unwrap(),
+            date: NaiveDate::from_ymd_opt(year as i32, 1, 1)
+                .expect("invariant: month=1, day=1 is always a valid date"),
         }
     }
 

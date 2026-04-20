@@ -165,19 +165,19 @@ impl AlertManager {
 
     /// Adds an alert rule.
     pub fn add_rule(&self, rule: AlertRule) {
-        let mut rules = self.rules.write().unwrap();
+        let mut rules = self.rules.write().expect("rwlock write poisoned");
         rules.push(rule);
     }
 
     /// Removes an alert rule.
     pub fn remove_rule(&self, rule_id: &str) {
-        let mut rules = self.rules.write().unwrap();
+        let mut rules = self.rules.write().expect("rwlock write poisoned");
         rules.retain(|r| r.id != rule_id);
     }
 
     /// Evaluates all rules against current audit records.
     pub fn evaluate(&self, records: &[AuditRecord]) -> AuditResult<Vec<Alert>> {
-        let rules = self.rules.read().unwrap();
+        let rules = self.rules.read().expect("rwlock read poisoned");
         let mut new_alerts = Vec::new();
 
         for rule in rules.iter().filter(|r| r.enabled) {
@@ -191,7 +191,7 @@ impl AlertManager {
         }
 
         // Update active alerts
-        let mut active = self.active_alerts.write().unwrap();
+        let mut active = self.active_alerts.write().expect("rwlock write poisoned");
         active.extend(new_alerts.clone());
 
         // Cleanup old alerts
@@ -326,7 +326,7 @@ impl AlertManager {
             return true;
         }
 
-        let history = self.alert_history.read().unwrap();
+        let history = self.alert_history.read().expect("rwlock read poisoned");
         let cutoff = Utc::now() - Duration::seconds(self.config.throttle_window_seconds as i64);
 
         let recent_count = history
@@ -339,7 +339,7 @@ impl AlertManager {
 
     /// Records an alert in history.
     fn record_alert(&self, alert: &Alert) {
-        let mut history = self.alert_history.write().unwrap();
+        let mut history = self.alert_history.write().expect("rwlock write poisoned");
         history.push((alert.triggered_at, alert.alert_type.clone()));
 
         // Cleanup old history
@@ -349,7 +349,7 @@ impl AlertManager {
 
     /// Acknowledges an alert.
     pub fn acknowledge_alert(&self, alert_id: Uuid) -> AuditResult<()> {
-        let mut active = self.active_alerts.write().unwrap();
+        let mut active = self.active_alerts.write().expect("rwlock write poisoned");
 
         if let Some(alert) = active.iter_mut().find(|a| a.id == alert_id) {
             alert.acknowledged = true;
@@ -361,14 +361,17 @@ impl AlertManager {
 
     /// Gets all active alerts.
     pub fn get_active_alerts(&self) -> Vec<Alert> {
-        self.active_alerts.read().unwrap().clone()
+        self.active_alerts
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 
     /// Gets unacknowledged alerts.
     pub fn get_unacknowledged_alerts(&self) -> Vec<Alert> {
         self.active_alerts
             .read()
-            .unwrap()
+            .expect("active_alerts rwlock read poisoned")
             .iter()
             .filter(|a| !a.acknowledged)
             .cloned()
@@ -377,7 +380,7 @@ impl AlertManager {
 
     /// Clears all acknowledged alerts.
     pub fn clear_acknowledged(&self) {
-        let mut active = self.active_alerts.write().unwrap();
+        let mut active = self.active_alerts.write().expect("rwlock write poisoned");
         active.retain(|a| !a.acknowledged);
     }
 
@@ -459,13 +462,13 @@ mod tests {
 
         manager.add_rule(rule);
 
-        let rules = manager.rules.read().unwrap();
+        let rules = manager.rules.read().expect("rwlock read poisoned");
         assert_eq!(rules.len(), 1);
         drop(rules);
 
         manager.remove_rule("test-rule");
 
-        let rules = manager.rules.read().unwrap();
+        let rules = manager.rules.read().expect("rwlock read poisoned");
         assert_eq!(rules.len(), 0);
     }
 

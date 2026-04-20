@@ -286,7 +286,7 @@ impl ReplayManager {
 
     /// Get current replay stats
     pub fn get_stats(&self) -> ReplayStats {
-        self.stats.read().unwrap().clone()
+        self.stats.read().expect("rwlock read poisoned").clone()
     }
 
     /// Load events based on config
@@ -375,14 +375,14 @@ mod tests {
         }
 
         fn get_processed_count(&self) -> usize {
-            self.processed.read().unwrap().len()
+            self.processed.read().expect("rwlock read poisoned").len()
         }
     }
 
     #[async_trait]
     impl ReplayEventHandler for TestReplayHandler {
         async fn handle(&self, event: &DomainEvent) -> EventResult<()> {
-            let mut processed = self.processed.write().unwrap();
+            let mut processed = self.processed.write().expect("rwlock write poisoned");
             processed.push(event.metadata.event_id);
             Ok(())
         }

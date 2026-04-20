@@ -1,7 +1,7 @@
 //! Export functionality for audit trails.
 
 use crate::{AuditError, AuditRecord, AuditResult, ComplianceReport};
-use printpdf::{BuiltinFont, Mm, Op, PdfDocument, PdfPage, PdfSaveOptions, Point, Pt, TextItem};
+use fop_render::{PdfBuiltinFont, SimpleDocumentBuilder};
 use rust_xlsxwriter::{Format, Workbook};
 use serde_json::{Value, json};
 use std::io::Write;
@@ -230,92 +230,66 @@ pub fn to_excel<P: AsRef<Path>>(records: &[AuditRecord], path: P) -> AuditResult
     Ok(())
 }
 
-/// Helper to create text operations at a specific position
-fn text_op(text: &str, size: f32, x: Mm, y: Mm, font: BuiltinFont) -> Vec<Op> {
-    vec![
-        Op::StartTextSection,
-        Op::SetFontSizeBuiltinFont {
-            size: Pt(size),
-            font,
-        },
-        Op::SetTextCursor {
-            pos: Point {
-                x: x.into(),
-                y: y.into(),
-            },
-        },
-        Op::WriteTextBuiltinFont {
-            items: vec![TextItem::Text(text.to_string())],
-            font,
-        },
-        Op::EndTextSection,
-    ]
-}
-
 /// Exports a compliance report to PDF format.
-#[allow(clippy::too_many_arguments)]
 pub fn to_pdf<P: AsRef<Path>>(
     records: &[AuditRecord],
     report: &ComplianceReport,
     path: P,
     title: &str,
 ) -> AuditResult<()> {
-    // Create PDF document
-    let mut doc = PdfDocument::new(title);
-
-    let mut ops: Vec<Op> = Vec::new();
-    let mut y_position = Mm(280.0);
-    let left_margin = Mm(20.0);
+    let mut builder = SimpleDocumentBuilder::new(title);
+    let left_margin = 20.0_f32;
+    let mut y_position = 280.0_f32;
 
     // Title
-    ops.extend(text_op(
+    builder.text(
         title,
         18.0,
         left_margin,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    y_position -= Mm(15.0);
+        PdfBuiltinFont::HelveticaBold,
+    );
+    y_position -= 15.0;
 
     // Report summary header
-    ops.extend(text_op(
+    builder.text(
         "Compliance Report Summary",
         14.0,
         left_margin,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    y_position -= Mm(10.0);
+        PdfBuiltinFont::HelveticaBold,
+    );
+    y_position -= 10.0;
 
     // Report details
-    ops.extend(text_op(
+    builder.text(
         &format!("Generated: {}", report.generated_at.to_rfc3339()),
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 7.0;
 
-    ops.extend(text_op(
+    builder.text(
         &format!("Total Decisions: {}", report.total_decisions),
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 7.0;
 
-    ops.extend(text_op(
+    builder.text(
         &format!("Automatic Decisions: {}", report.automatic_decisions),
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 7.0;
 
-    ops.extend(text_op(
+    builder.text(
         &format!(
             "Discretionary Decisions: {}",
             report.discretionary_decisions
@@ -323,20 +297,20 @@ pub fn to_pdf<P: AsRef<Path>>(
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 7.0;
 
-    ops.extend(text_op(
+    builder.text(
         &format!("Human Overrides: {}", report.human_overrides),
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 7.0;
 
-    ops.extend(text_op(
+    builder.text(
         &format!(
             "Integrity Verified: {}",
             if report.integrity_verified {
@@ -348,47 +322,47 @@ pub fn to_pdf<P: AsRef<Path>>(
         10.0,
         left_margin,
         y_position,
-        BuiltinFont::Helvetica,
-    ));
-    y_position -= Mm(15.0);
+        PdfBuiltinFont::Helvetica,
+    );
+    y_position -= 15.0;
 
     // Recent records section header
-    ops.extend(text_op(
+    builder.text(
         &format!("Recent Records (showing up to 20 of {})", records.len()),
         12.0,
         left_margin,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    y_position -= Mm(10.0);
+        PdfBuiltinFont::HelveticaBold,
+    );
+    y_position -= 10.0;
 
     // Table headers
-    ops.extend(text_op(
+    builder.text(
         "Timestamp",
         9.0,
-        Mm(20.0),
+        20.0,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    ops.extend(text_op(
+        PdfBuiltinFont::HelveticaBold,
+    );
+    builder.text(
         "Statute ID",
         9.0,
-        Mm(70.0),
+        70.0,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    ops.extend(text_op(
+        PdfBuiltinFont::HelveticaBold,
+    );
+    builder.text(
         "Result",
         9.0,
-        Mm(120.0),
+        120.0,
         y_position,
-        BuiltinFont::HelveticaBold,
-    ));
-    y_position -= Mm(7.0);
+        PdfBuiltinFont::HelveticaBold,
+    );
+    y_position -= 7.0;
 
     // List records (up to 20)
     for record in records.iter().take(20) {
-        if y_position < Mm(20.0) {
+        if y_position < 20.0 {
             break; // Prevent writing off the page
         }
 
@@ -399,37 +373,31 @@ pub fn to_pdf<P: AsRef<Path>>(
             crate::DecisionResult::Overridden { .. } => "Overridden",
         };
 
-        ops.extend(text_op(
+        builder.text(
             &record.timestamp.format("%Y-%m-%d %H:%M").to_string(),
             8.0,
-            Mm(20.0),
+            20.0,
             y_position,
-            BuiltinFont::Helvetica,
-        ));
-        ops.extend(text_op(
+            PdfBuiltinFont::Helvetica,
+        );
+        builder.text(
             &record.statute_id,
             8.0,
-            Mm(70.0),
+            70.0,
             y_position,
-            BuiltinFont::Helvetica,
-        ));
-        ops.extend(text_op(
+            PdfBuiltinFont::Helvetica,
+        );
+        builder.text(
             result_str,
             8.0,
-            Mm(120.0),
+            120.0,
             y_position,
-            BuiltinFont::Helvetica,
-        ));
-        y_position -= Mm(6.0);
+            PdfBuiltinFont::Helvetica,
+        );
+        y_position -= 6.0;
     }
 
-    // Create page with all operations
-    let page = PdfPage::new(Mm(210.0), Mm(297.0), ops);
-    doc.with_pages(vec![page]);
-
-    // Save PDF
-    let mut warnings = Vec::new();
-    let pdf_bytes = doc.save(&PdfSaveOptions::default(), &mut warnings);
+    let pdf_bytes = builder.save();
 
     std::fs::write(&path, pdf_bytes)
         .map_err(|e| AuditError::ExportError(format!("Failed to write PDF file: {}", e)))?;

@@ -173,7 +173,7 @@ impl EdgeCache {
     fn new(capacity: usize) -> Self {
         Self {
             cache: Arc::new(Mutex::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(capacity).unwrap(),
+                std::num::NonZeroUsize::new(capacity).expect("cache capacity must be non-zero"),
             ))),
             hits: Arc::new(Mutex::new(0)),
             misses: Arc::new(Mutex::new(0)),

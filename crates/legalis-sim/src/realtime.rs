@@ -87,7 +87,7 @@ impl UpdateStream {
 
     /// Publishes an update to the stream.
     pub fn publish(&self, update: SimulationUpdate) {
-        let mut updates = self.updates.lock().unwrap();
+        let mut updates = self.updates.lock().expect("mutex poisoned");
         if updates.len() >= self.max_buffer_size {
             updates.pop_front();
         }
@@ -96,24 +96,24 @@ impl UpdateStream {
 
     /// Retrieves all pending updates.
     pub fn consume_updates(&self) -> Vec<SimulationUpdate> {
-        let mut updates = self.updates.lock().unwrap();
+        let mut updates = self.updates.lock().expect("mutex poisoned");
         updates.drain(..).collect()
     }
 
     /// Peeks at updates without consuming them.
     pub fn peek_updates(&self) -> Vec<SimulationUpdate> {
-        let updates = self.updates.lock().unwrap();
+        let updates = self.updates.lock().expect("mutex poisoned");
         updates.iter().cloned().collect()
     }
 
     /// Gets the number of pending updates.
     pub fn pending_count(&self) -> usize {
-        self.updates.lock().unwrap().len()
+        self.updates.lock().expect("mutex poisoned").len()
     }
 
     /// Clears all pending updates.
     pub fn clear(&self) {
-        self.updates.lock().unwrap().clear();
+        self.updates.lock().expect("mutex poisoned").clear();
     }
 }
 
@@ -199,13 +199,13 @@ impl ParameterAdjuster {
 
     /// Registers a parameter for live adjustment.
     pub fn register_parameter(&self, param: LiveParameter) {
-        let mut params = self.parameters.lock().unwrap();
+        let mut params = self.parameters.lock().expect("mutex poisoned");
         params.insert(param.name.clone(), param);
     }
 
     /// Adjusts a parameter value.
     pub fn adjust(&self, name: &str, value: f64, at_step: usize) -> Result<(), String> {
-        let mut params = self.parameters.lock().unwrap();
+        let mut params = self.parameters.lock().expect("mutex poisoned");
 
         let param = params
             .get_mut(name)
@@ -222,11 +222,11 @@ impl ParameterAdjuster {
             at_step,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime should be after UNIX_EPOCH")
                 .as_secs(),
         };
 
-        let mut history = self.history.lock().unwrap();
+        let mut history = self.history.lock().expect("mutex poisoned");
         history.push(adjustment);
 
         Ok(())
@@ -234,25 +234,25 @@ impl ParameterAdjuster {
 
     /// Gets the current value of a parameter.
     pub fn get_value(&self, name: &str) -> Option<f64> {
-        let params = self.parameters.lock().unwrap();
+        let params = self.parameters.lock().expect("mutex poisoned");
         params.get(name).map(|p| p.value)
     }
 
     /// Gets all parameters.
     pub fn get_all_parameters(&self) -> Vec<LiveParameter> {
-        let params = self.parameters.lock().unwrap();
+        let params = self.parameters.lock().expect("mutex poisoned");
         params.values().cloned().collect()
     }
 
     /// Gets adjustment history.
     pub fn get_history(&self) -> Vec<ParameterAdjustment> {
-        let history = self.history.lock().unwrap();
+        let history = self.history.lock().expect("mutex poisoned");
         history.clone()
     }
 
     /// Clears adjustment history.
     pub fn clear_history(&self) {
-        let mut history = self.history.lock().unwrap();
+        let mut history = self.history.lock().expect("mutex poisoned");
         history.clear();
     }
 }
@@ -299,7 +299,7 @@ impl VisualizationIntegration {
     where
         F: Fn(&SimulationUpdate) + Send + Sync + 'static,
     {
-        let mut hooks = self.hooks.lock().unwrap();
+        let mut hooks = self.hooks.lock().expect("mutex poisoned");
         hooks.push(Arc::new(hook));
     }
 
@@ -308,17 +308,17 @@ impl VisualizationIntegration {
         // Check throttle
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime should be after UNIX_EPOCH")
             .as_millis() as u64;
 
-        let mut last = self.last_update.lock().unwrap();
+        let mut last = self.last_update.lock().expect("mutex poisoned");
         if now - *last < self.throttle_ms {
             return;
         }
         *last = now;
 
         // Notify hooks
-        let hooks = self.hooks.lock().unwrap();
+        let hooks = self.hooks.lock().expect("mutex poisoned");
         for hook in hooks.iter() {
             hook(update);
         }
@@ -326,12 +326,12 @@ impl VisualizationIntegration {
 
     /// Gets the number of registered hooks.
     pub fn hook_count(&self) -> usize {
-        self.hooks.lock().unwrap().len()
+        self.hooks.lock().expect("mutex poisoned").len()
     }
 
     /// Clears all hooks.
     pub fn clear_hooks(&self) {
-        self.hooks.lock().unwrap().clear();
+        self.hooks.lock().expect("mutex poisoned").clear();
     }
 }
 
@@ -392,12 +392,12 @@ impl SimulationController {
 
     /// Gets the current state.
     pub fn get_state(&self) -> RealtimeSimulationState {
-        *self.state.lock().unwrap()
+        *self.state.lock().expect("mutex poisoned")
     }
 
     /// Pauses the simulation.
     pub fn pause(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("mutex poisoned");
         if *state == RealtimeSimulationState::Running {
             *state = RealtimeSimulationState::Paused;
         }
@@ -405,7 +405,7 @@ impl SimulationController {
 
     /// Resumes the simulation.
     pub fn resume(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("mutex poisoned");
         if *state == RealtimeSimulationState::Paused {
             *state = RealtimeSimulationState::Running;
         }
@@ -413,35 +413,35 @@ impl SimulationController {
 
     /// Checks if simulation should continue.
     pub fn should_continue(&self) -> bool {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().expect("mutex poisoned");
         *state == RealtimeSimulationState::Running
     }
 
     /// Marks simulation as completed.
     pub fn complete(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("mutex poisoned");
         *state = RealtimeSimulationState::Completed;
     }
 
     /// Marks simulation as errored.
     pub fn error(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("mutex poisoned");
         *state = RealtimeSimulationState::Error;
     }
 
     /// Records a snapshot at the current step.
     pub fn snapshot(&self, metrics: SimulationMetrics) {
-        let step = *self.current_step.lock().unwrap();
+        let step = *self.current_step.lock().expect("mutex poisoned");
         let snapshot = SimulationSnapshot {
             step,
             metrics,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime should be after UNIX_EPOCH")
                 .as_secs(),
         };
 
-        let mut history = self.state_history.lock().unwrap();
+        let mut history = self.state_history.lock().expect("mutex poisoned");
         if history.len() >= self.max_history {
             history.remove(0);
         }
@@ -450,18 +450,18 @@ impl SimulationController {
 
     /// Advances to the next step.
     pub fn advance_step(&self) {
-        let mut step = self.current_step.lock().unwrap();
+        let mut step = self.current_step.lock().expect("mutex poisoned");
         *step += 1;
     }
 
     /// Gets the current step.
     pub fn get_current_step(&self) -> usize {
-        *self.current_step.lock().unwrap()
+        *self.current_step.lock().expect("mutex poisoned")
     }
 
     /// Rewinds to a previous step.
     pub fn rewind_to(&self, target_step: usize) -> Option<SimulationSnapshot> {
-        let history = self.state_history.lock().unwrap();
+        let history = self.state_history.lock().expect("mutex poisoned");
 
         // Find closest snapshot <= target_step
         let snapshot = history
@@ -469,7 +469,7 @@ impl SimulationController {
             .filter(|s| s.step <= target_step)
             .max_by_key(|s| s.step)?;
 
-        let mut current = self.current_step.lock().unwrap();
+        let mut current = self.current_step.lock().expect("mutex poisoned");
         *current = snapshot.step;
 
         Some(snapshot.clone())
@@ -477,13 +477,13 @@ impl SimulationController {
 
     /// Gets all snapshots in history.
     pub fn get_history(&self) -> Vec<SimulationSnapshot> {
-        let history = self.state_history.lock().unwrap();
+        let history = self.state_history.lock().expect("mutex poisoned");
         history.clone()
     }
 
     /// Clears history.
     pub fn clear_history(&self) {
-        let mut history = self.state_history.lock().unwrap();
+        let mut history = self.state_history.lock().expect("mutex poisoned");
         history.clear();
     }
 }
@@ -631,20 +631,20 @@ impl SimulationDebugger {
     /// Adds a breakpoint.
     pub fn add_breakpoint(&self, breakpoint: Breakpoint) -> Uuid {
         let id = breakpoint.id;
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.lock().expect("mutex poisoned");
         breakpoints.insert(id, breakpoint);
         id
     }
 
     /// Removes a breakpoint.
     pub fn remove_breakpoint(&self, id: &Uuid) -> bool {
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.lock().expect("mutex poisoned");
         breakpoints.remove(id).is_some()
     }
 
     /// Enables a breakpoint.
     pub fn enable_breakpoint(&self, id: &Uuid) {
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.lock().expect("mutex poisoned");
         if let Some(bp) = breakpoints.get_mut(id) {
             bp.enabled = true;
         }
@@ -652,7 +652,7 @@ impl SimulationDebugger {
 
     /// Disables a breakpoint.
     pub fn disable_breakpoint(&self, id: &Uuid) {
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.lock().expect("mutex poisoned");
         if let Some(bp) = breakpoints.get_mut(id) {
             bp.enabled = false;
         }
@@ -660,7 +660,7 @@ impl SimulationDebugger {
 
     /// Checks if any breakpoint should trigger.
     pub fn check_breakpoints(&self, step: usize, metrics: &SimulationMetrics) -> Option<Uuid> {
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.lock().expect("mutex poisoned");
 
         for (id, bp) in breakpoints.iter_mut() {
             if bp.should_trigger(step, metrics) {
@@ -673,11 +673,11 @@ impl SimulationDebugger {
                     metrics: metrics.clone(),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
+                        .expect("SystemTime should be after UNIX_EPOCH")
                         .as_secs(),
                 };
 
-                let mut hits = self.hits.lock().unwrap();
+                let mut hits = self.hits.lock().expect("mutex poisoned");
                 hits.push(hit);
 
                 return Some(*id);
@@ -689,19 +689,19 @@ impl SimulationDebugger {
 
     /// Gets all breakpoints.
     pub fn get_breakpoints(&self) -> Vec<Breakpoint> {
-        let breakpoints = self.breakpoints.lock().unwrap();
+        let breakpoints = self.breakpoints.lock().expect("mutex poisoned");
         breakpoints.values().cloned().collect()
     }
 
     /// Gets breakpoint hit history.
     pub fn get_hits(&self) -> Vec<BreakpointHit> {
-        let hits = self.hits.lock().unwrap();
+        let hits = self.hits.lock().expect("mutex poisoned");
         hits.clone()
     }
 
     /// Clears hit history.
     pub fn clear_hits(&self) {
-        let mut hits = self.hits.lock().unwrap();
+        let mut hits = self.hits.lock().expect("mutex poisoned");
         hits.clear();
     }
 }
@@ -797,7 +797,7 @@ mod tests {
         let called_clone = called.clone();
 
         viz.register_hook(move |_update| {
-            *called_clone.lock().unwrap() = true;
+            *called_clone.lock().expect("mutex poisoned") = true;
         });
 
         assert_eq!(viz.hook_count(), 1);
@@ -807,7 +807,7 @@ mod tests {
             total_steps: 10,
         });
 
-        assert!(*called.lock().unwrap());
+        assert!(*called.lock().expect("mutex poisoned"));
     }
 
     #[test]

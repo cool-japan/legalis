@@ -261,27 +261,21 @@ impl ErrorSuggester {
     /// Suggests general formatting fixes.
     pub fn suggest_format_fix(format: LegalFormat, error_msg: &str) -> Option<String> {
         match format {
-            LegalFormat::Catala => {
-                if error_msg.contains("syntax") {
-                    return Some(
-                        "Catala uses indentation-sensitive syntax. Check your spacing.".to_string(),
-                    );
-                }
+            LegalFormat::Catala if error_msg.contains("syntax") => {
+                return Some(
+                    "Catala uses indentation-sensitive syntax. Check your spacing.".to_string(),
+                );
             }
-            LegalFormat::L4 => {
-                if error_msg.contains("keyword") {
-                    return Some(
-                        "L4 keywords are case-sensitive: RULE, WHEN, THEN, MUST, MAY, SHANT"
-                            .to_string(),
-                    );
-                }
+            LegalFormat::L4 if error_msg.contains("keyword") => {
+                return Some(
+                    "L4 keywords are case-sensitive: RULE, WHEN, THEN, MUST, MAY, SHANT"
+                        .to_string(),
+                );
             }
-            LegalFormat::Stipula => {
-                if error_msg.contains("syntax") {
-                    return Some(
-                        "Stipula uses Java-like syntax with curly braces for blocks".to_string(),
-                    );
-                }
+            LegalFormat::Stipula if error_msg.contains("syntax") => {
+                return Some(
+                    "Stipula uses Java-like syntax with curly braces for blocks".to_string(),
+                );
             }
             _ => {}
         }

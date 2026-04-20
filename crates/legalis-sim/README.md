@@ -140,4 +140,4 @@ Indeterminate results trigger `JudicialDiscretion` in the `LegalResult`.
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0

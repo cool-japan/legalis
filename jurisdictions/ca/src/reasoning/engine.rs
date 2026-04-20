@@ -143,26 +143,25 @@ impl CanadianReasoningEngine {
     /// Check if statute is applicable
     fn is_statute_applicable(&self, statute: &Statute, query: &ReasoningQuery) -> bool {
         // Check jurisdiction match
-        if let Some(jurisdiction) = &statute.jurisdiction {
-            match &query.jurisdiction {
-                Some(ReasoningJurisdiction::Federal) => {
-                    if !jurisdiction.contains("FED") {
-                        return false;
-                    }
+        if let Some(jurisdiction) = &statute.jurisdiction
+            && let Some(query_jurisdiction) = &query.jurisdiction
+        {
+            match query_jurisdiction {
+                ReasoningJurisdiction::Federal if !jurisdiction.contains("FED") => {
+                    return false;
                 }
-                Some(ReasoningJurisdiction::Provincial(province)) => {
-                    if !jurisdiction.contains(province.abbreviation()) {
-                        return false;
-                    }
+                ReasoningJurisdiction::Provincial(province)
+                    if !jurisdiction.contains(province.abbreviation()) =>
+                {
+                    return false;
                 }
-                Some(ReasoningJurisdiction::Combined(province)) => {
+                ReasoningJurisdiction::Combined(province)
                     if !jurisdiction.contains("FED")
-                        && !jurisdiction.contains(province.abbreviation())
-                    {
-                        return false;
-                    }
+                        && !jurisdiction.contains(province.abbreviation()) =>
+                {
+                    return false;
                 }
-                None => {}
+                _ => {}
             }
         }
 

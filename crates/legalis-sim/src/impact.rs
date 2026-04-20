@@ -241,7 +241,7 @@ impl ImpactReport {
 
         // Calculate burden distribution (percentiles)
         let mut sorted = burdens.to_vec();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let percentiles = [10, 25, 50, 75, 90, 95, 99];
         self.compliance_burden.burden_distribution = percentiles

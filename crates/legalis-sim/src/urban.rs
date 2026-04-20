@@ -369,7 +369,7 @@ impl UrbanHousingMarket {
             return 0.0;
         }
         let mut sorted_prices = prices;
-        sorted_prices.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_prices.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let median_price = sorted_prices[sorted_prices.len() / 2];
         median_price / median_income
     }
@@ -546,7 +546,7 @@ impl UrbanSprawlModel {
         parcels.sort_by(|a, b| {
             b.development_potential()
                 .partial_cmp(&a.development_potential())
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         parcels
     }
@@ -928,7 +928,11 @@ impl SmartCityPortfolio {
     /// Get policies ranked by impact score
     pub fn ranked_by_impact(&self) -> Vec<&SmartCityPolicy> {
         let mut policies: Vec<_> = self.policies.values().collect();
-        policies.sort_by(|a, b| b.impact_score().partial_cmp(&a.impact_score()).unwrap());
+        policies.sort_by(|a, b| {
+            b.impact_score()
+                .partial_cmp(&a.impact_score())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         policies
     }
 

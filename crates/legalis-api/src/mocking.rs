@@ -220,7 +220,7 @@ impl MockResponse {
 
     /// Check if this response should fail
     pub fn should_fail(&self) -> bool {
-        use rand::Rng;
+        use rand::RngExt;
         if self.failure_rate > 0.0 {
             let mut rng = rand::rng();
             rng.random_range(0.0..1.0) < self.failure_rate
@@ -314,7 +314,7 @@ impl MockServer {
             .map_err(|e| MockError::Error(format!("Failed to acquire write lock: {}", e)))?;
 
         rules.push(rule);
-        rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        rules.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         Ok(id)
     }
@@ -344,7 +344,7 @@ impl MockServer {
         query: &HashMap<String, String>,
         body: Option<&serde_json::Value>,
     ) -> Option<MockResponse> {
-        let mut rules = self.rules.write().unwrap();
+        let mut rules = self.rules.write().expect("rwlock write poisoned");
 
         for rule in rules.iter_mut() {
             if rule.enabled && rule.matcher.matches(path, method, headers, query, body) {
@@ -358,7 +358,7 @@ impl MockServer {
 
     /// List all rules
     pub fn list_rules(&self) -> Vec<MockRule> {
-        self.rules.read().unwrap().clone()
+        self.rules.read().expect("rwlock read poisoned").clone()
     }
 
     /// Clear all rules
@@ -374,34 +374,43 @@ impl MockServer {
 
     /// Start recording requests
     pub fn start_recording(&self) {
-        *self.recording.write().unwrap() = true;
+        *self.recording.write().expect("rwlock write poisoned") = true;
     }
 
     /// Stop recording requests
     pub fn stop_recording(&self) {
-        *self.recording.write().unwrap() = false;
+        *self.recording.write().expect("rwlock write poisoned") = false;
     }
 
     /// Record a request (if recording is enabled)
     pub fn record_request(&self, request: RecordedRequest) {
-        if *self.recording.read().unwrap() {
-            self.recorded_requests.write().unwrap().push(request);
+        if *self.recording.read().expect("rwlock read poisoned") {
+            self.recorded_requests
+                .write()
+                .expect("rwlock write poisoned")
+                .push(request);
         }
     }
 
     /// Get recorded requests
     pub fn get_recorded_requests(&self) -> Vec<RecordedRequest> {
-        self.recorded_requests.read().unwrap().clone()
+        self.recorded_requests
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 
     /// Clear recorded requests
     pub fn clear_recorded_requests(&self) {
-        self.recorded_requests.write().unwrap().clear();
+        self.recorded_requests
+            .write()
+            .expect("rwlock write poisoned")
+            .clear();
     }
 
     /// Generate mock rules from recorded requests
     pub fn generate_mocks_from_recordings(&self) -> Vec<MockRule> {
-        let requests = self.recorded_requests.read().unwrap();
+        let requests = self.recorded_requests.read().expect("rwlock read poisoned");
         let mut rules = Vec::new();
 
         for (i, request) in requests.iter().enumerate() {

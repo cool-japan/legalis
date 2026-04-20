@@ -25,7 +25,7 @@ impl OpenLawImporter {
     }
 
     fn parse_variables(&self, text: &str) -> Vec<String> {
-        let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+        let re = Regex::new(r"\[\[([^\]]+)\]\]").expect("regex pattern is valid");
         re.captures_iter(text)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
             .collect()
@@ -33,7 +33,7 @@ impl OpenLawImporter {
 
     fn parse_conditionals(&self, text: &str) -> Vec<Condition> {
         let mut conditions = Vec::new();
-        let re = Regex::new(r"<%\s*if\s+([^%>]+)\s*%>").unwrap();
+        let re = Regex::new(r"<%\s*if\s+([^%>]+)\s*%>").expect("regex pattern is valid");
 
         for cap in re.captures_iter(text) {
             if let Some(condition_text) = cap.get(1) {
@@ -68,7 +68,7 @@ impl OpenLawImporter {
 
         // Extract title from first heading if present
         let title = if template.contains('#') {
-            let re = Regex::new(r"^#\s*(.+)$").unwrap();
+            let re = Regex::new(r"^#\s*(.+)$").expect("regex pattern is valid");
             template
                 .lines()
                 .find_map(|line| {

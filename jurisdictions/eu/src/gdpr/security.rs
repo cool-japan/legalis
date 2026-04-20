@@ -640,7 +640,9 @@ impl DataBreach {
             return Err(GdprError::missing_field("discovered_at"));
         }
 
-        let discovered = self.discovered_at.unwrap();
+        let discovered = self
+            .discovered_at
+            .expect("invariant: discovered_at validated as Some above");
         let now = Utc::now();
         let elapsed = now.signed_duration_since(discovered);
 

@@ -182,11 +182,11 @@ impl CanadianInterop {
             LegalAreaType::Family => {
                 secondary.push(GoverningLaw::Federal); // Divorce Act
             }
-            LegalAreaType::Contract => {
+            LegalAreaType::Contract
+                if facts.involves_negotiable_instruments || facts.involves_interest =>
+            {
                 // Bills of Exchange, Interest Act
-                if facts.involves_negotiable_instruments || facts.involves_interest {
-                    secondary.push(GoverningLaw::Federal);
-                }
+                secondary.push(GoverningLaw::Federal);
             }
             _ => {}
         }

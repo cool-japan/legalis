@@ -148,7 +148,10 @@ impl ParameterCalibrator {
             for param_name in param_names {
                 // Approximate gradient
                 let mut perturbed = current_params.clone();
-                *perturbed.get_mut(&param_name).unwrap() += step_size;
+                *perturbed
+                    .get_mut(&param_name)
+                    .expect("invariant: param_name was collected from current_params.keys()") +=
+                    step_size;
 
                 let perturbed_simulated = simulation_fn(&perturbed);
                 let mut perturbed_error = 0.0;
@@ -168,7 +171,9 @@ impl ParameterCalibrator {
                 }
 
                 let gradient = (perturbed_error - total_error) / step_size;
-                let param_value = current_params.get_mut(&param_name).unwrap();
+                let param_value = current_params
+                    .get_mut(&param_name)
+                    .expect("invariant: param_name was collected from current_params.keys()");
                 *param_value -= 0.1 * gradient; // Simple gradient step
             }
 

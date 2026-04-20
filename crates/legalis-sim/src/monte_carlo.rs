@@ -121,7 +121,9 @@ impl MonteCarloRunner {
 
         let mut results = Vec::new();
         for task in tasks {
-            let metrics = task.await.unwrap();
+            let metrics = task.await.map_err(|e| {
+                crate::SimulationError::ExecutionError(format!("Monte Carlo task panicked: {e}"))
+            })?;
             results.push(extract_metrics(&metrics));
         }
 

@@ -75,8 +75,10 @@ pub struct TemporalConfig {
 impl Default for TemporalConfig {
     fn default() -> Self {
         Self {
-            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            end_date: NaiveDate::from_ymd_opt(2024, 12, 31).unwrap(),
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1)
+                .expect("invariant: 2024-01-01 is a valid date"),
+            end_date: NaiveDate::from_ymd_opt(2024, 12, 31)
+                .expect("invariant: 2024-12-31 is a valid date"),
             time_step: TimeStep::Month,
             track_history: true,
             max_parallelism: num_cpus::get(),

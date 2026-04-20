@@ -202,7 +202,7 @@ impl MetricChanges {
             .filter(|&(_, &change)| change > 0)
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        growing.sort_by(|a, b| b.1.cmp(&a.1));
+        growing.sort_by_key(|b| std::cmp::Reverse(b.1));
         let top_growing = growing.into_iter().take(5).collect();
 
         let mut declining: Vec<_> = statute_changes
@@ -210,7 +210,7 @@ impl MetricChanges {
             .filter(|&(_, &change)| change < 0)
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        declining.sort_by(|a, b| a.1.cmp(&b.1));
+        declining.sort_by_key(|a| a.1);
         let top_declining = declining.into_iter().take(5).collect();
 
         Self {
@@ -245,36 +245,36 @@ impl ComparisonGenerator {
     ) -> AuditResult<ComparisonReport> {
         let current_month_start = reference_date
             .with_day(1)
-            .unwrap()
+            .expect("invariant: day=1 is always valid")
             .with_hour(0)
-            .unwrap()
+            .expect("invariant: hour=0 is always valid")
             .with_minute(0)
-            .unwrap()
+            .expect("invariant: minute=0 is always valid")
             .with_second(0)
-            .unwrap();
+            .expect("invariant: second=0 is always valid");
 
         let current_month_end = if current_month_start.month() == 12 {
             current_month_start
                 .with_year(current_month_start.year() + 1)
-                .unwrap()
+                .expect("invariant: year+1 is valid for any representable year")
                 .with_month(1)
-                .unwrap()
+                .expect("invariant: month=1 is always valid")
         } else {
             current_month_start
                 .with_month(current_month_start.month() + 1)
-                .unwrap()
+                .expect("invariant: month+1 is valid (not December)")
         };
 
         let previous_month_start = if current_month_start.month() == 1 {
             current_month_start
                 .with_year(current_month_start.year() - 1)
-                .unwrap()
+                .expect("invariant: year-1 is valid for any representable year")
                 .with_month(12)
-                .unwrap()
+                .expect("invariant: month=12 is always valid")
         } else {
             current_month_start
                 .with_month(current_month_start.month() - 1)
-                .unwrap()
+                .expect("invariant: month-1 is valid (not January)")
         };
 
         let current_records: Vec<_> = records
@@ -318,23 +318,23 @@ impl ComparisonGenerator {
     ) -> AuditResult<ComparisonReport> {
         let current_year_start = reference_date
             .with_month(1)
-            .unwrap()
+            .expect("invariant: month=1 is always valid")
             .with_day(1)
-            .unwrap()
+            .expect("invariant: day=1 is always valid")
             .with_hour(0)
-            .unwrap()
+            .expect("invariant: hour=0 is always valid")
             .with_minute(0)
-            .unwrap()
+            .expect("invariant: minute=0 is always valid")
             .with_second(0)
-            .unwrap();
+            .expect("invariant: second=0 is always valid");
 
         let current_year_end = current_year_start
             .with_year(current_year_start.year() + 1)
-            .unwrap();
+            .expect("invariant: year+1 is valid for any representable year");
 
         let previous_year_start = current_year_start
             .with_year(current_year_start.year() - 1)
-            .unwrap();
+            .expect("invariant: year-1 is valid for any representable year");
 
         let current_records: Vec<_> = records
             .iter()

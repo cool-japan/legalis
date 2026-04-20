@@ -196,7 +196,7 @@ impl EntityLinker {
                 // Threshold for fuzzy matching
                 if let Some(uri) = uris.first()
                     && let Some(entity) = self.entities.get(uri)
-                    && (best_match.is_none() || similarity > best_match.as_ref().unwrap().1)
+                    && (best_match.is_none() || similarity > best_match.as_ref().expect("invariant: best_match is Some in the else branch of is_none check").1)
                 {
                     best_match = Some((entity.clone(), similarity));
                 }

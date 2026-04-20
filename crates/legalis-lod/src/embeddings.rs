@@ -173,7 +173,7 @@ impl EmbeddingGenerator {
             .map(|(e, emb)| (e.clone(), cosine_similarity(target_emb, emb)))
             .collect();
 
-        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         similarities.into_iter().take(k).collect()
     }
 
@@ -211,7 +211,7 @@ impl EmbeddingGenerator {
     // Private helper methods
 
     fn initialize_embeddings(&mut self, triples: &[Triple]) {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         // Collect all entities and relations

@@ -370,7 +370,7 @@ impl TeamManager {
         }
 
         // Sort by timestamp (newest first)
-        entries.sort_by(|a, b| b.executed_at.cmp(&a.executed_at));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.executed_at));
 
         // Limit results
         entries.truncate(limit);
@@ -456,7 +456,7 @@ impl TeamManager {
         }
 
         // Sort by last activity (newest first)
-        sessions.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
+        sessions.sort_by_key(|b| std::cmp::Reverse(b.last_activity));
 
         Ok(sessions)
     }
@@ -528,7 +528,7 @@ impl TeamManager {
         }
 
         // Sort by timestamp (newest first)
-        notifications.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        notifications.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
         // Limit results
         notifications.truncate(limit);

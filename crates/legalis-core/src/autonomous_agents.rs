@@ -1173,7 +1173,10 @@ impl ReinforcementLearningAgent {
             } else {
                 self.discount_factor * max_next_q
             };
-        let q_values = self.q_table.get_mut(&state_key).unwrap();
+        let q_values = self
+            .q_table
+            .get_mut(&state_key)
+            .expect("invariant: state_key was just inserted via entry().or_insert_with()");
         q_values[experience.action] = current_q + self.learning_rate * (target - current_q);
     }
 

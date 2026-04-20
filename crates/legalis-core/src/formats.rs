@@ -133,7 +133,9 @@ impl JsonLdConverter {
             }
         });
 
-        let map = obj.as_object_mut().unwrap();
+        let map = obj
+            .as_object_mut()
+            .expect("invariant: json!({}) is always an object");
 
         // Add optional fields
         if !statute.preconditions.is_empty() {
@@ -296,7 +298,9 @@ impl JsonLdConverter {
 
     fn temporal_to_json(temporal: &TemporalValidity) -> Value {
         let mut obj = json!({});
-        let map = obj.as_object_mut().unwrap();
+        let map = obj
+            .as_object_mut()
+            .expect("invariant: json!({}) is always an object");
 
         if let Some(ref effective) = temporal.effective_date {
             map.insert(
@@ -973,7 +977,7 @@ impl StatuteHasher {
         }
 
         let result = hasher.finalize();
-        format!("{:x}", result)
+        hex::encode(result)
     }
 
     /// Verify that a statute matches its expected hash.

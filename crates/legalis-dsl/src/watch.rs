@@ -263,8 +263,9 @@ mod tests {
 
     #[test]
     fn test_watch_config() {
+        let dsl_path = std::env::temp_dir().join("legalis-dsl-watch-test.dsl");
         let config = WatchConfig::new()
-            .add_path("/tmp/test.dsl")
+            .add_path(dsl_path)
             .poll_interval(500)
             .validate_on_start(false)
             .verbose(true);

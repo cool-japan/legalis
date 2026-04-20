@@ -101,7 +101,7 @@ impl CommonFormImporter {
             let re = regex_lite::Regex::new(
                 r"(?:age|years)\s*(?:of\s*)?(?:at least|minimum|>=)\s*(\d+)",
             )
-            .unwrap();
+            .expect("regex pattern is valid");
             if let Some(cap) = re.captures(text)
                 && let Some(age_str) = cap.get(1)
                 && let Ok(age_val) = age_str.as_str().parse::<u32>()
@@ -305,7 +305,7 @@ impl FormatExporter for CommonFormExporter {
                     content: Vec::new(),
                     conspicuous: None,
                 })
-                .unwrap(),
+                .expect("serializing an empty CommonForm should not fail"),
                 report,
             ));
         }

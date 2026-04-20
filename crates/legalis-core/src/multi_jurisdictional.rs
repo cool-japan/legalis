@@ -262,7 +262,13 @@ impl JurisdictionConflictResolver {
 
         for &id in statute_ids {
             if let Some(&level) = self.levels.get(id)
-                && (max_level.is_none() || level.precedence() > max_level.unwrap().precedence())
+                && (max_level.is_none()
+                    || level.precedence()
+                        > max_level
+                            .expect(
+                                "invariant: max_level is Some in the else branch of is_none check",
+                            )
+                            .precedence())
             {
                 max_level = Some(level);
                 winner = Some(id);
@@ -281,7 +287,7 @@ impl JurisdictionConflictResolver {
                 ConflictRule::LexSuperior,
                 format!(
                     "{} law supersedes lower jurisdiction laws",
-                    max_level.unwrap()
+                    max_level.expect("invariant: winner.map is only called when max_level is Some")
                 ),
                 alternatives,
             )
@@ -698,7 +704,14 @@ impl HierarchyManager {
         for &id in statute_ids {
             if let Some((_, level)) = self.statutes.get(id)
                 && (highest.is_none()
-                    || level.precedence() > highest.as_ref().unwrap().1.precedence())
+                    || level.precedence()
+                        > highest
+                            .as_ref()
+                            .expect(
+                                "invariant: highest is Some in the else branch of is_none check",
+                            )
+                            .1
+                            .precedence())
             {
                 highest = Some((id.to_string(), *level));
             }

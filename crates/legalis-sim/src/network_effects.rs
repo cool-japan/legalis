@@ -699,7 +699,7 @@ impl PageRankResult {
             .iter()
             .map(|(&id, &score)| (id, score))
             .collect();
-        sorted.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+        sorted.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         sorted.into_iter().take(n).collect()
     }
 

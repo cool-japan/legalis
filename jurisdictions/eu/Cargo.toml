@@ -32,8 +32,8 @@ schema = ["dep:schemars"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
-criterion = "0.8"
-proptest = "1.9"
+criterion.workspace = true
+proptest = "1.11"
 
 [[bench]]
 name = "gdpr_validation"

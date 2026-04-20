@@ -111,17 +111,17 @@ impl DistributedCoordinator {
     /// coordinator.submit_task(task);
     /// ```
     pub fn submit_task(&self, task: DiffTask) {
-        let mut queue = self.task_queue.lock().unwrap();
+        let mut queue = self.task_queue.lock().expect("mutex poisoned");
         queue.push(task);
         // Sort by priority (higher priority first)
-        queue.sort_by(|a, b| b.priority.cmp(&a.priority));
+        queue.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     /// Submits multiple diff tasks
     pub fn submit_batch(&self, tasks: Vec<DiffTask>) {
-        let mut queue = self.task_queue.lock().unwrap();
+        let mut queue = self.task_queue.lock().expect("mutex poisoned");
         queue.extend(tasks);
-        queue.sort_by(|a, b| b.priority.cmp(&a.priority));
+        queue.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     /// Processes all queued tasks using local parallel computation
@@ -160,7 +160,7 @@ impl DistributedCoordinator {
     /// ```
     pub fn process_all(&self) -> DiffResult<()> {
         let tasks: Vec<DiffTask> = {
-            let mut queue = self.task_queue.lock().unwrap();
+            let mut queue = self.task_queue.lock().expect("mutex poisoned");
             queue.drain(..).collect()
         };
 
@@ -194,7 +194,7 @@ impl DistributedCoordinator {
             .collect::<DiffResult<Vec<TaskResult>>>()?;
 
         // Store results
-        let mut result_map = self.results.lock().unwrap();
+        let mut result_map = self.results.lock().expect("mutex poisoned");
         for result in results {
             result_map.insert(result.task_id.clone(), result);
         }
@@ -204,38 +204,38 @@ impl DistributedCoordinator {
 
     /// Gets the result of a specific task
     pub fn get_result(&self, task_id: &str) -> Option<TaskResult> {
-        let results = self.results.lock().unwrap();
+        let results = self.results.lock().expect("mutex poisoned");
         results.get(task_id).cloned()
     }
 
     /// Gets all completed results
     pub fn get_all_results(&self) -> Vec<TaskResult> {
-        let results = self.results.lock().unwrap();
+        let results = self.results.lock().expect("mutex poisoned");
         results.values().cloned().collect()
     }
 
     /// Gets the number of pending tasks
     pub fn pending_tasks(&self) -> usize {
-        let queue = self.task_queue.lock().unwrap();
+        let queue = self.task_queue.lock().expect("mutex poisoned");
         queue.len()
     }
 
     /// Gets the number of completed tasks
     pub fn completed_tasks(&self) -> usize {
-        let results = self.results.lock().unwrap();
+        let results = self.results.lock().expect("mutex poisoned");
         results.len()
     }
 
     /// Clears all results
     pub fn clear_results(&self) {
-        let mut results = self.results.lock().unwrap();
+        let mut results = self.results.lock().expect("mutex poisoned");
         results.clear();
     }
 
     /// Gets statistics about the distributed computation
     pub fn get_statistics(&self) -> ComputationStats {
-        let results = self.results.lock().unwrap();
-        let queue = self.task_queue.lock().unwrap();
+        let results = self.results.lock().expect("mutex poisoned");
+        let queue = self.task_queue.lock().expect("mutex poisoned");
 
         let total_time: u64 = results.values().map(|r| r.computation_time_ms).sum();
         let avg_time = if results.is_empty() {
@@ -538,7 +538,7 @@ mod tests {
         coordinator.submit_task(high_priority);
 
         // Queue should be sorted by priority
-        let queue = coordinator.task_queue.lock().unwrap();
+        let queue = coordinator.task_queue.lock().expect("mutex poisoned");
         assert_eq!(queue[0].task_id, "high");
         assert_eq!(queue[1].task_id, "low");
     }

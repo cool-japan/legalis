@@ -206,7 +206,7 @@ impl LiveDashboard {
         let alerts = self.detect_alerts(&recent_records, &metrics);
 
         // Update state
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("rwlock write poisoned");
         state.recent_events = events;
         state.active_alerts = alerts;
         state.metrics_history.push((Utc::now(), metrics));
@@ -227,7 +227,7 @@ impl LiveDashboard {
 
     /// Gets the current dashboard snapshot.
     pub fn snapshot(&self) -> DashboardSnapshot {
-        let state = self.state.read().unwrap();
+        let state = self.state.read().expect("rwlock read poisoned");
 
         let metrics = if let Some((_, latest)) = state.metrics_history.last() {
             latest.clone()
@@ -261,7 +261,7 @@ impl LiveDashboard {
 
     /// Adds a performance sample.
     pub fn record_performance(&self, processing_time_ms: f64) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("rwlock write poisoned");
         state.performance_samples.push(processing_time_ms);
 
         // Keep only recent samples
@@ -272,13 +272,13 @@ impl LiveDashboard {
 
     /// Clears all alerts.
     pub fn clear_alerts(&self) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("rwlock write poisoned");
         state.active_alerts.clear();
     }
 
     /// Clears a specific alert.
     pub fn clear_alert(&self, alert_id: Uuid) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("rwlock write poisoned");
         state.active_alerts.retain(|a| a.id != alert_id);
     }
 
@@ -404,11 +404,12 @@ impl LiveDashboard {
 
         for record in records {
             // Round to hour
+            // hour() is 0..23 and minutes/seconds are 0 — and_hms_opt is infallible here
             let hour = record
                 .timestamp
                 .date_naive()
                 .and_hms_opt(record.timestamp.time().hour(), 0, 0)
-                .unwrap()
+                .expect("invariant: hour() is 0-23, minute/second are 0")
                 .and_utc();
 
             let (count, overrides) = hourly_data.entry(hour).or_insert((0, 0));
@@ -524,7 +525,7 @@ impl LiveDashboard {
         let avg = samples.iter().sum::<f64>() / samples.len() as f64;
 
         let mut sorted = samples.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let p95_idx = (sorted.len() as f64 * 0.95) as usize;
         let p99_idx = (sorted.len() as f64 * 0.99) as usize;
@@ -548,7 +549,11 @@ impl LiveDashboard {
 
     /// Returns the number of active alerts.
     pub fn active_alert_count(&self) -> usize {
-        self.state.read().unwrap().active_alerts.len()
+        self.state
+            .read()
+            .expect("rwlock read poisoned")
+            .active_alerts
+            .len()
     }
 }
 

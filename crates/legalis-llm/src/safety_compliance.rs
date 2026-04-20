@@ -223,7 +223,8 @@ impl LegalAccuracyValidator {
     /// Validates legal citations in text
     fn validate_citations(&self, text: &str) -> ValidationCheck {
         // Simple pattern for US legal citations
-        let citation_pattern = Regex::new(r"\d+\s+U\.S\.C\.\s+§\s+\d+").unwrap();
+        let citation_pattern =
+            Regex::new(r"\d+\s+U\.S\.C\.\s+§\s+\d+").expect("regex pattern is valid");
         let _found_citations = citation_pattern.find_iter(text).count();
 
         ValidationCheck {
@@ -349,7 +350,7 @@ impl HallucinationDetector {
 
         // Patterns that often indicate hallucinations
         self.invalid_patterns
-            .push(Regex::new(r"\d{5,}\s+U\.S\.C\.").unwrap()); // Suspiciously high section numbers
+            .push(Regex::new(r"\d{5,}\s+U\.S\.C\.").expect("regex pattern is valid")); // Suspiciously high section numbers
     }
 
     /// Detects hallucinations in text
@@ -609,12 +610,14 @@ impl PrivilegeProtector {
         // Patterns for attorney-client communications
         self.privileged_patterns.push(
             Regex::new(r"(?i)\b(attorney|lawyer|counsel)\s+(said|told|advised|recommended)\b")
-                .unwrap(),
+                .expect("regex pattern is valid"),
         );
         self.privileged_patterns
-            .push(Regex::new(r"(?i)\blegal\s+advice\b").unwrap());
-        self.privileged_patterns
-            .push(Regex::new(r"(?i)\bconfidential\s+(communication|discussion)\b").unwrap());
+            .push(Regex::new(r"(?i)\blegal\s+advice\b").expect("regex pattern is valid"));
+        self.privileged_patterns.push(
+            Regex::new(r"(?i)\bconfidential\s+(communication|discussion)\b")
+                .expect("regex pattern is valid"),
+        );
     }
 
     /// Protects privileged information in text
@@ -741,7 +744,8 @@ impl EthicalBoundaryEnforcer {
         self.prohibited_activities.push(ProhibitedActivity {
             name: "Unauthorized Practice of Law".to_string(),
             description: "Providing specific legal advice without qualification".to_string(),
-            pattern: Regex::new(r"(?i)\byou should (file|sue|claim|petition)\b").unwrap(),
+            pattern: Regex::new(r"(?i)\byou should (file|sue|claim|petition)\b")
+                .expect("regex pattern is valid"),
             severity: Severity::Critical,
         });
 
@@ -750,7 +754,7 @@ impl EthicalBoundaryEnforcer {
             name: "Encouraging Illegal Activity".to_string(),
             description: "Suggesting or encouraging illegal actions".to_string(),
             pattern: Regex::new(r"(?i)\b(evade|avoid|hide from)\s+(law|tax|authorities)\b")
-                .unwrap(),
+                .expect("regex pattern is valid"),
             severity: Severity::Critical,
         });
 

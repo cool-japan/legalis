@@ -448,7 +448,7 @@ fn simple_random() -> f64 {
         if BEHAVIOR_RNG_SEED == 0 {
             BEHAVIOR_RNG_SEED = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime should be after UNIX_EPOCH")
                 .as_nanos() as u64;
         }
         BEHAVIOR_RNG_SEED = BEHAVIOR_RNG_SEED

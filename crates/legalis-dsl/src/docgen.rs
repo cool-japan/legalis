@@ -45,7 +45,7 @@ impl MarkdownGenerator {
     fn generate_toc(&self, doc: &LegalDocument) -> String {
         let mut toc = String::new();
 
-        writeln!(&mut toc, "## Table of Contents\n").unwrap();
+        writeln!(&mut toc, "## Table of Contents\n").expect("writing to String is infallible");
 
         for (i, statute) in doc.statutes.iter().enumerate() {
             writeln!(
@@ -55,10 +55,10 @@ impl MarkdownGenerator {
                 statute.title,
                 statute.id
             )
-            .unwrap();
+            .expect("writing to String is infallible");
         }
 
-        writeln!(&mut toc).unwrap();
+        writeln!(&mut toc).expect("writing to String is infallible");
         toc
     }
 
@@ -72,94 +72,102 @@ impl MarkdownGenerator {
             "### {} {{#statute-{}}}\n",
             statute.title, statute.id
         )
-        .unwrap();
+        .expect("writing to String is infallible");
 
         // ID badge
-        writeln!(&mut doc, "**ID:** `{}`\n", statute.id).unwrap();
+        writeln!(&mut doc, "**ID:** `{}`\n", statute.id).expect("writing to String is infallible");
 
         // Dependencies
         if !statute.requires.is_empty() {
-            writeln!(&mut doc, "**Requires:**").unwrap();
+            writeln!(&mut doc, "**Requires:**").expect("writing to String is infallible");
             for req in &statute.requires {
-                writeln!(&mut doc, "- [`{}`](#statute-{})", req, req).unwrap();
+                writeln!(&mut doc, "- [`{}`](#statute-{})", req, req)
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Supersedes
         if !statute.supersedes.is_empty() {
-            writeln!(&mut doc, "**Supersedes:**").unwrap();
+            writeln!(&mut doc, "**Supersedes:**").expect("writing to String is infallible");
             for sup in &statute.supersedes {
-                writeln!(&mut doc, "- [`{}`](#statute-{})", sup, sup).unwrap();
+                writeln!(&mut doc, "- [`{}`](#statute-{})", sup, sup)
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Conditions
         if !statute.conditions.is_empty() {
-            writeln!(&mut doc, "#### Conditions\n").unwrap();
+            writeln!(&mut doc, "#### Conditions\n").expect("writing to String is infallible");
             for (i, condition) in statute.conditions.iter().enumerate() {
-                writeln!(&mut doc, "{}. {}", i + 1, self.format_condition(condition)).unwrap();
+                writeln!(&mut doc, "{}. {}", i + 1, self.format_condition(condition))
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Effects
         if !statute.effects.is_empty() {
-            writeln!(&mut doc, "#### Effects\n").unwrap();
+            writeln!(&mut doc, "#### Effects\n").expect("writing to String is infallible");
             for effect in &statute.effects {
                 writeln!(
                     &mut doc,
                     "- **{}**: {}",
                     effect.effect_type, effect.description
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Discretion
         if let Some(discretion) = &statute.discretion {
-            writeln!(&mut doc, "#### Discretion\n").unwrap();
-            writeln!(&mut doc, "{}\n", discretion).unwrap();
+            writeln!(&mut doc, "#### Discretion\n").expect("writing to String is infallible");
+            writeln!(&mut doc, "{}\n", discretion).expect("writing to String is infallible");
         }
 
         // Exceptions
         if !statute.exceptions.is_empty() {
-            writeln!(&mut doc, "#### Exceptions\n").unwrap();
+            writeln!(&mut doc, "#### Exceptions\n").expect("writing to String is infallible");
             for (i, exception) in statute.exceptions.iter().enumerate() {
-                writeln!(&mut doc, "{}. {}", i + 1, exception.description).unwrap();
+                writeln!(&mut doc, "{}. {}", i + 1, exception.description)
+                    .expect("writing to String is infallible");
                 if !exception.conditions.is_empty() {
-                    writeln!(&mut doc, "   - When:").unwrap();
+                    writeln!(&mut doc, "   - When:").expect("writing to String is infallible");
                     for cond in &exception.conditions {
-                        writeln!(&mut doc, "     - {}", self.format_condition(cond)).unwrap();
+                        writeln!(&mut doc, "     - {}", self.format_condition(cond))
+                            .expect("writing to String is infallible");
                     }
                 }
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Amendments
         if !statute.amendments.is_empty() {
-            writeln!(&mut doc, "#### Amendment History\n").unwrap();
+            writeln!(&mut doc, "#### Amendment History\n")
+                .expect("writing to String is infallible");
             for amendment in &statute.amendments {
-                write!(&mut doc, "- **{}**", amendment.target_id).unwrap();
+                write!(&mut doc, "- **{}**", amendment.target_id)
+                    .expect("writing to String is infallible");
                 if let Some(version) = amendment.version {
-                    write!(&mut doc, " (v{})", version).unwrap();
+                    write!(&mut doc, " (v{})", version).expect("writing to String is infallible");
                 }
                 if let Some(date) = &amendment.date {
-                    write!(&mut doc, " [{}]", date).unwrap();
+                    write!(&mut doc, " [{}]", date).expect("writing to String is infallible");
                 }
-                writeln!(&mut doc, ": {}", amendment.description).unwrap();
+                writeln!(&mut doc, ": {}", amendment.description)
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Defaults
         if !statute.defaults.is_empty() {
-            writeln!(&mut doc, "#### Default Values\n").unwrap();
-            writeln!(&mut doc, "| Field | Value |").unwrap();
-            writeln!(&mut doc, "|-------|-------|").unwrap();
+            writeln!(&mut doc, "#### Default Values\n").expect("writing to String is infallible");
+            writeln!(&mut doc, "| Field | Value |").expect("writing to String is infallible");
+            writeln!(&mut doc, "|-------|-------|").expect("writing to String is infallible");
             for default in &statute.defaults {
                 writeln!(
                     &mut doc,
@@ -167,12 +175,12 @@ impl MarkdownGenerator {
                     default.field,
                     self.format_value(&default.value)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
-        writeln!(&mut doc, "---\n").unwrap();
+        writeln!(&mut doc, "---\n").expect("writing to String is infallible");
         doc
     }
 
@@ -280,7 +288,7 @@ impl MarkdownGenerator {
     fn generate_cross_refs(&self, doc: &LegalDocument) -> String {
         let mut refs = String::new();
 
-        writeln!(&mut refs, "## Cross-References\n").unwrap();
+        writeln!(&mut refs, "## Cross-References\n").expect("writing to String is infallible");
 
         // Build dependency map
         let mut depends_on: std::collections::HashMap<String, Vec<String>> =
@@ -302,9 +310,9 @@ impl MarkdownGenerator {
         }
 
         if !depends_on.is_empty() {
-            writeln!(&mut refs, "### Dependency Graph\n").unwrap();
-            writeln!(&mut refs, "```mermaid").unwrap();
-            writeln!(&mut refs, "graph TD").unwrap();
+            writeln!(&mut refs, "### Dependency Graph\n").expect("writing to String is infallible");
+            writeln!(&mut refs, "```mermaid").expect("writing to String is infallible");
+            writeln!(&mut refs, "graph TD").expect("writing to String is infallible");
             for (statute, deps) in &depends_on {
                 for dep in deps {
                     writeln!(
@@ -315,10 +323,10 @@ impl MarkdownGenerator {
                         dep.replace('-', "_"),
                         dep
                     )
-                    .unwrap();
+                    .expect("writing to String is infallible");
                 }
             }
-            writeln!(&mut refs, "```\n").unwrap();
+            writeln!(&mut refs, "```\n").expect("writing to String is infallible");
         }
 
         refs
@@ -330,19 +338,21 @@ impl DocGenerator for MarkdownGenerator {
         let mut output = String::new();
 
         // Title
-        writeln!(&mut output, "# Legal Document\n").unwrap();
+        writeln!(&mut output, "# Legal Document\n").expect("writing to String is infallible");
 
         // Metadata
         if !doc.imports.is_empty() {
-            writeln!(&mut output, "## Imports\n").unwrap();
+            writeln!(&mut output, "## Imports\n").expect("writing to String is infallible");
             for import in &doc.imports {
                 if let Some(alias) = &import.alias {
-                    writeln!(&mut output, "- `{}` as `{}`", import.path, alias).unwrap();
+                    writeln!(&mut output, "- `{}` as `{}`", import.path, alias)
+                        .expect("writing to String is infallible");
                 } else {
-                    writeln!(&mut output, "- `{}`", import.path).unwrap();
+                    writeln!(&mut output, "- `{}`", import.path)
+                        .expect("writing to String is infallible");
                 }
             }
-            writeln!(&mut output).unwrap();
+            writeln!(&mut output).expect("writing to String is infallible");
         }
 
         // Table of contents
@@ -351,7 +361,7 @@ impl DocGenerator for MarkdownGenerator {
         }
 
         // Statutes
-        writeln!(&mut output, "## Statutes\n").unwrap();
+        writeln!(&mut output, "## Statutes\n").expect("writing to String is infallible");
 
         for statute in &doc.statutes {
             output.push_str(&self.generate_statute(statute));
@@ -363,12 +373,12 @@ impl DocGenerator for MarkdownGenerator {
         }
 
         // Footer
-        writeln!(&mut output, "---\n").unwrap();
+        writeln!(&mut output, "---\n").expect("writing to String is infallible");
         writeln!(
             &mut output,
             "*Generated by legalis-dsl documentation generator*"
         )
-        .unwrap();
+        .expect("writing to String is infallible");
 
         output
     }
@@ -475,8 +485,8 @@ impl LaTeXGenerator {
             Self::escape_latex(&statute.title),
             statute.id
         )
-        .unwrap();
-        writeln!(&mut doc).unwrap();
+        .expect("writing to String is infallible");
+        writeln!(&mut doc).expect("writing to String is infallible");
 
         // ID badge
         writeln!(
@@ -484,8 +494,8 @@ impl LaTeXGenerator {
             "\\textbf{{ID:}} \\texttt{{{}}}\\\\",
             Self::escape_latex(&statute.id)
         )
-        .unwrap();
-        writeln!(&mut doc).unwrap();
+        .expect("writing to String is infallible");
+        writeln!(&mut doc).expect("writing to String is infallible");
 
         // Visibility
         writeln!(
@@ -493,13 +503,13 @@ impl LaTeXGenerator {
             "\\textbf{{Visibility:}} {:?}\\\\",
             statute.visibility
         )
-        .unwrap();
-        writeln!(&mut doc).unwrap();
+        .expect("writing to String is infallible");
+        writeln!(&mut doc).expect("writing to String is infallible");
 
         // Dependencies
         if !statute.requires.is_empty() {
-            writeln!(&mut doc, "\\textbf{{Requires:}}").unwrap();
-            writeln!(&mut doc, "\\begin{{itemize}}").unwrap();
+            writeln!(&mut doc, "\\textbf{{Requires:}}").expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{itemize}}").expect("writing to String is infallible");
             for req in &statute.requires {
                 writeln!(
                     &mut doc,
@@ -508,43 +518,46 @@ impl LaTeXGenerator {
                     req,
                     req
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{itemize}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{itemize}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Supersedes
         if !statute.supersedes.is_empty() {
-            writeln!(&mut doc, "\\textbf{{Supersedes:}}").unwrap();
-            writeln!(&mut doc, "\\begin{{itemize}}").unwrap();
+            writeln!(&mut doc, "\\textbf{{Supersedes:}}").expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{itemize}}").expect("writing to String is infallible");
             for sup in &statute.supersedes {
                 writeln!(
                     &mut doc,
                     "    \\item \\texttt{{{}}}",
                     Self::escape_latex(sup)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{itemize}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{itemize}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Conditions
         if !statute.conditions.is_empty() {
-            writeln!(&mut doc, "\\subsubsection*{{Conditions}}").unwrap();
-            writeln!(&mut doc, "\\begin{{enumerate}}").unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Conditions}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{enumerate}}").expect("writing to String is infallible");
             for condition in &statute.conditions {
-                writeln!(&mut doc, "    \\item {}", self.format_condition(condition)).unwrap();
+                writeln!(&mut doc, "    \\item {}", self.format_condition(condition))
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{enumerate}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{enumerate}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Effects
         if !statute.effects.is_empty() {
-            writeln!(&mut doc, "\\subsubsection*{{Effects}}").unwrap();
-            writeln!(&mut doc, "\\begin{{itemize}}").unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Effects}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{itemize}}").expect("writing to String is infallible");
             for effect in &statute.effects {
                 writeln!(
                     &mut doc,
@@ -552,78 +565,90 @@ impl LaTeXGenerator {
                     Self::escape_latex(&effect.effect_type),
                     Self::escape_latex(&effect.description)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{itemize}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{itemize}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Discretion
         if let Some(discretion) = &statute.discretion {
-            writeln!(&mut doc, "\\subsubsection*{{Discretion}}").unwrap();
-            writeln!(&mut doc, "{}\\\\", Self::escape_latex(discretion)).unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Discretion}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "{}\\\\", Self::escape_latex(discretion))
+                .expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Exceptions
         if !statute.exceptions.is_empty() {
-            writeln!(&mut doc, "\\subsubsection*{{Exceptions}}").unwrap();
-            writeln!(&mut doc, "\\begin{{enumerate}}").unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Exceptions}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{enumerate}}").expect("writing to String is infallible");
             for exception in &statute.exceptions {
                 writeln!(
                     &mut doc,
                     "    \\item {}",
                     Self::escape_latex(&exception.description)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
                 if !exception.conditions.is_empty() {
-                    writeln!(&mut doc, "    \\begin{{itemize}}").unwrap();
-                    writeln!(&mut doc, "        \\item When:").unwrap();
+                    writeln!(&mut doc, "    \\begin{{itemize}}")
+                        .expect("writing to String is infallible");
+                    writeln!(&mut doc, "        \\item When:")
+                        .expect("writing to String is infallible");
                     for cond in &exception.conditions {
                         writeln!(
                             &mut doc,
                             "        \\begin{{itemize}}\\item {}\\end{{itemize}}",
                             self.format_condition(cond)
                         )
-                        .unwrap();
+                        .expect("writing to String is infallible");
                     }
-                    writeln!(&mut doc, "    \\end{{itemize}}").unwrap();
+                    writeln!(&mut doc, "    \\end{{itemize}}")
+                        .expect("writing to String is infallible");
                 }
             }
-            writeln!(&mut doc, "\\end{{enumerate}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{enumerate}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Amendments
         if !statute.amendments.is_empty() {
-            writeln!(&mut doc, "\\subsubsection*{{Amendment History}}").unwrap();
-            writeln!(&mut doc, "\\begin{{itemize}}").unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Amendment History}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{itemize}}").expect("writing to String is infallible");
             for amendment in &statute.amendments {
                 write!(
                     &mut doc,
                     "    \\item \\textbf{{{}}}",
                     Self::escape_latex(&amendment.target_id)
                 )
-                .unwrap();
+                .expect("writing to String is infallible");
                 if let Some(version) = amendment.version {
-                    write!(&mut doc, " (v{})", version).unwrap();
+                    write!(&mut doc, " (v{})", version).expect("writing to String is infallible");
                 }
                 if let Some(date) = &amendment.date {
-                    write!(&mut doc, " [{}]", Self::escape_latex(date)).unwrap();
+                    write!(&mut doc, " [{}]", Self::escape_latex(date))
+                        .expect("writing to String is infallible");
                 }
-                writeln!(&mut doc, ": {}", Self::escape_latex(&amendment.description)).unwrap();
+                writeln!(&mut doc, ": {}", Self::escape_latex(&amendment.description))
+                    .expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{itemize}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{itemize}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         // Defaults
         if !statute.defaults.is_empty() {
-            writeln!(&mut doc, "\\subsubsection*{{Default Values}}").unwrap();
-            writeln!(&mut doc, "\\begin{{tabular}}{{|l|l|}}").unwrap();
-            writeln!(&mut doc, "\\hline").unwrap();
-            writeln!(&mut doc, "\\textbf{{Field}} & \\textbf{{Value}} \\\\").unwrap();
-            writeln!(&mut doc, "\\hline").unwrap();
+            writeln!(&mut doc, "\\subsubsection*{{Default Values}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\begin{{tabular}}{{|l|l|}}")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\hline").expect("writing to String is infallible");
+            writeln!(&mut doc, "\\textbf{{Field}} & \\textbf{{Value}} \\\\")
+                .expect("writing to String is infallible");
+            writeln!(&mut doc, "\\hline").expect("writing to String is infallible");
             for default in &statute.defaults {
                 writeln!(
                     &mut doc,
@@ -631,11 +656,11 @@ impl LaTeXGenerator {
                     Self::escape_latex(&default.field),
                     self.format_value(&default.value)
                 )
-                .unwrap();
-                writeln!(&mut doc, "\\hline").unwrap();
+                .expect("writing to String is infallible");
+                writeln!(&mut doc, "\\hline").expect("writing to String is infallible");
             }
-            writeln!(&mut doc, "\\end{{tabular}}").unwrap();
-            writeln!(&mut doc).unwrap();
+            writeln!(&mut doc, "\\end{{tabular}}").expect("writing to String is infallible");
+            writeln!(&mut doc).expect("writing to String is infallible");
         }
 
         doc
@@ -772,22 +797,22 @@ impl DocGenerator for LaTeXGenerator {
         output.push_str(&self.generate_preamble());
 
         // Begin document
-        writeln!(&mut output, "\\begin{{document}}").unwrap();
-        writeln!(&mut output).unwrap();
-        writeln!(&mut output, "\\maketitle").unwrap();
-        writeln!(&mut output).unwrap();
+        writeln!(&mut output, "\\begin{{document}}").expect("writing to String is infallible");
+        writeln!(&mut output).expect("writing to String is infallible");
+        writeln!(&mut output, "\\maketitle").expect("writing to String is infallible");
+        writeln!(&mut output).expect("writing to String is infallible");
 
         // Table of contents
         if self.include_toc {
-            writeln!(&mut output, "\\tableofcontents").unwrap();
-            writeln!(&mut output, "\\newpage").unwrap();
-            writeln!(&mut output).unwrap();
+            writeln!(&mut output, "\\tableofcontents").expect("writing to String is infallible");
+            writeln!(&mut output, "\\newpage").expect("writing to String is infallible");
+            writeln!(&mut output).expect("writing to String is infallible");
         }
 
         // Imports section
         if !doc.imports.is_empty() {
-            writeln!(&mut output, "\\section{{Imports}}").unwrap();
-            writeln!(&mut output, "\\begin{{itemize}}").unwrap();
+            writeln!(&mut output, "\\section{{Imports}}").expect("writing to String is infallible");
+            writeln!(&mut output, "\\begin{{itemize}}").expect("writing to String is infallible");
             for import in &doc.imports {
                 if let Some(alias) = &import.alias {
                     writeln!(
@@ -796,30 +821,30 @@ impl DocGenerator for LaTeXGenerator {
                         Self::escape_latex(&import.path),
                         Self::escape_latex(alias)
                     )
-                    .unwrap();
+                    .expect("writing to String is infallible");
                 } else {
                     writeln!(
                         &mut output,
                         "    \\item \\texttt{{{}}}",
                         Self::escape_latex(&import.path)
                     )
-                    .unwrap();
+                    .expect("writing to String is infallible");
                 }
             }
-            writeln!(&mut output, "\\end{{itemize}}").unwrap();
-            writeln!(&mut output).unwrap();
+            writeln!(&mut output, "\\end{{itemize}}").expect("writing to String is infallible");
+            writeln!(&mut output).expect("writing to String is infallible");
         }
 
         // Statutes section
-        writeln!(&mut output, "\\section{{Statutes}}").unwrap();
-        writeln!(&mut output).unwrap();
+        writeln!(&mut output, "\\section{{Statutes}}").expect("writing to String is infallible");
+        writeln!(&mut output).expect("writing to String is infallible");
 
         for statute in &doc.statutes {
             output.push_str(&self.generate_statute(statute));
         }
 
         // End document
-        writeln!(&mut output, "\\end{{document}}").unwrap();
+        writeln!(&mut output, "\\end{{document}}").expect("writing to String is infallible");
 
         output
     }

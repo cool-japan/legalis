@@ -8,7 +8,7 @@
 //! - Behavioral economics integration
 
 use crate::error::{SimResult, SimulationError};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 /// DSGE (Dynamic Stochastic General Equilibrium) Model
@@ -494,13 +494,19 @@ impl OrderBook {
         match order_type {
             OrderType::Bid => {
                 self.bids.push(order);
-                self.bids
-                    .sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap());
+                self.bids.sort_by(|a, b| {
+                    b.price
+                        .partial_cmp(&a.price)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
             OrderType::Ask => {
                 self.asks.push(order);
-                self.asks
-                    .sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap());
+                self.asks.sort_by(|a, b| {
+                    a.price
+                        .partial_cmp(&b.price)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
         }
 
@@ -756,7 +762,9 @@ impl AnchoringModel {
             .min_by(|(_, a), (_, b)| {
                 let dist_a = (self.estimate(**a) - self.anchor).abs();
                 let dist_b = (self.estimate(**b) - self.anchor).abs();
-                dist_a.partial_cmp(&dist_b).unwrap()
+                dist_a
+                    .partial_cmp(&dist_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(idx, _)| idx)
             .unwrap_or(0)

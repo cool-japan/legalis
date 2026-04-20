@@ -216,7 +216,7 @@ impl CheckpointStore {
         }
 
         // Sort by timestamp
-        checkpoints_with_time.sort_by(|a, b| a.1.cmp(&b.1));
+        checkpoints_with_time.sort_by_key(|a| a.1);
 
         // Delete oldest checkpoints
         let to_delete = checkpoints_with_time.len() - self.config.max_checkpoints;
@@ -424,7 +424,7 @@ mod tests {
 
     fn temp_dir() -> PathBuf {
         let id = Uuid::new_v4();
-        PathBuf::from(format!("/tmp/legalis-sim-test-{}", id))
+        std::env::temp_dir().join(format!("legalis-sim-test-{}", id))
     }
 
     #[test]

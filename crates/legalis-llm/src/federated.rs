@@ -415,7 +415,7 @@ impl FederatedCoordinator {
             let mut aggregated = Vec::new();
             for i in 0..values_by_index.len() {
                 if let Some(mut vals) = values_by_index.remove(&i) {
-                    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                     let median = if vals.len() % 2 == 0 {
                         (vals[vals.len() / 2 - 1] + vals[vals.len() / 2]) / 2.0
                     } else {
@@ -457,7 +457,7 @@ impl FederatedCoordinator {
         global_model: &mut HashMap<String, Vec<f64>>,
         epsilon: f64,
     ) -> Result<()> {
-        use rand::Rng;
+        use rand::RngExt;
 
         let mut rng = rand::rng();
         let sensitivity = 1.0; // Assume unit sensitivity

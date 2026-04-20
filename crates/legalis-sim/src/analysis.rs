@@ -61,7 +61,7 @@ impl DistributionAnalyzer {
         let std_dev = variance.sqrt();
 
         let mut sorted = self.data.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let median = if sorted.len().is_multiple_of(2) {
             (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
@@ -314,7 +314,7 @@ impl CorrelationAnalyzer {
 
     fn rank(data: &[f64]) -> Vec<f64> {
         let mut indexed: Vec<(usize, f64)> = data.iter().copied().enumerate().collect();
-        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut ranks = vec![0.0; data.len()];
         for (rank, (idx, _)) in indexed.iter().enumerate() {

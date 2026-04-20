@@ -374,7 +374,7 @@ impl RbacManager {
     /// Adds an access policy.
     pub fn add_policy(&mut self, policy: AccessPolicy) {
         self.policies.push(policy);
-        self.policies.sort_by(|a, b| b.priority.cmp(&a.priority));
+        self.policies.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     /// Checks if a user has a specific permission for a resource.

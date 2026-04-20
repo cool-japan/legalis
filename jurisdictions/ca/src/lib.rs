@@ -2,7 +2,7 @@
 //!
 //! This crate provides comprehensive modeling of Canadian law across multiple areas.
 //!
-//! **Status**: v0.1.1 - Initial Implementation
+//! **Status**: v0.1.5 - Initial Implementation
 //!
 //! ## Legal Areas Covered
 //!

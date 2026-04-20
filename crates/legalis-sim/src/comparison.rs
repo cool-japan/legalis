@@ -322,7 +322,7 @@ impl SensitivityResults {
                 metrics_a
                     .deterministic_ratio()
                     .partial_cmp(&metrics_b.deterministic_ratio())
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(name, _)| name.clone())
     }
@@ -384,7 +384,7 @@ impl BatchSimulationResults {
         report.push_str("=== Batch Simulation Results ===\n\n");
 
         let mut sorted_scenarios: Vec<_> = self.results.iter().collect();
-        sorted_scenarios.sort_by(|(a, _), (b, _)| a.cmp(b));
+        sorted_scenarios.sort_by_key(|(a, _)| *a);
 
         for (name, metrics) in sorted_scenarios {
             report.push_str(&format!(
@@ -405,7 +405,7 @@ impl BatchSimulationResults {
         self.results.iter().max_by(|(_, a), (_, b)| {
             a.deterministic_ratio()
                 .partial_cmp(&b.deterministic_ratio())
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 

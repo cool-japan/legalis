@@ -33,17 +33,17 @@ pub fn validate_client_classification(classification: &ClientClassification) -> 
 /// Validate wholesale classification basis
 fn validate_wholesale_basis(classification: &ClientClassification) -> Result<()> {
     match &classification.basis {
-        ClassificationBasis::ProductValueTest { consideration_aud } => {
-            if *consideration_aud < 500_000.0 {
-                return Err(FinancialServicesError::InvalidWholesaleClassification {
-                    client_name: classification.client_name.clone(),
-                    basis: "Product value test".to_string(),
-                    reason: format!(
-                        "Consideration ${:.0} is below $500,000 threshold",
-                        consideration_aud
-                    ),
-                });
-            }
+        ClassificationBasis::ProductValueTest { consideration_aud }
+            if *consideration_aud < 500_000.0 =>
+        {
+            return Err(FinancialServicesError::InvalidWholesaleClassification {
+                client_name: classification.client_name.clone(),
+                basis: "Product value test".to_string(),
+                reason: format!(
+                    "Consideration ${:.0} is below $500,000 threshold",
+                    consideration_aud
+                ),
+            });
         }
         ClassificationBasis::AssetsTest {
             net_assets_aud,
@@ -88,17 +88,17 @@ fn validate_wholesale_basis(classification: &ClientClassification) -> Result<()>
                 });
             }
         }
-        ClassificationBasis::RegulatedSuperFund { net_assets_aud, .. } => {
-            if *net_assets_aud < 10_000_000.0 {
-                return Err(FinancialServicesError::InvalidWholesaleClassification {
-                    client_name: classification.client_name.clone(),
-                    basis: "Regulated superannuation fund".to_string(),
-                    reason: format!(
-                        "Fund net assets ${:.0} is below $10,000,000 threshold",
-                        net_assets_aud
-                    ),
-                });
-            }
+        ClassificationBasis::RegulatedSuperFund { net_assets_aud, .. }
+            if *net_assets_aud < 10_000_000.0 =>
+        {
+            return Err(FinancialServicesError::InvalidWholesaleClassification {
+                client_name: classification.client_name.clone(),
+                basis: "Regulated superannuation fund".to_string(),
+                reason: format!(
+                    "Fund net assets ${:.0} is below $10,000,000 threshold",
+                    net_assets_aud
+                ),
+            });
         }
         ClassificationBasis::RetailDefault => {
             return Err(FinancialServicesError::InvalidWholesaleClassification {

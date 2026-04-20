@@ -25,7 +25,7 @@ impl CiceroImporter {
     }
 
     fn parse_variables(&self, text: &str) -> Vec<String> {
-        let re = Regex::new(r"\{\{([^}]+)\}\}").unwrap();
+        let re = Regex::new(r"\{\{([^}]+)\}\}").expect("regex pattern is valid");
         re.captures_iter(text)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str().trim().to_string()))
             .collect()
@@ -33,7 +33,7 @@ impl CiceroImporter {
 
     fn parse_clauses(&self, text: &str) -> Vec<String> {
         // Look for clause blocks
-        let re = Regex::new(r"```cicero(?:mark)?\n(.*?)\n```").unwrap();
+        let re = Regex::new(r"```cicero(?:mark)?\n(.*?)\n```").expect("regex pattern is valid");
         re.captures_iter(text)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
             .collect()
@@ -44,7 +44,8 @@ impl CiceroImporter {
 
         // Parse condition patterns from text
         if text.contains("age") || text.contains("Age") {
-            let re = Regex::new(r"(?:age|Age)\s*(?:>=|≥|at least|minimum of)\s*(\d+)").unwrap();
+            let re = Regex::new(r"(?:age|Age)\s*(?:>=|≥|at least|minimum of)\s*(\d+)")
+                .expect("regex pattern is valid");
             if let Some(cap) = re.captures(text)
                 && let Some(age_str) = cap.get(1)
                 && let Ok(age_val) = age_str.as_str().parse::<u32>()
@@ -65,7 +66,7 @@ impl CiceroImporter {
 
         // Extract title from first heading or use clause name
         let title = if template.contains('#') {
-            let re = Regex::new(r"^#\s*(.+)$").unwrap();
+            let re = Regex::new(r"^#\s*(.+)$").expect("regex pattern is valid");
             template
                 .lines()
                 .find_map(|line| {

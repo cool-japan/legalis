@@ -108,17 +108,16 @@ pub fn validate_employer(employer: &Employer) -> Result<()> {
 /// Validate contract type specific rules
 pub fn validate_contract_type(contract_type: &ContractType) -> Result<()> {
     match contract_type {
-        ContractType::ZeroHours { exclusivity_clause } => {
+        ContractType::ZeroHours { exclusivity_clause }
             // Exclusivity clauses banned since 2015
-            if *exclusivity_clause {
+            if *exclusivity_clause => {
                 return Err(EmploymentError::IllegalExclusivityClause);
             }
-        }
         ContractType::FixedTerm {
             less_favourable, ..
-        } => {
+        }
             // Check for less favourable treatment
-            if *less_favourable {
+            if *less_favourable => {
                 return Err(EmploymentError::LessFavourableTreatment {
                     worker_type: "fixed-term".to_string(),
                     regulation: "Fixed-Term Employees Regulations 2002".to_string(),
@@ -126,12 +125,11 @@ pub fn validate_contract_type(contract_type: &ContractType) -> Result<()> {
                         .to_string(),
                 });
             }
-        }
         ContractType::PartTime {
             less_favourable, ..
-        } => {
+        }
             // Check for less favourable treatment
-            if *less_favourable {
+            if *less_favourable => {
                 return Err(EmploymentError::LessFavourableTreatment {
                     worker_type: "part-time".to_string(),
                     regulation: "Part-Time Workers Regulations 2000".to_string(),
@@ -140,7 +138,6 @@ pub fn validate_contract_type(contract_type: &ContractType) -> Result<()> {
                             .to_string(),
                 });
             }
-        }
         _ => {}
     }
 
@@ -239,28 +236,26 @@ pub fn validate_dismissal(dismissal: &Dismissal) -> Result<()> {
 /// Validate dismissal reason under ERA 1996 s.98
 pub fn validate_dismissal_reason(reason: &DismissalReason, years_service: u8) -> Result<()> {
     match reason {
-        DismissalReason::Capability { warnings_given, .. } => {
+        DismissalReason::Capability { warnings_given, .. }
             // Capability dismissals should follow warnings process
-            if !warnings_given && years_service >= 2 {
+            if !warnings_given && years_service >= 2 => {
                 return Err(EmploymentError::UnfairDismissal {
                     reason: "Capability dismissal without warnings may be unfair".to_string(),
                 });
             }
-        }
         DismissalReason::Conduct {
             warnings_given,
             gross_misconduct,
             ..
-        } => {
+        }
             // Conduct dismissals (non-gross) should follow warnings
-            if *warnings_given == 0 && !gross_misconduct {
+            if *warnings_given == 0 && !gross_misconduct => {
                 return Err(EmploymentError::UnfairDismissal {
                     reason:
                         "Conduct dismissal without warnings may be unfair (unless gross misconduct)"
                             .to_string(),
                 });
             }
-        }
         DismissalReason::Redundancy {
             fair_selection,
             consultation,

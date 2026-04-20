@@ -146,12 +146,20 @@ impl SelfHealingManager {
 
     /// Register a node for monitoring.
     pub fn register_node(&self, node: HealableNode) {
-        self.nodes.lock().unwrap().insert(node.node_id, node);
+        self.nodes
+            .lock()
+            .expect("nodes mutex poisoned")
+            .insert(node.node_id, node);
     }
 
     /// Report node health status.
     pub fn report_health(&self, node_id: Uuid, is_healthy: bool, error: Option<String>) {
-        if let Some(node) = self.nodes.lock().unwrap().get_mut(&node_id) {
+        if let Some(node) = self
+            .nodes
+            .lock()
+            .expect("nodes mutex poisoned")
+            .get_mut(&node_id)
+        {
             let old_health = node.health.clone();
             node.report_health(is_healthy, error);
             let new_health = node.health.clone();
@@ -171,7 +179,7 @@ impl SelfHealingManager {
     /// Attempt to heal all unhealthy nodes.
     pub fn heal_nodes(&self) -> Vec<(Uuid, RecoveryAction)> {
         let mut actions = Vec::new();
-        let mut nodes = self.nodes.lock().unwrap();
+        let mut nodes = self.nodes.lock().expect("nodes mutex poisoned");
 
         for (node_id, node) in nodes.iter_mut() {
             if node.needs_healing() {
@@ -195,7 +203,7 @@ impl SelfHealingManager {
     pub fn get_node_health(&self, node_id: Uuid) -> Option<NodeHealth> {
         self.nodes
             .lock()
-            .unwrap()
+            .expect("nodes mutex poisoned")
             .get(&node_id)
             .map(|n| n.health.clone())
     }
@@ -204,7 +212,7 @@ impl SelfHealingManager {
     pub fn unhealthy_nodes(&self) -> Vec<HealableNode> {
         self.nodes
             .lock()
-            .unwrap()
+            .expect("nodes mutex poisoned")
             .values()
             .filter(|n| n.needs_healing())
             .cloned()
@@ -213,16 +221,25 @@ impl SelfHealingManager {
 
     /// Get healing event log.
     pub fn get_healing_log(&self) -> Vec<HealingEvent> {
-        self.healing_log.lock().unwrap().clone()
+        self.healing_log
+            .lock()
+            .expect("healing_log mutex poisoned")
+            .clone()
     }
 
     fn log_event(&self, event: HealingEvent) {
-        self.healing_log.lock().unwrap().push(event);
+        self.healing_log
+            .lock()
+            .expect("healing_log mutex poisoned")
+            .push(event);
     }
 
     /// Clear healing log.
     pub fn clear_log(&self) {
-        self.healing_log.lock().unwrap().clear();
+        self.healing_log
+            .lock()
+            .expect("healing_log mutex poisoned")
+            .clear();
     }
 }
 
@@ -398,9 +415,15 @@ impl AutoScaler {
 
     /// Evaluate metrics and make scaling decision.
     pub fn evaluate(&self, metrics: &LoadMetrics) -> ScalingDecision {
-        let policy = self.policy.lock().unwrap();
-        let current = *self.current_nodes.lock().unwrap();
-        let last_action = *self.last_scaling_action.lock().unwrap();
+        let policy = self.policy.lock().expect("policy mutex poisoned");
+        let current = *self
+            .current_nodes
+            .lock()
+            .expect("current_nodes mutex poisoned");
+        let last_action = *self
+            .last_scaling_action
+            .lock()
+            .expect("last_scaling_action mutex poisoned");
 
         // Check cooldown
         if let Some(last) = last_action {
@@ -432,8 +455,11 @@ impl AutoScaler {
 
     /// Apply a scaling decision.
     pub fn apply_scaling(&self, decision: ScalingDecision) -> usize {
-        let mut current = self.current_nodes.lock().unwrap();
-        let policy = self.policy.lock().unwrap();
+        let mut current = self
+            .current_nodes
+            .lock()
+            .expect("current_nodes mutex poisoned");
+        let policy = self.policy.lock().expect("policy mutex poisoned");
         let old_count = *current;
 
         let new_count = match decision {
@@ -444,14 +470,20 @@ impl AutoScaler {
 
         if new_count != old_count {
             *current = new_count;
-            *self.last_scaling_action.lock().unwrap() = Some(Utc::now());
+            *self
+                .last_scaling_action
+                .lock()
+                .expect("last_scaling_action mutex poisoned") = Some(Utc::now());
 
-            self.scaling_history.lock().unwrap().push(ScalingEvent {
-                timestamp: Utc::now(),
-                old_node_count: old_count,
-                new_node_count: new_count,
-                decision: decision.clone(),
-            });
+            self.scaling_history
+                .lock()
+                .expect("scaling_history mutex poisoned")
+                .push(ScalingEvent {
+                    timestamp: Utc::now(),
+                    old_node_count: old_count,
+                    new_node_count: new_count,
+                    decision: decision.clone(),
+                });
         }
 
         new_count
@@ -459,17 +491,23 @@ impl AutoScaler {
 
     /// Get current node count.
     pub fn current_node_count(&self) -> usize {
-        *self.current_nodes.lock().unwrap()
+        *self
+            .current_nodes
+            .lock()
+            .expect("current_nodes mutex poisoned")
     }
 
     /// Get scaling history.
     pub fn scaling_history(&self) -> Vec<ScalingEvent> {
-        self.scaling_history.lock().unwrap().clone()
+        self.scaling_history
+            .lock()
+            .expect("scaling_history mutex poisoned")
+            .clone()
     }
 
     /// Update scaling policy.
     pub fn update_policy(&self, policy: ScalingPolicy) {
-        *self.policy.lock().unwrap() = policy;
+        *self.policy.lock().expect("policy mutex poisoned") = policy;
     }
 }
 
@@ -537,7 +575,7 @@ impl CapacityPlanner {
 
     /// Record a capacity data point.
     pub fn record(&self, data_point: CapacityDataPoint) {
-        let mut history = self.history.lock().unwrap();
+        let mut history = self.history.lock().expect("history mutex poisoned");
         history.push_back(data_point);
 
         if history.len() > self.max_history {
@@ -547,7 +585,7 @@ impl CapacityPlanner {
 
     /// Predict capacity needs for a future time.
     pub fn predict(&self, hours_ahead: i64) -> Option<CapacityPrediction> {
-        let history = self.history.lock().unwrap();
+        let history = self.history.lock().expect("history mutex poisoned");
 
         if history.len() < 10 {
             return None; // Not enough data
@@ -598,12 +636,17 @@ impl CapacityPlanner {
 
     /// Get historical data points.
     pub fn get_history(&self) -> Vec<CapacityDataPoint> {
-        self.history.lock().unwrap().iter().cloned().collect()
+        self.history
+            .lock()
+            .expect("history mutex poisoned")
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// Calculate capacity utilization over time.
     pub fn utilization_stats(&self) -> CapacityStats {
-        let history = self.history.lock().unwrap();
+        let history = self.history.lock().expect("history mutex poisoned");
 
         if history.is_empty() {
             return CapacityStats::default();
@@ -756,21 +799,25 @@ impl BackupVerifier {
 
         self.verifications
             .lock()
-            .unwrap()
+            .expect("verifications mutex poisoned")
             .insert(metadata.backup_id, verification.clone());
         verification
     }
 
     /// Get verification result for a backup.
     pub fn get_verification(&self, backup_id: Uuid) -> Option<BackupVerification> {
-        self.verifications.lock().unwrap().get(&backup_id).cloned()
+        self.verifications
+            .lock()
+            .expect("verifications mutex poisoned")
+            .get(&backup_id)
+            .cloned()
     }
 
     /// Get all verifications.
     pub fn get_all_verifications(&self) -> Vec<BackupVerification> {
         self.verifications
             .lock()
-            .unwrap()
+            .expect("verifications mutex poisoned")
             .values()
             .cloned()
             .collect()
@@ -780,7 +827,7 @@ impl BackupVerifier {
     pub fn failed_verifications(&self) -> Vec<BackupVerification> {
         self.verifications
             .lock()
-            .unwrap()
+            .expect("verifications mutex poisoned")
             .values()
             .filter(|v| !v.is_valid())
             .cloned()
@@ -789,7 +836,10 @@ impl BackupVerifier {
 
     /// Calculate overall backup health.
     pub fn backup_health_score(&self) -> f64 {
-        let verifications = self.verifications.lock().unwrap();
+        let verifications = self
+            .verifications
+            .lock()
+            .expect("verifications mutex poisoned");
         if verifications.is_empty() {
             return 0.0;
         }
@@ -889,7 +939,7 @@ impl IntrusionDetector {
 
     /// Record a security event and detect anomalies.
     pub fn record_event(&self, event: SecurityEvent) -> Option<AnomalyDetection> {
-        let mut events = self.events.lock().unwrap();
+        let mut events = self.events.lock().expect("events mutex poisoned");
 
         // Check for anomalies before adding
         let detection = self.detect_anomaly(&event, &events);
@@ -902,7 +952,10 @@ impl IntrusionDetector {
         if let Some(anomaly) = &detection
             && anomaly.is_anomaly
         {
-            self.anomalies.lock().unwrap().push(anomaly.clone());
+            self.anomalies
+                .lock()
+                .expect("anomalies mutex poisoned")
+                .push(anomaly.clone());
         }
 
         detection
@@ -981,14 +1034,17 @@ impl IntrusionDetector {
 
     /// Get all detected anomalies.
     pub fn get_anomalies(&self) -> Vec<AnomalyDetection> {
-        self.anomalies.lock().unwrap().clone()
+        self.anomalies
+            .lock()
+            .expect("anomalies mutex poisoned")
+            .clone()
     }
 
     /// Get high-threat anomalies.
     pub fn high_threat_anomalies(&self) -> Vec<AnomalyDetection> {
         self.anomalies
             .lock()
-            .unwrap()
+            .expect("anomalies mutex poisoned")
             .iter()
             .filter(|a| a.is_high_threat())
             .cloned()
@@ -999,7 +1055,7 @@ impl IntrusionDetector {
     pub fn actionable_anomalies(&self) -> Vec<AnomalyDetection> {
         self.anomalies
             .lock()
-            .unwrap()
+            .expect("anomalies mutex poisoned")
             .iter()
             .filter(|a| a.requires_action())
             .cloned()
@@ -1008,7 +1064,7 @@ impl IntrusionDetector {
 
     /// Calculate overall security score (0.0 - 1.0, higher is safer).
     pub fn security_score(&self) -> f64 {
-        let anomalies = self.anomalies.lock().unwrap();
+        let anomalies = self.anomalies.lock().expect("anomalies mutex poisoned");
         if anomalies.is_empty() {
             return 1.0;
         }
@@ -1024,7 +1080,7 @@ impl IntrusionDetector {
         let cutoff = Utc::now() - Duration::days(days);
         self.anomalies
             .lock()
-            .unwrap()
+            .expect("anomalies mutex poisoned")
             .retain(|a| a.event.timestamp > cutoff);
     }
 }

@@ -108,7 +108,7 @@ impl ScenarioSet {
             a.metrics
                 .deterministic_ratio()
                 .partial_cmp(&b.metrics.deterministic_ratio())
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 
@@ -118,15 +118,17 @@ impl ScenarioSet {
             a.metrics
                 .deterministic_ratio()
                 .partial_cmp(&b.metrics.deterministic_ratio())
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 
     /// Finds the most likely scenario (highest probability).
     pub fn most_likely(&self) -> Option<&Scenario> {
-        self.scenarios
-            .iter()
-            .max_by(|a, b| a.probability.partial_cmp(&b.probability).unwrap())
+        self.scenarios.iter().max_by(|a, b| {
+            a.probability
+                .partial_cmp(&b.probability)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Calculates the variance of outcomes.
@@ -473,7 +475,11 @@ impl ScenarioEvaluator {
         }
 
         // Sort by score descending
-        rankings.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        rankings.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         rankings
     }
 }

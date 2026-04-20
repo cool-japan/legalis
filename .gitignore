@@ -38,3 +38,5 @@ crates/legalis-api/proto/legalis_descriptor.bin
 **/CLAUDE.md
 **/claude_output/
 **/.claude/
+# Rustc ICE dumps
+rustc-ice-*.txt

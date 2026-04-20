@@ -147,7 +147,7 @@ assert!(validate_investment(&investment).is_ok());
 
 ## Lisensi (License)
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Tautan Terkait (Related Links)
 

@@ -4,14 +4,14 @@
 
 *Governance as Code, Justice as Narrative*
 
-[![License: MIT/Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.4-brightgreen.svg)](RELEASE-0.1.4.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-brightgreen.svg)](CHANGELOG.md)
 [![Crates](https://img.shields.io/badge/crates-46-blue.svg)](#crates)
 [![Jurisdictions](https://img.shields.io/badge/jurisdictions-23%20operational-green.svg)](#jurisdictions)
-[![Tests](https://img.shields.io/badge/tests-14705%20passing-success.svg)](#crates)
-[![Files](https://img.shields.io/badge/rust%20files-1856-orange.svg)](#workspace-structure)
-[![Code](https://img.shields.io/badge/lines-897k-informational.svg)](#workspace-structure)
+[![Tests](https://img.shields.io/badge/tests-14763%20passing-success.svg)](#crates)
+[![Files](https://img.shields.io/badge/rust%20files-2221-orange.svg)](#workspace-structure)
+[![Code](https://img.shields.io/badge/lines-935k-informational.svg)](#workspace-structure)
 
 ## Overview
 
@@ -50,7 +50,7 @@ This separation is the philosophical core of Legalis-RS - it explicitly marks wh
 - 🇻🇳 **Vietnam** - Socialist Civil Law (Civil Code 91/2015, Cybersecurity Law, Competition Law)
 - 🇿🇦 **South Africa** - Mixed Law (Constitution 1996, Companies Act, LRA/BCEA, POPIA, Customary Law)
 
-**Total**: **1,371 jurisdiction files** (~341k jurisdiction LoC), **46 workspace crates** (17 core + 23 jurisdictions + 6 examples), **14,705 tests passing** with comprehensive coverage across all jurisdictions.
+**Total**: **1,371 jurisdiction files** (~341k jurisdiction LoC), **46 workspace crates** (17 core + 23 jurisdictions + 6 examples), **14,763 tests passing** with comprehensive coverage across all jurisdictions.
 
 ## Core Philosophy
 
@@ -125,24 +125,24 @@ legalis-rs/
 
 ## Code Metrics
 
-**Project Scale (v0.1.4)**:
+**Project Scale (v0.1.5)**:
 
 | Metric | Count | Details |
 |--------|-------|---------|
-| **Total Lines of Code** | 933,027 | Rust (867k), Python (8.6k), Markdown (50k), TypeScript (1.7k) |
-| **Rust Code Lines** | 867,470 | 723,696 executable + 26,669 comments + 117,105 blanks |
+| **Total Lines of Code** | 1,009,738 | Rust (935k), Python (8.6k), Markdown (50k), TypeScript (1.7k) |
+| **Rust Code Lines** | 812,650 | Code only (from tokei) |
 | **Documentation Lines** | 152,112 | Inline Rust documentation (/// and //!) |
-| **Rust Files** | 1,657 | Across 65 workspace crates |
-| **Test Functions** | 13,083 | Unit tests + async tests + property tests |
-| **Workspace Crates** | 70 | 17 core + 23 jurisdictions + 30 examples |
+| **Rust Files** | 2,221 | Across 76 workspace crates |
+| **Test Functions** | 14,763 | Unit tests + async tests + property tests |
+| **Workspace Crates** | 76 | 17 core + 23 jurisdictions + 36 examples |
 | **Jurisdictions** | 23 | AE, AU, BR, CA, CN, DE, EU, FR, ID, IN, JP, KR, LA, MX, MY, RU, SA, SG, TH, UK, US, VN, ZA |
 | **Supported Languages** | 60+ | Multi-language i18n support |
 | **Documentation Ratio** | 17.5% | Comments to code ratio (industry average: 10-20%) |
 | **Zero Warnings** | ✅ | Strict clippy compliance enforced |
-| **New Examples (v0.1.4)** | 6 | Proof of universal legal computation engine |
+| **New Examples (v0.1.5)** | 6 | Proof of universal legal computation engine |
 
 **Testing Infrastructure**:
-- **Unit Tests**: 13,083 passing tests
+- **Unit Tests**: 14,763 passing tests
 - **Integration Tests**: 22+ test files
 - **Benchmark Suites**: 13 Criterion benchmarks
 - **Property-Based Tests**: 10+ tests across multiple crates
@@ -153,7 +153,7 @@ legalis-rs/
 
 ## Crates
 
-All 70 workspace crates (17 core + 23 jurisdictions + 30 examples) compile cleanly with **NO WARNINGS** - strict quality policy enforced.
+All 76 workspace crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with **NO WARNINGS** - strict quality policy enforced.
 
 ### Core Layer
 | Crate | Version | Tests | Description |
@@ -561,14 +561,24 @@ Detailed technical papers are available in multiple languages:
 
 These papers provide comprehensive coverage of the system architecture, core technologies, design philosophy, and case studies.
 
+## Sponsorship
+
+Legalis is developed and maintained by **COOLJAPAN OU (Team Kitasan)**.
+
+If you find Legalis useful, please consider sponsoring the project to support continued development of the Pure Rust ecosystem.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/cool-japan)
+
+**[https://github.com/sponsors/cool-japan](https://github.com/sponsors/cool-japan)**
+
+Your sponsorship helps us:
+- Maintain and improve the COOLJAPAN ecosystem
+- Keep the entire ecosystem (OxiBLAS, OxiFFT, SciRS2, etc.) 100% Pure Rust
+- Provide long-term support and security updates
+
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0).
 
 ## Contributing
 

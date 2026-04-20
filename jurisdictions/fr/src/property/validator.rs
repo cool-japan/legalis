@@ -57,15 +57,15 @@ pub fn validate_easement(easement: &Easement) -> PropertyLawResult<()> {
     }
 
     match easement.easement_type {
-        EasementType::RightOfWay | EasementType::LandlockedAccess | EasementType::WaterRights => {
-            if easement.dominant_estate.is_none() {
-                return Err(PropertyLawError::InvalidEasement {
-                    reason: format!(
-                        "{:?} easement should have dominant estate specified",
-                        easement.easement_type
-                    ),
-                });
-            }
+        EasementType::RightOfWay | EasementType::LandlockedAccess | EasementType::WaterRights
+            if easement.dominant_estate.is_none() =>
+        {
+            return Err(PropertyLawError::InvalidEasement {
+                reason: format!(
+                    "{:?} easement should have dominant estate specified",
+                    easement.easement_type
+                ),
+            });
         }
         _ => {}
     }
@@ -81,15 +81,15 @@ pub fn validate_encumbrance(encumbrance: &Encumbrance) -> PropertyLawResult<()> 
     }
 
     match encumbrance.encumbrance_type {
-        super::types::EncumbranceType::Mortgage | super::types::EncumbranceType::Lien => {
-            if encumbrance.amount.is_none() {
-                return Err(PropertyLawError::InvalidEncumbrance {
-                    reason: format!(
-                        "{:?} encumbrance should have amount specified",
-                        encumbrance.encumbrance_type
-                    ),
-                });
-            }
+        super::types::EncumbranceType::Mortgage | super::types::EncumbranceType::Lien
+            if encumbrance.amount.is_none() =>
+        {
+            return Err(PropertyLawError::InvalidEncumbrance {
+                reason: format!(
+                    "{:?} encumbrance should have amount specified",
+                    encumbrance.encumbrance_type
+                ),
+            });
         }
         _ => {}
     }

@@ -318,7 +318,11 @@ impl RiskScorer {
         }
 
         // Sort by risk score descending
-        profiles.sort_by(|a, b| b.risk_score.partial_cmp(&a.risk_score).unwrap());
+        profiles.sort_by(|a, b| {
+            b.risk_score
+                .partial_cmp(&a.risk_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(profiles)
     }
@@ -369,7 +373,11 @@ impl RiskScorer {
         }
 
         // Sort by risk score descending
-        profiles.sort_by(|a, b| b.risk_score.partial_cmp(&a.risk_score).unwrap());
+        profiles.sort_by(|a, b| {
+            b.risk_score
+                .partial_cmp(&a.risk_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(profiles)
     }

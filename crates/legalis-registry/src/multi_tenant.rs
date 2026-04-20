@@ -390,7 +390,7 @@ impl MultiTenantRegistry {
 
     /// Create a new tenant
     pub fn create_tenant(&self, metadata: TenantMetadata) -> TenantResult<()> {
-        let mut tenants = self.tenants.write().unwrap();
+        let mut tenants = self.tenants.write().expect("tenants rwlock poisoned");
 
         if tenants.contains_key(&metadata.id) {
             return Err(TenantError::AlreadyExists(metadata.id.clone()));
@@ -400,11 +400,14 @@ impl MultiTenantRegistry {
         tenants.insert(tenant_id.clone(), metadata);
 
         // Create isolated registry for tenant
-        let mut registries = self.registries.write().unwrap();
+        let mut registries = self.registries.write().expect("registries rwlock poisoned");
         registries.insert(tenant_id.clone(), StatuteRegistry::new());
 
         // Initialize usage metrics
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         metrics.insert(tenant_id.clone(), TenantUsageMetrics::new(tenant_id));
 
         Ok(())
@@ -412,7 +415,7 @@ impl MultiTenantRegistry {
 
     /// Get tenant metadata
     pub fn get_tenant(&self, tenant_id: &TenantId) -> TenantResult<TenantMetadata> {
-        let tenants = self.tenants.read().unwrap();
+        let tenants = self.tenants.read().expect("tenants rwlock poisoned");
         tenants
             .get(tenant_id)
             .cloned()
@@ -421,7 +424,7 @@ impl MultiTenantRegistry {
 
     /// Update tenant metadata
     pub fn update_tenant(&self, metadata: TenantMetadata) -> TenantResult<()> {
-        let mut tenants = self.tenants.write().unwrap();
+        let mut tenants = self.tenants.write().expect("tenants rwlock poisoned");
 
         if !tenants.contains_key(&metadata.id) {
             return Err(TenantError::NotFound(metadata.id.clone()));
@@ -433,7 +436,7 @@ impl MultiTenantRegistry {
 
     /// Delete tenant and all associated data
     pub fn delete_tenant(&self, tenant_id: &TenantId) -> TenantResult<()> {
-        let mut tenants = self.tenants.write().unwrap();
+        let mut tenants = self.tenants.write().expect("tenants rwlock poisoned");
 
         if !tenants.contains_key(tenant_id) {
             return Err(TenantError::NotFound(tenant_id.clone()));
@@ -442,15 +445,21 @@ impl MultiTenantRegistry {
         tenants.remove(tenant_id);
 
         // Remove tenant's registry
-        let mut registries = self.registries.write().unwrap();
+        let mut registries = self.registries.write().expect("registries rwlock poisoned");
         registries.remove(tenant_id);
 
         // Remove usage metrics
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         metrics.remove(tenant_id);
 
         // Remove all sharing involving this tenant
-        let mut shares = self.shared_statutes.write().unwrap();
+        let mut shares = self
+            .shared_statutes
+            .write()
+            .expect("shared_statutes rwlock poisoned");
         shares.retain(|s| &s.owner_tenant != tenant_id && &s.shared_with != tenant_id);
 
         Ok(())
@@ -458,13 +467,13 @@ impl MultiTenantRegistry {
 
     /// List all tenants
     pub fn list_tenants(&self) -> Vec<TenantMetadata> {
-        let tenants = self.tenants.read().unwrap();
+        let tenants = self.tenants.read().expect("tenants rwlock poisoned");
         tenants.values().cloned().collect()
     }
 
     /// Get tenant count
     pub fn tenant_count(&self) -> usize {
-        let tenants = self.tenants.read().unwrap();
+        let tenants = self.tenants.read().expect("tenants rwlock poisoned");
         tenants.len()
     }
 
@@ -490,7 +499,7 @@ impl MultiTenantRegistry {
         self.check_tenant_exists(tenant_id)?;
         self.check_tenant_active(tenant_id)?;
 
-        let mut registries = self.registries.write().unwrap();
+        let mut registries = self.registries.write().expect("registries rwlock poisoned");
         let registry = registries
             .get_mut(tenant_id)
             .ok_or_else(|| TenantError::NotFound(tenant_id.clone()))?;
@@ -528,7 +537,7 @@ impl MultiTenantRegistry {
 
         // Verify statute exists in owner's registry
         let statute_exists = {
-            let mut registries = self.registries.write().unwrap();
+            let mut registries = self.registries.write().expect("registries rwlock poisoned");
             let owner_registry = registries
                 .get_mut(owner_tenant)
                 .ok_or_else(|| TenantError::NotFound(owner_tenant.clone()))?;
@@ -550,7 +559,10 @@ impl MultiTenantRegistry {
             permission,
         );
 
-        let mut shares = self.shared_statutes.write().unwrap();
+        let mut shares = self
+            .shared_statutes
+            .write()
+            .expect("shared_statutes rwlock poisoned");
         shares.push(share);
 
         // Update metrics
@@ -567,7 +579,10 @@ impl MultiTenantRegistry {
         owner_tenant: &TenantId,
         shared_with: &TenantId,
     ) -> TenantResult<()> {
-        let mut shares = self.shared_statutes.write().unwrap();
+        let mut shares = self
+            .shared_statutes
+            .write()
+            .expect("shared_statutes rwlock poisoned");
         let initial_len = shares.len();
 
         shares.retain(|s| {
@@ -588,7 +603,10 @@ impl MultiTenantRegistry {
 
     /// Get all statutes shared with a tenant
     pub fn get_shared_with_tenant(&self, tenant_id: &TenantId) -> Vec<SharedStatute> {
-        let shares = self.shared_statutes.read().unwrap();
+        let shares = self
+            .shared_statutes
+            .read()
+            .expect("shared_statutes rwlock poisoned");
         shares
             .iter()
             .filter(|s| &s.shared_with == tenant_id && !s.is_expired())
@@ -598,7 +616,10 @@ impl MultiTenantRegistry {
 
     /// Get all statutes shared by a tenant
     pub fn get_shared_by_tenant(&self, tenant_id: &TenantId) -> Vec<SharedStatute> {
-        let shares = self.shared_statutes.read().unwrap();
+        let shares = self
+            .shared_statutes
+            .read()
+            .expect("shared_statutes rwlock poisoned");
         shares
             .iter()
             .filter(|s| &s.owner_tenant == tenant_id && !s.is_expired())
@@ -613,7 +634,10 @@ impl MultiTenantRegistry {
         requesting_tenant: &TenantId,
     ) -> TenantResult<StatuteEntry> {
         // Find sharing record
-        let shares = self.shared_statutes.read().unwrap();
+        let shares = self
+            .shared_statutes
+            .read()
+            .expect("shared_statutes rwlock poisoned");
         let share = shares
             .iter()
             .find(|s| s.statute_id == statute_id && &s.shared_with == requesting_tenant)
@@ -630,7 +654,7 @@ impl MultiTenantRegistry {
         }
 
         // Retrieve from owner's registry
-        let mut registries = self.registries.write().unwrap();
+        let mut registries = self.registries.write().expect("registries rwlock poisoned");
         let owner_registry = registries
             .get_mut(&share.owner_tenant)
             .ok_or_else(|| TenantError::NotFound(share.owner_tenant.clone()))?;
@@ -649,7 +673,10 @@ impl MultiTenantRegistry {
 
     /// Get tenant usage metrics
     pub fn get_usage_metrics(&self, tenant_id: &TenantId) -> TenantResult<TenantUsageMetrics> {
-        let metrics = self.usage_metrics.read().unwrap();
+        let metrics = self
+            .usage_metrics
+            .read()
+            .expect("usage_metrics rwlock poisoned");
         metrics
             .get(tenant_id)
             .cloned()
@@ -658,7 +685,10 @@ impl MultiTenantRegistry {
 
     /// Reset tenant usage metrics
     pub fn reset_usage_metrics(&self, tenant_id: &TenantId) -> TenantResult<()> {
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         let tenant_metrics = metrics
             .get_mut(tenant_id)
             .ok_or_else(|| TenantError::NotFound(tenant_id.clone()))?;
@@ -707,7 +737,7 @@ impl MultiTenantRegistry {
     // ------------------------------------------------------------------------
 
     fn check_tenant_exists(&self, tenant_id: &TenantId) -> TenantResult<()> {
-        let tenants = self.tenants.read().unwrap();
+        let tenants = self.tenants.read().expect("tenants rwlock poisoned");
         if tenants.contains_key(tenant_id) {
             Ok(())
         } else {
@@ -716,7 +746,7 @@ impl MultiTenantRegistry {
     }
 
     fn check_tenant_active(&self, tenant_id: &TenantId) -> TenantResult<()> {
-        let tenants = self.tenants.read().unwrap();
+        let tenants = self.tenants.read().expect("tenants rwlock poisoned");
         let metadata = tenants
             .get(tenant_id)
             .ok_or_else(|| TenantError::NotFound(tenant_id.clone()))?;
@@ -735,21 +765,30 @@ impl MultiTenantRegistry {
     }
 
     fn record_api_call(&self, tenant_id: &TenantId) {
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         if let Some(m) = metrics.get_mut(tenant_id) {
             m.api_calls += 1;
         }
     }
 
     fn increment_shared_statutes(&self, tenant_id: &TenantId) {
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         if let Some(m) = metrics.get_mut(tenant_id) {
             m.shared_statutes += 1;
         }
     }
 
     fn increment_received_shares(&self, tenant_id: &TenantId) {
-        let mut metrics = self.usage_metrics.write().unwrap();
+        let mut metrics = self
+            .usage_metrics
+            .write()
+            .expect("usage_metrics rwlock poisoned");
         if let Some(m) = metrics.get_mut(tenant_id) {
             m.received_shares += 1;
         }

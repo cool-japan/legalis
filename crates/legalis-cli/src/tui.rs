@@ -610,15 +610,11 @@ where
 
         if event::poll(std::time::Duration::from_millis(100))? {
             match event::read()? {
-                Event::Key(key) => {
-                    if app.handle_key(key.code, key.modifiers) {
-                        return Ok(());
-                    }
+                Event::Key(key) if app.handle_key(key.code, key.modifiers) => {
+                    return Ok(());
                 }
-                Event::Mouse(mouse) => {
-                    if app.mouse_enabled {
-                        app.handle_mouse(mouse.column, mouse.row, mouse.kind);
-                    }
+                Event::Mouse(mouse) if app.mouse_enabled => {
+                    app.handle_mouse(mouse.column, mouse.row, mouse.kind);
                 }
                 Event::Resize(_, _) => {
                     // Terminal was resized

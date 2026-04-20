@@ -20,14 +20,15 @@ toml = ["dep:toml", "serde"]
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
-toml = { version = "0.9", optional = true }
+toml = { workspace = true, optional = true }
 schemars = { version = "1.2", features = ["uuid1", "chrono04"], optional = true }
 rayon = { workspace = true, optional = true }
 uuid.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 regex.workspace = true
-sha2 = "0.10"
+sha2.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

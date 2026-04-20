@@ -101,7 +101,7 @@ impl ScriptEngine {
             PluginError::InitializationFailed(format!("Script compilation failed: {e}"))
         })?;
 
-        let mut scripts = self.scripts.write().unwrap();
+        let mut scripts = self.scripts.write().expect("rwlock write poisoned");
         scripts.insert(name.to_string(), ast);
 
         Ok(())
@@ -114,7 +114,7 @@ impl ScriptEngine {
         function_name: &str,
         diff: &StatuteDiff,
     ) -> Result<AnalysisResult, PluginError> {
-        let scripts = self.scripts.read().unwrap();
+        let scripts = self.scripts.read().expect("rwlock read poisoned");
         let ast = scripts
             .get(script_name)
             .ok_or_else(|| PluginError::NotFound(script_name.to_string()))?;
@@ -134,7 +134,7 @@ impl ScriptEngine {
 
     /// Evaluates an expression with a diff.
     pub fn evaluate(&self, script_name: &str, diff: &StatuteDiff) -> Result<Dynamic, PluginError> {
-        let scripts = self.scripts.read().unwrap();
+        let scripts = self.scripts.read().expect("rwlock read poisoned");
         let ast = scripts
             .get(script_name)
             .ok_or_else(|| PluginError::NotFound(script_name.to_string()))?;

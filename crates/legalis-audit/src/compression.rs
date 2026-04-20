@@ -3,10 +3,8 @@
 //! Provides DEFLATE compression for audit records to reduce storage footprint.
 
 use crate::{AuditError, AuditRecord, AuditResult};
-use flate2::Compression;
-use flate2::read::{DeflateDecoder, DeflateEncoder};
+use oxiarc_deflate::{deflate, inflate};
 use serde::{Deserialize, Serialize};
-use std::io::Read;
 
 /// Compression level for records.
 #[derive(Debug, Clone, Copy)]
@@ -22,13 +20,13 @@ pub enum CompressionLevel {
 }
 
 impl CompressionLevel {
-    /// Converts to flate2 compression level.
-    fn to_flate2(self) -> Compression {
+    /// Converts to an oxiarc DEFLATE compression level (0-9).
+    fn to_level(self) -> u8 {
         match self {
-            CompressionLevel::None => Compression::none(),
-            CompressionLevel::Fast => Compression::fast(),
-            CompressionLevel::Default => Compression::default(),
-            CompressionLevel::Best => Compression::best(),
+            CompressionLevel::None => 0,
+            CompressionLevel::Fast => 1,
+            CompressionLevel::Default => 6,
+            CompressionLevel::Best => 9,
         }
     }
 }
@@ -80,12 +78,9 @@ impl RecordCompressor {
         let json = serde_json::to_vec(record)?;
         let original_size = json.len();
 
-        // Compress
-        let mut encoder = DeflateEncoder::new(json.as_slice(), self.level.to_flate2());
-        let mut compressed = Vec::new();
-        encoder
-            .read_to_end(&mut compressed)
-            .map_err(|e| AuditError::StorageError(format!("Compression failed: {}", e)))?;
+        // Compress via oxiarc-deflate (one-shot API).
+        let compressed = deflate(&json, self.level.to_level())
+            .map_err(|e| AuditError::StorageError(format!("Compression failed: {e}")))?;
 
         let compressed_size = compressed.len();
         let ratio = compressed_size as f64 / original_size as f64;
@@ -100,12 +95,9 @@ impl RecordCompressor {
 
     /// Decompresses a compressed record.
     pub fn decompress(&self, compressed: &CompressedRecord) -> AuditResult<AuditRecord> {
-        // Decompress
-        let mut decoder = DeflateDecoder::new(compressed.data.as_slice());
-        let mut decompressed = Vec::new();
-        decoder
-            .read_to_end(&mut decompressed)
-            .map_err(|e| AuditError::StorageError(format!("Decompression failed: {}", e)))?;
+        // Decompress via oxiarc-deflate (one-shot API).
+        let decompressed = inflate(&compressed.data)
+            .map_err(|e| AuditError::StorageError(format!("Decompression failed: {e}")))?;
 
         // Deserialize
         let record: AuditRecord = serde_json::from_slice(&decompressed)?;

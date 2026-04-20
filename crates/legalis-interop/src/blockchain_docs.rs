@@ -160,7 +160,7 @@ impl DocGenerator {
                         if description.starts_with("Visibility: ")
                             || description.starts_with("Access: ")
                         {
-                            Some(description.split(": ").nth(1).unwrap().to_string())
+                            Some(description.split(": ").nth(1).expect("invariant: description contains ': ' (starts_with checked above)").to_string())
                         } else {
                             None
                         }

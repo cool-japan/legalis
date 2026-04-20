@@ -151,7 +151,7 @@ assert!(validate_foreign_business(&business).is_ok());
 
 ## สัญญาอนุญาต (License)
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## ลิงก์ที่เกี่ยวข้อง (Related Links)
 

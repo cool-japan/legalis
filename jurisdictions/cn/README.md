@@ -147,7 +147,7 @@ let operator = NetworkOperator::new()
 
 ## 许可证 (License)
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## 相关链接 (Related Links)
 

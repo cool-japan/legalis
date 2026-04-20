@@ -9,7 +9,7 @@
 
 use crate::error::{SimResult, SimulationError};
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -590,7 +590,7 @@ impl BidirectionalSync {
 
     /// Sorts queue by priority (highest first).
     fn sort_queue(queue: &mut [StateUpdate]) {
-        queue.sort_by(|a, b| b.priority.cmp(&a.priority));
+        queue.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     /// Processes next physical to digital update.

@@ -268,8 +268,8 @@ impl RiskAnalysisReport {
             total_weight += confidence_weight;
         }
 
-        if total_weight > 0 {
-            self.overall_risk_score = ((total_score * 25) / total_weight).min(100) as u8;
+        if let Some(weighted_score) = (total_score * 25).checked_div(total_weight) {
+            self.overall_risk_score = weighted_score.min(100) as u8;
         }
     }
 

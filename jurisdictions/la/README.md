@@ -266,7 +266,7 @@ let projects = get_legal_assistance_projects();
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Related Links
 

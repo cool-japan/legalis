@@ -4,7 +4,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/legalis-br.svg)](https://crates.io/crates/legalis-br)
 [![Documentation](https://docs.rs/legalis-br/badge.svg)](https://docs.rs/legalis-br)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ## English
 
@@ -238,11 +238,7 @@ legalis-br = "0.1.3"
 
 ## License / Licença
 
-Licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](../../LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](../../LICENSE-MIT))
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE-APACHE](../../LICENSE-APACHE)).
 
 ## Contribution / Contribuição
 

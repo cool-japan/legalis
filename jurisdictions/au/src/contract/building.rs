@@ -497,32 +497,20 @@ impl StatutoryWarrantyAnalyzer {
             parts.push("Warranty breached".to_string());
 
             match warranty {
-                StatutoryWarranty::ProperWorkmanship => {
-                    if facts.workmanship_defects {
-                        parts.push(
-                            "Work not performed in proper and workmanlike manner".to_string(),
-                        );
-                    }
+                StatutoryWarranty::ProperWorkmanship if facts.workmanship_defects => {
+                    parts.push("Work not performed in proper and workmanlike manner".to_string());
                 }
-                StatutoryWarranty::AccordanceWithPlans => {
-                    if facts.deviates_from_plans {
-                        parts.push("Work deviates from approved plans".to_string());
-                    }
+                StatutoryWarranty::AccordanceWithPlans if facts.deviates_from_plans => {
+                    parts.push("Work deviates from approved plans".to_string());
                 }
-                StatutoryWarranty::SuitableMaterials => {
-                    if facts.poor_quality_materials {
-                        parts.push("Materials not of good quality".to_string());
-                    }
+                StatutoryWarranty::SuitableMaterials if facts.poor_quality_materials => {
+                    parts.push("Materials not of good quality".to_string());
                 }
-                StatutoryWarranty::FitForHabitation => {
-                    if !facts.fit_for_habitation {
-                        parts.push("Dwelling not fit for habitation".to_string());
-                    }
+                StatutoryWarranty::FitForHabitation if !facts.fit_for_habitation => {
+                    parts.push("Dwelling not fit for habitation".to_string());
                 }
-                StatutoryWarranty::LegalCompliance => {
-                    if !facts.complies_with_building_code {
-                        parts.push("Work does not comply with Building Code".to_string());
-                    }
+                StatutoryWarranty::LegalCompliance if !facts.complies_with_building_code => {
+                    parts.push("Work does not comply with Building Code".to_string());
                 }
                 _ => {}
             }

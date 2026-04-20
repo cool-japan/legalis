@@ -16,7 +16,7 @@ thiserror.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 rayon = { workspace = true, optional = true }
-printpdf = { workspace = true, optional = true }
+fop-render = { workspace = true, optional = true }
 notify = { version = "8.2", optional = true }
 crossbeam-channel = { version = "0.5", optional = true }
 rand.workspace = true
@@ -36,7 +36,7 @@ proptest.workspace = true
 default = []
 smt-solver = ["oxiz-solver", "oxiz-core", "num-bigint"]
 parallel = ["rayon"]
-pdf = ["printpdf"]
+pdf = ["fop-render"]
 watch = ["notify", "crossbeam-channel"]
 
 [[bench]]

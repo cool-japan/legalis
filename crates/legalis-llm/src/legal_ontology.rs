@@ -501,21 +501,21 @@ impl LegalOntologyBuilder {
                 "contract",
                 RelationType::PartOf,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "acceptance",
                 "contract",
                 RelationType::PartOf,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "consideration",
                 "contract",
                 RelationType::PartOf,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         ontology
     }
@@ -544,14 +544,14 @@ impl LegalOntologyBuilder {
         // Relations
         ontology
             .add_relation(LegalRelation::new("negligence", "tort", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "intentional_tort",
                 "tort",
                 RelationType::IsA,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         ontology
     }
@@ -581,28 +581,28 @@ impl LegalOntologyBuilder {
         // Relations
         ontology
             .add_relation(LegalRelation::new("felony", "crime", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "misdemeanor",
                 "crime",
                 RelationType::IsA,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "mens_rea",
                 "crime",
                 RelationType::PartOf,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new(
                 "actus_reus",
                 "crime",
                 RelationType::PartOf,
             ))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         ontology
     }
@@ -686,10 +686,10 @@ mod tests {
 
         ontology
             .add_relation(LegalRelation::new("felony", "crime", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new("murder", "felony", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         assert!(ontology.is_subtype_of("felony", "crime"));
         assert!(ontology.is_subtype_of("murder", "felony"));
@@ -711,10 +711,10 @@ mod tests {
 
         ontology
             .add_relation(LegalRelation::new("felony", "crime", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new("murder", "felony", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         let ancestors = ontology.get_ancestors("murder");
         assert_eq!(ancestors.len(), 2);
@@ -736,10 +736,10 @@ mod tests {
 
         ontology
             .add_relation(LegalRelation::new("felony", "crime", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
         ontology
             .add_relation(LegalRelation::new("murder", "felony", RelationType::IsA))
-            .unwrap();
+            .expect("invariant: hardcoded relation source and target concepts exist in ontology");
 
         ontology.add_inference_rule(inference_rules::transitivity());
 

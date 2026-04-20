@@ -134,21 +134,21 @@ impl CachedStorage {
 
     /// Returns cache statistics.
     pub fn stats(&self) -> CacheStats {
-        self.stats.read().unwrap().clone()
+        self.stats.read().expect("rwlock read poisoned").clone()
     }
 
     /// Clears the cache.
     pub fn clear_cache(&mut self) {
-        self.cache.write().unwrap().clear();
+        self.cache.write().expect("rwlock write poisoned").clear();
         if self.config.enable_stats {
-            let mut stats = self.stats.write().unwrap();
+            let mut stats = self.stats.write().expect("rwlock write poisoned");
             stats.current_size = 0;
         }
     }
 
     /// Evicts expired entries from the cache.
     fn evict_expired(&self) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write().expect("rwlock write poisoned");
         let ttl = self.config.ttl_secs;
 
         let expired_keys: Vec<_> = cache
@@ -163,7 +163,7 @@ impl CachedStorage {
         }
 
         if self.config.enable_stats && evicted_count > 0 {
-            let mut stats = self.stats.write().unwrap();
+            let mut stats = self.stats.write().expect("rwlock write poisoned");
             stats.evictions += evicted_count;
             stats.current_size = cache.len();
         }
@@ -171,7 +171,7 @@ impl CachedStorage {
 
     /// Evicts least recently used entries if cache is full.
     fn evict_lru(&self) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write().expect("rwlock write poisoned");
 
         if cache.len() >= self.config.max_entries {
             // Find LRU entry
@@ -179,7 +179,7 @@ impl CachedStorage {
                 cache.remove(&lru_key);
 
                 if self.config.enable_stats {
-                    let mut stats = self.stats.write().unwrap();
+                    let mut stats = self.stats.write().expect("rwlock write poisoned");
                     stats.evictions += 1;
                     stats.current_size = cache.len();
                 }
@@ -191,13 +191,13 @@ impl CachedStorage {
     fn get_cached(&self, id: Uuid) -> AuditResult<AuditRecord> {
         // Try cache first
         {
-            let mut cache = self.cache.write().unwrap();
+            let mut cache = self.cache.write().expect("rwlock write poisoned");
             if let Some(entry) = cache.get_mut(&id) {
                 if !entry.is_expired(self.config.ttl_secs) {
                     entry.touch();
 
                     if self.config.enable_stats {
-                        let mut stats = self.stats.write().unwrap();
+                        let mut stats = self.stats.write().expect("rwlock write poisoned");
                         stats.hits += 1;
                     }
 
@@ -206,7 +206,7 @@ impl CachedStorage {
                     // Remove expired entry
                     cache.remove(&id);
                     if self.config.enable_stats {
-                        let mut stats = self.stats.write().unwrap();
+                        let mut stats = self.stats.write().expect("rwlock write poisoned");
                         stats.evictions += 1;
                         stats.current_size = cache.len();
                     }
@@ -216,7 +216,7 @@ impl CachedStorage {
 
         // Cache miss - fetch from storage
         if self.config.enable_stats {
-            let mut stats = self.stats.write().unwrap();
+            let mut stats = self.stats.write().expect("rwlock write poisoned");
             stats.misses += 1;
         }
 
@@ -224,11 +224,11 @@ impl CachedStorage {
 
         // Add to cache
         self.evict_lru();
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write().expect("rwlock write poisoned");
         cache.insert(id, CacheEntry::new(record.clone()));
 
         if self.config.enable_stats {
-            let mut stats = self.stats.write().unwrap();
+            let mut stats = self.stats.write().expect("rwlock write poisoned");
             stats.current_size = cache.len();
         }
 
@@ -237,11 +237,11 @@ impl CachedStorage {
 
     /// Invalidates a cache entry.
     fn invalidate(&self, id: Uuid) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write().expect("rwlock write poisoned");
         cache.remove(&id);
 
         if self.config.enable_stats {
-            let mut stats = self.stats.write().unwrap();
+            let mut stats = self.stats.write().expect("rwlock write poisoned");
             stats.current_size = cache.len();
         }
     }

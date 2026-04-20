@@ -211,7 +211,7 @@ impl VersionedStatute {
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime is after UNIX_EPOCH")
             .as_secs();
 
         Self {
@@ -229,7 +229,7 @@ impl VersionedStatute {
         self.modified_by = node;
         self.timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime is after UNIX_EPOCH")
             .as_secs();
     }
 

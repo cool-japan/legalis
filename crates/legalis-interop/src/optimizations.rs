@@ -95,23 +95,29 @@ impl RegexCache {
     pub fn new() -> Self {
         Self {
             // Catala patterns
-            scope_declaration: regex_lite::Regex::new(r"declaration\s+scope\s+(\w+)").unwrap(),
-            definition: regex_lite::Regex::new(r"definition\s+(\w+(?:\.\w+)*)\s+equals").unwrap(),
+            scope_declaration: regex_lite::Regex::new(r"declaration\s+scope\s+(\w+)")
+                .expect("regex pattern is valid"),
+            definition: regex_lite::Regex::new(r"definition\s+(\w+(?:\.\w+)*)\s+equals")
+                .expect("regex pattern is valid"),
 
             // L4 patterns
-            rule_pattern: regex_lite::Regex::new(r"RULE\s+(\w+)").unwrap(),
-            deontic_pattern: regex_lite::Regex::new(r"\b(MUST|MAY|SHANT|SHALL|SHOULD)\b").unwrap(),
+            rule_pattern: regex_lite::Regex::new(r"RULE\s+(\w+)").expect("regex pattern is valid"),
+            deontic_pattern: regex_lite::Regex::new(r"\b(MUST|MAY|SHANT|SHALL|SHOULD)\b")
+                .expect("regex pattern is valid"),
 
             // Stipula patterns
-            agreement_pattern: regex_lite::Regex::new(r"agreement\s+(\w+)\s*\(").unwrap(),
+            agreement_pattern: regex_lite::Regex::new(r"agreement\s+(\w+)\s*\(")
+                .expect("regex pattern is valid"),
 
             // Common patterns
-            age_condition: regex_lite::Regex::new(r"age\s*(>=|<=|>|<|==|!=)\s*(\d+)").unwrap(),
+            age_condition: regex_lite::Regex::new(r"age\s*(>=|<=|>|<|==|!=)\s*(\d+)")
+                .expect("regex pattern is valid"),
             comparison: regex_lite::Regex::new(
                 r"(\w+(?:\.\w+)*)\s*(>=|<=|>|<|==|!=)\s*(\d+|true|false|\w+)",
             )
-            .unwrap(),
-            identifier: regex_lite::Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap(),
+            .expect("regex pattern is valid"),
+            identifier: regex_lite::Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+                .expect("regex pattern is valid"),
         }
     }
 

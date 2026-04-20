@@ -38,7 +38,7 @@ impl LSHIndex {
     /// Creates a new LSH index.
     pub fn new(num_tables: usize, num_hashes: usize, dimension: usize) -> Self {
         let mut projection_vectors = Vec::new();
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         // Generate random projection vectors for each table
@@ -122,7 +122,7 @@ impl LSHIndex {
             .collect();
 
         // Sort by similarity (descending)
-        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         similarities.into_iter().take(k).collect()
     }
 
@@ -186,7 +186,7 @@ impl SimilarityIndex {
             })
             .collect();
 
-        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         similarities.into_iter().take(k).collect()
     }
 
@@ -246,7 +246,10 @@ impl HNSWIndex {
                 .push(entity.clone());
 
             // Prune if necessary
-            let neighbor_connections = self.graph.get_mut(&neighbor).unwrap();
+            let neighbor_connections = self
+                .graph
+                .get_mut(&neighbor)
+                .expect("invariant: neighbor was just inserted via or_default()");
             if neighbor_connections.len() > self.max_connections {
                 self.prune_connections(&neighbor);
             }
@@ -263,7 +266,12 @@ impl HNSWIndex {
         }
 
         // Start from a random entry point
-        let entry_point = self.embeddings.keys().next().unwrap().clone();
+        let entry_point = self
+            .embeddings
+            .keys()
+            .next()
+            .expect("invariant: embeddings is non-empty (checked is_empty above)")
+            .clone();
 
         // Greedy search
         let mut visited = std::collections::HashSet::new();
@@ -283,7 +291,9 @@ impl HNSWIndex {
 
         while let Some(std::cmp::Reverse((dist, current))) = candidates.pop() {
             if results.len() >= k {
-                let worst = results.peek().unwrap();
+                let worst = results
+                    .peek()
+                    .expect("invariant: results is non-empty (results.len() >= k > 0)");
                 if dist.0 > worst.0.0 {
                     break;
                 }
@@ -309,7 +319,7 @@ impl HNSWIndex {
             .into_iter()
             .map(|(dist, entity)| (entity, -dist.0))
             .collect();
-        result_vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        result_vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         result_vec.into_iter().take(k).collect()
     }
 
@@ -332,7 +342,7 @@ impl HNSWIndex {
             })
             .collect();
 
-        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         distances.into_iter().take(k).collect()
     }
 
@@ -354,7 +364,10 @@ impl HNSWIndex {
                 return;
             }
 
-            let entity_emb = self.embeddings.get(entity).unwrap();
+            let entity_emb = self
+                .embeddings
+                .get(entity)
+                .expect("invariant: entity was added to both graph and embeddings in add()");
             let mut conn_with_dist: Vec<(String, f64)> = connections
                 .iter()
                 .map(|conn| {
@@ -363,7 +376,8 @@ impl HNSWIndex {
                 })
                 .collect();
 
-            conn_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            conn_with_dist
+                .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             let pruned: Vec<String> = conn_with_dist
                 .into_iter()
                 .take(self.max_connections)

@@ -336,7 +336,7 @@ impl SubscriptionService {
 
     /// Check if free trial is offered
     pub fn has_free_trial(&self) -> bool {
-        self.free_trial_days.is_some() && self.free_trial_days.unwrap() > 0
+        self.free_trial_days.is_some_and(|days| days > 0)
     }
 }
 

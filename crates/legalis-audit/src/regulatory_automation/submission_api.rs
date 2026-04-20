@@ -95,15 +95,19 @@ impl SubmissionApi {
             }
         }
 
-        // Now get mutable submission to update status
-        let submission = self.submissions.get_mut(&submission_id).unwrap();
+        // Now get mutable submission to update status (key was validated above)
+        let submission = self
+            .submissions
+            .get_mut(&submission_id)
+            .expect("invariant: submission_id was validated as present above");
         submission.status = SubmissionStatus::Submitted;
-        submission.submitted_at = Some(Utc::now());
+        let submitted_at = Utc::now();
+        submission.submitted_at = Some(submitted_at);
 
         let receipt = SubmissionReceipt {
             submission_id,
             receipt_number: format!("REC-{}", Uuid::new_v4()),
-            submitted_at: submission.submitted_at.unwrap(),
+            submitted_at,
             endpoint: endpoint_id.to_string(),
             status: SubmissionStatus::Submitted,
         };

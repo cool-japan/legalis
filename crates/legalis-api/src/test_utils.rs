@@ -177,7 +177,7 @@ pub struct TestDataGenerator;
 impl TestDataGenerator {
     /// Generate random string
     pub fn random_string(length: usize) -> String {
-        use rand::Rng;
+        use rand::RngExt;
         const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut rng = rand::rng();
 

@@ -451,10 +451,8 @@ pub fn validate_transparency_obligation(
     }
 
     match obligation.system_type {
-        LimitedRiskType::DeepFake => {
-            if !obligation.content_marked {
-                return Err(AiRegulationError::DeepFakeNotMarked);
-            }
+        LimitedRiskType::DeepFake if !obligation.content_marked => {
+            return Err(AiRegulationError::DeepFakeNotMarked);
         }
         LimitedRiskType::EmotionRecognition => {
             result.add_warning(

@@ -169,7 +169,11 @@ impl BehavioralRecognizer {
         patterns.retain(|p| p.occurrence_count >= self.config.min_pattern_occurrences);
 
         // Sort by confidence descending
-        patterns.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        patterns.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(patterns)
     }
@@ -195,7 +199,7 @@ impl BehavioralRecognizer {
         }
 
         // Sort by total decisions descending
-        profiles.sort_by(|a, b| b.total_decisions.cmp(&a.total_decisions));
+        profiles.sort_by_key(|b| std::cmp::Reverse(b.total_decisions));
 
         Ok(profiles)
     }
@@ -246,7 +250,7 @@ impl BehavioralRecognizer {
         }
 
         // Sort by decision count descending
-        patterns.sort_by(|a, b| b.decision_count.cmp(&a.decision_count));
+        patterns.sort_by_key(|b| std::cmp::Reverse(b.decision_count));
 
         Ok(patterns)
     }
@@ -279,9 +283,15 @@ impl BehavioralRecognizer {
             // Extract sequence of statutes
             let sequence: Vec<String> = subject_recs.iter().map(|r| r.statute_id.clone()).collect();
 
-            // Calculate duration
-            let start = subject_recs.first().unwrap().timestamp;
-            let end = subject_recs.last().unwrap().timestamp;
+            // Calculate duration — len >= 2 is checked above
+            let start = subject_recs
+                .first()
+                .expect("invariant: subject_recs len >= 2")
+                .timestamp;
+            let end = subject_recs
+                .last()
+                .expect("invariant: subject_recs len >= 2")
+                .timestamp;
             let duration = (end - start).num_seconds() as f64;
 
             flow_sequences.entry(sequence).or_default().push(duration);
@@ -306,7 +316,7 @@ impl BehavioralRecognizer {
         }
 
         // Sort by occurrence count descending
-        patterns.sort_by(|a, b| b.occurrence_count.cmp(&a.occurrence_count));
+        patterns.sort_by_key(|b| std::cmp::Reverse(b.occurrence_count));
 
         Ok(patterns)
     }
@@ -335,9 +345,18 @@ impl BehavioralRecognizer {
             let override_rate = override_count as f64 / actor_recs.len() as f64;
 
             if override_rate > 0.3 && override_count >= self.config.min_pattern_occurrences {
+                // Safety: actor_recs is non-empty (override_count >= min_pattern_occurrences >= 1)
                 let time_range = (
-                    actor_recs.iter().map(|r| r.timestamp).min().unwrap(),
-                    actor_recs.iter().map(|r| r.timestamp).max().unwrap(),
+                    actor_recs
+                        .iter()
+                        .map(|r| r.timestamp)
+                        .min()
+                        .expect("invariant: actor_recs is non-empty"),
+                    actor_recs
+                        .iter()
+                        .map(|r| r.timestamp)
+                        .max()
+                        .expect("invariant: actor_recs is non-empty"),
                 );
 
                 let mut characteristics = HashMap::new();
@@ -384,9 +403,18 @@ impl BehavioralRecognizer {
             let percentage = (night_records.len() as f64 / records.len() as f64) * 100.0;
 
             if percentage > 10.0 {
+                // Safety: night_records is non-empty (len >= min_pattern_occurrences >= 1)
                 let time_range = (
-                    night_records.iter().map(|r| r.timestamp).min().unwrap(),
-                    night_records.iter().map(|r| r.timestamp).max().unwrap(),
+                    night_records
+                        .iter()
+                        .map(|r| r.timestamp)
+                        .min()
+                        .expect("invariant: night_records is non-empty"),
+                    night_records
+                        .iter()
+                        .map(|r| r.timestamp)
+                        .max()
+                        .expect("invariant: night_records is non-empty"),
                 );
 
                 let mut characteristics = HashMap::new();
@@ -439,9 +467,16 @@ impl BehavioralRecognizer {
                 confidence: 0.8,
                 actors: Vec::new(),
                 statutes: Vec::new(),
+                // Safety: sorted_records is non-empty (rapid_sequences >= min_pattern_occurrences)
                 time_range: (
-                    sorted_records.first().unwrap().timestamp,
-                    sorted_records.last().unwrap().timestamp,
+                    sorted_records
+                        .first()
+                        .expect("invariant: sorted_records is non-empty")
+                        .timestamp,
+                    sorted_records
+                        .last()
+                        .expect("invariant: sorted_records is non-empty")
+                        .timestamp,
                 ),
                 characteristics,
             });
@@ -480,7 +515,7 @@ impl BehavioralRecognizer {
                 .or_insert(0) += 1;
         }
         let mut peak_hours: Vec<_> = hour_counts.into_iter().collect();
-        peak_hours.sort_by(|a, b| b.1.cmp(&a.1));
+        peak_hours.sort_by_key(|b| std::cmp::Reverse(b.1));
         let peak_hours: Vec<u32> = peak_hours.into_iter().take(3).map(|(h, _)| h).collect();
 
         // Find peak days
@@ -491,7 +526,7 @@ impl BehavioralRecognizer {
                 .or_insert(0) += 1;
         }
         let mut peak_days_vec: Vec<_> = day_counts.into_iter().collect();
-        peak_days_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        peak_days_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
         let peak_days: Vec<String> = peak_days_vec
             .into_iter()
             .take(3)
@@ -516,7 +551,7 @@ impl BehavioralRecognizer {
             *statute_counts.entry(record.statute_id.clone()).or_insert(0) += 1;
         }
         let mut frequent_statutes: Vec<_> = statute_counts.into_iter().collect();
-        frequent_statutes.sort_by(|a, b| b.1.cmp(&a.1));
+        frequent_statutes.sort_by_key(|b| std::cmp::Reverse(b.1));
         frequent_statutes.truncate(5);
 
         // Calculate average decision time (simplified)

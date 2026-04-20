@@ -102,12 +102,10 @@ pub fn validate_facility_license(facility: &HealthcareFacility) -> Result<()> {
                 reason: reason.clone(),
             });
         }
-        AccreditationStatus::FullyAccredited { expiry_date, .. } => {
-            if now >= *expiry_date {
-                return Err(HealthLawError::FacilityNotAccredited {
-                    facility_name: facility.name_en.clone(),
-                });
-            }
+        AccreditationStatus::FullyAccredited { expiry_date, .. } if now >= *expiry_date => {
+            return Err(HealthLawError::FacilityNotAccredited {
+                facility_name: facility.name_en.clone(),
+            });
         }
         _ => {}
     }
@@ -660,20 +658,19 @@ pub fn validate_public_health_measure(measure: &PublicHealthMeasure) -> Result<(
 
     // Validate authority level for certain measures
     match &measure.measure_type {
-        PublicHealthMeasureType::TravelRestriction | PublicHealthMeasureType::BorderControl => {
+        PublicHealthMeasureType::TravelRestriction | PublicHealthMeasureType::BorderControl
             // These require national authority
-            if !matches!(measure.authority_level, AuthorityLevel::National) {
+            if !matches!(measure.authority_level, AuthorityLevel::National) => {
                 return Err(HealthLawError::UnauthorizedPublicHealthMeasure {
                     authority_level: measure.authority_level.description_en().to_string(),
                     measure_type: measure.measure_type.description_en().to_string(),
                 });
             }
-        }
-        PublicHealthMeasureType::Quarantine { duration_days } => {
+        PublicHealthMeasureType::Quarantine { duration_days }
             // Quarantine exceeding maximum days requires national authority
             if *duration_days > MAXIMUM_QUARANTINE_DAYS
                 && !matches!(measure.authority_level, AuthorityLevel::National)
-            {
+            => {
                 return Err(HealthLawError::UnauthorizedPublicHealthMeasure {
                     authority_level: measure.authority_level.description_en().to_string(),
                     measure_type: format!(
@@ -682,7 +679,6 @@ pub fn validate_public_health_measure(measure: &PublicHealthMeasure) -> Result<(
                     ),
                 });
             }
-        }
         _ => {}
     }
 

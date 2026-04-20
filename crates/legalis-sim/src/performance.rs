@@ -181,10 +181,13 @@ impl StreamingProcessor {
                 .map(|entity| processor(entity.as_ref()))
                 .collect();
 
-            results.lock().unwrap().extend(chunk_results);
+            results
+                .lock()
+                .expect("mutex poisoned")
+                .extend(chunk_results);
         }
 
-        results.into_inner().unwrap()
+        results.into_inner().expect("results mutex poisoned")
     }
 }
 
@@ -214,7 +217,10 @@ impl LazyAttributeCache {
             self.dirty = true;
             value
         } else {
-            self.cache.get(key).unwrap().clone()
+            self.cache
+                .get(key)
+                .expect("invariant: key was checked to exist above")
+                .clone()
         }
     }
 
@@ -431,17 +437,20 @@ impl ParallelExecutor {
 
                     s.spawn(move || {
                         let chunk_results: Vec<R> = chunk.into_iter().map(worker_fn).collect();
-                        results_ref.lock().unwrap().extend(chunk_results);
+                        results_ref
+                            .lock()
+                            .expect("mutex poisoned")
+                            .extend(chunk_results);
                     })
                 })
                 .collect();
 
             for handle in handles {
-                handle.join().unwrap();
+                handle.join().expect("worker thread panicked");
             }
         });
 
-        results.into_inner().unwrap()
+        results.into_inner().expect("results mutex poisoned")
     }
 
     /// Returns the scheduler

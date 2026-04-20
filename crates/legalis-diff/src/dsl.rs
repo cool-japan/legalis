@@ -408,21 +408,31 @@ pub fn parse_rule(text: &str) -> Result<Rule, String> {
         let line = line.trim();
 
         if line.starts_with("RULE ") {
-            id = line.strip_prefix("RULE ").unwrap().trim().to_string();
+            id = line
+                .strip_prefix("RULE ")
+                .expect("invariant: starts_with checked")
+                .trim()
+                .to_string();
         } else if line.starts_with("DESCRIPTION ") {
             description = line
                 .strip_prefix("DESCRIPTION ")
-                .unwrap()
+                .expect("invariant: starts_with checked")
                 .trim()
                 .trim_matches('"')
                 .to_string();
         } else if line.starts_with("WHEN ") {
-            let condition_str = line.strip_prefix("WHEN ").unwrap().trim();
+            let condition_str = line
+                .strip_prefix("WHEN ")
+                .expect("invariant: starts_with checked")
+                .trim();
             if let Some(cond) = parse_condition(condition_str) {
                 conditions.push(cond);
             }
         } else if line.starts_with("THEN ") {
-            let action_str = line.strip_prefix("THEN ").unwrap().trim();
+            let action_str = line
+                .strip_prefix("THEN ")
+                .expect("invariant: starts_with checked")
+                .trim();
             if let Some(action) = parse_action(action_str) {
                 actions.push(action);
             }

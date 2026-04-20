@@ -62,11 +62,20 @@ impl Era {
     #[must_use]
     pub fn start_date(&self) -> NaiveDate {
         match self {
-            Era::Meiji => NaiveDate::from_ymd_opt(1868, 1, 25).unwrap(),
-            Era::Taisho => NaiveDate::from_ymd_opt(1912, 7, 30).unwrap(),
-            Era::Showa => NaiveDate::from_ymd_opt(1926, 12, 25).unwrap(),
-            Era::Heisei => NaiveDate::from_ymd_opt(1989, 1, 8).unwrap(),
-            Era::Reiwa => NaiveDate::from_ymd_opt(2019, 5, 1).unwrap(),
+            Era::Meiji => {
+                NaiveDate::from_ymd_opt(1868, 1, 25).expect("invariant: 1868-01-25 is a valid date")
+            }
+            Era::Taisho => {
+                NaiveDate::from_ymd_opt(1912, 7, 30).expect("invariant: 1912-07-30 is a valid date")
+            }
+            Era::Showa => NaiveDate::from_ymd_opt(1926, 12, 25)
+                .expect("invariant: 1926-12-25 is a valid date"),
+            Era::Heisei => {
+                NaiveDate::from_ymd_opt(1989, 1, 8).expect("invariant: 1989-01-08 is a valid date")
+            }
+            Era::Reiwa => {
+                NaiveDate::from_ymd_opt(2019, 5, 1).expect("invariant: 2019-05-01 is a valid date")
+            }
         }
     }
 
@@ -74,25 +83,46 @@ impl Era {
     #[must_use]
     pub fn end_date(&self) -> Option<NaiveDate> {
         match self {
-            Era::Meiji => Some(NaiveDate::from_ymd_opt(1912, 7, 29).unwrap()),
-            Era::Taisho => Some(NaiveDate::from_ymd_opt(1926, 12, 24).unwrap()),
-            Era::Showa => Some(NaiveDate::from_ymd_opt(1989, 1, 7).unwrap()),
-            Era::Heisei => Some(NaiveDate::from_ymd_opt(2019, 4, 30).unwrap()),
+            Era::Meiji => Some(
+                NaiveDate::from_ymd_opt(1912, 7, 29)
+                    .expect("invariant: 1912-07-29 is a valid date"),
+            ),
+            Era::Taisho => Some(
+                NaiveDate::from_ymd_opt(1926, 12, 24)
+                    .expect("invariant: 1926-12-24 is a valid date"),
+            ),
+            Era::Showa => Some(
+                NaiveDate::from_ymd_opt(1989, 1, 7).expect("invariant: 1989-01-07 is a valid date"),
+            ),
+            Era::Heisei => Some(
+                NaiveDate::from_ymd_opt(2019, 4, 30)
+                    .expect("invariant: 2019-04-30 is a valid date"),
+            ),
             Era::Reiwa => None,
         }
     }
 
     /// Determines the era for a given date.
     pub fn from_date(date: NaiveDate) -> Result<Self, EraError> {
-        if date >= NaiveDate::from_ymd_opt(2019, 5, 1).unwrap() {
+        if date
+            >= NaiveDate::from_ymd_opt(2019, 5, 1).expect("invariant: 2019-05-01 is a valid date")
+        {
             Ok(Era::Reiwa)
-        } else if date >= NaiveDate::from_ymd_opt(1989, 1, 8).unwrap() {
+        } else if date
+            >= NaiveDate::from_ymd_opt(1989, 1, 8).expect("invariant: 1989-01-08 is a valid date")
+        {
             Ok(Era::Heisei)
-        } else if date >= NaiveDate::from_ymd_opt(1926, 12, 25).unwrap() {
+        } else if date
+            >= NaiveDate::from_ymd_opt(1926, 12, 25).expect("invariant: 1926-12-25 is a valid date")
+        {
             Ok(Era::Showa)
-        } else if date >= NaiveDate::from_ymd_opt(1912, 7, 30).unwrap() {
+        } else if date
+            >= NaiveDate::from_ymd_opt(1912, 7, 30).expect("invariant: 1912-07-30 is a valid date")
+        {
             Ok(Era::Taisho)
-        } else if date >= NaiveDate::from_ymd_opt(1868, 1, 25).unwrap() {
+        } else if date
+            >= NaiveDate::from_ymd_opt(1868, 1, 25).expect("invariant: 1868-01-25 is a valid date")
+        {
             Ok(Era::Meiji)
         } else {
             Err(EraError::DateBeforeMeiji(date))

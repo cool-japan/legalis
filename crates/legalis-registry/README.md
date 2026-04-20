@@ -59,4 +59,4 @@ let statute_v1 = registry.get_version("adult-rights", 1)?;
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0

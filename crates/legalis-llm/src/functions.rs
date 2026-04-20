@@ -399,7 +399,7 @@ impl FunctionOrchestrator {
             }
         }
 
-        Err(last_error.unwrap())
+        Err(last_error.expect("invariant: last_error is Some after exhausting all retry attempts"))
     }
 
     /// Executes multiple functions in parallel.
@@ -448,7 +448,8 @@ impl FunctionOrchestrator {
                     }
                 }
 
-                Err(last_error.unwrap())
+                Err(last_error
+                    .expect("invariant: last_error is Some after exhausting all retry attempts"))
             });
 
             handles.push(handle);

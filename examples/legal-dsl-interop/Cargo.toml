@@ -1,9 +1,9 @@
 [package]
 name = "legal-dsl-interop"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Example: Legal DSL interoperability - Catala, L4, Stipula conversion"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 publish = false
 
 [dependencies]

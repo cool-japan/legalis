@@ -269,7 +269,7 @@ impl SealManager {
 
     /// Generates a private key (simplified).
     fn generate_private_key() -> String {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
         let key: u64 = rng.random();
         format!("priv_{:x}", key)

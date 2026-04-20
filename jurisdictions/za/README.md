@@ -188,7 +188,7 @@ Broad-Based Black Economic Empowerment Act 53 of 2003
 
 ## License / Lisensie
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Related Links / Verwante Skakels
 

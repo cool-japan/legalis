@@ -426,12 +426,13 @@ mod tests {
         let mut executor = CliExecutor::default();
 
         // Create temp input file
-        let mut input_file = NamedTempFile::new().unwrap();
-        writeln!(input_file, "declaration scope Test:").unwrap();
-        writeln!(input_file, "  context input content integer").unwrap();
+        let mut input_file = NamedTempFile::new().expect("writing to String is infallible");
+        writeln!(input_file, "declaration scope Test:").expect("writing to String is infallible");
+        writeln!(input_file, "  context input content integer")
+            .expect("writing to String is infallible");
 
         // Create temp output file path
-        let output_file = NamedTempFile::new().unwrap();
+        let output_file = NamedTempFile::new().expect("writing to String is infallible");
         let output_path = output_file.path().to_owned();
 
         let command = CliCommand::Convert {
@@ -441,12 +442,15 @@ mod tests {
             target_format: LegalFormat::L4,
         };
 
-        let result = executor.execute(command).unwrap();
+        let result = executor
+            .execute(command)
+            .expect("writing to String is infallible");
 
         assert!(result.contains("Conversion successful"));
         assert!(output_path.exists());
 
-        let output_text = fs::read_to_string(&output_path).unwrap();
+        let output_text =
+            fs::read_to_string(&output_path).expect("writing to String is infallible");
         assert!(output_text.contains("RULE"));
     }
 
@@ -455,12 +459,14 @@ mod tests {
         let mut executor = CliExecutor::default();
 
         // Create temp input file with Catala content
-        let mut input_file = NamedTempFile::new().unwrap();
-        writeln!(input_file, "declaration scope AutoTest:").unwrap();
-        writeln!(input_file, "  context input content integer").unwrap();
+        let mut input_file = NamedTempFile::new().expect("writing to String is infallible");
+        writeln!(input_file, "declaration scope AutoTest:")
+            .expect("writing to String is infallible");
+        writeln!(input_file, "  context input content integer")
+            .expect("writing to String is infallible");
 
         // Create temp output file path
-        let output_file = NamedTempFile::new().unwrap();
+        let output_file = NamedTempFile::new().expect("writing to String is infallible");
         let output_path = output_file.path().to_owned();
 
         let command = CliCommand::AutoConvert {
@@ -469,7 +475,9 @@ mod tests {
             target_format: LegalFormat::L4,
         };
 
-        let result = executor.execute(command).unwrap();
+        let result = executor
+            .execute(command)
+            .expect("writing to String is infallible");
 
         assert!(result.contains("Auto-conversion successful"));
         assert!(result.contains("Catala"));
@@ -481,16 +489,20 @@ mod tests {
         let mut executor = CliExecutor::default();
 
         // Create temp input file
-        let mut input_file = NamedTempFile::new().unwrap();
-        writeln!(input_file, "declaration scope ValidateTest:").unwrap();
-        writeln!(input_file, "  context input content integer").unwrap();
+        let mut input_file = NamedTempFile::new().expect("writing to String is infallible");
+        writeln!(input_file, "declaration scope ValidateTest:")
+            .expect("writing to String is infallible");
+        writeln!(input_file, "  context input content integer")
+            .expect("writing to String is infallible");
 
         let command = CliCommand::Validate {
             input: input_file.path().to_owned(),
             format: LegalFormat::Catala,
         };
 
-        let result = executor.execute(command).unwrap();
+        let result = executor
+            .execute(command)
+            .expect("writing to String is infallible");
 
         assert!(result.contains("Validation successful"));
         assert!(result.contains("Catala"));
@@ -501,16 +513,20 @@ mod tests {
         let mut executor = CliExecutor::default();
 
         // Create temp input file
-        let mut input_file = NamedTempFile::new().unwrap();
-        writeln!(input_file, "declaration scope InfoTest:").unwrap();
-        writeln!(input_file, "  context input content integer").unwrap();
+        let mut input_file = NamedTempFile::new().expect("writing to String is infallible");
+        writeln!(input_file, "declaration scope InfoTest:")
+            .expect("writing to String is infallible");
+        writeln!(input_file, "  context input content integer")
+            .expect("writing to String is infallible");
 
         let command = CliCommand::Info {
             input: input_file.path().to_owned(),
             format: LegalFormat::Catala,
         };
 
-        let result = executor.execute(command).unwrap();
+        let result = executor
+            .execute(command)
+            .expect("writing to String is infallible");
 
         assert!(result.contains("File Information"));
         assert!(result.contains("Catala"));
@@ -545,10 +561,11 @@ mod tests {
         let mut executor = CliExecutor::new(config);
 
         // Create temp files
-        let mut input_file = NamedTempFile::new().unwrap();
-        writeln!(input_file, "agreement LowConf(A, B) {{}}").unwrap();
+        let mut input_file = NamedTempFile::new().expect("writing to String is infallible");
+        writeln!(input_file, "agreement LowConf(A, B) {{}}")
+            .expect("writing to String is infallible");
 
-        let output_file = NamedTempFile::new().unwrap();
+        let output_file = NamedTempFile::new().expect("writing to String is infallible");
 
         let command = CliCommand::Convert {
             input: input_file.path().to_owned(),

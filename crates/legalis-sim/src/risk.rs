@@ -44,8 +44,8 @@ impl ValueAtRisk {
         let mut det_ratios: Vec<f64> = metrics.iter().map(|m| m.deterministic_ratio()).collect();
         let mut disc_ratios: Vec<f64> = metrics.iter().map(|m| m.discretion_ratio()).collect();
 
-        det_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        disc_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        det_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        disc_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let index = ((1.0 - confidence_level) * det_ratios.len() as f64) as usize;
         let index = index.min(det_ratios.len().saturating_sub(1));
@@ -90,8 +90,8 @@ impl ConditionalVaR {
         let mut det_ratios: Vec<f64> = metrics.iter().map(|m| m.deterministic_ratio()).collect();
         let mut disc_ratios: Vec<f64> = metrics.iter().map(|m| m.discretion_ratio()).collect();
 
-        det_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        disc_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        det_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        disc_ratios.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let cutoff_index = ((1.0 - confidence_level) * det_ratios.len() as f64) as usize;
         let cutoff_index = cutoff_index.min(det_ratios.len().saturating_sub(1));
@@ -442,7 +442,9 @@ impl ComparativeRiskAnalysis {
                 a.risk_metrics.mean_deterministic - a.risk_metrics.std_dev_deterministic * 2.0;
             let score_b =
                 b.risk_metrics.mean_deterministic - b.risk_metrics.std_dev_deterministic * 2.0;
-            score_a.partial_cmp(&score_b).unwrap()
+            score_a
+                .partial_cmp(&score_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 
@@ -452,7 +454,7 @@ impl ComparativeRiskAnalysis {
             a.risk_metrics
                 .mean_deterministic
                 .partial_cmp(&b.risk_metrics.mean_deterministic)
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 

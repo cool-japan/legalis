@@ -163,12 +163,12 @@ pub fn detect_specific_practice(
     let desc_lower = description.to_lowercase();
 
     match practice_type {
-        UnfairPracticeType::FalseRepresentation => {
+        UnfairPracticeType::FalseRepresentation
             // Check for exaggerated claims
-            if desc_lower.contains("guaranteed cure")
+            if (desc_lower.contains("guaranteed cure")
                 || desc_lower.contains("100% effective")
-                || desc_lower.contains("never fails")
-            {
+                || desc_lower.contains("never fails"))
+            => {
                 let mut practice = UnfairPractice::new(
                     "detect-1",
                     UnfairPracticeType::FalseRepresentation,
@@ -177,13 +177,12 @@ pub fn detect_specific_practice(
                 practice.add_evidence(description.to_string());
                 return Some(practice);
             }
-        }
-        UnfairPracticeType::Harassment => {
+        UnfairPracticeType::Harassment
             // Check for pressure tactics
-            if desc_lower.contains("must buy now")
+            if (desc_lower.contains("must buy now")
                 || desc_lower.contains("last chance")
-                || desc_lower.contains("act immediately")
-            {
+                || desc_lower.contains("act immediately"))
+            => {
                 let mut practice = UnfairPractice::new(
                     "detect-2",
                     UnfairPracticeType::Harassment,
@@ -192,12 +191,11 @@ pub fn detect_specific_practice(
                 practice.add_evidence(description.to_string());
                 return Some(practice);
             }
-        }
-        UnfairPracticeType::BaitAdvertising => {
+        UnfairPracticeType::BaitAdvertising
             // Check for bait and switch indicators
-            if desc_lower.contains("price subject to change")
-                || desc_lower.contains("availability not guaranteed")
-            {
+            if (desc_lower.contains("price subject to change")
+                || desc_lower.contains("availability not guaranteed"))
+            => {
                 let mut practice = UnfairPractice::new(
                     "detect-3",
                     UnfairPracticeType::BaitAdvertising,
@@ -206,7 +204,6 @@ pub fn detect_specific_practice(
                 practice.add_evidence(description.to_string());
                 return Some(practice);
             }
-        }
         _ => {}
     }
 

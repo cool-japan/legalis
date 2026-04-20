@@ -1065,7 +1065,7 @@ impl Default for ZkProofManager {
 pub fn compute_hash(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Computes the SHA-256 hash of a string.

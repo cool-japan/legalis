@@ -77,4 +77,4 @@ dot -Tpng output.dot -o diagram.png
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0

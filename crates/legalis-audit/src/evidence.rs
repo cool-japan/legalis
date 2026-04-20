@@ -181,7 +181,12 @@ impl EvidencePackage {
         keys.sort();
         for key in keys {
             data.push_str(key);
-            data.push_str(self.metadata.get(key).unwrap());
+            // key was collected from self.metadata.keys() — get() is infallible
+            data.push_str(
+                self.metadata
+                    .get(key)
+                    .expect("invariant: key came from self.metadata.keys()"),
+            );
         }
 
         format!("{:x}", Self::simple_hash(&data))

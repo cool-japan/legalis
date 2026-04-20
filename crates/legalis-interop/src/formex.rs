@@ -78,7 +78,7 @@ impl FormexImporter {
 
         // Look for condition patterns in content
         if text.contains("age") || text.contains("years") {
-            let re = Regex::new(r"(?:age|years)\s*(?:of\s*)?(?:at least|minimum|>=|greater than or equal to)\s*(\d+)").unwrap();
+            let re = Regex::new(r"(?:age|years)\s*(?:of\s*)?(?:at least|minimum|>=|greater than or equal to)\s*(\d+)").expect("regex pattern is valid");
             if let Some(cap) = re.captures(text)
                 && let Some(age_str) = cap.get(1)
                 && let Ok(age_val) = age_str.as_str().parse::<u32>()

@@ -330,14 +330,13 @@ pub fn validate_rescission_claim(claim: &RescissionClaim) -> Result<()> {
 
     // Validate based on specific grounds
     match claim.ground {
-        RescissionGround::Misrepresentation => {
+        RescissionGround::Misrepresentation
             if !claim.description.to_lowercase().contains("misrepresent")
-                && !claim.description.contains("不実")
-            {
-                return Err(ConsumerProtectionError::Misrepresentation {
-                    description: "Misrepresentation not clearly described".to_string(),
-                });
-            }
+                && !claim.description.contains("不実") =>
+        {
+            return Err(ConsumerProtectionError::Misrepresentation {
+                description: "Misrepresentation not clearly described".to_string(),
+            });
         }
         RescissionGround::NonDisclosure => {
             if claim.description.to_lowercase().contains("disclose")

@@ -137,7 +137,11 @@ impl LoadTester {
                 break;
             }
 
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let permit = semaphore
+                .clone()
+                .acquire_owned()
+                .await
+                .expect("semaphore acquire failed");
             let request_fn = request_fn.clone();
             let request_delay = self.config.request_delay;
 
@@ -190,7 +194,7 @@ impl LoadTester {
             .iter()
             .map(|r| r.duration.as_secs_f64() * 1000.0)
             .collect();
-        durations.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        durations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let avg_response_time_ms = if !durations.is_empty() {
             durations.iter().sum::<f64>() / durations.len() as f64

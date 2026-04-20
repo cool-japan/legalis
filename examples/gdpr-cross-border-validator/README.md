@@ -424,7 +424,7 @@ Production deployment would enable:
 
 ## License
 
-MIT OR Apache-2.0 (same as Legalis-RS)
+Apache-2.0 (same as Legalis-RS)
 
 ## Status
 

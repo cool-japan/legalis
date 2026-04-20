@@ -1044,7 +1044,9 @@ impl NamedGraphManager {
                 modified_at: None,
             },
         );
-        self.graphs.get_mut(&id_str).unwrap()
+        self.graphs
+            .get_mut(&id_str)
+            .expect("invariant: id_str was just inserted into graphs")
     }
 
     /// Gets graph metadata.

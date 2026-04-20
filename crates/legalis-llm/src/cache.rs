@@ -153,8 +153,8 @@ impl ResponseCache {
         }
 
         let key = Self::hash_prompt(prompt);
-        let mut cache = self.cache.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
+        let mut stats = self.stats.lock().expect("mutex poisoned");
 
         if let Some(entry) = cache.get_mut(&key) {
             if entry.is_expired() {
@@ -182,8 +182,8 @@ impl ResponseCache {
         }
 
         let key = Self::hash_prompt(prompt);
-        let mut cache = self.cache.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
+        let mut stats = self.stats.lock().expect("mutex poisoned");
 
         // Evict entries if we're at capacity
         if cache.len() >= self.config.max_entries && !cache.contains_key(&key) {
@@ -202,8 +202,8 @@ impl ResponseCache {
         }
 
         let key = Self::hash_prompt(prompt);
-        let mut cache = self.cache.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
+        let mut stats = self.stats.lock().expect("mutex poisoned");
 
         // Evict entries if we're at capacity
         if cache.len() >= self.config.max_entries && !cache.contains_key(&key) {
@@ -240,8 +240,8 @@ impl ResponseCache {
 
     /// Clears all expired entries from the cache.
     pub fn clear_expired(&self) {
-        let mut cache = self.cache.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
+        let mut stats = self.stats.lock().expect("mutex poisoned");
 
         let before_count = cache.len();
         cache.retain(|_, entry| !entry.is_expired());
@@ -253,8 +253,8 @@ impl ResponseCache {
 
     /// Clears all entries from the cache.
     pub fn clear(&self) {
-        let mut cache = self.cache.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
+        let mut stats = self.stats.lock().expect("mutex poisoned");
 
         cache.clear();
         stats.entries = 0;
@@ -262,25 +262,25 @@ impl ResponseCache {
 
     /// Gets the current cache statistics.
     pub fn stats(&self) -> CacheStats {
-        let stats = self.stats.lock().unwrap();
+        let stats = self.stats.lock().expect("mutex poisoned");
         stats.clone()
     }
 
     /// Resets the cache statistics.
     pub fn reset_stats(&self) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().expect("mutex poisoned");
         *stats = CacheStats::default();
-        stats.entries = self.cache.lock().unwrap().len();
+        stats.entries = self.cache.lock().expect("mutex poisoned").len();
     }
 
     /// Gets the current number of entries in the cache.
     pub fn len(&self) -> usize {
-        self.cache.lock().unwrap().len()
+        self.cache.lock().expect("mutex poisoned").len()
     }
 
     /// Checks if the cache is empty.
     pub fn is_empty(&self) -> bool {
-        self.cache.lock().unwrap().is_empty()
+        self.cache.lock().expect("mutex poisoned").is_empty()
     }
 }
 
@@ -427,7 +427,7 @@ impl SemanticCache {
 
     /// Finds the most similar prompt in the cache.
     fn find_similar_prompt(&self, prompt: &str) -> Option<String> {
-        let prompts = self.prompts.lock().unwrap();
+        let prompts = self.prompts.lock().expect("mutex poisoned");
 
         let mut best_match = None;
         let mut best_similarity = self.similarity_threshold;
@@ -463,7 +463,7 @@ impl SemanticCache {
     pub fn set(&self, prompt: &str, response: String) {
         self.cache.set(prompt, response);
 
-        let mut prompts = self.prompts.lock().unwrap();
+        let mut prompts = self.prompts.lock().expect("mutex poisoned");
         if !prompts.contains(&prompt.to_string()) {
             prompts.push(prompt.to_string());
         }
@@ -473,7 +473,7 @@ impl SemanticCache {
     pub fn set_with_ttl(&self, prompt: &str, response: String, ttl: Duration) {
         self.cache.set_with_ttl(prompt, response, ttl);
 
-        let mut prompts = self.prompts.lock().unwrap();
+        let mut prompts = self.prompts.lock().expect("mutex poisoned");
         if !prompts.contains(&prompt.to_string()) {
             prompts.push(prompt.to_string());
         }
@@ -482,7 +482,7 @@ impl SemanticCache {
     /// Clears the cache.
     pub fn clear(&self) {
         self.cache.clear();
-        self.prompts.lock().unwrap().clear();
+        self.prompts.lock().expect("mutex poisoned").clear();
     }
 
     /// Gets cache statistics.
@@ -593,7 +593,7 @@ impl InvalidatableCache {
 
     pub fn get(&self, prompt: &str) -> Option<String> {
         let key = Self::hash_prompt(prompt);
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
 
         if let Some(entry) = cache.get(&key) {
             // Check expiration
@@ -604,7 +604,7 @@ impl InvalidatableCache {
 
             // Check version-based invalidation
             if self.strategy == InvalidationStrategy::VersionBased {
-                let current_version = self.current_version.lock().unwrap();
+                let current_version = self.current_version.lock().expect("mutex poisoned");
                 if let (Some(entry_version), Some(curr_version)) =
                     (&entry.version, &*current_version)
                     && entry_version != curr_version
@@ -622,7 +622,10 @@ impl InvalidatableCache {
 
     pub fn set(&self, prompt: &str, entry: InvalidatableCacheEntry) {
         let key = Self::hash_prompt(prompt);
-        self.cache.lock().unwrap().insert(key, entry);
+        self.cache
+            .lock()
+            .expect("mutex poisoned")
+            .insert(key, entry);
     }
 
     pub fn set_simple(&self, prompt: &str, response: String, ttl: Duration) {
@@ -631,17 +634,17 @@ impl InvalidatableCache {
     }
 
     pub fn set_version(&self, version: impl Into<String>) {
-        *self.current_version.lock().unwrap() = Some(version.into());
+        *self.current_version.lock().expect("mutex poisoned") = Some(version.into());
     }
 
     pub fn invalidate_by_tag(&self, tag: &str) {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
         cache.retain(|_, entry| !entry.has_tag(tag));
     }
 
     pub fn invalidate_by_pattern(&self, pattern: &str) {
         // This is a simplified pattern match - in production you'd want regex
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
         let keys_to_remove: Vec<u64> = cache
             .iter()
             .filter(|(_, entry)| entry.response.contains(pattern))
@@ -654,20 +657,20 @@ impl InvalidatableCache {
     }
 
     pub fn invalidate_all(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock().expect("mutex poisoned").clear();
     }
 
     pub fn invalidate_expired(&self) {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().expect("mutex poisoned");
         cache.retain(|_, entry| !entry.is_expired());
     }
 
     pub fn len(&self) -> usize {
-        self.cache.lock().unwrap().len()
+        self.cache.lock().expect("mutex poisoned").len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.cache.lock().unwrap().is_empty()
+        self.cache.lock().expect("mutex poisoned").is_empty()
     }
 }
 

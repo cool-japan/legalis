@@ -229,7 +229,7 @@ impl SchemaRegistry {
 
     /// Get all versions of a schema
     pub fn get_all_versions(&self, name: &str) -> Vec<EventSchema> {
-        let schemas = self.schemas.read().unwrap();
+        let schemas = self.schemas.read().expect("rwlock read poisoned");
 
         schemas
             .get(name)
@@ -254,7 +254,7 @@ impl SchemaRegistry {
 
     /// List all schema names
     pub fn list_schemas(&self) -> Vec<String> {
-        let schemas = self.schemas.read().unwrap();
+        let schemas = self.schemas.read().expect("rwlock read poisoned");
         schemas.keys().cloned().collect()
     }
 }

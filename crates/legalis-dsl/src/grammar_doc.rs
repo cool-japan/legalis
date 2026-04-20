@@ -88,64 +88,67 @@ impl GrammarSpec {
     pub fn to_markdown(&self) -> String {
         let mut doc = String::new();
 
-        writeln!(doc, "# {} Grammar Reference", self.name).unwrap();
-        writeln!(doc).unwrap();
-        writeln!(doc, "{}", self.description).unwrap();
-        writeln!(doc).unwrap();
+        writeln!(doc, "# {} Grammar Reference", self.name)
+            .expect("writing to String is infallible");
+        writeln!(doc).expect("writing to String is infallible");
+        writeln!(doc, "{}", self.description).expect("writing to String is infallible");
+        writeln!(doc).expect("writing to String is infallible");
 
         // Grammar Rules
-        writeln!(doc, "## Grammar Rules").unwrap();
-        writeln!(doc).unwrap();
-        writeln!(doc, "```ebnf").unwrap();
+        writeln!(doc, "## Grammar Rules").expect("writing to String is infallible");
+        writeln!(doc).expect("writing to String is infallible");
+        writeln!(doc, "```ebnf").expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(doc, "{} ::= {}", rule.name, rule.production).unwrap();
+            writeln!(doc, "{} ::= {}", rule.name, rule.production)
+                .expect("writing to String is infallible");
         }
-        writeln!(doc, "```").unwrap();
-        writeln!(doc).unwrap();
+        writeln!(doc, "```").expect("writing to String is infallible");
+        writeln!(doc).expect("writing to String is infallible");
 
         // Detailed Rule Descriptions
-        writeln!(doc, "## Rule Descriptions").unwrap();
-        writeln!(doc).unwrap();
+        writeln!(doc, "## Rule Descriptions").expect("writing to String is infallible");
+        writeln!(doc).expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(doc, "### `{}`", rule.name).unwrap();
-            writeln!(doc).unwrap();
+            writeln!(doc, "### `{}`", rule.name).expect("writing to String is infallible");
+            writeln!(doc).expect("writing to String is infallible");
             if let Some(description) = &rule.description {
-                writeln!(doc, "{}", description).unwrap();
-                writeln!(doc).unwrap();
+                writeln!(doc, "{}", description).expect("writing to String is infallible");
+                writeln!(doc).expect("writing to String is infallible");
             }
-            writeln!(doc, "**Production:** `{}`", rule.production).unwrap();
-            writeln!(doc).unwrap();
+            writeln!(doc, "**Production:** `{}`", rule.production)
+                .expect("writing to String is infallible");
+            writeln!(doc).expect("writing to String is infallible");
 
             if !rule.examples.is_empty() {
-                writeln!(doc, "**Examples:**").unwrap();
-                writeln!(doc).unwrap();
+                writeln!(doc, "**Examples:**").expect("writing to String is infallible");
+                writeln!(doc).expect("writing to String is infallible");
                 for example in &rule.examples {
-                    writeln!(doc, "```").unwrap();
-                    writeln!(doc, "{}", example).unwrap();
-                    writeln!(doc, "```").unwrap();
-                    writeln!(doc).unwrap();
+                    writeln!(doc, "```").expect("writing to String is infallible");
+                    writeln!(doc, "{}", example).expect("writing to String is infallible");
+                    writeln!(doc, "```").expect("writing to String is infallible");
+                    writeln!(doc).expect("writing to String is infallible");
                 }
             }
         }
 
         // Keywords
         if !self.keywords.is_empty() {
-            writeln!(doc, "## Keywords").unwrap();
-            writeln!(doc).unwrap();
+            writeln!(doc, "## Keywords").expect("writing to String is infallible");
+            writeln!(doc).expect("writing to String is infallible");
             for keyword in &self.keywords {
-                writeln!(doc, "- `{}`", keyword).unwrap();
+                writeln!(doc, "- `{}`", keyword).expect("writing to String is infallible");
             }
-            writeln!(doc).unwrap();
+            writeln!(doc).expect("writing to String is infallible");
         }
 
         // Operators
         if !self.operators.is_empty() {
-            writeln!(doc, "## Operators").unwrap();
-            writeln!(doc).unwrap();
+            writeln!(doc, "## Operators").expect("writing to String is infallible");
+            writeln!(doc).expect("writing to String is infallible");
             for operator in &self.operators {
-                writeln!(doc, "- `{}`", operator).unwrap();
+                writeln!(doc, "- `{}`", operator).expect("writing to String is infallible");
             }
-            writeln!(doc).unwrap();
+            writeln!(doc).expect("writing to String is infallible");
         }
 
         doc
@@ -155,89 +158,98 @@ impl GrammarSpec {
     pub fn to_html(&self) -> String {
         let mut html = String::new();
 
-        writeln!(html, "<!DOCTYPE html>").unwrap();
-        writeln!(html, "<html>").unwrap();
-        writeln!(html, "<head>").unwrap();
-        writeln!(html, "  <meta charset=\"UTF-8\">").unwrap();
-        writeln!(html, "  <title>{} Grammar Reference</title>", self.name).unwrap();
-        writeln!(html, "  <style>").unwrap();
-        writeln!(html, "    body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }}").unwrap();
-        writeln!(html, "    h1 {{ color: #2c3e50; }}").unwrap();
+        writeln!(html, "<!DOCTYPE html>").expect("writing to String is infallible");
+        writeln!(html, "<html>").expect("writing to String is infallible");
+        writeln!(html, "<head>").expect("writing to String is infallible");
+        writeln!(html, "  <meta charset=\"UTF-8\">").expect("writing to String is infallible");
+        writeln!(html, "  <title>{} Grammar Reference</title>", self.name)
+            .expect("writing to String is infallible");
+        writeln!(html, "  <style>").expect("writing to String is infallible");
+        writeln!(html, "    body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }}").expect("writing to String is infallible");
+        writeln!(html, "    h1 {{ color: #2c3e50; }}").expect("writing to String is infallible");
         writeln!(
             html,
             "    h2 {{ color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }}"
         )
-        .unwrap();
-        writeln!(html, "    h3 {{ color: #7f8c8d; }}").unwrap();
+        .expect("writing to String is infallible");
+        writeln!(html, "    h3 {{ color: #7f8c8d; }}").expect("writing to String is infallible");
         writeln!(
             html,
             "    code {{ background-color: #f8f9fa; padding: 2px 6px; border-radius: 3px; }}"
         )
-        .unwrap();
-        writeln!(html, "    pre {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }}").unwrap();
-        writeln!(html, "    .rule {{ margin-bottom: 30px; }}").unwrap();
-        writeln!(html, "    ul {{ line-height: 1.8; }}").unwrap();
-        writeln!(html, "  </style>").unwrap();
-        writeln!(html, "</head>").unwrap();
-        writeln!(html, "<body>").unwrap();
+        .expect("writing to String is infallible");
+        writeln!(html, "    pre {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }}").expect("writing to String is infallible");
+        writeln!(html, "    .rule {{ margin-bottom: 30px; }}")
+            .expect("writing to String is infallible");
+        writeln!(html, "    ul {{ line-height: 1.8; }}").expect("writing to String is infallible");
+        writeln!(html, "  </style>").expect("writing to String is infallible");
+        writeln!(html, "</head>").expect("writing to String is infallible");
+        writeln!(html, "<body>").expect("writing to String is infallible");
 
-        writeln!(html, "  <h1>{} Grammar Reference</h1>", self.name).unwrap();
-        writeln!(html, "  <p>{}</p>", self.description).unwrap();
+        writeln!(html, "  <h1>{} Grammar Reference</h1>", self.name)
+            .expect("writing to String is infallible");
+        writeln!(html, "  <p>{}</p>", self.description).expect("writing to String is infallible");
 
         // Grammar Rules
-        writeln!(html, "  <h2>Grammar Rules</h2>").unwrap();
-        writeln!(html, "  <pre><code>").unwrap();
+        writeln!(html, "  <h2>Grammar Rules</h2>").expect("writing to String is infallible");
+        writeln!(html, "  <pre><code>").expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(html, "{} ::= {}", rule.name, rule.production).unwrap();
+            writeln!(html, "{} ::= {}", rule.name, rule.production)
+                .expect("writing to String is infallible");
         }
-        writeln!(html, "  </code></pre>").unwrap();
+        writeln!(html, "  </code></pre>").expect("writing to String is infallible");
 
         // Detailed Rule Descriptions
-        writeln!(html, "  <h2>Rule Descriptions</h2>").unwrap();
+        writeln!(html, "  <h2>Rule Descriptions</h2>").expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(html, "  <div class=\"rule\">").unwrap();
-            writeln!(html, "    <h3>{}</h3>", rule.name).unwrap();
+            writeln!(html, "  <div class=\"rule\">").expect("writing to String is infallible");
+            writeln!(html, "    <h3>{}</h3>", rule.name).expect("writing to String is infallible");
             if let Some(description) = &rule.description {
-                writeln!(html, "    <p>{}</p>", description).unwrap();
+                writeln!(html, "    <p>{}</p>", description)
+                    .expect("writing to String is infallible");
             }
             writeln!(
                 html,
                 "    <p><strong>Production:</strong> <code>{}</code></p>",
                 rule.production
             )
-            .unwrap();
+            .expect("writing to String is infallible");
 
             if !rule.examples.is_empty() {
-                writeln!(html, "    <p><strong>Examples:</strong></p>").unwrap();
+                writeln!(html, "    <p><strong>Examples:</strong></p>")
+                    .expect("writing to String is infallible");
                 for example in &rule.examples {
-                    writeln!(html, "    <pre><code>{}</code></pre>", example).unwrap();
+                    writeln!(html, "    <pre><code>{}</code></pre>", example)
+                        .expect("writing to String is infallible");
                 }
             }
-            writeln!(html, "  </div>").unwrap();
+            writeln!(html, "  </div>").expect("writing to String is infallible");
         }
 
         // Keywords
         if !self.keywords.is_empty() {
-            writeln!(html, "  <h2>Keywords</h2>").unwrap();
-            writeln!(html, "  <ul>").unwrap();
+            writeln!(html, "  <h2>Keywords</h2>").expect("writing to String is infallible");
+            writeln!(html, "  <ul>").expect("writing to String is infallible");
             for keyword in &self.keywords {
-                writeln!(html, "    <li><code>{}</code></li>", keyword).unwrap();
+                writeln!(html, "    <li><code>{}</code></li>", keyword)
+                    .expect("writing to String is infallible");
             }
-            writeln!(html, "  </ul>").unwrap();
+            writeln!(html, "  </ul>").expect("writing to String is infallible");
         }
 
         // Operators
         if !self.operators.is_empty() {
-            writeln!(html, "  <h2>Operators</h2>").unwrap();
-            writeln!(html, "  <ul>").unwrap();
+            writeln!(html, "  <h2>Operators</h2>").expect("writing to String is infallible");
+            writeln!(html, "  <ul>").expect("writing to String is infallible");
             for operator in &self.operators {
-                writeln!(html, "    <li><code>{}</code></li>", operator).unwrap();
+                writeln!(html, "    <li><code>{}</code></li>", operator)
+                    .expect("writing to String is infallible");
             }
-            writeln!(html, "  </ul>").unwrap();
+            writeln!(html, "  </ul>").expect("writing to String is infallible");
         }
 
-        writeln!(html, "</body>").unwrap();
-        writeln!(html, "</html>").unwrap();
+        writeln!(html, "</body>").expect("writing to String is infallible");
+        writeln!(html, "</html>").expect("writing to String is infallible");
 
         html
     }
@@ -246,54 +258,58 @@ impl GrammarSpec {
     pub fn to_text(&self) -> String {
         let mut text = String::new();
 
-        writeln!(text, "{} GRAMMAR REFERENCE", self.name.to_uppercase()).unwrap();
-        writeln!(text, "{}", "=".repeat(self.name.len() + 18)).unwrap();
-        writeln!(text).unwrap();
-        writeln!(text, "{}", self.description).unwrap();
-        writeln!(text).unwrap();
+        writeln!(text, "{} GRAMMAR REFERENCE", self.name.to_uppercase())
+            .expect("writing to String is infallible");
+        writeln!(text, "{}", "=".repeat(self.name.len() + 18))
+            .expect("writing to String is infallible");
+        writeln!(text).expect("writing to String is infallible");
+        writeln!(text, "{}", self.description).expect("writing to String is infallible");
+        writeln!(text).expect("writing to String is infallible");
 
-        writeln!(text, "GRAMMAR RULES").unwrap();
-        writeln!(text, "-------------").unwrap();
+        writeln!(text, "GRAMMAR RULES").expect("writing to String is infallible");
+        writeln!(text, "-------------").expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(text, "{} ::= {}", rule.name, rule.production).unwrap();
+            writeln!(text, "{} ::= {}", rule.name, rule.production)
+                .expect("writing to String is infallible");
         }
-        writeln!(text).unwrap();
+        writeln!(text).expect("writing to String is infallible");
 
-        writeln!(text, "RULE DESCRIPTIONS").unwrap();
-        writeln!(text, "-----------------").unwrap();
+        writeln!(text, "RULE DESCRIPTIONS").expect("writing to String is infallible");
+        writeln!(text, "-----------------").expect("writing to String is infallible");
         for rule in &self.rules {
-            writeln!(text, "{}:", rule.name).unwrap();
+            writeln!(text, "{}:", rule.name).expect("writing to String is infallible");
             if let Some(description) = &rule.description {
-                writeln!(text, "  {}", description).unwrap();
+                writeln!(text, "  {}", description).expect("writing to String is infallible");
             }
-            writeln!(text, "  Production: {}", rule.production).unwrap();
+            writeln!(text, "  Production: {}", rule.production)
+                .expect("writing to String is infallible");
             if !rule.examples.is_empty() {
-                writeln!(text, "  Examples:").unwrap();
+                writeln!(text, "  Examples:").expect("writing to String is infallible");
                 for example in &rule.examples {
                     for line in example.lines() {
-                        writeln!(text, "    {}", line).unwrap();
+                        writeln!(text, "    {}", line).expect("writing to String is infallible");
                     }
                 }
             }
-            writeln!(text).unwrap();
+            writeln!(text).expect("writing to String is infallible");
         }
 
         if !self.keywords.is_empty() {
-            writeln!(text, "KEYWORDS").unwrap();
-            writeln!(text, "--------").unwrap();
+            writeln!(text, "KEYWORDS").expect("writing to String is infallible");
+            writeln!(text, "--------").expect("writing to String is infallible");
             for keyword in &self.keywords {
-                writeln!(text, "- {}", keyword).unwrap();
+                writeln!(text, "- {}", keyword).expect("writing to String is infallible");
             }
-            writeln!(text).unwrap();
+            writeln!(text).expect("writing to String is infallible");
         }
 
         if !self.operators.is_empty() {
-            writeln!(text, "OPERATORS").unwrap();
-            writeln!(text, "---------").unwrap();
+            writeln!(text, "OPERATORS").expect("writing to String is infallible");
+            writeln!(text, "---------").expect("writing to String is infallible");
             for operator in &self.operators {
-                writeln!(text, "- {}", operator).unwrap();
+                writeln!(text, "- {}", operator).expect("writing to String is infallible");
             }
-            writeln!(text).unwrap();
+            writeln!(text).expect("writing to String is infallible");
         }
 
         text

@@ -6,7 +6,7 @@
 
 use crate::{AuditError, AuditRecord, AuditResult};
 use chrono::{DateTime, Duration, Utc};
-use flate2::{Compression, write::GzEncoder};
+use oxiarc_deflate::streaming::{GzipStreamDecoder, GzipStreamEncoder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
@@ -154,8 +154,8 @@ impl ArchiveManager {
 
         // Write compressed archive
         let file = std::fs::File::create(&file_path)?;
-        let compression = Compression::new(self.policy.compression_level);
-        let mut encoder = GzEncoder::new(file, compression);
+        let level = self.policy.compression_level.min(9) as u8;
+        let mut encoder = GzipStreamEncoder::new(file, level);
 
         for record in &records_to_archive {
             let json = serde_json::to_string(record)?;
@@ -211,7 +211,7 @@ impl ArchiveManager {
 
         // Decompress and read records
         let file = std::fs::File::open(&metadata.file_path)?;
-        let decoder = flate2::read::GzDecoder::new(file);
+        let decoder = GzipStreamDecoder::new(file);
         let reader = std::io::BufReader::new(decoder);
 
         let mut records = Vec::new();

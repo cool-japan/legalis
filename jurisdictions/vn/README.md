@@ -125,7 +125,7 @@ assert!(validate_investment(&investment).is_ok());
 
 ## Giấy phép (License)
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Liên kết liên quan (Related Links)
 

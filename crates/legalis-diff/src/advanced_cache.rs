@@ -210,9 +210,15 @@ impl CacheManager {
     /// manager.invalidate("statute-123");
     /// ```
     pub fn invalidate(&self, key: &str) {
-        self.primary_cache.lock().unwrap().remove(key);
+        self.primary_cache
+            .lock()
+            .expect("mutex poisoned")
+            .remove(key);
         if self.config.secondary_backend.is_some() {
-            self.secondary_cache.lock().unwrap().remove(key);
+            self.secondary_cache
+                .lock()
+                .expect("mutex poisoned")
+                .remove(key);
         }
     }
 
@@ -227,9 +233,9 @@ impl CacheManager {
     /// manager.invalidate_all();
     /// ```
     pub fn invalidate_all(&self) {
-        self.primary_cache.lock().unwrap().clear();
+        self.primary_cache.lock().expect("mutex poisoned").clear();
         if self.config.secondary_backend.is_some() {
-            self.secondary_cache.lock().unwrap().clear();
+            self.secondary_cache.lock().expect("mutex poisoned").clear();
         }
     }
 
@@ -252,7 +258,7 @@ impl CacheManager {
             return;
         }
 
-        let mut queue = self.preload_queue.lock().unwrap();
+        let mut queue = self.preload_queue.lock().expect("mutex poisoned");
         for key in keys {
             if !queue.contains(&key) {
                 queue.push(key);
@@ -272,8 +278,8 @@ impl CacheManager {
     /// assert_eq!(stats.primary_size, 0);
     /// ```
     pub fn stats(&self) -> CacheStats {
-        let primary = self.primary_cache.lock().unwrap();
-        let secondary = self.secondary_cache.lock().unwrap();
+        let primary = self.primary_cache.lock().expect("mutex poisoned");
+        let secondary = self.secondary_cache.lock().expect("mutex poisoned");
 
         CacheStats {
             primary_size: primary.len(),
@@ -287,7 +293,7 @@ impl CacheManager {
     // Internal methods
 
     fn get_from_primary(&self, key: &str) -> Option<CacheEntry> {
-        let mut cache = self.primary_cache.lock().unwrap();
+        let mut cache = self.primary_cache.lock().expect("mutex poisoned");
         if let Some(entry) = cache.get_mut(key) {
             // Update access metadata
             entry.last_accessed = SystemTime::now();
@@ -304,7 +310,7 @@ impl CacheManager {
     }
 
     fn get_from_secondary(&self, key: &str) -> Option<CacheEntry> {
-        let mut cache = self.secondary_cache.lock().unwrap();
+        let mut cache = self.secondary_cache.lock().expect("mutex poisoned");
         if let Some(entry) = cache.get_mut(key) {
             entry.last_accessed = SystemTime::now();
             entry.access_count += 1;
@@ -328,7 +334,7 @@ impl CacheManager {
 
         self.primary_cache
             .lock()
-            .unwrap()
+            .expect("primary_cache mutex poisoned")
             .insert(key.to_string(), entry);
     }
 
@@ -342,7 +348,7 @@ impl CacheManager {
 
         self.secondary_cache
             .lock()
-            .unwrap()
+            .expect("secondary_cache mutex poisoned")
             .insert(key.to_string(), entry);
     }
 
@@ -359,7 +365,7 @@ impl CacheManager {
     }
 
     fn maybe_evict(&self) {
-        let mut cache = self.primary_cache.lock().unwrap();
+        let mut cache = self.primary_cache.lock().expect("mutex poisoned");
 
         if cache.len() >= self.config.max_size {
             match self.config.invalidation_strategy {
@@ -731,7 +737,7 @@ mod tests {
         manager.preload(vec!["key1".to_string(), "key2".to_string()]);
 
         // Preload queue should contain the keys
-        let queue = manager.preload_queue.lock().unwrap();
+        let queue = manager.preload_queue.lock().expect("mutex poisoned");
         assert_eq!(queue.len(), 2);
     }
 }

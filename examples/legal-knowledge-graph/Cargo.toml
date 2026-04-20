@@ -1,9 +1,9 @@
 [package]
 name = "legal-knowledge-graph"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Example: Exporting statutes to Linked Open Data (RDF/TTL, JSON-LD, SPARQL)"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 publish = false
 
 [dependencies]

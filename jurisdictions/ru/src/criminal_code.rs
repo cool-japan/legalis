@@ -133,26 +133,20 @@ impl PunishmentType {
             Self::Fine {
                 min_amount,
                 max_amount,
-            } => {
-                if max_amount < min_amount {
-                    return Err(CriminalCodeError::InvalidPunishment(
-                        "Maximum fine cannot be less than minimum".to_string(),
-                    ));
-                }
+            } if max_amount < min_amount => {
+                return Err(CriminalCodeError::InvalidPunishment(
+                    "Maximum fine cannot be less than minimum".to_string(),
+                ));
             }
-            Self::CompulsoryWork { hours } => {
-                if *hours > 480 {
-                    return Err(CriminalCodeError::InvalidPunishment(
-                        "Compulsory work cannot exceed 480 hours".to_string(),
-                    ));
-                }
+            Self::CompulsoryWork { hours } if *hours > 480 => {
+                return Err(CriminalCodeError::InvalidPunishment(
+                    "Compulsory work cannot exceed 480 hours".to_string(),
+                ));
             }
-            Self::CorrectionalLabor { months } => {
-                if *months > 24 {
-                    return Err(CriminalCodeError::InvalidPunishment(
-                        "Correctional labor cannot exceed 24 months".to_string(),
-                    ));
-                }
+            Self::CorrectionalLabor { months } if *months > 24 => {
+                return Err(CriminalCodeError::InvalidPunishment(
+                    "Correctional labor cannot exceed 24 months".to_string(),
+                ));
             }
             Self::Imprisonment {
                 min_years,

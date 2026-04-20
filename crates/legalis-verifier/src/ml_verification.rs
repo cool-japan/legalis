@@ -314,7 +314,7 @@ impl NeuralNetworkVerifier {
                 .weights
                 .iter()
                 .map(|w| w.abs())
-                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                 .unwrap_or(0.0);
 
             if max_weight > 10.0 {
@@ -374,7 +374,7 @@ impl NeuralNetworkVerifier {
                         .weights
                         .iter()
                         .map(|w| w.abs())
-                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                         .unwrap_or(1.0);
                     max_weight * (layer.input_dim as f64).sqrt()
                 }
@@ -416,7 +416,7 @@ impl AdversarialRobustnessChecker {
             adversarial_examples.len() as f64 / test_inputs.len().min(10) as f64;
         let min_perturbation = perturbations
             .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .copied()
             .unwrap_or(f64::INFINITY);
         let avg_perturbation = if perturbations.is_empty() {
@@ -646,7 +646,7 @@ impl ExplainabilityVerifier {
         // Normalize
         let max_importance = importance
             .values()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .copied()
             .unwrap_or(1.0);
 
@@ -692,7 +692,11 @@ impl ExplainabilityVerifier {
 
         // Generate text explanation
         let mut top_features: Vec<_> = feature_contributions.iter().collect();
-        top_features.sort_by(|a, b| b.1.abs().partial_cmp(&a.1.abs()).unwrap());
+        top_features.sort_by(|a, b| {
+            b.1.abs()
+                .partial_cmp(&a.1.abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let explanation_text = if top_features.len() >= 3 {
             format!(

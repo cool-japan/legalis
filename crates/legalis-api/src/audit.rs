@@ -280,7 +280,7 @@ impl AuditLog {
             .collect();
 
         // Sort by timestamp (newest first)
-        results.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        results.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
 
         // Apply limit and offset
         let offset = filter.offset.unwrap_or(0);

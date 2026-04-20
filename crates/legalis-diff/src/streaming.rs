@@ -426,7 +426,7 @@ impl MemoryPool {
     pub fn acquire_buffer(&self) -> Vec<Change> {
         self.change_buffers
             .lock()
-            .unwrap()
+            .expect("change_buffers mutex poisoned")
             .pop()
             .unwrap_or_default()
     }
@@ -434,7 +434,7 @@ impl MemoryPool {
     /// Returns a buffer to the pool for reuse.
     pub fn release_buffer(&self, mut buffer: Vec<Change>) {
         buffer.clear();
-        let mut pool = self.change_buffers.lock().unwrap();
+        let mut pool = self.change_buffers.lock().expect("mutex poisoned");
         if pool.len() < self.max_pooled_buffers {
             pool.push(buffer);
         }
@@ -442,7 +442,7 @@ impl MemoryPool {
 
     /// Returns the number of buffers currently in the pool.
     pub fn pool_size(&self) -> usize {
-        self.change_buffers.lock().unwrap().len()
+        self.change_buffers.lock().expect("mutex poisoned").len()
     }
 }
 

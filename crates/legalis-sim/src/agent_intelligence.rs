@@ -536,7 +536,11 @@ impl BdiAgent {
             .collect();
 
         // Sort by priority
-        eligible_desires.sort_by(|a, b| b.priority.partial_cmp(&a.priority).unwrap());
+        eligible_desires.sort_by(|a, b| {
+            b.priority
+                .partial_cmp(&a.priority)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Form intentions for top desires (if not already intended)
         for desire in eligible_desires.iter().take(3) {
@@ -658,7 +662,7 @@ impl AgentMemory {
             })
             .collect();
 
-        experiences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        experiences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         experiences
             .into_iter()
             .take(k)

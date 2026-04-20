@@ -270,7 +270,7 @@ let company = Company::builder()
 
 ## License
 
-Licensed under either of MIT or Apache-2.0 at your option.
+Licensed under the Apache License, Version 2.0.
 
 ## Disclaimer
 

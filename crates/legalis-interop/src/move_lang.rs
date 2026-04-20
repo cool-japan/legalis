@@ -469,7 +469,9 @@ impl MoveExporter {
                                 Some(
                                     description
                                         .strip_prefix("Visibility: ")
-                                        .unwrap()
+                                        .expect(
+                                            "invariant: starts_with checked before strip_prefix",
+                                        )
                                         .to_string(),
                                 )
                             } else {
@@ -487,7 +489,14 @@ impl MoveExporter {
                     .filter_map(|cond| {
                         if let Condition::Custom { description, .. } = cond {
                             if description.starts_with("Acquires: ") {
-                                Some(description.strip_prefix("Acquires: ").unwrap().to_string())
+                                Some(
+                                    description
+                                        .strip_prefix("Acquires: ")
+                                        .expect(
+                                            "invariant: starts_with checked before strip_prefix",
+                                        )
+                                        .to_string(),
+                                )
                             } else {
                                 None
                             }

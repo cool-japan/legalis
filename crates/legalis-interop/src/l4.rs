@@ -341,10 +341,8 @@ impl L4Importer {
             match ch {
                 '(' => depth += 1,
                 ')' => depth -= 1,
-                _ if depth == 0 => {
-                    if upper_expr[i..].starts_with(&upper_op) {
-                        return Some(i);
-                    }
+                _ if depth == 0 && upper_expr[i..].starts_with(&upper_op) => {
+                    return Some(i);
                 }
                 _ => {}
             }

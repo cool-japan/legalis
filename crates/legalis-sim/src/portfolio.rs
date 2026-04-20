@@ -134,28 +134,37 @@ impl EfficientFrontier {
             .max_by(|a, b| {
                 let sharpe_a = a.expected_return / a.risk;
                 let sharpe_b = b.expected_return / b.risk;
-                sharpe_a.partial_cmp(&sharpe_b).unwrap()
+                sharpe_a
+                    .partial_cmp(&sharpe_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
     }
 
     /// Finds the portfolio with minimum risk.
     pub fn min_risk_portfolio(&self) -> Option<&FrontierPoint> {
-        self.frontier_points
-            .iter()
-            .min_by(|a, b| a.risk.partial_cmp(&b.risk).unwrap())
+        self.frontier_points.iter().min_by(|a, b| {
+            a.risk
+                .partial_cmp(&b.risk)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Finds the portfolio with maximum return.
     pub fn max_return_portfolio(&self) -> Option<&FrontierPoint> {
-        self.frontier_points
-            .iter()
-            .max_by(|a, b| a.expected_return.partial_cmp(&b.expected_return).unwrap())
+        self.frontier_points.iter().max_by(|a, b| {
+            a.expected_return
+                .partial_cmp(&b.expected_return)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Sorts frontier points by risk (ascending).
     pub fn sort_by_risk(&mut self) {
-        self.frontier_points
-            .sort_by(|a, b| a.risk.partial_cmp(&b.risk).unwrap());
+        self.frontier_points.sort_by(|a, b| {
+            a.risk
+                .partial_cmp(&b.risk)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 }
 
@@ -268,7 +277,11 @@ impl CorrelationMatrix {
             }
         }
 
-        pairs.sort_by(|a, b| b.2.abs().partial_cmp(&a.2.abs()).unwrap());
+        pairs.sort_by(|a, b| {
+            b.2.abs()
+                .partial_cmp(&a.2.abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         pairs
     }
 }

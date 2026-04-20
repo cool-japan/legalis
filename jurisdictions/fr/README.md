@@ -419,7 +419,7 @@ pub const OVERTIME_RATE_2: f64 = 0.50; // Beyond 8 hours: +50%
 
 ## License
 
-This project is licensed under MIT OR Apache-2.0.
+This project is licensed under Apache-2.0.
 
 ---
 

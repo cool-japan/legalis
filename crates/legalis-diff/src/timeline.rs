@@ -230,7 +230,7 @@ impl Timeline {
             }
         }
 
-        events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        events.sort_by_key(|a| a.timestamp);
         events
     }
 
@@ -314,7 +314,11 @@ impl BlameAnnotation {
             };
         }
 
-        let current = &chain.versions.last().unwrap().statute;
+        let current = &chain
+            .versions
+            .last()
+            .expect("invariant: versions is non-empty, checked above")
+            .statute;
 
         // Track title
         let title_version = Self::find_component_origin(chain, |s| s.title.clone());

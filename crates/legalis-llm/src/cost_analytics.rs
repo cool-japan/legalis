@@ -157,14 +157,14 @@ impl CostAnalytics {
     pub fn most_expensive_provider(&self) -> Option<(&String, &f64)> {
         self.cost_by_provider
             .iter()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
     }
 
     /// Returns the most used model.
     pub fn most_expensive_model(&self) -> Option<(&String, &f64)> {
         self.cost_by_model
             .iter()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
     }
 }
 

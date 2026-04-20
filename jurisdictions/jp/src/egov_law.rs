@@ -139,10 +139,8 @@ impl EGovLawParser {
                         "LawTitle" => {
                             law.title = current_text.trim().to_string();
                         }
-                        "Preamble" | "PreambleText" => {
-                            if !current_text.trim().is_empty() {
-                                law.preamble = Some(current_text.trim().to_string());
-                            }
+                        "Preamble" | "PreambleText" if !current_text.trim().is_empty() => {
+                            law.preamble = Some(current_text.trim().to_string());
                         }
                         "ArticleCaption" => {
                             if let Some(ref mut article) = current_article {
@@ -184,10 +182,11 @@ impl EGovLawParser {
                                 law.articles.push(article);
                             }
                         }
-                        "SupplProvision" if path_str.ends_with("SupplProvision") => {
-                            if !current_text.trim().is_empty() {
-                                law.supplementary.push(current_text.trim().to_string());
-                            }
+                        "SupplProvision"
+                            if path_str.ends_with("SupplProvision")
+                                && !current_text.trim().is_empty() =>
+                        {
+                            law.supplementary.push(current_text.trim().to_string());
                         }
                         _ => {}
                     }

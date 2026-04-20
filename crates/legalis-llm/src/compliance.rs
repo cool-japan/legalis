@@ -149,7 +149,7 @@ impl AuditLogger {
 
     /// Retrieves all audit log entries.
     pub fn get_entries(&self) -> Vec<AuditLogEntry> {
-        self.entries.lock().unwrap().clone()
+        self.entries.lock().expect("mutex poisoned").clone()
     }
 
     /// Clears all audit log entries.
@@ -161,7 +161,7 @@ impl AuditLogger {
 
     /// Gets the number of audit log entries.
     pub fn entry_count(&self) -> usize {
-        self.entries.lock().unwrap().len()
+        self.entries.lock().expect("mutex poisoned").len()
     }
 }
 
@@ -269,13 +269,15 @@ impl ConfidentialityProtector {
         // Default patterns for common sensitive information
         let patterns = vec![
             // Social Security Numbers
-            regex::Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap(),
+            regex::Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").expect("regex pattern is valid"),
             // Credit card numbers (simple pattern)
-            regex::Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
+            regex::Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")
+                .expect("regex pattern is valid"),
             // Email addresses
-            regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+            regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+                .expect("regex pattern is valid"),
             // Phone numbers
-            regex::Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap(),
+            regex::Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").expect("regex pattern is valid"),
         ];
 
         Self {

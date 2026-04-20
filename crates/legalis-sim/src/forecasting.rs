@@ -161,7 +161,11 @@ impl LinearForecast {
         };
 
         // Generate forecast
-        let last_time = time_series.points.last().unwrap().time;
+        let last_time = time_series
+            .points
+            .last()
+            .expect("invariant: points is non-empty, checked above")
+            .time;
         let forecast = (1..=forecast_horizon)
             .map(|i| {
                 let time = last_time + i;
@@ -235,7 +239,11 @@ impl MovingAverageForecast {
         let average = recent_values.iter().sum::<f64>() / window_size as f64;
 
         // Generate flat forecast
-        let last_time = time_series.points.last().unwrap().time;
+        let last_time = time_series
+            .points
+            .last()
+            .expect("invariant: points is non-empty, checked above")
+            .time;
         let forecast = (1..=forecast_horizon)
             .map(|i| ForecastPoint {
                 time: last_time + i,
@@ -292,7 +300,11 @@ impl ExponentialSmoothingForecast {
         }
 
         // Generate flat forecast (simple exponential smoothing)
-        let last_time = time_series.points.last().unwrap().time;
+        let last_time = time_series
+            .points
+            .last()
+            .expect("invariant: points is non-empty, checked above")
+            .time;
         let forecast = (1..=forecast_horizon)
             .map(|i| ForecastPoint {
                 time: last_time + i,

@@ -262,7 +262,10 @@ impl PopulationGenerator {
                 return region;
             }
         }
-        self.profile.regions.last().unwrap()
+        self.profile
+            .regions
+            .last()
+            .expect("invariant: regions is non-empty (validated at profile construction)")
     }
 }
 
@@ -335,7 +338,10 @@ impl BehavioralPopulationBuilder {
                 return strategy;
             }
         }
-        *distribution.keys().next().unwrap()
+        *distribution
+            .keys()
+            .next()
+            .expect("invariant: distribution is non-empty (caller ensures valid distribution)")
     }
 }
 
@@ -355,7 +361,7 @@ fn random() -> f64 {
         if POPULATION_RNG_SEED == 0 {
             POPULATION_RNG_SEED = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime is after UNIX_EPOCH")
                 .as_nanos() as u64;
         }
         POPULATION_RNG_SEED = POPULATION_RNG_SEED

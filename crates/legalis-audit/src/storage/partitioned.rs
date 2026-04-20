@@ -368,7 +368,9 @@ impl AuditStorage for PartitionedStorage {
 
         for partition in self.partitions.values() {
             if let Some(last_record) = partition.records.last()
-                && (latest_timestamp.is_none() || last_record.timestamp > latest_timestamp.unwrap())
+                && (latest_timestamp.is_none()
+                    || last_record.timestamp
+                        > latest_timestamp.expect("invariant: is_none() is false in this branch"))
             {
                 latest_timestamp = Some(last_record.timestamp);
                 last_hash = partition.last_hash.clone();

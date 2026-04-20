@@ -576,7 +576,7 @@ impl MonteCarloSimulator {
             use std::time::{SystemTime, UNIX_EPOCH};
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime is after UNIX_EPOCH")
                 .as_secs()
         });
 
@@ -666,7 +666,7 @@ impl MonteCarloSimulator {
             use std::time::{SystemTime, UNIX_EPOCH};
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime is after UNIX_EPOCH")
                 .as_secs()
         });
 

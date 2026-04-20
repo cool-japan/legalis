@@ -43,36 +43,28 @@ pub fn validate_eia_requirement(project_type: &ProjectType) -> Result<Option<EIA
 
     // Validate specific project types have required parameters
     match project_type {
-        ProjectType::Mining { area_hectares, .. } => {
-            if *area_hectares < 0.0 {
-                return Err(EnvironmentalLawError::ValidationError {
-                    message: "Mining area cannot be negative".to_string(),
-                });
-            }
+        ProjectType::Mining { area_hectares, .. } if *area_hectares < 0.0 => {
+            return Err(EnvironmentalLawError::ValidationError {
+                message: "Mining area cannot be negative".to_string(),
+            });
         }
-        ProjectType::Hydropower { capacity_mw, .. } => {
-            if *capacity_mw < 0.0 {
-                return Err(EnvironmentalLawError::ValidationError {
-                    message: "Hydropower capacity cannot be negative".to_string(),
-                });
-            }
+        ProjectType::Hydropower { capacity_mw, .. } if *capacity_mw < 0.0 => {
+            return Err(EnvironmentalLawError::ValidationError {
+                message: "Hydropower capacity cannot be negative".to_string(),
+            });
         }
-        ProjectType::Agricultural { area_hectares, .. } => {
-            if *area_hectares < 0.0 {
-                return Err(EnvironmentalLawError::ValidationError {
-                    message: "Agricultural area cannot be negative".to_string(),
-                });
-            }
+        ProjectType::Agricultural { area_hectares, .. } if *area_hectares < 0.0 => {
+            return Err(EnvironmentalLawError::ValidationError {
+                message: "Agricultural area cannot be negative".to_string(),
+            });
         }
         ProjectType::WasteManagement {
             capacity_tons_per_day,
             ..
-        } => {
-            if *capacity_tons_per_day < 0.0 {
-                return Err(EnvironmentalLawError::ValidationError {
-                    message: "Waste management capacity cannot be negative".to_string(),
-                });
-            }
+        } if *capacity_tons_per_day < 0.0 => {
+            return Err(EnvironmentalLawError::ValidationError {
+                message: "Waste management capacity cannot be negative".to_string(),
+            });
         }
         _ => {}
     }
@@ -361,52 +353,42 @@ pub fn validate_air_quality_batch(
 /// ```
 pub fn validate_water_quality(parameter: WaterPollutant, value: f64, unit: &str) -> Result<()> {
     match parameter {
-        WaterPollutant::BOD => {
-            if value > MAX_BOD_DISCHARGE {
-                return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
-                    parameter: parameter.lao_name().to_string(),
-                    actual: value,
-                    limit: MAX_BOD_DISCHARGE,
-                    unit: unit.to_string(),
-                });
-            }
+        WaterPollutant::BOD if value > MAX_BOD_DISCHARGE => {
+            return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
+                parameter: parameter.lao_name().to_string(),
+                actual: value,
+                limit: MAX_BOD_DISCHARGE,
+                unit: unit.to_string(),
+            });
         }
-        WaterPollutant::COD => {
-            if value > MAX_COD_DISCHARGE {
-                return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
-                    parameter: parameter.lao_name().to_string(),
-                    actual: value,
-                    limit: MAX_COD_DISCHARGE,
-                    unit: unit.to_string(),
-                });
-            }
+        WaterPollutant::COD if value > MAX_COD_DISCHARGE => {
+            return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
+                parameter: parameter.lao_name().to_string(),
+                actual: value,
+                limit: MAX_COD_DISCHARGE,
+                unit: unit.to_string(),
+            });
         }
-        WaterPollutant::TSS => {
-            if value > MAX_TSS_DISCHARGE {
-                return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
-                    parameter: parameter.lao_name().to_string(),
-                    actual: value,
-                    limit: MAX_TSS_DISCHARGE,
-                    unit: unit.to_string(),
-                });
-            }
+        WaterPollutant::TSS if value > MAX_TSS_DISCHARGE => {
+            return Err(EnvironmentalLawError::WaterQualityExceedsLimit {
+                parameter: parameter.lao_name().to_string(),
+                actual: value,
+                limit: MAX_TSS_DISCHARGE,
+                unit: unit.to_string(),
+            });
         }
-        WaterPollutant::PH => {
-            if !(MIN_PH_DISCHARGE..=MAX_PH_DISCHARGE).contains(&value) {
-                return Err(EnvironmentalLawError::PHOutOfRange {
-                    actual: value,
-                    min: MIN_PH_DISCHARGE,
-                    max: MAX_PH_DISCHARGE,
-                });
-            }
+        WaterPollutant::PH if !(MIN_PH_DISCHARGE..=MAX_PH_DISCHARGE).contains(&value) => {
+            return Err(EnvironmentalLawError::PHOutOfRange {
+                actual: value,
+                min: MIN_PH_DISCHARGE,
+                max: MAX_PH_DISCHARGE,
+            });
         }
-        WaterPollutant::Temperature => {
-            if value > MAX_TEMPERATURE_DISCHARGE {
-                return Err(EnvironmentalLawError::TemperatureExceedsLimit {
-                    actual: value,
-                    limit: MAX_TEMPERATURE_DISCHARGE,
-                });
-            }
+        WaterPollutant::Temperature if value > MAX_TEMPERATURE_DISCHARGE => {
+            return Err(EnvironmentalLawError::TemperatureExceedsLimit {
+                actual: value,
+                limit: MAX_TEMPERATURE_DISCHARGE,
+            });
         }
         WaterPollutant::OilGrease => {
             let limit = 5.0; // mg/L

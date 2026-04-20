@@ -214,17 +214,16 @@ pub fn assess_skilled_visa_eligibility(
 
     // Check occupation list
     match visa_subclass {
-        VisaSubclass::SkilledIndependent189 => {
-            if occupation_assessment.occupation_list != SkilledOccupationList::Mltssl {
-                issues.push("Occupation must be on MLTSSL for subclass 189".to_string());
-            }
+        VisaSubclass::SkilledIndependent189
+            if occupation_assessment.occupation_list != SkilledOccupationList::Mltssl =>
+        {
+            issues.push("Occupation must be on MLTSSL for subclass 189".to_string());
         }
-        VisaSubclass::SkilledNominated190 => {
+        VisaSubclass::SkilledNominated190
             if occupation_assessment.occupation_list != SkilledOccupationList::Mltssl
-                && occupation_assessment.occupation_list != SkilledOccupationList::Stsol
-            {
-                issues.push("Occupation must be on MLTSSL or STSOL for subclass 190".to_string());
-            }
+                && occupation_assessment.occupation_list != SkilledOccupationList::Stsol =>
+        {
+            issues.push("Occupation must be on MLTSSL or STSOL for subclass 190".to_string());
         }
         _ => {}
     }
@@ -629,15 +628,15 @@ pub fn validate_sponsor(
     match visa_subclass {
         VisaSubclass::TemporarySkillShortage482
         | VisaSubclass::SkilledEmployerSponsoredRegional494
-        | VisaSubclass::EmployerNominationScheme186 => {
+        | VisaSubclass::EmployerNominationScheme186
             if !matches!(
                 sponsor.sponsor_type,
                 SponsorType::StandardBusinessSponsor
                     | SponsorType::AccreditedSponsor
                     | SponsorType::LabourAgreementSponsor
-            ) {
-                issues.push("Sponsor type not valid for employer sponsored visa".to_string());
-            }
+            ) =>
+        {
+            issues.push("Sponsor type not valid for employer sponsored visa".to_string());
         }
         VisaSubclass::Partner820801 | VisaSubclass::PartnerOffshore309100 => {
             // Partner sponsors must be Australian citizen/PR
@@ -689,54 +688,45 @@ pub fn validate_visa_condition_compliance(
     in_regional_area: bool,
 ) -> Result<()> {
     match condition {
-        VisaCondition::NoWork8101 => {
-            if hours_worked_fortnight.is_some_and(|h| h > 0) {
-                return Err(ImmigrationError::VisaConditionBreached {
-                    condition_number: "8101".to_string(),
-                    condition_description: "No work permitted".to_string(),
-                    breach: "Work undertaken while holding visa with no work condition".to_string(),
-                });
-            }
+        VisaCondition::NoWork8101 if hours_worked_fortnight.is_some_and(|h| h > 0) => {
+            return Err(ImmigrationError::VisaConditionBreached {
+                condition_number: "8101".to_string(),
+                condition_description: "No work permitted".to_string(),
+                breach: "Work undertaken while holding visa with no work condition".to_string(),
+            });
         }
-        VisaCondition::WorkLimitationStudent8105 => {
-            if is_studying && hours_worked_fortnight.is_some_and(|h| h > 48) {
-                return Err(ImmigrationError::VisaConditionBreached {
-                    condition_number: "8105".to_string(),
-                    condition_description: "Maximum 48 hours per fortnight during session"
-                        .to_string(),
-                    breach: format!(
-                        "Worked {} hours in fortnight (max 48)",
-                        hours_worked_fortnight.unwrap_or(0)
-                    ),
-                });
-            }
+        VisaCondition::WorkLimitationStudent8105
+            if is_studying && hours_worked_fortnight.is_some_and(|h| h > 48) =>
+        {
+            return Err(ImmigrationError::VisaConditionBreached {
+                condition_number: "8105".to_string(),
+                condition_description: "Maximum 48 hours per fortnight during session".to_string(),
+                breach: format!(
+                    "Worked {} hours in fortnight (max 48)",
+                    hours_worked_fortnight.unwrap_or(0)
+                ),
+            });
         }
-        VisaCondition::MaintainHealthInsurance8501 => {
-            if !has_health_insurance {
-                return Err(ImmigrationError::VisaConditionBreached {
-                    condition_number: "8501".to_string(),
-                    condition_description: "Must maintain adequate health insurance".to_string(),
-                    breach: "Health insurance not maintained".to_string(),
-                });
-            }
+        VisaCondition::MaintainHealthInsurance8501 if !has_health_insurance => {
+            return Err(ImmigrationError::VisaConditionBreached {
+                condition_number: "8501".to_string(),
+                condition_description: "Must maintain adequate health insurance".to_string(),
+                breach: "Health insurance not maintained".to_string(),
+            });
         }
-        VisaCondition::EmployerMustBeSponsoring8535 => {
-            if !working_for_sponsor {
-                return Err(ImmigrationError::VisaConditionBreached {
-                    condition_number: "8535".to_string(),
-                    condition_description: "Must work for sponsoring employer".to_string(),
-                    breach: "Not working for approved sponsor".to_string(),
-                });
-            }
+        VisaCondition::EmployerMustBeSponsoring8535 if !working_for_sponsor => {
+            return Err(ImmigrationError::VisaConditionBreached {
+                condition_number: "8535".to_string(),
+                condition_description: "Must work for sponsoring employer".to_string(),
+                breach: "Not working for approved sponsor".to_string(),
+            });
         }
-        VisaCondition::RegionalWorkRequirement8607 => {
-            if !in_regional_area {
-                return Err(ImmigrationError::VisaConditionBreached {
-                    condition_number: "8607".to_string(),
-                    condition_description: "Must live, work and study in regional area".to_string(),
-                    breach: "Not residing in designated regional area".to_string(),
-                });
-            }
+        VisaCondition::RegionalWorkRequirement8607 if !in_regional_area => {
+            return Err(ImmigrationError::VisaConditionBreached {
+                condition_number: "8607".to_string(),
+                condition_description: "Must live, work and study in regional area".to_string(),
+                breach: "Not residing in designated regional area".to_string(),
+            });
         }
         _ => {}
     }

@@ -812,12 +812,16 @@ impl UniversalLegalDocument {
 
     fn map_temporal(temporal: &legalis_core::TemporalValidity) -> TemporalValidity {
         TemporalValidity {
-            start: temporal
-                .effective_date
-                .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc()),
-            end: temporal
-                .expiry_date
-                .map(|d| d.and_hms_opt(23, 59, 59).unwrap().and_utc()),
+            start: temporal.effective_date.map(|d| {
+                d.and_hms_opt(0, 0, 0)
+                    .expect("invariant: 0,0,0 is a valid time")
+                    .and_utc()
+            }),
+            end: temporal.expiry_date.map(|d| {
+                d.and_hms_opt(23, 59, 59)
+                    .expect("invariant: 23,59,59 is a valid time")
+                    .and_utc()
+            }),
             duration: None,
             renewal: None,
         }
@@ -1026,11 +1030,8 @@ impl FormatNegotiator {
 
         // Process models have temporal semantics
         match source {
-            Bpmn | Dmn | Cmmn => {
-                if !matches!(target, Bpmn | Dmn | Cmmn) {
-                    warnings
-                        .push("Process flow and temporal semantics may be simplified".to_string());
-                }
+            Bpmn | Dmn | Cmmn if !matches!(target, Bpmn | Dmn | Cmmn) => {
+                warnings.push("Process flow and temporal semantics may be simplified".to_string());
             }
             _ => {}
         }
@@ -1129,7 +1130,7 @@ impl FormatNegotiator {
             .collect();
 
         // Sort by compatibility score
-        recommendations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        recommendations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         // Return top 5
         recommendations.truncate(5);

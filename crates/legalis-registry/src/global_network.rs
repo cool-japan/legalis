@@ -155,20 +155,27 @@ impl RegistryMesh {
     /// Register a new node in the mesh.
     pub fn register_node(&self, node: RegistryNode) -> Uuid {
         let node_id = node.node_id;
-        self.nodes.lock().unwrap().insert(node_id, node);
+        self.nodes
+            .lock()
+            .expect("nodes mutex poisoned")
+            .insert(node_id, node);
         node_id
     }
 
     /// Get a node by ID.
     pub fn get_node(&self, node_id: Uuid) -> Option<RegistryNode> {
-        self.nodes.lock().unwrap().get(&node_id).cloned()
+        self.nodes
+            .lock()
+            .expect("nodes mutex poisoned")
+            .get(&node_id)
+            .cloned()
     }
 
     /// List all active nodes.
     pub fn active_nodes(&self) -> Vec<RegistryNode> {
         self.nodes
             .lock()
-            .unwrap()
+            .expect("nodes mutex poisoned")
             .values()
             .filter(|n| n.status == NodeStatus::Active && n.is_healthy())
             .cloned()
@@ -194,11 +201,11 @@ impl RegistryMesh {
     pub fn set_latency(&self, from: Uuid, to: Uuid, latency_ms: u64) {
         self.latency_matrix
             .lock()
-            .unwrap()
+            .expect("latency_matrix mutex poisoned")
             .insert((from, to), latency_ms);
         self.latency_matrix
             .lock()
-            .unwrap()
+            .expect("latency_matrix mutex poisoned")
             .insert((to, from), latency_ms);
     }
 
@@ -206,19 +213,23 @@ impl RegistryMesh {
     pub fn get_latency(&self, from: Uuid, to: Uuid) -> Option<u64> {
         self.latency_matrix
             .lock()
-            .unwrap()
+            .expect("latency_matrix mutex poisoned")
             .get(&(from, to))
             .copied()
     }
 
     /// Remove a node from the mesh.
     pub fn remove_node(&self, node_id: Uuid) -> bool {
-        self.nodes.lock().unwrap().remove(&node_id).is_some()
+        self.nodes
+            .lock()
+            .expect("nodes mutex poisoned")
+            .remove(&node_id)
+            .is_some()
     }
 
     /// Count total nodes in mesh.
     pub fn node_count(&self) -> usize {
-        self.nodes.lock().unwrap().len()
+        self.nodes.lock().expect("nodes mutex poisoned").len()
     }
 }
 
@@ -270,7 +281,11 @@ impl JurisdictionRouter {
             RoutingStrategy::LeastLoaded => candidates
                 .into_iter()
                 .filter(|n| n.has_capacity())
-                .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap())
+                .min_by(|a, b| {
+                    a.load
+                        .partial_cmp(&b.load)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
                 .map(|n| n.node_id),
             RoutingStrategy::Primary(primary_id) => {
                 if candidates.iter().any(|n| n.node_id == *primary_id) {
@@ -378,12 +393,19 @@ impl SovereigntyManager {
 
     /// Add a sovereignty policy for a jurisdiction.
     pub fn add_policy(&self, jurisdiction: String, policy: SovereigntyPolicy) {
-        self.policies.lock().unwrap().insert(jurisdiction, policy);
+        self.policies
+            .lock()
+            .expect("policies mutex poisoned")
+            .insert(jurisdiction, policy);
     }
 
     /// Get policy for a jurisdiction.
     pub fn get_policy(&self, jurisdiction: &str) -> Option<SovereigntyPolicy> {
-        self.policies.lock().unwrap().get(jurisdiction).cloned()
+        self.policies
+            .lock()
+            .expect("policies mutex poisoned")
+            .get(jurisdiction)
+            .cloned()
     }
 
     /// Validate if a node can store data for a jurisdiction.
@@ -417,12 +439,17 @@ impl SovereigntyManager {
 
     /// List all jurisdictions with policies.
     pub fn jurisdictions_with_policies(&self) -> Vec<String> {
-        self.policies.lock().unwrap().keys().cloned().collect()
+        self.policies
+            .lock()
+            .expect("policies mutex poisoned")
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Count policies.
     pub fn policy_count(&self) -> usize {
-        self.policies.lock().unwrap().len()
+        self.policies.lock().expect("policies mutex poisoned").len()
     }
 }
 
@@ -498,14 +525,18 @@ impl GlobalNamespace {
     pub fn register_namespace(&self, namespace: String, info: NamespaceInfo) -> bool {
         self.namespaces
             .lock()
-            .unwrap()
+            .expect("namespaces mutex poisoned")
             .insert(namespace, info)
             .is_none()
     }
 
     /// Get namespace info.
     pub fn get_namespace(&self, namespace: &str) -> Option<NamespaceInfo> {
-        self.namespaces.lock().unwrap().get(namespace).cloned()
+        self.namespaces
+            .lock()
+            .expect("namespaces mutex poisoned")
+            .get(namespace)
+            .cloned()
     }
 
     /// Parse a fully qualified statute ID.
@@ -525,17 +556,29 @@ impl GlobalNamespace {
 
     /// List all registered namespaces.
     pub fn list_namespaces(&self) -> Vec<String> {
-        self.namespaces.lock().unwrap().keys().cloned().collect()
+        self.namespaces
+            .lock()
+            .expect("namespaces mutex poisoned")
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Count namespaces.
     pub fn namespace_count(&self) -> usize {
-        self.namespaces.lock().unwrap().len()
+        self.namespaces
+            .lock()
+            .expect("namespaces mutex poisoned")
+            .len()
     }
 
     /// Remove a namespace.
     pub fn remove_namespace(&self, namespace: &str) -> bool {
-        self.namespaces.lock().unwrap().remove(namespace).is_some()
+        self.namespaces
+            .lock()
+            .expect("namespaces mutex poisoned")
+            .remove(namespace)
+            .is_some()
     }
 }
 
@@ -647,12 +690,15 @@ impl ReplicationManager {
 
     /// Get current replication strategy.
     pub fn strategy(&self) -> ReplicationStrategy {
-        self.strategy.lock().unwrap().clone()
+        self.strategy
+            .lock()
+            .expect("strategy mutex poisoned")
+            .clone()
     }
 
     /// Update replication strategy.
     pub fn set_strategy(&self, strategy: ReplicationStrategy) {
-        *self.strategy.lock().unwrap() = strategy;
+        *self.strategy.lock().expect("strategy mutex poisoned") = strategy;
     }
 
     /// Record a replication operation.
@@ -670,12 +716,12 @@ impl ReplicationManager {
             latency_ms,
             success,
         };
-        self.log.lock().unwrap().push(entry);
+        self.log.lock().expect("log mutex poisoned").push(entry);
     }
 
     /// Get replication statistics.
     pub fn statistics(&self) -> ReplicationStatistics {
-        let log = self.log.lock().unwrap();
+        let log = self.log.lock().expect("log mutex poisoned");
         let total = log.len();
         let successful = log.iter().filter(|e| e.success).count();
         let avg_latency = if total > 0 {
@@ -694,12 +740,12 @@ impl ReplicationManager {
 
     /// Get replication log entries.
     pub fn get_log(&self) -> Vec<ReplicationLogEntry> {
-        self.log.lock().unwrap().clone()
+        self.log.lock().expect("log mutex poisoned").clone()
     }
 
     /// Clear replication log.
     pub fn clear_log(&self) {
-        self.log.lock().unwrap().clear();
+        self.log.lock().expect("log mutex poisoned").clear();
     }
 }
 

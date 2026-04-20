@@ -310,7 +310,11 @@ impl DocumentStore for InMemoryDocumentStore {
         }
 
         // Sort by score descending
-        scored_chunks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        scored_chunks.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(scored_chunks.into_iter().take(top_k).collect())
     }
@@ -570,7 +574,11 @@ impl HybridSearch {
             .map(|(_, (score, chunk))| RetrievedChunk { chunk, score })
             .collect();
 
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results
     }
 
@@ -689,7 +697,11 @@ impl ReRanker {
             let position_factor = (-decay * idx as f32).exp();
             chunk.score *= position_factor;
         }
-        chunks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        chunks.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     /// Calculates content similarity (simple approach based on word overlap).
@@ -852,7 +864,11 @@ pub mod rag_v2 {
             }
 
             // Sort by hybrid score descending
-            results.sort_by(|a, b| b.hybrid_score.partial_cmp(&a.hybrid_score).unwrap());
+            results.sort_by(|a, b| {
+                b.hybrid_score
+                    .partial_cmp(&a.hybrid_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             results
         }
 
@@ -938,7 +954,11 @@ pub mod rag_v2 {
             }
 
             // Sort by final score descending
-            reranked.sort_by(|a, b| b.final_score.partial_cmp(&a.final_score).unwrap());
+            reranked.sort_by(|a, b| {
+                b.final_score
+                    .partial_cmp(&a.final_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             reranked
         }
 

@@ -171,4 +171,4 @@ For more information on the Legalis-RS framework, see the [main project document
 
 ## License
 
-Licensed under either of MIT or Apache-2.0 at your option.
+Licensed under the Apache License, Version 2.0.

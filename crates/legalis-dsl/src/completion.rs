@@ -153,7 +153,11 @@ impl CompletionProvider {
                 .to_lowercase()
                 .starts_with(&prefix.to_lowercase())
         });
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         items
     }
@@ -521,7 +525,11 @@ impl CompletionProvider {
             }
         }
 
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items.truncate(max_suggestions);
         items
     }

@@ -220,10 +220,10 @@ mod tests {
     #[test]
     fn test_next_working_day() {
         // Friday -> Monday
-        if let Some(friday) = NaiveDate::from_ymd_opt(2024, 1, 5) {
-            if let Some(next) = next_working_day(friday) {
-                assert_eq!(next.weekday(), chrono::Weekday::Mon);
-            }
+        if let Some(friday) = NaiveDate::from_ymd_opt(2024, 1, 5)
+            && let Some(next) = next_working_day(friday)
+        {
+            assert_eq!(next.weekday(), chrono::Weekday::Mon);
         }
     }
 

@@ -75,7 +75,8 @@ impl ClauseIoImporter {
             if let Some(cond) = &section.condition
                 && cond.contains("age")
             {
-                let re = regex_lite::Regex::new(r"age\s*>=\s*(\d+)").unwrap();
+                let re =
+                    regex_lite::Regex::new(r"age\s*>=\s*(\d+)").expect("regex pattern is valid");
                 if let Some(cap) = re.captures(cond)
                     && let Some(age_str) = cap.get(1)
                     && let Ok(age_val) = age_str.as_str().parse::<u32>()

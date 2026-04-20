@@ -149,19 +149,19 @@ impl StreamingAnalyzer {
 
     /// Adds a pattern to detect.
     pub fn add_pattern(&self, pattern: StreamPattern) {
-        let mut patterns = self.patterns.write().unwrap();
+        let mut patterns = self.patterns.write().expect("rwlock write poisoned");
         patterns.push(pattern);
     }
 
     /// Removes a pattern.
     pub fn remove_pattern(&self, name: &str) {
-        let mut patterns = self.patterns.write().unwrap();
+        let mut patterns = self.patterns.write().expect("rwlock write poisoned");
         patterns.retain(|p| p.name != name);
     }
 
     /// Processes a new record.
     pub fn process(&self, record: AuditRecord) -> AuditResult<Vec<DetectedPattern>> {
-        let mut buffer = self.buffer.write().unwrap();
+        let mut buffer = self.buffer.write().expect("rwlock write poisoned");
         buffer.push_back(record);
 
         // Trim old records based on window type
@@ -206,15 +206,18 @@ impl StreamingAnalyzer {
 
     /// Detects patterns in current buffer.
     fn detect_patterns(&self) -> AuditResult<Vec<DetectedPattern>> {
-        let buffer = self.buffer.read().unwrap();
-        let patterns = self.patterns.read().unwrap();
+        let buffer = self.buffer.read().expect("rwlock read poisoned");
+        let patterns = self.patterns.read().expect("rwlock read poisoned");
         let mut detected = Vec::new();
 
         for pattern in patterns.iter() {
             if let Some(detection) = self.check_pattern(&buffer, pattern) {
                 detected.push(detection.clone());
 
-                let mut detected_patterns = self.detected_patterns.write().unwrap();
+                let mut detected_patterns = self
+                    .detected_patterns
+                    .write()
+                    .expect("rwlock write poisoned");
                 detected_patterns.push(detection);
 
                 // Keep only recent detections
@@ -287,7 +290,7 @@ impl StreamingAnalyzer {
 
     /// Gets current window metrics.
     pub fn current_metrics(&self) -> StreamingMetrics {
-        let buffer = self.buffer.read().unwrap();
+        let buffer = self.buffer.read().expect("rwlock read poisoned");
         let now = Utc::now();
         let window_start = now - Duration::seconds(self.config.window_size_seconds);
 
@@ -360,17 +363,23 @@ impl StreamingAnalyzer {
 
     /// Gets detected patterns.
     pub fn get_detected_patterns(&self) -> Vec<DetectedPattern> {
-        self.detected_patterns.read().unwrap().clone()
+        self.detected_patterns
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 
     /// Clears detected patterns.
     pub fn clear_detected_patterns(&self) {
-        self.detected_patterns.write().unwrap().clear();
+        self.detected_patterns
+            .write()
+            .expect("rwlock write poisoned")
+            .clear();
     }
 
     /// Performs aggregation on the current window.
     pub fn aggregate(&self, op: AggregationOp, field: &str) -> AuditResult<f64> {
-        let buffer = self.buffer.read().unwrap();
+        let buffer = self.buffer.read().expect("rwlock read poisoned");
 
         match op {
             AggregationOp::Count => Ok(buffer.len() as f64),
@@ -401,7 +410,7 @@ impl StreamingAnalyzer {
 
     /// Returns current buffer size.
     pub fn buffer_size(&self) -> usize {
-        self.buffer.read().unwrap().len()
+        self.buffer.read().expect("rwlock read poisoned").len()
     }
 }
 

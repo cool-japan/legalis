@@ -792,7 +792,9 @@ mod tests {
 
     #[test]
     fn test_batch_config_builder() {
-        let config = BatchConfig::new("/tmp/source", "/tmp/output")
+        let source = std::env::temp_dir().join("legalis-interop-batch-src");
+        let output = std::env::temp_dir().join("legalis-interop-batch-out");
+        let config = BatchConfig::new(source.clone(), output.clone())
             .with_source_format(LegalFormat::Catala)
             .with_target_format(LegalFormat::L4)
             .with_recursive(false)
@@ -800,8 +802,8 @@ mod tests {
             .with_max_parallel(4)
             .with_skip_existing(true);
 
-        assert_eq!(config.source_dir, PathBuf::from("/tmp/source"));
-        assert_eq!(config.output_dir, PathBuf::from("/tmp/output"));
+        assert_eq!(config.source_dir, source);
+        assert_eq!(config.output_dir, output);
         assert_eq!(config.source_format, Some(LegalFormat::Catala));
         assert_eq!(config.target_formats, vec![LegalFormat::L4]);
         assert!(!config.recursive);
@@ -909,26 +911,30 @@ mod tests {
 
     #[test]
     fn test_generate_output_path() {
+        let source = std::env::temp_dir().join("legalis-interop-output-src");
+        let output = std::env::temp_dir().join("legalis-interop-output-dst");
         let config =
-            BatchConfig::new("/tmp/source", "/tmp/output").with_target_format(LegalFormat::L4);
+            BatchConfig::new(source.clone(), output.clone()).with_target_format(LegalFormat::L4);
 
-        let source_file = PathBuf::from("/tmp/source/test.catala");
+        let source_file = source.join("test.catala");
         let output_path =
             BatchProcessor::generate_output_path(&source_file, &config, LegalFormat::L4);
 
-        assert_eq!(output_path, PathBuf::from("/tmp/output/test.l4"));
+        assert_eq!(output_path, output.join("test.l4"));
     }
 
     #[test]
     fn test_generate_output_path_recursive() {
-        let config = BatchConfig::new("/tmp/source", "/tmp/output")
+        let source = std::env::temp_dir().join("legalis-interop-output-rec-src");
+        let output = std::env::temp_dir().join("legalis-interop-output-rec-dst");
+        let config = BatchConfig::new(source.clone(), output.clone())
             .with_target_format(LegalFormat::L4)
             .with_recursive(true);
 
-        let source_file = PathBuf::from("/tmp/source/subdir/test.catala");
+        let source_file = source.join("subdir/test.catala");
         let output_path =
             BatchProcessor::generate_output_path(&source_file, &config, LegalFormat::L4);
 
-        assert_eq!(output_path, PathBuf::from("/tmp/output/subdir/test.l4"));
+        assert_eq!(output_path, output.join("subdir/test.l4"));
     }
 }

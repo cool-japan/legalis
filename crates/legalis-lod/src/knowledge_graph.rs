@@ -398,7 +398,7 @@ impl KnowledgeGraphBuilder {
             .map(|(uri, (in_deg, out_deg))| (uri, in_deg + out_deg))
             .collect();
 
-        ranked.sort_by(|a, b| b.1.cmp(&a.1));
+        ranked.sort_by_key(|b| std::cmp::Reverse(b.1));
         ranked.truncate(limit);
         ranked
     }
@@ -412,7 +412,7 @@ impl KnowledgeGraphBuilder {
             .filter(|(_, deg)| *deg > 0)
             .collect();
 
-        ranked.sort_by(|a, b| b.1.cmp(&a.1));
+        ranked.sort_by_key(|b| std::cmp::Reverse(b.1));
         ranked.truncate(limit);
         ranked
     }

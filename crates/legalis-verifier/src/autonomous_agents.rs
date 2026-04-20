@@ -26,7 +26,7 @@
 //! ```
 
 use legalis_core::Statute;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -542,9 +542,9 @@ impl AutonomousAgent {
             .max_by(|a, b| {
                 a.expected_utility()
                     .partial_cmp(&b.expected_utility())
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .unwrap()
+            .expect("invariant: strategies.is_empty() checked above")
     }
 
     /// Extract features from a statute for heuristic prediction

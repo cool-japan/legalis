@@ -146,7 +146,10 @@ impl VyperImporter {
         for line in source.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("# ") && !trimmed.contains("@") {
-                contract.name = trimmed.strip_prefix("# ").unwrap().to_string();
+                contract.name = trimmed
+                    .strip_prefix("# ")
+                    .expect("invariant: starts_with checked before strip_prefix")
+                    .to_string();
                 break;
             }
         }
@@ -439,7 +442,12 @@ impl VyperExporter {
                 if let Condition::Custom { description, .. } = cond
                     && description.starts_with("Modifier: ")
                 {
-                    decorators.push(description.strip_prefix("Modifier: ").unwrap().to_string());
+                    decorators.push(
+                        description
+                            .strip_prefix("Modifier: ")
+                            .expect("invariant: starts_with checked before strip_prefix")
+                            .to_string(),
+                    );
                 }
             }
 

@@ -62,9 +62,8 @@ impl StatuteGitRepository {
     ///
     /// ```
     /// use legalis_diff::vcs_integration::StatuteGitRepository;
-    /// use std::path::PathBuf;
     ///
-    /// let repo = StatuteGitRepository::new(PathBuf::from("/tmp/statutes"));
+    /// let repo = StatuteGitRepository::new(std::env::temp_dir().join("legalis-statutes"));
     /// assert_eq!(repo.current_branch(), "main");
     /// ```
     pub fn new(path: PathBuf) -> Self {
@@ -379,9 +378,8 @@ pub struct BlameEntry {
 /// ```
 /// use legalis_core::{Statute, Effect, EffectType};
 /// use legalis_diff::vcs_integration::{StatuteGitRepository, generate_blame};
-/// use std::path::PathBuf;
 ///
-/// let mut repo = StatuteGitRepository::new(PathBuf::from("/tmp/repo"));
+/// let mut repo = StatuteGitRepository::new(std::env::temp_dir().join("legalis-repo"));
 /// let statute = Statute::new("law", "Title", Effect::new(EffectType::Grant, "Benefit"));
 /// repo.commit(statute.clone(), "Initial commit", "alice");
 ///
@@ -516,7 +514,6 @@ pub fn merge_statutes(ours: &Statute, theirs: &Statute, strategy: MergeStrategy)
 mod tests {
     use super::*;
     use legalis_core::{Effect, EffectType};
-    use std::path::PathBuf;
 
     fn test_statute(id: &str, title: &str) -> Statute {
         Statute::new(id, title, Effect::new(EffectType::Grant, "Benefit"))
@@ -524,14 +521,16 @@ mod tests {
 
     #[test]
     fn test_repository_creation() {
-        let repo = StatuteGitRepository::new(PathBuf::from("/tmp/test"));
+        let repo =
+            StatuteGitRepository::new(std::env::temp_dir().join("legalis-vcs-integration-test"));
         assert_eq!(repo.current_branch(), "main");
         assert_eq!(repo.list_branches().len(), 1);
     }
 
     #[test]
     fn test_branch_operations() {
-        let mut repo = StatuteGitRepository::new(PathBuf::from("/tmp/test"));
+        let mut repo =
+            StatuteGitRepository::new(std::env::temp_dir().join("legalis-vcs-integration-test"));
 
         assert!(repo.create_branch("feature", None).is_ok());
         assert_eq!(repo.list_branches().len(), 2);
@@ -542,7 +541,8 @@ mod tests {
 
     #[test]
     fn test_commit() {
-        let mut repo = StatuteGitRepository::new(PathBuf::from("/tmp/test"));
+        let mut repo =
+            StatuteGitRepository::new(std::env::temp_dir().join("legalis-vcs-integration-test"));
         let statute = test_statute("law1", "Test Law");
 
         let commit_hash = repo.commit(statute, "Initial commit", "alice");
@@ -554,7 +554,8 @@ mod tests {
 
     #[test]
     fn test_branch_comparison() {
-        let mut repo = StatuteGitRepository::new(PathBuf::from("/tmp/test"));
+        let mut repo =
+            StatuteGitRepository::new(std::env::temp_dir().join("legalis-vcs-integration-test"));
 
         let statute1 = test_statute("law1", "Version 1");
         repo.commit(statute1, "Initial", "alice");
@@ -610,7 +611,8 @@ mod tests {
 
     #[test]
     fn test_blame_generation() {
-        let mut repo = StatuteGitRepository::new(PathBuf::from("/tmp/test"));
+        let mut repo =
+            StatuteGitRepository::new(std::env::temp_dir().join("legalis-vcs-integration-test"));
         let statute = test_statute("law1", "Test");
         repo.commit(statute, "Initial", "alice");
 

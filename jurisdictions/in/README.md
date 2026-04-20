@@ -203,7 +203,7 @@ Indian Contract Act, 1872
 
 ## लाइसेंस (License)
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## संबंधित लिंक (Related Links)
 

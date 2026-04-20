@@ -368,7 +368,10 @@ impl InMemoryEventPublisher {
 
     /// Get all published events (for testing)
     pub fn get_published_events(&self) -> Vec<DomainEvent> {
-        self.published_events.read().unwrap().clone()
+        self.published_events
+            .read()
+            .expect("rwlock read poisoned")
+            .clone()
     }
 }
 

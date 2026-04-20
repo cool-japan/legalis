@@ -567,7 +567,7 @@ cargo doc --no-deps --open
 
 ## ライセンス
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## 関連リンク
 

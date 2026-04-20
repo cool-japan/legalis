@@ -289,12 +289,12 @@ impl<P: LLMProvider> PerformanceMeasuringProvider<P> {
 
     /// Gets all collected metrics.
     pub fn get_metrics(&self) -> Vec<PerformanceMetrics> {
-        self.metrics.lock().unwrap().clone()
+        self.metrics.lock().expect("mutex poisoned").clone()
     }
 
     /// Gets average latency.
     pub fn average_latency(&self) -> Option<Duration> {
-        let metrics = self.metrics.lock().unwrap();
+        let metrics = self.metrics.lock().expect("mutex poisoned");
         if metrics.is_empty() {
             return None;
         }
@@ -305,7 +305,7 @@ impl<P: LLMProvider> PerformanceMeasuringProvider<P> {
 
     /// Gets p95 latency.
     pub fn p95_latency(&self) -> Option<Duration> {
-        let mut metrics = self.metrics.lock().unwrap().clone();
+        let mut metrics = self.metrics.lock().expect("mutex poisoned").clone();
         if metrics.is_empty() {
             return None;
         }
@@ -317,7 +317,7 @@ impl<P: LLMProvider> PerformanceMeasuringProvider<P> {
 
     /// Clears all metrics.
     pub fn clear_metrics(&self) {
-        self.metrics.lock().unwrap().clear();
+        self.metrics.lock().expect("mutex poisoned").clear();
     }
 }
 
@@ -334,7 +334,7 @@ impl<P: LLMProvider> LLMProvider for PerformanceMeasuringProvider<P> {
             latency,
         );
 
-        self.metrics.lock().unwrap().push(metrics);
+        self.metrics.lock().expect("mutex poisoned").push(metrics);
 
         result
     }
@@ -353,7 +353,7 @@ impl<P: LLMProvider> LLMProvider for PerformanceMeasuringProvider<P> {
             latency,
         );
 
-        self.metrics.lock().unwrap().push(metrics);
+        self.metrics.lock().expect("mutex poisoned").push(metrics);
 
         result
     }
@@ -369,19 +369,23 @@ impl<P: LLMProvider> LLMProvider for PerformanceMeasuringProvider<P> {
         let model_name = self.provider.model_name().to_string();
 
         let wrapped = stream.map(move |result| {
-            if first_token_time_clone.lock().unwrap().is_none() {
-                *first_token_time_clone.lock().unwrap() = Some(start.elapsed());
+            if first_token_time_clone
+                .lock()
+                .expect("mutex poisoned")
+                .is_none()
+            {
+                *first_token_time_clone.lock().expect("mutex poisoned") = Some(start.elapsed());
             }
             result
         });
 
         // Record metrics when stream completes
         let final_stream = wrapped.inspect(move |_| {
-            if let Some(ttft) = *first_token_time.lock().unwrap() {
+            if let Some(ttft) = *first_token_time.lock().expect("mutex poisoned") {
                 let total_latency = start.elapsed();
                 let metrics = PerformanceMetrics::new(&provider_name, &model_name, total_latency)
                     .with_time_to_first_token(ttft);
-                metrics_clone.lock().unwrap().push(metrics);
+                metrics_clone.lock().expect("mutex poisoned").push(metrics);
             }
         });
 
@@ -404,7 +408,7 @@ impl<P: LLMProvider> LLMProvider for PerformanceMeasuringProvider<P> {
 /// Chaos testing utilities for resilience verification.
 pub mod chaos {
     use super::*;
-    use rand::Rng;
+    use rand::RngExt;
 
     /// Chaos mode configuration.
     #[derive(Debug, Clone)]
@@ -440,32 +444,32 @@ pub mod chaos {
 
         /// Gets the number of induced failures.
         pub fn failure_count(&self) -> usize {
-            *self.failure_count.lock().unwrap()
+            *self.failure_count.lock().expect("mutex poisoned")
         }
 
         /// Resets the failure count.
         pub fn reset_failure_count(&self) {
-            *self.failure_count.lock().unwrap() = 0;
+            *self.failure_count.lock().expect("mutex poisoned") = 0;
         }
 
         async fn apply_chaos(&self) -> Result<()> {
             match &self.mode {
-                ChaosMode::RandomFailure { probability } => {
-                    if rand::rng().random_bool(*probability) {
-                        *self.failure_count.lock().unwrap() += 1;
-                        return Err(anyhow::anyhow!("Chaos-induced failure"));
-                    }
+                ChaosMode::RandomFailure { probability }
+                    if rand::rng().random_bool(*probability) =>
+                {
+                    *self.failure_count.lock().expect("mutex poisoned") += 1;
+                    return Err(anyhow::anyhow!("Chaos-induced failure"));
                 }
                 ChaosMode::RandomDelay { min_ms, max_ms } => {
                     let delay_ms = rand::rng().random_range(*min_ms..=*max_ms);
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }
-                ChaosMode::RandomTimeout { probability } => {
-                    if rand::rng().random_bool(*probability) {
-                        *self.failure_count.lock().unwrap() += 1;
-                        tokio::time::sleep(Duration::from_secs(30)).await;
-                        return Err(anyhow::anyhow!("Chaos-induced timeout"));
-                    }
+                ChaosMode::RandomTimeout { probability }
+                    if rand::rng().random_bool(*probability) =>
+                {
+                    *self.failure_count.lock().expect("mutex poisoned") += 1;
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    return Err(anyhow::anyhow!("Chaos-induced timeout"));
                 }
                 ChaosMode::Combined(modes) => {
                     // Apply each mode sequentially
@@ -473,7 +477,7 @@ pub mod chaos {
                         match mode {
                             ChaosMode::RandomFailure { probability } => {
                                 if rand::rng().random_bool(*probability) {
-                                    *self.failure_count.lock().unwrap() += 1;
+                                    *self.failure_count.lock().expect("mutex poisoned") += 1;
                                     return Err(anyhow::anyhow!("Chaos-induced failure"));
                                 }
                             }
@@ -483,7 +487,7 @@ pub mod chaos {
                             }
                             ChaosMode::RandomTimeout { probability } => {
                                 if rand::rng().random_bool(*probability) {
-                                    *self.failure_count.lock().unwrap() += 1;
+                                    *self.failure_count.lock().expect("mutex poisoned") += 1;
                                     tokio::time::sleep(Duration::from_secs(30)).await;
                                     return Err(anyhow::anyhow!("Chaos-induced timeout"));
                                 }
@@ -610,7 +614,7 @@ pub mod errors {
         }
 
         fn check_and_inject_error(&self) -> Result<()> {
-            let mut count = self.call_count.lock().unwrap();
+            let mut count = self.call_count.lock().expect("mutex poisoned");
             *count += 1;
 
             if *count == self.inject_on_call {
@@ -629,7 +633,7 @@ pub mod errors {
 
         /// Gets the current call count.
         pub fn call_count(&self) -> usize {
-            *self.call_count.lock().unwrap()
+            *self.call_count.lock().expect("mutex poisoned")
         }
     }
 

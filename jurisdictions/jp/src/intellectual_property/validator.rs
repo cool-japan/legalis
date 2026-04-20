@@ -236,41 +236,38 @@ pub fn validate_fair_use(fair_use_type: FairUseType, use_description: &str) -> R
     }
 
     match fair_use_type {
-        FairUseType::Quotation => {
+        FairUseType::Quotation
             // Article 32: Quotation must be for criticism, research, etc.
             // and must clearly distinguish quoted portion
             if !use_description.to_lowercase().contains("quot")
                 && !use_description.to_lowercase().contains("引用")
-            {
+            => {
                 return Err(IntellectualPropertyError::InvalidQuotation {
                     reason: "Use does not appear to be proper quotation".to_string(),
                 });
             }
-        }
-        FairUseType::PrivateUse => {
+        FairUseType::PrivateUse
             // Article 30: Must be for personal use only
-            if use_description.to_lowercase().contains("commercial")
+            if (use_description.to_lowercase().contains("commercial")
                 || use_description.to_lowercase().contains("public")
-                || use_description.to_lowercase().contains("営利")
-            {
+                || use_description.to_lowercase().contains("営利"))
+            => {
                 return Err(IntellectualPropertyError::FairUseNotApplicable {
                     reason: "Private use exception does not apply to commercial or public use"
                         .to_string(),
                 });
             }
-        }
-        FairUseType::EducationalUse => {
+        FairUseType::EducationalUse
             // Article 35: Must be for educational purposes
             if !use_description.to_lowercase().contains("education")
                 && !use_description.to_lowercase().contains("teaching")
                 && !use_description.to_lowercase().contains("教育")
-            {
+            => {
                 return Err(IntellectualPropertyError::FairUseNotApplicable {
                     reason: "Educational use exception requires genuine educational context"
                         .to_string(),
                 });
             }
-        }
         _ => {}
     }
 

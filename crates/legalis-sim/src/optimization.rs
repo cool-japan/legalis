@@ -364,7 +364,7 @@ impl NelderMeadOptimizer {
                 }
                 .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .unwrap();
+            .expect("invariant: simplex is non-empty (initialized from non-empty initial_params)");
 
         Ok(OptimizationResult {
             best_parameters: simplex[best_idx].clone(),
@@ -702,7 +702,7 @@ mod tests {
             .history
             .iter()
             .map(|(_, v)| v)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
         assert_eq!(*min_history_value, result.best_objective);
     }

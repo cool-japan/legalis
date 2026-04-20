@@ -26,13 +26,14 @@ impl DocumentStructureAnalyzer {
     /// Creates a new document structure analyzer.
     pub fn new() -> Self {
         let section_patterns = vec![
-            Regex::new(r"(?i)^(?:ARTICLE|SECTION|PART)\s+([IVXLCDM]+|\d+)").unwrap(),
-            Regex::new(r"(?i)^(\d+\.)+\s+[A-Z]").unwrap(),
+            Regex::new(r"(?i)^(?:ARTICLE|SECTION|PART)\s+([IVXLCDM]+|\d+)")
+                .expect("regex pattern is valid"),
+            Regex::new(r"(?i)^(\d+\.)+\s+[A-Z]").expect("regex pattern is valid"),
         ];
 
         let header_patterns = vec![
-            Regex::new(r"^[A-Z][A-Z\s]+$").unwrap(),
-            Regex::new(r"^\*\*[^*]+\*\*$").unwrap(),
+            Regex::new(r"^[A-Z][A-Z\s]+$").expect("regex pattern is valid"),
+            Regex::new(r"^\*\*[^*]+\*\*$").expect("regex pattern is valid"),
         ];
 
         Self {
@@ -222,25 +223,27 @@ impl LegalEntityExtractor {
             Regex::new(
                 r"\b([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)* (?:Inc\.|LLC|Corp\.|Corporation|Ltd\.))\b",
             )
-            .unwrap(),
-            Regex::new(r#""([^"]+)"\s*\((?:the\s+)?[""']([^""']+)[""']\)"#).unwrap(),
+            .expect("regex pattern is valid"),
+            Regex::new(r#""([^"]+)"\s*\((?:the\s+)?[""']([^""']+)[""']\)"#)
+                .expect("regex pattern is valid"),
         ];
 
         let date_patterns = vec![
-            Regex::new(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b").unwrap(),
-            Regex::new(r"\b([A-Z][a-z]+ \d{1,2},?\s+\d{4})\b").unwrap(),
-            Regex::new(r"\b(\d{4}-\d{2}-\d{2})\b").unwrap(),
+            Regex::new(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b").expect("regex pattern is valid"),
+            Regex::new(r"\b([A-Z][a-z]+ \d{1,2},?\s+\d{4})\b").expect("regex pattern is valid"),
+            Regex::new(r"\b(\d{4}-\d{2}-\d{2})\b").expect("regex pattern is valid"),
         ];
 
         let amount_patterns = vec![
-            Regex::new(r"\$\s*([\d,]+(?:\.\d{2})?)").unwrap(),
-            Regex::new(r"(?i)([\d,]+(?:\.\d{2})?)\s*(?:dollars?|USD)").unwrap(),
+            Regex::new(r"\$\s*([\d,]+(?:\.\d{2})?)").expect("regex pattern is valid"),
+            Regex::new(r"(?i)([\d,]+(?:\.\d{2})?)\s*(?:dollars?|USD)")
+                .expect("regex pattern is valid"),
         ];
 
         let reference_patterns = vec![
-            Regex::new(r"(?i)Section\s+(\d+(?:\.\d+)*)").unwrap(),
-            Regex::new(r"(?i)Article\s+([IVXLCDM]+|\d+)").unwrap(),
-            Regex::new(r"(?i)(\d+\s+[A-Z][a-z]+\.?\s+\d+)").unwrap(),
+            Regex::new(r"(?i)Section\s+(\d+(?:\.\d+)*)").expect("regex pattern is valid"),
+            Regex::new(r"(?i)Article\s+([IVXLCDM]+|\d+)").expect("regex pattern is valid"),
+            Regex::new(r"(?i)(\d+\s+[A-Z][a-z]+\.?\s+\d+)").expect("regex pattern is valid"),
         ];
 
         Self {
@@ -335,8 +338,15 @@ impl LegalEntityExtractor {
                         amounts.push(MonetaryAmount {
                             value,
                             currency: "USD".to_string(),
-                            text: cap.get(0).unwrap().as_str().to_string(),
-                            position: cap.get(0).unwrap().start(),
+                            text: cap
+                                .get(0)
+                                .expect("invariant: capture group 0 (full match) always exists")
+                                .as_str()
+                                .to_string(),
+                            position: cap
+                                .get(0)
+                                .expect("invariant: capture group 0 (full match) always exists")
+                                .start(),
                         });
                     }
                 }
@@ -542,7 +552,7 @@ impl ClauseClassifier {
 
         let (category, confidence) = scores
             .into_iter()
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((ClauseCategory::Other, 0.0));
 
         ClauseClassification {

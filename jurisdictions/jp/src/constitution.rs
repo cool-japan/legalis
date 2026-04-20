@@ -77,8 +77,10 @@ impl Constitution {
         Self {
             title_ja: "日本国憲法".to_string(),
             title_en: "The Constitution of Japan".to_string(),
-            promulgation_date: JapaneseDate::new(Era::Showa, 21, 11, 3).unwrap(),
-            effective_date: JapaneseDate::new(Era::Showa, 22, 5, 3).unwrap(),
+            promulgation_date: JapaneseDate::new(Era::Showa, 21, 11, 3)
+                .expect("invariant: Showa 21-11-03 is a valid date"),
+            effective_date: JapaneseDate::new(Era::Showa, 22, 5, 3)
+                .expect("invariant: Showa 22-05-03 is a valid date"),
             preamble: BilingualText {
                 ja: PREAMBLE_JA.to_string(),
                 en: PREAMBLE_EN.to_string(),

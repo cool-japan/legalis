@@ -167,7 +167,7 @@ impl DecisionClusterer {
 
     /// Initializes cluster centers using k-means++ algorithm.
     fn initialize_centers(&self, features: &[RecordFeatures]) -> Vec<Vec<f64>> {
-        use rand::Rng;
+        use rand::RngExt;
         use rand::prelude::IndexedRandom;
         use std::collections::HashSet;
 
@@ -194,7 +194,7 @@ impl DecisionClusterer {
                         centers
                             .iter()
                             .map(|c| f.distance_to(c))
-                            .min_by(|a, b| a.partial_cmp(b).unwrap())
+                            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                             .unwrap_or(0.0)
                             .powi(2)
                     }
@@ -239,7 +239,9 @@ impl DecisionClusterer {
             .min_by(|(_, a), (_, b)| {
                 let dist_a = feature.distance_to(a);
                 let dist_b = feature.distance_to(b);
-                dist_a.partial_cmp(&dist_b).unwrap()
+                dist_a
+                    .partial_cmp(&dist_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(i, _)| i)
             .unwrap_or(0)

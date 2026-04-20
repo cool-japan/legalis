@@ -647,25 +647,25 @@ impl SimulationAPI {
 
     /// Submit a simulation job
     pub fn submit_job(&self, job: SimulationJob) -> Uuid {
-        let mut queue = self.job_queue.lock().unwrap();
+        let mut queue = self.job_queue.lock().expect("mutex poisoned");
         queue.submit(job)
     }
 
     /// Get next job from queue
     pub fn get_next_job(&self) -> Option<SimulationJob> {
-        let mut queue = self.job_queue.lock().unwrap();
+        let mut queue = self.job_queue.lock().expect("mutex poisoned");
         queue.pop()
     }
 
     /// Get job status
     pub fn get_job(&self, id: &Uuid) -> Option<SimulationJob> {
-        let queue = self.job_queue.lock().unwrap();
+        let queue = self.job_queue.lock().expect("mutex poisoned");
         queue.get(id).cloned()
     }
 
     /// Cancel a job
     pub fn cancel_job(&self, id: &Uuid) -> bool {
-        let mut queue = self.job_queue.lock().unwrap();
+        let mut queue = self.job_queue.lock().expect("mutex poisoned");
         queue.cancel(id)
     }
 
@@ -673,7 +673,7 @@ impl SimulationAPI {
     pub fn complete_job(&self, job_id: Uuid, metrics: SimulationMetrics) -> SimResult<Uuid> {
         // Update job status
         {
-            let mut queue = self.job_queue.lock().unwrap();
+            let mut queue = self.job_queue.lock().expect("mutex poisoned");
             if let Some(job) = queue.get_mut(&job_id) {
                 job.complete();
             }
@@ -682,19 +682,19 @@ impl SimulationAPI {
         // Store result
         let result = SimulationResult::new(job_id, metrics);
         let result_id = {
-            let mut storage = self.result_storage.lock().unwrap();
+            let mut storage = self.result_storage.lock().expect("mutex poisoned");
             storage.store(result)?
         };
 
         // Queue webhook notification
         {
-            let queue = self.job_queue.lock().unwrap();
+            let queue = self.job_queue.lock().expect("mutex poisoned");
             if let Some(job) = queue.get(&job_id)
                 && let Some(ref webhook_url) = job.webhook_url
             {
                 let notification = WebhookNotification::new(job_id, JobStatus::Completed)
                     .with_result_id(result_id);
-                let mut delivery = self.webhook_delivery.lock().unwrap();
+                let mut delivery = self.webhook_delivery.lock().expect("mutex poisoned");
                 delivery.queue(webhook_url.clone(), notification);
             }
         }
@@ -708,7 +708,7 @@ impl SimulationAPI {
 
         // Update job status
         {
-            let mut queue = self.job_queue.lock().unwrap();
+            let mut queue = self.job_queue.lock().expect("mutex poisoned");
             if let Some(job) = queue.get_mut(&job_id) {
                 job.fail(error_msg.clone());
             }
@@ -716,13 +716,13 @@ impl SimulationAPI {
 
         // Queue webhook notification
         {
-            let queue = self.job_queue.lock().unwrap();
+            let queue = self.job_queue.lock().expect("mutex poisoned");
             if let Some(job) = queue.get(&job_id)
                 && let Some(ref webhook_url) = job.webhook_url
             {
                 let notification =
                     WebhookNotification::new(job_id, JobStatus::Failed).with_error(error_msg);
-                let mut delivery = self.webhook_delivery.lock().unwrap();
+                let mut delivery = self.webhook_delivery.lock().expect("mutex poisoned");
                 delivery.queue(webhook_url.clone(), notification);
             }
         }
@@ -732,44 +732,44 @@ impl SimulationAPI {
 
     /// Get simulation result
     pub fn get_result(&self, id: &Uuid) -> Option<SimulationResult> {
-        let storage = self.result_storage.lock().unwrap();
+        let storage = self.result_storage.lock().expect("mutex poisoned");
         storage.get(id).cloned()
     }
 
     /// Get all results for a job
     pub fn get_job_results(&self, job_id: &Uuid) -> Vec<SimulationResult> {
-        let storage = self.result_storage.lock().unwrap();
+        let storage = self.result_storage.lock().expect("mutex poisoned");
         storage.get_by_job(job_id).into_iter().cloned().collect()
     }
 
     /// Compare simulation results
     pub fn compare_results(&self, result_ids: Vec<Uuid>) -> SimResult<Uuid> {
-        let storage = self.result_storage.lock().unwrap();
-        let mut comparison_api = self.comparison_api.lock().unwrap();
+        let storage = self.result_storage.lock().expect("mutex poisoned");
+        let mut comparison_api = self.comparison_api.lock().expect("mutex poisoned");
         comparison_api.compare(&storage, result_ids)
     }
 
     /// Get comparison
     pub fn get_comparison(&self, id: &Uuid) -> Option<SimulationComparison> {
-        let comparison_api = self.comparison_api.lock().unwrap();
+        let comparison_api = self.comparison_api.lock().expect("mutex poisoned");
         comparison_api.get(id).cloned()
     }
 
     /// Get next pending webhook
     pub fn get_next_webhook(&self) -> Option<(String, WebhookNotification)> {
-        let mut delivery = self.webhook_delivery.lock().unwrap();
+        let mut delivery = self.webhook_delivery.lock().expect("mutex poisoned");
         delivery.pop_pending()
     }
 
     /// Mark webhook as delivered
     pub fn mark_webhook_delivered(&self, url: String, notification: WebhookNotification) {
-        let mut delivery = self.webhook_delivery.lock().unwrap();
+        let mut delivery = self.webhook_delivery.lock().expect("mutex poisoned");
         delivery.mark_delivered(url, notification);
     }
 
     /// Get queue statistics
     pub fn get_queue_stats(&self) -> QueueStats {
-        let queue = self.job_queue.lock().unwrap();
+        let queue = self.job_queue.lock().expect("mutex poisoned");
         QueueStats {
             total_jobs: queue.total_jobs(),
             queued: queue.jobs_by_status(JobStatus::Queued).len(),

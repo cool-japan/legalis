@@ -847,7 +847,11 @@ impl RecommendationEngine {
         }
 
         // Sort by score descending
-        recommendations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        recommendations.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(max_results);
 
         Ok(recommendations)

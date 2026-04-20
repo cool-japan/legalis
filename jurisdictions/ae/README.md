@@ -126,7 +126,7 @@ DIFC (Dubai International Financial Centre) and ADGM (Abu Dhabi Global Market)
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
 
 ## Related Links
 

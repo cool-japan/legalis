@@ -5,6 +5,45 @@ All notable changes to Legalis-RS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-04-20
+
+### Added
+
+#### legalis-porting: Code Splitting (splitrs)
+- All source files in `legalis-porting` split to under 2,000 lines using splitrs
+- New modules: `types.rs`, `types_3.rs` through `types_12.rs`, `functions.rs`, `functions_2.rs`, `trait_impls.rs`
+- Zero oversized files remain across the entire workspace
+
+#### Example READMEs (22 crates)
+- Generated and added README files for all 22 example crates
+- Each README documents purpose, usage, expected output, and COOLJAPAN ecosystem context
+
+### Changed
+
+#### PDF Backend: printpdf → fop-render
+- Replaced `printpdf` dependency with `fop-render = "0.1.1"` (COOLJAPAN pure-Rust PDF backend)
+- Migrated all PDF generation code to `SimpleDocumentBuilder` API from `fop-render`
+- Eliminates the last non-pure-Rust PDF dependency from the workspace
+
+#### Pure-Rust Stack Confirmed
+- Removed all remaining C/Fortran transitive dependencies introduced by `printpdf`
+- Default feature set is now 100% pure Rust; optional C/Fortran paths remain feature-gated
+- Workspace dependency declarations cleaned up (`*.workspace = true` enforced throughout)
+
+### Fixed
+
+#### No-unwrap Policy: Full Compliance
+- Eliminated all `unwrap()` calls from production code across the workspace
+- Replaced with `expect()`, `?` propagation, or proper `match`/`if let` error handling
+- Zero `unwrap()` remaining in non-test source files
+
+#### CVE Remediation
+- Updated all dependencies via `cargo update`
+- RSA CVE eliminated by removing `printpdf` (which pulled in a vulnerable RSA version)
+- All transitive dependency vulnerabilities resolved as of 2026-04-20
+
+[0.1.5]: https://github.com/cool-japan/legalis-rs/compare/v0.1.4...v0.1.5
+
 ## [0.1.4] - 2026-01-29
 
 ### Added - Core Infrastructure

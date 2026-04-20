@@ -30,7 +30,7 @@ impl ScheduleFrequency {
                 let mut next = from
                     .date_naive()
                     .and_hms_opt(*hour, 0, 0)
-                    .unwrap()
+                    .expect("invariant: ScheduleFrequency::Daily hour must be 0-23")
                     .and_utc();
                 if next <= from {
                     next += Duration::days(1);
@@ -41,7 +41,7 @@ impl ScheduleFrequency {
                 let mut next = from
                     .date_naive()
                     .and_hms_opt(*hour, 0, 0)
-                    .unwrap()
+                    .expect("invariant: ScheduleFrequency::Weekly hour must be 0-23")
                     .and_utc();
                 let target_weekday = *day % 7;
                 let current_weekday = from.weekday().num_days_from_sunday();
@@ -60,7 +60,7 @@ impl ScheduleFrequency {
                 let mut next = from
                     .date_naive()
                     .and_hms_opt(*hour, 0, 0)
-                    .unwrap()
+                    .expect("invariant: ScheduleFrequency::Monthly hour must be 0-23")
                     .and_utc();
                 let target_day = (*day).min(28); // Ensure valid day
                 if from.day() < target_day || (from.day() == target_day && from.hour() < *hour) {
@@ -391,7 +391,7 @@ mod tests {
             "Daily Audit Report".to_string(),
             ScheduleFrequency::Daily { hour: 9 },
             ReportFormat::Pdf,
-            PathBuf::from("/tmp/reports"),
+            std::env::temp_dir().join("legalis-audit-scheduler-reports"),
         )
         .with_description("Daily compliance report".to_string())
         .with_scope(ReportScope::LastDays(1));
@@ -408,7 +408,7 @@ mod tests {
             "Test Report".to_string(),
             ScheduleFrequency::Interval { seconds: 60 },
             ReportFormat::Json,
-            PathBuf::from("/tmp/reports"),
+            std::env::temp_dir().join("legalis-audit-scheduler-reports"),
         );
         let id = config.id;
 
@@ -428,7 +428,7 @@ mod tests {
             "Test Report".to_string(),
             ScheduleFrequency::Interval { seconds: 1 },
             ReportFormat::Json,
-            PathBuf::from("/tmp/reports"),
+            std::env::temp_dir().join("legalis-audit-scheduler-reports"),
         );
         config.next_run = Utc::now() - Duration::seconds(10);
         assert!(config.is_due());
@@ -443,7 +443,7 @@ mod tests {
             "Test Report".to_string(),
             ScheduleFrequency::Interval { seconds: 60 },
             ReportFormat::Json,
-            PathBuf::from("/tmp/reports"),
+            std::env::temp_dir().join("legalis-audit-scheduler-reports"),
         );
         let original_next = config.next_run;
         config.mark_completed();

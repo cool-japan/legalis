@@ -3,7 +3,7 @@
 //! This module provides intelligent request sampling to reduce overhead
 //! on high-traffic endpoints while maintaining observability.
 
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -304,13 +304,13 @@ pub fn extract_endpoint_pattern(path: &str) -> String {
 
     // Replace UUID-like patterns
     pattern = regex::Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-        .unwrap()
+        .expect("regex pattern is valid")
         .replace_all(&pattern, "{id}")
         .to_string();
 
     // Replace numeric IDs
     pattern = regex::Regex::new(r"/\d+")
-        .unwrap()
+        .expect("regex pattern is valid")
         .replace_all(&pattern, "/{id}")
         .to_string();
 

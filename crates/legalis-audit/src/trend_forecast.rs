@@ -393,7 +393,11 @@ impl TrendForecaster {
             TrendDirection::Cyclical => 0.0,
         };
 
-        let last_date = time_series.last().unwrap().0;
+        // time_series is non-empty (checked at the start of this method)
+        let last_date = time_series
+            .last()
+            .expect("invariant: time_series is non-empty")
+            .0;
 
         for i in 1..=self.config.forecast_days {
             let forecast_date = last_date + Duration::days(i);

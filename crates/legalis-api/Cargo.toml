@@ -40,11 +40,11 @@ chrono.workspace = true
 prometheus = "0.14"
 lazy_static = "1.5"
 futures = "0.3"
-base64 = "0.22"
+base64.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
 tokio-stream = { version = "0.1", features = ["sync"] }
-redis = { version = "1.0", features = ["tokio-comp", "connection-manager"], optional = true }
+redis = { version = "1.2", features = ["tokio-comp", "connection-manager"], optional = true }
 oauth2 = { version = "5.0", optional = true }
 reqwest = { version = "0.13", features = ["json"], optional = true }
 url = "2.5"
@@ -53,9 +53,9 @@ opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"], optional = true }
 tracing-opentelemetry = { version = "0.32", optional = true }
 regex = "1.12"
-rand = "0.9.2"
-sha2 = "0.10"
-hex = "0.4"
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true
 tonic = { version = "0.14", optional = true }
 tonic-prost = { version = "0.14", optional = true }
 prost = { version = "0.14", optional = true }
@@ -64,7 +64,7 @@ tonic-health = { version = "0.14", optional = true }
 tonic-web = { version = "0.14", optional = true }
 
 [dev-dependencies]
-proptest = "1.9"
+proptest = "1.11"
 tokio-test = "0.4"
 
 [build-dependencies]

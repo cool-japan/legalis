@@ -136,35 +136,30 @@ pub fn validate_enterprise_for_activity(
 
     // Check if tour operator is conducting correct type of tours
     match enterprise.category {
-        TourismEnterpriseCategory::TourOperatorInbound => {
-            if activity_lower.contains("outbound") {
-                return Err(TourismLawError::TourOperatorScopeExceeded {
-                    operator_name: enterprise.name_en.clone(),
-                    license_type: "Inbound".to_string(),
-                    activity: activity.to_string(),
-                });
-            }
+        TourismEnterpriseCategory::TourOperatorInbound if activity_lower.contains("outbound") => {
+            return Err(TourismLawError::TourOperatorScopeExceeded {
+                operator_name: enterprise.name_en.clone(),
+                license_type: "Inbound".to_string(),
+                activity: activity.to_string(),
+            });
         }
-        TourismEnterpriseCategory::TourOperatorOutbound => {
-            if activity_lower.contains("inbound") {
-                return Err(TourismLawError::TourOperatorScopeExceeded {
-                    operator_name: enterprise.name_en.clone(),
-                    license_type: "Outbound".to_string(),
-                    activity: activity.to_string(),
-                });
-            }
+        TourismEnterpriseCategory::TourOperatorOutbound if activity_lower.contains("inbound") => {
+            return Err(TourismLawError::TourOperatorScopeExceeded {
+                operator_name: enterprise.name_en.clone(),
+                license_type: "Outbound".to_string(),
+                activity: activity.to_string(),
+            });
         }
-        TourismEnterpriseCategory::TourOperatorDomestic => {
-            if activity_lower.contains("international")
+        TourismEnterpriseCategory::TourOperatorDomestic
+            if (activity_lower.contains("international")
                 || activity_lower.contains("outbound")
-                || activity_lower.contains("cross-border")
-            {
-                return Err(TourismLawError::TourOperatorScopeExceeded {
-                    operator_name: enterprise.name_en.clone(),
-                    license_type: "Domestic".to_string(),
-                    activity: activity.to_string(),
-                });
-            }
+                || activity_lower.contains("cross-border")) =>
+        {
+            return Err(TourismLawError::TourOperatorScopeExceeded {
+                operator_name: enterprise.name_en.clone(),
+                license_type: "Domestic".to_string(),
+                activity: activity.to_string(),
+            });
         }
         _ => {}
     }
@@ -557,13 +552,13 @@ pub fn validate_complaint_response(complaint: &TouristComplaint) -> Result<()> {
     let days_since_filing = (now - complaint.filing_date).num_days();
 
     match &complaint.status {
-        ComplaintStatus::PendingResponse | ComplaintStatus::Filed { .. } => {
-            if days_since_filing > COMPLAINT_RESPONSE_DEADLINE_DAYS as i64 {
-                return Err(TourismLawError::ComplaintNotAddressed {
-                    complaint_id: complaint.complaint_id.clone(),
-                    days: days_since_filing as u32,
-                });
-            }
+        ComplaintStatus::PendingResponse | ComplaintStatus::Filed { .. }
+            if days_since_filing > COMPLAINT_RESPONSE_DEADLINE_DAYS as i64 =>
+        {
+            return Err(TourismLawError::ComplaintNotAddressed {
+                complaint_id: complaint.complaint_id.clone(),
+                days: days_since_filing as u32,
+            });
         }
         _ => {}
     }

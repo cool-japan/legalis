@@ -1,7 +1,8 @@
 [package]
 name = "minpo-715-employer-liability"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+publish = false
 
 [[bin]]
 name = "minpo-715-employer-liability"

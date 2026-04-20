@@ -294,18 +294,16 @@ pub fn validate_maintenance_obligation(obligation: &MaintenanceObligation) -> Re
 
     // Validate relationship-specific rules
     match obligation.relationship {
-        MaintenanceRelationship::ParentToChild => {
+        MaintenanceRelationship::ParentToChild
             // Parent must be adult
-            if !obligation.obligor.is_adult() {
+            if !obligation.obligor.is_adult() => {
                 return Err(FamilyLawError::CustodyHolderMinor);
             }
-        }
-        MaintenanceRelationship::ChildToParent => {
+        MaintenanceRelationship::ChildToParent
             // Child must be adult to owe maintenance to parent
-            if !obligation.obligor.is_adult() {
+            if !obligation.obligor.is_adult() => {
                 return Err(FamilyLawError::CustodyHolderMinor);
             }
-        }
         _ => {}
     }
 

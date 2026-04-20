@@ -66,7 +66,7 @@ impl ExperienceReplay {
             .iter()
             .cloned()
             .collect::<Vec<_>>()
-            .choose_multiple(&mut rng, sample_size)
+            .sample(&mut rng, sample_size)
             .cloned()
             .collect()
     }
@@ -136,7 +136,7 @@ impl DQNAgent {
 
     /// Chooses an action using epsilon-greedy policy.
     pub fn choose_action(&self, state: &[f64]) -> usize {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         if rng.random_range(0.0..1.0) < self.epsilon {
@@ -155,7 +155,7 @@ impl DQNAgent {
             .max_by(|a, b| {
                 let q_a = self.q_table.get(&(state_hash, *a)).unwrap_or(&0.0);
                 let q_b = self.q_table.get(&(state_hash, *b)).unwrap_or(&0.0);
-                q_a.partial_cmp(q_b).unwrap()
+                q_a.partial_cmp(q_b).unwrap_or(std::cmp::Ordering::Equal)
             })
             .unwrap_or(0)
     }
@@ -248,7 +248,7 @@ impl ActorCriticAgent {
 
     /// Chooses an action using the current policy.
     pub fn choose_action(&self, state: &[f64]) -> usize {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         let state_hash = Self::hash_state(state);
@@ -470,7 +470,9 @@ impl ContractNetProtocol {
                 .max_by(|a, b| {
                     let score_a = a.capability / a.bid.max(0.001);
                     let score_b = b.capability / b.bid.max(0.001);
-                    score_a.partial_cmp(&score_b).unwrap()
+                    score_a
+                        .partial_cmp(&score_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .map(|p| p.agent_id)
         })
@@ -990,7 +992,7 @@ impl CulturalEvolution {
 
     /// Simulates one generation of cultural transmission.
     pub fn simulate_generation(&mut self) {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         let agent_ids: Vec<Uuid> = self.agents.keys().copied().collect();
@@ -1058,7 +1060,7 @@ impl CulturalEvolution {
         }
 
         let mut counts: Vec<(Uuid, usize)> = meme_counts.into_iter().collect();
-        counts.sort_by(|a, b| b.1.cmp(&a.1));
+        counts.sort_by_key(|b| std::cmp::Reverse(b.1));
         counts.truncate(top_n);
 
         counts

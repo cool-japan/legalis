@@ -50,14 +50,11 @@ impl EvaluationContext for EuEvaluationContext<'_, DataController> {
 
     fn check_geographic(&self, region_type: RegionType, region_id: &str) -> bool {
         match region_type {
-            RegionType::Country => {
+            RegionType::Country
                 // Check if established in EU
-                if region_id == "EU" {
+                if region_id == "EU" => {
                     self.entity.established_in_eu
-                } else {
-                    false
                 }
-            }
             RegionType::Custom => region_id == "EU" || region_id == "EEA",
             _ => false,
         }

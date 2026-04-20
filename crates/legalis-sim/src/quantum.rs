@@ -8,7 +8,7 @@
 //! - Quantum random number generation
 
 use crate::error::SimResult;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

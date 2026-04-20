@@ -117,49 +117,47 @@ impl LegalRuleMLImporter {
                 Ok(Event::End(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     match name.as_str() {
-                        "Rule" | "LegalRule" => {
-                            if in_rule {
-                                // Create statute from collected data
-                                let id = if current_id.is_empty() {
-                                    format!("lrml-{}", statutes.len() + 1)
-                                } else {
-                                    current_id.to_lowercase().replace(['_', ' ', ':'], "-")
-                                };
+                        "Rule" | "LegalRule" if in_rule => {
+                            // Create statute from collected data
+                            let id = if current_id.is_empty() {
+                                format!("lrml-{}", statutes.len() + 1)
+                            } else {
+                                current_id.to_lowercase().replace(['_', ' ', ':'], "-")
+                            };
 
-                                let title = if current_name.is_empty() {
-                                    format!("Rule {}", statutes.len() + 1)
-                                } else {
-                                    current_name.clone()
-                                };
+                            let title = if current_name.is_empty() {
+                                format!("Rule {}", statutes.len() + 1)
+                            } else {
+                                current_name.clone()
+                            };
 
-                                let effect_desc = if current_conclusion.is_empty() {
-                                    title.clone()
-                                } else {
-                                    current_conclusion.clone()
-                                };
+                            let effect_desc = if current_conclusion.is_empty() {
+                                title.clone()
+                            } else {
+                                current_conclusion.clone()
+                            };
 
-                                let mut statute = Statute::new(
-                                    &id,
-                                    &title,
-                                    Effect::new(EffectType::Grant, &effect_desc),
-                                );
+                            let mut statute = Statute::new(
+                                &id,
+                                &title,
+                                Effect::new(EffectType::Grant, &effect_desc),
+                            );
 
-                                // Add premises as conditions
-                                for premise in &current_premises {
-                                    if let Some(cond) = Self::parse_premise(premise, report) {
-                                        statute.preconditions.push(cond);
-                                    }
+                            // Add premises as conditions
+                            for premise in &current_premises {
+                                if let Some(cond) = Self::parse_premise(premise, report) {
+                                    statute.preconditions.push(cond);
                                 }
-
-                                statutes.push(statute);
-
-                                // Reset state
-                                current_id.clear();
-                                current_name.clear();
-                                current_premises.clear();
-                                current_conclusion.clear();
-                                in_rule = false;
                             }
+
+                            statutes.push(statute);
+
+                            // Reset state
+                            current_id.clear();
+                            current_name.clear();
+                            current_premises.clear();
+                            current_conclusion.clear();
+                            in_rule = false;
                         }
                         "Name" => {
                             in_name = false;

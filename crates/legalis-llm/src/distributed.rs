@@ -6,7 +6,7 @@
 use crate::{LLMProvider, TextStream};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -212,7 +212,7 @@ impl DistributedInference {
                 // Simple hash-based selection
                 let hash = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .expect("SystemTime is after UNIX_EPOCH")
                     .as_nanos() as usize;
                 let node = available_nodes[hash % available_nodes.len()].clone();
                 Ok(node)

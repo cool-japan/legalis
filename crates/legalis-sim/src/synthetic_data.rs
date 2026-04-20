@@ -8,7 +8,7 @@
 //! - Geographic-aware population generation
 use crate::error::{SimResult, SimulationError};
 use legalis_core::{BasicEntity, LegalEntity};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -306,7 +306,12 @@ impl DemographicSynthesizer {
 
                 if selected_value.is_empty() && !constraint.distribution.is_empty() {
                     // Fallback: pick the first value
-                    selected_value = constraint.distribution.keys().next().unwrap().clone();
+                    selected_value = constraint
+                        .distribution
+                        .keys()
+                        .next()
+                        .expect("invariant: distribution is non-empty, checked above")
+                        .clone();
                 }
 
                 entity.insert(constraint.attribute.clone(), selected_value);
@@ -342,7 +347,12 @@ impl DemographicSynthesizer {
                 }
 
                 if selected_value.is_empty() && !constraint.distribution.is_empty() {
-                    selected_value = constraint.distribution.keys().next().unwrap().clone();
+                    selected_value = constraint
+                        .distribution
+                        .keys()
+                        .next()
+                        .expect("invariant: distribution is non-empty, checked above")
+                        .clone();
                 }
 
                 entity.insert(constraint.attribute.clone(), selected_value);
@@ -423,7 +433,7 @@ impl IncomeWealthGenerator {
         let std_dev = variance.sqrt();
 
         let mut sorted = data.to_vec();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let median = if sorted.len().is_multiple_of(2) {
             (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
         } else {

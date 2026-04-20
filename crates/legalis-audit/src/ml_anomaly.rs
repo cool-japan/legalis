@@ -181,7 +181,11 @@ impl MLAnomalyDetector {
 
             // Create anomaly if score exceeds threshold
             if anomaly_score >= self.config.sensitivity {
-                let record = records.iter().find(|r| r.id == fv.record_id).unwrap();
+                // feature_vectors were built from records — record_id is always present
+                let record = records
+                    .iter()
+                    .find(|r| r.id == fv.record_id)
+                    .expect("invariant: fv.record_id originates from records");
                 anomalies.push(MLAnomaly {
                     record_id: fv.record_id,
                     timestamp: record.timestamp,
@@ -206,7 +210,11 @@ impl MLAnomalyDetector {
         }
 
         // Remove duplicates and sort by score
-        anomalies.sort_by(|a, b| b.anomaly_score.partial_cmp(&a.anomaly_score).unwrap());
+        anomalies.sort_by(|a, b| {
+            b.anomaly_score
+                .partial_cmp(&a.anomaly_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         anomalies.dedup_by_key(|a| a.record_id);
 
         Ok(anomalies)
@@ -232,7 +240,11 @@ impl MLAnomalyDetector {
             };
 
             if anomaly_score >= self.config.sensitivity {
-                let record = records.iter().find(|r| r.id == fv.record_id).unwrap();
+                // feature_vectors were built from records — record_id is always present
+                let record = records
+                    .iter()
+                    .find(|r| r.id == fv.record_id)
+                    .expect("invariant: fv.record_id originates from records");
                 anomalies.push(MLAnomaly {
                     record_id: fv.record_id,
                     timestamp: record.timestamp,
@@ -265,7 +277,7 @@ impl MLAnomalyDetector {
                 .map(|(i, other)| (i, Self::euclidean_distance(&fv.features, &other.features)))
                 .collect();
 
-            distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             let neighbors: Vec<_> = distances.iter().take(k).collect();
 
             if neighbors.is_empty() {
@@ -321,7 +333,11 @@ impl MLAnomalyDetector {
             };
 
             if anomaly_score >= self.config.sensitivity {
-                let record = records.iter().find(|r| r.id == fv.record_id).unwrap();
+                // feature_vectors were built from records — record_id is always present
+                let record = records
+                    .iter()
+                    .find(|r| r.id == fv.record_id)
+                    .expect("invariant: fv.record_id originates from records");
                 anomalies.push(MLAnomaly {
                     record_id: fv.record_id,
                     timestamp: record.timestamp,

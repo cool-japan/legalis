@@ -432,9 +432,13 @@ impl IncidentResponder {
             return 0.0;
         }
 
+        // resolved_at is Some (filtered above)
         let total_minutes: i64 = resolved
             .iter()
-            .map(|i| (i.resolved_at.unwrap() - i.triggered_at).num_minutes())
+            .map(|i| {
+                (i.resolved_at.expect("invariant: filtered to is_some()") - i.triggered_at)
+                    .num_minutes()
+            })
             .sum();
 
         total_minutes as f64 / resolved.len() as f64

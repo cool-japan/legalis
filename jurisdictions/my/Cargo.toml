@@ -23,3 +23,7 @@ uuid.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 tokio.workspace = true
+
+[[example]]
+name = "company_formation_my"
+path = "examples/company_formation.rs"

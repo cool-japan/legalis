@@ -86,9 +86,11 @@ fn base64_encode(bytes: &[u8]) -> String {
     {
         let mut encoder =
             base64::write::EncoderWriter::new(&mut buf, &base64::engine::general_purpose::STANDARD);
-        encoder.write_all(bytes).unwrap();
+        encoder
+            .write_all(bytes)
+            .expect("writing to Vec is infallible");
     }
-    String::from_utf8(buf).unwrap()
+    String::from_utf8(buf).expect("invariant: base64 output is always valid UTF-8")
 }
 
 /// Represents an audio input in various formats.

@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/legalis-mx.svg)](https://crates.io/crates/legalis-mx)
 [![Documentation](https://docs.rs/legalis-mx/badge.svg)](https://docs.rs/legalis-mx)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Comprehensive Mexican legal framework implementation in **Pure Rust**.
 
@@ -186,12 +186,7 @@ Full documentation available at [docs.rs/legalis-mx](https://docs.rs/legalis-mx)
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0).
 
 ## Contributing
 

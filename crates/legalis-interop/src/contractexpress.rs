@@ -62,7 +62,7 @@ impl ContractExpressImporter {
 
     fn parse_merge_fields(&self, text: &str) -> Vec<String> {
         // Merge fields in ContractExpress are typically «Field_Name»
-        let re = Regex::new(r"«([^»]+)»").unwrap();
+        let re = Regex::new(r"«([^»]+)»").expect("regex pattern is valid");
         re.captures_iter(text)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
             .collect()
@@ -72,14 +72,14 @@ impl ContractExpressImporter {
         let mut conditions = Vec::new();
 
         // Look for IF statements
-        let re = Regex::new(r"IF\s+([^:]+):").unwrap();
+        let re = Regex::new(r"IF\s+([^:]+):").expect("regex pattern is valid");
         for cap in re.captures_iter(text) {
             if let Some(condition_text) = cap.get(1) {
                 let cond_str = condition_text.as_str().trim();
 
                 // Parse age conditions
                 if cond_str.to_lowercase().contains("age") {
-                    let age_re = Regex::new(r"age\s*>=\s*(\d+)").unwrap();
+                    let age_re = Regex::new(r"age\s*>=\s*(\d+)").expect("regex pattern is valid");
                     if let Some(age_cap) = age_re.captures(cond_str)
                         && let Some(age_str) = age_cap.get(1)
                         && let Ok(age_val) = age_str.as_str().parse::<u32>()

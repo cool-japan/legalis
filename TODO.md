@@ -1,10 +1,18 @@
 # Legalis-RS TODO
 
-## Project Status Summary (v0.1.4)
+## Project Status Summary (v0.1.5)
 
 All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
 
-**Statistics**: 2,012 Rust files | 787k LoC (code) | 944k LoC (total with comments/blanks) | 16,171+ tests | 23 jurisdictions
+**Statistics**: 2,221 Rust files | 812k LoC (code) | 1,009k LoC (total with comments/blanks) | 14,763+ tests | 23 jurisdictions
+
+### Recent Additions (v0.1.5)
+- **Pure-Rust PDF Backend**: Migrated from `printpdf` to `fop-render = "0.1.1"` (COOLJAPAN ecosystem, `SimpleDocumentBuilder` API) — eliminates RSA CVE and achieves 100% pure-Rust stack
+- **Full Code Splitting**: All source files split to <2,000 lines via splitrs; zero oversized files (2,221 Rust files, up from 1,657)
+- **No-Unwrap Policy**: All `unwrap()` calls removed from production source code across all 16 core crates
+- **Workspace Versioning**: All 76 crates (including 35 examples) now use `version.workspace = true` for unified versioning
+- **CVE Remediation**: `cargo update` applied; RSA CVE eliminated by removing `printpdf`
+- **22 Example READMEs**: Comprehensive README.md files generated for all example applications
 
 ### Recent Additions (v0.1.4)
 - **5 New Jurisdictions**: South Korea (KR), Mexico (MX), Malaysia (MY), Russia (RU), Saudi Arabia (SA)
@@ -16,50 +24,50 @@ All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no
 
 | Crate | Version | Status | Tests |
 |-------|---------|--------|-------|
-| legalis-core | 0.3.0 | Stable | 631 passing |
-| legalis-dsl | 0.2.0 | Stable | 453 passing |
-| legalis-registry | 0.2.9 | Stable | 680 passing |
-| legalis-llm | 0.4.8 | Stable | 543 passing |
-| legalis-verifier | 0.2.9 | Stable | 392 passing |
-| legalis-sim | 0.2.9 | Stable | 643 passing |
-| legalis-diff | 0.4.0 | Stable | Passing |
-| legalis-i18n | 0.3.4 | Stable | 584 passing |
-| legalis-porting | 0.3.0 | Stable | 298 passing |
-| legalis-viz | 0.2.0 | Stable | 453 passing |
-| legalis-chain | 0.3.7 | Stable | Passing |
-| legalis-lod | 0.3.9 | Stable | 799 passing |
-| legalis-audit | 0.2.4 | Stable | 529 passing |
-| legalis-interop | 0.2.8 | Stable | 465 passing |
-| legalis-api | 0.2.3 | Stable | 200 passing |
-| legalis (CLI) | 0.2.3 | Stable | Passing |
+| legalis-core | 0.1.5 | Stable | 466 passing |
+| legalis-dsl | 0.1.5 | Stable | 495 passing |
+| legalis-registry | 0.1.5 | Stable | 827 passing |
+| legalis-llm | 0.1.5 | Stable | 593 passing |
+| legalis-verifier | 0.1.5 | Stable | 532 passing |
+| legalis-sim | 0.1.5 | Stable | 685 passing |
+| legalis-diff | 0.1.5 | Stable | 529 passing |
+| legalis-i18n | 0.1.5 | Stable | 595 passing |
+| legalis-porting | 0.1.5 | Stable | 342 passing |
+| legalis-viz | 0.1.5 | Stable | 523 passing |
+| legalis-chain | 0.1.5 | Stable | 81 passing |
+| legalis-lod | 0.1.5 | Stable | 799 passing |
+| legalis-audit | 0.1.5 | Stable | 608 passing |
+| legalis-interop | 0.1.5 | Stable | 523 passing |
+| legalis-api | 0.1.5 | Stable | 281 passing |
+| legalis (CLI) | 0.1.5 | Stable | 167 passing |
 
 ### Jurisdiction Crates (23)
 
 | Crate | Version | Status | Tests | Coverage |
 |-------|---------|--------|-------|----------|
-| legalis-ae | 0.1.4 | Stable | 700+ | Civil Code, Criminal Code, Commercial Companies, Labor Law, Tax Law, Data Protection, Cybercrime, Banking/Finance, IP, Real Estate, Islamic Law, Arbitration, Free Zones |
-| legalis-au | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-br | 0.1.4 | Stable | 800+ | Civil Code (Obligations, Contracts, Property, Family), Corporate Law (Governance, M&A), Tax Law (Income, ICMS, IPI, PIS/COFINS), Criminal Code, Environmental Law, Banking Law, Bankruptcy Law, IP |
-| legalis-ca | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-cn | 0.1.4 | Stable | 900+ | Civil Code (Personality Rights, Marriage, Succession, Property, Contracts, Torts), Foreign Investment, Data Security, Antitrust |
-| legalis-de | 0.1.4 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-eu | 0.1.4 | Stable | Passing | Constitutional, Treaties |
-| legalis-fr | 0.1.4 | Stable | Passing | Civil Code, Criminal Code, Labor Code |
-| legalis-id | 0.1.4 | Stable | 1,000+ | Company Law, Tax Law (Income, VAT, WHT, PBB), Omnibus Law (Cipta Kerja, Investment, Labor), Banking Law, Capital Markets, Land Law, Construction Law, Criminal Code, IP |
-| legalis-in | 0.1.4 | Stable | 1,200+ | Arbitration Act, Civil/Criminal Procedure Code, Competition Law, Environmental Law, Evidence Act, FEMA, Insolvency Code, IP (Patents, Trademarks), Securities Law |
-| legalis-jp | 0.1.4 | Stable | Passing | Civil Code, Criminal Code, Labor Law |
-| legalis-kr | 0.1.4 | Stable | 1,500+ | Civil Code (General, Property, Obligations, Family, Succession), Commercial Code, Criminal Code, Labor Law, Tax Law (Income, Corporate, VAT), Data Protection, Competition Law, IP, Financial Services, Real Estate, Procedure Law |
-| legalis-la | 0.1.4 | Stable | Passing | Civil Code |
-| legalis-mx | 0.1.4 | Stable | 800+ | Civil Code, Commercial Code, Criminal Code, Labor Law, Tax Law, Constitutional Law |
-| legalis-my | 0.1.4 | Stable | 600+ | Companies Act, Contract Law, Employment Law, Tax Law, Islamic Law, Land Law, IP |
-| legalis-ru | 0.1.4 | Stable | 900+ | Civil Code, Commercial Law, Criminal Code, Labor Law, Tax Law, Administrative Law, Constitutional Law |
-| legalis-sa | 0.1.4 | Stable | 700+ | Islamic Law (Sharia, Hanbali School), Commercial Code, Labor Law, Tax Law (Zakat, VAT, Income), Corporate Governance, Real Estate Law, IP |
-| legalis-sg | 0.1.4 | Stable | Passing | Companies Act, Employment Act, PDPA |
-| legalis-th | 0.1.4 | Stable | 1,100+ | Civil/Commercial Code (Property, Obligations, Family, Succession), Company Act, Securities Law, Tax Law (Income, VAT, WHT), Criminal Code, Labor Law, IP, Competition Law, Bankruptcy, Investment Promotion, Land Code, Immigration, Consumer Protection, Arbitration |
-| legalis-uk | 0.1.4 | Stable | Passing | Common Law, Employment Law |
-| legalis-us | 0.1.4 | Stable | Passing | Constitutional, Employment Law, Environmental |
-| legalis-vn | 0.1.4 | Stable | 1,000+ | Civil Code (Property, Obligations, Inheritance), Company Law, Tax Law (VAT, CIT, PIT, SCT), Banking Law, Competition Law, Construction Law, Consumer Protection, Criminal Code, Cybersecurity Law, IP, Land Law |
-| legalis-za | 0.1.4 | Stable | 900+ | Constitution, Constitutional Court, Criminal Law, Property Law (Common Law, Deeds Registration, MPRDA), Competition Law, Environmental Law, Financial Services, Insolvency, IP, Tax Law, Customary Law |
+| legalis-ae | 0.1.5 | Stable | 700+ | Civil Code, Criminal Code, Commercial Companies, Labor Law, Tax Law, Data Protection, Cybercrime, Banking/Finance, IP, Real Estate, Islamic Law, Arbitration, Free Zones |
+| legalis-au | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-br | 0.1.5 | Stable | 800+ | Civil Code (Obligations, Contracts, Property, Family), Corporate Law (Governance, M&A), Tax Law (Income, ICMS, IPI, PIS/COFINS), Criminal Code, Environmental Law, Banking Law, Bankruptcy Law, IP |
+| legalis-ca | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-cn | 0.1.5 | Stable | 900+ | Civil Code (Personality Rights, Marriage, Succession, Property, Contracts, Torts), Foreign Investment, Data Security, Antitrust |
+| legalis-de | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-eu | 0.1.5 | Stable | Passing | Constitutional, Treaties |
+| legalis-fr | 0.1.5 | Stable | Passing | Civil Code, Criminal Code, Labor Code |
+| legalis-id | 0.1.5 | Stable | 1,000+ | Company Law, Tax Law (Income, VAT, WHT, PBB), Omnibus Law (Cipta Kerja, Investment, Labor), Banking Law, Capital Markets, Land Law, Construction Law, Criminal Code, IP |
+| legalis-in | 0.1.5 | Stable | 1,200+ | Arbitration Act, Civil/Criminal Procedure Code, Competition Law, Environmental Law, Evidence Act, FEMA, Insolvency Code, IP (Patents, Trademarks), Securities Law |
+| legalis-jp | 0.1.5 | Stable | Passing | Civil Code, Criminal Code, Labor Law |
+| legalis-kr | 0.1.5 | Stable | 1,500+ | Civil Code (General, Property, Obligations, Family, Succession), Commercial Code, Criminal Code, Labor Law, Tax Law (Income, Corporate, VAT), Data Protection, Competition Law, IP, Financial Services, Real Estate, Procedure Law |
+| legalis-la | 0.1.5 | Stable | Passing | Civil Code |
+| legalis-mx | 0.1.5 | Stable | 800+ | Civil Code, Commercial Code, Criminal Code, Labor Law, Tax Law, Constitutional Law |
+| legalis-my | 0.1.5 | Stable | 600+ | Companies Act, Contract Law, Employment Law, Tax Law, Islamic Law, Land Law, IP |
+| legalis-ru | 0.1.5 | Stable | 900+ | Civil Code, Commercial Law, Criminal Code, Labor Law, Tax Law, Administrative Law, Constitutional Law |
+| legalis-sa | 0.1.5 | Stable | 700+ | Islamic Law (Sharia, Hanbali School), Commercial Code, Labor Law, Tax Law (Zakat, VAT, Income), Corporate Governance, Real Estate Law, IP |
+| legalis-sg | 0.1.5 | Stable | Passing | Companies Act, Employment Act, PDPA |
+| legalis-th | 0.1.5 | Stable | 1,100+ | Civil/Commercial Code (Property, Obligations, Family, Succession), Company Act, Securities Law, Tax Law (Income, VAT, WHT), Criminal Code, Labor Law, IP, Competition Law, Bankruptcy, Investment Promotion, Land Code, Immigration, Consumer Protection, Arbitration |
+| legalis-uk | 0.1.5 | Stable | Passing | Common Law, Employment Law |
+| legalis-us | 0.1.5 | Stable | Passing | Constitutional, Employment Law, Environmental |
+| legalis-vn | 0.1.5 | Stable | 1,000+ | Civil Code (Property, Obligations, Inheritance), Company Law, Tax Law (VAT, CIT, PIT, SCT), Banking Law, Competition Law, Construction Law, Consumer Protection, Criminal Code, Cybersecurity Law, IP, Land Law |
+| legalis-za | 0.1.5 | Stable | 900+ | Constitution, Constitutional Court, Criminal Law, Property Law (Common Law, Deeds Registration, MPRDA), Competition Law, Environmental Law, Financial Services, Insolvency, IP, Tax Law, Customary Law |
 
 ### Jurisdiction Integration Improvements
 
@@ -135,7 +143,7 @@ The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis
 - [x] Add OpenTelemetry integration for observability (in legalis-audit)
 
 ### In Progress
-- [ ] Add documentation comments (rustdoc) to all public APIs
+- [x] Add documentation comments (rustdoc) to all public APIs
 
 ### Backlog
 - [x] Create web-based UI frontend for legalis-api (completed - web-ui/public/index.html)

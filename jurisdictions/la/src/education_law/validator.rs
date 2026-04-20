@@ -679,13 +679,11 @@ pub fn validate_scholarship_eligibility(
 ) -> Result<()> {
     for criterion in &scholarship.eligibility_criteria {
         match criterion {
-            EligibilityCriterion::MinimumGPA(min_gpa) => {
-                if applicant_gpa < *min_gpa {
-                    return Err(EducationLawError::GPABelowMinimum {
-                        actual: applicant_gpa,
-                        required: *min_gpa,
-                    });
-                }
+            EligibilityCriterion::MinimumGPA(min_gpa) if applicant_gpa < *min_gpa => {
+                return Err(EducationLawError::GPABelowMinimum {
+                    actual: applicant_gpa,
+                    required: *min_gpa,
+                });
             }
             EligibilityCriterion::EconomicNeed { max_family_income } => {
                 if let (Some(max), Some(actual)) = (max_family_income, family_income)

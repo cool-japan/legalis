@@ -197,10 +197,10 @@ mod tests {
 
     #[test]
     fn test_jsonl_storage() {
-        let temp_file = "/tmp/test_audit_trail.jsonl";
-        let _ = std::fs::remove_file(temp_file);
+        let temp_dir = tempfile::TempDir::new().expect("tempdir");
+        let temp_file = temp_dir.path().join("test_audit_trail.jsonl");
 
-        let mut storage = JsonlStorage::new(temp_file).unwrap();
+        let mut storage = JsonlStorage::new(&temp_file).unwrap();
 
         let record = AuditRecord::new(
             EventType::AutomaticDecision,
@@ -222,18 +222,15 @@ mod tests {
 
         let retrieved = storage.get(id).unwrap();
         assert_eq!(retrieved.id, id);
-
-        // Clean up
-        let _ = std::fs::remove_file(temp_file);
     }
 
     #[test]
     fn test_jsonl_persistence() {
-        let temp_file = "/tmp/test_audit_persistence.jsonl";
-        let _ = std::fs::remove_file(temp_file);
+        let temp_dir = tempfile::TempDir::new().expect("tempdir");
+        let temp_file = temp_dir.path().join("test_audit_persistence.jsonl");
 
         let id = {
-            let mut storage = JsonlStorage::new(temp_file).unwrap();
+            let mut storage = JsonlStorage::new(&temp_file).unwrap();
             let record = AuditRecord::new(
                 EventType::AutomaticDecision,
                 Actor::System {
@@ -254,11 +251,8 @@ mod tests {
         };
 
         // Load in a new storage instance
-        let storage = JsonlStorage::new(temp_file).unwrap();
+        let storage = JsonlStorage::new(&temp_file).unwrap();
         let retrieved = storage.get(id).unwrap();
         assert_eq!(retrieved.id, id);
-
-        // Clean up
-        let _ = std::fs::remove_file(temp_file);
     }
 }

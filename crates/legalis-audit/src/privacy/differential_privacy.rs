@@ -5,7 +5,7 @@
 //! to prevent re-identification while maintaining statistical utility.
 
 use crate::{AuditRecord, AuditResult};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

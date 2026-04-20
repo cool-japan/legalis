@@ -287,7 +287,7 @@ impl Message {
             message_type,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime should be after UNIX_EPOCH")
                 .as_secs(),
         }
     }
@@ -323,20 +323,20 @@ impl MessageQueue {
         destination: Option<NodeId>,
         message_type: ClusterMessageType,
     ) -> SimResult<MessageId> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock().expect("mutex poisoned");
         let id = *next_id;
         *next_id += 1;
         drop(next_id);
 
         let message = Message::new(id, source, destination, message_type);
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().expect("mutex poisoned");
         queue.push_back(message);
         Ok(id)
     }
 
     /// Receive a message (blocking until message available)
     pub fn receive(&self, node_id: NodeId) -> Option<Message> {
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().expect("mutex poisoned");
         let position = queue
             .iter()
             .position(|msg| msg.destination == Some(node_id) || msg.destination.is_none());
@@ -346,7 +346,7 @@ impl MessageQueue {
 
     /// Peek at next message without removing
     pub fn peek(&self, node_id: NodeId) -> Option<Message> {
-        let queue = self.queue.lock().unwrap();
+        let queue = self.queue.lock().expect("mutex poisoned");
         queue
             .iter()
             .find(|msg| msg.destination == Some(node_id) || msg.destination.is_none())
@@ -355,12 +355,12 @@ impl MessageQueue {
 
     /// Get queue size
     pub fn size(&self) -> usize {
-        self.queue.lock().unwrap().len()
+        self.queue.lock().expect("mutex poisoned").len()
     }
 
     /// Clear the queue
     pub fn clear(&self) {
-        self.queue.lock().unwrap().clear();
+        self.queue.lock().expect("mutex poisoned").clear();
     }
 }
 
@@ -440,8 +440,16 @@ impl LoadBalancer {
         let mut overloaded: Vec<_> = nodes.iter().filter(|n| n.load > avg_load).collect();
         let mut underloaded: Vec<_> = nodes.iter().filter(|n| n.load < avg_load).collect();
 
-        overloaded.sort_by(|a, b| b.load.partial_cmp(&a.load).unwrap());
-        underloaded.sort_by(|a, b| a.load.partial_cmp(&b.load).unwrap());
+        overloaded.sort_by(|a, b| {
+            b.load
+                .partial_cmp(&a.load)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        underloaded.sort_by(|a, b| {
+            a.load
+                .partial_cmp(&b.load)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Move partitions from overloaded to underloaded nodes
         for overloaded_node in &overloaded {

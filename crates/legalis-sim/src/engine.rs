@@ -729,7 +729,7 @@ fn rand_simple() -> f64 {
         if SEED == 0 {
             SEED = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("SystemTime should be after UNIX_EPOCH")
                 .as_nanos() as u64;
         }
         SEED = SEED.wrapping_mul(6364136223846793005).wrapping_add(1);

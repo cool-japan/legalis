@@ -364,8 +364,14 @@ impl ResilientConverter {
                         result.output = Some(output);
                     } else {
                         // Append to existing output
-                        result.output =
-                            Some(format!("{}\n\n{}", result.output.as_ref().unwrap(), output));
+                        result.output = Some(format!(
+                            "{}\n\n{}",
+                            result
+                                .output
+                                .as_ref()
+                                .expect("invariant: output is Some (else branch of is_none check)"),
+                            output
+                        ));
                     }
                     // Merge report
                     result.report.statutes_converted += report.statutes_converted;

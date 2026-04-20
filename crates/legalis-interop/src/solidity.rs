@@ -167,7 +167,10 @@ impl SolidityImporter {
         for line in source.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("contract ") || trimmed.starts_with("abstract contract ") {
-                let name_start = trimmed.find("contract ").unwrap() + "contract ".len();
+                let name_start = trimmed
+                    .find("contract ")
+                    .expect("invariant: starts_with('contract ') checked above")
+                    + "contract ".len();
                 if let Some(name_end) =
                     trimmed[name_start..].find(|c: char| c.is_whitespace() || c == '{')
                 {
@@ -365,7 +368,12 @@ impl SolidityExporter {
                 .filter_map(|cond| {
                     if let Condition::Custom { description, .. } = cond {
                         if description.starts_with("Requires: ") {
-                            Some(description.strip_prefix("Requires: ").unwrap().to_string())
+                            Some(
+                                description
+                                    .strip_prefix("Requires: ")
+                                    .expect("invariant: starts_with checked before strip_prefix")
+                                    .to_string(),
+                            )
                         } else {
                             None
                         }

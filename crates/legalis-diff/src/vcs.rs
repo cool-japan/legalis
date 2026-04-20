@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_repository_creation() {
-        let repo = StatuteRepository::new("/tmp/test-repo");
+        let repo = StatuteRepository::new(std::env::temp_dir().join("legalis-vcs-test-repo"));
         assert_eq!(repo.current_branch, "main");
         assert!(repo.commits.is_empty());
         assert!(repo.statutes.is_empty());
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_add_commit() {
-        let mut repo = StatuteRepository::new("/tmp/test-repo");
+        let mut repo = StatuteRepository::new(std::env::temp_dir().join("legalis-vcs-test-repo"));
         let commit = test_commit("commit1", "Initial commit");
         let statute = test_statute();
 
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_diff_commits() {
-        let mut repo = StatuteRepository::new("/tmp/test-repo");
+        let mut repo = StatuteRepository::new(std::env::temp_dir().join("legalis-vcs-test-repo"));
 
         let statute_v1 = test_statute();
         let mut statute_v2 = statute_v1.clone();
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_statute_history() {
-        let mut repo = StatuteRepository::new("/tmp/test-repo");
+        let mut repo = StatuteRepository::new(std::env::temp_dir().join("legalis-vcs-test-repo"));
         let statute = test_statute();
 
         repo.add_commit(test_commit("commit1", "v1"), vec![statute.clone()]);

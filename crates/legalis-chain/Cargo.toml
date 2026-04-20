@@ -14,10 +14,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 chrono = "0.4"
-rayon = "1.11"
+rayon = "1.12"
 
 [dev-dependencies]
-criterion = "0.8"
+criterion.workspace = true
 
 [[bench]]
 name = "contract_generation"

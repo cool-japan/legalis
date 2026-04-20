@@ -170,8 +170,14 @@ pub fn analyze_time_series(diffs: &[TimestampedDiff]) -> TimeSeriesStats {
 
     // Calculate time span
     let timestamps: Vec<_> = diffs.iter().map(|d| d.timestamp).collect();
-    let min_time = timestamps.iter().min().unwrap();
-    let max_time = timestamps.iter().max().unwrap();
+    let min_time = timestamps
+        .iter()
+        .min()
+        .expect("invariant: diffs is non-empty, checked above");
+    let max_time = timestamps
+        .iter()
+        .max()
+        .expect("invariant: diffs is non-empty, checked above");
     let time_span = (*max_time - *min_time).num_days();
 
     // Group by day
@@ -265,8 +271,14 @@ pub fn calculate_velocity(diffs: &[TimestampedDiff]) -> ChangeVelocity {
 
     let total_changes: usize = diffs.iter().map(|d| d.diff.changes.len()).sum();
     let timestamps: Vec<_> = diffs.iter().map(|d| d.timestamp).collect();
-    let min_time = timestamps.iter().min().unwrap();
-    let max_time = timestamps.iter().max().unwrap();
+    let min_time = timestamps
+        .iter()
+        .min()
+        .expect("invariant: diffs is non-empty, checked above");
+    let max_time = timestamps
+        .iter()
+        .max()
+        .expect("invariant: diffs is non-empty, checked above");
     let time_span_days = (*max_time - *min_time).num_days().max(1);
 
     let changes_per_day = total_changes as f64 / time_span_days as f64;

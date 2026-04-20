@@ -152,7 +152,7 @@ pub fn sign_diff(diff: &StatuteDiff, keypair: &KeyPair) -> DiffResult<SignedDiff
     let signature = keypair.sign(&diff_json);
     let signed_at = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
+        .expect("SystemTime is after UNIX_EPOCH")
         .as_secs();
 
     Ok(SignedDiff {
@@ -394,7 +394,7 @@ impl AuditTrail {
     pub fn add_entry(&mut self, user: &str, action: &str, diff_id: &str, keypair: &KeyPair) {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime is after UNIX_EPOCH")
             .as_secs();
 
         let entry_data = format!("{}:{}:{}:{}", timestamp, user, action, diff_id);

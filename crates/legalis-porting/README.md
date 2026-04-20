@@ -112,4 +112,4 @@ legalis port input.legalis --target JP --format report
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
