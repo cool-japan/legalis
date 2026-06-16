@@ -6,7 +6,7 @@ Practical guide to using the Legalis-DE API.
 
 ```toml
 [dependencies]
-legalis-de = "0.1.1"
+legalis-de = "0.1.6"
 chrono = "0.4"  # For date values
 serde = { version = "1.0", features = ["derive"] }  # Optional: Serialization
 ```

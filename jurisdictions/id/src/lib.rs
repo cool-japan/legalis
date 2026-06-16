@@ -225,6 +225,7 @@ pub mod investment;
 pub mod labor_law;
 pub mod land_law;
 pub mod omnibus_law;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export commonly used items
@@ -263,6 +264,8 @@ pub use civil_code::{
     PropertyRight, PropertyType, get_contract_checklist, validate_contract_compliance,
     validate_contract_formation, validate_contract_validity, validate_legal_capacity,
 };
+
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

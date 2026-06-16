@@ -6,6 +6,8 @@
 [![Documentation](https://docs.rs/legalis-br/badge.svg)](https://docs.rs/legalis-br)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+**Version 0.1.6** — 14 modules, 199 tests passing, 0 warnings. / **Versão 0.1.6** — 14 módulos, 199 testes aprovados, 0 avisos.
+
 ## English
 
 ### Overview
@@ -117,7 +119,7 @@ match validate_withdrawal_right(&consumer_right) {
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-legalis-br = "0.1.3"
+legalis-br = "0.1.6"
 ```
 
 ---
@@ -233,7 +235,7 @@ match validate_withdrawal_right(&direito_consumidor) {
 Adicione ao seu `Cargo.toml`:
 ```toml
 [dependencies]
-legalis-br = "0.1.3"
+legalis-br = "0.1.6"
 ```
 
 ## License / Licença

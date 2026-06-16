@@ -7,7 +7,12 @@
 //! - Highlighting of discretionary "gray zones"
 
 // Trait implementations for all types (Default, Display, etc.)
+mod collaboration;
+mod data_exchange;
+mod filtering;
 mod functions;
+mod presentation;
+mod scalability;
 mod trait_impls;
 mod types;
 mod types_10;
@@ -22,7 +27,12 @@ mod types_8;
 mod types_9;
 
 // trait_impls contains only impl blocks, not types to re-export
+pub use collaboration::*;
+pub use data_exchange::*;
+pub use filtering::*;
 pub use functions::*;
+pub use presentation::*;
+pub use scalability::*;
 pub use types::*;
 pub use types_3::*;
 pub use types_4::*;

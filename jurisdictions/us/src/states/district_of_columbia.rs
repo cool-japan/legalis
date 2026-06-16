@@ -7,7 +7,8 @@
 //! - Complete bar to recovery if plaintiff at fault
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,24 @@ impl DistrictOfColumbiaLaw {
                 .with_year(1901),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1901, 1, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "Wingfield v. Peoples Drug Store, Inc., 379 A.2d 685",
+                "Wingfield v. Peoples Drug Store",
+                1994,
+            )
+            .with_significance(
+                "District of Columbia Court of Appeals applied contributory negligence as a \
+                 complete bar to recovery, confirming the District follows the minority rule.",
+            ),
+        )
         .with_notes(
             "The District of Columbia retains the traditional contributory negligence rule. \
              Any contributory negligence by the plaintiff is a complete bar to \
              recovery, regardless of the defendant's degree of negligence. One of \
-             only 5 US jurisdictions maintaining this minority rule (NC, VA, MD, AL, DC).",
+             only 5 US jurisdictions maintaining this minority rule (NC, VA, MD, AL, DC). \
+             A modified comparative rule applies only to pedestrian/cyclist cases under \
+             D.C. Code § 50-2204.52.",
         )
     }
 
@@ -117,5 +131,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = DistrictOfColumbiaLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "Wingfield v. Peoples Drug Store");
+        assert_eq!(case.year, 1994);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("complete bar")
+        );
+    }
+
+    #[test]
+    fn test_pedestrian_cyclist_exception_noted() {
+        let comp_neg = DistrictOfColumbiaLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("pedestrian"));
     }
 }

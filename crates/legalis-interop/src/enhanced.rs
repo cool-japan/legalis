@@ -197,6 +197,21 @@ impl EnhancedConverter {
             | LegalFormat::Vyper
             | LegalFormat::Cadence
             | LegalFormat::Move => true,
+            // AI-native formats - JSON-based, no normalization
+            LegalFormat::LlmNative
+            | LegalFormat::Embedding
+            | LegalFormat::NeuralDocument
+            | LegalFormat::AttentionMarkup
+            | LegalFormat::SemanticChunk => false,
+            // Preservation archive - canonical JSON container, no normalization
+            LegalFormat::PreservationArchive => false,
+            // Cross-reality formats - JSON scenes are not normalized; the SLM
+            // text DSL is line-structured and likewise must not be normalized.
+            LegalFormat::VrArAnnotation
+            | LegalFormat::SpatialDocument3D
+            | LegalFormat::Holographic
+            | LegalFormat::SpatialMarkup
+            | LegalFormat::MetaverseLegal => false,
         }
     }
 

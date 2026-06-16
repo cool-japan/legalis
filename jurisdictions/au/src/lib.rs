@@ -68,6 +68,7 @@ pub mod consumer_law;
 pub mod contract;
 pub mod corporate;
 pub mod criminal;
+pub mod dsl;
 pub mod employment;
 pub mod family;
 pub mod financial_services;
@@ -141,6 +142,7 @@ pub use corporate::{DirectorsDutiesAnalyzer, DirectorsDuty, InsolventTradingAnal
 pub use criminal::{
     Defence, FaultElement, OffenceAnalyzer, OffenceCategory, SentenceType, SentencingAnalyzer,
 };
+pub use dsl::statutes_as_dsl;
 pub use employment::{
     CompensationCalculator, EligibilityAnalyzer, GeneralProtectionsAnalyzer,
     NationalEmploymentStandard, NesAnalyzer, UnfairDismissalAnalyzer,

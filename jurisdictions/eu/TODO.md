@@ -464,49 +464,91 @@
 - 11 of 24 official EU languages
 
 ### Remaining Languages (13/24) - FUTURE
-- [ ] Bulgarian (BG) - GDPR
-- [ ] Croatian (HR) - GDPR
-- [ ] Danish (DA) - GDPR
-- [ ] Estonian (ET) - GDPR
-- [ ] Finnish (FI) - GDPR
-- [ ] Hungarian (HU) - GDPR
-- [ ] Irish (GA) - GDPR
-- [ ] Latvian (LV) - GDPR
-- [ ] Lithuanian (LT) - GDPR
-- [ ] Maltese (MT) - GDPR
-- [ ] Romanian (RO) - GDPR
-- [ ] Slovak (SK) - GDPR
-- [ ] Slovenian (SL) - GDPR
+- [ ] Bulgarian (BG) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Croatian (HR) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Danish (DA) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Estonian (ET) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Finnish (FI) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Hungarian (HU) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Irish (GA) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Latvian (LV) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Lithuanian (LT) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Maltese (MT) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Romanian (RO) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Slovak (SK) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
+- [ ] Slovenian (SL) - GDPR — DEFERRED: accurate legal translation requires the official EUR-Lex authentic text; generating it would risk inaccurate legal wording
 
 ### Community Contribution Framework
-- [ ] Translation contribution guide
-- [ ] EUR-Lex verification script
-- [ ] Translation quality checklist
-- [ ] Community review process
+- [ ] Translation contribution guide — DEFERRED: process + external EUR-Lex data
+- [ ] EUR-Lex verification script — DEFERRED: process + external EUR-Lex data
+- [ ] Translation quality checklist — DEFERRED: process + external EUR-Lex data
+- [ ] Community review process — DEFERRED: process + external EUR-Lex data
 
 ---
 
-## Phase 8: Member State Implementations (v0.8.0+) - FUTURE
+## Phase 8: Member State Implementations (v0.8.0+) - ✅ COMPLETED (2026-06-14)
 
 ### Germany (BDSG - Bundesdatenschutzgesetz)
-- [ ] GDPR implementation specifics
-- [ ] Age of consent (16 years)
-- [ ] Supervisory authority mapping (BfDI)
-- [ ] National data protection law additions
+- [x] GDPR implementation specifics
+- [x] Age of consent (16 years)
+- [x] Supervisory authority mapping (BfDI + 16 Länder DPAs)
+- [x] National data protection law additions (§ 26 employee data, § 38 DPO threshold, §§ 22-24 special categories / further processing, Art 10 criminal data)
 
 ### France (Loi Informatique et Libertés + RGPD)
-- [ ] CNIL (supervisory authority)
-- [ ] French GDPR implementation
-- [ ] National specifics
+- [x] CNIL (supervisory authority)
+- [x] French GDPR implementation (Loi 78-17 as amended by Loi 2018-493 & Ordonnance 2018-1125)
+- [x] National specifics (age 15 via Art. 7-1, NIR Art. 30, journalism Art. 80, collective actions Art. 37)
 
 ### Italy (Codice Privacy + GDPR)
-- [ ] Garante (supervisory authority)
-- [ ] Italian GDPR implementation
+- [x] Garante (supervisory authority)
+- [x] Italian GDPR implementation (D.Lgs. 196/2003 as amended by D.Lgs. 101/2018)
+- [x] National specifics (age 14 via Art. 2-quinquies, Arts 2-sexies/septies/octies, journalism Arts 136-139, criminal sanctions Arts 167-172)
 
 ### Pattern for Other Member States
-- [ ] Template for member state module
-- [ ] Directive transposition tracking
-- [ ] National law integration
+- [x] Template for member state module (`MemberStateGdpr` + builder + `OpeningClause`/`NationalDerogation`/`SupervisoryAuthority`/`NationalActCitation`)
+- [x] Directive transposition tracking (`TranspositionTracker`/`TranspositionRecord`/`TranspositionStatus`/`DirectiveReference`)
+- [x] National law integration (`for_state`, `effective_age_of_digital_consent`, `combined_consent_assessment`, `NationalGdprQuery`)
+
+---
+
+## COMPLETED (2026-06-14 — member-state GDPR implementations)
+
+New `member_states` module layering national GDPR specifics on the existing GDPR core
+(directly additive / backward-compatible). All built and tested in isolation
+(`cargo build/clippy/nextest -p legalis-eu`, clippy `-D warnings` clean, all features).
+
+- **Reusable member-state template** (`member_states::template`): `MemberStateGdpr` +
+  `MemberStateGdprBuilder`; `SupervisoryAuthority` (national lead + regional/sectoral,
+  Art 51 GDPR); `OpeningClause` enum mapping 13 GDPR opening clauses (Öffnungsklauseln) to
+  their articles + GDPR citation; `NationalDerogation` and `NationalActCitation`; age-of-
+  consent helpers (`can_child_consent`, `requires_parental_consent`,
+  `has_lowered_age_of_consent`) with Art 8(1) bounds validation (13-16; default 16).
+- **Germany — BDSG** (`member_states::germany`): age **16** (GDPR default retained);
+  lead authority **BfDI** + all **16 Länder DPAs** (§ 40 BDSG); derogations for § 26
+  employee data (Art 88, incl. CJEU C-34/21 caveat), § 38 DPO threshold (20 persons,
+  Art 37(4)), § 22 special categories (Art 9), §§ 23-24 further processing (Art 6(4)),
+  Art 10 criminal data; cites BDSG (2018) + DSAnpUG-EU (2017).
+- **France — Loi Informatique et Libertés** (`member_states::france`): age **15**
+  (Art. 7-1 Loi 78-17); supervisory authority **CNIL**; derogations for Art 8 age
+  (Art. 7-1), special/health data (Arts 6, 44-46), NIR (Art. 30, Art 87), journalism
+  (Art. 80, Art 85), collective actions (Art. 37, Art 80); cites Loi 78-17 (1978),
+  Loi 2018-493, Ordonnance 2018-1125.
+- **Italy — Codice Privacy** (`member_states::italy`): age **14**
+  (Art. 2-quinquies); supervisory authority **Garante**; derogations for Art 8 age
+  (Art. 2-quinquies), genetic/biometric/health safeguards (Arts 2-sexies/septies, Art 9),
+  criminal data (Art. 2-octies, Art 10), journalism (Arts 136-139, Art 85), criminal
+  sanctions (Arts 167-172); cites D.Lgs. 196/2003 + D.Lgs. 101/2018.
+- **Directive transposition tracking** (`member_states::transposition`):
+  `DirectiveReference` (with deadline + CELEX), `TranspositionRecord` (with overdue /
+  consistency validation), `TranspositionStatus` (Complete/Partial/Late/NotTransposed/
+  NotApplicable), `TranspositionTracker` (query by state / directive, `complete_count`).
+- **National-law integration** (`member_states`): `for_state`, `implemented_states`,
+  `all_implementations`, `effective_age_of_digital_consent` (national override else GDPR
+  default), `combined_consent_assessment` + `CombinedConsentAssessment`, and the
+  `NationalGdprQuery` facade combining GDPR core with national specifics.
+- **Wiring**: `member_states` module + key types re-exported from `lib.rs`. 42 new unit
+  `#[test]`s + 8 new doctests; `MemberStateError` (thiserror); no unwrap/expect/panic in
+  non-test code; every file < 2000 lines.
 
 ---
 
@@ -532,8 +574,8 @@
 
 ### Testing
 - [x] Property-based testing (proptest) - 11 property tests for GDPR Article 6
-- [ ] Fuzzing for edge cases
-- [ ] Integration tests with real EUR-Lex data
+- [ ] Fuzzing for edge cases — DEFERRED: out of scope for member-state work
+- [ ] Integration tests with real EUR-Lex data — DEFERRED: requires external EUR-Lex data
 - [x] Benchmark suite (GDPR + IP benchmarks)
 
 ---
@@ -541,34 +583,31 @@
 ## Research & Investigation
 
 ### Legal Research
-- [ ] Track EUR-Lex updates
-- [ ] Monitor CJEU case law developments
-- [ ] Follow European Data Protection Board (EDPB) guidelines
-- [ ] Review supervisory authority decisions
+- [ ] Track EUR-Lex updates — DEFERRED: ongoing maintenance against external EUR-Lex data
+- [ ] Monitor CJEU case law developments — DEFERRED: ongoing maintenance against external CJEU data
+- [ ] Follow European Data Protection Board (EDPB) guidelines — DEFERRED: ongoing maintenance against external EDPB data
+- [ ] Review supervisory authority decisions — DEFERRED: ongoing maintenance against external SA data
 
 ### Technical Research
-- [ ] EUR-Lex API integration feasibility
-- [ ] Automated legal text extraction
-- [ ] Natural language processing for legal text
-- [ ] Machine learning for compliance prediction
+- [ ] EUR-Lex API integration feasibility — DEFERRED: external API integration
+- [ ] Automated legal text extraction — DEFERRED: external data extraction
+- [ ] Natural language processing for legal text — DEFERRED: NLP / external
+- [ ] Machine learning for compliance prediction — DEFERRED: ML / external
 
 ### Community Building
-- [ ] Publish blog post on legalis-eu
-- [ ] Present at Rust conferences
-- [ ] Legal tech community outreach
-- [ ] Open source governance model
+- [ ] Publish blog post on legalis-eu — DEFERRED: community/outreach
+- [ ] Present at Rust conferences — DEFERRED: community/outreach
+- [ ] Legal tech community outreach — DEFERRED: community/outreach
+- [ ] Open source governance model — DEFERRED: community/outreach
 
 ---
 
 ## Known Issues & Limitations
 
 ### Current Limitations
-- Only English + German translations (24 more needed)
-- No member state implementations yet
+- 11 of 24 EU languages translated (13 more needed; deferred pending official EUR-Lex texts)
+- Member-state implementations cover Germany, France and Italy (template + transposition tracking enable adding the remaining states)
 - No EUR-Lex API integration
-- Article 83 fines not calculated yet
-- No DPIA framework yet
-- No ROPA (Article 30) implementation
 
 ### Technical Debt
 - None identified yet (new codebase)

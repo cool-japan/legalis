@@ -115,6 +115,30 @@ impl QueryBuilder {
         self
     }
 
+    /// Returns the statute-id filters (empty means "no statute constraint").
+    ///
+    /// Exposed so that an index-backed accelerator (see [`crate::scale`]) can
+    /// derive a candidate set from the indexed fields before applying the full
+    /// (exact) filter via [`QueryBuilder::execute`].
+    pub fn statute_id_filters(&self) -> &[String] {
+        &self.statute_ids
+    }
+
+    /// Returns the subject-id filters (empty means "no subject constraint").
+    pub fn subject_id_filters(&self) -> &[Uuid] {
+        &self.subject_ids
+    }
+
+    /// Returns the event-type filters (empty means "no event-type constraint").
+    pub fn event_type_filters(&self) -> &[EventType] {
+        &self.event_types
+    }
+
+    /// Returns the `(start, end)` time bounds of the query, if any.
+    pub fn time_bounds(&self) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        (self.start_time, self.end_time)
+    }
+
     /// Executes the query on a list of records.
     pub fn execute(&self, records: &[AuditRecord]) -> Vec<AuditRecord> {
         let mut results: Vec<AuditRecord> = records

@@ -5,18 +5,14 @@
 #![allow(dead_code)]
 
 use legalis_core::Statute;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::types::{ActivityAnalytics, RegistryError};
-use super::types_3::{RegistryEvent, TagAnalytics};
+use super::types::RegistryError;
+use super::types_3::RegistryEvent;
 use super::types_4::StatuteRegistry;
-use super::types_5::{Pagination, RegistryBackup, WebhookEventFilter};
-use super::types_6::{AggregationResult, RelationshipAnalytics, StatuteEntry, StatuteStatus};
-use super::types_7::{SearchQuery, TemporalAnalytics};
-use super::types_8::{PagedResult, StatuteSummary};
+use super::types_6::{StatuteEntry, StatuteStatus};
 
 /// Result type for registry operations.
 pub type RegistryResult<T> = Result<T, RegistryError>;
@@ -29,6 +25,12 @@ pub mod async_api {
     //! This module provides async versions of the main registry methods,
     //! allowing integration with async runtimes like tokio.
     use super::*;
+    use crate::types::ActivityAnalytics;
+    use crate::types_3::TagAnalytics;
+    use crate::types_5::{Pagination, RegistryBackup, WebhookEventFilter};
+    use crate::types_6::{AggregationResult, RelationshipAnalytics};
+    use crate::types_7::{SearchQuery, TemporalAnalytics};
+    use crate::types_8::PagedResult;
     use std::sync::Arc;
     use tokio::sync::RwLock;
     /// Async-friendly wrapper around StatuteRegistry.
@@ -231,6 +233,8 @@ pub mod streaming {
     //! This module provides Stream implementations for efficiently
     //! iterating over large collections of statutes.
     use super::*;
+    use crate::types_7::SearchQuery;
+    use crate::types_8::StatuteSummary;
     use async_stream::stream;
     use futures::Stream;
     /// Creates a stream of all statutes.
@@ -478,6 +482,7 @@ pub mod akoma_ntoso {
     use super::*;
     use quick_xml::de::from_str;
     use quick_xml::se::to_string;
+    use serde::{Deserialize, Serialize};
     /// Akoma Ntoso document wrapper.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename = "akomaNtoso")]

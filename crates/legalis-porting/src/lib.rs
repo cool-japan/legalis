@@ -136,6 +136,7 @@
 //! 6. **Risk Assessment**: Evaluate implementation risks
 //! 7. **Report Generation**: Document all changes and recommendations
 
+pub mod blockchain;
 mod functions;
 mod functions_2;
 #[cfg(test)]
@@ -148,6 +149,7 @@ mod functions_2_c;
 mod functions_2_d;
 #[cfg(test)]
 mod functions_2_e;
+pub mod metaverse;
 mod trait_impls;
 mod types;
 mod types_10;

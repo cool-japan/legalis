@@ -225,6 +225,18 @@ pub(crate) fn tokenize_input(input: &str) -> DslResult<(Vec<SpannedToken>, Vec<D
                     "PRIORITY" => Token::Priority,
                     "SCOPE" => Token::Scope,
                     "CONSTRAINT" | "CONSTRAINTS" | "INVARIANT" => Token::Constraint,
+                    // Contract / compliance / test clause keywords (v0.2.5 - v0.2.7).
+                    "CONTRACT" => Token::Contract,
+                    "PARTY" | "PARTIES" => Token::Party,
+                    "RIGHT" | "RIGHTS" => Token::Right,
+                    "PERFORMANCE" => Token::Performance,
+                    "CLAUSE" => Token::Clause,
+                    "COMPLIANCE" => Token::Compliance,
+                    "PENALTY" | "PENALTIES" => Token::Penalty,
+                    "REPORT" | "REPORTING" => Token::Report,
+                    "INSPECT" | "INSPECTION" | "AUDIT" => Token::Inspect,
+                    "DEADLINE" => Token::Deadline,
+                    "TIMELINE" => Token::Timeline,
                     // Module system keywords (v0.1.4)
                     "NAMESPACE" => Token::Namespace,
                     "FROM" => Token::From,
@@ -268,10 +280,39 @@ pub(crate) fn tokenize_input(input: &str) -> DslResult<(Vec<SpannedToken>, Vec<D
                         break;
                     }
                 }
-                tokens.push(SpannedToken::new(
-                    Token::Number(num.parse().unwrap_or(0)),
-                    token_start,
-                ));
+                // A `.` followed by a digit makes this a float literal (e.g. `0.05`).
+                // The original decimal text is preserved so precision/leading zeros
+                // survive the lexer (unlike `Number . Number`).
+                let is_float = matches!(chars.peek(), Some('.')) && {
+                    let mut lookahead = chars.clone();
+                    lookahead.next();
+                    matches!(lookahead.peek(), Some(c) if c.is_numeric())
+                };
+                if is_float {
+                    num.push('.');
+                    chars.next();
+                    offset += 1;
+                    column += 1;
+                    while let Some(&c) = chars.peek() {
+                        if c.is_numeric() {
+                            num.push(c);
+                            chars.next();
+                            offset += 1;
+                            column += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    tokens.push(SpannedToken::new(
+                        Token::Float(num.parse().unwrap_or(0.0)),
+                        token_start,
+                    ));
+                } else {
+                    tokens.push(SpannedToken::new(
+                        Token::Number(num.parse().unwrap_or(0)),
+                        token_start,
+                    ));
+                }
             }
             '-' => {
                 tokens.push(SpannedToken::new(Token::Dash, token_start));
@@ -303,6 +344,12 @@ pub(crate) fn tokenize_input(input: &str) -> DslResult<(Vec<SpannedToken>, Vec<D
             }
             '*' => {
                 tokens.push(SpannedToken::new(Token::Star, token_start));
+                chars.next();
+                offset += 1;
+                column += 1;
+            }
+            '@' => {
+                tokens.push(SpannedToken::new(Token::At, token_start));
                 chars.next();
                 offset += 1;
                 column += 1;

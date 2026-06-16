@@ -6,7 +6,11 @@ pub use super::*;
 
 mod advanced;
 mod basic;
+mod contract;
+mod formal;
 mod prop_tests;
+mod roundtrip;
 mod serialization;
 mod snapshot;
+mod testspec;
 mod unicode;

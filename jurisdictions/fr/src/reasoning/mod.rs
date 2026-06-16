@@ -20,6 +20,7 @@
 
 pub mod analyzer;
 pub mod context;
+pub mod dsl;
 pub mod engine;
 pub mod error;
 pub mod interop;
@@ -28,6 +29,7 @@ pub mod types;
 pub mod verifier;
 
 pub use analyzer::{CompanyAnalyzer, ContractAnalyzer, FrenchLawAnalyzer, LaborAnalyzer};
+pub use dsl::statutes_as_dsl;
 pub use engine::LegalReasoningEngine;
 pub use error::{ReasoningError, ReasoningResult};
 pub use interop::{
@@ -36,7 +38,8 @@ pub use interop::{
     generate_catala_rule, generate_catala_scope,
 };
 pub use statute_adapter::{
-    all_french_statutes, company_law_statutes, contract_law_statutes, labor_law_statutes,
+    all_french_statutes, company_law_statutes, contract_law_statutes, family_law_statutes,
+    labor_law_statutes,
 };
 pub use types::{
     ComplianceStatus, EntityType, LegalAnalysis, LegalOpinion, ReasoningStep, Remedy, RemedyType,

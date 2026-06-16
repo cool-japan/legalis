@@ -206,7 +206,41 @@ pub mod error;
 pub mod types;
 pub mod validator;
 
+// Specific tort sections (Besondere Deliktstatbestände, §§ 824-839 BGB)
+pub mod amtshaftung; // § 839 - Liability of public officials (Amtshaftung)
+pub mod aufsichtspflicht; // § 832 - Liability for persons under supervision (Aufsichtspflicht)
+pub mod gebaeudehaftung; // §§ 836-838 - Liability for buildings/structures (Gebäudehaftung)
+pub mod kreditgefaehrdung; // § 824 - Credit endangerment (Kreditgefährdung)
+pub mod sexuelle_selbstbestimmung; // § 825 - Inducement to sexual acts
+pub mod tierhalterhaftung; // §§ 833-835 - Animal liability (Tierhalterhaftung)
+
 // Re-exports for convenience
 pub use error::{Result, TortError};
 pub use types::*;
 pub use validator::*;
+
+// Specific tort section re-exports
+pub use amtshaftung::{
+    OfficialFault, OfficialLiabilityClaim, OfficialLiabilityClaimBuilder,
+    validate_official_liability,
+};
+pub use aufsichtspflicht::{
+    SupervisionBasis, SupervisionLiabilityClaim, SupervisionLiabilityClaimBuilder,
+    SupervisionReason, validate_supervision_liability,
+};
+pub use gebaeudehaftung::{
+    BuildingLiabilityClaim, BuildingLiabilityClaimBuilder, BuildingLiableParty,
+    StructuralDefectCause, StructuralFailureType, validate_building_liability,
+};
+pub use kreditgefaehrdung::{
+    CreditEndangermentClaim, CreditEndangermentClaimBuilder, StatementForm, StatementNature,
+    validate_credit_endangerment_claim,
+};
+pub use sexuelle_selbstbestimmung::{
+    InducementMeans, SexualActInvolvement, SexualSelfDeterminationClaim,
+    SexualSelfDeterminationClaimBuilder, validate_sexual_self_determination_claim,
+};
+pub use tierhalterhaftung::{
+    AnimalCategory, AnimalLiabilityBasis, AnimalLiabilityClaim, AnimalLiabilityClaimBuilder,
+    SECTION_835_REPEALED, validate_animal_liability,
+};

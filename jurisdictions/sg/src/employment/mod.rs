@@ -172,12 +172,13 @@ pub mod validator;
 // Re-export commonly used types
 pub use error::{EmploymentError, ErrorSeverity, Result};
 pub use types::{
-    Allowance, ContractType, CpfContribution, EmploymentContract, LeaveEntitlement, LeaveType,
-    TerminatingParty, TerminationNotice, WorkingHours,
+    Allowance, ContractType, CpfContribution, EaCoverage, EmployeeCategory, EmploymentContract,
+    LeaveEntitlement, LeaveType, PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS,
+    PART_IV_WORKMAN_SALARY_CEILING_CENTS, TerminatingParty, TerminationNotice, WorkingHours,
 };
 pub use validator::{
     ValidationReport, calculate_hourly_rate, calculate_last_employment_day,
-    calculate_prorated_leave, validate_cpf_calculation, validate_employment_contract,
-    validate_leave_entitlement, validate_overtime_payment, validate_termination_notice,
-    validate_working_hours,
+    calculate_prorated_leave, determine_ea_coverage, is_covered_by_part_iv,
+    validate_cpf_calculation, validate_employment_contract, validate_leave_entitlement,
+    validate_overtime_payment, validate_termination_notice, validate_working_hours,
 };

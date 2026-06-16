@@ -164,6 +164,7 @@ pub mod intellectual_property;
 pub mod islamic_law;
 pub mod labor_law;
 pub mod reasoning;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export citation types
@@ -228,6 +229,9 @@ pub use arbitration::{
     ArbitrationAgreement, ArbitrationError, ArbitrationResult, ArbitrationType, DisputeResolution,
     get_arbitration_checklist,
 };
+
+// Re-export statute models and DSL export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

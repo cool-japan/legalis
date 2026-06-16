@@ -239,6 +239,13 @@ pub mod corporate;
 /// - Bijural interoperability (common law / civil law)
 pub mod reasoning;
 
+/// `legalis-dsl` Integration (statute rendering)
+///
+/// Covers:
+/// - Rendering federal employment + criminal statutes as `legalis-dsl` source
+/// - DSL tooling interoperability (formatting, diffing, documentation)
+pub mod dsl;
+
 // Re-exports for convenience
 pub use common::{
     BilingualRequirement, CanadianCalendar, CanadianTimeZone, CaseCitation, Court, Holiday,
@@ -800,3 +807,5 @@ pub use reasoning::{
     determine_applicable_law,
     verify_statute,
 };
+
+pub use dsl::statutes_as_dsl;

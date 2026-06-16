@@ -116,6 +116,57 @@ pub fn validate_employment_contract(contract: &EmploymentContract) -> Result<Val
     Ok(report)
 }
 
+/// Determines Employment Act coverage for an employee (EA Part IV, s. 35).
+///
+/// Coverage has two layers:
+///
+/// 1. **General coverage** — since 1 April 2019 the Employment Act covers all
+///    employees under a contract of service, *except* seafarers, domestic
+///    workers and public officers (pass `excluded_from_ea = true` for those).
+/// 2. **Part IV** — the additional protections on rest days, hours of work and
+///    overtime apply only to a workman earning a basic monthly salary of at most
+///    [`PART_IV_WORKMAN_SALARY_CEILING_CENTS`] (SGD 4,500), or a non-workman
+///    (other than a manager/executive) earning at most
+///    [`PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS`] (SGD 2,600).
+///
+/// Managers and executives are covered generally but never by Part IV.
+///
+/// ## Examples
+///
+/// ```
+/// use legalis_sg::employment::*;
+///
+/// // A workman earning SGD 3,000/month is fully covered, including Part IV.
+/// let coverage = determine_ea_coverage(EmployeeCategory::Workman, 300_000, false);
+/// assert_eq!(coverage, EaCoverage::GeneralAndPartIv);
+///
+/// // A manager is covered generally but not by Part IV.
+/// let coverage = determine_ea_coverage(EmployeeCategory::ManagerOrExecutive, 800_000, false);
+/// assert_eq!(coverage, EaCoverage::GeneralOnly);
+/// ```
+pub fn determine_ea_coverage(
+    category: EmployeeCategory,
+    basic_monthly_salary_cents: u64,
+    excluded_from_ea: bool,
+) -> EaCoverage {
+    if excluded_from_ea {
+        return EaCoverage::NotCovered;
+    }
+
+    match category.part_iv_salary_ceiling_cents() {
+        Some(ceiling) if basic_monthly_salary_cents <= ceiling => EaCoverage::GeneralAndPartIv,
+        _ => EaCoverage::GeneralOnly,
+    }
+}
+
+/// Returns whether Part IV of the Employment Act applies to an employee in the
+/// given category earning the given basic monthly salary (in cents).
+///
+/// Convenience wrapper over [`determine_ea_coverage`] for a non-excluded employee.
+pub fn is_covered_by_part_iv(category: EmployeeCategory, basic_monthly_salary_cents: u64) -> bool {
+    determine_ea_coverage(category, basic_monthly_salary_cents, false).includes_part_iv()
+}
+
 /// Validates working hours against Employment Act s. 38 requirements
 pub fn validate_working_hours(hours: &WorkingHours) -> Result<()> {
     // Check weekly hours limit (s. 38)
@@ -438,5 +489,62 @@ mod tests {
     fn test_prorated_leave_full_year() {
         let prorated = calculate_prorated_leave(14, 12);
         assert_eq!(prorated, 14);
+    }
+
+    #[test]
+    fn test_ea_coverage_workman_threshold() {
+        // At the SGD 4,500 ceiling → Part IV applies.
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::Workman, 450_000, false),
+            EaCoverage::GeneralAndPartIv
+        );
+        // One cent over → general coverage only.
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::Workman, 450_001, false),
+            EaCoverage::GeneralOnly
+        );
+    }
+
+    #[test]
+    fn test_ea_coverage_non_workman_threshold() {
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::NonWorkman, 260_000, false),
+            EaCoverage::GeneralAndPartIv
+        );
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::NonWorkman, 260_100, false),
+            EaCoverage::GeneralOnly
+        );
+    }
+
+    #[test]
+    fn test_ea_coverage_manager_never_part_iv() {
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::ManagerOrExecutive, 100_000, false),
+            EaCoverage::GeneralOnly
+        );
+        assert_eq!(
+            determine_ea_coverage(EmployeeCategory::ManagerOrExecutive, 5_000_000, false),
+            EaCoverage::GeneralOnly
+        );
+    }
+
+    #[test]
+    fn test_ea_coverage_excluded() {
+        // Seafarers / domestic workers / public officers are excluded entirely.
+        let coverage = determine_ea_coverage(EmployeeCategory::Workman, 100_000, true);
+        assert_eq!(coverage, EaCoverage::NotCovered);
+        assert!(!coverage.is_covered());
+    }
+
+    #[test]
+    fn test_is_covered_by_part_iv() {
+        assert!(is_covered_by_part_iv(EmployeeCategory::Workman, 450_000));
+        assert!(!is_covered_by_part_iv(EmployeeCategory::Workman, 460_000));
+        assert!(is_covered_by_part_iv(EmployeeCategory::NonWorkman, 250_000));
+        assert!(!is_covered_by_part_iv(
+            EmployeeCategory::ManagerOrExecutive,
+            100_000
+        ));
     }
 }

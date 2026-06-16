@@ -5,7 +5,7 @@
 European Union jurisdiction support for Legalis-RS, providing comprehensive modeling of EU law including GDPR, Consumer Rights, Competition Law, Treaty Framework, and Intellectual Property.
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)]()
 [![Warnings](https://img.shields.io/badge/warnings-0-brightgreen)]()
 [![Performance](https://img.shields.io/badge/performance-sub--microsecond-blue)]()
 
@@ -65,7 +65,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-eu = "0.5.9"
+legalis-eu = "0.1.6"
 chrono = "0.4"  # Required for date/time handling
 ```
 
@@ -77,9 +77,9 @@ cargo add legalis-eu chrono
 
 ## Status
 
-**Current Version**: v0.5.9 - **Core Implementation Complete** ✅
+**Current Version**: v0.1.6 - **Core Implementation Complete** ✅
 
-- ✅ 196 tests passing (173 unit + 11 property + 12 i18n tests, 0 warnings)
+- ✅ 309 tests passing (incl. property and i18n tests), 0 warnings
 - ✅ 25 comprehensive examples
 - ✅ Internationalized error messages (11 EU languages: EN, DE, FR, ES, IT, PL, NL, PT, SV, CS, EL)
 - ✅ JSON Schema generation support
@@ -490,7 +490,7 @@ cargo doc --open
 
 ## Examples
 
-Run the 23 included examples to see all features in action:
+Run the 25 included examples to see all features in action:
 
 ```bash
 # GDPR Core
@@ -567,12 +567,7 @@ IP Validation:
 
 These measurements demonstrate that the crate adds minimal overhead (sub-microsecond), making it suitable for high-performance applications.
 
-**Test Coverage**: 196 tests passing:
-- 173 unit tests covering all modules
-- 11 property-based tests (proptest) for GDPR Article 6
-- 12 i18n tests for multilingual support (11 languages):
-  - 8 error message translation tests
-  - 4 MultilingualText structure tests
+**Test Coverage**: 309 tests passing (incl. property and i18n tests), 0 warnings, covering:
 - GDPR Article 6 (lawful bases)
 - GDPR Article 9 (special categories)
 - GDPR Article 24 (accountability)
@@ -669,13 +664,13 @@ All EU legal instruments integrate with `legalis-core`:
 
 ## Future Roadmap
 
-### Phase 6: Multi-Language Expansion (v0.6.0)
+### Phase 6: Multi-Language Expansion (v0.2.0)
 - French translation (RGPD)
 - Spanish translation
 - Italian translation
 - Community contribution framework
 
-### Phase 7: Member State Implementations (v0.7.0+)
+### Phase 7: Member State Implementations (v0.3.0+)
 - Germany (BDSG - Bundesdatenschutzgesetz)
 - France (Loi Informatique et Libertés)
 - Italy (Codice Privacy)

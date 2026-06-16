@@ -7,7 +7,8 @@
 //! - Progressive legal traditions
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,10 +38,23 @@ impl MinnesotaLaw {
                 .with_year(1978),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1978, 1, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "Milkovich v. Saari, 295 Minn. 155, 203 N.W.2d 408",
+                "Milkovich v. Saari",
+                1973,
+            )
+            .with_significance(
+                "Leading Minnesota decision adopting Robert Leflar's 'better law' / choice-\
+                 influencing-considerations approach to choice of law, applying Minnesota's \
+                 comparative negligence rule over Ontario's contributory negligence bar.",
+            ),
+        )
         .with_notes(
-            "Minnesota adopted modified comparative negligence with 51% bar in 1978. \
+            "Minnesota adopted modified comparative negligence with a 51% bar in 1978. \
              Plaintiff's contributory fault does not bar recovery unless greater than \
-             defendant's fault.",
+             defendant's fault. Minnesota is a leading 'better law' choice-of-law \
+             jurisdiction (Milkovich v. Saari).",
         )
     }
 
@@ -121,5 +135,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = MinnesotaLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "Milkovich v. Saari");
+        assert_eq!(case.year, 1973);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("better law")
+        );
+    }
+
+    #[test]
+    fn test_better_law_jurisdiction_noted() {
+        let comp_neg = MinnesotaLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("better law"));
     }
 }

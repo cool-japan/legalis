@@ -2,7 +2,7 @@
 
 ປະເທດລາວ (Lao PDR) Legal System Support for Legalis-RS
 
-**Version 0.1.3** - Civil Code 2020 Foundation with Comparative Law Analysis (introduced in v0.1.0)
+**Version 0.1.6** - Civil Code 2020 Foundation with Comparative Law Analysis (introduced in v0.1.0)
 
 ## ພາບລວມ (Overview)
 
@@ -213,13 +213,13 @@ let projects = get_legal_assistance_projects();
 
 ## 📊 Current Implementation Status
 
-**Version 0.1.3 Statistics:**
+**Version 0.1.6 Statistics:**
 - ✅ **Civil Code 2020**: 1,087 articles across 6 books
 - ✅ **Implementation**: ~2,188 lines of production code
-- ✅ **Modules**: 7 modules (general provisions, property, obligations, family, inheritance, comparative, ODA)
+- ✅ **Modules**: 30 modules (administrative_law, anti_corruption_law, banking_law, commercial_law, comparative, constitution, construction_law, consumer_protection_law, criminal_code, education_law, environmental_law, family, forestry_law, general_provisions, health_law, inheritance, insurance_law, intellectual_property_law, labor_law, land_law, mining_law, obligations, oda, property, securities_law, statutes, tax_law, telecommunications_law, tourism_law, water_law)
 - ✅ **Validators**: 12+ validation functions
 - ✅ **Bilingual Support**: Lao/English throughout
-- ✅ **Tests**: Comprehensive unit tests (in progress)
+- ✅ **Tests**: 702 tests passing, 0 warnings
 - ✅ **Documentation**: Extensive doc comments with legal context
 
 ## 🚧 Planned Features (See TODO.md)

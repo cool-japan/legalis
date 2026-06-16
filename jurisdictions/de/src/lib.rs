@@ -140,6 +140,9 @@ pub mod gmbhg;
 pub mod grundgesetz;
 pub mod hgb;
 pub mod reasoning; // Legal Reasoning Engine (Rechtsanalyse-Engine) - legalis-core integration
+pub mod steuerrecht; // Tax Law (Steuerrecht) - EStG, UStG, AO [v0.7.0 Phase 16]
+pub mod stgb; // Criminal Code (Strafgesetzbuch) - StGB [v0.6.0 Phases 13-14]
+pub mod verwaltungsrecht; // Administrative Law (Verwaltungsrecht) - VwVfG [v0.7.0 Phase 15]
 
 // BGB exports (tort law)
 pub use bgb::{bgb_823_1, bgb_823_2, bgb_826};

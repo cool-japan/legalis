@@ -14,7 +14,7 @@ Bienvenue dans la documentation de **legalis-fr** - une implémentation complèt
 Legalis-FR est une bibliothèque Rust prête pour la production qui fournit :
 
 - **11 domaines juridiques** couvrant le droit civil français, le droit du travail, le droit constitutionnel, et plus
-- **524 tests complets** garantissant la précision juridique
+- **573 tests complets** garantissant la précision juridique
 - **Documentation bilingue** (français/anglais) avec un ratio de 69,7% docs/code
 - **Moteur de Raisonnement Juridique** pour l'analyse juridique avancée et l'évaluation de cas
 - **API type-safe** empêchant les états juridiques invalides à la compilation

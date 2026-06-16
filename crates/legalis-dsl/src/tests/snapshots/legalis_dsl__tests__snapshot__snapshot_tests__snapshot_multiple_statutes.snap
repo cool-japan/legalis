@@ -45,7 +45,17 @@ expression: doc
       "id": "statute2",
       "title": "Second Statute",
       "visibility": "Private",
-      "conditions": [],
+      "conditions": [
+        {
+          "Comparison": {
+            "field": "income",
+            "operator": "<",
+            "value": {
+              "Number": 50000
+            }
+          }
+        }
+      ],
       "effects": [
         {
           "effect_type": "grant",

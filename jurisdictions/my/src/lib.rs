@@ -171,6 +171,7 @@ pub mod intellectual_property;
 pub mod islamic_law;
 pub mod reasoning;
 pub mod securities_law;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export commonly used types
@@ -206,3 +207,6 @@ pub use common::{
     MalaysianCurrency, MalaysianLegalCalendar, format_myr, format_myr_cents, is_malaysian_holiday,
     is_working_day,
 };
+
+// Re-export statute models and DSL export
+pub use statutes::{all_statutes, statutes_as_dsl};

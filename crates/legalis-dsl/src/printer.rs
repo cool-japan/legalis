@@ -733,6 +733,530 @@ fn format_effect_node(effect: &EffectNode) -> String {
     output
 }
 
+// ---------------------------------------------------------------------------
+// Contract / compliance / inline-test printing (round-trips with
+// `LegalDslParser::parse_contract_document`).
+// ---------------------------------------------------------------------------
+
+use crate::contract::{
+    ClauseNode, ComplianceRequirementNode, ContractDocument, ContractNode, DeadlineNode,
+    InspectionNode, ObligationNode, PartyNode, PenaltyNode, PerformanceBlock, ReportFrequency,
+    ReportNode, RightNode, TestCaseNode, TestExpectation, TestValue, TimelineNode,
+};
+use crate::testspec::{
+    CoverageRequirementNode, MockEntityNode, PropertyDomain, PropertySpecNode,
+    SnapshotAssertionNode, SnapshotMode, TestSpecDocument,
+};
+
+/// Renders a scalar as a bare identifier when it is a "simple" word (letters,
+/// digits and underscores only) and as a quoted string otherwise. This mirrors
+/// the convention used by [`DslPrinter::format_condition`] for `HAS` keys and is
+/// what the contract parser accepts on the way back in.
+fn ident_or_quoted(value: &str) -> String {
+    let simple = !value.is_empty() && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if simple {
+        value.to_string()
+    } else {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
+/// Quotes a string value (escaping backslashes and double quotes).
+fn quote_str(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// Formats a [`ContractDocument`] (its contracts then its `@test` cases) back to
+/// DSL text.
+pub fn format_contract_document(doc: &ContractDocument) -> String {
+    let mut output = String::new();
+    for (idx, contract) in doc.contracts.iter().enumerate() {
+        if idx > 0 {
+            output.push('\n');
+        }
+        output.push_str(&format_contract(contract));
+    }
+    if !doc.contracts.is_empty() && !doc.test_cases.is_empty() {
+        output.push('\n');
+    }
+    for (idx, case) in doc.test_cases.iter().enumerate() {
+        if idx > 0 {
+            output.push('\n');
+        }
+        output.push_str(&format_test_case(case));
+    }
+    output
+}
+
+/// Formats a single [`ContractNode`] back to DSL text.
+pub fn format_contract(contract: &ContractNode) -> String {
+    let mut out = String::new();
+    out.push_str("CONTRACT ");
+    out.push_str(&contract.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&contract.title));
+    out.push_str(" {\n");
+
+    for party in &contract.parties {
+        format_party(&mut out, party);
+    }
+    for clause in &contract.clauses {
+        format_clause(&mut out, clause);
+    }
+    for obligation in &contract.obligations {
+        format_obligation(&mut out, obligation);
+    }
+    for right in &contract.rights {
+        format_right(&mut out, right);
+    }
+    for performance in &contract.performances {
+        format_performance(&mut out, performance);
+    }
+    for requirement in &contract.compliance {
+        format_compliance(&mut out, requirement);
+    }
+    for penalty in &contract.penalties {
+        format_penalty(&mut out, penalty);
+    }
+    for report in &contract.reports {
+        format_report(&mut out, report);
+    }
+    for inspection in &contract.inspections {
+        format_inspection(&mut out, inspection);
+    }
+    for deadline in &contract.deadlines {
+        out.push_str("    ");
+        format_deadline_line(&mut out, deadline);
+    }
+    for timeline in &contract.timelines {
+        format_timeline(&mut out, timeline);
+    }
+
+    out.push_str("}\n");
+    out
+}
+
+fn format_party(out: &mut String, party: &PartyNode) {
+    out.push_str("    PARTY ");
+    out.push_str(&party.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&party.name));
+    if let Some(role) = &party.role {
+        out.push_str(" ROLE ");
+        out.push_str(&ident_or_quoted(&role.display_word()));
+    }
+    out.push('\n');
+}
+
+fn format_clause(out: &mut String, clause: &ClauseNode) {
+    out.push_str("    CLAUSE ");
+    out.push_str(&clause.id);
+    if let Some(template) = &clause.from_template {
+        out.push_str(" FROM ");
+        out.push_str(&ident_or_quoted(template));
+    }
+    out.push_str(": ");
+    out.push_str(&quote_str(&clause.text));
+    out.push('\n');
+}
+
+fn format_obligation(out: &mut String, obligation: &ObligationNode) {
+    out.push_str("    OBLIGATION ");
+    out.push_str(&obligation.id);
+    if let Some(obligor) = &obligation.obligor {
+        out.push_str(" BY ");
+        out.push_str(&ident_or_quoted(obligor));
+    }
+    if let Some(obligee) = &obligation.obligee {
+        out.push_str(" TO ");
+        out.push_str(&ident_or_quoted(obligee));
+    }
+    out.push_str(": ");
+    out.push_str(&quote_str(&obligation.description));
+    for condition in &obligation.conditions {
+        out.push_str(" WHEN ");
+        out.push_str(&format_condition_node(condition));
+    }
+    if let Some(due) = &obligation.due {
+        out.push_str(" DUE ");
+        out.push_str(&quote_str(due));
+    }
+    out.push('\n');
+}
+
+fn format_right(out: &mut String, right: &RightNode) {
+    out.push_str("    RIGHT ");
+    out.push_str(&right.id);
+    if let Some(holder) = &right.holder {
+        out.push_str(" OF ");
+        out.push_str(&ident_or_quoted(holder));
+    }
+    if let Some(kind) = &right.kind {
+        out.push(' ');
+        out.push_str(kind.keyword());
+    }
+    out.push_str(": ");
+    out.push_str(&quote_str(&right.description));
+    for condition in &right.conditions {
+        out.push_str(" WHEN ");
+        out.push_str(&format_condition_node(condition));
+    }
+    if let Some(correlative) = &right.correlative_obligation {
+        out.push_str(" CORRELATIVE ");
+        out.push_str(&ident_or_quoted(correlative));
+    }
+    out.push('\n');
+}
+
+fn format_performance(out: &mut String, performance: &PerformanceBlock) {
+    out.push_str("    PERFORMANCE ");
+    out.push_str(&performance.id);
+    out.push_str(" {\n");
+    if let Some(desc) = &performance.description {
+        out.push_str("        DESC ");
+        out.push_str(&quote_str(desc));
+        out.push('\n');
+    }
+    for condition in &performance.conditions {
+        out.push_str("        WHEN ");
+        out.push_str(&format_condition_node(condition));
+        out.push('\n');
+    }
+    if let Some(due) = &performance.due {
+        out.push_str("        DUE ");
+        out.push_str(&quote_str(due));
+        out.push('\n');
+    }
+    out.push_str("    }\n");
+}
+
+fn format_compliance(out: &mut String, requirement: &ComplianceRequirementNode) {
+    out.push_str("    COMPLIANCE ");
+    out.push_str(&requirement.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&requirement.description));
+    if let Some(standard) = &requirement.standard {
+        out.push_str(" STANDARD ");
+        out.push_str(&quote_str(standard));
+    }
+    for condition in &requirement.conditions {
+        out.push_str(" WHEN ");
+        out.push_str(&format_condition_node(condition));
+    }
+    out.push('\n');
+}
+
+fn format_penalty(out: &mut String, penalty: &PenaltyNode) {
+    out.push_str("    PENALTY ");
+    out.push_str(&penalty.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&penalty.description));
+    if let Some(amount) = penalty.amount {
+        out.push_str(" AMOUNT ");
+        out.push_str(&amount.to_string());
+        if let Some(currency) = &penalty.currency {
+            out.push(' ');
+            out.push_str(&ident_or_quoted(currency));
+        }
+    }
+    if let Some(per) = &penalty.per_unit {
+        out.push_str(" PER ");
+        out.push_str(&ident_or_quoted(per));
+    }
+    if let Some(for_obligation) = &penalty.for_obligation {
+        out.push_str(" FOR ");
+        out.push_str(&ident_or_quoted(for_obligation));
+    }
+    for condition in &penalty.conditions {
+        out.push_str(" WHEN ");
+        out.push_str(&format_condition_node(condition));
+    }
+    out.push('\n');
+}
+
+fn format_frequency(out: &mut String, frequency: &ReportFrequency) {
+    out.push_str(" EVERY ");
+    match frequency.keyword() {
+        Some(keyword) => out.push_str(keyword),
+        None => {
+            if let ReportFrequency::Custom(text) = frequency {
+                out.push_str(&quote_str(text));
+            }
+        }
+    }
+}
+
+fn format_report(out: &mut String, report: &ReportNode) {
+    out.push_str("    REPORT ");
+    out.push_str(&report.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&report.description));
+    if let Some(frequency) = &report.frequency {
+        format_frequency(out, frequency);
+    }
+    if let Some(recipient) = &report.recipient {
+        out.push_str(" TO ");
+        out.push_str(&ident_or_quoted(recipient));
+    }
+    if let Some(due) = &report.due {
+        out.push_str(" DUE ");
+        out.push_str(&quote_str(due));
+    }
+    out.push('\n');
+}
+
+fn format_inspection(out: &mut String, inspection: &InspectionNode) {
+    out.push_str("    INSPECT ");
+    out.push_str(&inspection.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&inspection.description));
+    if let Some(authority) = &inspection.authority {
+        out.push_str(" BY ");
+        out.push_str(&ident_or_quoted(authority));
+    }
+    if let Some(frequency) = &inspection.frequency {
+        format_frequency(out, frequency);
+    }
+    for condition in &inspection.conditions {
+        out.push_str(" WHEN ");
+        out.push_str(&format_condition_node(condition));
+    }
+    out.push('\n');
+}
+
+/// Appends a `DEADLINE <id>: "<date>" ["<desc>"]` line (the caller supplies the
+/// leading indentation).
+fn format_deadline_line(out: &mut String, deadline: &DeadlineNode) {
+    out.push_str("DEADLINE ");
+    out.push_str(&deadline.id);
+    out.push_str(": ");
+    out.push_str(&quote_str(&deadline.date));
+    if let Some(desc) = &deadline.description {
+        out.push(' ');
+        out.push_str(&quote_str(desc));
+    }
+    out.push('\n');
+}
+
+fn format_timeline(out: &mut String, timeline: &TimelineNode) {
+    out.push_str("    TIMELINE ");
+    out.push_str(&timeline.id);
+    if let Some(desc) = &timeline.description {
+        out.push_str(": ");
+        out.push_str(&quote_str(desc));
+    }
+    out.push_str(" {\n");
+    for deadline in &timeline.deadlines {
+        out.push_str("        ");
+        format_deadline_line(out, deadline);
+    }
+    out.push_str("    }\n");
+}
+
+/// Formats a single inline `@test` case back to DSL text.
+pub fn format_test_case(case: &TestCaseNode) -> String {
+    let mut out = String::new();
+    out.push_str("@test ");
+    out.push_str(&quote_str(&case.name));
+    out.push_str(" FOR ");
+    out.push_str(&ident_or_quoted(&case.target_statute));
+    out.push_str(" {\n");
+
+    if !case.uses.is_empty() {
+        out.push_str("    USING ");
+        let rendered: Vec<String> = case.uses.iter().map(|id| ident_or_quoted(id)).collect();
+        out.push_str(&rendered.join(", "));
+        out.push('\n');
+    }
+
+    if !case.bindings.is_empty() {
+        out.push_str("    GIVEN ");
+        out.push_str(&format_bindings(&case.bindings));
+        out.push('\n');
+    }
+
+    out.push_str("    EXPECT ");
+    out.push_str(&format_expectation(&case.expectation));
+    out.push('\n');
+
+    out.push_str("}\n");
+    out
+}
+
+/// Renders a `key = value, ...` binding list (shared by `@test`/`@property`).
+fn format_bindings(bindings: &[crate::contract::TestBinding]) -> String {
+    bindings
+        .iter()
+        .map(|binding| {
+            format!(
+                "{} = {}",
+                ident_or_quoted(&binding.key),
+                format_test_value(&binding.value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Renders an `EXPECT` outcome keyword.
+fn format_expectation(expectation: &TestExpectation) -> String {
+    match expectation {
+        TestExpectation::Satisfied => "SATISFIED".to_string(),
+        TestExpectation::Unsatisfied => "NOT SATISFIED".to_string(),
+        TestExpectation::Effect(effect) => effect.keyword().to_string(),
+    }
+}
+
+fn format_test_value(value: &TestValue) -> String {
+    match value {
+        TestValue::Number(n) => n.to_string(),
+        TestValue::String(s) => quote_str(s),
+        TestValue::Boolean(b) => b.to_string(),
+    }
+}
+
+/// Formats a [`TestSpecDocument`] (mocks, `@test`s, properties, coverage,
+/// snapshots) back to DSL text. Constructs are grouped by kind; within each kind
+/// declaration order is preserved, so the result re-parses to an equal document.
+pub fn format_test_spec_document(doc: &TestSpecDocument) -> String {
+    let mut blocks: Vec<String> = Vec::new();
+    for mock in &doc.mocks {
+        blocks.push(format_mock(mock));
+    }
+    for case in &doc.tests {
+        blocks.push(format_test_case(case));
+    }
+    for prop in &doc.properties {
+        blocks.push(format_property(prop));
+    }
+    for req in &doc.coverage {
+        blocks.push(format_coverage(req));
+    }
+    for snap in &doc.snapshots {
+        blocks.push(format_snapshot(snap));
+    }
+    blocks.join("\n")
+}
+
+/// Formats a single `@mock` entity definition.
+pub fn format_mock(mock: &MockEntityNode) -> String {
+    let mut out = String::new();
+    out.push_str("@mock ");
+    out.push_str(&ident_or_quoted(&mock.id));
+    out.push_str(" {\n");
+    for binding in &mock.bindings {
+        out.push_str("    ");
+        out.push_str(&ident_or_quoted(&binding.key));
+        out.push_str(" = ");
+        out.push_str(&format_test_value(&binding.value));
+        out.push('\n');
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// Formats a single `@property` specification.
+pub fn format_property(prop: &PropertySpecNode) -> String {
+    let mut out = String::new();
+    out.push_str("@property ");
+    out.push_str(&quote_str(&prop.name));
+    out.push_str(" FOR ");
+    out.push_str(&ident_or_quoted(&prop.target_statute));
+    out.push_str(" {\n");
+
+    for var in &prop.vars {
+        out.push_str("    FORALL ");
+        out.push_str(&ident_or_quoted(&var.name));
+        out.push_str(" IN ");
+        format_domain(&mut out, &var.domain);
+        out.push('\n');
+    }
+    if !prop.fixed_bindings.is_empty() {
+        out.push_str("    GIVEN ");
+        out.push_str(&format_bindings(&prop.fixed_bindings));
+        out.push('\n');
+    }
+    if !prop.uses.is_empty() {
+        out.push_str("    USING ");
+        let rendered: Vec<String> = prop.uses.iter().map(|id| ident_or_quoted(id)).collect();
+        out.push_str(&rendered.join(", "));
+        out.push('\n');
+    }
+    out.push_str("    EXPECT ");
+    out.push_str(&format_expectation(&prop.expectation));
+    out.push('\n');
+    if let Some(cases) = prop.max_cases {
+        out.push_str("    CASES ");
+        out.push_str(&cases.to_string());
+        out.push('\n');
+    }
+
+    out.push_str("}\n");
+    out
+}
+
+/// Appends a property generation domain.
+fn format_domain(out: &mut String, domain: &PropertyDomain) {
+    match domain {
+        PropertyDomain::IntRange { lo, hi } => {
+            out.push_str(&lo.to_string());
+            out.push_str(" TO ");
+            out.push_str(&hi.to_string());
+        }
+        PropertyDomain::Values(values) => {
+            out.push_str("( ");
+            let rendered: Vec<String> = values.iter().map(format_test_value).collect();
+            out.push_str(&rendered.join(", "));
+            out.push_str(" )");
+        }
+    }
+}
+
+/// Formats a single `@coverage` requirement.
+pub fn format_coverage(req: &CoverageRequirementNode) -> String {
+    let mut out = String::new();
+    out.push_str("@coverage REQUIRE ");
+    out.push_str(req.metric.keyword());
+    out.push(' ');
+    out.push_str(req.comparator.symbol());
+    out.push(' ');
+    out.push_str(&format_percent(req.threshold));
+    out.push('%');
+    if let Some(target) = &req.target {
+        out.push_str(" FOR ");
+        out.push_str(&ident_or_quoted(target));
+    }
+    out.push('\n');
+    out
+}
+
+/// Renders a percentage, dropping the decimal point for whole numbers.
+fn format_percent(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{value:.0}")
+    } else {
+        format!("{value}")
+    }
+}
+
+/// Formats a single `@snapshot` assertion.
+pub fn format_snapshot(snap: &SnapshotAssertionNode) -> String {
+    let mut out = String::new();
+    out.push_str("@snapshot ");
+    out.push_str(&quote_str(&snap.name));
+    out.push_str(" FOR ");
+    out.push_str(&ident_or_quoted(&snap.target_statute));
+    match &snap.mode {
+        SnapshotMode::Match(signature) => {
+            out.push_str(" EXPECT ");
+            out.push_str(&quote_str(signature));
+        }
+        SnapshotMode::Record => out.push_str(" RECORD"),
+    }
+    out.push('\n');
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

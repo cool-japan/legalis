@@ -8,7 +8,7 @@ publish = false
 # It is excluded from workspace tests as it has external dependencies.
 
 [dependencies]
-mecrab = "0.1"
+mecrab = "0.1.0"
 legalis-core = { path = "../../crates/legalis-core" }
 legalis-jp = { path = "../../jurisdictions/jp" }
 anyhow = "1.0"

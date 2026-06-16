@@ -2,7 +2,7 @@
 
 中华人民共和国 (China) 法律体系支持 - Legalis-RS
 
-**版本 0.1.3** - 民法典、网络安全法、个人信息保护法、劳动法
+**版本 0.1.6** - 民法典、网络安全法、个人信息保护法、劳动法
 
 ## 概述 (Overview)
 
@@ -124,12 +124,13 @@ let operator = NetworkOperator::new()
 
 ## 📊 当前实现状态
 
-**版本 0.1.3 统计：**
+**版本 0.1.6 统计：**
 - ✅ **劳动合同法**：完整的劳动合同管理
 - ✅ **公司法**：公司设立与治理
 - ✅ **个人信息保护法**：PIPL合规框架
 - ✅ **网络安全法**：网络运营者义务
-- ✅ **模块**：7个模块（labor_contract, company_law, data_protection, cybersecurity, common, citation, i18n）
+- ✅ **模块**：13个模块（citation, common, company_law, cybersecurity, data_protection, i18n, labor_contract, antitrust, civil_code, data_security, dsl, foreign_investment, reasoning）
+- ✅ **测试**：190 个测试通过，0 警告
 
 ## 🚧 计划功能
 

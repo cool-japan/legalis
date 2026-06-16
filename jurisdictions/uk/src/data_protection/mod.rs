@@ -140,11 +140,17 @@ pub use legalis_eu::gdpr::GdprError;
 // ============================================================================
 
 pub mod adequacy;
+pub mod dpo;
 pub mod enforcement;
 pub mod exemptions;
 
 // Re-export UK-specific types
 pub use adequacy::{UkAdequacyDecision, is_adequate_country_uk};
+pub use dpo::{
+    DesignationGround, DpoAssessment, DpoAssessmentOutcome, DpoContactDetails,
+    DpoNotificationFailure, DpoPosition, DpoPositionFailure, DpoTask, MonitoringScale,
+    OrganisationType,
+};
 pub use enforcement::{IcoEnforcement, IcoEnforcementType};
 pub use exemptions::{Dpa2018Exemption, ExemptionType};
 

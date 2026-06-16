@@ -42,12 +42,17 @@
 //! - **UPA (1914)**: Original version
 //! - **RUPA (1997)**: Modern revision adopted by majority of states
 //!
-//! ### 3. Other Notable Uniform Acts
+//! ### 3. Other Tracked Uniform Acts
 //!
-//! - **Uniform Trust Code (UTC)**: Trust law standardization
-//! - **Uniform Probate Code (UPC)**: Estate administration
-//! - **Uniform Arbitration Act (UAA)**: Arbitration procedures
-//! - **Uniform Electronic Transactions Act (UETA)**: E-commerce
+//! Each of the following is modeled with model-act metadata, key provisions,
+//! state adoption tracking, and substantive validators:
+//!
+//! - **Uniform Trust Code (UTC, 2000)** [`utc`]: Trust law standardization
+//! - **Uniform Probate Code (UPC, 1969/1990)** [`upc`]: Wills, intestacy, estate administration
+//! - **Revised Uniform Limited Liability Company Act (RULLCA, 2006)** [`ullca`]: LLC governance
+//! - **Revised Uniform Arbitration Act (RUAA, 2000)** [`uaa`]: Arbitration procedures
+//! - **Uniform Electronic Transactions Act (UETA, 1999)** [`ueta`]: Legal recognition of
+//!   electronic records, signatures, and contracts (49 jurisdictions; New York non-uniform)
 //!
 //! ## Why Uniform Acts Matter for Legalis-RS
 //!
@@ -66,12 +71,41 @@
 //! enabling accurate analysis when different states' UCC provisions conflict.
 
 pub mod adoption_status;
+pub mod error;
+pub mod model_act;
+pub mod uaa;
 pub mod ucc;
+pub mod ueta;
+pub mod ullca;
 pub mod upa;
+pub mod upc;
+pub mod utc;
 
 pub use adoption_status::{AdoptionComparison, AdoptionStatus, UniformActComparator};
+pub use error::{Result, UniformActError};
+pub use model_act::{DraftingBody, ModelActMetadata, US_JURISDICTIONS};
+pub use uaa::{
+    ArbitrationActVersion, ArbitrationAgreement, RuaaSection, UaaAdoption, UaaTracker,
+    VacaturGround, arbitration_agreement_issues, validate_arbitration_agreement,
+};
 pub use ucc::{UCCAdoption, UCCArticle, UCCTracker, UCCVersion};
+pub use ueta::{
+    ElectronicRecord, SignatureMethod, UetaAdoption, UetaSection, UetaTracker,
+    electronic_record_issues, signature_attributable, validate_electronic_record,
+};
+pub use ullca::{
+    LlcFormation, LlcManagementStructure, RullcaSection, UllcaAdoption, UllcaTracker, UllcaVersion,
+    default_management_structure, llc_formation_issues, validate_llc_formation,
+};
 pub use upa::{PartnershipActVersion, UPAAdoption, UPATracker};
+pub use upc::{
+    UpcAdoption, UpcArticle, UpcSection, UpcTracker, WillExecution, validate_will_execution,
+    will_execution_issues,
+};
+pub use utc::{
+    TrustCreation, UtcAdoption, UtcArticle, UtcSection, UtcTracker, trust_creation_issues,
+    validate_trust_creation,
+};
 
 #[cfg(test)]
 mod tests {

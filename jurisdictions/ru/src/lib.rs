@@ -23,6 +23,7 @@ pub mod data_protection;
 pub mod intellectual_property;
 pub mod labor_code;
 pub mod reasoning;
+pub mod statutes;
 pub mod tax_code;
 
 // Citation exports
@@ -82,6 +83,9 @@ pub use reasoning::{
     ComplianceStatus, LegalAnalysis, ReasoningEngine, ReasoningError, ReasoningResult, RiskLevel,
     RuEvaluationContext, Violation, ViolationSeverity,
 };
+
+// Statute model exports (legalis-core Statute / legalis-dsl)
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 // Tax Code exports (Налоговый кодекс)
 pub use tax_code::{

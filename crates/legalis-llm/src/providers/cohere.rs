@@ -98,12 +98,45 @@ impl LLMProvider for CohereClient {
         &self.model
     }
 
-    async fn generate_text_stream(&self, _prompt: &str) -> Result<TextStream> {
-        Err(anyhow!("Streaming not yet implemented for Cohere"))
+    async fn generate_text_stream(&self, prompt: &str) -> Result<TextStream> {
+        #[derive(Serialize)]
+        struct CohereStreamRequest<'a> {
+            model: &'a str,
+            message: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            preamble: Option<&'a str>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let request = CohereStreamRequest {
+            model: &self.model,
+            message: prompt,
+            preamble: self.config.system_prompt.as_deref(),
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post("https://api.cohere.ai/v1/chat")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Cohere API")?;
+
+        let byte_stream = response.bytes_stream();
+        let text_stream = parse_sse_stream(byte_stream);
+
+        Ok(Box::pin(text_stream))
     }
 
     fn supports_streaming(&self) -> bool {
-        false
+        true
     }
 }
 
@@ -250,5 +283,44 @@ impl LLMProvider for PerplexityClient {
 
     fn supports_streaming(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cohere_supports_streaming() {
+        let client = CohereClient::new("test-key", "command");
+        assert!(client.supports_streaming());
+    }
+
+    #[test]
+    fn test_cohere_stream_request_serialization() {
+        #[derive(serde::Serialize)]
+        struct CohereStreamRequest<'a> {
+            model: &'a str,
+            message: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            preamble: Option<&'a str>,
+            max_tokens: u32,
+            temperature: f32,
+            stream: bool,
+        }
+
+        let req = CohereStreamRequest {
+            model: "command",
+            message: "hello",
+            preamble: None,
+            max_tokens: 100,
+            temperature: 0.7,
+            stream: true,
+        };
+
+        let val = serde_json::to_value(&req).unwrap();
+        assert_eq!(val["stream"], serde_json::json!(true));
+        assert_eq!(val["model"], serde_json::json!("command"));
+        assert_eq!(val["message"], serde_json::json!("hello"));
     }
 }

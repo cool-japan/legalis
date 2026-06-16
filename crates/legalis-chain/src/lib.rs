@@ -5,6 +5,8 @@
 //! This crate provides export functionality to convert deterministic
 //! legal statutes into smart contracts (WASM/Solidity).
 
+mod autonomous;
+mod composition;
 mod contractgenerator_impl;
 mod contractgenerator_impl_1;
 mod contractgenerator_impl_10;
@@ -21,13 +23,21 @@ mod contractgenerator_impl_7;
 mod contractgenerator_impl_8;
 mod contractgenerator_impl_9;
 mod contractgenerator_type;
+mod evolution;
 mod functions;
+mod security_analysis;
+mod tokenization;
 mod trait_impls;
 mod types;
 mod types_19;
 
 // Re-export public API
+pub use autonomous::*;
+pub use composition::*;
 pub use contractgenerator_type::*;
+pub use evolution::*;
 pub use functions::*;
+pub use security_analysis::*;
+pub use tokenization::*;
 pub use types::*;
 pub use types_19::*;

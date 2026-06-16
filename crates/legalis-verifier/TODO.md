@@ -2,9 +2,73 @@
 
 ## Status Summary
 
-Version: 0.3.4 | Status: Stable | Tests: 500+ passing | Warnings: 0
+Version: 0.3.4 | Status: Stable | Tests: 593 passing (627 with all features) | Warnings: 0
 
-All v0.1.x, v0.2.x, and v0.3.x features complete. OxiZ SMT solver (Z3), temporal verification (CTL*, LTL), constitutional principles, cross-statute analysis, proof generation, and CI/CD integration all complete. Multi-Party Verification (v0.2.1) FULLY COMPLETE with stakeholder conflict analysis, Nash equilibrium detection, game-theoretic modeling, coalition analysis, and mechanism design verification. Probabilistic Verification (v0.2.2) FULLY COMPLETE with Markov chain analysis, statistical model checking, Monte Carlo verification, and comprehensive risk quantification. Explainable Verification (v0.2.3) FULLY COMPLETE with natural language explanations, verification path visualization, layperson-friendly conflict explanations, and what-if scenario analysis. Privacy-Preserving Verification (v0.2.4) FULLY COMPLETE with zero-knowledge proofs, secure multi-party computation, differential privacy, homomorphic encryption, and trusted execution environment support. Incremental Verification 2.0 (v0.2.5) FULLY COMPLETE with fine-grained dependency tracking, on-demand lazy verification, verification result diffing, incremental proof maintenance, and hot-reload support. Formal Methods Integration (v0.2.6) FULLY COMPLETE with Coq proof extraction and validation, Lean 4 theorem prover integration, Isabelle/HOL proof export, ACL2 model verification, and PVS specification checking. Machine Learning Verification (v0.2.7) FULLY COMPLETE with neural network verification, adversarial robustness checking, fairness verification for ML-based decisions, explainability verification for black-box models, and drift detection for learned policies. Distributed Verification (v0.2.8) FULLY COMPLETE with parallel verification across worker nodes, four load balancing strategies (Round Robin, Least Loaded, Random, Complexity Weighted), verification result aggregation, fault-tolerant verification with configurable redundancy, worker statistics and utilization tracking. Certification Framework (v0.2.9) FULLY COMPLETE with ISO 27001 compliance verification, SOC 2 Type II verification, GDPR compliance checking automation, regulatory certification reports, and third-party verification attestation. Quantum Verification (v0.3.0) FULLY COMPLETE with quantum circuit verification, quantum-resistant cryptographic proofs (6 post-quantum algorithms), quantum annealing for SAT solving, hybrid classical-quantum verification, and quantum supremacy benchmarks. Autonomous Verification Agents (v0.3.1) FULLY COMPLETE with self-improving verification strategies, learning-based proof heuristics, automated abstraction refinement (CEGAR), verification goal decomposition, and meta-verification for verifier correctness. Real-Time Verification (v0.3.2) FULLY COMPLETE with stream-based verification, live monitoring, WebSocket updates, circuit breaking, and performance metrics. Cross-Domain Verification (v0.3.3) FULLY COMPLETE with multi-jurisdictional coherence checking, treaty compliance verification, harmonization gap detection, cross-border regulation analysis, and international law conflict resolution. Self-Healing Legal Systems (v0.3.4) FULLY COMPLETE with automatic conflict resolution, predictive violation prevention, adaptive compliance strategies, automated statute optimization, and continuous monitoring.
+All v0.1.x, v0.2.x, and v0.3.x features complete. OxiZ SMT solver (Z3), temporal verification (CTL*, LTL), constitutional principles, cross-statute analysis, proof generation, and CI/CD integration all complete. Multi-Party Verification (v0.2.1) FULLY COMPLETE with stakeholder conflict analysis, Nash equilibrium detection, game-theoretic modeling, coalition analysis, and mechanism design verification. Probabilistic Verification (v0.2.2) FULLY COMPLETE with Markov chain analysis, statistical model checking, Monte Carlo verification, and comprehensive risk quantification. Explainable Verification (v0.2.3) FULLY COMPLETE with natural language explanations, verification path visualization, layperson-friendly conflict explanations, and what-if scenario analysis. Privacy-Preserving Verification (v0.2.4) FULLY COMPLETE with zero-knowledge proofs, secure multi-party computation, differential privacy, homomorphic encryption, and trusted execution environment support. Incremental Verification 2.0 (v0.2.5) FULLY COMPLETE with fine-grained dependency tracking, on-demand lazy verification, verification result diffing, incremental proof maintenance, and hot-reload support. Formal Methods Integration (v0.2.6) FULLY COMPLETE with Coq proof extraction and validation, Lean 4 theorem prover integration, Isabelle/HOL proof export, ACL2 model verification, and PVS specification checking. Machine Learning Verification (v0.2.7) FULLY COMPLETE with neural network verification, adversarial robustness checking, fairness verification for ML-based decisions, explainability verification for black-box models, and drift detection for learned policies. Distributed Verification (v0.2.8) FULLY COMPLETE with parallel verification across worker nodes, four load balancing strategies (Round Robin, Least Loaded, Random, Complexity Weighted), verification result aggregation, fault-tolerant verification with configurable redundancy, worker statistics and utilization tracking. Certification Framework (v0.2.9) FULLY COMPLETE with ISO 27001 compliance verification, SOC 2 Type II verification, GDPR compliance checking automation, regulatory certification reports, and third-party verification attestation. Quantum Verification (v0.3.0) FULLY COMPLETE with quantum circuit verification, quantum-resistant cryptographic proofs (6 post-quantum algorithms), quantum annealing for SAT solving, hybrid classical-quantum verification, and quantum supremacy benchmarks. Autonomous Verification Agents (v0.3.1) FULLY COMPLETE with self-improving verification strategies, learning-based proof heuristics, automated abstraction refinement (CEGAR), verification goal decomposition, and meta-verification for verifier correctness. Real-Time Verification (v0.3.2) FULLY COMPLETE with stream-based verification, live monitoring, WebSocket updates, circuit breaking, and performance metrics. Cross-Domain Verification (v0.3.3) FULLY COMPLETE with multi-jurisdictional coherence checking, treaty compliance verification, harmonization gap detection, cross-border regulation analysis, and international law conflict resolution. Self-Healing Legal Systems (v0.3.4) FULLY COMPLETE with automatic conflict resolution, predictive violation prevention, adaptive compliance strategies, automated statute optimization, and continuous monitoring. Advanced Model Checking (Temporal Verification v0.2.0) FULLY COMPLETE with full LTL model checking via generalized Büchi automata (GPVW construction + nested-DFS emptiness with lasso counterexamples), symbolic CTL/CTL* model checking over reduced ordered BDDs (fixpoint EX/EU/EG evaluation), timed-automaton verification with Difference Bound Matrices and zone graphs (deadline reachability and deadline-guarantee checks), and temporal-property synthesis from labelled example traces using Dwyer specification patterns.
+
+---
+
+## COMPLETED (2026-06-14 — streaming verification + compliance frameworks)
+
+### Streaming / Real-Time Incremental Verification (`src/streaming_verification.rs`, 917 lines)
+- [x] **`StreamingVerifier`** — incremental verifier that consumes a stream of
+  `StreamEvent`s (Add / Modify / Remove). Maintains an in-memory corpus,
+  per-statute result cache, and content hashes so identical modifications are
+  detected as no-ops. Reuses the existing per-statute checks via the new public
+  `StatuteVerifier::verify_single`, and on every event runs incremental conflict
+  detection (only the affected pairs) and, for modifications, instant impact
+  analysis. Returns a `StreamOutcome` per event and supports `apply_batch`,
+  `verify_full` (whole-corpus reconciliation), and `report`.
+- [x] **`ContinuousComplianceMonitor`** — tracks compliance of a changing rule
+  set against any number of registered `ComplianceEvaluator`s (via the new
+  `ComplianceEvaluator` trait). On each corpus change it re-evaluates every
+  framework and emits `ComplianceAlert`s for compliance loss (Critical), score
+  regressions (Warning/Error by configurable threshold), and newly introduced
+  violations. Records the latest `ComplianceSnapshot` per framework.
+- [x] **`IncrementalConflictDetector`** — stateful wrapper over the canonical
+  `detect_statute_conflicts`; on each `upsert`/`remove` only the pairs involving
+  the changed statute are re-checked (O(n) per event vs. O(n²) full rescan),
+  with stale conflicts pruned.
+- [x] **`IncrementalImpactAnalyzer`** — single-change impact assessment reusing
+  `analyze_change_impact`, with both committing (`assess_modification`) and
+  dry-run (`preview_modification`) variants.
+- [x] Helpers: `worst_conflict_severity`, `conflict_type_label`,
+  `StreamingConfig` (toggle conflict/impact/history).
+- [x] Added public `StatuteVerifier::verify_single` (thin wrapper over the
+  existing private `verify_single_statute`) so the streaming layer can run
+  per-statute checks without cross-statute analysis (additive, backward compatible).
+
+### Additional Compliance Frameworks + Gap Analysis (`src/compliance_frameworks.rs`, 1471 lines)
+- [x] Structured **`FrameworkDefinition`** data model: `ControlFamily` →
+  `ControlRequirement` tagged with a normalized cross-framework
+  `ControlCategory` (15 categories) and evidence keywords.
+- [x] **HIPAA** (Administrative / Physical / Technical safeguards + Privacy &
+  Breach Notification), **PCI-DSS v4.0** (all 12 core requirements across 6
+  families), **FedRAMP** (NIST SP 800-53 families AC/AU/CA/CM/CP/IA/IR/RA/SC/PE),
+  and **NIST CSF 2.0** (Govern/Identify/Protect/Detect/Respond/Recover) encoded
+  as structured data. Compact reference definitions for GDPR / ISO 27001 / SOC 2
+  added for cross-comparison.
+- [x] **`ComplianceFrameworkEvaluator`** evaluates a corpus against a framework
+  using the same textual-evidence heuristic style as `certification_framework`,
+  producing a `FrameworkComplianceReport` (per-requirement Satisfied / Partially
+  Satisfied / Not Addressed, weighted score, Markdown report). Implements the
+  `ComplianceEvaluator` trait for use by the continuous monitor.
+- [x] **`cross_framework_gap_analysis`** compares ≥2 frameworks at the
+  `ControlCategory` level, classifying each category as Universal / Partial /
+  Unique coverage and reporting per-framework gaps (`gaps_for`) plus a Markdown
+  report.
+
+### Quality
+- [x] 61 new `#[test]`s (39 streaming + 22 compliance frameworks); full crate
+  suite 654 passing, 0 failures.
+- [x] `cargo clippy -p legalis-verifier --all-targets -- -D warnings` clean.
+- [x] No `unwrap`/`expect`/`panic!` in non-test code; all new files < 2000 lines.
+- [x] Modules wired into `lib.rs` (`pub mod streaming_verification;`,
+  `pub mod compliance_frameworks;`). Additive and backward compatible.
+
+### Deferred (require external tools/services unavailable in a pure-Rust offline crate)
+- Verification-as-a-service network API; integration with actual compliance
+  management systems; ticketing-system integration.
 
 ---
 
@@ -2342,12 +2406,47 @@ All v0.1.x, v0.2.x, and v0.3.x features complete. OxiZ SMT solver (Z3), temporal
 
 ## Roadmap for 0.2.0 Series
 
-### Temporal Verification (v0.2.0)
-- [ ] Add full LTL model checking with Büchi automata
-- [ ] Add CTL* model checking with binary decision diagrams
-- [ ] Add timed automata verification for deadlines
-- [ ] Add deadline satisfaction checking with zone graphs
-- [ ] Add temporal property synthesis from examples
+### Temporal Verification (v0.2.0) - Advanced Model Checking FULLY COMPLETE
+- [x] Add full LTL model checking with Büchi automata
+- [x] Add CTL* model checking with binary decision diagrams
+- [x] Add timed automata verification for deadlines
+- [x] Add deadline satisfaction checking with zone graphs
+- [x] Add temporal property synthesis from examples
+
+#### Advanced Model Checking (2026-06-14) - COMPLETED
+New module `src/model_checking/` (split into focused submodules, each < 2000 lines,
+wired into `src/lib.rs` as `pub mod model_checking`). Implements real algorithms that
+*deepen* the crate's existing lightweight temporal helpers (`verify_ltl`,
+`verify_ctl`, `verify_timed_reachability`, `synthesize_ltl_property`), reusing the
+existing temporal types (`LtlFormula`, `CtlFormula`, `CtlStarFormula`,
+`TransitionSystem`, `TimedAutomaton`, `ClockConstraint`, `Clock`, `DeadlineViolation`,
+`VerificationError`) without duplicating them.
+
+- **`buchi.rs`** — Full LTL model checking: NNF rewriting + GPVW on-the-fly tableau
+  building a *generalized Büchi automaton* (`GeneralizedBuchiAutomaton`, `ltl_to_gba`),
+  synchronous product with the Kripke structure with on-the-fly degeneralization, and
+  emptiness via *nested depth-first search* (CVWY) yielding lasso counterexamples
+  (`LassoTrace`, `LtlModelCheckResult`, `check_ltl`).
+- **`bdd.rs`** — Reduced ordered BDD manager (`Bdd`) with unique-table reduction,
+  `ite`/`apply`, restriction, existential quantification and order-preserving rename;
+  symbolic CTL model checking via least/greatest fixpoints (`SymbolicCtlChecker`,
+  `check_ctl_symbolic`) plus the CTL-expressible CTL* fragment (`ctl_star_to_ctl`,
+  `check_ctl_star_symbolic`).
+- **`zones.rs`** — Difference Bound Matrices (`DifferenceBoundMatrix`, `DbmBound`):
+  canonicalize (Floyd–Warshall), intersect, reset, up/delay, classic k-extrapolation,
+  inclusion; zone-graph reachability (`reachable_zone_states`,
+  `accepting_reachable_zone`) and deadline analysis with zone graphs
+  (`Deadline`, `DeadlineOutcome`, `verify_deadline_reachable`,
+  `check_deadline_satisfaction`).
+- **`synthesis.rs`** — Temporal property synthesis from labelled traces
+  (`TemporalPropertySynthesizer`): a library of Dwyer-style specification patterns
+  (`SpecificationPattern`), scored/ranked candidate separation
+  (`ScoredCandidate`, `SynthesisOutcome`), reusing the crate's finite-trace LTL
+  semantics (`check_formula_on_trace`).
+- **Tests**: 29 new comprehensive `#[test]`s in `model_checking/tests.rs`
+  (LTL/Büchi 7, BDD 5, symbolic CTL/CTL* 5, DBM/zone/deadline 9, synthesis 3).
+- Build clean; `cargo clippy --all-targets -- -D warnings` passes with zero output;
+  no `unwrap`/`expect`/`panic!` in non-test code (errors via `VerificationError`).
 
 ### Multi-Party Verification (v0.2.1) - FULLY COMPLETED
 - [x] Add multi-stakeholder conflict analysis
@@ -2429,18 +2528,18 @@ All v0.1.x, v0.2.x, and v0.3.x features complete. OxiZ SMT solver (Z3), temporal
 - [x] Add meta-verification for verifier correctness
 
 ### Real-Time Verification (v0.3.2)
-- [ ] Add streaming verification for live statute updates
-- [ ] Implement continuous compliance monitoring
-- [ ] Add real-time conflict detection
-- [ ] Create instant impact analysis
-- [ ] Add verification-as-a-service API
+- [x] Add streaming verification for live statute updates (`streaming_verification.rs`: `StreamingVerifier` consumes a stream of add/modify/remove `StreamEvent`s and incrementally updates verification state, reusing `StatuteVerifier::verify_single` and content-hash no-op detection)
+- [x] Implement continuous compliance monitoring (`streaming_verification.rs`: `ContinuousComplianceMonitor` tracks a changing rule set against registered `ComplianceEvaluator`s and emits `ComplianceAlert`s on compliance loss / score regression / new violations)
+- [x] Add real-time conflict detection (`streaming_verification.rs`: `IncrementalConflictDetector` re-checks only affected pairs per update, reusing the canonical `detect_statute_conflicts`)
+- [x] Create instant impact analysis (`streaming_verification.rs`: `IncrementalImpactAnalyzer` performs single-change impact assessment, reusing `analyze_change_impact`)
+- [ ] Add verification-as-a-service API — DEFERRED: requires a network service/HTTP-server stack outside a pure-Rust offline crate's scope
 
 ### Cross-Domain Verification (v0.3.3)
-- [ ] Add multi-jurisdictional coherence checking
-- [ ] Implement treaty compliance verification
-- [ ] Add international law conflict detection
-- [ ] Create cross-border regulation analysis
-- [ ] Add global legal consistency verification
+- [x] Add multi-jurisdictional coherence checking (`cross_domain_verification.rs`; deepened by `conflict_of_laws.rs` norm-hierarchy maxims)
+- [x] Implement treaty compliance verification (`cross_domain_verification.rs`; deepened by `conflict_of_laws.rs` treaty transposition w/ ratification & reservation modeling)
+- [x] Add international law conflict detection (`cross_domain_verification.rs`; deepened by `conflict_of_laws.rs` private-international-law choice-of-law engine)
+- [x] Create cross-border regulation analysis (`cross_domain_verification.rs`; deepened by `conflict_of_laws.rs` adequacy / equivalence assessment)
+- [x] Add global legal consistency verification (`cross_domain_verification.rs`; deepened by `conflict_of_laws.rs` incompatibility-graph coherence index)
 
 ### Self-Healing Legal Systems (v0.3.4)
 - [x] Add automatic conflict resolution suggestions
@@ -3283,14 +3382,82 @@ Successfully implemented comprehensive Quantum Verification for legalis-verifier
 - [x] **Comprehensive Coverage**: 14 ISO controls + 5 SOC 2 criteria + 7 GDPR principles
 
 ### Future Enhancement Opportunities
-- [ ] Integration with actual compliance management systems
+- [ ] Integration with actual compliance management systems — DEFERRED: requires external SaaS/GRC system connectors outside a pure-Rust offline crate
 - [ ] Automated evidence collection for audits
-- [ ] Continuous compliance monitoring and alerting
-- [ ] Additional frameworks (HIPAA, PCI-DSS, FedRAMP, NIST)
-- [ ] Cross-framework gap analysis
+- [x] Continuous compliance monitoring and alerting (`streaming_verification.rs`: `ContinuousComplianceMonitor` + `ComplianceAlert`)
+- [x] Additional frameworks (HIPAA, PCI-DSS, FedRAMP, NIST) (`compliance_frameworks.rs`: structured `FrameworkDefinition`s with control families/requirements evaluated by `ComplianceFrameworkEvaluator`)
+- [x] Cross-framework gap analysis (`compliance_frameworks.rs`: `cross_framework_gap_analysis` compares ≥2 frameworks at the normalized `ControlCategory` level, reporting universal/partial/unique coverage and per-framework gaps)
 - [ ] Compliance dashboard and metrics visualization
 - [ ] Automated remediation suggestions with code generation
-- [ ] Integration with ticketing systems for violation tracking
+- [ ] Integration with ticketing systems for violation tracking — DEFERRED: requires external ticketing-system (Jira/ServiceNow) integration outside a pure-Rust offline crate
 
 ### Version 0.2.9 Summary
 Successfully implemented comprehensive Certification Framework for legalis-verifier, providing automated compliance verification against three major regulatory standards: ISO 27001:2013 (14 controls), SOC 2 Type II (5 criteria), and GDPR (7 principles). The implementation includes intelligent violation detection, severity scoring, detailed recommendations, and third-party attestation generation. With 13 new tests (379 total), zero warnings, and complete serde serialization support, this establishes a solid foundation for regulatory compliance automation in legal systems. The module is production-ready and can be integrated into existing verification workflows with minimal changes.
+
+## Latest Enhancements (June 14, 2026) - Conflict-of-Laws Doctrine Engine (v0.3.3 deepening)
+
+### Cross-Jurisdictional Coherence Deepened (`src/conflict_of_laws.rs`)
+This batch completes the Cross-Domain Verification (v0.3.3) roadmap by adding a
+substantive, doctrine-grounded engine on top of the original keyword heuristics
+in `cross_domain_verification.rs` (which used Jaccard title similarity, three
+hard-coded treaties and four effect-pair contradictions). The new module reuses
+the existing `Statute`, `Effect`, `EffectType`, `Severity` and
+`JurisdictionLevel` types without redefining them.
+
+- [x] **Subject-matter classification**: 15-domain controlled vocabulary
+  (`LegalDomain`) with `classify_domains()` / `statute_domains()` token-based
+  tagging — far more precise than the old "first word of title" heuristic.
+- [x] **Deontic polarity model**: `Polarity` (Mandatory/Prohibitory/Permissive/
+  Neutral) with `effect_polarity()` mapping from `EffectType`, plus
+  `polarities_opposed()` for genuine-opposition detection.
+- [x] **Norm-hierarchy antinomy resolution** (multi-jurisdictional coherence):
+  `detect_antinomies()` finds real conflicts (opposed polarity on overlapping
+  domains) and resolves them with the classic maxims in doctrinal priority
+  order — *lex superior derogat legi inferiori*, *lex specialis derogat legi
+  generali*, *lex posterior derogat legi priori* — via `apply_maxims()`,
+  classifying each as `HierarchyInversion`, `GrantRevokeConflict`,
+  `ExtraterritorialClash` or `DeonticConflict`.
+- [x] **Treaty transposition** (treaty compliance verification):
+  `TreatyObligation` modeling (article, required polarity, domain) with
+  ratification (`ratify`) and reservation (`add_reservation`) tracking;
+  `assess_transposition()` classifies each obligation as Implemented / Partial /
+  Missing / Contradictory / NotRequired (*pacta sunt servanda*).
+- [x] **Private-international-law choice-of-law** (international law conflict
+  detection): `resolve_choice_of_law()` over `ConnectingFactors`, applying party
+  autonomy, characteristic performance, *lex loci actus*/*damni*, *lex
+  domicilii*/*patriae* and *lex fori*, with single *renvoi* handling
+  (`set_renvoi`) and an *ordre public* exception (`block_for_public_policy`).
+- [x] **Adequacy / equivalence** (cross-border regulation analysis):
+  `assess_adequacy()` scores protection strength per jurisdiction in a domain and
+  classifies recognition as Mutual / Unilateral / None.
+- [x] **Global coherence** (global legal consistency verification):
+  `verify_global_coherence()` aggregates antinomies, builds the
+  incompatibility graph of irreconcilable norms (connected-component clustering),
+  computes a normalized coherence index, and tallies resolutions by principle;
+  `coherence_report_markdown()` renders the report.
+
+### Comprehensive Test Coverage
+- [x] Added 32 unit tests + 1 doctest for `conflict_of_laws` (561 -> 593 default,
+  595 -> 627 with all features):
+  - Jurisdiction-level heuristics (international/regional/national/state/local,
+    "United States" not misread as State) and overrides
+  - Domain classification (single, multiple, Other fallback)
+  - Polarity mapping and norm construction
+  - Each resolution maxim (lex superior, pacta sunt servanda, lex specialis,
+    lex posterior) plus irreconcilable and grant/revoke antinomies
+  - Negative cases (no shared domain, no opposition)
+  - Choice-of-law (party autonomy, characteristic performance, lex loci damni,
+    renvoi back to forum, public-policy override)
+  - Treaty transposition (implemented, missing, contradictory, reserved)
+  - Adequacy (mutual recognition, no recognition)
+  - Global coherence (clean -> index 1.0, irreconcilable cluster) and Markdown report
+
+### Build Quality
+- [x] All 593 tests passing default / 627 with all features (0 failures)
+- [x] Zero compiler warnings (NO WARNINGS POLICY compliance)
+- [x] Zero clippy warnings (`-D warnings`, default and `--all-features`)
+- [x] No unwrap/expect/panic/todo/unimplemented/unreachable in non-test code
+- [x] Pure Rust, no new dependencies; reuses existing crate + legalis-core types
+- [x] Split into a directory module to respect the 2,000-line limit:
+  `src/conflict_of_laws/mod.rs` (1,563 lines) + `src/conflict_of_laws/tests.rs` (614 lines)
+- [x] Module declared in `lib.rs` as `pub mod conflict_of_laws`

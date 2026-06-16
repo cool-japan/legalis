@@ -41,7 +41,6 @@ impl StatuteLoader {
     }
 }
 
-#[async_trait::async_trait]
 impl Loader<String> for StatuteLoader {
     type Value = Statute;
     type Error = Arc<String>;
@@ -83,7 +82,6 @@ impl JurisdictionLoader {
     }
 }
 
-#[async_trait::async_trait]
 impl Loader<String> for JurisdictionLoader {
     type Value = Vec<Statute>;
     type Error = Arc<String>;
@@ -103,12 +101,13 @@ impl Loader<String> for JurisdictionLoader {
 
         // Batch load all statutes and group by jurisdiction
         for statute in statutes.iter() {
-            if let Some(jurisdiction) = &statute.jurisdiction {
-                if keys.contains(jurisdiction) {
-                    if let Some(statutes_vec) = result.get_mut(jurisdiction) {
-                        statutes_vec.push(statute.clone());
-                    }
-                }
+            if let Some(jurisdiction) = &statute.jurisdiction
+                && keys.contains(jurisdiction)
+            {
+                result
+                    .get_mut(jurisdiction)
+                    .into_iter()
+                    .for_each(|v| v.push(statute.clone()));
             }
         }
 
@@ -138,13 +137,15 @@ impl VersionLoader {
     }
 }
 
-#[async_trait::async_trait]
 impl Loader<StatuteVersionKey> for VersionLoader {
     type Value = Statute;
     type Error = Arc<String>;
 
     /// Load specific statute versions in a single batch operation.
-    async fn load(&self, keys: &[StatuteVersionKey]) -> Result<HashMap<StatuteVersionKey, Statute>, Arc<String>> {
+    async fn load(
+        &self,
+        keys: &[StatuteVersionKey],
+    ) -> Result<HashMap<StatuteVersionKey, Statute>, Arc<String>> {
         let statutes = self.statutes.read().await;
 
         let mut result = HashMap::new();
@@ -213,9 +214,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_statute_loader_missing() {
-        let statutes = Arc::new(RwLock::new(vec![
-            create_test_statute("statute-1", Some("US"), 1),
-        ]));
+        let statutes = Arc::new(RwLock::new(vec![create_test_statute(
+            "statute-1",
+            Some("US"),
+            1,
+        )]));
 
         let loader = StatuteLoader::new(statutes);
 
@@ -249,9 +252,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_jurisdiction_loader_empty() {
-        let statutes = Arc::new(RwLock::new(vec![
-            create_test_statute("statute-1", Some("US"), 1),
-        ]));
+        let statutes = Arc::new(RwLock::new(vec![create_test_statute(
+            "statute-1",
+            Some("US"),
+            1,
+        )]));
 
         let loader = JurisdictionLoader::new(statutes);
 
@@ -276,8 +281,14 @@ mod tests {
 
         // Request specific versions
         let keys = vec![
-            StatuteVersionKey { id: "statute-1".to_string(), version: 1 },
-            StatuteVersionKey { id: "statute-1".to_string(), version: 3 },
+            StatuteVersionKey {
+                id: "statute-1".to_string(),
+                version: 1,
+            },
+            StatuteVersionKey {
+                id: "statute-1".to_string(),
+                version: 3,
+            },
         ];
         let result = loader.load(&keys).await.unwrap();
 
@@ -288,16 +299,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_version_loader_missing_version() {
-        let statutes = Arc::new(RwLock::new(vec![
-            create_test_statute("statute-1", Some("US"), 1),
-        ]));
+        let statutes = Arc::new(RwLock::new(vec![create_test_statute(
+            "statute-1",
+            Some("US"),
+            1,
+        )]));
 
         let loader = VersionLoader::new(statutes);
 
         // Request a version that doesn't exist
-        let keys = vec![
-            StatuteVersionKey { id: "statute-1".to_string(), version: 99 },
-        ];
+        let keys = vec![StatuteVersionKey {
+            id: "statute-1".to_string(),
+            version: 99,
+        }];
         let result = loader.load(&keys).await.unwrap();
 
         assert_eq!(result.len(), 0);

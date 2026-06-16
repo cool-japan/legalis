@@ -13,6 +13,8 @@ categories = ["text-processing", "localization", "internationalization"]
 
 [dependencies]
 chrono.workspace = true
+legalis-core.workspace = true
+legalis-dsl.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 

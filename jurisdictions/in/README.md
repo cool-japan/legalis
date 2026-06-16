@@ -2,7 +2,7 @@
 
 भारत (India) - Legal System Support for Legalis-RS
 
-**Version 0.1.3** - Constitution, Companies Act, DPDPA, Labour Codes, IT Act
+**Version 0.1.6** - Constitution, Companies Act, DPDPA, Labour Codes, IT Act
 
 ## अवलोकन (Overview)
 
@@ -186,8 +186,9 @@ Indian Contract Act, 1872
 
 ## 📊 वर्तमान कार्यान्वयन स्थिति (Current Status)
 
-**Version 0.1.3 Statistics:**
-- ✅ **Modules**: 11 modules (constitution, companies, data_protection, labour_codes, it_act, gst, contract, criminal, common, citation)
+**Version 0.1.6 Statistics:**
+- ✅ **Modules**: 21 modules (citation, common, companies, constitution, contract, criminal, data_protection, gst, it_act, labour_codes, civil_procedure_code, criminal_procedure_code, evidence_act, arbitration_act, competition_law, insolvency_code, environmental_law, fema, securities_law, intellectual_property, statutes)
+- ✅ **Tests**: 235 tests passing, 0 warnings
 - ✅ **Constitution**: Fundamental Rights and Directive Principles
 - ✅ **DPDPA**: Full compliance framework
 - ✅ **Companies Act**: Incorporation and governance

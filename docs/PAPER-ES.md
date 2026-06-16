@@ -5,7 +5,7 @@
 ---
 
 **Autores**: Equipo de Desarrollo de Legalis-RS
-**Versión**: 0.2.0
+**Versión**: 0.1.6
 **Lenguaje**: Rust (Edition 2024)
 **Licencia**: MIT / Apache 2.0
 
@@ -630,4 +630,4 @@ parallel_workers = 8
 ---
 
 **Equipo de Desarrollo Legalis-RS**
-Versión 0.2.0 | 2024
+Versión 0.1.6 | 2026

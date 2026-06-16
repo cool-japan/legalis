@@ -5,7 +5,7 @@
 ---
 
 **Autorid**: Legalis-RS Arendusmeeskond
-**Versioon**: 0.2.0
+**Versioon**: 0.1.6
 **Keel**: Rust (Edition 2024)
 **Litsents**: MIT / Apache 2.0
 
@@ -433,4 +433,4 @@ Legalis-RS esitab uue lähenemise õiguse kodifitseerimiseks, muutes "arvutatavu
 ---
 
 **Legalis-RS Arendusmeeskond**
-Versioon 0.2.0 | 2024
+Versioon 0.1.6 | 2026

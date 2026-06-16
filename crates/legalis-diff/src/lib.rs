@@ -52,8 +52,10 @@ pub mod advanced_cache;
 pub mod advanced_visual;
 pub mod algorithms;
 pub mod analysis;
+pub mod analytics;
 pub mod api;
 pub mod audit;
+pub mod blockchain;
 pub mod cloud;
 pub mod collaborative;
 pub mod collaborative_review;
@@ -67,16 +69,20 @@ pub mod export_plugins;
 pub mod formats;
 pub mod fuzzy;
 pub mod git;
+pub mod governance;
 pub mod gpu;
+pub mod immersive;
 pub mod integration;
 pub mod integration_examples;
 pub mod legal_domain;
+pub mod legal_xml;
 pub mod legislative_history;
 pub mod llm;
 pub mod machine_readable;
 pub mod merge;
 pub mod ml;
 pub mod ml_advanced;
+pub mod mobile;
 pub mod multilingual;
 pub mod nlp;
 pub mod optimization;
@@ -128,6 +134,42 @@ pub enum DiffError {
 
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
+    #[error("Blockchain integrity violation: {0}")]
+    ChainIntegrity(String),
+
+    #[error("Invalid transaction: {0}")]
+    InvalidTransaction(String),
+
+    #[error(
+        "Insufficient token balance for account '{account}': has {available}, needs {required}"
+    )]
+    InsufficientBalance {
+        account: String,
+        available: u64,
+        required: u64,
+    },
+
+    #[error("Consensus failure: {0}")]
+    ConsensusFailure(String),
+
+    #[error("Smart contract error: {0}")]
+    ContractError(String),
+
+    #[error("NFT error: {0}")]
+    NftError(String),
+
+    #[error("Visualization error: {0}")]
+    Visualization(String),
+
+    #[error("Authentication failed: {0}")]
+    AuthenticationFailed(String),
+
+    #[error("Access denied: {0}")]
+    AccessDenied(String),
+
+    #[error("Directory error: {0}")]
+    DirectoryError(String),
 }
 
 /// Result type for diff operations.

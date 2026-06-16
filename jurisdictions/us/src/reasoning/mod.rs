@@ -4,6 +4,7 @@
 //! federal and state law compliance analysis.
 
 mod context;
+mod dsl;
 mod engine;
 mod error;
 mod simulation;
@@ -12,6 +13,7 @@ mod types;
 mod verifier;
 
 pub use context::UsEvaluationContext;
+pub use dsl::statutes_as_dsl;
 pub use engine::LegalReasoningEngine;
 pub use error::{ReasoningError, ReasoningResult};
 pub use simulation::{

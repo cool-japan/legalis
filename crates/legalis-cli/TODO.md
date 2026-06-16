@@ -2,9 +2,79 @@
 
 ## Status Summary
 
-Version: 0.2.4 | Status: Stable | Tests: Passing | Warnings: 0
+Version: 0.2.6 | Status: Stable | Tests: Passing (324) | Warnings: 0
 
-All v0.1.1 through v0.2.4 roadmap features are complete. v0.2.0 AI-powered CLI, v0.2.1 Interactive TUI, v0.2.2 Workflow Automation, v0.2.3 Cloud Integration, and v0.2.4 Collaboration Features have been implemented and tested.
+All v0.1.1 through v0.2.6 roadmap features are complete. v0.2.0 AI-powered CLI, v0.2.1 Interactive TUI, v0.2.2 Workflow Automation, v0.2.3 Cloud Integration, v0.2.4 Collaboration Features, v0.2.5 Performance Profiling, and v0.2.6 Offline Capabilities have been implemented and tested. A subset of v0.2.7–v0.3.4 (enterprise, UX, self-healing) has been implemented; see the dated section below.
+
+## COMPLETED (2026-06-14 — enterprise/UX/self-healing subset)
+
+Implemented an additive, backward-compatible enterprise / UX / self-healing
+feature set (no warnings; `cargo clippy -p legalis --all-targets -- -D warnings`
+clean; 324 tests passing). New modules and the commands wiring them in:
+
+- `src/verbosity.rs` — ordered `Verbosity` levels (silent → trace) resolved from
+  `--verbosity` / `-v` / `--quiet` / `LEGALIS_VERBOSITY`, a process-global
+  accessor, and `tracing` directive mapping. Honored by new text output.
+- `src/theme.rs` (extended) + `ColorTheme::HighContrast` — high-contrast theme
+  and `configure_colors()` honoring `--theme none`, `NO_COLOR`, `CLICOLOR_FORCE`.
+- `src/paths.rs` — single overridable state root (`LEGALIS_DATA_DIR`) for audit
+  log, usage stats, and checkpoints.
+- `src/audit_log.rs` — hash-chained JSONL audit trail over `legalis-audit`
+  recording every CLI operation (actor, command, args, outcome) with integrity
+  verification.
+- `src/compliance.rs` — compliance mode (`--compliance` / `LEGALIS_COMPLIANCE`)
+  that guards sensitive operations and forces audit logging.
+- `src/policy.rs` — enterprise policy (TOML/JSON/YAML): allow/deny command lists,
+  numeric limits, require-compliance/require-audit, discovery + validation.
+- `src/central_config.rs` — layered config (defaults → central → file → env →
+  flags) with provenance tracking and strict validation.
+- `src/suggest.rs` — usage learning (counts + Markov transitions), contextual
+  next-command suggestions, and proactive recommendations.
+- `src/recovery.rs` — transient-failure classifier + exponential-backoff retry
+  engine (injectable sleeper); wired around mandatory audit-log opens.
+- `src/diagnostics.rs` — structured self-diagnostics, configuration repair, and
+  crash-recovery checkpoints (resume after interruption; wired into offline sync).
+- `src/plugin_security.rs` — pure-Rust SemVer + requirement language, plugin
+  dependency validation/topological resolution (cycle + missing detection), and
+  a plugin security scanner.
+- `src/commands/enterprise.rs` — handlers for `audit-log`, `policy`,
+  `central-config`, `assistant`, `diagnose`, `repair`, `recover`, plus the
+  cross-cutting policy/compliance gate, usage recording, and audit recording
+  invoked from `main.rs` around every command.
+- New `PluginOperation` subcommands `scan` / `deps` / `check-version` handled in
+  `src/commands/registry_plugin_config.rs`.
+
+Cross-cutting integration in `main.rs`: every invocation is policy-gated,
+compliance-guarded, usage-recorded, and audit-logged (mandatory under compliance
+or `require_audit_log`, best-effort otherwise).
+
+Deferred items (need speech/LLM, AR/VR hardware, cluster infra, an update/SSO/
+marketplace service, or are unsafe to auto-run) are marked inline below with a
+one-line reason.
+
+### Completed 2026-06-14: Performance Profiling (v0.2.5) + Offline Capabilities (v0.2.6)
+
+- `src/profiling.rs` — high-resolution, allocation-aware micro-profiler (distinct
+  from the RSS-based `src/perf.rs`). Key types: `TrackingAllocator<A>` (a pure-Rust
+  instrumented `GlobalAlloc` installed as the process `#[global_allocator]` in
+  `main.rs`), `MemorySource` trait with `AllocatorSource`/`RssMemorySource`/
+  `ManualMemorySource`, `Profiler` (phase-scoped `measure`/`try_measure`),
+  `DurationStats` (mean/stddev + linear-interpolated p50/p90/p95/p99),
+  `PhaseProfile`, `PhaseBottleneck`, `OptimizationHint`, and `ProfileReport`
+  rendered through every `OutputFormat` (text/json/yaml/toml/csv/table/html).
+  14 unit tests.
+- `src/offline.rs` — offline-first subsystem. Key types: `CommandQueue`/
+  `QueuedCommand` (file-backed JSON queue), `LocalCache`/`CacheRecord` (versioned
+  TTL cache), `ConnectivityProbe` (`AlwaysOnline`/`AlwaysOffline`/`TcpProbe`),
+  offline `validate_command`, `JournalApplier` (file-backed authoritative store),
+  `OfflineStore::sync` reconciler with version-based conflict detection,
+  `ConflictStrategy` (last-writer-wins / remote-wins / merge), a recursive
+  three-way JSON `merge_three_way`, and explicit `ConflictRecord`s. 18 unit tests.
+- `src/commands/profiling_offline.rs` — CLI handlers wiring the new `Profiling`
+  and `Offline` subcommands (queue/list/validate/sync/conflicts/resolve/
+  cache-stats/cache-prune/clear) into `main.rs`.
+- 32 new tests (167 -> 199); `cargo clippy -p legalis --no-deps --all-targets
+  -- -D warnings` clean.
 
 ---
 
@@ -210,73 +280,73 @@ All v0.1.1 through v0.2.4 roadmap features are complete. v0.2.0 AI-powered CLI, 
 - [x] Add role-based command access
 
 ### Performance Profiling (v0.2.5)
-- [ ] Add command execution profiling
-- [ ] Implement memory usage tracking
-- [ ] Add bottleneck detection
-- [ ] Create performance reports
-- [ ] Add optimization suggestions
+- [x] Add command execution profiling
+- [x] Implement memory usage tracking
+- [x] Add bottleneck detection
+- [x] Create performance reports
+- [x] Add optimization suggestions
 
 ### Offline Capabilities (v0.2.6)
-- [ ] Add offline command queue
-- [ ] Implement local caching
-- [ ] Add sync when online
-- [ ] Create offline validation
-- [ ] Add conflict resolution for offline changes
+- [x] Add offline command queue
+- [x] Implement local caching
+- [x] Add sync when online
+- [x] Create offline validation
+- [x] Add conflict resolution for offline changes
 
 ### Accessibility (v0.2.7)
-- [ ] Add screen reader support
-- [ ] Implement high contrast mode
+- [ ] Add screen reader support — DEFERRED: needs a screen-reader/AT integration layer (no pure-Rust facility available here)
+- [x] Implement high contrast mode
 - [ ] Add keyboard-only navigation
-- [ ] Create voice command support
-- [ ] Add customizable output verbosity
+- [ ] Create voice command support — DEFERRED: requires speech recognition
+- [x] Add customizable output verbosity
 
 ### Plugin Ecosystem (v0.2.8)
-- [ ] Add plugin marketplace
-- [ ] Implement plugin versioning
-- [ ] Add plugin dependency management
+- [ ] Add plugin marketplace — DEFERRED: requires an external marketplace service
+- [x] Implement plugin versioning
+- [x] Add plugin dependency management
 - [ ] Create plugin development kit
-- [ ] Add plugin security scanning
+- [x] Add plugin security scanning
 
 ### Enterprise Features (v0.2.9)
-- [ ] Add SSO authentication
-- [ ] Implement audit logging
-- [ ] Add compliance mode
-- [ ] Create enterprise policy enforcement
-- [ ] Add centralized configuration management
+- [ ] Add SSO authentication — DEFERRED: requires an external identity provider (OIDC/SAML)
+- [x] Implement audit logging
+- [x] Add compliance mode
+- [x] Create enterprise policy enforcement
+- [x] Add centralized configuration management
 
 ## Roadmap for 0.3.0 Series (Next-Gen Features)
 
 ### Voice-First CLI (v0.3.0)
-- [ ] Add voice command input
-- [ ] Implement voice feedback output
-- [ ] Add multilingual voice support
-- [ ] Create hands-free operation mode
-- [ ] Add voice command training
+- [ ] Add voice command input — DEFERRED: requires speech recognition
+- [ ] Implement voice feedback output — DEFERRED: requires text-to-speech
+- [ ] Add multilingual voice support — DEFERRED: requires speech recognition
+- [ ] Create hands-free operation mode — DEFERRED: requires speech/voice stack
+- [ ] Add voice command training — DEFERRED: requires speech recognition
 
 ### Intelligent Assistant (v0.3.1)
-- [ ] Add contextual command suggestions
-- [ ] Implement learning from user patterns
-- [ ] Add proactive recommendations
-- [ ] Create predictive command execution
-- [ ] Add natural conversation mode
+- [x] Add contextual command suggestions
+- [x] Implement learning from user patterns
+- [x] Add proactive recommendations
+- [ ] Create predictive command execution — DEFERRED: auto-running commands without explicit user intent is unsafe
+- [ ] Add natural conversation mode — DEFERRED: requires an LLM/conversational backend
 
 ### AR/VR Integration (v0.3.2)
-- [ ] Add AR command overlay
-- [ ] Implement VR workspace
-- [ ] Add spatial command organization
-- [ ] Create gesture-based commands
-- [ ] Add immersive documentation
+- [ ] Add AR command overlay — DEFERRED: requires AR/VR hardware
+- [ ] Implement VR workspace — DEFERRED: requires AR/VR hardware
+- [ ] Add spatial command organization — DEFERRED: requires AR/VR hardware
+- [ ] Create gesture-based commands — DEFERRED: requires AR/VR hardware
+- [ ] Add immersive documentation — DEFERRED: requires AR/VR hardware
 
 ### Distributed CLI (v0.3.3)
-- [ ] Add multi-node command execution
-- [ ] Implement distributed workflows
-- [ ] Add cluster management
-- [ ] Create edge computing support
-- [ ] Add federated command routing
+- [ ] Add multi-node command execution — DEFERRED: requires cluster infrastructure
+- [ ] Implement distributed workflows — DEFERRED: requires cluster infrastructure
+- [ ] Add cluster management — DEFERRED: requires cluster infrastructure
+- [ ] Create edge computing support — DEFERRED: requires edge/cluster infrastructure
+- [ ] Add federated command routing — DEFERRED: requires cluster infrastructure
 
 ### Self-Healing CLI (v0.3.4)
-- [ ] Add automatic error recovery
-- [ ] Implement self-diagnostic commands
-- [ ] Add automatic updates
-- [ ] Create configuration repair
-- [ ] Add crash recovery and resume
+- [x] Add automatic error recovery
+- [x] Implement self-diagnostic commands
+- [ ] Add automatic updates — DEFERRED: requires an update server
+- [x] Create configuration repair
+- [x] Add crash recovery and resume

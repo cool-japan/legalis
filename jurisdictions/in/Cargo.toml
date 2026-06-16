@@ -23,6 +23,7 @@ indexmap.workspace = true
 
 # Internal dependencies
 legalis-core.workspace = true
+legalis-dsl.workspace = true
 legalis-i18n.workspace = true
 
 [dev-dependencies]

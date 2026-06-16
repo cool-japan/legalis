@@ -333,7 +333,9 @@ impl EmbeddingGenerator {
                 if neighbors.is_empty() {
                     break;
                 }
-                current = neighbors.choose(&mut rng).unwrap();
+                current = neighbors
+                    .choose(&mut rng)
+                    .expect("invariant: neighbors is non-empty (checked above)");
                 walk.push(current.to_string());
             } else {
                 break;

@@ -213,6 +213,9 @@ pub mod eprivacy;
 // Shared utilities
 pub mod shared;
 
+// Member State GDPR implementations (Phase 8)
+pub mod member_states;
+
 // Legal Reasoning Engine
 pub mod reasoning;
 
@@ -263,6 +266,15 @@ pub use i18n::MultilingualText;
 
 // Shared
 pub use shared::MemberState;
+
+// Member State GDPR implementations (Phase 8)
+pub use member_states::{
+    CombinedConsentAssessment, DirectiveReference, MemberStateError, MemberStateGdpr,
+    MemberStateGdprBuilder, NationalActCitation, NationalDerogation, NationalGdprQuery,
+    OpeningClause, SupervisoryAuthority, TranspositionRecord, TranspositionStatus,
+    TranspositionTracker, combined_consent_assessment, effective_age_of_digital_consent,
+    for_state as member_state_implementation,
+};
 
 // Legal reasoning engine
 pub use reasoning::{

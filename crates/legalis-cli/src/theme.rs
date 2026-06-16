@@ -25,7 +25,23 @@ impl Theme {
             ColorTheme::Light => Self::light_theme(),
             ColorTheme::Monokai => Self::monokai_theme(),
             ColorTheme::Solarized => Self::solarized_theme(),
+            ColorTheme::HighContrast => Self::high_contrast_theme(),
             ColorTheme::None => Self::no_color_theme(),
+        }
+    }
+
+    /// High-contrast theme for accessibility: maximally distinct, bright base
+    /// colors that read well on both light and dark terminals.
+    fn high_contrast_theme() -> Self {
+        Self {
+            primary: Color::BrightWhite,
+            secondary: Color::BrightCyan,
+            success: Color::BrightGreen,
+            warning: Color::BrightYellow,
+            error: Color::BrightRed,
+            info: Color::BrightBlue,
+            dimmed: Color::White,
+            highlight: Color::BrightMagenta,
         }
     }
 
@@ -207,6 +223,37 @@ impl Theme {
     }
 }
 
+/// Configures the global `colored` color override based on the selected theme
+/// and the environment, returning whether colors are enabled.
+///
+/// Precedence (highest first):
+/// 1. The `--theme none` selection disables color.
+/// 2. The `NO_COLOR` environment variable disables color (any value).
+/// 3. `CLICOLOR_FORCE` (non-empty, non-zero) forces color on.
+/// 4. Otherwise color is enabled.
+pub fn configure_colors(theme: &ColorTheme) -> bool {
+    if theme.is_colorless() {
+        colored::control::set_override(false);
+        return false;
+    }
+    if std::env::var_os("NO_COLOR").is_some() {
+        colored::control::set_override(false);
+        return false;
+    }
+    if std::env::var("CLICOLOR_FORCE")
+        .map(|v| {
+            let trimmed = v.trim();
+            !trimmed.is_empty() && trimmed != "0"
+        })
+        .unwrap_or(false)
+    {
+        colored::control::set_override(true);
+        return true;
+    }
+    colored::control::set_override(true);
+    true
+}
+
 /// Output context for formatting decisions.
 pub struct OutputContext {
     pub theme: Theme,
@@ -314,5 +361,46 @@ mod tests {
         let text = "This is a very long text that should be wrapped";
         let wrapped = ctx.wrap_text(text);
         assert!(wrapped.contains('\n'));
+    }
+
+    #[test]
+    fn test_high_contrast_theme() {
+        let theme = Theme::from_color_theme(&ColorTheme::HighContrast);
+        assert_eq!(theme.error, Color::BrightRed);
+        assert_eq!(theme.success, Color::BrightGreen);
+        assert_eq!(theme.primary, Color::BrightWhite);
+    }
+
+    #[test]
+    fn test_colorless_predicate() {
+        assert!(ColorTheme::None.is_colorless());
+        assert!(!ColorTheme::HighContrast.is_colorless());
+        assert!(!ColorTheme::Default.is_colorless());
+    }
+
+    #[test]
+    fn test_configure_colors_none_theme_disables() {
+        // The `none` theme always disables color regardless of env.
+        let enabled = configure_colors(&ColorTheme::None);
+        assert!(!enabled);
+        // Restore auto-detection for other tests.
+        colored::control::unset_override();
+    }
+
+    #[test]
+    fn test_configure_colors_respects_no_color_env() {
+        let saved = std::env::var_os("NO_COLOR");
+        unsafe {
+            std::env::set_var("NO_COLOR", "1");
+        }
+        let enabled = configure_colors(&ColorTheme::Default);
+        assert!(!enabled);
+        unsafe {
+            match saved {
+                Some(v) => std::env::set_var("NO_COLOR", v),
+                None => std::env::remove_var("NO_COLOR"),
+            }
+        }
+        colored::control::unset_override();
     }
 }

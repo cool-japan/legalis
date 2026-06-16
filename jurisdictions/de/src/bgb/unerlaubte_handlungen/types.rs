@@ -474,6 +474,26 @@ pub struct TortClaim826 {
     pub notes: Option<String>,
 }
 
+/// Physical harm types enumerated identically in §§ 833 and 836 BGB.
+///
+/// Both the animal-keeper liability (§ 833 BGB) and the building-collapse
+/// liability (§ 836 BGB) protect the same legal interests using the identical
+/// statutory wording: *"ein Mensch getötet, der Körper oder die Gesundheit
+/// eines Menschen verletzt oder eine Sache beschädigt"*. This shared enum is
+/// reused by both the [`crate::bgb::unerlaubte_handlungen::tierhalterhaftung`]
+/// and [`crate::bgb::unerlaubte_handlungen::gebaeudehaftung`] modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PhysicalHarmType {
+    /// Death of a person (Tötung eines Menschen)
+    Death,
+    /// Bodily injury (Körperverletzung)
+    BodilyInjury,
+    /// Injury to health (Gesundheitsverletzung)
+    HealthInjury,
+    /// Property damage (Sachbeschädigung)
+    PropertyDamage,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

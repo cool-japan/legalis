@@ -2,6 +2,8 @@
 
 Comprehensive Saudi Arabian legal system implementation for the Legalis-RS ecosystem, based on **Islamic Law (Sharia)** and modern regulatory frameworks.
 
+**Version 0.1.6** — 13 modules, 133 tests passing, 0 warnings.
+
 ## Overview
 
 Legalis-SA (المملكة العربية السعودية) provides full support for Saudi Arabia's unique Islamic legal system, covering Basic Law, Sharia principles, company law, labor law, capital markets, tax law (VAT and Zakat), data protection, intellectual property, and arbitration. The crate offers bilingual support (Arabic/English) with Arabic as the authoritative language.

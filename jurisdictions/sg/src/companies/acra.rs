@@ -190,37 +190,96 @@ fn calculate_check_digit(base: &str) -> char {
     (b'A' + check) as char
 }
 
-/// Validates UEN format
+/// Structural classification of a Singapore UEN.
+///
+/// ACRA issues UENs in three documented structural formats (see
+/// <https://www.uen.gov.sg>). This enum captures which format a given string
+/// matches. The classification is *structural* only: ACRA's check-digit
+/// algorithm is proprietary and is therefore not verified here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UenFormat {
+    /// Business registered with ACRA's Registry of Businesses.
+    ///
+    /// Format: `NNNNNNNNC` (9 characters) — 8 running digits followed by a
+    /// check alphabet (e.g., `53123456B`).
+    Business,
+
+    /// Local company registered with ACRA's Registry of Companies.
+    ///
+    /// Format: `YYYYNNNNNC` (10 characters) — 4-digit year of incorporation,
+    /// 5 running digits, then a check alphabet (e.g., `202401234A`).
+    LocalCompany,
+
+    /// Any other entity issued a new-style UEN (LLPs, societies, statutory
+    /// bodies, healthcare institutions, representative offices, etc.).
+    ///
+    /// Format: `(T|S|R)YYTTNNNNC` (10 characters) — a century prefix
+    /// (`T` = 20xx, `S` = 19xx, `R` = 18xx), a 2-digit year, a 2-letter
+    /// entity-type code, 4 running digits, then a check alphabet
+    /// (e.g., `T08LP1234C` for a 2008 LLP).
+    OtherEntity,
+}
+
+/// Classifies a UEN string into one of ACRA's documented structural formats.
+///
+/// Returns [`None`] when the string matches none of the recognised formats.
+/// Only the structure (length, digit/alpha placement, prefix) is validated;
+/// the proprietary check digit is not recomputed.
+///
+/// ## Examples
+///
+/// ```
+/// use legalis_sg::companies::acra::{classify_uen, UenFormat};
+///
+/// assert_eq!(classify_uen("202401234A"), Some(UenFormat::LocalCompany));
+/// assert_eq!(classify_uen("53123456B"), Some(UenFormat::Business));
+/// assert_eq!(classify_uen("T08LP1234C"), Some(UenFormat::OtherEntity));
+/// assert_eq!(classify_uen("bad-uen"), None);
+/// ```
+pub fn classify_uen(uen: &str) -> Option<UenFormat> {
+    let bytes = uen.as_bytes();
+    match bytes.len() {
+        9 => {
+            // Business: 8 digits + check alphabet.
+            let digits_ok = bytes[..8].iter().all(u8::is_ascii_digit);
+            let check_ok = bytes[8].is_ascii_alphabetic();
+            (digits_ok && check_ok).then_some(UenFormat::Business)
+        }
+        10 => {
+            // Local company: YYYY + 5 digits + check alphabet.
+            let year_ok = bytes[..4].iter().all(u8::is_ascii_digit);
+            let seq_ok = bytes[4..9].iter().all(u8::is_ascii_digit);
+            let check_ok = bytes[9].is_ascii_alphabetic();
+            if year_ok && seq_ok && check_ok {
+                return Some(UenFormat::LocalCompany);
+            }
+
+            // Other entity: (T|S|R) + YY + 2-letter type + 4 digits + check alphabet.
+            let prefix_ok = matches!(bytes[0], b'T' | b'S' | b'R');
+            let year_ok = bytes[1..3].iter().all(u8::is_ascii_digit);
+            let type_ok = bytes[3..5].iter().all(u8::is_ascii_alphabetic);
+            let seq_ok = bytes[5..9].iter().all(u8::is_ascii_digit);
+            let check_ok = bytes[9].is_ascii_alphabetic();
+            (prefix_ok && year_ok && type_ok && seq_ok && check_ok)
+                .then_some(UenFormat::OtherEntity)
+        }
+        _ => None,
+    }
+}
+
+/// Validates that a UEN matches one of ACRA's documented structural formats.
+///
+/// See [`classify_uen`] for the recognised formats. Returns
+/// [`CompaniesError::InvalidUen`] when the string is not a structurally valid
+/// UEN.
 pub fn validate_uen(uen: &str) -> Result<()> {
-    if uen.len() < 9 || uen.len() > 10 {
-        return Err(CompaniesError::InvalidUen {
+    if classify_uen(uen).is_some() {
+        Ok(())
+    } else {
+        Err(CompaniesError::InvalidUen {
             uen: uen.to_string(),
-        });
+        })
     }
-
-    // Must be alphanumeric
-    if !uen.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return Err(CompaniesError::InvalidUen {
-            uen: uen.to_string(),
-        });
-    }
-
-    // Check format patterns
-    let is_valid_format =
-        // Local company: YYYYNNNNNC (10 chars)
-        (uen.len() == 10 && uen[..4].chars().all(|c| c.is_ascii_digit())) ||
-        // Business: 5NNNNNNNC or 6NNNNNNNC (9 chars)
-        (uen.len() == 9 && (uen.starts_with('5') || uen.starts_with('6'))) ||
-        // Pre-UEN company: NNNNNNNC (8-9 chars)
-        (uen.len() >= 8 && uen.len() <= 9);
-
-    if !is_valid_format {
-        return Err(CompaniesError::InvalidUen {
-            uen: uen.to_string(),
-        });
-    }
-
-    Ok(())
 }
 
 /// ACRA filing requirement
@@ -359,6 +418,46 @@ mod tests {
 
         assert!(validate_uen("12345").is_err()); // Too short
         assert!(validate_uen("2024-01234").is_err()); // Invalid chars
+    }
+
+    #[test]
+    fn test_classify_uen_business() {
+        // ROB business: 8 digits + check alphabet.
+        assert_eq!(classify_uen("53123456B"), Some(UenFormat::Business));
+        assert_eq!(classify_uen("00000001Z"), Some(UenFormat::Business));
+        // Missing check alphabet (all numeric).
+        assert_eq!(classify_uen("531234567"), None);
+        // Letter inside the digit run.
+        assert_eq!(classify_uen("5312A456B"), None);
+    }
+
+    #[test]
+    fn test_classify_uen_local_company() {
+        // ROC local company: YYYY + 5 digits + check alphabet.
+        assert_eq!(classify_uen("202401234A"), Some(UenFormat::LocalCompany));
+        assert_eq!(classify_uen("199912345Z"), Some(UenFormat::LocalCompany));
+        // 10 chars but all numeric (no check alphabet).
+        assert_eq!(classify_uen("2024012345"), None);
+    }
+
+    #[test]
+    fn test_classify_uen_other_entity() {
+        // New-style UEN for other entities: (T|S|R) + YY + 2 letters + 4 digits + check.
+        assert_eq!(classify_uen("T08LP1234C"), Some(UenFormat::OtherEntity)); // 2008 LLP
+        assert_eq!(classify_uen("S98SS0001A"), Some(UenFormat::OtherEntity)); // 1998 society
+        assert_eq!(classify_uen("R88PQ9999X"), Some(UenFormat::OtherEntity)); // 1888 prefix
+        // Invalid century prefix.
+        assert_eq!(classify_uen("X08LP1234C"), None);
+        // Entity-type code must be alphabetic.
+        assert_eq!(classify_uen("T0812341234"), None);
+    }
+
+    #[test]
+    fn test_classify_uen_rejects_malformed() {
+        assert_eq!(classify_uen(""), None);
+        assert_eq!(classify_uen("12345"), None); // Too short
+        assert_eq!(classify_uen("12345678901"), None); // Too long
+        assert_eq!(classify_uen("2024-01234"), None); // Punctuation
     }
 
     #[test]

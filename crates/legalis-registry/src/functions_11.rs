@@ -484,9 +484,12 @@ pub mod enterprise_security {
                 signature: None,
             }
         }
-        /// Calculate SHA-256 hash (simplified placeholder).
+        /// Calculate SHA-256 hash of the given data string.
         fn calculate_hash(data: &str) -> String {
-            format!("hash_{}", data.len())
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(data.as_bytes());
+            hex::encode(hasher.finalize())
         }
         /// Verify the entry hash.
         pub fn verify_hash(&self) -> bool {

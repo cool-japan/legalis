@@ -2,7 +2,7 @@
 
 日本法サポートライブラリ for Legalis-RS
 
-**Version 0.2.0** - 5 Major Law Domains with e-Gov Electronic Filing Support
+**Version 0.1.6** - 5 Major Law Domains with e-Gov Electronic Filing Support
 
 ## 概要
 
@@ -486,7 +486,7 @@ println!("{}", confidentiality.title_ja); // "第13条（秘密保持義務）"
 
 ## サンプルコード / Examples
 
-10個の実働サンプルで各法域の使い方を学べます：
+21個の実働サンプルで各法域の使い方を学べます：
 
 ```bash
 # 商法・会社法
@@ -519,7 +519,7 @@ cargo run --example contract-template-generator        # 契約書の自動生�
 ## テスト・品質保証 / Testing & Quality
 
 ```bash
-# 全テストを実行（176個のテストすべてがパス）
+# 全テストを実行（676個のテストすべてがパス）
 cargo nextest run --all-features
 
 # 警告ゼロポリシー準拠
@@ -533,12 +533,12 @@ cargo doc --no-deps --open
 ```
 
 **品質指標:**
-- ✅ **176個のユニットテスト** - 全モジュールの要件判定をカバー
+- ✅ **676個のユニットテスト** - 全モジュールの要件判定をカバー
 - ✅ **30個のドキュメントテスト** - APIの使用例を実行可能な形で提供
 - ✅ **ゼロ警告ポリシー** - コンパイラ警告・Clippy警告なし
 - ✅ **型安全性** - ビルダーパターンで不正な状態を排除
 - ✅ **13,400行以上のコード** - 本番環境対応の完全実装
-- ✅ **10個の動作例** - すべてコンパイル・実行可能
+- ✅ **21個の動作例** - すべてコンパイル・実行可能
 - ✅ **包括的カバレッジ** - 8つの主要法域を完全実装
 
 ## 法体系の特徴

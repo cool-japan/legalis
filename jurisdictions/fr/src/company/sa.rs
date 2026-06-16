@@ -55,7 +55,7 @@
 //! The SAS has eclipsed SA for new formations (70%+ of incorporations), but SA dominates
 //! CAC 40 listings (38/40 companies) and remains the form for large-scale enterprises.
 
-use legalis_core::{Condition, Effect, EffectType, Statute};
+use legalis_core::{ComparisonOp, Condition, Effect, EffectType, Statute};
 
 /// Article L225-1 - SA Definition and Minimum Capital
 ///
@@ -644,6 +644,159 @@ pub fn article_l225_18() -> Statute {
     )
 }
 
+/// Article L223-1 — SARL Definition (Société à Responsabilité Limitée)
+///
+/// ## French Text
+///
+/// > La société à responsabilité limitée est instituée par une ou plusieurs personnes
+/// > qui ne supportent les pertes qu'à concurrence de leurs apports.
+///
+/// ## English Translation
+///
+/// > The société à responsabilité limitée (SARL) is constituted by one or more persons
+/// > who bear losses only up to the amount of their contributions.
+///
+/// ## Legal Significance
+///
+/// Art. L223-1 establishes the SARL as France's primary small and medium enterprise
+/// corporate vehicle:
+///
+/// - **One or more persons**: A single-person SARL is the EURL (Entreprise Unipersonnelle
+///   à Responsabilité Limitée). Multiple partners form the standard SARL.
+/// - **Limited liability (responsabilité limitée)**: Partners risk only their capital
+///   contributions, never their personal assets.
+/// - **Minimum capital**: €1 since the 2003 reform (formerly €7,500). This enables
+///   accessible entrepreneurship without significant capital barriers.
+/// - **Parts sociales**: SARL rights are represented by parts sociales (not shares/actions).
+///   These are less freely transferable than SA actions, reinforcing the SARL's intuitu
+///   personae character (personal relationship between partners).
+///
+/// ## Comparative Analysis
+///
+/// | Jurisdiction | SARL Equivalent | Minimum Capital | Max Partners |
+/// |---|---|---|---|
+/// | **France** | SARL (1925) | €1 | 100 |
+/// | **Germany** | GmbH (1892) | €25,000 | No limit |
+/// | **Japan** | 合同会社 GK (2006) | ¥1 | No limit |
+/// | **UK** | Private Ltd (Ltd) | £1 | No limit |
+/// | **USA** | LLC (varies by state) | $0 | No limit |
+#[must_use]
+pub fn article_l223_1() -> Statute {
+    Statute::new(
+        "code-commerce-l223-1",
+        "Code de commerce Article L223-1 — Société à responsabilité limitée (SARL definition)",
+        Effect::new(
+            EffectType::StatusChange,
+            "La SARL est instituée par une ou plusieurs personnes.\n\nA SARL is constituted by one or more persons who bear losses only up to their contributions.",
+        )
+        .with_parameter("company_form", "SARL / Société à Responsabilité Limitée")
+        .with_parameter("liability", "Limited to contributions (responsabilité limitée)")
+        .with_parameter("minimum_capital", "€1 (since 2003 reform)")
+        .with_parameter("share_type", "Parts sociales (not freely transferable)")
+        .with_parameter("single_partner", "EURL (Entreprise Unipersonnelle à Responsabilité Limitée)"),
+    )
+    .with_jurisdiction("FR")
+    .with_version(1)
+    .with_precondition(Condition::AttributeEquals {
+        key: "company_form".to_string(),
+        value: "SARL".to_string(),
+    })
+    .with_discretion(
+        "L'article L223-1 définit la SARL comme une société dont les associés ne \
+        supportent les pertes qu'à concurrence de leurs apports. Depuis la réforme de 2003, \
+        le capital minimum est d'1 euro, rendant la SARL accessible à tous. Les droits \
+        sociaux sont représentés par des parts sociales (non des actions), dont la cession \
+        est soumise à agrément des associés (Art. L223-14), renforçant le caractère \
+        intuitu personae. La SARL unipersonnelle est l'EURL. Le gérant (ou les gérants) \
+        assurent la direction sans nécessité d'un conseil d'administration.\
+        \n\n\
+        Article L223-1 defines the SARL as a company whose partners bear losses only \
+        up to their contributions. Since the 2003 reform, the minimum capital is €1, \
+        making the SARL accessible to all. Rights are represented by parts sociales \
+        (not shares), whose transfer is subject to partner approval (Art. L223-14), \
+        reinforcing the intuitu personae character. A single-partner SARL is the EURL. \
+        The gérant (manager) directs the company without requiring a board of directors.",
+    )
+}
+
+/// Article L223-3 — SARL Maximum 100 Partners
+///
+/// ## French Text
+///
+/// > Le nombre des associés d'une société à responsabilité limitée ne peut être supérieur
+/// > à cent. Si la société vient à comprendre plus de cent associés, elle doit, dans le
+/// > délai de deux ans, être transformée en société anonyme.
+///
+/// ## English Translation
+///
+/// > The number of partners in a société à responsabilité limitée may not exceed one hundred.
+/// > If the company comes to have more than one hundred partners, it must, within two years,
+/// > be converted into a société anonyme.
+///
+/// ## Legal Significance
+///
+/// Art. L223-3 imposes the 100-partner ceiling that distinguishes the SARL from the SA:
+///
+/// - **Cap at 100**: The limit was increased from 50 to 100 by the PACTE Law (2019),
+///   allowing more flexibility for growth-stage SARLs.
+/// - **Conversion obligation**: Exceeding 100 partners triggers a mandatory two-year
+///   conversion window to SA form.
+/// - **Failure to convert**: If conversion is not completed within two years of exceeding
+///   the limit, any interested party may petition a court for dissolution.
+///
+/// ## Policy Rationale
+///
+/// The cap reflects the SARL's intimate nature (intuitu personae):
+/// - Preserves the personal relationship and unanimous consent culture
+/// - Ensures manageable decision-making among partners
+/// - Prevents SARLs from becoming de facto public companies
+#[must_use]
+pub fn article_l223_3() -> Statute {
+    Statute::new(
+        "code-commerce-l223-3",
+        "Code de commerce Article L223-3 — Nombre maximal d'associés (SARL max 100 partners)",
+        Effect::new(
+            EffectType::Prohibition,
+            "Une SARL ne peut avoir plus de 100 associés.\n\nA SARL may not have more than 100 partners.",
+        )
+        .with_parameter("maximum_partners", "100")
+        .with_parameter("conversion_deadline", "2 years to convert to SA")
+        .with_parameter("failure_consequence", "Dissolution by court order"),
+    )
+    .with_jurisdiction("FR")
+    .with_version(1)
+    .with_precondition(
+        Condition::And(
+            Box::new(Condition::AttributeEquals {
+                key: "company_form".to_string(),
+                value: "SARL".to_string(),
+            }),
+            Box::new(Condition::Threshold {
+                attributes: vec![("partner_count".to_string(), 1.0)],
+                operator: ComparisonOp::GreaterThan,
+                value: 100.0,
+            }),
+        ),
+    )
+    .with_discretion(
+        "L'article L223-3 limite le nombre d'associés à 100 (porté de 50 à 100 par la \
+        loi PACTE 2019). Si ce seuil est dépassé, la société dispose de 2 ans pour se \
+        transformer en SA. À défaut, tout intéressé peut demander la dissolution judiciaire. \
+        Cette limite préserve le caractère intuitu personae de la SARL et la distingue des \
+        sociétés par actions (SA, SAS) ouvertes à un nombre illimité d'actionnaires. \
+        La transformation en SA exige un capital de 37 000 € et la mise en place d'un \
+        conseil d'administration (3-18 membres per Art. L225-17).\
+        \n\n\
+        Article L223-3 limits the number of partners to 100 (raised from 50 to 100 by \
+        the PACTE Law 2019). If this threshold is exceeded, the company has 2 years to \
+        convert to an SA. If not, any interested party may seek judicial dissolution. \
+        This limit preserves the SARL's intuitu personae character and distinguishes it \
+        from stock companies (SA, SAS) open to unlimited shareholders. \
+        Conversion to SA requires €37,000 capital and a board of directors (3-18 members \
+        per Art. L225-17).",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,6 +852,70 @@ mod tests {
     fn test_all_sa_articles_valid() {
         let statutes = vec![article_l225_1(), article_l225_17(), article_l225_18()];
 
+        for statute in statutes {
+            assert!(statute.is_valid());
+            assert_eq!(statute.validate().len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_article_l223_1_creation() {
+        let statute = article_l223_1();
+        assert_eq!(statute.id, "code-commerce-l223-1");
+        assert_eq!(statute.jurisdiction, Some("FR".to_string()));
+    }
+
+    #[test]
+    fn test_article_l223_1_has_preconditions() {
+        let statute = article_l223_1();
+        assert!(!statute.preconditions.is_empty());
+    }
+
+    #[test]
+    fn test_article_l223_1_has_discretion() {
+        let statute = article_l223_1();
+        assert!(statute.discretion_logic.is_some());
+        assert!(!statute.discretion_logic.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_article_l223_3_creation() {
+        let statute = article_l223_3();
+        assert_eq!(statute.id, "code-commerce-l223-3");
+        assert_eq!(statute.jurisdiction, Some("FR".to_string()));
+    }
+
+    #[test]
+    fn test_article_l223_3_is_prohibition() {
+        let statute = article_l223_3();
+        assert!(matches!(
+            statute.effect.effect_type,
+            EffectType::Prohibition
+        ));
+    }
+
+    #[test]
+    fn test_article_l223_3_has_preconditions() {
+        let statute = article_l223_3();
+        assert!(!statute.preconditions.is_empty());
+    }
+
+    #[test]
+    fn test_article_l223_3_has_discretion() {
+        let statute = article_l223_3();
+        assert!(statute.discretion_logic.is_some());
+        assert!(!statute.discretion_logic.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_all_company_articles_valid() {
+        let statutes = vec![
+            article_l225_1(),
+            article_l225_17(),
+            article_l225_18(),
+            article_l223_1(),
+            article_l223_3(),
+        ];
         for statute in statutes {
             assert!(statute.is_valid());
             assert_eq!(statute.validate().len(), 0);

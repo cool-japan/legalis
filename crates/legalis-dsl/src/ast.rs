@@ -45,6 +45,24 @@ pub enum Token {
     Scope,
     Constraint,
 
+    // Contract / compliance / test keywords (v0.2.5 - v0.2.7).
+    // These drive the `CONTRACT` block and top-level `@test` cases parsed by
+    // [`crate::contract`]. `OBLIGATION`/`PROHIBITION` reuse the existing effect
+    // tokens above; the remaining clause keywords are dedicated tokens.
+    Contract,
+    Party,
+    Right,
+    Performance,
+    Clause,
+    Compliance,
+    Penalty,
+    Report,
+    Inspect,
+    Deadline,
+    Timeline,
+    /// `@` marker introducing a directive such as `@test`.
+    At,
+
     // Module system keywords (v0.1.4)
     Namespace,
     From,
@@ -97,6 +115,8 @@ pub enum Token {
     Ident(String),
     StringLit(String),
     Number(u64),
+    /// Decimal/float literal (e.g. `0.05`), kept distinct from integer `Number`.
+    Float(f64),
     Operator(String),
 }
 

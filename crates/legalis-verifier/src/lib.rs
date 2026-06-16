@@ -15,13 +15,17 @@ pub use smt::SmtVerifier;
 
 pub mod autonomous_agents;
 pub mod certification_framework;
+pub mod compliance_frameworks;
+pub mod conflict_of_laws;
 pub mod cross_domain_verification;
 pub mod distributed_verification;
 pub mod formal_methods;
 pub mod ml_verification;
+pub mod model_checking;
 pub mod quantum_verification;
 pub mod realtime_verification;
 pub mod self_healing;
+pub mod streaming_verification;
 
 mod functions;
 mod functions_2;

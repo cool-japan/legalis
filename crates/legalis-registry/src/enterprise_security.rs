@@ -531,10 +531,12 @@ impl TamperProofLogEntry {
         }
     }
 
-    /// Calculate SHA-256 hash (simplified placeholder).
+    /// Calculate SHA-256 hash of the given data string.
     fn calculate_hash(data: &str) -> String {
-        // Placeholder: In real implementation, use proper SHA-256
-        format!("hash_{}", data.len())
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(data.as_bytes());
+        hex::encode(hasher.finalize())
     }
 
     /// Verify the entry hash.
@@ -1163,5 +1165,46 @@ mod tests {
 
         let result = manager.encrypt_field("ssn", "123-45-6789");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tamper_proof_log_sha256_hash_chain() {
+        let log = TamperProofLog::new();
+
+        // Append two entries and verify that the chain is valid.
+        let id1 = log.append("first event".to_string());
+        let id2 = log.append("second event".to_string());
+
+        // Both IDs should be distinct.
+        assert_ne!(id1, id2);
+
+        // The chain integrity check must pass.
+        log.verify_chain()
+            .expect("Hash chain should be intact after sha256-backed calculate_hash");
+    }
+
+    #[test]
+    fn test_tamper_proof_log_entry_hash_is_real_sha256() {
+        let entry = TamperProofLogEntry::new("test data".to_string(), "genesis".to_string());
+
+        // A real SHA-256 hex digest is exactly 64 characters long.
+        assert_eq!(
+            entry.entry_hash.len(),
+            64,
+            "SHA-256 hex digest must be 64 characters, got: '{}'",
+            entry.entry_hash
+        );
+        // Every character must be a lowercase hex digit.
+        assert!(
+            entry.entry_hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA-256 hex digest must contain only hex digits, got: '{}'",
+            entry.entry_hash
+        );
+
+        // The hash must verify correctly.
+        assert!(
+            entry.verify_hash(),
+            "verify_hash() must return true for a freshly created entry"
+        );
     }
 }

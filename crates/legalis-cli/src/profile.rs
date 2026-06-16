@@ -246,11 +246,11 @@ impl Profiler {
 
             // Record memory usage
             #[cfg(target_os = "linux")]
-            if let Some(mem_before_bytes) = mem_before {
-                if let Ok(mem_after) = get_current_memory_usage() {
-                    let mem_used = mem_after.saturating_sub(mem_before_bytes);
-                    self.data.record_memory_sample(mem_used);
-                }
+            if let Some(mem_before_bytes) = mem_before
+                && let Ok(mem_after) = get_current_memory_usage()
+            {
+                let mem_used = mem_after.saturating_sub(mem_before_bytes);
+                self.data.record_memory_sample(mem_used);
             }
 
             self.data.stats.operations += 1;

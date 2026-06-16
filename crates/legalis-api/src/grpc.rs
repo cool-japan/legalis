@@ -150,13 +150,42 @@ pub mod service {
 
             let total_count = filtered.len() as i32;
 
-            // Convert to proto
-            let proto_statutes: Vec<_> =
-                filtered.iter().map(|s| Self::statute_to_proto(s)).collect();
+            // Cursor-based pagination: page_token is base64(offset as decimal string)
+            let page_size = if req.page_size > 0 {
+                req.page_size as usize
+            } else {
+                usize::MAX
+            };
+            let offset = if req.page_token.is_empty() {
+                0usize
+            } else {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &req.page_token)
+                    .ok()
+                    .and_then(|b| String::from_utf8(b).ok())
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(0)
+            };
+
+            let page: Vec<_> = filtered
+                .iter()
+                .skip(offset)
+                .take(page_size)
+                .map(|s| Self::statute_to_proto(s))
+                .collect();
+
+            let next_offset = offset + page.len();
+            let next_page_token = if next_offset < filtered.len() {
+                base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    next_offset.to_string().as_bytes(),
+                )
+            } else {
+                String::new()
+            };
 
             Ok(Response::new(ListStatutesResponse {
-                statutes: proto_statutes,
-                next_page_token: String::new(), // TODO: Implement pagination
+                statutes: page,
+                next_page_token,
                 total_count,
             }))
         }
@@ -415,13 +444,62 @@ pub mod service {
 
         async fn run_simulation(
             &self,
-            _request: Request<RunSimulationRequest>,
+            request: Request<RunSimulationRequest>,
         ) -> Result<Response<SimulationResult>, Status> {
-            // TODO: Implement actual simulation logic
+            use legalis_sim::{PopulationBuilder, SimEngine};
+
+            let req = request.into_inner();
+            let statutes = self.state.statutes.read().await;
+
+            let statute = statutes
+                .iter()
+                .find(|s| s.id == req.statute_id)
+                .ok_or_else(|| Status::not_found(format!("Statute not found: {}", req.statute_id)))?
+                .clone();
+
+            drop(statutes);
+
+            let population_size = req
+                .parameters
+                .get("population_size")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(10)
+                .clamp(1, 10_000);
+
+            let population = PopulationBuilder::new()
+                .generate_random(population_size)
+                .build();
+
+            let engine = SimEngine::new(vec![statute], population);
+            let metrics = engine.run_simulation().await;
+
+            let mut results = HashMap::new();
+            results.insert(
+                "total_applications".to_string(),
+                metrics.total_applications.to_string(),
+            );
+            results.insert(
+                "deterministic_count".to_string(),
+                metrics.deterministic_count.to_string(),
+            );
+            results.insert(
+                "discretion_count".to_string(),
+                metrics.discretion_count.to_string(),
+            );
+            results.insert("void_count".to_string(), metrics.void_count.to_string());
+            results.insert(
+                "statute_count".to_string(),
+                metrics.statute_metrics.len().to_string(),
+            );
+            results.insert(
+                "discretion_agents_count".to_string(),
+                metrics.discretion_agents.len().to_string(),
+            );
+
             Ok(Response::new(SimulationResult {
                 simulation_id: uuid::Uuid::new_v4().to_string(),
                 success: true,
-                results: HashMap::new(),
+                results,
                 errors: vec![],
             }))
         }
@@ -457,36 +535,111 @@ pub mod service {
             &self,
             request: Request<RunSimulationRequest>,
         ) -> Result<Response<Self::StreamSimulationStream>, Status> {
-            let _req = request.into_inner();
-            let (tx, rx) = tokio::sync::mpsc::channel(4);
+            use legalis_sim::{PopulationBuilder, SimEngine};
 
-            // Spawn a task to simulate progress updates
+            let req = request.into_inner();
+            let statutes = self.state.statutes.read().await;
+
+            let statute = statutes
+                .iter()
+                .find(|s| s.id == req.statute_id)
+                .ok_or_else(|| Status::not_found(format!("Statute not found: {}", req.statute_id)))?
+                .clone();
+
+            drop(statutes);
+
+            let population_size = req
+                .parameters
+                .get("population_size")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(10)
+                .clamp(1, 10_000);
+
+            let (tx, rx) = tokio::sync::mpsc::channel(8);
+
             tokio::spawn(async move {
                 let simulation_id = uuid::Uuid::new_v4().to_string();
 
-                for progress in [0, 25, 50, 75, 100] {
-                    let progress_msg = SimulationProgress {
+                // Phase 0 — notify that we are initialising
+                let _ = tx
+                    .send(Ok(SimulationProgress {
                         simulation_id: simulation_id.clone(),
-                        progress_percent: progress,
-                        current_step: format!("Processing step {}", progress / 25),
-                        result: if progress == 100 {
-                            Some(SimulationResult {
-                                simulation_id: simulation_id.clone(),
-                                success: true,
-                                results: HashMap::new(),
-                                errors: vec![],
-                            })
-                        } else {
-                            None
-                        },
-                    };
+                        progress_percent: 0,
+                        current_step: "Initialising simulation".to_string(),
+                        result: None,
+                    }))
+                    .await;
 
-                    if tx.send(Ok(progress_msg)).await.is_err() {
-                        break;
-                    }
+                // Phase 25 — building population
+                let population = PopulationBuilder::new()
+                    .generate_random(population_size)
+                    .build();
 
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                }
+                let _ = tx
+                    .send(Ok(SimulationProgress {
+                        simulation_id: simulation_id.clone(),
+                        progress_percent: 25,
+                        current_step: format!("Built population of {} agents", population.len()),
+                        result: None,
+                    }))
+                    .await;
+
+                // Phase 50 — running the engine
+                let _ = tx
+                    .send(Ok(SimulationProgress {
+                        simulation_id: simulation_id.clone(),
+                        progress_percent: 50,
+                        current_step: "Running statute application engine".to_string(),
+                        result: None,
+                    }))
+                    .await;
+
+                let engine = SimEngine::new(vec![statute], population);
+                let metrics = engine.run_simulation().await;
+
+                // Phase 75 — aggregating results
+                let _ = tx
+                    .send(Ok(SimulationProgress {
+                        simulation_id: simulation_id.clone(),
+                        progress_percent: 75,
+                        current_step: "Aggregating results".to_string(),
+                        result: None,
+                    }))
+                    .await;
+
+                let mut results = HashMap::new();
+                results.insert(
+                    "total_applications".to_string(),
+                    metrics.total_applications.to_string(),
+                );
+                results.insert(
+                    "deterministic_count".to_string(),
+                    metrics.deterministic_count.to_string(),
+                );
+                results.insert(
+                    "discretion_count".to_string(),
+                    metrics.discretion_count.to_string(),
+                );
+                results.insert("void_count".to_string(), metrics.void_count.to_string());
+                results.insert(
+                    "statute_count".to_string(),
+                    metrics.statute_metrics.len().to_string(),
+                );
+
+                // Phase 100 — done, send final result
+                let _ = tx
+                    .send(Ok(SimulationProgress {
+                        simulation_id: simulation_id.clone(),
+                        progress_percent: 100,
+                        current_step: "Simulation complete".to_string(),
+                        result: Some(SimulationResult {
+                            simulation_id: simulation_id.clone(),
+                            success: true,
+                            results,
+                            errors: vec![],
+                        }),
+                    }))
+                    .await;
             });
 
             Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
@@ -516,12 +669,43 @@ pub mod service {
                 .collect();
 
             let total_count = filtered.len() as i32;
-            let proto_statutes: Vec<_> =
-                filtered.iter().map(|s| Self::statute_to_proto(s)).collect();
+
+            // Cursor-based pagination: page_token is base64(offset as decimal string)
+            let page_size = if req.page_size > 0 {
+                req.page_size as usize
+            } else {
+                usize::MAX
+            };
+            let offset = if req.page_token.is_empty() {
+                0usize
+            } else {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &req.page_token)
+                    .ok()
+                    .and_then(|b| String::from_utf8(b).ok())
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(0)
+            };
+
+            let page: Vec<_> = filtered
+                .iter()
+                .skip(offset)
+                .take(page_size)
+                .map(|s| Self::statute_to_proto(s))
+                .collect();
+
+            let next_offset = offset + page.len();
+            let next_page_token = if next_offset < filtered.len() {
+                base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    next_offset.to_string().as_bytes(),
+                )
+            } else {
+                String::new()
+            };
 
             Ok(Response::new(SearchStatutesResponse {
-                statutes: proto_statutes,
-                next_page_token: String::new(), // TODO: Implement pagination
+                statutes: page,
+                next_page_token,
                 total_count,
             }))
         }
@@ -532,15 +716,31 @@ pub mod service {
         ) -> Result<Response<VerifyConditionResponse>, Status> {
             let req = request.into_inner();
 
-            // Basic validation logic - in a real implementation, this would parse and evaluate the condition
-            let is_valid = !req.condition.is_empty() && !req.condition.contains("invalid");
-            let message = if is_valid {
-                format!("Condition '{}' is valid", req.condition)
-            } else {
-                format!("Condition '{}' is invalid", req.condition)
-            };
+            if req.condition.is_empty() {
+                return Ok(Response::new(VerifyConditionResponse {
+                    is_valid: false,
+                    message: "Condition string is empty".to_string(),
+                }));
+            }
 
-            Ok(Response::new(VerifyConditionResponse { is_valid, message }))
+            // Wrap the condition in a minimal STATUTE block so the DSL parser can process it.
+            // The DSL condition grammar is: WHEN <condition_expr> THEN GRANT "ok"
+            let probe = format!(
+                "STATUTE _verify_probe_: \"Probe\" {{ WHEN {} THEN GRANT \"ok\" }}",
+                req.condition
+            );
+
+            let parser = legalis_dsl::LegalDslParser::new();
+            match parser.parse_statute(&probe) {
+                Ok(_) => Ok(Response::new(VerifyConditionResponse {
+                    is_valid: true,
+                    message: format!("Condition '{}' is syntactically valid", req.condition),
+                })),
+                Err(e) => Ok(Response::new(VerifyConditionResponse {
+                    is_valid: false,
+                    message: format!("Condition '{}' is invalid: {}", req.condition, e),
+                })),
+            }
         }
 
         async fn health_check(
@@ -663,11 +863,182 @@ pub mod service {
 #[cfg(test)]
 #[cfg(feature = "grpc")]
 mod tests {
+    use super::service::pb::legalis_service_server::LegalisService;
     use super::service::*;
 
     #[test]
     fn test_grpc_service_state_creation() {
         let state = GrpcServiceState::new();
         assert_eq!(state.statutes.try_read().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_verify_condition_valid() {
+        use pb::VerifyConditionRequest;
+
+        let state = GrpcServiceState::new();
+        let service = LegalisGrpcService::new(state);
+
+        let request = tonic::Request::new(VerifyConditionRequest {
+            condition: "AGE >= 18".to_string(),
+        });
+
+        let response = service
+            .verify_condition(request)
+            .await
+            .expect("verify_condition should not return an error");
+
+        let result = response.into_inner();
+        assert!(
+            result.is_valid,
+            "AGE >= 18 should be a valid DSL condition; message: {}",
+            result.message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_verify_condition_empty() {
+        use pb::VerifyConditionRequest;
+
+        let state = GrpcServiceState::new();
+        let service = LegalisGrpcService::new(state);
+
+        let request = tonic::Request::new(VerifyConditionRequest {
+            condition: String::new(),
+        });
+
+        let response = service
+            .verify_condition(request)
+            .await
+            .expect("verify_condition should not error on empty input");
+
+        let result = response.into_inner();
+        assert!(!result.is_valid, "Empty condition should be invalid");
+    }
+
+    #[tokio::test]
+    async fn test_verify_condition_invalid_syntax() {
+        use pb::VerifyConditionRequest;
+
+        let state = GrpcServiceState::new();
+        let service = LegalisGrpcService::new(state);
+
+        // This condition is syntactically invalid: an unterminated string literal with no operator.
+        // The DSL parser will reject it because the string is never closed.
+        let request = tonic::Request::new(VerifyConditionRequest {
+            condition: "AGE >= \"unclosed string".to_string(),
+        });
+
+        let response = service
+            .verify_condition(request)
+            .await
+            .expect("verify_condition should not error on bad input");
+
+        let result = response.into_inner();
+        assert!(
+            !result.is_valid,
+            "Unclosed string literal should be invalid"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stream_simulation_happy_path() {
+        use legalis_core::{Effect, EffectType, Statute};
+        use pb::RunSimulationRequest;
+        use std::collections::HashMap;
+        use tokio_stream::StreamExt;
+
+        let statute = Statute::new(
+            "stream-test-statute",
+            "Streaming Simulation Test",
+            Effect::new(EffectType::Grant, "Grant test benefit"),
+        );
+        let statute_id = statute.id.clone();
+
+        let state = GrpcServiceState::new();
+        {
+            let mut guard = state
+                .statutes
+                .try_write()
+                .expect("write lock should not be contended");
+            guard.push(statute);
+        }
+
+        let service = LegalisGrpcService::new(state);
+        let mut params = HashMap::new();
+        params.insert("population_size".to_string(), "3".to_string());
+
+        let request = tonic::Request::new(RunSimulationRequest {
+            statute_id: statute_id.clone(),
+            parameters: params,
+        });
+
+        let response = service
+            .stream_simulation(request)
+            .await
+            .expect("stream_simulation should succeed for known statute");
+
+        let mut stream = response.into_inner();
+
+        let mut progress_values = Vec::new();
+        let mut final_result = None;
+
+        while let Some(item) = stream.next().await {
+            let msg = item.expect("stream item should not be an error");
+            progress_values.push(msg.progress_percent);
+            if let Some(r) = msg.result {
+                final_result = Some(r);
+            }
+        }
+
+        assert!(
+            !progress_values.is_empty(),
+            "Expected at least one progress message"
+        );
+        assert_eq!(
+            *progress_values.last().unwrap_or(&0),
+            100,
+            "Final progress message should be 100"
+        );
+
+        let result = final_result.expect("Final SimulationResult should be emitted");
+        assert!(result.success, "Simulation should complete successfully");
+        assert!(
+            result.results.contains_key("total_applications"),
+            "Result should contain total_applications"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stream_simulation_not_found() {
+        use pb::RunSimulationRequest;
+        use std::collections::HashMap;
+
+        let state = GrpcServiceState::new();
+        let service = LegalisGrpcService::new(state);
+
+        let request = tonic::Request::new(RunSimulationRequest {
+            statute_id: "nonexistent-for-stream".to_string(),
+            parameters: HashMap::new(),
+        });
+
+        let result = service.stream_simulation(request).await;
+
+        assert!(
+            result.is_err(),
+            "stream_simulation should return Err for unknown statute"
+        );
+        // We can't use unwrap_err() because the Ok variant (Pin<Box<dyn Stream>>) is not Debug.
+        // Extract the error via pattern matching instead.
+        let error = match result {
+            Err(e) => e,
+            Ok(_) => panic!("Expected Err but got Ok"),
+        };
+        assert_eq!(
+            error.code(),
+            tonic::Code::NotFound,
+            "Expected NotFound, got {:?}",
+            error.code()
+        );
     }
 }

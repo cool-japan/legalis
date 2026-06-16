@@ -198,6 +198,9 @@ pub mod immigration;
 pub mod intellectual_property;
 pub mod securities_law;
 
+// Cross-cutting reasoning: legalis-core Statute models + legalis-dsl export
+pub mod statutes;
+
 // Re-export calendar types
 pub use calendar::{
     BE_CE_OFFSET, BuddhistDate, BuddhistYear, ThaiEra, be_to_ce, ce_to_be, format_buddhist_year,
@@ -295,6 +298,9 @@ pub use competition_law::{
     AbuseOfDominance, MARKET_DOMINANCE_THRESHOLD_PERCENT, MERGER_NOTIFICATION_THRESHOLD_THB,
     ProhibitedPractice,
 };
+
+// Re-export statute models and DSL export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

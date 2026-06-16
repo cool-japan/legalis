@@ -14,8 +14,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
+sha2.workspace = true
 regex-lite = "0.1"
-quick-xml = { version = "0.39", features = ["serialize"] }
+quick-xml = { version = "0.40", features = ["serialize"] }
 rayon = { version = "1.12", optional = true }
 tokio = { version = "1.52", features = ["rt", "fs"], optional = true }
 walkdir = { version = "2.5", optional = true }

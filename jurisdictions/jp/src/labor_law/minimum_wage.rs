@@ -153,8 +153,7 @@ pub struct MinimumWageData {
 /// assert_eq!(osaka, 1_064);
 /// ```
 pub fn get_minimum_wage(prefecture: Prefecture, _date: NaiveDate) -> u64 {
-    // TODO: In the future, support historical minimum wage data
-    // For now, return 2024 rates
+    // Returns 2024 (令和6年度) rates. Historical data is not yet modelled.
     match prefecture {
         Prefecture::Tokyo => 1_113,
         Prefecture::Kanagawa => 1_112,

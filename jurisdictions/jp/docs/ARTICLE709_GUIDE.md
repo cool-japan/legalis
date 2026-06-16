@@ -500,7 +500,7 @@ pub fn calculate_compensation(claim: &Article709) -> Option<u64>
 ### プロジェクト情報
 - **GitHub**: https://github.com/cool-japan/legalis
 - **ドキュメント**: https://docs.rs/legalis-jp
-- **ライセンス**: MIT OR Apache-2.0
+- **ライセンス**: Apache-2.0
 
 ### サンプルコード
 完全なサンプルコードは以下で確認できます：

@@ -3,6 +3,7 @@
 //! This module provides a GraphQL interface for querying and mutating statutes,
 //! running verifications, and managing the statute registry.
 
+use async_graphql::dataloader::DataLoader;
 use async_graphql::{Context, FieldResult, Object, Schema, SimpleObject, Subscription};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use futures::{Stream, StreamExt};
@@ -14,6 +15,7 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::auth::{AuthUser, Permission};
+use crate::dataloader::{JurisdictionLoader, StatuteLoader, VersionLoader};
 use crate::websocket::{WsBroadcaster, WsNotification};
 
 /// GraphQL schema type.
@@ -156,12 +158,11 @@ impl QueryRoot {
 
     /// Get a statute by ID.
     async fn statute(&self, ctx: &Context<'_>, id: String) -> FieldResult<Option<StatuteObject>> {
-        let state = ctx.data::<GraphQLState>()?;
-        let statutes = state.statutes.read().await;
-        Ok(statutes
-            .iter()
-            .find(|s| s.id == id)
-            .map(StatuteObject::from))
+        let loader = ctx
+            .data::<DataLoader<StatuteLoader>>()
+            .map_err(|e| e.message.clone())?;
+        let statute = loader.load_one(id).await.map_err(|e| e.to_string())?;
+        Ok(statute.map(|s| StatuteObject::from(&s)))
     }
 
     /// Search statutes by title.
@@ -189,11 +190,16 @@ impl QueryRoot {
         ctx: &Context<'_>,
         jurisdiction: String,
     ) -> FieldResult<Vec<StatuteObject>> {
-        let state = ctx.data::<GraphQLState>()?;
-        let statutes = state.statutes.read().await;
+        let loader = ctx
+            .data::<DataLoader<JurisdictionLoader>>()
+            .map_err(|e| e.message.clone())?;
+        let statutes = loader
+            .load_one(jurisdiction)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(statutes
+            .unwrap_or_default()
             .iter()
-            .filter(|s| s.jurisdiction.as_ref() == Some(&jurisdiction))
             .map(StatuteObject::from)
             .collect())
     }
@@ -204,14 +210,15 @@ impl QueryRoot {
         ctx: &Context<'_>,
         statute_ids: Vec<String>,
     ) -> FieldResult<VerificationResult> {
-        let state = ctx.data::<GraphQLState>()?;
-        let statutes_lock = state.statutes.read().await;
+        let loader = ctx
+            .data::<DataLoader<StatuteLoader>>()
+            .map_err(|e| e.message.clone())?;
+        let statutes_map = loader
+            .load_many(statute_ids)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        let statutes_to_verify: Vec<_> = statutes_lock
-            .iter()
-            .filter(|s| statute_ids.contains(&s.id))
-            .cloned()
-            .collect();
+        let statutes_to_verify: Vec<Statute> = statutes_map.into_values().collect();
 
         if statutes_to_verify.is_empty() {
             return Err("No statutes found with provided IDs".into());
@@ -448,6 +455,9 @@ impl MutationRoot {
         let statute_title = statute.title.clone();
         drop(statutes);
 
+        // Note: StatuteLoader uses NoCache (DataLoader::new default), so each GraphQL
+        // request reads-through to the registry — no explicit cache clearing required.
+
         // Broadcast WebSocket notification
         let user_id = ctx
             .data::<AuthUser>()
@@ -477,6 +487,9 @@ impl MutationRoot {
         statutes.retain(|s| s.id != id);
         let deleted = statutes.len() < initial_len;
         drop(statutes);
+
+        // Note: StatuteLoader uses NoCache (DataLoader::new default), so each GraphQL
+        // request reads-through to the registry — no explicit cache clearing required.
 
         // Broadcast WebSocket notification if deleted
         if deleted {
@@ -721,14 +734,22 @@ impl SubscriptionRoot {
     }
 }
 
-/// Creates a new GraphQL schema with subscription support, query complexity limiting,
-/// and depth limiting for security.
-/// TODO: Add DataLoader support for N+1 optimization (requires trait signature fixes)
+/// Creates a new GraphQL schema with DataLoader support for N+1 optimization,
+/// subscription support, query complexity limiting, and depth limiting for security.
 pub fn create_schema(state: GraphQLState) -> LegalisSchema {
+    let statute_loader = DataLoader::new(StatuteLoader::new(state.statutes.clone()), tokio::spawn);
+    let jurisdiction_loader = DataLoader::new(
+        JurisdictionLoader::new(state.statutes.clone()),
+        tokio::spawn,
+    );
+    let version_loader = DataLoader::new(VersionLoader::new(state.statutes.clone()), tokio::spawn);
     Schema::build(QueryRoot, MutationRoot, SubscriptionRoot)
         .data(state)
-        .limit_complexity(1000) // Maximum query complexity score
-        .limit_depth(15) // Maximum query depth
+        .data(statute_loader)
+        .data(jurisdiction_loader)
+        .data(version_loader)
+        .limit_complexity(1000)
+        .limit_depth(15)
         .finish()
 }
 

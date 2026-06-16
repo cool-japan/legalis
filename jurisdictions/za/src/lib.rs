@@ -227,6 +227,7 @@ pub mod insolvency;
 pub mod intellectual_property;
 pub mod labor;
 pub mod property_law;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export citation types
@@ -330,6 +331,9 @@ pub use environmental_law::{
     NemaPrinciple, WasteActivity, WasteClassification, WaterUse, get_environmental_checklist,
     validate_duty_of_care, validate_environmental_authorization,
 };
+
+// Re-export statute models and DSL export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

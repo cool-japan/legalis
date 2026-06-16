@@ -485,13 +485,241 @@ impl XmlConverter {
             .replace('\'', "&apos;")
     }
 
-    /// Parse a statute from XML format (basic implementation).
+    /// Parse a statute from XML format using quick-xml event-based parsing.
     ///
-    /// Note: This is a simplified parser. For production use, consider using
-    /// a proper XML parsing library like `quick-xml` or `roxmltree`.
-    pub fn from_xml(_xml: &str) -> Result<Statute, FormatError> {
-        // Simplified implementation - would need proper XML parser for full support
-        Err(FormatError::XmlError("XML parsing not yet fully implemented. Use a proper XML library like quick-xml for production.".to_string()))
+    /// Parses the XML produced by [`XmlConverter::to_xml`], extracting all
+    /// fields including id, title, jurisdiction, version, effect type,
+    /// effect description, and optional discretion text.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use legalis_core::{Statute, Effect, EffectType};
+    /// use legalis_core::formats::XmlConverter;
+    ///
+    /// let statute = Statute::new(
+    ///     "xml-test",
+    ///     "XML Test Statute",
+    ///     Effect::new(EffectType::Grant, "Test grant"),
+    /// )
+    /// .with_jurisdiction("JP")
+    /// .with_version(2);
+    ///
+    /// let xml = XmlConverter::to_xml(&statute).unwrap();
+    /// let parsed = XmlConverter::from_xml(&xml).unwrap();
+    /// assert_eq!(parsed.id, "xml-test");
+    /// assert_eq!(parsed.jurisdiction, Some("JP".to_string()));
+    /// assert_eq!(parsed.version, 2);
+    /// ```
+    pub fn from_xml(xml: &str) -> Result<Statute, FormatError> {
+        use quick_xml::Reader;
+        use quick_xml::events::Event;
+
+        let mut reader = Reader::from_str(xml);
+        // quick-xml 0.40 splits an element's character data across multiple
+        // `Text`/`GeneralRef` events (entity references are reported separately).
+        // Trimming individual text events would drop the spaces that surround an
+        // entity (e.g. `A &amp; B`), so we keep raw fragments here and trim the
+        // fully reassembled field values once parsing is complete.
+        reader.config_mut().trim_text(false);
+
+        // Accumulated state
+        let mut id: Option<String> = None;
+        let mut title: Option<String> = None;
+        let mut jurisdiction: Option<String> = None;
+        let mut version: Option<u32> = None;
+        let mut effect_type_str: Option<String> = None;
+        let mut effect_description: Option<String> = None;
+        let mut discretion: Option<String> = None;
+
+        // Tag tracking stack
+        let mut tag_stack: Vec<String> = Vec::new();
+        // Whether we are inside <effect>
+        let mut in_effect = false;
+
+        // Selects the destination field for the text content of `current_tag`.
+        // Because an element's text now arrives as several events, fragments are
+        // appended into the chosen slot instead of overwriting it.
+        fn text_target<'slot>(
+            current_tag: &str,
+            in_effect: bool,
+            id: &'slot mut Option<String>,
+            title: &'slot mut Option<String>,
+            effect_type_str: &'slot mut Option<String>,
+            effect_description: &'slot mut Option<String>,
+            discretion: &'slot mut Option<String>,
+        ) -> Option<&'slot mut Option<String>> {
+            match current_tag {
+                "id" if !in_effect => Some(id),
+                "title" => Some(title),
+                "type" if in_effect => Some(effect_type_str),
+                "description" if in_effect => Some(effect_description),
+                "discretion" => Some(discretion),
+                _ => None,
+            }
+        }
+
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(ref e)) => {
+                    let tag = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+
+                    // Check for jurisdiction / version attributes on <statute>
+                    if tag == "statute" {
+                        for attr_result in e.attributes() {
+                            let attr = attr_result.map_err(|err| {
+                                FormatError::XmlError(format!("Attribute parse error: {}", err))
+                            })?;
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                            let val = String::from_utf8_lossy(&attr.value).into_owned();
+                            match key.as_str() {
+                                "jurisdiction" => {
+                                    jurisdiction = Some(Self::unescape_xml(&val));
+                                }
+                                "version" => {
+                                    version = val.parse::<u32>().ok();
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    if tag == "effect" {
+                        in_effect = true;
+                    }
+                    tag_stack.push(tag);
+                }
+                Ok(Event::End(ref e)) => {
+                    let tag = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                    if tag == "effect" {
+                        in_effect = false;
+                    }
+                    if !tag_stack.is_empty() {
+                        tag_stack.pop();
+                    }
+                }
+                Ok(Event::Text(ref e)) => {
+                    let fragment = e.decode().map_err(|err| {
+                        FormatError::XmlError(format!("XML decode error: {}", err))
+                    })?;
+
+                    if let Some(current_tag) = tag_stack.last()
+                        && let Some(slot) = text_target(
+                            current_tag,
+                            in_effect,
+                            &mut id,
+                            &mut title,
+                            &mut effect_type_str,
+                            &mut effect_description,
+                            &mut discretion,
+                        )
+                    {
+                        slot.get_or_insert_with(String::new).push_str(&fragment);
+                    }
+                }
+                Ok(Event::GeneralRef(ref e)) => {
+                    // quick-xml 0.40 reports entity references (e.g. `&amp;` or
+                    // `&#10;`) as standalone events rather than inlining them in the
+                    // adjacent text. Resolve each one and append it to the field
+                    // currently being read.
+                    let replacement = match e.resolve_char_ref().map_err(|err| {
+                        FormatError::XmlError(format!("XML character reference error: {}", err))
+                    })? {
+                        Some(ch) => ch.to_string(),
+                        None => {
+                            let name = e.decode().map_err(|err| {
+                                FormatError::XmlError(format!("XML decode error: {}", err))
+                            })?;
+                            quick_xml::escape::resolve_predefined_entity(&name)
+                                .map(str::to_string)
+                                .ok_or_else(|| {
+                                    FormatError::XmlError(format!("Unknown XML entity: &{};", name))
+                                })?
+                        }
+                    };
+
+                    if let Some(current_tag) = tag_stack.last()
+                        && let Some(slot) = text_target(
+                            current_tag,
+                            in_effect,
+                            &mut id,
+                            &mut title,
+                            &mut effect_type_str,
+                            &mut effect_description,
+                            &mut discretion,
+                        )
+                    {
+                        slot.get_or_insert_with(String::new).push_str(&replacement);
+                    }
+                }
+                Ok(Event::Empty(_)) => {}
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(err) => {
+                    return Err(FormatError::XmlError(format!("XML parse error: {}", err)));
+                }
+            }
+        }
+
+        // The reader runs with `trim_text(false)`, so trim the reassembled values
+        // here to discard any surrounding layout whitespace while keeping spacing
+        // that is internal to the content.
+        let id = id
+            .ok_or_else(|| FormatError::MissingField("id".to_string()))?
+            .trim()
+            .to_string();
+        let title = title
+            .ok_or_else(|| FormatError::MissingField("title".to_string()))?
+            .trim()
+            .to_string();
+        let effect_type_str = effect_type_str
+            .ok_or_else(|| FormatError::MissingField("effect/type".to_string()))?
+            .trim()
+            .to_string();
+        let effect_description = effect_description
+            .ok_or_else(|| FormatError::MissingField("effect/description".to_string()))?
+            .trim()
+            .to_string();
+
+        let effect_type = match effect_type_str.as_str() {
+            "Grant" => EffectType::Grant,
+            "Revoke" => EffectType::Revoke,
+            "Obligation" => EffectType::Obligation,
+            "Prohibition" => EffectType::Prohibition,
+            "MonetaryTransfer" => EffectType::MonetaryTransfer,
+            "StatusChange" => EffectType::StatusChange,
+            "Custom" => EffectType::Custom,
+            other => {
+                return Err(FormatError::InvalidValue(format!(
+                    "Unknown effect type: {}",
+                    other
+                )));
+            }
+        };
+
+        let effect = Effect::new(effect_type, effect_description);
+        let mut statute = Statute::new(&id, &title, effect);
+
+        if let Some(jur) = jurisdiction {
+            statute = statute.with_jurisdiction(jur);
+        }
+        if let Some(ver) = version {
+            statute = statute.with_version(ver);
+        }
+        if let Some(disc) = discretion {
+            statute = statute.with_discretion(disc.trim().to_string());
+        }
+
+        Ok(statute)
+    }
+
+    /// Reverse XML character escaping for attribute values read back from raw strings.
+    fn unescape_xml(s: &str) -> String {
+        s.replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
     }
 }
 
@@ -1192,6 +1420,30 @@ mod tests {
     }
 
     #[test]
+    fn test_xml_roundtrip_escaped_entities() {
+        // `quick-xml` 0.40 emits entity references as separate events and splits
+        // the surrounding text, so this round-trip guards that `from_xml`
+        // reassembles entities (and the spaces around them) into the exact value.
+        let statute = Statute::new(
+            "test-escape-rt",
+            "Test <Statute> & \"Quote\"",
+            Effect::new(EffectType::Grant, "Fee is 5 < 10 & > 1"),
+        )
+        .with_discretion("if a & b > c then 'allow'");
+
+        let xml = XmlConverter::to_xml(&statute).unwrap();
+        let parsed = XmlConverter::from_xml(&xml).unwrap();
+
+        assert_eq!(parsed.id, "test-escape-rt");
+        assert_eq!(parsed.title, "Test <Statute> & \"Quote\"");
+        assert_eq!(parsed.effect.description, "Fee is 5 < 10 & > 1");
+        assert_eq!(
+            parsed.discretion_logic.as_deref(),
+            Some("if a & b > c then 'allow'")
+        );
+    }
+
+    #[test]
     #[cfg(feature = "yaml")]
     fn test_yaml_roundtrip_basic() {
         let statute = Statute::new(
@@ -1451,6 +1703,87 @@ mod tests {
 
         let result = SchemaMigration::migrate(statute, 3, 1);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_xml_roundtrip_basic() {
+        let statute = Statute::new(
+            "xml-rt-1",
+            "XML Roundtrip Statute",
+            Effect::new(EffectType::Obligation, "Test obligation"),
+        );
+
+        let xml = XmlConverter::to_xml(&statute).unwrap();
+        let parsed = XmlConverter::from_xml(&xml).unwrap();
+
+        assert_eq!(statute.id, parsed.id);
+        assert_eq!(statute.title, parsed.title);
+        assert_eq!(
+            format!("{:?}", statute.effect.effect_type),
+            format!("{:?}", parsed.effect.effect_type)
+        );
+        assert_eq!(statute.effect.description, parsed.effect.description);
+    }
+
+    #[test]
+    fn test_xml_roundtrip_with_jurisdiction_version() {
+        let statute = Statute::new(
+            "xml-rt-2",
+            "XML Roundtrip With Jurisdiction",
+            Effect::new(EffectType::Grant, "Grant benefit"),
+        )
+        .with_jurisdiction("JP")
+        .with_version(3);
+
+        let xml = XmlConverter::to_xml(&statute).unwrap();
+        let parsed = XmlConverter::from_xml(&xml).unwrap();
+
+        assert_eq!(parsed.id, "xml-rt-2");
+        assert_eq!(parsed.jurisdiction, Some("JP".to_string()));
+        assert_eq!(parsed.version, 3);
+    }
+
+    #[test]
+    fn test_xml_roundtrip_effect_types() {
+        for effect_type in [
+            EffectType::Grant,
+            EffectType::Revoke,
+            EffectType::Obligation,
+            EffectType::Prohibition,
+            EffectType::MonetaryTransfer,
+            EffectType::StatusChange,
+            EffectType::Custom,
+        ] {
+            let statute = Statute::new(
+                "xml-et-test",
+                "Effect Type Test",
+                Effect::new(effect_type.clone(), "Test description"),
+            );
+            let xml = XmlConverter::to_xml(&statute).unwrap();
+            let parsed = XmlConverter::from_xml(&xml).unwrap();
+            assert_eq!(
+                format!("{:?}", statute.effect.effect_type),
+                format!("{:?}", parsed.effect.effect_type)
+            );
+        }
+    }
+
+    #[test]
+    fn test_xml_roundtrip_with_discretion() {
+        let statute = Statute::new(
+            "xml-rt-3",
+            "Discretion Test",
+            Effect::new(EffectType::Grant, "Discretionary grant"),
+        )
+        .with_discretion("judicial_discretion_allowed");
+
+        let xml = XmlConverter::to_xml(&statute).unwrap();
+        let parsed = XmlConverter::from_xml(&xml).unwrap();
+
+        assert_eq!(
+            parsed.discretion_logic,
+            Some("judicial_discretion_allowed".to_string())
+        );
     }
 
     #[test]

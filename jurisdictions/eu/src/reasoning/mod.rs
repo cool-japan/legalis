@@ -6,6 +6,7 @@
 //! - Consumer Rights Directive (2011/83/EU)
 
 mod context;
+mod dsl;
 mod engine;
 mod error;
 mod lod;
@@ -15,6 +16,7 @@ mod types;
 mod verifier;
 
 pub use context::EuEvaluationContext;
+pub use dsl::statutes_as_dsl;
 pub use engine::LegalReasoningEngine;
 pub use error::{ReasoningError, ReasoningResult};
 pub use lod::{CelexMapper, EurLexExporter, export_gdpr_statutes_to_eurlex, get_eurlex_uri};

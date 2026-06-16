@@ -239,6 +239,20 @@ pub struct AppState {
     pub collaborative_editor: Arc<crate::collaborative::CollaborativeEditor>,
     /// Presence manager for tracking active users
     pub presence_manager: Arc<crate::presence::PresenceManager>,
+    /// Consent ledger for data-processing purposes
+    pub consent_store: crate::consent::ConsentStore,
+    /// API usage policy set (definitions + quota enforcement)
+    pub usage_policies: crate::usage_policy::PolicySet,
+    /// Data classification registry
+    pub classification: Arc<RwLock<crate::data_classification::ClassificationRegistry>>,
+    /// API key lifecycle / rotation manager
+    pub key_rotation: crate::key_rotation::KeyRotationManager,
+    /// Predictive cache / access-pattern model
+    pub predictive_cache: crate::predictive_cache::PredictiveCache,
+    /// Adaptive (intelligent) rate limiter
+    pub intelligent_limiter: crate::intelligent_rate_limit::IntelligentRateLimiter,
+    /// Abuse / request-anomaly detector
+    pub abuse_detector: crate::abuse_detection::AbuseDetector,
 }
 impl AppState {
     pub fn new() -> Self {
@@ -253,6 +267,16 @@ impl AppState {
             api_keys: RwLock::new(Vec::new()),
             collaborative_editor: Arc::new(crate::collaborative::CollaborativeEditor::new()),
             presence_manager: Arc::new(crate::presence::PresenceManager::new(30)),
+            consent_store: crate::consent::ConsentStore::new(),
+            usage_policies: crate::usage_policy::PolicySet::new(),
+            classification: Arc::new(RwLock::new(
+                crate::data_classification::ClassificationRegistry::new(),
+            )),
+            key_rotation: crate::key_rotation::KeyRotationManager::with_default_policy(),
+            predictive_cache: crate::predictive_cache::PredictiveCache::new(),
+            intelligent_limiter:
+                crate::intelligent_rate_limit::IntelligentRateLimiter::with_defaults(),
+            abuse_detector: crate::abuse_detection::AbuseDetector::with_defaults(),
         }
     }
 }

@@ -23,6 +23,7 @@
 //! ```
 
 pub mod context;
+pub mod dsl;
 pub mod engine;
 pub mod error;
 pub mod lod;
@@ -32,6 +33,7 @@ pub mod types;
 pub mod verifier;
 
 pub use context::UkEvaluationContext;
+pub use dsl::statutes_as_dsl;
 pub use engine::LegalReasoningEngine;
 pub use error::{ReasoningError, ReasoningResult};
 pub use lod::{

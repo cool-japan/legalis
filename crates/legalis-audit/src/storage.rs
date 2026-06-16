@@ -48,4 +48,20 @@ pub trait AuditStorage: Send + Sync {
 
     /// Updates the last hash.
     fn set_last_hash(&mut self, hash: Option<String>) -> AuditResult<()>;
+
+    /// Removes a record by ID, returning `true` if a record was removed.
+    ///
+    /// This is an *optional* capability. The default implementation is a no-op
+    /// that returns `Ok(false)` ("removal not supported by this backend"), so
+    /// append-only / forensic backends stay immutable and every existing
+    /// implementation keeps compiling unchanged.
+    ///
+    /// Backends that own their storage (e.g. [`memory::MemoryStorage`]) override
+    /// it to physically delete the record. It is used by
+    /// [`crate::scale::MultiTierStore`] to physically migrate a record out of
+    /// its source tier; when a source tier does not support removal the
+    /// migration degrades gracefully to a logical (copy-only) migration.
+    fn remove(&mut self, _id: Uuid) -> AuditResult<bool> {
+        Ok(false)
+    }
 }

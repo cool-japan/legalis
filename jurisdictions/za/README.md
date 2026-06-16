@@ -2,7 +2,7 @@
 
 South Africa / Suid-Afrika - Legal System Support for Legalis-RS
 
-**Version 0.1.3** - Constitution, Companies Act, POPIA, Labour Relations
+**Version 0.1.6** - Constitution, Companies Act, POPIA, Labour Relations
 
 ## Overview / Oorsig
 
@@ -165,8 +165,9 @@ Broad-Based Black Economic Empowerment Act 53 of 2003
 
 ## 📊 Current Implementation Status
 
-**Version 0.1.3 Statistics:**
-- ✅ **Modules**: 6 modules (constitution, companies, data_protection, labor, common, citation)
+**Version 0.1.6 Statistics:**
+- ✅ **Modules**: 16 modules (citation, common, companies, competition_law, constitution, criminal_law, customary_law, data_protection, environmental_law, financial_services, insolvency, intellectual_property, labor, property_law, statutes, tax_law)
+- ✅ **Tests**: 162 tests passing, 0 warnings
 - ✅ **Constitution**: Bill of Rights and limitation analysis
 - ✅ **POPIA**: Full compliance framework
 - ✅ **Companies Act**: Incorporation and governance

@@ -35,7 +35,7 @@ We provide three scripts to help with the publishing process:
 Tests all crates with `--dry-run` to verify they're ready for publishing without actually uploading them.
 
 ```bash
-cd /Users/kitasan/work/legalis
+cd <path-to-legalis>
 ./publish_dryrun.sh
 ```
 
@@ -49,12 +49,12 @@ cd /Users/kitasan/work/legalis
 
 ### 2. Main Publishing Script
 
-**Location:** `/Users/kitasan/work/pub_legalis.sh`
+**Location:** `../pub_legalis.sh`
 
 Publishes all Legalis-RS crates to crates.io in the correct dependency order.
 
 ```bash
-/Users/kitasan/work/pub_legalis.sh
+../pub_legalis.sh
 ```
 
 **What it does:**
@@ -153,7 +153,7 @@ git push origin v0.1.0
 
 ```bash
 # Run the main publishing script
-/Users/kitasan/work/pub_legalis.sh
+../pub_legalis.sh
 
 # The script will:
 # 1. Show the publishing order
@@ -182,7 +182,7 @@ After publishing, verify all crates on crates.io:
 
 Examples are commented out in `pub_legalis.sh` by default. To publish them:
 
-1. Edit `/Users/kitasan/work/pub_legalis.sh`
+1. Edit `../pub_legalis.sh`
 2. Uncomment desired examples in the `EXAMPLES` array
 3. Add them to the `CRATES` array
 4. Run the publishing script
@@ -263,10 +263,10 @@ cargo yank --undo --vers 0.1.0 legalis-core
 For issues with publishing:
 - Check crates.io status: https://status.crates.io/
 - Contact: COOLJAPAN OU (Team Kitasan)
-- License: MIT OR Apache-2.0
+- License: Apache-2.0
 
 ---
 
-**Version:** 0.1.0
-**Last Updated:** 2026-01-05
+**Version:** 0.1.6
+**Last Updated:** 2026-06-16
 **Author:** COOLJAPAN OU (Team Kitasan)

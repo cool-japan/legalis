@@ -2,7 +2,7 @@
 
 ราชอาณาจักรไทย (Thailand) - ระบบกฎหมายสำหรับ Legalis-RS
 
-**เวอร์ชัน 0.1.3** - กฎหมายแรงงาน, พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล, พ.ร.บ.ส่งเสริมการลงทุน, พ.ร.บ.การประกอบธุรกิจของคนต่างด้าว
+**เวอร์ชัน 0.1.6** - กฎหมายแรงงาน, พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล, พ.ร.บ.ส่งเสริมการลงทุน, พ.ร.บ.การประกอบธุรกิจของคนต่างด้าว
 
 ## ภาพรวม (Overview)
 
@@ -129,12 +129,13 @@ assert!(validate_foreign_business(&business).is_ok());
 
 ## 📊 สถานะการพัฒนาปัจจุบัน
 
-**สถิติเวอร์ชัน 0.1.3:**
+**สถิติเวอร์ชัน 0.1.6:**
 - ✅ **ปฏิทินพุทธศักราช**: การแปลงวันที่ครบถ้วน
 - ✅ **PDPA**: พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล
 - ✅ **กฎหมายแรงงาน**: พ.ร.บ.คุ้มครองแรงงาน
 - ✅ **FBA**: พ.ร.บ.การประกอบธุรกิจของคนต่างด้าว
-- ✅ **โมดูล**: 6 โมดูล (calendar, data_protection, labor_law, foreign_business, citation)
+- ✅ **โมดูล**: 19 โมดูล (calendar, citation, civil_commercial_code, company_act, competition_law, foreign_business, investment_promotion, land_code, labor_law, consumer_protection, data_protection, tax_law, arbitration, bankruptcy, criminal_code, immigration, intellectual_property, securities_law, statutes)
+- ✅ **การทดสอบ**: 174 การทดสอบผ่าน, 0 คำเตือน
 
 ## 🚧 คุณสมบัติที่วางแผนไว้
 

@@ -2,9 +2,42 @@
 
 ## Status Summary
 
-Version: 0.2.5 | Status: Stable | Tests: 262 passing (257 with grpc feature) | Warnings: 0
+Version: 0.2.5 | Status: Stable | Tests: 459 passing (with grpc feature) | Warnings: 0
 
-All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Generation (v0.1.7 and v0.2.0) is complete with TypeScript and Python generators supporting authentication, retry logic, streaming, and comprehensive testing. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. Event-Driven Architecture (v0.2.4) is complete with event sourcing, CQRS patterns, event streaming (Kafka/NATS), event replay, and schema registry. Developer Experience (v0.2.5) is complete with API playground improvements, request mocking, API testing utilities, SDK auto-update notifications, and changelog generation.
+All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Generation (v0.1.7 and v0.2.0) is complete with TypeScript and Python generators supporting authentication, retry logic, streaming, and comprehensive testing. gRPC support (v0.2.1) is fully implemented with reflection, health checking, and gRPC-web. GraphQL enhancements (v0.2.2) are complete with persisted queries (APQ), automatic query batching, live queries (subscriptions 2.0), query cost analysis, and schema stitching. API Gateway features (v0.2.3) are complete with request/response transformation, circuit breaker patterns, load balancing strategies, and service mesh integration. Event-Driven Architecture (v0.2.4) is complete with event sourcing, CQRS patterns, event streaming (Kafka/NATS), event replay, and schema registry. Developer Experience (v0.2.5) is complete with API playground improvements, request mocking, API testing utilities, SDK auto-update notifications, and changelog generation. The v0.2.7–v0.3.0 pure-Rust subset (advanced security, performance, compliance/governance, and intelligent/algorithmic features) is complete.
+
+---
+
+## COMPLETED (2026-06-14 — API security/perf/governance/intelligent)
+
+Implemented the actionable pure-Rust subset of the v0.2.7–v0.3.0 roadmap. All new logic lives in dedicated modules (each < 2000 lines), with comprehensive unit tests and tower/axum handler tests. `cargo clippy -p legalis-api --all-targets -- -D warnings` is clean; `cargo nextest run -p legalis-api` reports 459 passing.
+
+Advanced Security (v0.2.7):
+- API key rotation — `key_rotation.rs`: `KeyRotationManager` with lifecycle states (Active/GracePeriod/Retired/Revoked), configurable rotation interval + overlapping grace period, SHA-256 hashed key storage, revocation, grace-period expiry, and status summary.
+- IP whitelisting — `ip_whitelist.rs`: IPv4/IPv6 exact + CIDR allowlist with prefix matching, fail-closed `ip_whitelist_middleware`, optional X-Forwarded-For/X-Real-IP trust, and `IpWhitelistExt` router helper.
+- Security headers automation — `security_headers.rs`: fully configurable `SecurityHeadersConfig` (HSTS/CSP/X-Frame-Options/X-Content-Type-Options/Referrer-Policy/Permissions-Policy/COOP/CORP/COEP/extras) with hardened defaults and `SecurityHeadersExt` middleware.
+
+Performance (v0.2.8):
+- Response streaming — `streaming.rs`: NDJSON and incremental JSON-array streamed (chunked) responses with empty/single-element correctness and a parse helper.
+- Partial responses — `partial_response.rs`: nested sparse fieldsets supporting dotted paths and brace-group expansion (`author{name,email}`), with JSON projection.
+- Pagination cursors — `pagination.rs`: opaque, HMAC-SHA256-signed, tamper-evident typed cursors (encode/decode + `paginate`) with constant-time signature verification.
+- Prefetching hints — `prefetch.rs`: RFC 8288 `Link` header generation for preload/prefetch/preconnect/dns-prefetch and next/prev pagination relations.
+
+Compliance & Governance (v0.2.9):
+- API usage policies — `usage_policy.rs`: declarative quotas (rolling windows), method/path/body-size/scope constraints, `PolicySet` enforcement.
+- Data classification — `data_classification.rs`: Public→Restricted taxonomy, field-path tagging with ancestor inheritance, handling rules, and JSON redaction.
+- Consent management — `consent.rs`: versioned, append-only consent ledger (grant/withdraw/expiry/history) with endpoints in `governance_routes.rs`.
+- Regulatory reporting — `regulatory_reporting.rs`: `ComplianceReport` and per-actor activity reports over a time window, exposed via endpoints.
+- Audit export — `audit_export.rs`: JSON/NDJSON/RFC4180-CSV export (with correct CSV quoting) and `GET /api/v1/audit/export`.
+
+AI-Powered (pure-Rust algorithmic; v0.3.0):
+- Intelligent rate limiting — `intelligent_rate_limit.rs`: adaptive per-client token bucket with load-driven exponential capacity contraction and per-client reputation.
+- Predictive caching — `predictive_cache.rs`: first-order Markov transition model + frequency stats, top-N successor prediction and blended cache-warming sets.
+- Anomaly detection for abuse — `abuse_detection.rs`: per-client scoring blending burst rate, error ratio, and endpoint-scanning signals with a configurable threshold.
+
+HTTP wiring: `governance_routes.rs` adds consent, regulatory-report, audit-export, classification, abuse-status, and predictive-cache endpoints, merged into `create_router`. `AppState` gained the corresponding shared components.
+
+Deferred (require external infra/services/hardware unavailable in-crate): mTLS, HTTP/3 (QUIC), natural-language API queries, AI-generated responses, plus all of v0.3.1–v0.3.4 (self-healing/auto-scaling/auto-migration, edge computing, blockchain/DAO gateway, quantum/post-quantum) and SDK codegen for Go/Rust/Java/Kotlin, GraphQL federation.
 
 ---
 
@@ -158,16 +191,16 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Gen
 ### SDK Generation (v0.1.7)
 - [x] Generate TypeScript SDK from OpenAPI (with auth, retry, streaming, tests)
 - [x] Generate Python SDK from OpenAPI (with auth, retry, async support, tests)
-- [ ] Generate Go SDK from OpenAPI (planned)
-- [ ] Generate Rust SDK from OpenAPI (planned)
+- [ ] Generate Go SDK from OpenAPI (planned) — DEFERRED: SDK codegen for other languages needs target-language toolchains/templates and is out of scope for this pure-Rust API crate.
+- [ ] Generate Rust SDK from OpenAPI (planned) — DEFERRED: dedicated client-SDK codegen effort; out of scope for this server crate's roadmap subset.
 - [x] Add SDK versioning and compatibility (via config)
 
 ### Federation (v0.1.8)
-- [ ] Add GraphQL federation support
-- [ ] Add cross-service registry queries
-- [ ] Add federated verification
-- [ ] Add distributed simulation coordination
-- [ ] Add cross-region replication endpoints
+- [ ] Add GraphQL federation support — DEFERRED: requires a federation gateway (Apollo-style) and multiple subgraph services; cross-service infra not available in-crate.
+- [ ] Add cross-service registry queries — DEFERRED: needs networked peer registry services outside this single crate.
+- [ ] Add federated verification — DEFERRED: depends on distributed/federated services not present in-crate.
+- [ ] Add distributed simulation coordination — DEFERRED: requires a multi-node coordination layer/cluster outside this crate.
+- [ ] Add cross-region replication endpoints — DEFERRED: needs multi-region datastore/replication infrastructure.
 
 ### API Versioning (v0.1.9)
 - [x] Add URL-based versioning (v1, v2 with path-based routing)
@@ -181,9 +214,9 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Gen
 ### SDK Generation (v0.2.0)
 - [x] Generate TypeScript/JavaScript SDK from OpenAPI (comprehensive with fetch, auth handlers, retry logic)
 - [x] Generate Python SDK with type hints (async/await, httpx, dataclasses)
-- [ ] Generate Go SDK with idiomatic patterns (planned)
-- [ ] Generate Rust SDK with async support (planned)
-- [ ] Generate Java/Kotlin SDK for Android (planned)
+- [ ] Generate Go SDK with idiomatic patterns (planned) — DEFERRED: target-language SDK codegen out of scope for this pure-Rust API crate.
+- [ ] Generate Rust SDK with async support (planned) — DEFERRED: dedicated client-SDK codegen effort; out of scope here.
+- [ ] Generate Java/Kotlin SDK for Android (planned) — DEFERRED: Android/JVM toolchain and templates not available in-crate.
 
 ### gRPC Support (v0.2.1)
 - [x] Add gRPC service definitions (proto files with comprehensive service and message types)
@@ -221,41 +254,41 @@ All v0.1.x series features (through v0.1.9 API Versioning) are complete. SDK Gen
 - [x] Add changelog generation
 
 ### Multi-Region Support (v0.2.6)
-- [ ] Add geo-distributed endpoints
-- [ ] Implement data residency compliance
-- [ ] Add regional failover
-- [ ] Create cross-region replication
-- [ ] Add latency-based routing
+- [ ] Add geo-distributed endpoints — DEFERRED: requires multi-region deployment/geo-routing infrastructure outside this crate.
+- [ ] Implement data residency compliance — DEFERRED: depends on regional datastores/deployment topology not available in-crate.
+- [ ] Add regional failover — DEFERRED: needs multi-region orchestration/health-routing infrastructure.
+- [ ] Create cross-region replication — DEFERRED: needs a replicated multi-region datastore.
+- [ ] Add latency-based routing — DEFERRED: requires an edge/geo load-balancing layer outside this single-process crate.
 
 ### Advanced Security (v0.2.7)
-- [ ] Add mutual TLS (mTLS)
-- [ ] Implement API key rotation
-- [ ] Add IP whitelisting
-- [ ] Create security headers automation
-- [ ] Add penetration testing endpoints
+- [ ] Add mutual TLS (mTLS) — DEFERRED: requires TLS termination/cert infrastructure (rustls client-auth, PKI) not available in-crate; belongs at the transport/deployment layer.
+- [x] Implement API key rotation (key_rotation.rs: KeyRotationManager with lifecycle states, rotation intervals, overlapping grace periods, hashed key storage, revocation, status summary)
+- [x] Add IP whitelisting (ip_whitelist.rs: IPv4/IPv6 exact + CIDR allowlist, fail-closed middleware, X-Forwarded-For/X-Real-IP support, IpWhitelistExt router helper)
+- [x] Create security headers automation (security_headers.rs: configurable HSTS/CSP/X-Frame-Options/Referrer-Policy/Permissions-Policy/COOP/CORP/COEP with hardened defaults and SecurityHeadersExt middleware)
+- [x] Add penetration testing endpoints (existing security.rs OWASP checks: SQLi/XSS/path-traversal/CORS/security-header validators)
 
 ### Performance Optimization (v0.2.8)
-- [ ] Add response streaming
-- [ ] Implement partial responses (fields selection)
-- [ ] Add query result pagination cursors
-- [ ] Create prefetching hints
-- [ ] Add HTTP/3 (QUIC) support
+- [x] Add response streaming (streaming.rs: NDJSON and incremental JSON-array streamed responses via chunked bodies, with parse helper)
+- [x] Implement partial responses (fields selection) (partial_response.rs: nested sparse fieldsets with dotted paths and brace-group expansion, JSON projection)
+- [x] Add query result pagination cursors (pagination.rs: opaque HMAC-SHA256-signed, tamper-evident typed cursors with encode/decode and paginate())
+- [x] Create prefetching hints (prefetch.rs: RFC 8288 Link header generation for preload/prefetch/preconnect/dns-prefetch and next/prev pagination relations)
+- [ ] Add HTTP/3 (QUIC) support — DEFERRED: needs a QUIC stack (quinn/h3) and UDP transport configuration outside this Axum/HTTP-1.1+2 crate; transport-layer concern.
 
 ### Compliance and Governance (v0.2.9)
-- [ ] Add API usage policies
-- [ ] Implement data classification
-- [ ] Add consent management endpoints
-- [ ] Create regulatory reporting APIs
-- [ ] Add audit export capabilities
+- [x] Add API usage policies (usage_policy.rs: declarative UsagePolicy with windowed quotas, method/path/body-size/scope constraints, PolicySet enforcement with rolling windows)
+- [x] Implement data classification (data_classification.rs: Public→Restricted taxonomy, field-path tagging registry with ancestor inheritance, handling rules, JSON redaction; POST/GET /api/v1/governance/classifications)
+- [x] Add consent management endpoints (consent.rs + governance_routes.rs: versioned consent ledger with grant/withdraw/expiry/history; /api/v1/consent/grant, /withdraw, /{subject}/history, /{subject}/check)
+- [x] Create regulatory reporting APIs (regulatory_reporting.rs + governance_routes.rs: ComplianceReport and per-actor activity reports over a time window; /api/v1/reports/compliance, /api/v1/reports/actors/{user_id})
+- [x] Add audit export capabilities (audit_export.rs + governance_routes.rs: JSON/NDJSON/RFC4180-CSV export with quoting; GET /api/v1/audit/export with Content-Disposition)
 
 ## Roadmap for 0.3.0 Series (Next-Gen Features)
 
 ### AI-Powered API (v0.3.0)
-- [ ] Add natural language API queries
-- [ ] Implement AI-generated responses
-- [ ] Add intelligent rate limiting
-- [ ] Create predictive caching
-- [ ] Add anomaly detection for abuse
+- [ ] Add natural language API queries — DEFERRED: requires an external LLM/NLU service for NL→query translation; not a pure-Rust in-crate algorithm.
+- [ ] Implement AI-generated responses — DEFERRED: requires an external generative LLM backend; out of scope for a dependency-free API crate.
+- [x] Add intelligent rate limiting (intelligent_rate_limit.rs: adaptive per-client token bucket with load-driven exponential capacity contraction and per-client reputation; pure-Rust, deterministic)
+- [x] Create predictive caching (predictive_cache.rs: first-order Markov transition model over access keys + frequency stats, top-N successor prediction and blended cache-warming set; /api/v1/governance/predictive-cache)
+- [x] Add anomaly detection for abuse (abuse_detection.rs: statistical/heuristic per-client scoring blending burst rate, error ratio and endpoint-scanning signals; /api/v1/governance/abuse)
 
 ### Autonomous API Management (v0.3.1)
 - [ ] Add self-healing endpoints

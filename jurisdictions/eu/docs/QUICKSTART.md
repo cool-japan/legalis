@@ -16,7 +16,7 @@ Add `legalis-eu` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-eu = "0.5.9"
+legalis-eu = "0.1.6"
 chrono = "0.4"  # Required for date/time handling
 ```
 

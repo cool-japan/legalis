@@ -24,8 +24,8 @@ oxiarc-deflate = { workspace = true, optional = true }
 tokio = { version = "1.52", features = ["sync", "macros", "rt-multi-thread"], optional = true }
 futures = { version = "0.3", optional = true }
 async-stream = { version = "0.3", optional = true }
-quick-xml = { version = "0.39", features = ["serialize"], optional = true }
-sqlx = { version = "0.9.0-alpha.1", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "uuid", "json"], optional = true }
+quick-xml = { version = "0.40", features = ["serialize"], optional = true }
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "uuid", "json"], optional = true }
 async-graphql = { workspace = true, optional = true }
 async-graphql-axum = { workspace = true, optional = true }
 async-trait = { version = "0.1", optional = true }

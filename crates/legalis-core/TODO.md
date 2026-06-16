@@ -486,10 +486,29 @@ All v0.1.x, v0.2.x, v0.3.0 (AI-Native Legal Reasoning), v0.3.1 (Blockchain & Sma
 
 ### Documentation & Examples
 - [x] Add runbook for common legal scenarios
-- [ ] Create tutorial for building a complete legal system
-- [ ] Add comparison with other legal reasoning frameworks
+- [x] Create tutorial for building a complete legal system
+- [x] Add comparison with other legal reasoning frameworks
 - [x] Document performance characteristics and complexity
 - [x] Add architectural decision records (ADRs)
+
+#### COMPLETED (2026-06-14 — documentation)
+
+Two long-open documentation items were delivered as workspace-level Markdown docs
+(grounded in the real `legalis-core` API — `Statute`/`Condition`/`Effect`/
+`ComparisonOp`/`LegalResult`/`EvaluationContext` — and the shipped
+`examples/welfare-benefits` pipeline):
+
+- **Tutorial for building a complete legal system** —
+  `docs/tutorial-building-a-legal-system.md`. End-to-end: define statutes (DSL and
+  Rust) -> conditions/evaluation -> verification -> population simulation,
+  touching `legalis-core`, `legalis-dsl`, `legalis-verifier`, and `legalis-sim`.
+- **Comparison with other legal reasoning frameworks** —
+  `docs/comparison-with-other-frameworks.md`. Fair, cited comparison vs. Catala,
+  OpenFisca, general rule engines (DMN), and the Akoma Ntoso / LegalRuleML
+  standards, focused on design trade-offs.
+
+(The pre-existing crate-internal `crates/legalis-core/ADR.md` already covers the
+core data-structure ADRs; the new workspace-level ADRs live in `docs/adr/`.)
 
 ## Latest Enhancements (2025-12-26 - Session 5)
 

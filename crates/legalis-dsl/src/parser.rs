@@ -9,6 +9,21 @@ pub trait ToCore {
     fn to_core(&self) -> DslResult<Self::Output>;
 }
 
+/// Renders a parsed [`ConditionValue`] as the plain string form used by
+/// [`legalis_core::Condition::SetMembership`], whose `values` field is a
+/// `Vec<String>`. This keeps set-membership conditions lossless across the
+/// DSL print → parse round-trip (the printer emits each value quoted, the
+/// lexer recovers it as a [`ConditionValue`], and this restores the string).
+fn condition_value_to_string(value: &ConditionValue) -> String {
+    match value {
+        ConditionValue::Number(n) => n.to_string(),
+        ConditionValue::String(s) => s.clone(),
+        ConditionValue::Boolean(b) => b.to_string(),
+        ConditionValue::Date(d) => d.clone(),
+        ConditionValue::SetExpr(expr) => format!("{expr:?}"),
+    }
+}
+
 impl ToCore for ConditionNode {
     type Output = legalis_core::Condition;
 
@@ -65,17 +80,23 @@ impl ToCore for ConditionNode {
             ConditionNode::Between { field, min, max } => Ok(legalis_core::Condition::Custom {
                 description: format!("{} BETWEEN {:?} AND {:?}", field, min, max),
             }),
-            ConditionNode::In { field, values } => Ok(legalis_core::Condition::Custom {
-                description: format!("{} IN {:?}", field, values),
+            ConditionNode::In { field, values } => Ok(legalis_core::Condition::SetMembership {
+                attribute: field.clone(),
+                values: values.iter().map(condition_value_to_string).collect(),
+                negated: false,
             }),
-            ConditionNode::Like { field, pattern } => Ok(legalis_core::Condition::Custom {
-                description: format!("{} LIKE {}", field, pattern),
+            ConditionNode::Like { field, pattern } => Ok(legalis_core::Condition::Pattern {
+                attribute: field.clone(),
+                pattern: pattern.clone(),
+                negated: false,
             }),
             ConditionNode::Matches {
                 field,
                 regex_pattern,
-            } => Ok(legalis_core::Condition::Custom {
-                description: format!("{} MATCHES {}", field, regex_pattern),
+            } => Ok(legalis_core::Condition::Pattern {
+                attribute: field.clone(),
+                pattern: regex_pattern.clone(),
+                negated: false,
             }),
             ConditionNode::InRange {
                 field,

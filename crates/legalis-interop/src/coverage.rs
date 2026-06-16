@@ -84,6 +84,17 @@ impl FormatCoverage {
             LegalFormat::Vyper => Self::analyze_vyper(),
             LegalFormat::Cadence => Self::analyze_cadence(),
             LegalFormat::Move => Self::analyze_move(),
+            LegalFormat::LlmNative => Self::analyze_llm_native(),
+            LegalFormat::Embedding => Self::analyze_embedding(),
+            LegalFormat::NeuralDocument => Self::analyze_neural_document(),
+            LegalFormat::AttentionMarkup => Self::analyze_attention_markup(),
+            LegalFormat::SemanticChunk => Self::analyze_semantic_chunk(),
+            LegalFormat::PreservationArchive => Self::analyze_preservation_archive(),
+            LegalFormat::VrArAnnotation => Self::analyze_vr_ar_annotation(),
+            LegalFormat::SpatialDocument3D => Self::analyze_spatial_document_3d(),
+            LegalFormat::Holographic => Self::analyze_holographic(),
+            LegalFormat::SpatialMarkup => Self::analyze_spatial_markup(),
+            LegalFormat::MetaverseLegal => Self::analyze_metaverse_legal(),
         }
     }
 
@@ -696,6 +707,173 @@ impl FormatCoverage {
         ];
         let unsupported = vec!["Generic type parameters".to_string()];
         let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_llm_native() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Markdown prompt blocks".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+            "Salience-based section ordering".to_string(),
+            "Token-budget-aware rendering".to_string(),
+        ];
+        let unsupported = vec!["Native temporal validity ranges".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Compound conditions".to_string(),
+            "Rendered descriptively; re-imported as custom conditions".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_embedding() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Fixed-dimension embedding vectors".to_string(),
+            "Deterministic feature-hashing embedder".to_string(),
+            "Cosine-similarity retrieval".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Learned/contextual embeddings".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_neural_document() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Activation graph nodes".to_string(),
+            "PageRank salience and activation".to_string(),
+            "Semantic-similarity and derivation edges".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Trained attention weights".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_attention_markup() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Role-tagged spans".to_string(),
+            "Softmax attention distribution".to_string(),
+            "Span cross-references".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Sub-token character offsets".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_semantic_chunk() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Overlap-controlled chunking".to_string(),
+            "Stable content-addressed chunk identifiers".to_string(),
+            "Per-chunk source attribution".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Embedding vectors per chunk".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Statute granularity".to_string(),
+            "Chunks may merge or split statutes; provenance preserves originals".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_preservation_archive() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Lossless structured provenance (full roundtrip)".to_string(),
+            "Redundant quantum-aware fixity checksums".to_string(),
+            "Post-quantum hash-based signatures (Lamport/Merkle)".to_string(),
+            "Cryptographic agility (algorithm registry + versioned envelope)".to_string(),
+            "Migration history metadata".to_string(),
+            "BagIt-like container projection".to_string(),
+        ];
+        let unsupported = vec![
+            "Lattice signatures (ML-DSA) — deferred".to_string(),
+            "Lattice KEM (ML-KEM) — deferred".to_string(),
+        ];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Signing".to_string(),
+            "Requires a caller-supplied seed; archives are unsigned by default".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_vr_ar_annotation() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Spatially-anchored annotations".to_string(),
+            "Multiple anchor kinds (world, marker, plane, geo)".to_string(),
+            "Effect-coloured, salience-scaled annotations".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Animation / interaction timelines".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Billboarding".to_string(),
+            "Recorded as a scene flag; rendering is viewer-dependent".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_spatial_document_3d() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "3D scene-graph of statute panels".to_string(),
+            "Deterministic layouts (grid, circle, helix, stack)".to_string(),
+            "Derivation edges between nodes".to_string(),
+            "X3D-like XML projection".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Imported X3D geometry parsing".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "X3D export".to_string(),
+            "Lossy visualisation view; JSON remains canonical".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_holographic() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Depth-layered light-field planes".to_string(),
+            "Per-element parallax and luminance".to_string(),
+            "Salience-ordered plane assignment".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Physical interference / phase reconstruction".to_string()];
+        let partial = HashMap::new();
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_spatial_markup() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Parseable textual spatial DSL (SLM)".to_string(),
+            "Explicit per-node transforms and anchors".to_string(),
+            "Full statute payload (lossless roundtrip)".to_string(),
+            "Human-readable, diff-friendly text".to_string(),
+        ];
+        let unsupported = vec!["Nested / hierarchical node grouping".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Transform precision".to_string(),
+            "Coordinates are rounded to three decimals on export".to_string(),
+        );
+        (supported, unsupported, partial)
+    }
+
+    fn analyze_metaverse_legal() -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+        let supported = vec![
+            "Interactive entity scene graph".to_string(),
+            "Effect-derived avatar interactions".to_string(),
+            "Portals from derivation links".to_string(),
+            "World metadata (spawn, coordinate system)".to_string(),
+            "Structured provenance (lossless roundtrip)".to_string(),
+        ];
+        let unsupported = vec!["Live avatar presence / networking".to_string()];
+        let mut partial = HashMap::new();
+        partial.insert(
+            "Interaction gating".to_string(),
+            "Gated on the first precondition only".to_string(),
+        );
         (supported, unsupported, partial)
     }
 }

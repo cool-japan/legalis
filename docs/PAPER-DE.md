@@ -5,7 +5,7 @@
 ---
 
 **Autoren**: Legalis-RS Entwicklungsteam
-**Version**: 0.2.0
+**Version**: 0.1.6
 **Sprache**: Rust (Edition 2024)
 **Lizenz**: MIT / Apache 2.0
 
@@ -467,4 +467,4 @@ Legalis-RS präsentiert einen neuen Ansatz zur Kodifizierung von Recht, indem di
 ---
 
 **Legalis-RS Entwicklungsteam**
-Version 0.2.0 | 2024
+Version 0.1.6 | 2026

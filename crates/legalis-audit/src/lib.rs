@@ -46,6 +46,26 @@
 //! - Retention policies with statute exemptions
 //! - Erasure analysis (right to be forgotten)
 //!
+//! ## Autonomous Compliance
+//! Use the [`autonomous`] module for self-governing compliance:
+//! - Self-monitoring against declarative invariants
+//!   ([`autonomous::ComplianceMonitor`])
+//! - Predictive compliance — drift forecasting
+//!   ([`autonomous::ComplianceForecaster`])
+//! - Adaptive audit policies that retune under risk
+//!   ([`autonomous::AdaptiveAuditPolicy`])
+//! - Rule-based auto-remediation with dry-run/apply
+//!   ([`autonomous::RemediationEngine`])
+//! - Continuous, signed compliance attestation
+//!   ([`autonomous::AttestationEngine`])
+//! - A closed-loop [`autonomous::AutonomousComplianceEngine`]
+//!
+//! ## International Standards & Multi-Jurisdiction Compliance
+//! Use the [`federation`] module to map and evaluate across regimes:
+//! - International standard mapping ([`federation::StandardMapping`])
+//! - Multi-jurisdiction compliance evaluation
+//!   ([`federation::MultiJurisdictionEvaluator`])
+//!
 //! ## Example Usage
 //!
 //! ```rust
@@ -90,6 +110,7 @@ pub mod aggregate;
 pub mod analysis;
 pub mod archival;
 pub mod async_batch;
+pub mod autonomous;
 pub mod batch;
 pub mod behavioral;
 pub mod bias;
@@ -107,8 +128,10 @@ pub mod elasticsearch;
 pub mod encryption;
 pub mod evidence;
 pub mod export;
+pub mod federation;
 pub mod forensic;
 pub mod incident_response;
+pub mod insights;
 pub mod integrity;
 pub mod integrity_checker;
 pub mod interactive;
@@ -120,6 +143,7 @@ pub mod newrelic;
 pub mod notifications;
 pub mod predictive;
 pub mod privacy;
+pub mod quantum;
 pub mod query;
 pub mod query_plan;
 pub mod realtime_alert;
@@ -128,6 +152,7 @@ pub mod regulatory_automation;
 pub mod replay;
 pub mod retention;
 pub mod risk_scoring;
+pub mod scale;
 pub mod scheduler;
 pub mod search;
 pub mod servicenow;
@@ -137,6 +162,7 @@ pub mod storage;
 pub mod streaming;
 pub mod telemetry;
 pub mod templates;
+pub mod tenant;
 pub mod timeline;
 pub mod timeseries;
 pub mod trend_forecast;
@@ -177,7 +203,7 @@ pub enum AuditError {
     QueryError(String),
 
     #[error("Database error: {0}")]
-    DatabaseError(#[from] rusqlite::Error),
+    DatabaseError(#[from] oxisql_core::OxiSqlError),
 }
 
 /// Result type for audit operations.
@@ -254,6 +280,18 @@ impl AuditRecord {
     pub fn verify(&self) -> bool {
         let computed = self.compute_hash();
         computed == self.record_hash
+    }
+
+    /// Re-links this record onto the given previous hash and recomputes its
+    /// record hash.
+    ///
+    /// This is for callers outside the default [`AuditTrail::record`] path that
+    /// need to (re-)insert a record into a hash chain — for example the
+    /// per-tenant chains maintained by [`crate::tenant`], or chain re-anchoring
+    /// after a retention purge.
+    pub fn relink(&mut self, previous_hash: Option<String>) {
+        self.previous_hash = previous_hash;
+        self.record_hash = self.compute_hash();
     }
 }
 
@@ -577,6 +615,93 @@ impl AuditTrail {
     pub fn analyze_patterns(&self) -> AuditResult<analysis::DecisionAnalysis> {
         let records = self.storage.get_all()?;
         Ok(analysis::DecisionAnalyzer::analyze(&records))
+    }
+
+    /// Generates AI-powered audit insights: stream anomalies, outcome
+    /// predictions, prioritized findings, root-cause analyses, and remediation
+    /// recommendations. See [`insights::InsightsEngine`].
+    pub fn generate_insights(&self) -> AuditResult<insights::InsightsReport> {
+        let records = self.storage.get_all()?;
+        insights::InsightsEngine::new().analyze(&records)
+    }
+
+    /// Builds a scalable inverted [`scale::AuditIndex`] over the whole trail.
+    ///
+    /// Build the index once and reuse it with [`scale::QueryAccelerator`] (or a
+    /// [`scale::ScaleEngine`]) for fast, repeated filtered queries instead of
+    /// re-scanning every record.
+    pub fn build_scale_index(&self) -> AuditResult<scale::AuditIndex> {
+        let records = self.storage.get_all()?;
+        Ok(scale::AuditIndex::from_records(&records))
+    }
+
+    /// Produces a quantum-proof [`quantum::HybridProof`] over the whole trail,
+    /// binding it with both the classical Merkle root and a post-quantum hash
+    /// chain head signed by a hash-based [`quantum::MerkleSignatureScheme`].
+    ///
+    /// Each call consumes one one-time leaf of the engine's signing key; rotate
+    /// the key before exhaustion. See [`quantum::QuantumIntegrityEngine`].
+    pub fn quantum_seal(
+        &self,
+        engine: &mut quantum::QuantumIntegrityEngine,
+    ) -> AuditResult<quantum::HybridProof> {
+        let records = self.storage.get_all()?;
+        engine.seal(&records)
+    }
+
+    /// Runs one autonomous-compliance cycle over the whole trail: self-monitor
+    /// against invariants, forecast compliance drift, assess risk, adapt the
+    /// audit policy, plan/apply remediation, and emit a (chained) attestation.
+    /// See [`autonomous::AutonomousComplianceEngine`].
+    pub fn run_autonomous_cycle(
+        &self,
+        engine: &mut autonomous::AutonomousComplianceEngine,
+    ) -> AuditResult<autonomous::AutonomousCycleReport> {
+        let records = self.storage.get_all()?;
+        engine.run(&records)
+    }
+
+    /// Evaluates the trail against a set of compliance invariants, returning a
+    /// [`autonomous::MonitorReport`] of any violations. See
+    /// [`autonomous::ComplianceMonitor`].
+    pub fn monitor_compliance(
+        &self,
+        monitor: &autonomous::ComplianceMonitor,
+    ) -> AuditResult<autonomous::MonitorReport> {
+        let records = self.storage.get_all()?;
+        Ok(monitor.evaluate(&records))
+    }
+
+    /// Forecasts compliance drift (override / void / discretion rates) from the
+    /// trail's history. See [`autonomous::ComplianceForecaster`].
+    pub fn forecast_compliance_drift(
+        &self,
+        forecaster: &autonomous::ComplianceForecaster,
+    ) -> AuditResult<autonomous::DriftReport> {
+        let records = self.storage.get_all()?;
+        Ok(forecaster.forecast(&records))
+    }
+
+    /// Produces a continuous-compliance attestation over the whole trail. See
+    /// [`autonomous::AttestationEngine`].
+    pub fn attest_compliance(
+        &self,
+        engine: &mut autonomous::AttestationEngine,
+        window: chrono::Duration,
+    ) -> AuditResult<autonomous::ComplianceAttestation> {
+        let records = self.storage.get_all()?;
+        engine.attest_window(&records, window)
+    }
+
+    /// Evaluates the trail's demonstrable audit capabilities against multiple
+    /// jurisdictions' required international standards. See
+    /// [`federation::MultiJurisdictionEvaluator`].
+    pub fn evaluate_multi_jurisdiction(
+        &self,
+        evaluator: &federation::MultiJurisdictionEvaluator,
+    ) -> AuditResult<federation::MultiJurisdictionReport> {
+        let records = self.storage.get_all()?;
+        Ok(evaluator.evaluate_records(&records))
     }
 
     /// Generates a distribution report for a specific dimension.
@@ -1226,5 +1351,32 @@ mod tests {
         let explanation = trail.explain_decision(id).unwrap();
         assert!(!explanation.explanation.is_empty());
         assert!(explanation.explanation.contains("statute-1"));
+    }
+
+    #[test]
+    fn test_generate_insights() {
+        let mut trail = AuditTrail::new();
+
+        for i in 0..8 {
+            let record = AuditRecord::new(
+                EventType::AutomaticDecision,
+                Actor::System {
+                    component: "engine".to_string(),
+                },
+                format!("statute-{}", i % 2),
+                Uuid::new_v4(),
+                DecisionContext::default(),
+                DecisionResult::Deterministic {
+                    effect_applied: "approved".to_string(),
+                    parameters: HashMap::new(),
+                },
+                None,
+            );
+            trail.record(record).unwrap();
+        }
+
+        let report = trail.generate_insights().unwrap();
+        // The public wrapper must return an internally consistent report.
+        assert_eq!(report.summary.total_findings, report.findings.len());
     }
 }

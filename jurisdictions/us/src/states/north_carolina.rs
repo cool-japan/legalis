@@ -7,7 +7,8 @@
 //! - Complete bar to recovery if plaintiff at fault
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,24 @@ impl NorthCarolinaLaw {
                 .with_year(1868),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1868, 1, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "Smith v. Fiber Controls Corp., 300 N.C. 669, 268 S.E.2d 504",
+                "Smith v. Fiber Controls",
+                1980,
+            )
+            .with_significance(
+                "North Carolina Supreme Court reaffirmed that contributory negligence is a \
+                 complete bar to recovery and declined to adopt comparative negligence, holding \
+                 any change is for the legislature.",
+            ),
+        )
         .with_notes(
             "North Carolina retains the traditional contributory negligence rule. \
              Any contributory negligence by the plaintiff completely bars recovery, \
              regardless of the defendant's degree of fault. One of only 5 US \
-             jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL).",
+             jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL). \
+             The 'last clear chance' doctrine remains an exception.",
         )
     }
 
@@ -118,5 +132,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = NorthCarolinaLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "Smith v. Fiber Controls");
+        assert_eq!(case.year, 1980);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("complete bar")
+        );
+    }
+
+    #[test]
+    fn test_last_clear_chance_exception_noted() {
+        let comp_neg = NorthCarolinaLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("last clear chance"));
     }
 }

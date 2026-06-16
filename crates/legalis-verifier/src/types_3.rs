@@ -480,7 +480,7 @@ impl ClockConstraint {
     }
 }
 /// A deadline violation.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DeadlineViolation {
     /// Deadline that was violated
     pub deadline_id: String,

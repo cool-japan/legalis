@@ -5,7 +5,7 @@
 ---
 
 **Penulis**: Tim Pengembangan Legalis-RS
-**Versi**: 0.2.0
+**Versi**: 0.1.6
 **Bahasa**: Rust (Edition 2024)
 **Lisensi**: MIT / Apache 2.0
 
@@ -642,4 +642,4 @@ parallel_workers = 8
 ---
 
 **Tim Pengembangan Legalis-RS**
-Versi 0.2.0 | 2024
+Versi 0.1.6 | 2026

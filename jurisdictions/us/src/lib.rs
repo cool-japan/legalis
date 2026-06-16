@@ -136,13 +136,40 @@ pub use choice_of_law::{
 // Uniform acts
 pub use uniform_acts::{
     adoption_status::{AdoptionComparison, AdoptionStatus, UniformActComparator},
+    error::UniformActError,
+    model_act::{DraftingBody, ModelActMetadata},
+    uaa::{
+        ArbitrationActVersion, ArbitrationAgreement, RuaaSection, UaaAdoption, UaaTracker,
+        VacaturGround, validate_arbitration_agreement,
+    },
     ucc::{UCCAdoption, UCCArticle, UCCTracker, UCCVersion},
+    ueta::{
+        ElectronicRecord, SignatureMethod, UetaAdoption, UetaSection, UetaTracker,
+        validate_electronic_record,
+    },
+    ullca::{
+        LlcFormation, LlcManagementStructure, RullcaSection, UllcaAdoption, UllcaTracker,
+        UllcaVersion, validate_llc_formation,
+    },
     upa::{PartnershipActVersion, UPAAdoption, UPATracker},
+    upc::{
+        UpcAdoption, UpcArticle, UpcSection, UpcTracker, WillExecution, validate_will_execution,
+    },
+    utc::{
+        TrustCreation, UtcAdoption, UtcArticle, UtcSection, UtcTracker, validate_trust_creation,
+    },
 };
 
 // Federal-state boundary
 pub use federal::{
     commerce_clause::{CommerceClauseAnalysis, CommerceClauseResult, DormantCommerceClauseTest},
+    commerce_power::{
+        ActivityCharacter, CommerceCategory, CommercePowerAnalysis, CommercePowerResult,
+        lopez_fact_pattern, morrison_fact_pattern, raich_fact_pattern, wickard_fact_pattern,
+    },
+    jurisdiction_hierarchy::{
+        FederalismLevel, JurisdictionConflict, JurisdictionHierarchy, PreemptionKind,
+    },
     preemption::{
         ConflictPreemptionType, FieldPreemptionAnalysis, PreemptionAnalysis, PreemptionResult,
         PreemptionType,

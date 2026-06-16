@@ -267,6 +267,95 @@ fn test_requires_and_unless_combined() {
     );
 }
 
+/// Regression test for the REQUIRES-clause over-consumption bug.
+///
+/// The list-parsing loop for `REQUIRES` used to read the token *following* its
+/// identifier list with `iter.next()` and discard it via the catch-all arm. When
+/// `REQUIRES` was immediately followed by another clause (the common case the
+/// printer emits — one `REQUIRES <id>` line per dependency, then `WHEN ...`),
+/// that next clause keyword was silently swallowed and the clause dropped.
+///
+/// Before the fix this asserted-on `WHEN` condition disappeared, so
+/// `conditions.len()` was `0`. After the fix the trailing clause is preserved.
+#[test]
+fn test_requires_does_not_drop_following_clause() {
+    let dsl = r#"
+    STATUTE dependent-grant: "Dependent Grant" {
+        REQUIRES base-rights, citizenship-verified
+        WHEN AGE >= 25
+        THEN GRANT "Dependent grant"
+    }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let doc = parser.parse_document(dsl).unwrap();
+    let statute = &doc.statutes[0];
+
+    // The REQUIRES list itself still parses correctly.
+    assert_eq!(
+        statute.requires,
+        vec!["base-rights", "citizenship-verified"]
+    );
+
+    // The clause immediately following REQUIRES must NOT be dropped. This is the
+    // assertion that fails before the fix (the WHEN was consumed by the REQUIRES
+    // loop, leaving zero conditions) and passes afterwards.
+    assert_eq!(
+        statute.conditions.len(),
+        1,
+        "the WHEN clause after REQUIRES must be preserved, not swallowed"
+    );
+    assert!(
+        matches!(statute.conditions[0], ast::ConditionNode::Comparison { .. }),
+        "the preserved condition should be the AGE >= 25 comparison, got {:?}",
+        statute.conditions[0]
+    );
+
+    // The effect after the (previously dropped) WHEN must also survive.
+    assert_eq!(statute.effects.len(), 1);
+    assert_eq!(statute.effects[0].effect_type, "grant");
+}
+
+/// Verifies the REQUIRES fix survives a full printer round-trip: a statute with a
+/// `REQUIRES` clause followed by another clause must parse -> print -> parse with
+/// no dropped conditions. `format_document` emits each requirement on its own
+/// `REQUIRES <id>` line directly before the `WHEN` clause, so this exercises the
+/// exact "REQUIRES immediately followed by a clause" path through the printer.
+#[test]
+fn test_requires_roundtrip_preserves_following_clause() {
+    let dsl = r#"
+    STATUTE dependent-grant: "Dependent Grant" {
+        REQUIRES base-rights, citizenship-verified
+        WHEN AGE >= 25
+        THEN GRANT "Dependent grant"
+    }
+    "#;
+
+    let parser = LegalDslParser::new();
+    let first = parser.parse_document(dsl).unwrap();
+
+    // Print the parsed AST back to DSL text, then re-parse it.
+    let printed = crate::format_document(&first);
+    let second = parser.parse_document(&printed).unwrap();
+
+    // The round-tripped statute must be identical to the first parse: in
+    // particular the conditions must not have been dropped on either pass.
+    assert_eq!(first.statutes.len(), second.statutes.len());
+    let a = &first.statutes[0];
+    let b = &second.statutes[0];
+    assert_eq!(a.requires, b.requires);
+    assert_eq!(
+        a.conditions, b.conditions,
+        "conditions must round-trip with no dropped clauses"
+    );
+    assert_eq!(
+        b.conditions.len(),
+        1,
+        "condition must survive the round-trip"
+    );
+    assert_eq!(a.effects.len(), b.effects.len());
+}
+
 #[test]
 fn test_syntax_error_with_hint() {
     let location = SourceLocation::new(1, 5, 4);

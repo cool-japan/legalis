@@ -12,6 +12,7 @@ documentation = "https://docs.rs/legalis-au"
 
 [dependencies]
 legalis-core.workspace = true
+legalis-dsl.workspace = true
 legalis-i18n.workspace = true
 legalis-verifier.workspace = true
 legalis-sim.workspace = true

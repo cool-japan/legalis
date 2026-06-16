@@ -43,7 +43,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-mx = "0.1.4"
+legalis-mx = "0.1.6"
 ```
 
 ### Examples

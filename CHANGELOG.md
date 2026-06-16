@@ -5,6 +5,76 @@ All notable changes to Legalis-RS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-06-16
+
+### Added
+
+#### legalis-sim: Real NVIDIA CUDA GPU Acceleration
+- Optional `cuda` feature (`legalis-sim/Cargo.toml`) backed by `cudarc = "0.19"` (CUDA 12.x, NVRTC runtime kernel compilation, dynamic `libcuda`/`libnvrtc` loading — crates still build on hosts without the CUDA toolkit)
+- `GpuExecutor::is_gpu_active()` — runtime check that returns `true` only when a real GPU context is active
+- `GpuExecutor::evaluate_population_threshold()` — GPU-accelerated weighted-sum threshold evaluation across the entire entity population; falls back to CPU transparently when no device is available
+- `ThresholdOp` — comparison-operator enum (`Equal`, `NotEqual`, `GreaterThan`, `GreaterOrEqual`, `LessThan`, `LessOrEqual`) used in threshold conditions
+- Condition-evaluation CUDA kernel NVRTC-compiled at startup; both GPU and CPU paths return identical results
+
+#### legalis-api: Security, Governance & Advanced API Layer
+- `AbuseDetector` / `AbuseConfig` / `AbuseAssessment` — statistical multi-signal API abuse detection (request burstiness, error ratio, endpoint scanning)
+- `audit_export` — audit log serialisation to JSON, NDJSON, and CSV for compliance archival and SIEM ingestion
+- `consent` — consent lifecycle management
+- `data_classification` — data-sensitivity classification policies
+- `governance_routes` — governance API endpoints
+- `intelligent_rate_limit` — heuristic-informed rate limiting
+- `ip_whitelist` — IP allowlist management
+- `key_rotation` — API key lifecycle (generation, rotation, revocation)
+- `pagination` — cursor-based pagination utilities
+- `partial_response` — sparse/partial response field filtering
+- `predictive_cache` — access-pattern-driven predictive cache layer
+- `prefetch` — request prefetching
+- `regulatory_reporting` — compliance report generation
+- `security_headers` — security HTTP header middleware (CSP, HSTS, etc.)
+- `streaming` — SSE / chunked streaming response support
+- `usage_policy` — API usage policy enforcement
+- `dataloader` — GraphQL DataLoader integration (enabled via `async-graphql` `dataloader` feature)
+
+#### legalis-audit: Autonomous Compliance, Federation, Quantum Safety & Scale
+- `autonomous` module: attestation, real-time compliance monitoring, policy enforcement, predictive compliance, automated remediation
+- `federation` module: cross-jurisdiction audit federation, compliance standards mapping (ISO 27001, SOC 2, GDPR)
+- `insights` module: anomaly detection, finding management, improvement recommendations, outcome predictions, root cause analysis
+- `quantum` module: post-quantum hash chains (`pq_hash`), quantum-safe signatures, key management, randomness beacons, hybrid classical/quantum protocols
+- `scale` module: tiered storage backend, query-acceleration index, audit-record codec, LRU cache
+- `tenant` module: multi-tenant analytics, compliance dashboards, data isolation, retention policies
+- SHA-256 hash chains in `integrity` for tamper-proof audit log chaining
+
+#### legalis-chain: Autonomous Smart-Chain Layer
+- `autonomous` module: auto-optimizer, cost optimizer (gas deferral heuristics, batch-savings estimation), performance monitor, resource manager, self-healing chain invariant enforcement
+- `composition` module: smart-chain builder, dependency-graph resolution, inheritance
+
+#### legalis-llm: Legal Analytics
+- `analytics` module: risk heatmaps (`RiskHeatmap`), jurisdiction comparison (`JurisdictionComparator`), outcome pattern analysis (`PatternAnalyzer`), report builder (`ReportBuilder`), trend detection (Mann–Kendall test, change-point detection, exponential moving average)
+
+#### jurisdictions/fr: French Civil & Company Law
+- `contract::article1104` — good faith principle (Code Civil Art. 1104)
+- `contract::article1218` — force majeure (Code Civil Art. 1218)
+- `company::sa` — SA/SARL articles (L223-1, L223-3, L225-1, L225-17, L225-18)
+- `reasoning::dsl::statutes_as_dsl()` — DSL export of the full French statute library
+- `reasoning::statute_adapter` — domain-aggregated statute collections: `contract_law_statutes()`, `labor_law_statutes()`, `company_law_statutes()`, `family_law_statutes()`
+- XML statute parsing via `quick-xml = "0.37"` with `serialize` feature
+
+### Changed
+- `oxiarc-deflate` updated 0.2.6 → 0.3.3
+- `fop-render` updated 0.1.1 → 0.1.2
+- `oxiz-solver` / `oxiz-core` updated 0.2.0 → 0.2.2
+- `oxiarc` updated to 0.3.2; `mecrab` updated to 0.2.0
+- `async-graphql` now enables the `dataloader` feature
+- `quick-xml = "0.37"` added to workspace dependencies (XML statute parsing)
+- `cudarc = "0.19"` added to workspace dependencies (optional, default-features = false)
+
+### Fixed
+- No-unwrap policy: replaced `unwrap()` in Vyper backend and `EmbeddingGenerator` with proper `expect()` / `?` error propagation
+- Error handling: simplified deadline-manager and submission-API error paths; restored `judgment-anonymization` workspace example
+- SQLite backend: migrated `legalis-audit` from `rusqlite` (C-linked `libsqlite3`) to `oxisql-sqlite-compat = "0.1.2"` (Pure-Rust Limbo backend via OxiSQL) — the default feature set is now C/C++ free for all storage backends
+
+[0.1.6]: https://github.com/cool-japan/legalis-rs/compare/v0.1.5...v0.1.6
+
 ## [0.1.5] - 2026-04-20
 
 ### Added
@@ -536,7 +606,7 @@ Massive content additions to existing jurisdictions:
 - Fuzz testing support
 - Platform support: macOS, Linux, Windows (via WSL)
 - Optional Z3 SMT solver integration
-- Dual license: MIT OR Apache-2.0
+- License: Apache-2.0
 
 ### Documentation
 - Complete API documentation
@@ -552,3 +622,4 @@ Massive content additions to existing jurisdictions:
 - Documentation in English (multilingual docs planned)
 
 [0.1.0]: https://github.com/cool-japan/legalis-rs/releases/tag/v0.1.0
+[0.1.6]: https://github.com/cool-japan/legalis-rs/compare/v0.1.5...v0.1.6

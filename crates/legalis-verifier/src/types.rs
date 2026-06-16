@@ -1173,6 +1173,16 @@ impl StatuteVerifier {
         }
         result
     }
+    /// Verifies a single statute in isolation (public wrapper).
+    ///
+    /// Runs the per-statute checks (constitutional compliance, redundant
+    /// conditions, unreachable code, dead-statute detection) without any
+    /// cross-statute analysis. This is the building block used by the
+    /// incremental/streaming verifier in
+    /// [`crate::streaming_verification`].
+    pub fn verify_single(&self, statute: &Statute) -> VerificationResult {
+        self.verify_single_statute(statute)
+    }
     /// Verifies statutes with a specified budget.
     ///
     /// This method respects the verification budget and stops early if limits are reached.

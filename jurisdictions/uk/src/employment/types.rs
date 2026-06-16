@@ -561,6 +561,97 @@ pub enum AutomaticallyUnfairReason {
     Discrimination,
 }
 
+/// Statutory cap on a "week's pay" for redundancy and basic-award purposes (ERA 1996 s.227).
+///
+/// £700 from 6 April 2024 (Employment Rights (Increase of Limits) Order 2023, SI 2023/1191).
+pub const WEEKLY_PAY_CAP_GBP: f64 = 700.0;
+
+/// Maximum number of years of continuous service that may be reckoned.
+///
+/// Service in excess of 20 years is disregarded for the statutory redundancy payment
+/// (ERA 1996 s.162(3)) and, by extension, for the unfair-dismissal basic award
+/// (ERA 1996 s.119(2)).
+pub const MAX_RECKONABLE_YEARS: u8 = 20;
+
+/// Age band of the lower threshold (22) for the statutory reckoning (ERA 1996 s.162(2)(b)).
+const REDUNDANCY_LOWER_AGE_BAND: u8 = 22;
+
+/// Age band of the upper threshold (41) for the statutory reckoning (ERA 1996 s.162(2)(a)).
+const REDUNDANCY_UPPER_AGE_BAND: u8 = 41;
+
+/// Age-banded breakdown of reckonable service under ERA 1996 s.162(2).
+///
+/// The statute requires the period of continuous employment to be reckoned **backwards**
+/// from the end of employment, allowing an appropriate number of weeks' pay for each
+/// complete year according to the employee's age during that year. This same reckoning is
+/// applied to the unfair-dismissal basic award by ERA 1996 s.119.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServiceReckoning {
+    /// Complete years reckoned at 1.5 weeks' pay (employee aged 41 or over) — s.162(2)(a).
+    pub years_at_one_and_half: u8,
+
+    /// Complete years reckoned at 1 week's pay (aged 22 to 40 inclusive) — s.162(2)(b).
+    pub years_at_one: u8,
+
+    /// Complete years reckoned at 0.5 week's pay (aged under 22) — s.162(2)(c).
+    pub years_at_half: u8,
+}
+
+impl ServiceReckoning {
+    /// Reckon service backwards from the end of employment (ERA 1996 s.162(1)-(3)).
+    ///
+    /// For each complete year, reckoning backwards from the dismissal date, the age band is
+    /// fixed by the employee's age at the start of that year (so a year only attracts the
+    /// 1.5-week rate where the employee was 41 or over for the whole of it). Service beyond
+    /// [`MAX_RECKONABLE_YEARS`] is disregarded (s.162(3)).
+    ///
+    /// This is the correct statutory method: applying a single multiplier based on the age at
+    /// the dismissal date to every year would over-state the entitlement of any employee who
+    /// crossed an age band during their employment.
+    pub fn reckon(age_at_dismissal: u8, complete_years: u8) -> Self {
+        let reckonable_years = complete_years.min(MAX_RECKONABLE_YEARS);
+        let mut years_at_one_and_half = 0u8;
+        let mut years_at_one = 0u8;
+        let mut years_at_half = 0u8;
+
+        for year_back in 1..=reckonable_years {
+            let age_during_year = age_at_dismissal.saturating_sub(year_back);
+            if age_during_year >= REDUNDANCY_UPPER_AGE_BAND {
+                years_at_one_and_half += 1;
+            } else if age_during_year >= REDUNDANCY_LOWER_AGE_BAND {
+                years_at_one += 1;
+            } else {
+                years_at_half += 1;
+            }
+        }
+
+        Self {
+            years_at_one_and_half,
+            years_at_one,
+            years_at_half,
+        }
+    }
+
+    /// Total number of weeks' pay due for the reckoned service (ERA 1996 s.162(2)).
+    pub fn weeks_due(&self) -> f64 {
+        let upper = f64::from(self.years_at_one_and_half) * 1.5;
+        let middle = f64::from(self.years_at_one);
+        let lower = f64::from(self.years_at_half) * 0.5;
+        upper + middle + lower
+    }
+
+    /// Total number of complete years reckoned (capped at [`MAX_RECKONABLE_YEARS`]).
+    pub fn total_years(&self) -> u8 {
+        self.years_at_one_and_half + self.years_at_one + self.years_at_half
+    }
+}
+
+/// Number of weeks' pay due for `complete_years` of service ending at `age_at_dismissal`
+/// (ERA 1996 s.162). Convenience wrapper over [`ServiceReckoning::reckon`].
+pub fn statutory_weeks_due(age_at_dismissal: u8, complete_years: u8) -> f64 {
+    ServiceReckoning::reckon(age_at_dismissal, complete_years).weeks_due()
+}
+
 /// Redundancy payment calculation under ERA 1996 s.162
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RedundancyPayment {
@@ -575,31 +666,131 @@ pub struct RedundancyPayment {
 }
 
 impl RedundancyPayment {
-    /// Calculate statutory redundancy payment (ERA 1996 s.162)
+    /// Age-banded reckoning of the employee's service (ERA 1996 s.162(1)-(3)).
+    pub fn reckoning(&self) -> ServiceReckoning {
+        ServiceReckoning::reckon(self.age, self.years_of_service)
+    }
+
+    /// A "week's pay" subject to the statutory cap (ERA 1996 s.227).
+    pub fn capped_weekly_pay(&self) -> f64 {
+        self.weekly_pay_gbp.min(WEEKLY_PAY_CAP_GBP)
+    }
+
+    /// Calculate the statutory redundancy payment (ERA 1996 s.162).
     ///
-    /// Age-based multipliers:
-    /// - Under 22: 0.5 week's pay per year
-    /// - 22-40: 1.0 week's pay per year
-    /// - 41+: 1.5 weeks' pay per year
+    /// The payment is the number of weeks' pay due under the age-banded reckoning
+    /// (s.162(2)) multiplied by a week's pay capped at [`WEEKLY_PAY_CAP_GBP`] (s.227):
+    /// - 1.5 weeks' pay for each complete year aged 41 or over,
+    /// - 1 week's pay for each complete year aged 22 to 40,
+    /// - 0.5 week's pay for each complete year aged under 22,
     ///
-    /// Maximum: 20 years counted, £700/week cap (April 2024)
+    /// reckoned backwards from the dismissal date over at most 20 years.
     pub fn calculate_statutory_payment(&self) -> f64 {
-        // Cap weekly pay at £700
-        let capped_weekly_pay = self.weekly_pay_gbp.min(700.0);
+        self.reckoning().weeks_due() * self.capped_weekly_pay()
+    }
+}
 
-        // Cap years at 20
-        let capped_years = self.years_of_service.min(20) as f64;
+/// Basic award for unfair dismissal (ERA 1996 s.119).
+///
+/// The basic award is calculated in the same way as a statutory redundancy payment: the
+/// age-banded reckoning of s.162 applied to a week's pay capped at [`WEEKLY_PAY_CAP_GBP`],
+/// over at most 20 years (s.119(2), s.227). It is reduced by any redundancy payment already
+/// made in respect of the same dismissal (s.122(4)); that interaction is left to the caller.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BasicAward {
+    /// Employee age at the effective date of termination.
+    pub age: u8,
 
-        // Age-based multiplier
-        let multiplier = if self.age < 22 {
-            0.5
-        } else if self.age <= 40 {
-            1.0
-        } else {
-            1.5
-        };
+    /// Complete years of continuous service (max 20 counted).
+    pub years_of_service: u8,
 
-        capped_weekly_pay * capped_years * multiplier
+    /// Gross weekly pay in GBP (capped at [`WEEKLY_PAY_CAP_GBP`]).
+    pub weekly_pay_gbp: f64,
+}
+
+impl BasicAward {
+    /// Age-banded reckoning of the employee's service (ERA 1996 s.162 as applied by s.119).
+    pub fn reckoning(&self) -> ServiceReckoning {
+        ServiceReckoning::reckon(self.age, self.years_of_service)
+    }
+
+    /// A "week's pay" subject to the statutory cap (ERA 1996 s.227).
+    pub fn capped_weekly_pay(&self) -> f64 {
+        self.weekly_pay_gbp.min(WEEKLY_PAY_CAP_GBP)
+    }
+
+    /// Calculate the basic award (ERA 1996 s.119).
+    pub fn calculate(&self) -> f64 {
+        self.reckoning().weeks_due() * self.capped_weekly_pay()
+    }
+
+    /// The statutory maximum basic award (20 years × 1.5 × the week's-pay cap).
+    ///
+    /// £21,000 from 6 April 2024.
+    pub fn statutory_maximum() -> f64 {
+        f64::from(MAX_RECKONABLE_YEARS) * 1.5 * WEEKLY_PAY_CAP_GBP
+    }
+}
+
+/// Compensatory award for unfair dismissal (ERA 1996 ss.123-124).
+///
+/// The tribunal first assesses the claimant's financial loss flowing from the dismissal
+/// (s.123). The award is then limited to the lower of 52 weeks' gross pay or the statutory
+/// maximum (s.124(1), (1ZA)). Unlike the basic award, the 52-week limit uses the claimant's
+/// *actual* (uncapped) gross weekly pay.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompensatoryAward {
+    /// Tribunal-assessed financial loss attributable to the dismissal (ERA 1996 s.123).
+    pub assessed_loss_gbp: f64,
+
+    /// Claimant's actual gross weekly pay (uncapped; used for the 52-week limit).
+    pub gross_weekly_pay_gbp: f64,
+}
+
+impl CompensatoryAward {
+    /// Statutory maximum compensatory award: £115,115 from 6 April 2024 (ERA 1996 s.124(1)).
+    pub const STATUTORY_MAXIMUM_GBP: f64 = 115_115.0;
+
+    /// Alternative limit of 52 weeks' gross pay (ERA 1996 s.124(1ZA)).
+    pub const WEEKS_LIMIT: f64 = 52.0;
+
+    /// The applicable statutory cap: the lower of 52 weeks' pay or the statutory maximum.
+    pub fn statutory_cap(&self) -> f64 {
+        (Self::WEEKS_LIMIT * self.gross_weekly_pay_gbp).min(Self::STATUTORY_MAXIMUM_GBP)
+    }
+
+    /// The compensatory award actually payable: the assessed loss, limited by the cap.
+    pub fn award(&self) -> f64 {
+        self.assessed_loss_gbp.min(self.statutory_cap())
+    }
+}
+
+/// Combined monetary award for unfair dismissal (ERA 1996 ss.118-124).
+///
+/// Comprises the basic award (s.119) and the compensatory award (s.124).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnfairDismissalAward {
+    /// Basic award component (ERA 1996 s.119).
+    pub basic_award: BasicAward,
+
+    /// Compensatory award component (ERA 1996 s.124).
+    pub compensatory_award: CompensatoryAward,
+}
+
+impl UnfairDismissalAward {
+    /// The basic award payable (ERA 1996 s.119).
+    pub fn basic(&self) -> f64 {
+        self.basic_award.calculate()
+    }
+
+    /// The compensatory award payable (ERA 1996 s.124).
+    pub fn compensatory(&self) -> f64 {
+        self.compensatory_award.award()
+    }
+
+    /// Total compensation: basic award plus compensatory award.
+    pub fn total(&self) -> f64 {
+        self.basic() + self.compensatory()
     }
 }
 
@@ -739,8 +930,118 @@ mod tests {
             years_of_service: 10,
             weekly_pay_gbp: 800.0, // Above £700 cap
         };
-        // 10 years × 1.5 × £700 (capped) = £10,500
-        assert_eq!(payment.calculate_statutory_payment(), 10500.0);
+        // ERA 1996 s.162: reckoning backwards from 45 over 10 years covers ages 35-44.
+        // Years aged 41+ (44,43,42,41): 4 × 1.5 = 6.0 weeks.
+        // Years aged 22-40 (40..35):   6 × 1.0 = 6.0 weeks.
+        // Total 12 weeks × £700 (capped) = £8,400.
+        assert_eq!(payment.calculate_statutory_payment(), 8400.0);
+    }
+
+    #[test]
+    fn test_service_reckoning_band_crossing() {
+        // Employee aged 45 with 10 complete years started at 35: only 4 years at the 41+ rate.
+        let reckoning = ServiceReckoning::reckon(45, 10);
+        assert_eq!(reckoning.years_at_one_and_half, 4);
+        assert_eq!(reckoning.years_at_one, 6);
+        assert_eq!(reckoning.years_at_half, 0);
+        assert_eq!(reckoning.total_years(), 10);
+        assert_eq!(reckoning.weeks_due(), 12.0);
+    }
+
+    #[test]
+    fn test_service_reckoning_crossing_22() {
+        // Aged 23 with 5 years: the year ending at 22 is at 1.0; the earlier 4 are at 0.5.
+        let reckoning = ServiceReckoning::reckon(23, 5);
+        assert_eq!(reckoning.years_at_one_and_half, 0);
+        assert_eq!(reckoning.years_at_one, 1);
+        assert_eq!(reckoning.years_at_half, 4);
+        assert_eq!(reckoning.weeks_due(), 3.0);
+    }
+
+    #[test]
+    fn test_service_reckoning_caps_at_twenty_years() {
+        // Aged 55 with 25 years: only the most recent 20 are reckoned (ages 35-54).
+        let reckoning = ServiceReckoning::reckon(55, 25);
+        assert_eq!(reckoning.total_years(), 20);
+        assert_eq!(reckoning.years_at_one_and_half, 14); // ages 54..41
+        assert_eq!(reckoning.years_at_one, 6); // ages 40..35
+        assert_eq!(reckoning.years_at_half, 0);
+        assert_eq!(reckoning.weeks_due(), 27.0);
+    }
+
+    #[test]
+    fn test_statutory_weeks_due_helper_matches_reckoning() {
+        assert_eq!(statutory_weeks_due(45, 10), 12.0);
+        assert_eq!(statutory_weeks_due(21, 3), 1.5);
+        assert_eq!(statutory_weeks_due(30, 8), 8.0);
+    }
+
+    #[test]
+    fn test_basic_award_matches_redundancy_method() {
+        // ERA 1996 s.119: basic award uses the same age-banded reckoning as redundancy.
+        let award = BasicAward {
+            age: 45,
+            years_of_service: 10,
+            weekly_pay_gbp: 600.0,
+        };
+        // 12 weeks × £600 = £7,200.
+        assert_eq!(award.calculate(), 7200.0);
+    }
+
+    #[test]
+    fn test_basic_award_statutory_maximum() {
+        // 20 years × 1.5 × £700 = £21,000 (April 2024).
+        assert_eq!(BasicAward::statutory_maximum(), 21000.0);
+    }
+
+    #[test]
+    fn test_compensatory_award_capped_by_statutory_maximum() {
+        // High earner: 52 weeks' pay exceeds the statutory maximum, so the cap is £115,115.
+        let award = CompensatoryAward {
+            assessed_loss_gbp: 200_000.0,
+            gross_weekly_pay_gbp: 5_000.0,
+        };
+        assert_eq!(award.statutory_cap(), 115_115.0);
+        assert_eq!(award.award(), 115_115.0);
+    }
+
+    #[test]
+    fn test_compensatory_award_capped_by_fifty_two_weeks() {
+        // Lower earner: 52 × £1,000 = £52,000 is below the statutory maximum and binds.
+        let award = CompensatoryAward {
+            assessed_loss_gbp: 100_000.0,
+            gross_weekly_pay_gbp: 1_000.0,
+        };
+        assert_eq!(award.statutory_cap(), 52_000.0);
+        assert_eq!(award.award(), 52_000.0);
+    }
+
+    #[test]
+    fn test_compensatory_award_below_cap_pays_assessed_loss() {
+        let award = CompensatoryAward {
+            assessed_loss_gbp: 30_000.0,
+            gross_weekly_pay_gbp: 2_000.0,
+        };
+        // Cap is min(52 × 2,000, 115,115) = 104,000; assessed loss is lower, so it is paid in full.
+        assert_eq!(award.award(), 30_000.0);
+    }
+
+    #[test]
+    fn test_unfair_dismissal_award_total() {
+        let award = UnfairDismissalAward {
+            basic_award: BasicAward {
+                age: 45,
+                years_of_service: 10,
+                weekly_pay_gbp: 600.0,
+            },
+            compensatory_award: CompensatoryAward {
+                assessed_loss_gbp: 30_000.0,
+                gross_weekly_pay_gbp: 2_000.0,
+            },
+        };
+        assert_eq!(award.basic(), 7200.0);
+        assert_eq!(award.compensatory(), 30_000.0);
+        assert_eq!(award.total(), 37_200.0);
     }
 
     #[test]

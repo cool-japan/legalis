@@ -12,6 +12,7 @@ categories = ["text-processing", "localization"]
 
 [dependencies]
 legalis-core.workspace = true
+legalis-dsl.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

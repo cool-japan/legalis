@@ -110,6 +110,7 @@ pub mod company_law;
 pub mod competition_law;
 pub mod criminal_code;
 pub mod data_protection;
+pub mod dsl;
 pub mod financial_services;
 pub mod i18n;
 pub mod intellectual_property;
@@ -125,6 +126,9 @@ pub use common::{
     CompanyName, KoreanName, KrwAmount, OrganizationForm, currency, dates, holidays, names,
 };
 pub use i18n::{BilingualText, Locale, terms};
+
+// Re-export legalis-dsl integration
+pub use dsl::{all_statutes, statutes_as_dsl};
 
 // Re-export civil code types
 pub use civil_code::{

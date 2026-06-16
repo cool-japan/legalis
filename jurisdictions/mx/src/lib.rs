@@ -168,6 +168,7 @@ pub mod data_protection;
 pub mod intellectual_property;
 pub mod labor_law;
 pub mod reasoning;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export citation types
@@ -242,6 +243,9 @@ pub use competition_law::{
 
 // Re-export reasoning types
 pub use reasoning::{InterpretationMethod, LegalPrinciple, LegalReasoning, principles};
+
+// Re-export statute models and legalis-dsl export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

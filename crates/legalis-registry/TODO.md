@@ -2,13 +2,17 @@
 
 ## Status Summary
 
-Version: 0.3.2 | Status: Stable | Tests: 748 passing | Warnings: 0
+Version: 0.3.4 | Status: Stable | Tests: 925 passing (931 with --all-features) | Warnings: 0
 
 All v0.1.x series features complete including multi-format export/import, database backends (SQLite, PostgreSQL), diff/merge, validation framework, metrics, and advanced features. Event sourcing, webhooks, multi-tenant support all complete.
 
 All v0.2.x series features complete (Distributed Registry, Vector Search, Blockchain Integration, Graph Database, Multi-Tenant Architecture, AI-Powered Features, Event Sourcing 2.0, Federation Protocol, Real-Time Collaboration, Enterprise Security).
 
-**NEW: Legal Knowledge Base (v0.3.2) complete** - Comprehensive knowledge management with statute-to-concept linking for semantic organization, legal ontology integration with hierarchical concepts, case law cross-references with judicial precedent tracking, knowledge graph visualization with DOT export, and AI-powered legal research with intelligent querying fully implemented with 30 new tests.
+**NEW: Quantum-Safe Registry (v0.3.4) complete** - Post-quantum hardening in `src/quantum_safe/` (pure Rust, no new deps): hash-based Lamport/Merkle signatures over statute entries and versions, quantum-resistant content hashing with a Merkle store manifest, a deterministic BB84-style QKD key-agreement model, hybrid classical (HMAC-SHA-256) + post-quantum signature envelopes with configurable acceptance policy, a cryptographic-agility algorithm registry (lattice ML-DSA/ML-KEM deferred as Planned), and tamper-evident quantum-safe audit-trail verification over the registry event log. Implemented with 48 new tests (crate total 877 -> 925 passing).
+
+**Regulatory Sandbox (v0.3.3) complete** - Isolated statute simulation environments with copy-on-write overlay over a shared immutable base (production never mutated), an impact-prediction sandbox that scores candidate statutes against synthetic/supplied entity samples via the legalis-core condition engine, A/B testing of statute variants with deterministic cohort assignment plus two-proportion z-test and Cohen's d statistics, regulatory experiment tracking with hypotheses, a guarded status lifecycle, metrics, and an append-only audit log, and rollback-safe testing (apply-then-discard / transactional commit) with SHA-256 integrity verification. Implemented in `src/sandbox/` with 48 new tests.
+
+**Legal Knowledge Base (v0.3.2) complete** - Comprehensive knowledge management with statute-to-concept linking for semantic organization, legal ontology integration with hierarchical concepts, case law cross-references with judicial precedent tracking, knowledge graph visualization with DOT export, and AI-powered legal research with intelligent querying fully implemented with 30 new tests.
 
 **Previous v0.3.x Features:**
 - Autonomous Registry Management (v0.3.1) - Self-healing registry nodes, auto-scaling, predictive capacity planning, automated backup verification, intrusion detection
@@ -3790,16 +3794,116 @@ The Legal Knowledge Base (v0.3.2) milestone is now **100% complete** with all fi
 - [x] Create knowledge graph visualization
 - [x] Add AI-powered legal research
 
-### Regulatory Sandbox (v0.3.3)
-- [ ] Add statute simulation environments
-- [ ] Implement impact prediction sandbox
-- [ ] Add A/B testing for statute variants
-- [ ] Create regulatory experiment tracking
-- [ ] Add rollback-safe statute testing
+### Regulatory Sandbox (v0.3.3) - COMPLETED ✓
+- [x] Add statute simulation environments
+- [x] Implement impact prediction sandbox
+- [x] Add A/B testing for statute variants
+- [x] Create regulatory experiment tracking
+- [x] Add rollback-safe statute testing
+
+#### Completed 2026-06-14
+
+Implemented as a new `src/sandbox/` submodule directory (wired into `src/lib.rs`
+as `pub mod sandbox;`), reusing the crate's existing store/backup/error types
+and the `legalis-core` condition engine; no existing functionality duplicated.
+
+- `sandbox/environment.rs` - `SandboxEnvironment` (copy-on-write overlay over a
+  shared immutable `BaseLayer`, never mutating production), `IsolationLevel`
+  (`CopyOnWrite` / `FullCopy` / `ReadOnly`), `SandboxDiff`, `SandboxCheckpoint`,
+  COW read-through / staging / tombstones, `fork`, `materialize` into a real
+  `StatuteRegistry`, and SHA-256 integrity digests.
+- `sandbox/impact.rs` - `ImpactPredictionSandbox`, `ImpactModel` (welfare +
+  monetary scoring with optional attribute scaling), `SyntheticEntity`,
+  `EntityImpact`, `CohortImpact`, `ImpactReport`; evaluates statute
+  preconditions via `Condition::evaluate_simple` and aggregates effects,
+  coverage, cohorts, and indeterminate (missing-data) cases.
+- `sandbox/ab_test.rs` - `AbTest`, `StatuteVariant`, `CohortArm`,
+  `AbTestResult`; deterministic SHA-256 cohort assignment, plus real statistics:
+  `erf` (Abramowitz-Stegun 7.1.26), `normal_cdf`, `two_proportion_z`,
+  `two_sided_p_value`, `cohens_d`, `sample_variance`.
+- `sandbox/experiment.rs` - `ExperimentRegistry`, `Experiment`, `Hypothesis`,
+  `ExperimentStatus` (guarded lifecycle), `MetricDirection`, `HypothesisOutcome`,
+  `ExperimentLogEntry` (append-only audit log), metrics + hypothesis evaluation.
+- `sandbox/rollback.rs` - `RollbackSafeTester` with `apply_then_discard`
+  (always revert) and `try_transaction` (commit on Ok, roll back on Err), both
+  with cryptographic integrity verification; `RollbackOutcome`.
+- `sandbox/mod.rs` - `SandboxManager` orchestrator + module docs/example.
+- 48 new tests (all `#[test]`, FS-free) -> crate total 829 -> 877 passing.
+- `cargo clippy -p legalis-registry --all-targets -- -D warnings`: zero output
+  (also clean under `--all-features`). No `unwrap`/`expect`/`panic` in non-test
+  code. Every file < 2000 lines. No new dependencies.
 
 ### Quantum-Safe Registry (v0.3.4)
-- [ ] Add post-quantum cryptographic signatures
-- [ ] Implement quantum-resistant hashing
-- [ ] Add quantum key distribution integration
-- [ ] Create hybrid classical-quantum security
-- [ ] Add quantum audit trail verification
+- [x] Add post-quantum cryptographic signatures
+- [x] Implement quantum-resistant hashing
+- [x] Add quantum key distribution integration
+- [x] Create hybrid classical-quantum security
+- [x] Add quantum audit trail verification
+
+## Recent Enhancements (2026-06-14 - Session: Quantum-Safe Registry v0.3.4)
+
+Implemented the **Quantum-Safe Registry (v0.3.4)** as a new, always-on module in
+`src/quantum_safe/` (pure Rust, `scirs2`-free, reusing only the workspace's
+`sha2`/`hex` for primitives; no new dependencies). All hashing is
+domain-separated (`DOMAIN_SEP = legalis.registry.quantum-safe/v1`) and fully
+deterministic (signing keys derive from a caller-supplied seed; no `rand`).
+
+#### Post-quantum cryptographic signatures
+- [x] `quantum_safe/hash_sig.rs` - self-contained hash-based signatures: Lamport
+  one-time signature (`LamportKeyPair`, `LamportSignature`, `lamport_verify`) over
+  a 256-bit digest, lifted to a many-time XMSS-style `MerkleSigner`
+  (`MerklePublicKey`, `MerkleSignature`, `merkle_verify`) with one-time-leaf
+  reuse enforcement. Relies only on hash pre-image/collision resistance (immune
+  to Shor's algorithm).
+- [x] `quantum_safe/signatures.rs` - registry semantics: `StatuteSigner` /
+  `SignedStatute` sign and verify individual statute entries **and specific
+  versions** (`sign_entry`, `sign_statute`, `sign_version`); each signature binds
+  the statute id + version + canonical content digest so it cannot be transplanted.
+
+#### Quantum-resistant hashing
+- [x] `quantum_safe/hashing.rs` - `QuantumHashAlgorithm` (SHA-256, SHA-512,
+  SHA-512/256, iterated SHA-512, SHA-512‖SHA-256 combiner) with Grover-aware
+  security accounting; `ContentHash` over canonicalized entries (sorted-key JSON,
+  order-independent); `StoreHashManifest` Merkle commitment over the whole store
+  via `hash_registry_store` / `verify_registry_store` (reports changed ids).
+
+#### Quantum key distribution integration
+- [x] `quantum_safe/qkd.rs` - deterministic BB84-style key-agreement **model**:
+  `Basis`, `Bb84Config`, `Bb84Session` (Alice/Bob bases, sifting, QBER estimation,
+  intercept-resend `EavesdropAssessment`); `derive_key_material()` privacy-amplifies
+  the sifted key into a 32-byte symmetric key. Wired into the facade via
+  `QuantumSafeRegistry::adopt_qkd_key` / `set_classical_key`.
+
+#### Hybrid classical-quantum security
+- [x] `quantum_safe/hybrid.rs` - `HybridSignatureEnvelope` binds a classical
+  HMAC-SHA-256 tag to the post-quantum `SignedStatute`, with a configurable
+  `HybridPolicy` (`RequireBoth`/`RequireQuantum`/`RequireClassical`/`RequireEither`)
+  and per-layer `HybridVerification`.
+- [x] `quantum_safe/agility.rs` - `PqAlgorithmRegistry` cataloguing digest /
+  signature / KEM algorithms with classical+quantum security levels, life-cycle
+  `AlgorithmStatus`, `recommended`/`migration_target`, and `CryptoSuite`
+  upgrade. Lattice schemes (ML-DSA/ML-KEM, FIPS 203/204) and SLH-DSA (FIPS 205)
+  are registered `Planned` and **deferred** (no heavy non-pure-Rust dep); the
+  hash-based scheme is the fully-implemented PQ option.
+
+#### Quantum audit trail verification
+- [x] `quantum_safe/audit.rs` - `QuantumAuditTrail` over the registry's
+  `RegistryEvent` log: per-event quantum-resistant digest, tamper-evident
+  hash-chain (`AuditChainLink`) + Merkle root; `verify` reports exact
+  `tampered_sequences` (detects edits, reordering, deletion); `SignedAuditTrail`
+  post-quantum signs the audit root. Built from a registry via `from_registry`.
+
+#### Facade, quality, deferred
+- [x] `quantum_safe/mod.rs` - shared primitives (`tagged_hash`, `hmac_sha256`,
+  `merkle_root`, `canonical_json_bytes`, `constant_time_eq`) + `QuantumSafeRegistry`
+  one-stop facade (`content_hash`, `hash_store`, `sign_entry`, `sign_entry_hybrid`,
+  `verify_hybrid`, `audit_trail`, `sign_audit_trail`).
+- [x] 48 new `#[test]`s (all FS-free, deterministic) -> crate total 877 -> **925
+  passing** (default features); **931 passing** under `--all-features`.
+- [x] `cargo clippy -p legalis-registry --all-targets -- -D warnings`: zero output,
+  also clean under `--all-features`. No `unwrap`/`expect`/`panic`/`todo`/
+  `unimplemented`/`unreachable` in non-test code. Every file < 2000 lines.
+  Additive only (no API breaks). No new workspace dependencies.
+- DEFERRED: standardized lattice/stateless PQ schemes (ML-DSA, ML-KEM, SLH-DSA)
+  are catalogued as `Planned` in `PqAlgorithmRegistry` but not implemented, to
+  honour the pure-Rust policy; the conservative hash-based scheme is fully realized.

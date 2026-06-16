@@ -2,6 +2,8 @@
 
 Deutsche Rechtsordnung-Unterstützung für Legalis-RS
 
+**Version 0.1.6** — 11 Module, 835 Tests bestanden, 0 Warnungen.
+
 ## Überblick
 
 `legalis-de` bietet Unterstützung für das deutsche Rechtssystem im Legalis-RS-Framework, einschließlich wichtiger Gesetze wie BGB, StGB und Grundgesetz.

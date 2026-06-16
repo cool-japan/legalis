@@ -7,7 +7,8 @@
 //! - Medical malpractice reform
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,8 +38,21 @@ impl TennesseeLaw {
                 .with_year(1992),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1992, 7, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "McIntyre v. Balentine, 833 S.W.2d 52",
+                "McIntyre v. Balentine",
+                1992,
+            )
+            .with_significance(
+                "Landmark decision in which the Tennessee Supreme Court judicially abolished \
+                 contributory negligence and adopted a modified (49%/'not as great as') system of \
+                 comparative fault.",
+            ),
+        )
         .with_notes(
-            "Tennessee adopted modified comparative negligence with 50% bar in 1992. \
+            "Tennessee adopted modified comparative negligence with a 50% bar in 1992 by judicial \
+             decision in McIntyre v. Balentine, replacing the prior contributory negligence rule. \
              Plaintiff's recovery is barred if their fault is as great as the combined \
              fault of all defendants (50% bar, not 51%).",
         )
@@ -114,5 +128,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = TennesseeLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "McIntyre v. Balentine");
+        assert_eq!(case.year, 1992);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("comparative fault")
+        );
+    }
+
+    #[test]
+    fn test_judicial_adoption_noted() {
+        let comp_neg = TennesseeLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("McIntyre v. Balentine"));
     }
 }

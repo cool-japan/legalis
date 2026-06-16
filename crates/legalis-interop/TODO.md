@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.3.0 | Status: Stable | Tests: 523 passing | Warnings: 0
+Version: 0.3.0 | Status: Stable | Tests: 700 passing (717 with all features) | Warnings: 0
 
-All v0.1.x, v0.2.x, and v0.3.0 series features complete. Supports 40+ legal formats including Catala, Stipula, L4, Akoma Ntoso, LegalRuleML, LKIF, BPMN, DMN, CMMN, RuleML, SBVR, OpenLaw, Cicero, CommonForm, Clause.io, ContractExpress, FORMEX, NIEM, FinReg, XBRL, RegML, MiFID II, Basel III, SAP Legal Module, Salesforce Contract, DocuSign, MS Word Legal, PDF Legal, Solidity, Vyper, Cadence, and Move. Universal Legal Format (ULF) v1.0.0 with format negotiation, versioning, and compatibility layers now available as canonical interchange format for lossless conversions.
+All v0.1.x, v0.2.x, and v0.3.0 series features complete, plus the v0.3.2 AI-Native Formats batch, the v0.3.3 Quantum-Safe Format Migration batch, and the v0.3.4 Cross-Reality Legal Formats batch. Supports 51+ legal formats including Catala, Stipula, L4, Akoma Ntoso, LegalRuleML, LKIF, BPMN, DMN, CMMN, RuleML, SBVR, OpenLaw, Cicero, CommonForm, Clause.io, ContractExpress, FORMEX, NIEM, FinReg, XBRL, RegML, MiFID II, Basel III, SAP Legal Module, Salesforce Contract, DocuSign, MS Word Legal, PDF Legal, Solidity, Vyper, Cadence, and Move, plus AI-native formats (LLM-native, embedding, neural-document, attention-markup, semantic-chunk), a long-term preservation archive (BagIt-like container with quantum-resistant fixity, post-quantum hash-based signatures, migration metadata, and a cryptographic-agility layer), and cross-reality formats (VR/AR annotation, 3D document, holographic display, spatial markup, metaverse-native). Universal Legal Format (ULF) v1.0.0 with format negotiation, versioning, and compatibility layers now available as canonical interchange format for lossless conversions.
 
 ---
 
@@ -421,30 +421,213 @@ All v0.1.x, v0.2.x, and v0.3.0 series features complete. Supports 40+ legal form
   - Added 21 comprehensive tests (6 ULF, 7 negotiation, 8 versioning)
   - All conversions can now use ULF as lossless intermediate format
 
-### Real-Time Format Translation (v0.3.1)
-- [ ] Add live document format translation
-- [ ] Implement streaming conversion APIs
-- [ ] Add collaborative format editing
-- [ ] Create real-time format synchronization
-- [ ] Add multi-format document views
+### Real-Time Format Translation (v0.3.1) ✅ Complete
+- [x] Add live document format translation
+- [x] Implement streaming conversion APIs
+- [x] Add collaborative format editing
+- [x] Create real-time format synchronization
+- [x] Add multi-format document views
 
-### AI-Native Formats (v0.3.2)
-- [ ] Add LLM-native legal format
-- [ ] Implement embedding-based format
-- [ ] Add neural legal document format
-- [ ] Create attention-aware markup
-- [ ] Add semantic chunk format
+## COMPLETED (2026-06-14 — real-time/collaborative conversion engines)
 
-### Quantum-Safe Format Migration (v0.3.3)
-- [ ] Add post-quantum signed formats
-- [ ] Implement quantum-resistant checksums
-- [ ] Add long-term preservation formats
-- [ ] Create format archival strategies
-- [ ] Add cryptographic agility support
+All five v0.3.1 items implemented as **pure-Rust, offline** engines in a new
+`realtime/` module (the "real-time"/"collaborative" naming describes the
+incremental, low-latency, conflict-free-convergence *capability*, not a
+requirement for live networking — every engine is transport-agnostic and runs
+with no server). Built only on stable `legalis-core` + the existing workspace
+deps (`serde`, `serde_json`, `sha2`); no new dependency, no `scirs2`.
 
-### Cross-Reality Legal Formats (v0.3.4)
-- [ ] Add VR/AR legal annotation format
-- [ ] Implement 3D legal document format
-- [ ] Add holographic legal display format
-- [ ] Create spatial legal markup
-- [ ] Add metaverse-native legal formats
+- **Shared backbone** (`realtime/mod.rs`): `CanonicalDocument` — an ordered,
+  id-keyed collection of `DocumentRegion`s (one per `Statute`) with an
+  O(log n) index; content-addressed `region_fingerprint` (domain-separated
+  SHA-256 over canonical JSON) drives change detection; `RegionDelta`
+  (added/updated/removed/reordered) diffs two snapshots; `DocumentChange`
+  (Insert/Update/Remove/Move) is the serializable edit unit; `FormatPair`,
+  `ChangeKind`. 9 tests.
+- **Live document format translation** (`realtime/live_translate.rs`):
+  `LiveTranslator` — delta-driven incremental translator with a per-region
+  export cache keyed by fingerprint. `apply_change`/`apply_changes` re-translate
+  *only* the regions that actually changed (revert-in-batch ⇒ zero work);
+  `from_source` seeds from imported text; segmented output is reassembled in
+  document order. Property test: incremental output == from-scratch
+  translation. 7 tests.
+- **Streaming conversion APIs** (`realtime/streaming_convert.rs`):
+  `StreamingConverter` — chunked, bounded-memory format→format conversion with
+  an explicit state machine (`Idle → Streaming → Flushing → Done`/`Failed`).
+  `feed_chunk` accepts arbitrary byte windows and emits converted chunks at
+  record boundaries; the buffer is flushed at a threshold and force-split at a
+  hard cap, so peak memory is bounded regardless of document size
+  (`StreamMetrics::peak_buffer_bytes`). `convert_str_chunked` convenience.
+  7 tests (incl. mid-stream memory-bound assertion and chunked-vs-whole
+  equivalence).
+- **Collaborative format editing** (`realtime/collab.rs`): `CrdtDocument` — a
+  CRDT merge engine (RGA-ordered sequence + per-field last-writer-wins
+  registers + tombstones) over Lamport `Dot`s `(counter, replica)`. Inserts,
+  updates, deletes, and moves are commutative + idempotent, giving
+  **conflict-free convergence**: any two replicas observing the same operation
+  set compute the same document. `state_digest` proves convergence. 8 tests:
+  concurrent-insert convergence under reversed delivery, LWW update resolution,
+  monotone delete vs. concurrent update, 3-replica convergence under 4 delivery
+  permutations, concurrent-move convergence, idempotent redelivery,
+  snapshot/replay equivalence.
+- **Real-time format synchronization** (`realtime/sync.rs`): `FormatSyncEngine`
+  — keeps two *different-format* representations in sync by importing an edited
+  side, diffing it, replaying the delta as CRDT ops on a shared `CrdtDocument`,
+  and re-exporting *both* sides. Bidirectional (`Endpoint::A`/`B`);
+  `apply_remote_ops`/`snapshot_ops` are the hooks a transport would use;
+  `with_replica_id` keeps two engines' CRDT identities distinct. 6 tests incl.
+  two-engine convergence via op relay under concurrent edits.
+- **Multi-format document views** (`realtime/views.rs`): `MultiFormatView` —
+  projects one canonical document into N simultaneous format views that stay
+  mutually consistent; each view is refreshed incrementally (one re-render per
+  changed region per view); views can be added/removed at runtime and a
+  late-added view immediately matches the canonical state. Consistency property
+  test: every view == a from-scratch export of the canonical document. 6 tests.
+
+- **Wiring**: `pub mod realtime;` added to `lib.rs` (now ~1007 lines, well under
+  2000). Additive and backward-compatible — no existing API changed, no new
+  `LegalFormat` variant (these engines compose the existing converter), so the
+  exhaustive matches in `coverage.rs`/`enhanced.rs` are untouched.
+- **Files** (all < 2000 lines): `realtime/mod.rs` (626), `collab.rs` (635),
+  `live_translate.rs` (464), `streaming_convert.rs` (524), `sync.rs` (409),
+  `views.rs` (344).
+- **Tests**: 43 new (`700` total, up from `657`). `cargo nextest run -p
+  legalis-interop` → **700 passed, 0 failed**. `cargo clippy -p legalis-interop
+  --all-targets [--all-features] -- -D warnings` → **clean** (zero warnings).
+  No `unwrap`/`expect`/`panic!`/`todo!`/`unimplemented!`/`unreachable!` in
+  non-test code; tests use `expect` only.
+- **Deferred**: a live *network transport* (WebSocket/QUIC peer relay) for the
+  collaborative and synchronisation engines — the convergence logic
+  (CRDT + bidirectional propagation) is fully implemented and exercised offline;
+  only the wire shipping of `CrdtOp`s between physically-separate hosts is left,
+  because that requires a networking stack out of scope for an offline,
+  dependency-light interop crate. `CrdtOp`/`DocumentChange` are already
+  `Serialize`/`Deserialize`, so a transport can be layered on without engine
+  changes.
+
+### AI-Native Formats (v0.3.2) ✅ Complete
+- [x] Add LLM-native legal format
+- [x] Implement embedding-based format
+- [x] Add neural legal document format
+- [x] Create attention-aware markup
+- [x] Add semantic chunk format
+- **Implementation Details** (completed 2026-06-14):
+  - New module `formats_nextgen/` (mod + 5 submodules), all pure-Rust, scirs2-free,
+    deterministic, and dependency-free beyond serde/serde_json:
+    - `llm_native.rs` — `LlmNativeDocument`/`LlmBlock` with salience scoring and
+      token-budget-aware prompt ordering (`render_prompt`); JSON-with-provenance.
+    - `embedding.rs` — `EmbeddingDocument`/`EmbeddingRecord`/`RetrievalHit` with a
+      deterministic feature-hashing embedder and cosine-similarity `search` (no
+      external model).
+    - `neural.rs` — `NeuralDocument`/`NeuralNode`/`NeuralEdge`; node salience via
+      weighted PageRank over a semantic-similarity adjacency, plus derivation edges.
+    - `attention.rs` — `AttentionDocument`/`AttentionUnit`/`AttentionSpan`;
+      role-tagged spans with a softmax (TF-IDF) attention distribution and
+      cross-references; inline `⟦role|a=…⟧` markup.
+    - `semantic_chunk.rs` — `ChunkDocument`/`SemanticChunk`/`SemanticChunkConfig`;
+      overlap-controlled RAG chunking with stable content-addressed IDs.
+  - `mod.rs` shares `StructuredStatute` (lossless provenance backbone),
+    `HashingEmbedder`, `cosine_similarity`, `softmax`, condition/effect codecs,
+    `render_statute_markdown`, and token estimation.
+  - 5 new `LegalFormat` variants (`LlmNative`, `Embedding`, `NeuralDocument`,
+    `AttentionMarkup`, `SemanticChunk`) with extensions, `from_extension`, and
+    importer/exporter registration; schema-tagged JSON enables auto-detection.
+  - All five formats implement `FormatImporter`/`FormatExporter` with
+    round-trippable serialize/parse via embedded provenance.
+  - 53 new tests (11 shared utils + 7 LLM-native + 6 embedding + 8 neural +
+    6 attention + 8 semantic-chunk + 7 converter-level integration in
+    `ai_native_tests.rs`). Zero clippy warnings, no unwrap/expect in non-test code.
+
+### Quantum-Safe Format Migration (v0.3.3) ✅ Complete
+- [x] Add post-quantum signed formats
+- [x] Implement quantum-resistant checksums
+- [x] Add long-term preservation formats
+- [x] Create format archival strategies
+- [x] Add cryptographic agility support
+- **Implementation Details** (completed 2026-06-14):
+  - New module `future_proof/` (mod + 4 submodules), pure-Rust and `scirs2`-free,
+    deterministic and dependency-light (reuses the workspace's `sha2` crate,
+    enabled via `sha2.workspace = true`; no new workspace dependency):
+    - `mod.rs` — shared primitives: SHA-256/512/512-256 wrappers, a
+      length-prefixed domain-separated `tagged_hash`, constant-time comparison,
+      and hex codecs (`to_hex`/`from_hex`/`from_hex_array`).
+    - `checksum.rs` — `ChecksumAlgorithm` (SHA-256, SHA-512, SHA-512/256,
+      iterated SHA-512 hardening, and a SHA-512‖SHA-256 concatenation combiner)
+      plus `Checksum` with constant-time `verify`, `quantum_preimage_bits`
+      (Grover bound), and redundant `compute_set`/`verify_set` helpers.
+    - `hash_sig.rs` — a self-contained **Lamport one-time signature** with a
+      hash-committed public-key fingerprint (secret keys derived from a seed via
+      a PRF, so no `rand` dependency), lifted to a many-time `MerkleSigner`
+      (XMSS-style Merkle tree) with one-time-use enforcement and authentication
+      paths. Documented as a hash-based OTS, **not** a standardized PQ scheme.
+    - `agility.rs` — `AlgorithmRegistry` of digest/signature/KEM descriptors
+      (classical & quantum security bits, life-cycle status) with `recommended`
+      and `migration_target`; a versioned `CryptoEnvelope` with
+      `is_quantum_resistant`/`weaknesses`/`upgraded` (in-place scheme upgrade);
+      `CryptoSuite` presets; `SignatureScheme` (hash-based implemented; ML-DSA /
+      SLH-DSA / ML-KEM **deferred** as `AlgorithmStatus::Planned` — no heavy
+      lattice dependency added).
+    - `archive.rs` — `PreservationArchive`, a self-describing, BagIt-like
+      container with a manifest, lossless `StructuredStatute` payload (reused
+      from `formats_nextgen`), redundant fixity checksums, `MigrationRecord`
+      history, an optional post-quantum hash-based signature, and a crypto
+      envelope. Includes `verify_fixity`/`sign`/`verify_signature`,
+      `to_bagit_files`/`from_bagit_files`, and `ArchivalStrategy`
+      (minimal/standard/maximum-security presets) + `ArchivalPlan` dry-run
+      planning with quantum-resistance warnings.
+  - 1 new `LegalFormat` variant (`PreservationArchive`, extension `lpa.json`)
+    with `extension`/`from_extension` and importer/exporter registration; the
+    importer verifies fixity and signatures on import; schema-tagged JSON enables
+    auto-detection. `enhanced.rs` and `coverage.rs` exhaustive matches updated.
+  - 39 new tests (7 shared primitives + 6 checksum + 8 hash-signature +
+    6 agility + 12 archive/strategy/converter-integration; BagIt round-trip uses
+    `std::env::temp_dir()`). Zero clippy warnings (`-D warnings`, all features),
+    no unwrap/expect/panic in non-test code.
+
+### Cross-Reality Legal Formats (v0.3.4) ✅ Complete
+- [x] Add VR/AR legal annotation format
+- [x] Implement 3D legal document format
+- [x] Add holographic legal display format
+- [x] Create spatial legal markup
+- [x] Add metaverse-native legal formats
+- **Implementation Details** (completed 2026-06-14):
+  - New module `cross_reality/` (mod + 5 submodules), pure-Rust, `scirs2`-free,
+    deterministic, and dependency-free beyond serde/serde_json (no new workspace
+    dependency). Reuses `formats_nextgen::StructuredStatute` as the lossless
+    provenance backbone so every format round-trips the underlying `Statute` set.
+    - `mod.rs` — shared spatial primitives: `Vec3`, `Quaternion` (axis-angle +
+      Hamilton product), `Transform`, `Color` (+ hex), `Aabb`, `SpatialAnchor`
+      with `AnchorKind` (world/marker/plane/geo/face/object), `SceneLayout`
+      (grid/circle/helix/stack) with deterministic `layout_positions` /
+      `layout_transform` and `face_target_yaw`, plus `effect_color`,
+      `condition_salience`, `depth_parallax`, and `round3`.
+    - `vr_ar.rs` — `VrArScene`/`AnnotationAnchor`; spatially-anchored, effect-
+      coloured, salience-scaled, optionally-billboarded annotations with a
+      Markdown body and visibility range; schema-tagged JSON.
+    - `document_3d.rs` — `Scene3D`/`Node3D`/`SceneEdge`; a scene graph of statute
+      panels with derivation edges and an `Aabb`, plus an X3D-like XML projection
+      (`to_x3d`, XML-escaped, lossy visualisation view; JSON stays canonical).
+    - `holographic.rs` — `HologramDisplay`/`DepthLayer`/`HologramElement` with
+      `LightFieldParams`; salience-ordered depth-plane assignment, per-element
+      ring-spiral placement, depth-derived parallax, and luminance.
+    - `spatial_markup.rs` — `SpatialMarkupDocument`/`MarkupNode`; a compact,
+      fully-parseable textual DSL (`#SLM/v1`) encoding per-node transforms,
+      anchors, and the complete statute payload — lossless without a separate
+      provenance blob (`to_markup`/`from_markup`).
+    - `metaverse.rs` — `MetaverseScene`/`MetaverseEntity`/`Portal` with
+      `WorldMetadata`, `EntityModel`/`EntityPrimitive`, effect-derived
+      `InteractionVerb`s gated on preconditions, and lineage portals from
+      derivation links; schema-tagged JSON.
+  - 5 new `LegalFormat` variants (`VrArAnnotation`, `SpatialDocument3D`,
+    `Holographic`, `SpatialMarkup`, `MetaverseLegal`) with `extension`,
+    `from_extension`, importer/exporter registration, and full coverage in the
+    exhaustive matches (`coverage.rs` analyzers, `enhanced.rs` normalization).
+    Schema-tagged JSON (and the `#SLM` header) enable auto-detection.
+  - 42 new tests (11 shared primitives + 4 VR/AR + 5 3D-document + 5 holographic
+    + 6 spatial-markup + 5 metaverse + 6 converter-level integration in
+    `lib.rs`), all including round-trip coverage. Zero clippy warnings
+    (`-D warnings`, all features), no unwrap/expect/panic in non-test code.
+- **Deferred**: `Create spatial legal markup`'s nested/hierarchical grouping and
+  `metaverse-native`'s live avatar presence/networking are out of scope for an
+  offline serializer; the data model is implemented and the live transport is
+  left for a future real-time batch.

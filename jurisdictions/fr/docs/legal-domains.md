@@ -20,7 +20,7 @@ Legalis-FR implémente **11 domaines juridiques majeurs** couvrant le droit civi
 | **Droit Administratif** | CJA | 1 | 4 | 391 |
 | **Responsabilité Délictuelle** | Code civil | 3 | 9 | 391 |
 
-**Total** : 87 articles, 460+ tests, 17 539 lignes
+**Total** : 87 articles, 573 tests, 17 539 lignes
 
 ---
 

@@ -2,6 +2,8 @@
 
 Comprehensive Russian legal system implementation for the Legalis-RS ecosystem.
 
+**Version 0.1.6** — 12 modules, 80 tests passing, 0 warnings.
+
 ## Overview
 
 Legalis-RU (Российская Федерация) provides full support for Russian law, covering civil, criminal, labor, tax, company, competition, data protection, and intellectual property law. The crate offers bilingual support (Russian/English) and implements Russia's civil law system with post-Soviet characteristics.

@@ -14,7 +14,7 @@ Welcome to the **legalis-fr** documentation - a comprehensive Rust implementatio
 Legalis-FR is a production-ready Rust crate providing:
 
 - **11 legal domains** covering French civil law, labor law, constitutional law, and more
-- **524 comprehensive tests** ensuring legal accuracy
+- **573 comprehensive tests** ensuring legal accuracy
 - **Bilingual documentation** (French/English) with 69.7% doc-to-code ratio
 - **Legal Reasoning Engine** for advanced legal analysis and case evaluation
 - **Type-safe API** preventing invalid legal states at compile time

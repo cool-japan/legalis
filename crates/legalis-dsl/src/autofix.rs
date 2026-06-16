@@ -383,14 +383,77 @@ impl AutoFixer {
         fixes
     }
 
-    /// Checks for contradictory conditions
-    fn check_contradictions(&self, _conditions: &[ConditionNode], _statute_id: &str) -> Vec<Fix> {
-        // This is a simplified check - a full implementation would use SMT solver
-        // For now, we just check for obvious contradictions like "AGE > 18 AND AGE < 18"
+    /// Detects static contradictions in AND-conjunctions; does not recurse into Or/Not branches.
+    fn check_contradictions(&self, conditions: &[ConditionNode], statute_id: &str) -> Vec<Fix> {
+        let mut fixes = Vec::new();
 
-        // TODO: Implement proper contradiction detection
+        for top_condition in conditions {
+            // Flatten the And-tree into leaves; stop at Or/Not boundaries.
+            let mut leaves: Vec<&ConditionNode> = Vec::new();
+            flatten_and_leaves(top_condition, &mut leaves);
 
-        Vec::new()
+            // Group leaf nodes by field name.
+            let mut groups: HashMap<String, Vec<&ConditionNode>> = HashMap::new();
+            for leaf in &leaves {
+                match *leaf {
+                    ConditionNode::Comparison { field, .. }
+                    | ConditionNode::Between { field, .. }
+                    | ConditionNode::In { field, .. }
+                    | ConditionNode::InRange { field, .. }
+                    | ConditionNode::NotInRange { field, .. }
+                    | ConditionNode::Like { field, .. }
+                    | ConditionNode::Matches { field, .. } => {
+                        groups.entry(field.clone()).or_default().push(leaf);
+                    }
+                    // HasAttribute, TemporalComparison, And, Or, Not — no named field to group on.
+                    _ => {}
+                }
+            }
+
+            // Check each group for contradictions.
+            for (field, group) in &groups {
+                // Check standalone always-false nodes first.
+                for node in group.iter() {
+                    if is_standalone_always_false(node) {
+                        let original = format!("{:?}", node);
+                        fixes.push(Fix {
+                            description: format!(
+                                "Statute `{statute_id}`: conditions on `{field}` are contradictory and can never be satisfied"
+                            ),
+                            original,
+                            replacement: String::new(),
+                            location: None,
+                            category: FixCategory::Semantic,
+                            confidence: 0.90,
+                        });
+                    }
+                }
+
+                // Check pairwise contradictions between any two leaves in the group.
+                let len = group.len();
+                'outer: for i in 0..len {
+                    for j in (i + 1)..len {
+                        if are_pairwise_contradictory(group[i], group[j]) {
+                            let original = format!("{:?} AND {:?}", group[i], group[j]);
+                            fixes.push(Fix {
+                                description: format!(
+                                    "Statute `{statute_id}`: conditions on `{field}` are contradictory and can never be satisfied"
+                                ),
+                                original,
+                                replacement: String::new(),
+                                location: None,
+                                category: FixCategory::Semantic,
+                                confidence: 0.90,
+                            });
+                            // One fix per group is enough to signal the contradiction.
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+        }
+
+        fixes
     }
 
     /// Checks for redundant conditions
@@ -462,6 +525,182 @@ impl AutoFixer {
             fixes,
             by_category,
         }
+    }
+}
+
+/// Flattens a nested And-tree into leaf nodes.
+///
+/// Only recurses into `And` nodes. `Or` and `Not` nodes are treated as opaque
+/// leaves because they do not preserve the conjunction invariant needed for
+/// contradiction detection.
+fn flatten_and_leaves<'a>(node: &'a ConditionNode, out: &mut Vec<&'a ConditionNode>) {
+    match node {
+        ConditionNode::And(left, right) => {
+            flatten_and_leaves(left, out);
+            flatten_and_leaves(right, out);
+        }
+        other => out.push(other),
+    }
+}
+
+/// Returns true if a single node is trivially always false on its own.
+fn is_standalone_always_false(node: &ConditionNode) -> bool {
+    match node {
+        // Between { min, max } where min >= max is always false.
+        ConditionNode::Between { min, max, .. } => {
+            if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) = (min, max) {
+                return min_val >= max_val;
+            }
+            false
+        }
+        // In { values: [] } — the empty set is always false.
+        ConditionNode::In { values, .. } => values.is_empty(),
+        // InRange where min > max (exclusive bounds make this more complex).
+        ConditionNode::InRange {
+            min,
+            max,
+            inclusive_min,
+            inclusive_max,
+            ..
+        } => {
+            if let (ConditionValue::Number(min_val), ConditionValue::Number(max_val)) = (min, max) {
+                if !inclusive_min && !inclusive_max {
+                    return *max_val <= *min_val + 1;
+                }
+                return min_val >= max_val;
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Returns true when two leaf nodes in the same And-conjunction contradict each other.
+fn are_pairwise_contradictory(a: &ConditionNode, b: &ConditionNode) -> bool {
+    match (a, b) {
+        // Two comparisons on the same field.
+        (
+            ConditionNode::Comparison {
+                field: f1,
+                operator: op1,
+                value: v1,
+            },
+            ConditionNode::Comparison {
+                field: f2,
+                operator: op2,
+                value: v2,
+            },
+        ) if f1 == f2 => comparison_pair_contradictory(op1, v1, op2, v2),
+
+        // Between vs Comparison on same field.
+        (
+            ConditionNode::Between {
+                field: f1,
+                min,
+                max,
+            },
+            ConditionNode::Comparison {
+                field: f2,
+                operator: op,
+                value,
+            },
+        )
+        | (
+            ConditionNode::Comparison {
+                field: f2,
+                operator: op,
+                value,
+            },
+            ConditionNode::Between {
+                field: f1,
+                min,
+                max,
+            },
+        ) if f1 == f2 => between_vs_comparison_contradictory(min, max, op, value),
+
+        _ => false,
+    }
+}
+
+/// Core numeric-comparison contradiction check.
+fn comparison_pair_contradictory(
+    op1: &str,
+    v1: &ConditionValue,
+    op2: &str,
+    v2: &ConditionValue,
+) -> bool {
+    match (v1, v2) {
+        (ConditionValue::Number(n1), ConditionValue::Number(n2)) => {
+            // > X AND < Y where X >= Y
+            if (op1 == ">" || op1 == ">=") && (op2 == "<" || op2 == "<=") {
+                return n1 >= n2;
+            }
+            // < X AND > Y (symmetric)
+            if (op1 == "<" || op1 == "<=") && (op2 == ">" || op2 == ">=") {
+                return n2 >= n1;
+            }
+            // == X AND != X
+            if op1 == "==" && op2 == "!=" {
+                return n1 == n2;
+            }
+            if op1 == "!=" && op2 == "==" {
+                return n1 == n2;
+            }
+            // == X AND == Y where X != Y
+            if op1 == "==" && op2 == "==" {
+                return n1 != n2;
+            }
+            false
+        }
+        (ConditionValue::Boolean(b1), ConditionValue::Boolean(b2)) => {
+            // == true AND == false (or similar boolean contradictions)
+            if op1 == "==" && op2 == "==" {
+                return b1 != b2;
+            }
+            if op1 == "==" && op2 == "!=" {
+                return b1 == b2;
+            }
+            if op1 == "!=" && op2 == "==" {
+                return b1 == b2;
+            }
+            false
+        }
+        (ConditionValue::String(s1), ConditionValue::String(s2)) => {
+            // == "A" AND == "B" where A != B
+            if op1 == "==" && op2 == "==" {
+                return s1 != s2;
+            }
+            if op1 == "==" && op2 == "!=" {
+                return s1 == s2;
+            }
+            if op1 == "!=" && op2 == "==" {
+                return s1 == s2;
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Checks whether a Between range [min, max] contradicts a Comparison on the same field.
+fn between_vs_comparison_contradictory(
+    min: &ConditionValue,
+    max: &ConditionValue,
+    op: &str,
+    value: &ConditionValue,
+) -> bool {
+    if let (ConditionValue::Number(lo), ConditionValue::Number(hi), ConditionValue::Number(v)) =
+        (min, max, value)
+    {
+        match op {
+            // BETWEEN lo..hi AND field < v where v <= lo → impossible (all values in range >= lo)
+            "<" | "<=" => v <= lo,
+            // BETWEEN lo..hi AND field > v where v >= hi → impossible (all values in range <= hi)
+            ">" | ">=" => v >= hi,
+            _ => false,
+        }
+    } else {
+        false
     }
 }
 
@@ -649,5 +888,170 @@ mod tests {
 
         assert!(formatted.contains("Found 1 issues"));
         assert!(formatted.contains("Syntax"));
+    }
+
+    // ---- contradiction-detection tests ----
+
+    fn make_fixer() -> AutoFixer {
+        AutoFixer::new()
+    }
+
+    /// Helper: wrap two conditions in And(Box<left>, Box<right>)
+    fn and_cond(left: ConditionNode, right: ConditionNode) -> ConditionNode {
+        ConditionNode::And(Box::new(left), Box::new(right))
+    }
+
+    #[test]
+    fn contradictory_numeric_range_emits_fix() {
+        let fixer = make_fixer();
+        // field > 18 AND field < 18 → always false
+        let cond = and_cond(
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: ">".to_string(),
+                value: ConditionValue::Number(18),
+            },
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: "<".to_string(),
+                value: ConditionValue::Number(18),
+            },
+        );
+        let fixes = fixer.check_contradictions(&[cond], "S1");
+        assert_eq!(fixes.len(), 1, "expected exactly one fix");
+        assert_eq!(fixes[0].category, FixCategory::Semantic);
+    }
+
+    #[test]
+    fn equality_vs_inequality_emits_fix() {
+        let fixer = make_fixer();
+        // field == 5 AND field != 5 → always false
+        let cond = and_cond(
+            ConditionNode::Comparison {
+                field: "score".to_string(),
+                operator: "==".to_string(),
+                value: ConditionValue::Number(5),
+            },
+            ConditionNode::Comparison {
+                field: "score".to_string(),
+                operator: "!=".to_string(),
+                value: ConditionValue::Number(5),
+            },
+        );
+        let fixes = fixer.check_contradictions(&[cond], "S2");
+        assert_eq!(fixes.len(), 1, "expected exactly one fix");
+    }
+
+    #[test]
+    fn mutually_exclusive_equalities_emits_fix() {
+        let fixer = make_fixer();
+        // field == "A" AND field == "B" → always false
+        let cond = and_cond(
+            ConditionNode::Comparison {
+                field: "status".to_string(),
+                operator: "==".to_string(),
+                value: ConditionValue::String("A".to_string()),
+            },
+            ConditionNode::Comparison {
+                field: "status".to_string(),
+                operator: "==".to_string(),
+                value: ConditionValue::String("B".to_string()),
+            },
+        );
+        let fixes = fixer.check_contradictions(&[cond], "S3");
+        assert_eq!(fixes.len(), 1, "expected exactly one fix");
+    }
+
+    #[test]
+    fn empty_between_range_emits_fix() {
+        let fixer = make_fixer();
+        // Between { min: 10, max: 5 } → always false (min > max)
+        let cond = ConditionNode::Between {
+            field: "age".to_string(),
+            min: ConditionValue::Number(10),
+            max: ConditionValue::Number(5),
+        };
+        let fixes = fixer.check_contradictions(&[cond], "S4");
+        assert_eq!(
+            fixes.len(),
+            1,
+            "expected exactly one fix for reversed Between"
+        );
+    }
+
+    #[test]
+    fn disjoint_or_no_fix() {
+        let fixer = make_fixer();
+        // Or(field > 10, field < 5) — Or branches are not flattened, so no contradiction detected.
+        let cond = ConditionNode::Or(
+            Box::new(ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: ">".to_string(),
+                value: ConditionValue::Number(10),
+            }),
+            Box::new(ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: "<".to_string(),
+                value: ConditionValue::Number(5),
+            }),
+        );
+        let fixes = fixer.check_contradictions(&[cond], "S5");
+        assert_eq!(fixes.len(), 0, "Or branches must not trigger contradiction");
+    }
+
+    #[test]
+    fn non_contradictory_overlap_no_fix() {
+        let fixer = make_fixer();
+        // field >= 10 AND field <= 100 → valid (non-empty range)
+        let cond = and_cond(
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: ">=".to_string(),
+                value: ConditionValue::Number(10),
+            },
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: "<=".to_string(),
+                value: ConditionValue::Number(100),
+            },
+        );
+        let fixes = fixer.check_contradictions(&[cond], "S6");
+        assert_eq!(fixes.len(), 0, "valid range must not emit a fix");
+    }
+
+    #[test]
+    fn multiple_top_level_contradictions() {
+        let fixer = make_fixer();
+        // Two separate top-level conditions, each contradictory.
+        let cond1 = and_cond(
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: ">".to_string(),
+                value: ConditionValue::Number(18),
+            },
+            ConditionNode::Comparison {
+                field: "age".to_string(),
+                operator: "<".to_string(),
+                value: ConditionValue::Number(18),
+            },
+        );
+        let cond2 = and_cond(
+            ConditionNode::Comparison {
+                field: "score".to_string(),
+                operator: "==".to_string(),
+                value: ConditionValue::Number(1),
+            },
+            ConditionNode::Comparison {
+                field: "score".to_string(),
+                operator: "!=".to_string(),
+                value: ConditionValue::Number(1),
+            },
+        );
+        let fixes = fixer.check_contradictions(&[cond1, cond2], "S7");
+        assert_eq!(
+            fixes.len(),
+            2,
+            "expected one fix per contradictory top-level condition"
+        );
     }
 }

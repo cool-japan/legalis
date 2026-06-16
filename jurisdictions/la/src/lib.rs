@@ -230,6 +230,8 @@ pub mod banking_law;
 pub mod commercial_law;
 pub mod comparative;
 pub mod constitution;
+pub mod construction_law;
+pub mod consumer_protection_law;
 pub mod criminal_code;
 pub mod education_law;
 pub mod environmental_law;
@@ -238,15 +240,23 @@ pub mod forestry_law;
 pub mod general_provisions;
 pub mod health_law;
 pub mod inheritance;
+pub mod insurance_law;
+pub mod intellectual_property_law;
 pub mod labor_law;
 pub mod land_law;
 pub mod mining_law;
 pub mod obligations;
 pub mod oda;
 pub mod property;
+pub mod securities_law;
+pub mod statutes;
 pub mod tax_law;
+pub mod telecommunications_law;
 pub mod tourism_law;
 pub mod water_law;
+
+// Re-export Statute-based models and their legalis-dsl export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 // Re-export general provisions
 pub use general_provisions::{
@@ -1315,4 +1325,206 @@ pub use banking_law::{
     validate_str_reporting,
     validate_tier1_ratio,
     validate_usury,
+};
+
+// Re-export consumer protection law
+pub use consumer_protection_law::{
+    // Citation
+    CONSUMER_PROTECTION_LAW_CITATION,
+    // Complaint & status
+    ComplaintStatus as ConsumerComplaintStatus,
+    ConsumerComplaint,
+    ConsumerContract,
+    // Error types
+    ConsumerProtectionError,
+    ConsumerProtectionResult,
+    // Rights & obligations
+    ConsumerRight,
+    ContractTermType,
+    DisputeResolutionMethod as ConsumerDisputeResolutionMethod,
+    // Constants
+    FUNDAMENTAL_CONSUMER_RIGHTS_COUNT,
+    HazardSeverity,
+    ProductLabel,
+    ProductRecall,
+    ProductSafetyAssessment,
+    ProhibitedPractice,
+    REQUIRED_LABEL_LANGUAGE,
+    Redress,
+    RedressType as ConsumerRedressType,
+    SanctionType as ConsumerSanctionType,
+    SupplierObligation,
+    // Validators
+    validate_advertising,
+    validate_complaint as validate_consumer_complaint,
+    validate_consumer_contract,
+    validate_dispute_escalation as validate_consumer_dispute_escalation,
+    validate_product_label,
+    validate_product_recall,
+    validate_product_safety,
+    validate_redress as validate_consumer_redress,
+    validate_sanction as validate_consumer_sanction,
+    validate_supplier_obligation,
+};
+
+// Re-export insurance law
+pub use insurance_law::{
+    ClaimStatus as InsuranceClaimStatus,
+    // Constants
+    INSURANCE_CLASS_COUNT,
+    INSURANCE_LAW_CITATION,
+    // Types
+    InsuranceClaim,
+    InsuranceClass,
+    // Error types
+    InsuranceLawError,
+    InsurancePolicy,
+    InsuranceResult,
+    Insurer,
+    InsurerType,
+    Intermediary,
+    IntermediaryType,
+    MIN_SOLVENCY_RATIO_PERCENT,
+    MOTOR_THIRD_PARTY_COMPULSORY,
+    PolicyStatus,
+    // Validators
+    validate_claim,
+    validate_compulsory_insurance,
+    validate_indemnity_principle,
+    validate_insurer_license,
+    validate_intermediary,
+    validate_policy,
+    validate_solvency,
+};
+
+// Re-export telecommunications law
+pub use telecommunications_law::{
+    EquipmentTypeApproval,
+    InterconnectionRequest,
+    LICENSE_VALIDITY_YEARS as TELECOM_LICENSE_VALIDITY_YEARS,
+    LicenseCategory,
+    LicenseStatus as TelecomLicenseStatus,
+    MAX_CALL_DROP_RATE_PERMILLE,
+    MIN_SERVICE_AVAILABILITY_PERCENT,
+    OperatorType,
+    SPECTRUM_MAX_GHZ,
+    SPECTRUM_MAX_MHZ,
+    SPECTRUM_MIN_KHZ,
+    ServiceQuality,
+    ServiceType,
+    SpectrumAssignment,
+    TELECOMMUNICATIONS_LAW_CITATION,
+    Tariff,
+    TelecomLicense,
+    // Error types
+    TelecommunicationsLawError,
+    TelecommunicationsResult,
+    // Validators
+    validate_communication_confidentiality,
+    validate_equipment_type_approval,
+    validate_interconnection,
+    validate_license,
+    validate_service_quality,
+    validate_spectrum_assignment,
+    validate_spectrum_no_overlap,
+    validate_tariff,
+};
+
+// Re-export construction law
+pub use construction_law::{
+    BuildingPermit,
+    CONSTRUCTION_LAW_CITATION,
+    ConstructionCategory,
+    ConstructionContract,
+    // Error types
+    ConstructionLawError,
+    ConstructionProject,
+    ConstructionResult,
+    Contractor,
+    ContractorGrade,
+    DEFECTS_LIABILITY_PERIOD_MONTHS,
+    Inspection,
+    InspectionStage,
+    PermitStatus as ConstructionPermitStatus,
+    ProjectType as ConstructionProjectType,
+    WorkAcceptance,
+    // Validators
+    validate_building_permit,
+    validate_construction_authorized,
+    validate_contractor_grade,
+    validate_contractor_license,
+    validate_defects_liability,
+    validate_inspection_sequence,
+    validate_safety_plan,
+    validate_work_acceptance,
+};
+
+// Re-export securities law
+pub use securities_law::{
+    DisclosureEvent,
+    FOREIGN_OWNERSHIP_LIMIT_PERCENT,
+    ListedCompany,
+    ListingStatus,
+    MATERIAL_DISCLOSURE_DEADLINE_DAYS,
+    MIN_PUBLIC_FLOAT_PERCENT,
+    MarketParticipantType,
+    OfferingType,
+    ProhibitedConduct,
+    PublicOffering,
+    SECURITIES_LAW_CITATION,
+    SECURITY_TYPE_COUNT,
+    SecuritiesCompany,
+    // Error types
+    SecuritiesLawError,
+    SecuritiesResult,
+    SecuritiesTrade,
+    SecurityType,
+    // Validators
+    validate_disclosure,
+    validate_foreign_ownership as validate_securities_foreign_ownership,
+    validate_insider_trading,
+    validate_listing,
+    validate_market_manipulation,
+    validate_prospectus,
+    validate_public_offering,
+    validate_securities_company_license,
+    validate_trade,
+};
+
+// Re-export intellectual property law
+pub use intellectual_property_law::{
+    COPYRIGHT_TERM_AFTER_DEATH_YEARS,
+    CopyrightWork,
+    GeographicalIndication,
+    INDUSTRIAL_DESIGN_TERM_YEARS,
+    IP_LAW_CITATION,
+    IP_RIGHT_TYPE_COUNT,
+    IndustrialDesign,
+    IpApplicationStatus,
+    IpInfringement,
+    // Error types
+    IpLawError,
+    IpResult,
+    IpRightType,
+    LAYOUT_DESIGN_TERM_YEARS,
+    PATENT_TERM_YEARS,
+    PETTY_PATENT_TERM_YEARS,
+    PLANT_VARIETY_TERM_YEARS,
+    PatentApplication,
+    PlantVariety,
+    RegistrationStatus as IpRegistrationStatus,
+    TRADEMARK_TERM_YEARS,
+    TradeSecret,
+    TrademarkRegistration,
+    // Validators
+    validate_copyright,
+    validate_geographical_indication,
+    validate_industrial_design,
+    validate_infringement,
+    validate_patent_term,
+    validate_patentability,
+    validate_plant_variety,
+    validate_trade_secret,
+    validate_trademark_registrability,
+    validate_trademark_renewal,
 };

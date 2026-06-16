@@ -2,9 +2,167 @@
 
 ## Status Summary
 
-Version: 0.4.3 | Status: Stable | Tests: 81 Passing | Warnings: 0
+Version: 0.4.9 | Status: Stable | Tests: 247 Passing | Warnings: 0
 
-All v0.1.x, v0.2.x, v0.3.0-v0.3.9, and v0.4.0-v0.4.3 series features complete. Supports Solidity, Vyper, Move, Cairo, CosmWasm, Ink!, Sway, Clarity, and ZK targets. Account abstraction (ERC-4337), advanced security (including AI-assisted vulnerability detection and quantum-resistant patterns), L2 optimizations, cross-chain interoperability, DeFi primitives, performance optimizations (incremental compilation, streaming output, lazy evaluation), modern testing tools (including time-travel debugging), comprehensive documentation (threat modeling, incident response playbooks, audit preparation guides), quantum-resistant contracts (post-quantum signatures, lattice-based crypto, QKD integration, quantum-safe hashing), sovereign individual contracts (SSI, portable legal status, decentralized arbitration, personal legal agents), bio-digital contracts (biometric verification, DNA identity, health data oracles, genetic privacy, life event triggers), environmental smart contracts (carbon credit tokenization, IoT sensor integration, real-time monitoring, biodiversity offsets, circular economy tracking), metaverse legal infrastructure (virtual property rights, cross-metaverse asset portability, avatar identity and rights, virtual governance, immersive contract visualization), AI-powered legal automation (natural language contract generation, ML-based risk assessment, automated legal clause optimization, predictive compliance monitoring, intelligent contract auditing), regulatory compliance framework (SEC compliance templates, GDPR/privacy law enforcement, KYC/AML integration, MiCA regulation support, jurisdiction-specific adaptations), advanced DeFi protocols (flash loan attack prevention, MEV protection strategies, liquidation cascade prevention, fair launch mechanisms, impermanent loss mitigation), and enterprise integration (enterprise identity management, role-based access control, supply chain verification, audit trail generation, SLA enforcement contracts) all complete.
+All v0.1.x, v0.2.x, v0.3.0-v0.3.9, and v0.4.0-v0.4.3 series features complete. Supports Solidity, Vyper, Move, Cairo, CosmWasm, Ink!, Sway, Clarity, and ZK targets. Account abstraction (ERC-4337), advanced security (including AI-assisted vulnerability detection and quantum-resistant patterns), L2 optimizations, cross-chain interoperability, DeFi primitives, performance optimizations (incremental compilation, streaming output, lazy evaluation), modern testing tools (including time-travel debugging), comprehensive documentation (threat modeling, incident response playbooks, audit preparation guides), quantum-resistant contracts (post-quantum signatures, lattice-based crypto, QKD integration, quantum-safe hashing), sovereign individual contracts (SSI, portable legal status, decentralized arbitration, personal legal agents), bio-digital contracts (biometric verification, DNA identity, health data oracles, genetic privacy, life event triggers), environmental smart contracts (carbon credit tokenization, IoT sensor integration, real-time monitoring, biodiversity offsets, circular economy tracking), metaverse legal infrastructure (virtual property rights, cross-metaverse asset portability, avatar identity and rights, virtual governance, immersive contract visualization), AI-powered legal automation (natural language contract generation, ML-based risk assessment, automated legal clause optimization, predictive compliance monitoring, intelligent contract auditing), regulatory compliance framework (SEC compliance templates, GDPR/privacy law enforcement, KYC/AML integration, MiCA regulation support, jurisdiction-specific adaptations), advanced DeFi protocols (flash loan attack prevention, MEV protection strategies, liquidation cascade prevention, fair launch mechanisms, impermanent loss mitigation), and enterprise integration (enterprise identity management, role-based access control, supply chain verification, audit trail generation, SLA enforcement contracts) all complete. Real-world asset enhancement (real estate, commodity, intellectual-property NFT, revenue-sharing, and fractionalized-ownership tokenization) complete (v0.4.6). Dynamic contract evolution / governance & upgradability (on-chain timelocked upgrade governance, feature flags, A/B testing, gradual rollout, and emergency pause patterns) complete (v0.4.4). Autonomous contract management (self-healing finite state machine with autonomous checkpoint-restore and auto-resume, on-chain feedback-controller auto-optimization, token-bucket resource management with per-epoch budgets, self-instrumenting performance monitoring with EMA + health scores, and cost-optimizing batched execution with refund harvesting and base-fee deferral) complete (v0.4.8).
+
+## COMPLETED (2026-06-14 — modular builder + security detectors)
+
+Two new pure-Rust modules, every file < 600 lines, additive and backward-compatible.
+
+### Contract Composition (v0.4.7)
+
+New module `src/composition/` (`mod.rs` + 4 implementation files + `tests.rs`):
+
+- **Modular contract builder** — `ModularContractBuilder` + `ContractComponent`
+  (`builder.rs`). Composes a single Solidity contract from reusable component
+  mixins (imports / bases / state vars / events / modifiers / functions),
+  de-duplicating imports and bases, banner-commenting each contributing
+  component for traceability, rejecting exact-duplicate member declarations
+  (whitespace-normalised), and emitting the `is`-clause through the inheritance
+  optimizer so bases are in C3 order.
+- **Contract templates library** — `TemplateLibrary` + `ContractTemplate` +
+  `TemplateParam` + `ParamKind` (`templates.rs`). Parameterized `{{placeholder}}`
+  templates with *typed* parameter validation (`Identifier`, `UnsignedInt`,
+  `Address`, `Text`, `Boolean`), default values, unknown-key rejection and an
+  unexpanded-placeholder guard. Ships a curated builtin set
+  (`with_builtins`): a capped/ownable ERC-20, a role-gated pausable
+  SafeERC20/ReentrancyGuard vault, and a timelocked escrow — all emitting
+  compile-ready NatSpec'd Solidity.
+- **Contract inheritance optimizer** — `InheritanceHierarchy` + `InheritanceNode`
+  (`inheritance.rs`). Exact **C3 linearization** (the same MRO algorithm
+  Solidity/Python use), producing the full MRO of any contract and an optimized
+  most-base-first direct-base list with transitively-redundant bases removed.
+  Inconsistent hierarchies and parent cycles are reported as errors (matching
+  Solidity's "linearization impossible").
+- **Dependency management** — `DependencyGraph` (`dependencies.rs`). Tracks
+  inter-contract "depends-on" edges and produces a deterministic, insertion-stable
+  Kahn topological deployment order, with cycle detection and transitive-closure
+  queries.
+
+`drag-and-drop contract assembly` deferred (UI; no front-end runtime in a
+library crate).
+
+### Advanced Security analyzers (v0.4.9)
+
+New module `src/security_analysis/` (`mod.rs` + 5 detector files + `tests.rs`):
+
+- Shared structured result types: `SecurityFinding` (category + `rule_id` +
+  `Severity` + explanation + remediation + optional source line),
+  `FindingCategory`, `SecurityScan` (severity-sorted findings + `0..=100`
+  risk score), and the `analyze_security` orchestrator (EVM-targets only;
+  non-EVM returns a clean perfect-score scan). Reuses the crate's existing
+  `Severity` enum.
+- **Runtime exploit detection** (`runtime_exploit.rs`): `tx.origin` auth,
+  unguarded `delegatecall` forwarding caller data, `selfdestruct`, predictable
+  block-entropy randomness, unchecked low-level `call`/`send`, and unrestricted
+  arbitrary-call sinks.
+- **Honeypot detection** (`honeypot.rs`): owner/whitelist-only transfer gates
+  with no opt-in, blacklist transfer traps, uncapped owner-settable sell tax,
+  fake (no-value-transfer) withdraw/claim, and unconditional-revert transfer
+  paths.
+- **Rug-pull prevention** (`rug_pull.rs`): uncapped owner mint, owner
+  whole-balance drain, uncapped fee setter, upgradeable proxy without an upgrade
+  timelock, and zero-able max-tx freeze.
+- **Sandwich-attack mitigation** (`sandwich.rs`): swap/reserve-pricing flows
+  lacking an enforced slippage bound or deadline, and spot-reserve pricing
+  without a TWAP — each finding suggests slippage bounds / deadlines / private
+  mempool / TWAP mitigations.
+- **Front-running protection** (`front_running.rs`): first-caller rewards,
+  plaintext-secret submissions, open-bid auctions, and the ERC-20 approve race —
+  each suggesting commit-reveal / sealed-bid / increaseAllowance mitigations.
+
+**Tests:** 82 new `#[test]`s (165 → 247 total), including positive (vulnerable)
+*and* negative (safe) fixtures for every detector and explicit no-false-positive
+assertions against the crate's own hardened generators/templates.
+`cargo clippy -p legalis-chain --all-targets -- -D warnings` is clean; all
+doctests pass.
+
+---
+
+### 2026-06-14 — Autonomous Management (v0.4.8) COMPLETED
+
+New module `src/autonomous/` (`mod.rs` + 5 generator files + `tests.rs`, every file < 800 lines):
+
+- **Config types:** `SelfHealingConfig`, `AutoOptimizerConfig`, `ResourceManagerConfig`,
+  `PerformanceMonitorConfig`, `CostOptimizerConfig`, plus supporting enums `HealthState`,
+  `ControlSense` and the `HealthInvariant` record.
+- **Control-domain math (pure Rust, validated before any codegen):** `next_health_state`
+  (the `Healthy -> Degraded -> Recovering -> Healthy` FSM with cool-down auto-resume),
+  `classify_in_band`, `adjust_parameter` + `clamp_value` (bounded step/feedback controller),
+  `token_bucket_available` + `can_consume` + `epoch_index` (rate-limit + budget math),
+  `ema_update` + `health_score` (monitoring aggregates), `batch_savings` + `should_defer`
+  (cost heuristics); `invariant_constant_name` / `operation_constant_name` identifier
+  sanitisers (reusing the evolution module's `sanitize_identifier`).
+- **Generators on `ContractGenerator`** emitting EVM (Solidity) source and composing across
+  the EVM-family targets (reusing `is_evm_target`): `generate_self_healing` (autonomous
+  breach-detect → checkpoint-restore → auto-resume, distinct from the guardian-triggered
+  emergency pause), `generate_auto_optimizer` (runtime feedback controller, distinct from the
+  compile-time gas hints), `generate_resource_manager` (global/per-caller token bucket +
+  per-epoch budget), `generate_performance_monitor` (self-instrumenting `measured` modifier
+  with EMA/min/max + optional health score, distinct from the domain-specific compliance/
+  environmental monitors), `generate_cost_optimizer` (batched multicall + storage-refund
+  harvest + base-fee guard).
+- **Quality:** autonomous recovery needs no privileged operator in the hot path;
+  ReentrancyGuard + CEI on the keeper-rewarded and batched-call paths; bounded controller
+  steps; lazy-refill buckets; security/gas notes embedded as NatSpec. On-chain routines
+  (`_transition`, `_adjust`, `_available`, `_ema`, `estimateSavings`, `_shouldDefer`) mirror
+  the pure-Rust math for parity. Non-EVM targets return a `ChainError::GenerationError`.
+- **Tests:** 26 new `#[test]`s (139 -> 165 total). `cargo clippy -p legalis-chain
+  --all-targets -- -D warnings` is clean; all doctests pass.
+
+---
+
+### 2026-06-14 — Dynamic Contract Evolution / Governance & Upgradability (v0.4.4) COMPLETED
+
+New module `src/evolution/` (`mod.rs` + 5 generator files + `tests.rs`):
+
+- **Config types:** `UpgradeGovernanceConfig`, `FeatureFlagConfig`, `AbTestConfig`,
+  `GradualRolloutConfig`, `EmergencyPauseConfig`, plus supporting enums `ProxyKind`,
+  `FlagAdminModel`, `VariantAssignment`, `RolloutStrategy`, and the `FeatureFlag` /
+  `AbVariant` records.
+- **Operational-domain math (pure Rust, validated before any codegen):**
+  `validate_upgrade_governance`, `validate_feature_flags`, `validate_ab_variants`,
+  `validate_gradual_rollout`, `validate_emergency_pause`; `assign_variant` +
+  `cumulative_thresholds` (cumulative-weight bucketing with on-chain parity);
+  `rollout_basis_points_at` + `is_in_rollout_bucket` (linear schedule parity);
+  `quorum_votes`; `flag_constant_name` / `scope_constant_name` identifier sanitisers.
+- **Generators on `ContractGenerator`** emitting EVM (Solidity) source and composing
+  across the EVM-family targets (reusing `is_evm_target`): `generate_upgrade_governance`
+  (timelocked, token-weighted UUPS/Transparent proxy upgrades — distinct from the
+  general DAO governor), `generate_feature_flags` (owner/role admin, per-address
+  overrides, global kill switch), `generate_ab_test` (deterministic/sticky variant
+  router with conversion metrics + routing), `generate_gradual_rollout` (linear/manual/
+  canary with guardian rollback), `generate_emergency_pause` (tiered, guardian-pause /
+  governance-unpause, auto-expiry, unpause cool-down).
+- **Quality:** snapshot-based voting (anti-flash-loan), CEI + ReentrancyGuard on the
+  upgrade execution path, auto-expiring pauses (no permanent freeze), separation of
+  duty between guardians and governance; security/gas notes embedded as NatSpec.
+  Non-EVM targets return a `ChainError::GenerationError`.
+- **Tests:** 29 new `#[test]`s (110 -> 139 total). `cargo clippy -p legalis-chain
+  --all-targets -- -D warnings` is clean; all doctests pass.
+
+---
+
+### 2026-06-14 — Real-World Asset Enhancement (v0.4.6) COMPLETED
+
+New module `src/tokenization/` (`mod.rs` + 5 generator files + `tests.rs`, every file < 600 lines):
+
+- **Config types:** `RealEstateToken`, `CommodityToken`, `IpNft`, `RevenueShareContract`,
+  `FractionalOwnership`, plus supporting enums `PropertyType`, `CommodityType`, `IpAssetType`,
+  `RedemptionPolicy`, `RevenueDistributionFrequency`.
+- **Legal-domain math (pure Rust, validated before any codegen):** `validate_ownership_allocations`,
+  `distribute_revenue` (largest-remainder / dust-free pro-rata apportionment), `price_per_share`,
+  `OwnershipAllocation`, `RevenueDistribution`, `BASIS_POINTS_DENOMINATOR`.
+- **Generators on `ContractGenerator`** emitting EVM (Solidity) source and composing across the
+  EVM-family targets (Solidity + zkSync Era / Base / Polygon zkEVM / Scroll / Linea / Avalanche
+  Subnet): `generate_real_estate_token`, `generate_commodity_token`, `generate_ip_nft`,
+  `generate_revenue_share`, `generate_fractional_ownership`.
+- **Quality:** contracts use Ownable2Step, ReentrancyGuard + CEI pull-payments, magnified-dividend
+  accounting, EIP-2981 royalties, and Chainlink proof-of-reserves; security/gas notes embedded as
+  NatSpec. Non-EVM targets return a `ChainError::GenerationError`.
+- **Tests:** 29 new `#[test]`s (81 -> 110 total). `cargo clippy -p legalis-chain --all-targets --
+  -D warnings` is clean; all doctests pass.
 
 ---
 
@@ -416,43 +574,43 @@ All v0.1.x, v0.2.x, v0.3.0-v0.3.9, and v0.4.0-v0.4.3 series features complete. S
 - [x] Add SLA enforcement contracts
 
 ### Dynamic Contract Evolution (v0.4.4)
-- [ ] Add on-chain governance for upgrades
-- [ ] Implement feature flags
-- [ ] Add A/B testing for contracts
-- [ ] Create gradual rollout mechanisms
-- [ ] Add emergency pause patterns
+- [x] Add on-chain governance for upgrades
+- [x] Implement feature flags
+- [x] Add A/B testing for contracts
+- [x] Create gradual rollout mechanisms
+- [x] Add emergency pause patterns
 
 ### Enhanced Privacy Features (v0.4.5)
-- [ ] Add homomorphic encryption support
-- [ ] Implement secure multi-party computation
-- [ ] Add private voting mechanisms
-- [ ] Create confidential transactions
-- [ ] Add privacy-preserving analytics
+- [ ] Add homomorphic encryption support — DEFERRED: requires a specialized FHE library (e.g. lattice-based TFHE/CKKS) that is not in the workspace; legalis-chain may depend only on legalis-core and cannot add heavy external crypto crates.
+- [ ] Implement secure multi-party computation — DEFERRED: requires a specialized MPC/secret-sharing framework not available in the workspace; out of reach for a pure-Rust codegen crate with no new external dependencies.
+- [ ] Add private voting mechanisms — DEFERRED: a genuine implementation needs an on-chain commitment primitive; legalis-chain does not currently depend on sha2/keccak in Rust and the workspace policy forbids adding it here. (Tracked for a future iteration once a hashing dependency is admitted to this crate.)
+- [ ] Create confidential transactions — DEFERRED: needs Pedersen commitments + range proofs (bulletproofs); no such crate is in the workspace and none may be added to legalis-chain.
+- [ ] Add privacy-preserving analytics — DEFERRED: depends on the confidential-transaction / MPC primitives above, which are themselves deferred for lack of workspace crypto.
 
 ### Real-World Asset Enhancement (v0.4.6)
-- [ ] Add real estate tokenization
-- [ ] Implement commodity tokenization
-- [ ] Add intellectual property NFTs
-- [ ] Create revenue-sharing contracts
-- [ ] Add fractionalized ownership
+- [x] Add real estate tokenization
+- [x] Implement commodity tokenization
+- [x] Add intellectual property NFTs
+- [x] Create revenue-sharing contracts
+- [x] Add fractionalized ownership
 
-### Contract Composition (v0.4.7)
-- [ ] Add modular contract builder
-- [ ] Implement contract templates library
-- [ ] Add drag-and-drop contract assembly
-- [ ] Create contract inheritance optimizer
-- [ ] Add dependency management
+### Contract Composition (v0.4.7) — COMPLETED 2026-06-14
+- [x] Add modular contract builder
+- [x] Implement contract templates library
+- [ ] Add drag-and-drop contract assembly — DEFERRED: requires an interactive UI / visual editor, which is out of scope for this pure-Rust library crate (no front-end runtime available).
+- [x] Create contract inheritance optimizer
+- [x] Add dependency management
 
-### Autonomous Management (v0.4.8)
-- [ ] Add self-healing contracts
-- [ ] Implement automatic optimization
-- [ ] Add resource management
-- [ ] Create performance monitoring
-- [ ] Add cost optimization
+### Autonomous Management (v0.4.8) — COMPLETED 2026-06-14
+- [x] Add self-healing contracts
+- [x] Implement automatic optimization
+- [x] Add resource management
+- [x] Create performance monitoring
+- [x] Add cost optimization
 
-### Advanced Security (v0.4.9)
-- [ ] Add runtime exploit detection
-- [ ] Implement honeypot detection
-- [ ] Add rug pull prevention
-- [ ] Create sandwich attack mitigation
-- [ ] Add front-running protection
+### Advanced Security (v0.4.9) — COMPLETED 2026-06-14
+- [x] Add runtime exploit detection
+- [x] Implement honeypot detection
+- [x] Add rug pull prevention
+- [x] Create sandwich attack mitigation
+- [x] Add front-running protection

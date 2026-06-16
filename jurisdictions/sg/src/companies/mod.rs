@@ -120,21 +120,25 @@ pub use types::{
     Shareholder,
 };
 pub use validator::{
-    ValidationReport, validate_agm_requirement, validate_annual_return_deadline,
-    validate_company_formation, validate_director_eligibility,
-    validate_resident_director_requirement, validate_share_capital, validate_shareholder_ownership,
+    SECRETARY_APPOINTMENT_DEADLINE_MONTHS, ValidationReport, validate_agm_requirement,
+    validate_annual_return_deadline, validate_company_formation,
+    validate_company_secretary_requirement, validate_director_disqualification,
+    validate_director_eligibility, validate_resident_director_requirement, validate_share_capital,
+    validate_shareholder_ownership,
 };
 
 // Re-export ACRA utilities
 pub use acra::{
-    BizFileStatus, BizFileSubmission, FilingRequirement, FilingType, RegistrationStatus, UenType,
-    generate_uen, is_valid_company_name, validate_company_name, validate_uen,
+    BizFileStatus, BizFileSubmission, FilingRequirement, FilingType, RegistrationStatus, UenFormat,
+    UenType, classify_uen, generate_uen, is_valid_company_name, validate_company_name,
+    validate_uen,
 };
 
 // Re-export governance utilities
 pub use governance::{
     AgendaItem, AnnualGeneralMeeting, Attendee, AttendeeRole, BoardMeeting, NoticeRequirement,
-    Resolution, ResolutionType, VotingResult, calculate_annual_return_deadline,
+    Resolution, ResolutionType, VotingResult, agm_deadline_months, calculate_agm_deadline_from_fye,
+    calculate_annual_return_deadline, calculate_annual_return_deadline_from_fye,
     calculate_first_agm_deadline, calculate_subsequent_agm_deadline, days_until_agm_due,
-    is_agm_overdue, is_annual_return_overdue, is_sufficient_notice,
+    is_agm_overdue, is_agm_overdue_from_fye, is_annual_return_overdue, is_sufficient_notice,
 };

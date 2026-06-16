@@ -8,6 +8,8 @@
 # Note: cargo publish builds with default features only.
 # Z3 and other optional dependencies are not required.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 CRATES=(
     # Level 1: Foundation
     "crates/legalis-core"
@@ -66,7 +68,7 @@ for i in "${!CRATES[@]}"; do
 
     echo "[$((i+1))/${#CRATES[@]}] Testing: $crate_name"
 
-    cd "/Users/kitasan/work/legalis/$crate" || {
+    cd "$SCRIPT_DIR/$crate" || {
         echo "  ❌ Directory not found: $crate"
         failed_crates+=("$crate_name (directory not found)")
         continue
@@ -97,7 +99,7 @@ if [[ ${#failed_crates[@]} -eq 0 ]]; then
     echo "✅ All crates passed dry-run!"
     echo ""
     echo "You can now run the actual publish script:"
-    echo "  /Users/kitasan/work/pub_legalis.sh"
+    echo "  ../pub_legalis.sh"
 else
     echo "❌ The following crates failed:"
     for crate in "${failed_crates[@]}"; do

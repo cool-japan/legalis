@@ -31,7 +31,7 @@
 
 use super::error::{CompaniesError, Result};
 use super::types::*;
-use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Months, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Validation report with detailed compliance information
@@ -232,7 +232,7 @@ pub fn validate_company_formation(company: &Company) -> Result<ValidationReport>
 /// Validates director eligibility
 ///
 /// Checks if a person is eligible to be appointed as director:
-/// - Not disqualified under s. 148, 149, or 155
+/// - Not disqualified under s. 148, 149, 154, or 155
 /// - At least 18 years old (s. 145(2))
 ///
 /// ## Examples
@@ -257,7 +257,7 @@ pub fn validate_director_eligibility(director: &Director) -> Result<()> {
         DisqualificationStatus::BankruptcyDisqualification { .. } => {
             return Err(CompaniesError::DirectorDisqualified {
                 name: director.name.clone(),
-                reason: "Undischarged bankrupt (s. 149)".to_string(),
+                reason: "Undischarged bankrupt (s. 148)".to_string(),
             });
         }
         DisqualificationStatus::CourtOrderDisqualification { reason, .. } => {
@@ -268,6 +268,42 @@ pub fn validate_director_eligibility(director: &Director) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Validates a director's disqualification status *as at a given date*.
+///
+/// Unlike [`validate_director_eligibility`], which rejects any recorded
+/// disqualification regardless of when it occurred, this function honours the
+/// duration of each disqualifying ground and treats the director as eligible
+/// once the relevant period has elapsed:
+///
+/// - **s. 148** — undischarged bankrupt (in force until discharge);
+/// - **s. 149 / s. 155** — Court order (in force until its end date, or
+///   indefinitely);
+/// - **s. 154** — conviction for fraud or dishonesty (generally 5 years).
+///
+/// ## Examples
+///
+/// ```
+/// use legalis_sg::companies::*;
+/// use chrono::Utc;
+///
+/// let director = Director::new("John Tan", "S1234567A", true);
+/// validate_director_disqualification(&director, Utc::now())?;
+/// # Ok::<(), legalis_sg::companies::CompaniesError>(())
+/// ```
+pub fn validate_director_disqualification(director: &Director, as_of: DateTime<Utc>) -> Result<()> {
+    if director.disqualification_status.is_active(as_of) {
+        let section = director
+            .disqualification_status
+            .statute_section()
+            .unwrap_or("CA s. 148/149/154/155");
+        return Err(CompaniesError::DirectorDisqualified {
+            name: director.name.clone(),
+            reason: format!("disqualification in force ({section})"),
+        });
+    }
     Ok(())
 }
 
@@ -292,6 +328,97 @@ pub fn validate_resident_director_requirement(directors: &[Director]) -> Result<
     if !directors.iter().any(|d| d.is_resident_director) {
         return Err(CompaniesError::NoResidentDirector);
     }
+    Ok(())
+}
+
+/// Number of months within which a company secretary must be appointed, and the
+/// maximum period the office of secretary may remain vacant.
+///
+/// Source: Companies Act 1967 s. 171(1) — the office of secretary "shall not be
+/// left vacant for more than 6 months at any one time".
+pub const SECRETARY_APPOINTMENT_DEADLINE_MONTHS: u32 = 6;
+
+/// Validates the company secretary requirement (s. 171) as at a given date.
+///
+/// To the extent determinable from the [`Company`] record, this checks that:
+///
+/// - the office of secretary has not been left vacant for more than 6 months
+///   since incorporation (s. 171(1));
+/// - where the company has a sole director, that director is not also the sole
+///   secretary (s. 171(1E));
+/// - for a public company, the secretary is professionally qualified
+///   (s. 171(1AA)).
+///
+/// Company types that do not require a secretary (e.g. sole proprietorships)
+/// always pass.
+///
+/// ## Examples
+///
+/// ```
+/// use legalis_sg::companies::*;
+/// use chrono::Utc;
+///
+/// let mut company = Company::new(
+///     "202401234A",
+///     "Tech Pte Ltd",
+///     CompanyType::PrivateLimited,
+///     Address::singapore("1 Raffles Place", "048616"),
+/// );
+/// company.company_secretary = Some(CompanySecretary::new("Mary Tan", "S7654321B"));
+/// validate_company_secretary_requirement(&company, Utc::now())?;
+/// # Ok::<(), legalis_sg::companies::CompaniesError>(())
+/// ```
+pub fn validate_company_secretary_requirement(
+    company: &Company,
+    as_of: DateTime<Utc>,
+) -> Result<()> {
+    if !company.company_type.requires_company_secretary() {
+        return Ok(());
+    }
+
+    let secretary = match &company.company_secretary {
+        None => {
+            // Vacancy is permitted for up to 6 months from incorporation (s. 171(1)).
+            if let Some(deadline) = company
+                .registration_date
+                .checked_add_months(Months::new(SECRETARY_APPOINTMENT_DEADLINE_MONTHS))
+                && as_of > deadline
+            {
+                let days_overdue = (as_of - deadline).num_days();
+                return Err(CompaniesError::CompanySecretaryVacancyExceeded { days_overdue });
+            }
+            return Ok(());
+        }
+        Some(secretary) => secretary,
+    };
+
+    // s. 171(1E): a sole director may not also be the company secretary.
+    if company.directors.len() == 1
+        && let Some(director_id) = company.directors[0].nric_fin.as_deref()
+        && director_id == secretary.nric_fin
+    {
+        return Err(CompaniesError::ValidationError {
+            message: format!(
+                "Sole director '{}' cannot also be the company secretary (CA s. 171(1E))",
+                company.directors[0].name
+            ),
+        });
+    }
+
+    // s. 171(1AA): a public company's secretary must be professionally qualified.
+    if matches!(
+        company.company_type,
+        CompanyType::PublicLimited | CompanyType::PublicListedCompany
+    ) && !secretary.qualified
+    {
+        return Err(CompaniesError::ValidationError {
+            message: format!(
+                "Public company secretary '{}' must be professionally qualified (CA s. 171(1AA))",
+                secretary.name
+            ),
+        });
+    }
+
     Ok(())
 }
 
@@ -404,17 +531,13 @@ pub fn validate_annual_return_deadline(company: &Company) -> Result<DateTime<Utc
     Ok(deadline)
 }
 
-/// Validates UEN (Unique Entity Number) format
+/// Validates UEN (Unique Entity Number) format.
 ///
-/// UEN format: 9-10 alphanumeric characters
-/// Examples: "202401234A", "53123456B"
+/// Delegates to [`crate::companies::acra::classify_uen`], which recognises
+/// ACRA's documented business (`NNNNNNNNC`), local-company (`YYYYNNNNNC`) and
+/// other-entity (`(T|S|R)YYTTNNNNC`) formats.
 fn is_valid_uen(uen: &str) -> bool {
-    if uen.len() < 9 || uen.len() > 10 {
-        return false;
-    }
-
-    // Must be alphanumeric
-    uen.chars().all(|c| c.is_ascii_alphanumeric())
+    super::acra::classify_uen(uen).is_some()
 }
 
 /// Validates share capital structure
@@ -585,5 +708,101 @@ mod tests {
         // AGM more than 15 months ago - should fail
         let old_agm = Utc::now() - Duration::days(500);
         assert!(validate_agm_requirement(&company, old_agm).is_err());
+    }
+
+    #[test]
+    fn test_validate_company_secretary_within_grace() {
+        // Freshly incorporated company with no secretary is within the 6-month grace.
+        let company = create_test_company();
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_company_secretary_vacancy_exceeded() {
+        let mut company = create_test_company();
+        company.registration_date = Utc::now() - Duration::days(250); // > 6 months ago
+        match validate_company_secretary_requirement(&company, Utc::now()) {
+            Err(CompaniesError::CompanySecretaryVacancyExceeded { days_overdue }) => {
+                assert!(days_overdue > 0);
+            }
+            other => panic!("Expected CompanySecretaryVacancyExceeded, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_validate_company_secretary_sole_director_conflict() {
+        // Sole director (John Tan, S1234567A) cannot also be the secretary (s. 171(1E)).
+        let mut company = create_test_company();
+        company.company_secretary = Some(CompanySecretary::new("John Tan", "S1234567A"));
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_err());
+    }
+
+    #[test]
+    fn test_validate_company_secretary_distinct_ok() {
+        let mut company = create_test_company();
+        company.company_secretary = Some(CompanySecretary::new("Mary Lim", "S7654321B"));
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_company_secretary_not_required_for_sole_prop() {
+        let company = Company::new(
+            "53123456B",
+            "Hawker Stall",
+            CompanyType::SoleProprietorship,
+            Address::singapore("1 Food St", "123456"),
+        );
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_company_secretary_public_must_be_qualified() {
+        let mut company = Company::new(
+            "202401234A",
+            "Big Corp Ltd",
+            CompanyType::PublicLimited,
+            Address::singapore("1 Raffles Place", "048616"),
+        );
+        company
+            .directors
+            .push(Director::new("Dir A", "S1111111A", true));
+        company
+            .directors
+            .push(Director::new("Dir B", "S2222222B", true));
+
+        // Unqualified secretary fails for a public company (s. 171(1AA)).
+        company.company_secretary = Some(CompanySecretary::new("Sec C", "S3333333C"));
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_err());
+
+        // Qualified secretary passes.
+        let mut qualified = CompanySecretary::new("Sec C", "S3333333C");
+        qualified.qualified = true;
+        company.company_secretary = Some(qualified);
+        assert!(validate_company_secretary_requirement(&company, Utc::now()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_director_disqualification_expired() {
+        let now = Utc::now();
+        let mut director = Director::new("Alex Tan", "S3456789C", true);
+        director.disqualification_status = DisqualificationStatus::ConvictionDisqualification {
+            conviction_date: now - Duration::days(2000),
+            offense: "Fraud".to_string(),
+            disqualification_until: now - Duration::days(1),
+        };
+        // Expired → eligible now.
+        assert!(validate_director_disqualification(&director, now).is_ok());
+        // Still in force 10 days ago → error.
+        assert!(validate_director_disqualification(&director, now - Duration::days(10)).is_err());
+    }
+
+    #[test]
+    fn test_validate_director_disqualification_active_bankruptcy() {
+        let now = Utc::now();
+        let mut director = Director::new("Ben Lim", "S4567890D", true);
+        director.disqualification_status = DisqualificationStatus::BankruptcyDisqualification {
+            bankruptcy_date: now - Duration::days(10),
+        };
+        assert!(validate_director_disqualification(&director, now).is_err());
     }
 }

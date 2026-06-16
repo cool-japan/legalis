@@ -5,6 +5,20 @@ All notable changes to `legalis-jp` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-06-16
+
+### Changed
+- **Workspace version alignment**: `legalis-jp` now ships as part of the unified Legalis-RS `0.1.6` workspace release (`version.workspace = true`). All previously developed law domains and features remain available unchanged.
+
+### Ecosystem
+- **CUDA Acceleration**: GPU-accelerated compute paths added across the Legalis-RS ecosystem.
+- **legalis-api**: Strengthened security and governance controls.
+- **legalis-audit**: Expanded auditing capabilities.
+- **OxiSQL**: Migrated to a pure-Rust SQL backend.
+
+### Notes
+- No breaking changes to `legalis-jp` public APIs in this release.
+
 ## [0.2.0] - 2026-01-09
 
 ### Added
@@ -132,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.1.6]: https://github.com/cool-japan/legalis/compare/v0.2.0...v0.1.6
 [0.2.0]: https://github.com/your-repo/legalis/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/your-repo/legalis/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/your-repo/legalis/releases/tag/v0.1.0

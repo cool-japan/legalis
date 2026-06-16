@@ -383,6 +383,7 @@ const filterSync = new DashboardFilterSync();
     }
 }
 /// Timeline visualization for temporal statutes.
+#[derive(Debug, Clone)]
 pub struct Timeline {
     pub(crate) events: Vec<(String, TimelineEvent)>,
 }

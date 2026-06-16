@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.3.1 | Status: Stable | Tests: 685 passing (2 ignored) | Warnings: 0
+Version: 0.3.4 | Status: Stable | Tests: 845 passing (default) / 849 passing (`--features cuda`), 2 ignored | Warnings: 0
 
-All v0.1.x series features through v0.1.10 (Orchestration) are complete with 34 modules. GPU acceleration (v0.2.0), Distributed Simulation (v0.2.1), Agent-Based Modeling 2.0 (v0.2.2), Real-Time Simulation (v0.2.3), Synthetic Data Generation (v0.2.4), Economic Simulation Extensions (v0.2.5), Healthcare Simulation (v0.2.6), Environmental Simulation (v0.2.7), Urban Simulation (v0.2.8), Simulation Validation Framework (v0.2.9), Quantum Simulation (v0.3.0), and Digital Twin Integration (v0.3.1) are now complete with 43 modules.
+All v0.1.x series features through v0.1.10 (Orchestration) are complete with 34 modules. GPU acceleration (v0.2.0), Distributed Simulation (v0.2.1), Agent-Based Modeling 2.0 (v0.2.2), Real-Time Simulation (v0.2.3), Synthetic Data Generation (v0.2.4), Economic Simulation Extensions (v0.2.5), Healthcare Simulation (v0.2.6), Environmental Simulation (v0.2.7), Urban Simulation (v0.2.8), Simulation Validation Framework (v0.2.9), Quantum Simulation (v0.3.0), Digital Twin Integration (v0.3.1), Federated Simulation (v0.3.2), Autonomous Simulation (v0.3.3), Immersive Simulation (v0.3.4), and Cloud-Native Scaling are now complete with 47 modules.
 
 ---
 
@@ -608,9 +608,9 @@ Network effects module fully integrated with UUID-based RelationshipGraph API.
 - [x] Add model calibration automation (AutoCalibrationConfig, AutoCalibrationResult)
 
 ### Parallel & Distributed (v0.1.6) - IN PROGRESS 2025-12-29
-- [ ] Add GPU acceleration for simulations
-- [ ] Add distributed simulation across nodes
-- [ ] Add cloud-native scaling (AWS, GCP, Azure)
+- [x] Add GPU acceleration for simulations — **real NVIDIA CUDA backend** (cudarc 0.19, NVRTC runtime kernel compilation, on-device condition evaluation) behind the optional `cuda` feature; see "Real CUDA Acceleration" below
+- [x] Add distributed simulation across nodes (completed in v0.2.1, see Distributed Simulation section)
+- [x] Add cloud-native scaling (AWS, GCP, Azure) — provider-agnostic pure-Rust abstraction with simulated backend; live SDK bindings deferred (see Cloud-Native Scaling section below)
 - [x] Add simulation checkpointing (file-based persistence with save/load to disk)
 - [x] Add resume from failure (interruption detection and recovery)
 
@@ -684,6 +684,42 @@ Network effects module fully integrated with UUID-based RelationshipGraph API.
 - [x] GPU executor for running simulations on GPU
 - [x] 25 comprehensive tests for GPU module
 - [x] All tests passing with NO WARNINGS
+
+### Real CUDA Acceleration — COMPLETED 2026-06-13
+
+The original v0.2.0 GPU module was a **data model + CPU model**: kernel *source
+strings* (CUDA C / OpenCL / WGSL) and an executor that always fell back to a CPU
+loop. This iteration makes the NVIDIA path **actually execute on the GPU**.
+
+- [x] Real `cudarc` 0.19 CUDA backend behind an optional `cuda` cargo feature
+  (`cuda = ["dep:cudarc"]`); default build stays dependency-light and unchanged
+- [x] `CudaState`: retained `CudaContext`/`CudaStream`, NVRTC **runtime
+  compilation** (`compile_ptx`) of the condition kernels, module/function caching
+- [x] `GpuExecutor::new(GpuConfig::cuda())` initialises device 0 when present and
+  reports the **real device name** (e.g. "NVIDIA RTX A4000"); `list_devices()`
+  enumerates real CUDA devices via `CudaContext::device_count()`
+- [x] `GpuExecutor::execute("condition_eval", …)` runs the NVRTC-compiled kernel
+  on-device (host→device upload, launch, device→host copy)
+- [x] `GpuExecutor::evaluate_population_threshold(tensor, multipliers, value, op)`
+  — GPU-accelerated analogue of the engine's `Condition::Threshold` (weighted sum
+  vs. comparison operator), with a new `eval_threshold` kernel and `ThresholdOp`
+- [x] **Graceful fallback**: any init/compile/launch failure (no driver, headless
+  CI) transparently routes to the identical CPU path — `new()` never fails for
+  lack of a GPU, and all results are bit-identical to the CPU reference
+- [x] 9 new tests (CPU threshold reference + GPU↔CPU equivalence across all six
+  operators, real-device enumeration, empty-population edge case); the GPU tests
+  self-skip when no device is present
+- [x] Verified on a real **NVIDIA RTX A4000** (CUDA 12.0): `cargo nextest run
+  --features cuda` → 694 passing; `cargo clippy --all-targets --features cuda --
+  -D warnings` → zero warnings; default build → 690 passing, zero warnings
+
+**Architecture note (SciRS2 policy).** legalis is intentionally free of the SciRS2
+stack (zero `scirs2` dependencies across the workspace). Per the COOLJAPAN SciRS2
+policy's escape hatch for projects without a SciRS2 policy, the GPU path binds
+`cudarc` directly rather than routing through `scirs2-core::gpu`; `cudarc` is the
+same pure-Rust CUDA binding the rest of the ecosystem (scirs2, optirs, torsh)
+builds on. Vulkan/WGPU was rejected for this host: only the NVIDIA ICD is present
+(no Vulkan loader / `/dev/dri`), so CUDA is the reliable, testable backend.
 
 ### Current Statistics (as of 2026-01-01 - Distributed Simulation v0.2.1 Complete)
 - Total tests: 480 passing, 2 ignored (up from 459)
@@ -947,23 +983,206 @@ Network effects module fully integrated with UUID-based RelationshipGraph API.
   - Bidirectional sync and queues: 7 tests
   - Edge cases and buffer management: 2 tests
 
-### Federated Simulation (v0.3.2)
-- [ ] Add privacy-preserving distributed simulation
-- [ ] Implement federated learning for models
-- [ ] Add cross-organization simulation sharing
-- [ ] Create secure multi-party computation
-- [ ] Add differential privacy guarantees
+### Federated Simulation (v0.3.2) - COMPLETED 2026-06-14
+- [x] Add privacy-preserving distributed simulation (FederatedSimulation, FederationHub, isolated DataPartition)
+- [x] Implement federated learning for models (LocalModel logistic-regression SGD, FederatedAveraging FedAvg/DP-FedAvg)
+- [x] Add cross-organization simulation sharing (SharingPolicy, SharedResult, PrivateMetricsSummary reusing SimulationMetrics)
+- [x] Create secure multi-party computation (AdditiveSecretSharing over 2^61-1 field, SecureAggregator secure aggregation)
+- [x] Add differential privacy guarantees (Laplace/Gaussian (ε,δ) mechanisms, L2 clipping, PrivacyAccountant budget accounting)
 
-### Autonomous Simulation (v0.3.3)
-- [ ] Add self-tuning simulation parameters
-- [ ] Implement automated scenario generation
-- [ ] Add intelligent exploration of parameter space
-- [ ] Create self-healing simulation systems
-- [ ] Add meta-learning for simulation optimization
+The `federated` module is a directory module split into four focused submodules
+(each well under the 2000-line limit):
+- `secure_mpc.rs` (350 lines) — `FIELD_PRIME` (Mersenne 2^61-1), `FieldEncoder`
+  (signed fixed-point), `SecretShare`, `AdditiveSecretSharing`, `SecureAggregator`
+  (real share → distribute → partial-sum → reconstruct protocol)
+- `differential_privacy.rs` (460 lines) — `PrivacyParams`, `DpMechanism`,
+  `LaplaceMechanism`, `GaussianMechanism`, `l2_norm`/`clip_l2_norm`,
+  `PrivacyBudget`, `PrivacyAccountant` (basic + advanced composition)
+- `learning.rs` (504 lines) — `LocalModel` (logistic regression SGD),
+  `ModelUpdate`, `DpFedConfig`, `FederatedAveraging` (FedAvg + DP-FedAvg)
+- `mod.rs` (930 lines) — `OrgId`, `LocalRecord`, `DataPartition` (partition
+  isolation), `FederatedOrganization`, `SharingPolicy`, `SharedResult`,
+  `RoundReport`, `PrivateMetricsSummary`, `FederationHub`, `FederatedSimulation`
 
-### Immersive Simulation (v0.3.4)
-- [ ] Add VR simulation visualization
-- [ ] Implement AR policy overlay
-- [ ] Add haptic feedback for impact perception
-- [ ] Create collaborative VR exploration
-- [ ] Add spatial audio for multi-dimensional data
+Algorithms are real (no stubs): FedAvg with sample weighting; DP-FedAvg with
+per-update L2 clipping plus Gaussian noise calibrated to `clip_norm / n`;
+information-theoretically secure additive secret sharing for the aggregation
+step; (ε,δ)-DP Laplace/Gaussian mechanisms with sequential + advanced
+composition budget accounting; and partition isolation enforced at the API
+boundary (`DataPartition::access` denies any non-owner).
+- [x] 45 comprehensive tests for federated module
+- [x] All tests passing with NO WARNINGS
+
+### Current Statistics (as of 2026-06-14 - Federated Simulation v0.3.2 Complete)
+- Total tests: 735 passing, 2 ignored (up from 690 default)
+- All clippy warnings resolved (`cargo clippy -p legalis-sim --all-targets -- -D warnings` clean)
+- All doc tests passing (5 tests)
+- NO WARNINGS policy maintained
+- Module count: 44 total modules (added federated module)
+- Improvements: 45 new tests added (federated simulation module)
+- Code quality: 100% NO WARNINGS compliance maintained
+- No new dependencies (reuses existing `rand` 0.10 workspace dependency)
+- Federated Simulation Module: 45 comprehensive tests covering all features
+  - Secure multi-party computation (secret sharing, secure aggregation): 10 tests
+  - Differential privacy (Laplace/Gaussian, clipping, accountant): 10 tests
+  - Federated learning (logistic regression, FedAvg, DP-FedAvg): 10 tests
+  - Cross-org orchestration (isolation, hub, sharing, simulation): 15 tests
+
+### Autonomous Simulation (v0.3.3) - COMPLETED 2026-06-14
+- [x] Add self-tuning simulation parameters (UcbBanditTuner UCB1 bandit, SimulatedAnnealingTuner Metropolis controller toward a TargetMetric, SelfTuningController)
+- [x] Implement automated scenario generation (FactorialDesign, LatinHypercubeSampler, low-discrepancy HaltonSequence, NoveltySearch, AutoScenarioGenerator)
+- [x] Add intelligent exploration of parameter space (from-scratch GaussianProcess surrogate + AcquisitionFunction (EI/UCB/PI) BayesianOptimizer, DifferentialEvolution)
+- [x] Create self-healing simulation systems (Invariant/InvariantKind detection of degenerate/diverged/stalled runs, RecoveryStrategy ladder, SelfHealingController, HealthMonitor reusing SimulationMetrics)
+- [x] Add meta-learning for simulation optimization (MetaLearningStore similarity-weighted warm start, transferable ridge-regression PerformanceModel, MetaLearner)
+
+The `autonomous` module is a directory module split into five focused submodules
+plus a shared `mod.rs` (each well under the 2000-line limit):
+- `mod.rs` (479 lines) — `ParameterSpace` (named/bounded dimensions with
+  unit-cube normalisation), shared objective helpers, Box-Muller `standard_normal`,
+  and a from-scratch linear-algebra core (`cholesky_decompose`, `cholesky_solve`,
+  `forward_substitution`) reused by the surrogate and the performance model
+- `self_tuning.rs` (623 lines) — `TargetMetric`, `BanditArm`, `UcbBanditTuner`
+  (UCB1), `SimulatedAnnealingTuner` (Metropolis acceptance + geometric cooling),
+  `TuningOutcome`, `TuningStrategy`, `SelfTuningController`
+- `scenario_generation.rs` (641 lines) — `GeneratedScenario`, `FactorialDesign`
+  (combinatorial sweep with explosion guard), `LatinHypercubeSampler` (stratified
+  Fisher-Yates), `HaltonSequence` (radical-inverse low-discrepancy), `NoveltySearch`
+  (greedy k-NN novelty), `AutoScenarioGenerator`
+- `exploration.rs` (690 lines) — `GaussianProcess` (RBF kernel, Cholesky exact
+  inference, adaptive jitter), `AcquisitionFunction` (EI/UCB/PI with correct
+  maximise/minimise orientation), `BayesianOptimizer`, `DifferentialEvolution`
+  (`DE/rand/1/bin`)
+- `self_healing.rs` (728 lines) — `InvariantKind`/`Invariant`/`InvariantViolation`,
+  `HealthStatus`, `HealthMonitor` (+ `check_metrics` over `SimulationMetrics`),
+  `RecoveryStrategy`, `HealingAction`/`HealingIncident`/`HealingReport`,
+  `SelfHealingController`
+- `meta_learning.rs` (586 lines) — `RunContext`, `RunRecord`, `MetaLearningStore`
+  (similarity-weighted warm start), `PerformanceModel` (transferable ridge
+  regression via normal equations), `MetaLearner`
+
+Algorithms are real (no stubs): UCB1 with per-arm confidence bounds; Metropolis
+simulated annealing with temperature-scheduled acceptance; stratified Latin-
+hypercube and radical-inverse Halton quasi-random sampling; greedy novelty search
+over a k-nearest archive; an exact Gaussian-process surrogate (Cholesky solve)
+driving Expected-Improvement / UCB / Probability-of-Improvement acquisition;
+differential evolution; declarative invariant-based health monitoring with an
+escalating recovery ladder; and a transferable ridge-regression performance model
+plus inverse-distance/quality-weighted warm start. Reuses the crate's `Objective`,
+`ParameterBounds`, `OptimizationResult` and `SimulationMetrics` rather than
+duplicating them; no new dependencies (reuses the existing `rand` 0.10 workspace
+dependency).
+- [x] 44 comprehensive tests for autonomous module
+- [x] All tests passing with NO WARNINGS
+
+### Current Statistics (as of 2026-06-14 - Autonomous Simulation v0.3.3 Complete)
+- Total tests: 779 passing (default) / 783 passing (`--features cuda`), 2 ignored (up from 735 default)
+- All clippy warnings resolved (`cargo clippy -p legalis-sim --all-targets -- -D warnings` clean)
+- All doc tests passing (5 tests); rustdoc `-D warnings` clean
+- NO WARNINGS policy maintained
+- Module count: 45 total modules (added autonomous module)
+- Improvements: 44 new tests added (autonomous simulation module)
+- Code quality: 100% NO WARNINGS compliance maintained
+- No new dependencies (reuses existing `rand` 0.10 workspace dependency)
+- Autonomous Simulation Module: 44 comprehensive tests covering all features
+  - Shared parameter space + linear algebra (`mod.rs`): 6 tests
+  - Self-tuning parameters (UCB bandit, simulated annealing): 8 tests
+  - Automated scenario generation (factorial, LHS, Halton, novelty): 7 tests
+  - Intelligent exploration (Gaussian process, Bayesian opt, differential evolution): 8 tests
+  - Self-healing systems (invariants, health monitor, recovery): 8 tests
+  - Meta-learning (warm start, transferable performance model): 7 tests
+
+### Immersive Simulation (v0.3.4) - COMPLETED 2026-06-14
+- [x] Add VR simulation visualization (SimScene 3-D graph from a population/metrics; A-Frame WebXR, X3D, glTF-JSON exporters)
+- [x] Implement AR policy overlay (world-anchored, impact-graded PolicyOverlay cards; ring layout; AR anchor JSON + AR.js/WebXR A-Frame export)
+- [x] Add haptic feedback for impact perception (HapticEncoder mapping impact metrics to force/vibration HapticCue timelines)
+- [x] Create collaborative VR exploration (CollabSession: shared camera/presence/annotations with deterministic last-writer-wins conflict resolution + FNV state digest)
+- [x] Add spatial audio for multi-dimensional data (Sonifier mapping data dimensions to 3-D positional AudioSource; distance-attenuation/stereo-pan SpatialAudioScene)
+
+The `immersive` module is a directory module (`pub mod immersive`) split into a
+shared `mod.rs` plus six focused submodules (each well under the 2000-line limit):
+- `mod.rs` (605 lines) — shared 3-D primitives `Vec3`, `Color` (incl. cool→warm
+  `heat` gradient), `Camera`, `Viewport`, `BoundingBox`, and dependency-free
+  deterministic hashing (`fnv1a`, `digest_hex`, `seed_position`); re-exports
+- `scene.rs` (809 lines) — `SimScene`/`SceneNode`/`SceneEdge`, `NodeKind`/`EdgeKind`,
+  `AttributeAxis`, `PopulationMapping`, `scene_from_entities` (reuses
+  `legalis_core::LegalEntity`), `scene_from_metrics` (reuses `SimulationMetrics`)
+- `xr.rs` (359 lines) — `XrFormat` (A-Frame / X3D / glTF-JSON) + `export_scene`
+- `ar.rs` (515 lines) — `ArAnchor`/`ArTrackingMode`, `PolicyOverlay`/`OverlayShape`,
+  `ArOverlayScene` (JSON + AR.js export), `overlay_from_metrics`
+- `haptic.rs` (523 lines) — `HapticChannel`/`HapticWaveform`, `HapticCue`,
+  `HapticPattern`, `ImpactSignal`, `HapticEncoder`
+- `collab.rs` (649 lines) — `CollabSession`/`CollabSnapshot`/`CollabEvent`,
+  `CollabParticipant`/`ParticipantRole`, `SharedCamera`, `PresenceCursor`,
+  `SceneAnnotation` (deterministic LWW + FNV `state_digest`)
+- `audio.rs` (513 lines) — `Waveform`, `AudioSource`, `AudioParam`/`SonifiedField`,
+  `Sonifier`, `SpatialAudioScene`, `sonify_metrics`
+
+Algorithms are real (no stubs): deterministic FNV-1a layout seeding and 128-bit
+state digests (no `rand`/`sha2`/`hex` dependency); painter-free standards-shaped
+A-Frame/X3D/glTF and AR.js scene serialisation with XML escaping; perceptual
+haptic mapping (log-free force gamma curve + LRA-band vibration frequency) into a
+sequenced timeline; CRDT-style last-writer-wins conflict resolution proven
+convergent by digest; and log-scale pitch sonification with an inverse-distance /
+cross-product stereo-pan spatial mix. Reuses the crate's `SimulationMetrics`,
+`SimResult`/`SimulationError` and `legalis_core::LegalEntity` rather than
+duplicating them; no new dependencies.
+- [x] 44 comprehensive tests for immersive module
+- [x] All tests passing with NO WARNINGS
+
+### Cloud-Native Scaling - COMPLETED 2026-06-14
+- [x] Provider-agnostic `CloudProvider` trait (provision/terminate/reconcile) over
+  `InstanceType`/`NodeSpec`/`CloudNode`/`NodePool`
+- [x] HPA-style `AutoscalingPolicy` with dead-band + per-step cap producing a
+  `ScalingDecision` from observed `ClusterLoad`
+- [x] `WorkDistributionPlan` partitioning weighted `WorkUnit`s across nodes
+  (round-robin / hash / greedy longest-processing-time bin-packing)
+- [x] `CostModel`/`CostEstimate` with per-instance price overrides + discount
+  (spot/committed-use), pool and concrete-node estimation
+- [x] In-memory `SimulatedCloud` backend implementing `CloudProvider`
+- [x] **Deferred**: live AWS/GCP/Azure SDK bindings (EC2 ASG / GKE MIG / Azure VMSS)
+  require network + credentials unavailable offline; a production backend
+  implements `CloudProvider` over the relevant SDK without changing callers
+
+The `cloud` module is a directory module (`pub mod cloud`) split into a shared
+`mod.rs` plus four focused submodules (each well under the 2000-line limit):
+- `mod.rs` (470 lines) — `CloudNodeId`, `InstanceType` (+ standard catalog),
+  `NodeSpec`, `NodeState`, `CloudNode`, `NodePool`, `ReconcileReport`,
+  `CloudProvider` trait (with default `reconcile`/`pool_nodes`/`total_vcpus`)
+- `autoscaling.rs` (344 lines) — `ClusterLoad`, `AutoscalingPolicy`,
+  `ScalingDirection`, `ScalingDecision`
+- `distribution.rs` (313 lines) — `WorkUnit`, `DistributionStrategy`,
+  `NodeAssignment`, `WorkDistributionPlan`, `distribute` (reuses immersive `fnv1a`)
+- `cost.rs` (233 lines) — `CostModel`, `CostEstimate`
+- `simulated.rs` (220 lines) — `SimulatedCloud` (in-memory, quota-aware)
+
+Algorithms are real (no stubs): HPA-style target-tracking autoscaling
+(`ceil(demand / (target × slots_per_node))`) with a dead-band and per-decision
+step cap; greedy LPT bin-packing for balanced work distribution; an inverse-
+discount cost model; and an idempotent provision/terminate reconcile loop.
+Reuses `SimResult`/`SimulationError`; no new dependencies.
+- [x] 22 comprehensive tests for cloud module
+- [x] All tests passing with NO WARNINGS
+
+### Current Statistics (as of 2026-06-14 - Immersive Simulation v0.3.4 + Cloud-Native Scaling Complete)
+- Total tests: 845 passing (default) / 849 passing (`--features cuda`), 2 ignored (up from 779 default)
+- All clippy warnings resolved (`cargo clippy -p legalis-sim --all-targets -- -D warnings` clean, zero output)
+- All doc tests passing (9 tests, up from 5; rustdoc `-D warnings` clean incl. `--document-private-items`)
+- NO WARNINGS policy maintained
+- Module count: 47 total modules (added `immersive` and `cloud` directory modules)
+- Improvements: 66 new tests added (44 immersive + 22 cloud)
+- Code quality: 100% NO WARNINGS compliance maintained
+- No new dependencies (reuses existing workspace deps; immersive is deliberately `rand`/`sha2`/`hex`-free via deterministic FNV hashing)
+- Immersive Simulation Module: 44 comprehensive tests covering all features
+  - Shared 3-D primitives + hashing (`mod.rs`): 6 tests
+  - Scene graph from population/metrics (`scene.rs`): 7 tests
+  - VR/AR scene export (`xr.rs`): 6 tests
+  - AR policy overlays (`ar.rs`): 6 tests
+  - Haptic feedback encoding (`haptic.rs`): 6 tests
+  - Collaborative VR sessions (`collab.rs`): 7 tests
+  - Spatial-audio sonification (`audio.rs`): 6 tests
+- Cloud-Native Scaling Module: 22 comprehensive tests covering all features
+  - Node pool + provider core (`mod.rs`): 3 tests
+  - Autoscaling policy (`autoscaling.rs`): 6 tests
+  - Work distribution (`distribution.rs`): 5 tests
+  - Cost model (`cost.rs`): 3 tests
+  - Simulated backend + end-to-end pipeline (`simulated.rs`): 5 tests

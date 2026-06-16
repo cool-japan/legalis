@@ -12,6 +12,7 @@ documentation = "https://docs.rs/legalis-us"
 
 [dependencies]
 legalis-core.workspace = true
+legalis-dsl.workspace = true
 legalis-verifier.workspace = true
 legalis-sim.workspace = true
 chrono.workspace = true

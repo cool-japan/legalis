@@ -4,12 +4,11 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Files** | 72 Rust files |
-| **Total Lines** | 42,820 lines |
-| **Production Code** | 33,767 lines |
-| **Tests** | 473 passing |
-| **Clippy Warnings** | Zero |
-| **Legal Domains** | 17 implemented |
+| **Total Files** | 104 Rust files |
+| **Total Lines** | 67,099 lines |
+| **Tests** | 702 passing (+113 doctests) |
+| **Clippy Warnings** | Zero (`-D warnings`, incl. `--features serde`) |
+| **Legal Domains** | 23 implemented |
 
 ---
 
@@ -305,35 +304,83 @@
 
 ---
 
+## ✅ Version 0.18.0 - Additional Legal Domains Batch (COMPLETED 2026-06-14)
+
+**Implemented:** ~8,720 lines across 6 new domains | **Status:** COMPLETED ✅
+**Build:** `cargo build/clippy -p legalis-la --all-targets -- -D warnings` clean (also `--features serde`)
+**Tests:** 702 passing (was 474) + 113 doctests passing
+
+Six previously-listed substantive laws were gap-filled, each as a 4-file module
+(`error.rs`, `types.rs`, `validator.rs`, `mod.rs`) mirroring the existing crate
+pattern (bilingual Lao/English, `#[cfg_attr(feature = "serde", ...)]`, thiserror
+error type with `english_message()`/`lao_message()`/`legal_basis()`). Where exact
+internal article numbers could not be verified, provisions are cited by law
+name/year (a module `*_LAW_CITATION` constant) plus a documented topic descriptor,
+and numeric thresholds are encoded as named, documented constants — no fabricated
+article numbers.
+
+- ✅ **Consumer Protection Law** (`consumer_protection_law`, 37 tests) — Law on
+  Consumer Protection No. 02/NA (2010): 8 fundamental consumer rights, supplier
+  obligations, prohibited practices, mandatory Lao-language labelling, product
+  safety/recalls, complaints, redress, dispute-escalation, proportional sanctions.
+- ✅ **Insurance Law** (`insurance_law`, 36 tests) — Law on Insurance No. 06/NA
+  (2011): insurer licensing, solvency (assets ≥ liabilities), policy validity
+  (insurable interest), indemnity principle, compulsory motor third-party cover,
+  intermediary licensing.
+- ✅ **Telecommunications Law** (`telecommunications_law`, 39 tests) — Law on
+  Telecommunications No. 09/NA (2011): operator licensing, radio-spectrum
+  assignment + non-overlap, non-discriminatory interconnection, QoS, tariff
+  approval, equipment type-approval, confidentiality of communications.
+- ✅ **Construction Law** (`construction_law`, 36 tests) — Law on Construction
+  No. 05/NA (2009): building permits, contractor grading vs project value, safety
+  plans, staged inspection sequencing, acceptance before occupancy, defects
+  liability.
+- ✅ **Securities & Capital Markets Law** (`securities_law`, 36 tests) — Law on
+  Securities (2012): public-offering prospectus/approval, listing free-float,
+  foreign-ownership cap, intermediary licensing, insider-trading & market
+  manipulation prohibitions, material disclosure.
+- ✅ **Intellectual Property Law (expanded)** (`intellectual_property_law`, 44
+  tests) — Law on Intellectual Property No. 38/NA (2017, consolidated): patents,
+  petty patents, industrial designs, trademarks (10y renewable), copyright
+  (life+50), trade secrets, geographical indications, layout-designs, plant
+  varieties (DUS+novelty); TRIPS/Berne-aligned terms as named constants. (The
+  basic `Patent`/`Trademark` types in `commercial_law` remain; this is the
+  broader, dedicated IP module.)
+
+Also: 6 new `Statute` builders added to `statutes.rs` (now 14 total) so the new
+laws render through the jurisdiction-neutral `legalis-core` citation/DSL system.
+
+---
+
 ## 🎯 Future Enhancements (Version 1.0.0+)
 
-### Additional Legal Domains (Potential)
-- [ ] Insurance Law (ກົດໝາຍປະກັນໄພ)
-- [ ] Telecommunications Law (ກົດໝາຍໂທລະຄົມມະນາຄົມ)
-- [ ] Construction Law (ກົດໝາຍການກໍ່ສ້າງ)
-- [ ] Consumer Protection Law (ກົດໝາຍປົກປ້ອງຜູ້ບໍລິໂພກ)
-- [ ] Securities & Capital Markets Law (ກົດໝາຍຫຼັກຊັບ)
-- [ ] Intellectual Property Law (ກົດໝາຍຊັບສິນທາງປັນຍາ) - expanded
+### Additional Legal Domains — COMPLETED in v0.18.0
+- [x] Insurance Law (ກົດໝາຍປະກັນໄພ) — `insurance_law` (Law on Insurance No. 06/NA, 2011)
+- [x] Telecommunications Law (ກົດໝາຍໂທລະຄົມມະນາຄົມ) — `telecommunications_law` (No. 09/NA, 2011)
+- [x] Construction Law (ກົດໝາຍການກໍ່ສ້າງ) — `construction_law` (Law on Construction No. 05/NA, 2009)
+- [x] Consumer Protection Law (ກົດໝາຍປົກປ້ອງຜູ້ບໍລິໂພກ) — `consumer_protection_law` (No. 02/NA, 2010)
+- [x] Securities & Capital Markets Law (ກົດໝາຍຫຼັກຊັບ) — `securities_law` (Law on Securities, 2012)
+- [x] Intellectual Property Law (ກົດໝາຍຊັບສິນທາງປັນຍາ) - expanded — `intellectual_property_law` (No. 38/NA, 2017). Note: basic patent/trademark already existed in `commercial_law`; this adds copyright, designs, GIs, trade secrets, plant varieties, layout-designs.
 
 ### Advanced Features
-- [ ] Legal database integration (Ministry of Justice database)
-- [ ] Case law database (Supreme People's Court decisions)
-- [ ] Legal document generation templates
-- [ ] Multi-language support (Lao, English, French, Thai, Vietnamese)
-- [ ] Integration with ASEAN legal frameworks
-- [ ] Conflict of laws framework (international private law)
+- [ ] Legal database integration (Ministry of Justice database) — DEFERRED: needs an external database integration, out of scope for a pure-Rust in-crate model.
+- [ ] Case law database (Supreme People's Court decisions) — DEFERRED: needs an external case-law database, out of scope.
+- [ ] Legal document generation templates — DEFERRED: no concrete in-crate spec; revisit when scoped.
+- [ ] Multi-language support (Lao, English, French, Thai, Vietnamese) — DEFERRED: every module is already bilingual Lao/English; French/Thai/Vietnamese require translation data sets that are not yet provided as concrete in-crate data.
+- [ ] Integration with ASEAN legal frameworks — DEFERRED: external/comparative integration, not concrete in-crate data/functions.
+- [ ] Conflict of laws framework (international private law) — DEFERRED: large separate domain, outside the targeted substantive-law set.
 
 ### Comparative Law Extensions
-- [ ] ASEAN legal harmonization analysis
-- [ ] Thailand legal system comparison
-- [ ] Vietnam legal system comparison
-- [ ] China legal system comparison (BRI context)
+- [ ] ASEAN legal harmonization analysis — DEFERRED: pure-research comparative item (the crate's `comparative` module covers Japanese/French influences).
+- [ ] Thailand legal system comparison — DEFERRED: pure-research comparative item.
+- [ ] Vietnam legal system comparison — DEFERRED: pure-research comparative item.
+- [ ] China legal system comparison (BRI context) — DEFERRED: pure-research comparative item.
 
 ### ODA & Legal Development
-- [ ] Expanded JICA project documentation
-- [ ] Legal capacity building framework
-- [ ] Judicial training modules
-- [ ] Legal education materials
+- [ ] Expanded JICA project documentation — DEFERRED: documentation/research (the `oda` module already records JICA legal assistance).
+- [ ] Legal capacity building framework — DEFERRED: documentation/research item.
+- [ ] Judicial training modules — DEFERRED: documentation/research item.
+- [ ] Legal education materials — DEFERRED: documentation/research item.
 
 ---
 
@@ -360,7 +407,13 @@
 | 0.15.0 | Banking & Financial Services Law | ~3,800 | ✅ |
 | 0.16.0 | Tourism Law | ~3,700 | ✅ |
 | 0.17.0 | Anti-Corruption Law | ~3,100 | ✅ |
-| **Total** | **17 Domains** | **~42,820** | **473 tests** |
+| 0.18.0 | Consumer Protection Law | ~1,330 | 37 ✅ |
+| 0.18.0 | Insurance Law | ~1,310 | 36 ✅ |
+| 0.18.0 | Telecommunications Law | ~1,485 | 39 ✅ |
+| 0.18.0 | Construction Law | ~1,335 | 36 ✅ |
+| 0.18.0 | Securities & Capital Markets Law | ~1,330 | 36 ✅ |
+| 0.18.0 | Intellectual Property Law (expanded) | ~1,700 | 44 ✅ |
+| **Total** | **23 Domains** | **~67,099** | **702 tests** |
 
 ---
 

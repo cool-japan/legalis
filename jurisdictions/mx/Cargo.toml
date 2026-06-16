@@ -12,6 +12,8 @@ keywords = ["legalis", "mexico", "civil-law", "labor-law", "tax-law"]
 categories = ["text-processing", "localization", "internationalization"]
 
 [dependencies]
+legalis-core.workspace = true
+legalis-dsl.workspace = true
 chrono.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true

@@ -336,6 +336,15 @@ impl Director {
             DisqualificationStatus::Eligible
         )
     }
+
+    /// Returns whether the director is eligible to act as at `as_of`.
+    ///
+    /// Unlike [`Director::is_eligible`], this takes account of disqualifications
+    /// that may have expired by `as_of` (e.g. the 5-year period for a conviction
+    /// under s. 154 or a Court order under s. 149/155 has elapsed).
+    pub fn is_eligible_as_of(&self, as_of: DateTime<Utc>) -> bool {
+        !self.disqualification_status.is_active(as_of)
+    }
 }
 
 /// Director qualifications
@@ -356,18 +365,31 @@ pub enum DirectorQualification {
 
 /// Director disqualification status
 ///
-/// ## Sections 148, 149, 155: Disqualification
+/// ## Disqualification under the Companies Act 1967
 ///
-/// A person is disqualified from being director if:
-/// - **s. 148**: Convicted of offense involving fraud/dishonesty (5 years)
-/// - **s. 149**: Undischarged bankrupt
-/// - **s. 155**: Court order disqualification
+/// A person is disqualified from acting as (or taking part in the management of)
+/// a company where:
+///
+/// - **s. 148** — they are an undischarged bankrupt (may not act without the
+///   leave of the Court or the written permission of the Official Assignee);
+/// - **s. 149** — the Court makes a disqualification order against an unfit
+///   director of an insolvent company (up to 5 years);
+/// - **s. 154** — they are convicted of an offence involving fraud or
+///   dishonesty punishable with imprisonment (automatic 5-year disqualification);
+/// - **s. 155** — they have persistently defaulted in relation to the delivery
+///   of documents to the Registrar (5 years).
+///
+/// Each disqualifying ground has its own duration. Use
+/// [`DisqualificationStatus::is_active`] to test whether a disqualification is
+/// still in force as at a given date, and [`DisqualificationStatus::statute_section`]
+/// to obtain the governing section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DisqualificationStatus {
     /// Eligible to be appointed as director
     Eligible,
 
-    /// Disqualified under s. 148 (conviction for fraud/dishonesty)
+    /// Disqualified under s. 154 (conviction for an offence involving fraud or
+    /// dishonesty) — automatic disqualification, generally 5 years.
     ConvictionDisqualification {
         /// Conviction date
         conviction_date: DateTime<Utc>,
@@ -377,21 +399,61 @@ pub enum DisqualificationStatus {
         disqualification_until: DateTime<Utc>,
     },
 
-    /// Disqualified under s. 149 (undischarged bankrupt)
+    /// Disqualified under s. 148 (undischarged bankrupt). Remains in force until
+    /// the person is discharged from bankruptcy.
     BankruptcyDisqualification {
         /// Date of bankruptcy order
         bankruptcy_date: DateTime<Utc>,
     },
 
-    /// Disqualified under s. 155 (court order)
+    /// Disqualified by Court order under s. 149 (unfit director of an insolvent
+    /// company) or s. 155 (persistent default in filing).
     CourtOrderDisqualification {
         /// Date of court order
         order_date: DateTime<Utc>,
         /// Reasons for disqualification
         reason: String,
-        /// Disqualification period (if specified)
+        /// Disqualification period (if specified; `None` means indefinite)
         disqualification_until: Option<DateTime<Utc>>,
     },
+}
+
+impl DisqualificationStatus {
+    /// Returns whether the disqualification is still in force as at `as_of`.
+    ///
+    /// - [`DisqualificationStatus::Eligible`] is never active.
+    /// - A conviction (s. 154) is active until its `disqualification_until` date.
+    /// - An undischarged bankruptcy (s. 148) is active for as long as the status
+    ///   is recorded (the person has not been discharged).
+    /// - A Court order (s. 149/155) is active until its end date, or indefinitely
+    ///   when no end date is specified.
+    pub fn is_active(&self, as_of: DateTime<Utc>) -> bool {
+        match self {
+            DisqualificationStatus::Eligible => false,
+            DisqualificationStatus::ConvictionDisqualification {
+                disqualification_until,
+                ..
+            } => as_of < *disqualification_until,
+            DisqualificationStatus::BankruptcyDisqualification { .. } => true,
+            DisqualificationStatus::CourtOrderDisqualification {
+                disqualification_until,
+                ..
+            } => match disqualification_until {
+                Some(end) => as_of < *end,
+                None => true,
+            },
+        }
+    }
+
+    /// Returns the governing Companies Act section for this disqualification, if any.
+    pub fn statute_section(&self) -> Option<&'static str> {
+        match self {
+            DisqualificationStatus::Eligible => None,
+            DisqualificationStatus::ConvictionDisqualification { .. } => Some("CA s. 154"),
+            DisqualificationStatus::BankruptcyDisqualification { .. } => Some("CA s. 148"),
+            DisqualificationStatus::CourtOrderDisqualification { .. } => Some("CA s. 149/155"),
+        }
+    }
 }
 
 /// Company shareholder/member
@@ -781,6 +843,64 @@ mod tests {
             director.disqualification_status,
             DisqualificationStatus::Eligible
         );
+    }
+
+    #[test]
+    fn test_disqualification_conviction_expiry() {
+        let now = Utc::now();
+        let status = DisqualificationStatus::ConvictionDisqualification {
+            conviction_date: now - chrono::Duration::days(365 * 5),
+            offense: "Cheating (Penal Code s. 420)".to_string(),
+            disqualification_until: now - chrono::Duration::days(1), // expired yesterday
+        };
+        assert!(!status.is_active(now)); // 5-year period elapsed
+        assert!(status.is_active(now - chrono::Duration::days(2))); // still active 2 days ago
+        assert_eq!(status.statute_section(), Some("CA s. 154"));
+    }
+
+    #[test]
+    fn test_disqualification_bankruptcy_indefinite() {
+        let now = Utc::now();
+        let status = DisqualificationStatus::BankruptcyDisqualification {
+            bankruptcy_date: now - chrono::Duration::days(30),
+        };
+        assert!(status.is_active(now));
+        assert!(status.is_active(now + chrono::Duration::days(3650)));
+        assert_eq!(status.statute_section(), Some("CA s. 148"));
+    }
+
+    #[test]
+    fn test_disqualification_court_order() {
+        let now = Utc::now();
+        let active = DisqualificationStatus::CourtOrderDisqualification {
+            order_date: now - chrono::Duration::days(100),
+            reason: "Unfit director of insolvent company".to_string(),
+            disqualification_until: Some(now + chrono::Duration::days(100)),
+        };
+        assert!(active.is_active(now));
+        assert!(!active.is_active(now + chrono::Duration::days(101)));
+        assert_eq!(active.statute_section(), Some("CA s. 149/155"));
+
+        let indefinite = DisqualificationStatus::CourtOrderDisqualification {
+            order_date: now,
+            reason: "Indefinite".to_string(),
+            disqualification_until: None,
+        };
+        assert!(indefinite.is_active(now + chrono::Duration::days(100_000)));
+    }
+
+    #[test]
+    fn test_director_is_eligible_as_of() {
+        let now = Utc::now();
+        let mut director = Director::new("Jane Lim", "S2345678B", true);
+        director.disqualification_status = DisqualificationStatus::ConvictionDisqualification {
+            conviction_date: now - chrono::Duration::days(2000),
+            offense: "Fraud".to_string(),
+            disqualification_until: now - chrono::Duration::days(1),
+        };
+        assert!(!director.is_eligible()); // status is not Eligible
+        assert!(director.is_eligible_as_of(now)); // but the 5-year period has expired
+        assert!(!director.is_eligible_as_of(now - chrono::Duration::days(10)));
     }
 
     #[test]

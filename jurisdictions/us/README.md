@@ -2,6 +2,8 @@
 
 United States Jurisdiction Support for Legalis-RS
 
+**Version 0.1.6** — 15 modules, 626 tests passing, 0 warnings.
+
 ## Overview
 
 `legalis-us` provides comprehensive Common Law system support for the Legalis-RS framework, including:
@@ -34,7 +36,7 @@ United States Jurisdiction Support for Legalis-RS
 - ✅ Phase 3: Professional Licensing (Attorney, Medical, Architect) - 1,667 lines
 - ✅ Phase 4: Tax Law Variations (Income, Sales, Corporate) - 1,197 lines
 - ✅ Phase 5: Legislative Tracking (Policy Adoption, Constitutional Provisions) - 1,100 lines
-- **436 tests passing, 0 warnings**
+- **15 modules, 626 tests passing, 0 warnings**
 - **Total: ~18,700+ lines of production code**
 
 ## Features
@@ -760,7 +762,7 @@ us/src/
 
 ## Testing
 
-All features are comprehensively tested with **409 tests** covering:
+All features are comprehensively tested with **626 tests** covering:
 
 ```bash
 # Run all tests
@@ -775,7 +777,7 @@ cargo test federal::preemption
 cargo clippy --all-features
 ```
 
-**Current Test Status:** 166 tests passing, 0 warnings
+**Current Test Status:** 626 tests passing, 0 warnings
 
 ## Dependencies
 

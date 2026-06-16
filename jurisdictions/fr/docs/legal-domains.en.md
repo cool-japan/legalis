@@ -20,7 +20,7 @@ Legalis-FR implements **11 major legal domains** covering French civil, commerci
 | **Administrative Law** | CJA | 1 | 4 | 391 |
 | **Tort Law** | Code civil | 3 | 9 | 391 |
 
-**Total**: 87 articles, 460+ tests, 17,539 lines
+**Total**: 87 articles, 573 tests, 17,539 lines
 
 ---
 

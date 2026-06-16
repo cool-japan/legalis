@@ -77,8 +77,10 @@
 //! | Good faith | Explicit (Art. 1104) | Implicit (信義則 - 1条2項) |
 
 pub mod article1103;
+pub mod article1104;
 pub mod article1128;
 pub mod article1217;
+pub mod article1218;
 pub mod article1231;
 pub mod error;
 pub mod types;
@@ -96,6 +98,8 @@ pub use validator::{
 
 // Re-export article functions
 pub use article1103::article1103;
+pub use article1104::article1104;
 pub use article1128::article1128;
 pub use article1217::article1217;
+pub use article1218::article1218;
 pub use article1231::article1231;

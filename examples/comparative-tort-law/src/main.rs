@@ -55,11 +55,11 @@
 //! - Trade-offs between legal certainty and flexibility
 //! - Unique Common Law features (punitive damages, precedent binding)
 
-use legalis_core::{BasicEntity, LegalEntity, LegalResult};
+use legalis_core::{BasicEntity, LegalEntity, LegalResult, Statute};
 use legalis_de::{bgb_823_1, bgb_826};
 use legalis_fr::article_1240;
 use legalis_jp::article_709;
-use legalis_sim::SimEngine;
+use legalis_sim::{SimEngine, SimulationMetrics};
 use legalis_us::{battery_as_statute, iied_as_statute, products_liability_as_statute};
 
 #[tokio::main]
@@ -113,12 +113,11 @@ async fn main() {
 
     println!("\n{}\n", "=".repeat(75));
 
-    // Comparative analysis (commented out - API migration needed)
-    // println!("\n📊 Comparative Analysis\n");
-    // run_comparative_simulation().await;
+    println!("\n{}\n", "=".repeat(75));
 
-    println!("\n📊 Comparative Analysis: See individual test cases above");
-    println!("Note: Population-based simulation temporarily disabled pending API migration");
+    // Comparative analysis: population-based simulation across all four jurisdictions
+    println!("\n📊 Comparative Analysis\n");
+    run_comparative_simulation().await;
 }
 
 /// Test Case 1: Battery (Physical Assault)
@@ -475,36 +474,25 @@ fn print_result(result: &LegalResult<legalis_core::Effect>) {
     }
 }
 
-/// Run population-based comparative simulation
-/// Note: Commented out pending API migration - SimEngine API has changed
-/// TODO: Migrate to new SimEngine API that requires (statutes, population) constructor
-#[allow(dead_code)]
-async fn run_comparative_simulation_disabled() {
-    unimplemented!("API migration needed - SimEngine constructor and methods have changed");
-    /*
-    let mut engine_jp = SimEngine::new();
-    let mut engine_de = SimEngine::new();
-    let mut engine_fr = SimEngine::new();
-    let mut engine_us = SimEngine::new();
+/// Build a population of entities with varied tort scenario attributes and run a simulation.
+///
+/// Each entity's attributes are assigned deterministically from its index to ensure
+/// reproducible scenario variation across intent, negligence, damage, and jurisdiction-specific
+/// conditions.
+pub async fn build_and_run_sim(
+    statutes: Vec<Statute>,
+    population_size: usize,
+) -> SimulationMetrics {
+    let mut population: Vec<Box<dyn LegalEntity>> = Vec::with_capacity(population_size);
 
-    let article_709_statute = article_709();
-    let bgb_823_statute = bgb_823_1();
-    let bgb_826_statute = bgb_826();
-    let article_1240_statute = article_1240();
-    let battery_statute = battery_as_statute();
-    let iied_statute = iied_as_statute();
-
-    // Simulate 1000 random tort scenarios
-    let num_simulations = 1000;
-
-    for i in 0..num_simulations {
+    for i in 0..population_size {
         let mut entity = BasicEntity::new();
 
-        // Randomize scenario attributes
         let has_intent = i % 3 == 0;
         let has_negligence = i % 2 == 0;
         let has_damage = i % 10 != 0; // 90% have damage
 
+        // Shared attributes
         entity.set_attribute("intent", has_intent.to_string());
         entity.set_attribute("negligence", has_negligence.to_string());
         entity.set_attribute("damage", has_damage.to_string());
@@ -512,69 +500,91 @@ async fn run_comparative_simulation_disabled() {
         entity.set_attribute("infringement", (i % 4 != 0).to_string());
         entity.set_attribute("illegality", (i % 5 != 0).to_string());
 
-        // German-specific
+        // German-specific (§ 823(1) enumerated interests)
         entity.set_attribute("body_violated", (i % 3 == 0).to_string());
         entity.set_attribute("health_violated", (i % 4 == 0).to_string());
+        entity.set_attribute("intentional_harm", has_intent.to_string());
+        entity.set_attribute("contra_bonos_mores", (i % 6 == 0).to_string());
 
-        // French
+        // French-specific
         entity.set_attribute("faute_intentionnelle", has_intent.to_string());
         entity.set_attribute("faute_negligence", has_negligence.to_string());
         entity.set_attribute("dommage", has_damage.to_string());
         entity.set_attribute("lien_causalite", "true".to_string());
 
-        // US battery
+        // US battery / IIED
         entity.set_attribute("voluntary_act", "true".to_string());
         entity.set_attribute("intent_harmful_contact", has_intent.to_string());
         entity.set_attribute("harmful_contact", (i % 3 == 0).to_string());
+        entity.set_attribute("extreme_outrageous_conduct", (i % 5 == 0).to_string());
+        entity.set_attribute("intent_emotional_distress", has_intent.to_string());
+        entity.set_attribute("severe_emotional_distress", (i % 7 == 0).to_string());
 
-        engine_jp.add_statute(article_709_statute.clone());
-        engine_jp.simulate(&entity);
+        // US products liability (§ 402A)
+        entity.set_attribute("commercial_seller", "true".to_string());
+        entity.set_attribute("design_defect", (i % 4 == 0).to_string());
+        entity.set_attribute("unreasonably_dangerous", (i % 4 == 0).to_string());
+        entity.set_attribute("no_substantial_change", "true".to_string());
+        entity.set_attribute("physical_harm", has_damage.to_string());
 
-        engine_de.add_statute(bgb_823_statute.clone());
-        engine_de.add_statute(bgb_826_statute.clone());
-        engine_de.simulate(&entity);
-
-        engine_fr.add_statute(article_1240_statute.clone());
-        engine_fr.simulate(&entity);
-
-        engine_us.add_statute(battery_statute.clone());
-        engine_us.add_statute(iied_statute.clone());
-        engine_us.simulate(&entity);
+        population.push(Box::new(entity));
     }
 
-    let metrics_jp = engine_jp.metrics();
-    let metrics_de = engine_de.metrics();
-    let metrics_fr = engine_fr.metrics();
-    let metrics_us = engine_us.metrics();
+    SimEngine::new(statutes, population).run_simulation().await
+}
 
-    println!("Simulated {} random tort scenarios:\n", num_simulations);
+/// Run population-based comparative simulation across all four jurisdictions.
+async fn run_comparative_simulation() {
+    let num_simulations: usize = 1000;
+
+    let statutes_jp = vec![article_709()];
+    let statutes_de = vec![bgb_823_1(), bgb_826()];
+    let statutes_fr = vec![article_1240()];
+    let statutes_us = vec![
+        battery_as_statute(),
+        iied_as_statute(),
+        products_liability_as_statute(),
+    ];
+
+    let (metrics_jp, metrics_de, metrics_fr, metrics_us) = tokio::join!(
+        build_and_run_sim(statutes_jp, num_simulations),
+        build_and_run_sim(statutes_de, num_simulations),
+        build_and_run_sim(statutes_fr, num_simulations),
+        build_and_run_sim(statutes_us, num_simulations),
+    );
+
+    println!(
+        "Simulated {} random tort scenarios per jurisdiction:\n",
+        num_simulations
+    );
 
     println!("┌────────────────┬──────────────┬─────────────┬──────────┐");
     println!("│ System         │ Deterministic│ Discretion  │ Coverage │");
     println!("├────────────────┼──────────────┼─────────────┼──────────┤");
 
     let coverage_jp =
-        (metrics_jp.deterministic_count as f64 / num_simulations as f64) * 100.0;
+        (metrics_jp.deterministic_count as f64 / metrics_jp.total_applications as f64) * 100.0;
     println!(
         "│ 🇯🇵 Japan 709    │ {:>12} │ {:>11} │ {:>6.1}%  │",
         metrics_jp.deterministic_count, metrics_jp.discretion_count, coverage_jp
     );
 
-    let coverage_de = ((metrics_de.deterministic_count) as f64 / num_simulations as f64) * 100.0;
+    let coverage_de =
+        (metrics_de.deterministic_count as f64 / metrics_de.total_applications as f64) * 100.0;
     println!(
         "│ 🇩🇪 Germany BGB  │ {:>12} │ {:>11} │ {:>6.1}%  │",
         metrics_de.deterministic_count, metrics_de.discretion_count, coverage_de
     );
 
     let coverage_fr =
-        (metrics_fr.deterministic_count as f64 / num_simulations as f64) * 100.0;
+        (metrics_fr.deterministic_count as f64 / metrics_fr.total_applications as f64) * 100.0;
     println!(
         "│ 🇫🇷 France 1240  │ {:>12} │ {:>11} │ {:>6.1}%  │",
         metrics_fr.deterministic_count, metrics_fr.discretion_count, coverage_fr
     );
 
     let coverage_us =
-        (metrics_us.deterministic_count as f64 / num_simulations as f64) * 100.0;
+        (metrics_us.deterministic_count as f64 / metrics_us.total_applications as f64) * 100.0;
     println!(
         "│ 🇺🇸 USA Restate. │ {:>12} │ {:>11} │ {:>6.1}%  │",
         metrics_us.deterministic_count, metrics_us.discretion_count, coverage_us
@@ -599,5 +609,91 @@ async fn run_comparative_simulation_disabled() {
     println!("   Civil Law:    General tort provisions cover wide range");
     println!("   Common Law:   Separate torts (battery, negligence, IIED, etc.)");
     println!("                 Each with distinct elements and precedents");
-    */
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use legalis_de::{bgb_823_1, bgb_826};
+    use legalis_fr::article_1240;
+    use legalis_jp::article_709;
+    use legalis_us::{battery_as_statute, iied_as_statute, products_liability_as_statute};
+
+    #[tokio::test]
+    async fn test_jp_simulation_produces_results() {
+        let metrics = build_and_run_sim(vec![article_709()], 10).await;
+        assert!(
+            metrics.total_applications > 0,
+            "Japan simulation must apply statutes to at least one entity"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_de_simulation_produces_results() {
+        let metrics = build_and_run_sim(vec![bgb_823_1(), bgb_826()], 10).await;
+        assert!(
+            metrics.total_applications > 0,
+            "Germany simulation must apply statutes to at least one entity"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fr_simulation_produces_results() {
+        let metrics = build_and_run_sim(vec![article_1240()], 10).await;
+        assert!(
+            metrics.total_applications > 0,
+            "France simulation must apply statutes to at least one entity"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_us_simulation_produces_results() {
+        let metrics = build_and_run_sim(
+            vec![
+                battery_as_statute(),
+                iied_as_statute(),
+                products_liability_as_statute(),
+            ],
+            10,
+        )
+        .await;
+        assert!(
+            metrics.total_applications > 0,
+            "US simulation must apply statutes to at least one entity"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_all_jurisdictions_in_parallel() {
+        let (metrics_jp, metrics_de, metrics_fr, metrics_us) = tokio::join!(
+            build_and_run_sim(vec![article_709()], 10),
+            build_and_run_sim(vec![bgb_823_1(), bgb_826()], 10),
+            build_and_run_sim(vec![article_1240()], 10),
+            build_and_run_sim(
+                vec![
+                    battery_as_statute(),
+                    iied_as_statute(),
+                    products_liability_as_statute()
+                ],
+                10
+            ),
+        );
+
+        assert!(
+            metrics_jp.total_applications > 0,
+            "JP total_applications must be > 0"
+        );
+        assert!(
+            metrics_de.total_applications > 0,
+            "DE total_applications must be > 0"
+        );
+        assert!(
+            metrics_fr.total_applications > 0,
+            "FR total_applications must be > 0"
+        );
+        assert!(
+            metrics_us.total_applications > 0,
+            "US total_applications must be > 0"
+        );
+    }
 }

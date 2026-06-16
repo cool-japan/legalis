@@ -5,7 +5,7 @@
 ---
 
 **Tác giả**: Nhóm Phát triển Legalis-RS
-**Phiên bản**: 0.2.0
+**Phiên bản**: 0.1.6
 **Ngôn ngữ**: Rust (Edition 2024)
 **Giấy phép**: MIT / Apache 2.0
 
@@ -659,4 +659,4 @@ parallel_workers = 8
 ---
 
 **Nhóm Phát triển Legalis-RS**
-Phiên bản 0.2.0 | 2024
+Phiên bản 0.1.6 | 2026

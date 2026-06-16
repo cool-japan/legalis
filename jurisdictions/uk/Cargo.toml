@@ -12,6 +12,7 @@ documentation = "https://docs.rs/legalis-uk"
 
 [dependencies]
 legalis-core.workspace = true
+legalis-dsl.workspace = true
 legalis-eu.workspace = true  # For UK GDPR reuse (80% of EU GDPR)
 legalis-i18n.workspace = true
 legalis-verifier.workspace = true

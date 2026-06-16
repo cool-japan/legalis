@@ -110,8 +110,11 @@ pub mod labor_contract;
 pub mod antitrust;
 pub mod civil_code;
 pub mod data_security;
+pub mod dsl;
 pub mod foreign_investment;
 pub mod reasoning;
+
+pub use dsl::{all_statutes, statutes_as_dsl};
 
 // Re-export commonly used types
 pub use citation::{Citation, cite, laws};

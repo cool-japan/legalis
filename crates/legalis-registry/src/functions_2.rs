@@ -7,12 +7,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use super::functions::RegistryResult;
 use super::types::{RegistryError, Validator};
 use super::types_4::StatuteRegistry;
-use super::types_6::{StatuteEntry, StatuteStatus};
+use super::types_6::StatuteEntry;
 use super::types_8::ValidationError;
 
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
@@ -22,8 +21,10 @@ pub mod storage {
     //! This module provides database backends with connection pooling
     //! for SQLite and PostgreSQL.
     use super::*;
+    use crate::types_6::StatuteStatus;
     use sqlx::{Pool, Row};
     use std::sync::Arc;
+    use uuid::Uuid;
     /// Storage backend trait for statute persistence.
     #[cfg(feature = "async")]
     #[async_trait::async_trait]
@@ -544,6 +545,7 @@ pub mod graphql {
     //! This module provides a GraphQL interface for querying and
     //! mutating the statute registry.
     use super::*;
+    use crate::types_6::StatuteStatus;
     use async_graphql::{EmptySubscription, FieldResult, Object, Schema, SimpleObject};
     use std::sync::Arc;
     use tokio::sync::RwLock;

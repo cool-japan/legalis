@@ -209,5 +209,5 @@ pub use validator::{
     validate_articles_of_incorporation, validate_sa_board, validate_shareholders_meeting,
 };
 
-// Re-export SA articles
-pub use sa::{article_l225_1, article_l225_17, article_l225_18};
+// Re-export SA and SARL articles
+pub use sa::{article_l223_1, article_l223_3, article_l225_1, article_l225_17, article_l225_18};

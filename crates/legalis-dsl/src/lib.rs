@@ -75,11 +75,16 @@ pub mod codegen;
 pub mod completion;
 pub mod compliance;
 pub mod consistency;
+pub mod contract;
+mod contract_parser;
 pub mod dataflow;
 pub mod diff;
 pub mod docgen;
+pub mod domains;
 pub mod error_explainer;
 pub mod error_recovery;
+pub mod extensibility;
+pub mod formal;
 pub mod grammar_doc;
 pub mod graph;
 pub mod heredoc;
@@ -101,13 +106,17 @@ mod parser;
 mod printer;
 pub mod profiler;
 pub mod query;
+pub mod refactor;
 pub mod search_index;
 pub mod statistics;
 pub mod taint;
 pub mod templates;
+pub mod testspec;
+mod testspec_parser;
 pub mod transform;
 pub mod tree_view;
 pub mod type_checker;
+pub mod typeinfer;
 pub mod validation;
 pub mod watch;
 
@@ -124,10 +133,32 @@ pub use codegen::{
 pub use completion::{CompletionCategory, CompletionContext, CompletionItem, CompletionProvider};
 pub use compliance::{ComplianceMatrix, ComplianceStats};
 pub use consistency::{ConsistencyChecker, ConsistencyIssue};
+pub use contract::{
+    ClauseNode, ClauseTemplate, ComplianceRequirementNode, ContractDocument, ContractNode,
+    DeadlineNode, ExpectedEffect, InspectionNode, ObligationNode, PartyNode, PartyRole,
+    PenaltyNode, PerformanceBlock, ReportFrequency, ReportNode, RightKind, RightNode, TestBinding,
+    TestCaseNode, TestCaseResult, TestExpectation, TestRunReport, TestValue, TimelineNode,
+    common_clause_template, common_clause_templates, run_test_cases,
+};
 pub use dataflow::{DataFlowAnalyzer, DataFlowIssue, DataFlowState};
 pub use diff::{Change, DocumentDiff, StatuteDiff};
 pub use docgen::{DocGenerator, LaTeXGenerator, MarkdownGenerator};
+pub use domains::{
+    CriminalLawDomain, DomainDiagnostic, DomainKeyword, DomainOperator, DomainRegistry,
+    DomainSeverity, DomainVocabulary, EnvironmentalDomain, FinancialServicesDomain,
+    HealthcareDomain, LegalDomain, TaxLawDomain, builtin_registry, domain_tag, is_tagged_with,
+    tag_statute,
+};
 pub use error_explainer::{ErrorExplainer, ErrorExplanation, ErrorSeverity};
+pub use extensibility::{
+    Associativity, CompatibilityLayer, CustomLiteral, DeprecationRule, DurationLiteral, ExprNode,
+    ExtensibleParser, GrammarProduction, KeywordSpec, LiteralRegistry, LiteralValue, MoneyLiteral,
+    OperatorDef, OperatorFixity, OperatorTable, ParsedFragment, ParserPlugin, PercentLiteral,
+    PluginRegistry, ProductionHandler, SyntaxExtensionRegistry, SyntaxVersion,
+};
+pub use formal::{
+    AlloyExporter, CoqExporter, FormalExporter, Lean4Exporter, SmtLibExporter, TlaExporter,
+};
 pub use grammar_doc::{GrammarRule, GrammarSpec, legalis_grammar};
 pub use graph::{
     DependencyGraph, GraphFormat, GraphOptions, generate_dot_graph, generate_mermaid_graph,
@@ -156,18 +187,35 @@ pub use parser::*;
 pub use printer::*;
 pub use profiler::{ParseProfiler, ProfileComparison, ProfileReport, Profiler};
 pub use query::{ConditionSearch, StatuteQuery};
+pub use refactor::{
+    ExtractOptions, ExtractedCondition, InlineResult, MergeOptions, MergeResult, NormalizeReport,
+    RefactorChange, RefactorKind, RefactorReport, SplitOptions, SplitResult, extract_condition,
+    inline_condition, inline_named_conditions, merge_similar_statutes,
+    normalize_condition_structure, normalize_document_conditions, normalize_statute_conditions,
+    split_complex_statute,
+};
 pub use search_index::{IndexStats, SearchIndex, SearchResult, StatuteMetadata};
 pub use statistics::{
     ComplexityMetrics, DependencyAnalysis, DocumentStatistics, analyze_complexity,
 };
 pub use taint::{TaintAnalyzer, TaintCategory, TaintConfig, TaintInfo, TaintReport};
 pub use templates::{StatuteTemplate, TemplateBuilder, TemplateLibrary};
+pub use testspec::{
+    CoverageComparator, CoverageMetric, CoverageReport, CoverageRequirementNode, CoverageResult,
+    CoverageStats, MockEntityNode, PropertyDomain, PropertyResult, PropertyRunReport,
+    PropertySpecNode, PropertyVar, SnapshotAssertionNode, SnapshotMode, SnapshotResult,
+    SnapshotRunReport, TestSpecDocument, TestSpecReport, compute_coverage, run_property_cases,
+    run_snapshots, run_test_cases_with_mocks, statute_signature,
+};
 pub use transform::{
     ConditionTransform, DeduplicateStatutes, DocumentTransform, NormalizeIds, RemoveEmptyStatutes,
     SimplifyConditions, SortByDependencies, StatuteTransform, TransformPipeline,
 };
 pub use tree_view::TreeFormatter;
 pub use type_checker::{Type, TypeChecker, TypeContext, TypeError};
+pub use typeinfer::{
+    DocumentTyping, EntityTyping, InferenceEngine, MonoType, TypeInferError, TypeScheme,
+};
 pub use validation::{CompletenessChecker, SemanticValidator, ValidationContext, ValidationError};
 pub use watch::{FileWatcher, ValidationResult, WatchConfig};
 

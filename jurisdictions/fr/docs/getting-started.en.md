@@ -10,8 +10,8 @@ Add legalis-fr to your `Cargo.toml` dependencies:
 
 ```toml
 [dependencies]
-legalis-fr = "0.2.0"
-legalis-core = "0.2.0"  # Core types and traits
+legalis-fr = "0.1.6"
+legalis-core = "0.1.6"  # Core types and traits
 chrono = "0.4"          # Date handling (required)
 ```
 
@@ -224,7 +224,7 @@ Once comfortable with basics, explore:
 **Solution**: Ensure you've added the dependency correctly:
 ```toml
 [dependencies]
-legalis-fr = "0.2.0"  # Note the hyphen, not underscore
+legalis-fr = "0.1.6"  # Note the hyphen, not underscore
 ```
 
 Import with underscore:

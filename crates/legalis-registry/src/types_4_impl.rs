@@ -9,14 +9,17 @@ use uuid::Uuid;
 
 use super::functions::RegistryResult;
 use super::types::{DuplicateCandidate, EnrichmentType, FieldProfile, HealthStatus, RegistryError};
+#[cfg(feature = "yaml")]
+use super::types_3::BackupMetadata;
 use super::types_3::{
-    BackupMetadata, BulkConfig, DataProfile, RegistryDifference, RegistryEvent,
-    StatuteDifferenceDetail,
+    BulkConfig, DataProfile, RegistryDifference, RegistryEvent, StatuteDifferenceDetail,
 };
 use super::types_4::StatuteRegistry;
+#[cfg(feature = "yaml")]
+use super::types_5::RegistryBackup;
 use super::types_5::{
     ComplianceDashboard, DataRetentionConfig, DataRetentionRule, LineageEntry, PiiDetector,
-    QualityAssessment, RegistryBackup, StatuteDiff,
+    QualityAssessment, StatuteDiff,
 };
 use super::types_6::{AuditReportConfig, StatuteEntry, StatuteStatus};
 use super::types_7::{
@@ -24,9 +27,9 @@ use super::types_7::{
     EnrichmentSuggestion, GeographicRegion, HealthCheckResult, OperationMetrics,
     RetentionExecutionResult, SimilarityScore,
 };
-use super::types_8::{
-    AuditReport, ComponentHealth, EnrichmentConfig, PiiScanResult, QualityScore, StatuteSummary,
-};
+#[cfg(feature = "csv-export")]
+use super::types_8::StatuteSummary;
+use super::types_8::{AuditReport, ComponentHealth, EnrichmentConfig, PiiScanResult, QualityScore};
 
 impl StatuteRegistry {
     /// Computes the difference between two versions of a statute.

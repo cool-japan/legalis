@@ -2,11 +2,12 @@
 
 **World-class implementation of French law for the Legalis-RS legal reasoning framework**
 
-[![Tests](https://img.shields.io/badge/tests-524%20passing-success)](#)
+[![Version](https://img.shields.io/badge/version-0.1.6-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-573%20passing-success)](#)
 [![Documentation](https://img.shields.io/badge/docs-69.7%25-success)](#)
 [![Articles](https://img.shields.io/badge/articles-86-blue)](#)
 [![Domains](https://img.shields.io/badge/domains-11-blue)](#)
-[![Lines](https://img.shields.io/badge/lines-30.9k-blue)](#)
+[![Lines](https://img.shields.io/badge/lines-32.5k-blue)](#)
 
 ## Overview
 
@@ -15,7 +16,7 @@ Comprehensive, production-ready implementation of French law with **exceptional 
 ### 🎯 Key Statistics
 
 - **📚 86 articles** across 11 legal domains
-- **✅ 524 tests** (100% passing, zero warnings)
+- **✅ 573 tests** (100% passing, zero warnings)
 - **📖 69.7% documentation ratio** (12,217 markdown lines)
 - **🌍 5-7 jurisdictions compared** per article
 - **⚖️ 50+ leading cases** cited with full details
@@ -101,7 +102,7 @@ validate_patent(&patent)?;
 ### Core Commercial & Labor Law
 
 #### 5. **Labor Law** (労働法) ⭐
-15 articles • 1,700 lines • 73 tests • 72% docs
+15 articles • 1,700 lines • 57 tests • 72% docs
 
 ```rust
 use legalis_fr::labor::*;
@@ -124,7 +125,7 @@ validate_working_hours(&contract)?;
 ---
 
 #### 6. **Contract Law** (契約法)
-4 articles • 967 lines • 35 tests • 76.5% docs
+4 articles • 967 lines • 58 tests • 76.5% docs
 
 ```rust
 use legalis_fr::contract::*;
@@ -143,7 +144,7 @@ validate_contract_validity(&contract)?;
 ---
 
 #### 7. **Company Law** (会社法)
-3 articles • 988 lines • 22 tests • 77.2% docs
+3 articles • 988 lines • 41 tests • 77.2% docs
 
 ```rust
 use legalis_fr::company::*;
@@ -170,17 +171,17 @@ validate_articles_of_incorporation(&sa)?;
 Marriage, divorce (4 types), PACS, matrimonial property regimes
 
 #### 9. **Constitution** (憲法)
-89 articles • 547 lines • 24 tests • 55% docs
+89 articles • 547 lines • 11 tests • 55% docs
 
 Fifth Republic (1958), semi-presidential system, 16 titles
 
 #### 10. **Code civil - Tort Law** (不法行為法)
-3 articles • 404 lines • 9 tests
+3 articles • 404 lines • 8 tests
 
 Articles 1240-1242 (fault, negligence, strict liability)
 
 #### 11. **Legal Reasoning Engine** (推論エンジン)
-6 analyzers • 2,280 lines • 52 tests
+6 analyzers • 2,280 lines • 82 tests
 
 Automated legal analysis, compliance checking, contract validation
 
@@ -291,7 +292,7 @@ assert!(validate_articles_of_incorporation(&sa).is_ok());
 ## Testing
 
 ```bash
-# All 524 tests (100% passing)
+# All 573 tests (100% passing)
 cargo nextest run --all-features -p legalis-fr
 
 # Zero warnings policy
@@ -303,7 +304,7 @@ cargo build --release -p legalis-fr
 
 **Test Results**:
 ```
-Summary [0.247s] 524 tests run: 524 passed, 0 skipped
+Summary [0.247s] 573 tests run: 573 passed, 0 skipped
 ✅ 100% pass rate
 ✅ Zero warnings
 ✅ Zero errors
@@ -316,16 +317,16 @@ Summary [0.247s] 524 tests run: 524 passed, 0 skipped
 | Module | Articles | Lines | Tests | Doc Ratio | Quality |
 |--------|----------|-------|-------|-----------|---------|
 | Intellectual Property | 8 | 1,897 | 56 | 105% | ⭐⭐⭐⭐⭐ |
-| Company Law | 3 | 988 | 22 | 77.2% | ⭐⭐⭐⭐⭐ |
-| Contract Law | 4 | 967 | 35 | 76.5% | ⭐⭐⭐⭐⭐ |
+| Company Law | 3 | 988 | 41 | 77.2% | ⭐⭐⭐⭐⭐ |
+| Contract Law | 4 | 967 | 58 | 76.5% | ⭐⭐⭐⭐⭐ |
 | Property Law | 13 | 1,967 | 77 | 76% | ⭐⭐⭐⭐⭐ |
-| Labor Law | 15 | 1,700 | 73 | 72% | ⭐⭐⭐⭐⭐ |
+| Labor Law | 15 | 1,700 | 57 | 72% | ⭐⭐⭐⭐⭐ |
 | Evidence Law | 3 | 1,132 | 42 | 71% | ⭐⭐⭐⭐⭐ |
 | Inheritance Law | 11 | 1,711 | 63 | 70% | ⭐⭐⭐⭐⭐ |
 | Family Law | 19 | 2,442 | 71 | 57% | ⭐⭐⭐⭐ |
-| Constitution | 89 | 547 | 24 | 55% | ⭐⭐⭐⭐ |
-| Code civil (Tort) | 3 | 404 | 9 | 37% | ⭐⭐⭐ |
-| Reasoning Engine | 6 | 2,280 | 52 | 18% | ⭐⭐⭐ |
+| Constitution | 89 | 547 | 11 | 55% | ⭐⭐⭐⭐ |
+| Code civil (Tort) | 3 | 404 | 8 | 37% | ⭐⭐⭐ |
+| Reasoning Engine | 6 | 2,280 | 82 | 18% | ⭐⭐⭐ |
 
 ---
 
@@ -404,7 +405,7 @@ pub const OVERTIME_RATE_2: f64 = 0.50; // Beyond 8 hours: +50%
 
 - **Code Quality**: Zero warnings, 100% test pass rate
 - **Documentation**: 75.9% ratio (industry-leading)
-- **Test Coverage**: 524 tests (267% of planned target)
+- **Test Coverage**: 573 tests (292% of planned target)
 - **International Scope**: 5-7 jurisdictions compared per article
 - **Historical Depth**: Roman law → 1804 Code → Modern reforms
 
@@ -425,7 +426,7 @@ This project is licensed under Apache-2.0.
 
 **🇫🇷 Liberté, Égalité, Fraternité**
 
-*524 tests passing • 86 articles • 30.8k lines • 75.9% docs • 11 domains • Fully bilingual*
+*573 tests passing • 86 articles • 32.5k lines • 75.9% docs • 11 domains • Fully bilingual*
 
 **Implementation**: Claude Sonnet 4.5 (2026-01-09)
 **Framework**: [legalis-rs](https://github.com/cool-japan/legalis)

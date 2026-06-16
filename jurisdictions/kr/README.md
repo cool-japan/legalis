@@ -2,6 +2,8 @@
 
 Comprehensive South Korean legal system implementation for the Legalis-RS ecosystem.
 
+**Version 0.1.6** — 18 modules, 131 tests passing, 0 warnings.
+
 ## Overview
 
 Legalis-KR (대한민국 법률 프레임워크) provides full support for South Korean law, covering civil, commercial, labor, criminal, data protection, tax, competition, and intellectual property law. The crate offers bilingual support (Korean/English) and implements Korea's civil law system with its unique characteristics.

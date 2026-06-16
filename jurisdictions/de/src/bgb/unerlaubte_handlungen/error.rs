@@ -165,6 +165,137 @@ pub enum TortError {
     )]
     ZeroDamage,
 
+    // === §824 Errors (Kreditgefährdung / Credit Endangerment) ===
+    #[error(
+        "Äußerung ist ein Werturteil, keine Tatsachenbehauptung (§824 Abs. 1 BGB)\n\
+         Statement is a value judgment, not an assertion of fact (§824 para. 1 BGB)"
+    )]
+    NotFactualAssertion,
+
+    #[error(
+        "Behauptete/verbreitete Tatsache ist nicht unwahr (§824 Abs. 1 BGB)\n\
+         Asserted/disseminated fact is not untrue (§824 para. 1 BGB)"
+    )]
+    StatementNotUntrue,
+
+    #[error(
+        "Tatsache nicht geeignet, Kredit, Erwerb oder Fortkommen zu gefährden (§824 Abs. 1 BGB)\n\
+         Fact not suitable to endanger credit, earnings or advancement (§824 para. 1 BGB)"
+    )]
+    NotSuitableToEndangerCredit,
+
+    #[error(
+        "Weder Kenntnis noch fahrlässige Unkenntnis der Unwahrheit (§824 Abs. 1 BGB)\n\
+         Neither knowledge nor negligent ignorance of the untruth (§824 para. 1 BGB)"
+    )]
+    NoKnowledgeOrNegligenceOfUntruth,
+
+    #[error(
+        "Haftung entfällt wegen berechtigten Interesses an der Mitteilung (§824 Abs. 2 BGB)\n\
+         Liability excluded due to legitimate interest in the communication (§824 para. 2 BGB)"
+    )]
+    LegitimateInterestPrivilege,
+
+    // === §825 Errors (Bestimmung zu sexuellen Handlungen) ===
+    #[error(
+        "Keine Bestimmung zu sexuellen Handlungen nachgewiesen (§825 BGB)\n\
+         No inducement to sexual acts established (§825 BGB)"
+    )]
+    NoSexualActInducement,
+
+    #[error(
+        "Kein qualifiziertes Bestimmungsmittel (Hinterlist, Drohung, Missbrauch eines \
+         Abhängigkeitsverhältnisses) (§825 BGB)\n\
+         No qualifying means (deception, threat, abuse of a relationship of dependence) (§825 BGB)"
+    )]
+    NoQualifyingInducementMeans,
+
+    // === §832 Errors (Aufsichtspflicht / Supervision Liability) ===
+    #[error(
+        "Beaufsichtigte Person hat keinen widerrechtlichen Schaden zugefügt (§832 BGB)\n\
+         Supervised person did not unlawfully cause damage (§832 BGB)"
+    )]
+    NoUnlawfulDamageBySupervised,
+
+    #[error(
+        "Aufsichtspflichtiger entlastet: {ground} (§832 Abs. 1 S. 2 BGB)\n\
+         Supervisor exculpated: {ground} (§832 para. 1 sent. 2 BGB)"
+    )]
+    SupervisorExculpated { ground: String },
+
+    // === §833/§834 Errors (Tierhalterhaftung / Animal Liability) ===
+    #[error(
+        "Schaden wurde nicht durch die spezifische Tiergefahr verursacht (§833 BGB)\n\
+         Damage was not caused by the specific animal hazard (§833 BGB)"
+    )]
+    NotCausedByAnimal,
+
+    #[error(
+        "Tierhalter/Tieraufseher entlastet: {ground} (§833 S. 2 / §834 S. 2 BGB)\n\
+         Animal keeper/supervisor exculpated: {ground} (§833 sent. 2 / §834 sent. 2 BGB)"
+    )]
+    AnimalKeeperExculpated { ground: String },
+
+    // === §836-838 Errors (Gebäudehaftung / Building Liability) ===
+    #[error(
+        "Schaden nicht durch Einsturz/Ablösung infolge fehlerhafter Errichtung oder \
+         mangelhafter Unterhaltung (§836 BGB)\n\
+         Damage not caused by collapse/detachment resulting from faulty construction or \
+         defective maintenance (§836 BGB)"
+    )]
+    NoStructuralDefectCausation,
+
+    #[error(
+        "Besitzer/Unterhaltungspflichtiger entlastet: {ground} (§836 Abs. 1 S. 2 BGB)\n\
+         Possessor/maintenance obligor exculpated: {ground} (§836 para. 1 sent. 2 BGB)"
+    )]
+    BuildingPossessorExculpated { ground: String },
+
+    // === §839 Errors (Amtshaftung / Public Official Liability) ===
+    #[error(
+        "Schädiger ist kein Beamter im haftungsrechtlichen Sinne (§839 BGB)\n\
+         Wrongdoer is not an official in the liability sense (§839 BGB)"
+    )]
+    NotAnOfficial,
+
+    #[error(
+        "Keine drittbezogene Amtspflichtverletzung nachgewiesen (§839 Abs. 1 BGB)\n\
+         No breach of an official duty established (§839 para. 1 BGB)"
+    )]
+    NoOfficialDutyBreach,
+
+    #[error(
+        "Amtspflicht bestand nicht gegenüber dem Geschädigten (Drittbezogenheit) (§839 Abs. 1 BGB)\n\
+         Official duty was not owed to the injured party (third-party relation) (§839 para. 1 BGB)"
+    )]
+    NoDutyToThirdParty,
+
+    #[error(
+        "Kein Verschulden des Beamten (Vorsatz/Fahrlässigkeit) (§839 Abs. 1 BGB)\n\
+         No fault of the official (intent/negligence) (§839 para. 1 BGB)"
+    )]
+    NoOfficialFault,
+
+    #[error(
+        "Subsidiarität: bei bloßer Fahrlässigkeit besteht anderweitige Ersatzmöglichkeit \
+         (§839 Abs. 1 S. 2 BGB)\n\
+         Subsidiarity: alternative compensation available for mere negligence \
+         (§839 para. 1 sent. 2 BGB)"
+    )]
+    OfficialLiabilitySubsidiary,
+
+    #[error(
+        "Spruchrichterprivileg: Amtspflichtverletzung im Urteil ohne Straftat (§839 Abs. 2 BGB)\n\
+         Judicial privilege: breach of duty in a judgment without a criminal offense (§839 para. 2 BGB)"
+    )]
+    JudicialPrivilege,
+
+    #[error(
+        "Haftung entfällt: Schaden war durch Gebrauch eines Rechtsmittels abwendbar (§839 Abs. 3 BGB)\n\
+         Liability excluded: damage could have been averted by use of a legal remedy (§839 para. 3 BGB)"
+    )]
+    FailureToUseLegalRemedy,
+
     #[error(
         "Mehrere Fehler: {errors:?}\n\
          Multiple errors: {errors:?}"
@@ -200,6 +331,32 @@ impl TortError {
             Self::InjuredPartyMissing => "General",
             Self::ConductNotDescribed => "General",
             Self::ZeroDamage => "General",
+            // §824 Kreditgefährdung
+            Self::NotFactualAssertion => "§824 Abs. 1 BGB",
+            Self::StatementNotUntrue => "§824 Abs. 1 BGB",
+            Self::NotSuitableToEndangerCredit => "§824 Abs. 1 BGB",
+            Self::NoKnowledgeOrNegligenceOfUntruth => "§824 Abs. 1 BGB",
+            Self::LegitimateInterestPrivilege => "§824 Abs. 2 BGB",
+            // §825 Bestimmung zu sexuellen Handlungen
+            Self::NoSexualActInducement => "§825 BGB",
+            Self::NoQualifyingInducementMeans => "§825 BGB",
+            // §832 Aufsichtspflicht
+            Self::NoUnlawfulDamageBySupervised => "§832 BGB",
+            Self::SupervisorExculpated { .. } => "§832 Abs. 1 S. 2 BGB",
+            // §833/§834 Tierhalterhaftung
+            Self::NotCausedByAnimal => "§833 BGB",
+            Self::AnimalKeeperExculpated { .. } => "§833 S. 2 / §834 S. 2 BGB",
+            // §836-838 Gebäudehaftung
+            Self::NoStructuralDefectCausation => "§836 BGB",
+            Self::BuildingPossessorExculpated { .. } => "§836 Abs. 1 S. 2 BGB",
+            // §839 Amtshaftung
+            Self::NotAnOfficial => "§839 Abs. 1 BGB",
+            Self::NoOfficialDutyBreach => "§839 Abs. 1 BGB",
+            Self::NoDutyToThirdParty => "§839 Abs. 1 BGB",
+            Self::NoOfficialFault => "§839 Abs. 1 BGB",
+            Self::OfficialLiabilitySubsidiary => "§839 Abs. 1 S. 2 BGB",
+            Self::JudicialPrivilege => "§839 Abs. 2 BGB",
+            Self::FailureToUseLegalRemedy => "§839 Abs. 3 BGB",
             Self::MultipleErrors { .. } => "Multiple",
         }
     }

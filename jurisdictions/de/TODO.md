@@ -245,13 +245,37 @@
 **Examples:** 3 working examples (contract-formation.rs, contract-breach-damages.rs, tort-claim-823-1.rs) = 958 lines
 **Status:** All 310 tests passing, zero warnings, full bilingual support, builder patterns implemented
 
-#### Future Enhancements (OPTIONAL)
-- [ ] §824 - Credit endangerment (Kreditgefährdung)
-- [ ] §825 - Sexual offenses tort liability
-- [ ] §832 - Liability for persons under supervision
-- [ ] §833-838 - Animal keeper liability (Tierhalterhaftung)
-- [ ] §839 - Liability of public officials (Amtshaftung)
-- [ ] Examples: traffic-accident-tort.rs, product-liability.rs
+#### Special Tort Sections (COMPLETE - 2026-06-14, see "Deliktsrecht Gap-Fill" below)
+- [x] §824 - Credit endangerment (Kreditgefährdung) — `kreditgefaehrdung.rs`, untrue-fact/Werturteil distinction + Abs. 2 legitimate-interest privilege
+- [x] §825 - Inducement to sexual acts (sexuelle Selbstbestimmung) — `sexuelle_selbstbestimmung.rs`, Hinterlist/Drohung/Abhängigkeit means
+- [x] §832 - Liability for persons under supervision (Aufsichtspflicht) — `aufsichtspflicht.rs`, statutory/contractual basis + presumed-fault exculpation
+- [x] §833-838 - Animal keeper (§833/834) & building liability (§836-838) — `tierhalterhaftung.rs` (Luxus-/Nutztier strict-vs-exculpable, §835 repealed marker) + `gebaeudehaftung.rs`
+- [x] §839 - Liability of public officials (Amtshaftung) — `amtshaftung.rs`, drittbezogene Amtspflicht, subsidiarity (Abs. 1 S. 2), judges' privilege (Abs. 2), Abs. 3 remedy bar (Art. 34 GG noted)
+- [x] Examples → implemented as in-crate doc examples (one per section) + integration tests (`tests/deliktsrecht_validation_tests.rs`); traffic-accident scenario covered by §823_1 + §833 examples. (Deferred: standalone product-liability example — ProdHaftG/§823 is outside the §§824-839 scope.)
+
+#### 🆕 Deliktsrecht Gap-Fill (2026-06-14) - Special Tort Sections §§ 824-839 BGB
+
+Closed the Phase 5 "Future Enhancements" gap with six legally-grounded modules added
+to `src/bgb/unerlaubte_handlungen/` (each cites the governing §, encodes the
+exculpation/privilege structure, reuses the existing `TortError`, `TortParty`,
+`DamageClaim` and `Capital` types and the bilingual citation system):
+
+| § | Module | Liability model | Key types / validator |
+|---|--------|-----------------|-----------------------|
+| §824 | `kreditgefaehrdung.rs` | Untrue factual assertion endangering credit; Abs. 2 legitimate-interest privilege | `CreditEndangermentClaim(+Builder)`, `StatementForm`, `StatementNature`, `validate_credit_endangerment_claim` |
+| §825 | `sexuelle_selbstbestimmung.rs` | Inducement to sexual acts by Hinterlist/Drohung/Abhängigkeit | `SexualSelfDeterminationClaim(+Builder)`, `InducementMeans`, `SexualActInvolvement`, `validate_sexual_self_determination_claim` |
+| §832 | `aufsichtspflicht.rs` | Presumed-fault supervisor liability (statutory/contractual) with exculpation | `SupervisionLiabilityClaim(+Builder)`, `SupervisionBasis`, `SupervisionReason`, `validate_supervision_liability` |
+| §§833-835 | `tierhalterhaftung.rs` | Strict (Luxustier) vs exculpable (Nutztier/§834 Tieraufseher); §835 repealed marker | `AnimalLiabilityClaim(+Builder)`, `AnimalLiabilityBasis`, `AnimalCategory`, `SECTION_835_REPEALED`, `validate_animal_liability` |
+| §§836-838 | `gebaeudehaftung.rs` | Presumed-fault building-collapse/detachment liability with exculpation | `BuildingLiabilityClaim(+Builder)`, `BuildingLiableParty`, `StructuralFailureType`, `StructuralDefectCause`, `validate_building_liability` |
+| §839 | `amtshaftung.rs` | Drittbezogene Amtspflicht + subsidiarity (Abs. 1 S. 2), judges' privilege (Abs. 2), Abs. 3 remedy bar | `OfficialLiabilityClaim(+Builder)`, `OfficialFault`, `validate_official_liability` |
+
+Shared: `PhysicalHarmType` enum added to `types.rs` (§§833/836 identical wording);
+24 new bilingual `TortError` variants with `article_reference()` arms.
+
+**Tests:** 501 → 579 (+78: 59 inline unit tests + 19 integration tests in
+`tests/deliktsrecht_validation_tests.rs`). All 579 pass; 49 doctests pass.
+**Quality gates:** `cargo clippy -p legalis-de --all-targets -- -D warnings` clean;
+no unwrap/expect/panic in non-test code; all files < 600 lines; additive, no new deps.
 
 ### ✅ Phase 6: BGB Property Law (Sachenrecht) - COMPLETE
 **Target:** ~2,000 lines | **Actual:** 2,720 lines (136% of target)
@@ -552,76 +576,147 @@
 - [x] leave-entitlement-calculation.rs (272 lines)
 - [x] Total: 855 lines with comprehensive validation demonstrations
 
-#### Validators
-- [ ] Employment contract completeness
-- [ ] Dismissal legality checker (social justification)
-- [ ] Working hours compliance (ArbZG)
-- [ ] Leave entitlement calculator (BUrlG)
-- [ ] Works council threshold detection
+#### Validators (RECONCILED 2026-06-14 - already implemented in Phase 10, `src/arbeitsrecht/validator.rs`)
+- [x] Employment contract completeness — `validate_employment_contract()` (§2 NachwG, §622 BGB)
+- [x] Dismissal legality checker (social justification) — `validate_dismissal()` + `validate_dismissal_grounds()` (KSchG §1, §623/§626 BGB, §102 BetrVG)
+- [x] Working hours compliance (ArbZG) — `validate_working_hours()` + `WorkingHours::complies_with_arbzg()` (ArbZG §3)
+- [x] Leave entitlement calculator (BUrlG) — `validate_leave_entitlement()` + `LeaveEntitlement::calculate_minimum()` (BUrlG §3)
+- [x] Works council threshold detection — `validate_works_council()` + `WorksCouncil::required_size()`/`is_required()` (BetrVG §1, §9)
 
 ---
 
 ## Version 0.6.0 - Criminal Code (Strafgesetzbuch - StGB)
 
 ### Phase 13: StGB General Part (Allgemeiner Teil)
-**Target:** ~1,500 lines
+**Target:** ~1,500 lines | **Actual:** ~1,630 lines (src/stgb/allgemeiner_teil/ + strafe.rs + error.rs)
 
-- [ ] §13-14 - Criminal liability (Strafbarkeit)
-- [ ] §15-18 - Intent and negligence (Vorsatz und Fahrlässigkeit)
-- [ ] §19-21 - Legal incapacity (Schuldunfähigkeit)
-- [ ] §22-30 - Attempt and complicity (Versuch und Teilnahme)
-- [ ] §32-35 - Justification grounds (Rechtfertigungsgründe)
-- [ ] §38-43 - Penalties (Strafen)
+- [x] §13-14 - Criminal liability (Strafbarkeit; Begehen durch Unterlassen / Garantenstellung; Handeln für einen anderen) — `allgemeiner_teil/unterlassen.rs`
+- [x] §15-18 - Intent and negligence (Vorsatz/Fahrlässigkeit §15; Irrtum §§16-17; erfolgsqualifizierte Delikte §18) — `allgemeiner_teil/schuld.rs`
+- [x] §19-21 - Legal incapacity (Schuldunfähigkeit §19 Kind, §20, verminderte Schuldfähigkeit §21) — `allgemeiner_teil/schuldfaehigkeit.rs`
+- [x] §22-30 - Attempt and complicity (Versuch §22-23, Rücktritt §24, Täterschaft/Teilnahme §§25-27) — `allgemeiner_teil/versuch_teilnahme.rs`
+- [x] §32-35 - Justification/excuse grounds (Notwehr §32, rechtfertigender Notstand §34, entschuldigender Notstand §35) — `allgemeiner_teil/rechtfertigung.rs`
+- [x] §38-43 - Penalties (Freiheitsstrafe §38-39, Geldstrafe/Tagessätze §40-41, Ersatzfreiheitsstrafe §43; Strafrahmen) — `stgb/strafe.rs` + `allgemeiner_teil/strafen.rs`
 
 ### Phase 14: StGB Special Part - Selected Crimes
-**Target:** ~2,000 lines
+**Target:** ~2,000 lines | **Actual:** ~4,790 lines (src/stgb/besonderer_teil/)
 
 #### Property Crimes (Vermögensdelikte)
-- [ ] §242-248c - Theft (Diebstahl)
-- [ ] §249-255 - Robbery (Raub)
-- [ ] §263-266 - Fraud (Betrug)
-- [ ] §267-282 - Forgery (Urkundenfälschung)
+- [x] §242-248c - Theft (Diebstahl §242, besonders schwerer Fall §243, Qualifikationen §244/§244a, §§248a-248c) — `besonderer_teil/diebstahl.rs`
+- [x] §249-255 - Robbery (Raub §249, schwerer Raub §250, Raub mit Todesfolge §251, räuberischer Diebstahl §252, Erpressung §253, räuberische Erpressung §255) — `besonderer_teil/raub.rs`
+- [x] §263-266 - Fraud (Betrug §263, Computerbetrug §263a, Versicherungsmissbrauch §265, Untreue §266, §§266a-266b) — `besonderer_teil/betrug.rs`
+- [x] §267-282 - Forgery (Urkundenfälschung §267, §§268-269, §271, §274, §277, §281) — `besonderer_teil/urkundenfaelschung.rs`
 
 #### Crimes Against the Person
-- [ ] §211-222 - Homicide (Tötungsdelikte)
-- [ ] §223-231 - Bodily harm (Körperverletzung)
-- [ ] §177-184 - Sexual offenses (Sexualdelikte)
+- [x] §211-222 - Homicide (Mord §211, Totschlag §212, §213, §216, fahrlässige Tötung §222) — `besonderer_teil/toetungsdelikte.rs`
+- [x] §223-231 - Bodily harm (Körperverletzung §223, gefährliche §224, §225, schwere §226, §226a, §227, fahrlässige §229, §231; Einwilligung §228) — `besonderer_teil/koerperverletzung.rs`
+- [x] §177-184 - Sexual offenses (sexueller Übergriff/Nötigung/Vergewaltigung §177, §178 mit Todesfolge, §184/§184b) — `besonderer_teil/sexualdelikte.rs`
 
 ---
 
 ## Version 0.7.0 - Administrative & Tax Law
 
 ### Phase 15: Administrative Procedure Act (VwVfG)
-- [ ] Administrative act (Verwaltungsakt) framework
-- [ ] Procedural requirements
-- [ ] Legal remedies (Rechtsbehelfe)
+- [x] Administrative act (Verwaltungsakt) framework (§35 definition, §36 Nebenbestimmungen, §§41/43 Bekanntgabe/Wirksamkeit, §44 Nichtigkeit, §48 Rücknahme / §49 Widerruf) — `verwaltungsrecht/verwaltungsakt.rs`
+- [x] Procedural requirements (Wirksamkeit/Bekanntgabe, Nichtigkeit checks) — `verwaltungsrecht/verwaltungsakt.rs`
+- [x] Legal remedies (Rechtsbehelfe: Widerspruch §70 VwGO, Anfechtungs-/Verpflichtungsklage §42 VwGO) — `verwaltungsrecht/rechtsbehelfe.rs`
 
 ### Phase 16: Tax Law Basics (Steuerrecht)
-- [ ] Income Tax Act (EStG) - selected provisions
-- [ ] VAT Act (UStG) - basic framework
-- [ ] Tax Procedure Code (AO) - procedural rules
+- [x] Income Tax Act (EStG) - selected provisions (Einkunftsarten §2, Einkommensteuertarif §32a 2023) — `steuerrecht/estg.rs`
+- [x] VAT Act (UStG) - basic framework (Steuerbarkeit §1, Steuersätze §12 Regelsatz/ermäßigt) — `steuerrecht/ustg.rs`
+- [x] Tax Procedure Code (AO) - procedural rules (Steuerbescheid §§124/155/157, Festsetzungsverjährung §§169-171, Einspruch §355, Zinsen §233a) — `steuerrecht/ao.rs`
 
 ---
 
 ## Future Considerations
 
 ### Advanced Features
-- [ ] Legal decision tree visualization (using legalis-viz)
-- [ ] Smart contract generation for German law compliance
-- [ ] Knowledge graph for German legal concepts
-- [ ] LLM integration for statutory interpretation
-- [ ] E-Gov XML parser for German federal law database
+- [ ] Legal decision tree visualization (using legalis-viz) — DEFERRED: requires legalis-viz integration / rendering backend, out of pure-Rust statute-modelling scope for this phase.
+- [ ] Smart contract generation for German law compliance — DEFERRED: requires smart-contract/codegen target and external toolchain.
+- [ ] Knowledge graph for German legal concepts — DEFERRED: requires a graph store/dataset and ontology integration.
+- [ ] LLM integration for statutory interpretation — DEFERRED: requires external LLM provider integration (legalis-llm).
+- [ ] E-Gov XML parser for German federal law database — DEFERRED: requires the external E-Gov XML schema/dataset.
 
 ### Integration
-- [ ] Cross-reference with EU law (GDPR, MiFID II, etc.)
-- [ ] Comparative analysis with other jurisdictions (JP, US, FR)
-- [ ] Multi-jurisdictional conflict resolution
+- [ ] Cross-reference with EU law (GDPR, MiFID II, etc.) — DEFERRED: requires EU-law datasets and cross-reference corpus.
+- [ ] Comparative analysis with other jurisdictions (JP, US, FR) — DEFERRED: requires multi-jurisdiction corpora and the other jurisdiction crates.
+- [ ] Multi-jurisdictional conflict resolution — DEFERRED: requires multi-jurisdiction conflict-of-laws datasets/engine.
 
 ### Case Law Database (Rechtsprechung)
-- [ ] BGH (Federal Court of Justice) decisions
-- [ ] BVerfG (Constitutional Court) decisions
-- [ ] BAG (Federal Labor Court) decisions
-- [ ] Precedent citation and analysis
+- [ ] BGH (Federal Court of Justice) decisions — DEFERRED: requires an external case-law database/dataset.
+- [ ] BVerfG (Constitutional Court) decisions — DEFERRED: requires an external case-law database/dataset.
+- [ ] BAG (Federal Labor Court) decisions — DEFERRED: requires an external case-law database/dataset.
+- [ ] Precedent citation and analysis — DEFERRED: depends on the above case-law databases.
+
+---
+
+## COMPLETED (2026-06-14 — StGB/Verwaltungsrecht/Steuerrecht)
+
+Implemented Versions 0.6.0 (Criminal Code, Phases 13-14) and 0.7.0 (Administrative
+& Tax Law, Phases 15-16) as pure-Rust, additive, backward-compatible modules.
+~9,720 lines of new production code + tests across 27 source files (every file
+< 2000 lines), with 249 new `#[test]` functions.
+
+### StGB (Strafgesetzbuch) — `src/stgb/`
+- **Shared sentencing framework** `strafe.rs`: `Freiheitsstrafe` (§38-39),
+  `Geldstrafe`/Tagessätze (§40-43, incl. Ersatzfreiheitsstrafe), and the abstract
+  `Strafrahmen` type with range checking. Bilingual `StgbError` in `error.rs`.
+- **Allgemeiner Teil** `allgemeiner_teil/`:
+  - `unterlassen.rs` (§13-14): Garantenstellung (Beschützer-/Überwachergarant),
+    Entsprechensklausel, Handeln für einen anderen.
+  - `schuld.rs` (§15-18): Vorsatzformen (dolus directus/eventualis), Fahrlässigkeit,
+    Tatbestandsirrtum (§16) / Verbotsirrtum (§17), Erfolgsqualifikation (§18).
+  - `schuldfaehigkeit.rs` (§19-21): §19 Kind (<14), §20 Schuldunfähigkeit, §21
+    verminderte Schuldfähigkeit.
+  - `versuch_teilnahme.rs` (§22-30): unmittelbares Ansetzen (§22), Strafbarkeit
+    (§23), strafbefreiender Rücktritt (§24, un-/beendeter Versuch), Täterschaft
+    (§25), Anstiftung (§26), Beihilfe (§27), limitierte Akzessorietät.
+  - `rechtfertigung.rs` (§32-35): Notwehr (§32), rechtfertigender Notstand (§34),
+    entschuldigender Notstand (§35).
+  - `strafen.rs` (§38-43): §39 Bemessung, §41 Geldstrafe neben Freiheitsstrafe, §43.
+- **Besonderer Teil** `besonderer_teil/`: each offence modelled with an offence
+  enum (`paragraph()` + `strafrahmen()`), a `*Case` struct of Tatbestandsmerkmale,
+  and a `validate_*` function:
+  - `toetungsdelikte.rs` (§211-222): Mord (§211, Mordmerkmale), Totschlag (§212),
+    §213, §216, fahrlässige Tötung (§222).
+  - `koerperverletzung.rs` (§223-231): §223, gefährliche (§224), §225, schwere
+    (§226), §226a, mit Todesfolge (§227), fahrlässige (§229), §231; Einwilligung (§228).
+  - `diebstahl.rs` (§242-248c): §242, §243 Regelbeispiele, §244/§244a, §§248a-248c.
+  - `raub.rs` (§249-255): §249, §250, §251 (life + 10y floor), §252, §253, §255.
+  - `betrug.rs` (§263-266): §263 (Täuschungskette), §263a, §265, §266, §266a/§266b.
+  - `urkundenfaelschung.rs` (§267-282): §267 (Urkunde Beweis-/Garantiefunktion),
+    §§268-269, §271, §274, §277, §281.
+  - `sexualdelikte.rs` (§177-184): §177 (Übergriff/Nötigung/Vergewaltigung, post-2016
+    reform), §178 mit Todesfolge (life + 10y floor), §184/§184b.
+
+### Verwaltungsrecht (VwVfG) — `src/verwaltungsrecht/`
+- `verwaltungsakt.rs`: §35 Verwaltungsakt (5 Merkmale + Allgemeinverfügung), §36
+  Nebenbestimmungen, §§41/43 Bekanntgabe/Wirksamkeit, §44 Nichtigkeit (Evidenztheorie
+  + Abs. 2 Katalog), §48 Rücknahme (Vertrauensschutz) / §49 Widerruf.
+- `rechtsbehelfe.rs`: Widerspruch (§70 VwGO, Monatsfrist via chrono), Anfechtungs-/
+  Verpflichtungsklage admissibility (§42 Abs. 2 Klagebefugnis, §68 Vorverfahren).
+- `error.rs`: bilingual `VwVfGError`.
+
+### Steuerrecht — `src/steuerrecht/`
+- `estg.rs`: §2 Einkunftsarten (7 types, Gewinn-/Überschusseinkünfte), §32a
+  Einkommensteuertarif 2023 (5-zone piecewise, floored to euros).
+- `ustg.rs`: §1 Steuerbarkeit (5 Merkmale), §12 Steuersätze (19% / 7% / steuerfrei),
+  Umsatzsteuer/Brutto/Netto computations (integer cents).
+- `ao.rs`: Steuerbescheid (§§124/155/157), Festsetzungsverjährung (§§169-171:
+  4/1/10/5 years), Einspruch (§355), Nachzahlungszinsen (§233a).
+- `error.rs`: bilingual `SteuerError`.
+
+### Verification
+- `cargo clippy -p legalis-de --all-targets -- -D warnings`: clean (zero warnings).
+- `cargo nextest run -p legalis-de`: 828 tests passed, 0 failed.
+- `cargo test -p legalis-de --doc`: 49 doc-tests passed.
+- No `unwrap()/expect()/panic!/todo!/unimplemented!/unreachable!` in non-test code.
+- Monetary amounts stored as integer cents. All new modules wired into `lib.rs`.
+
+### Deferred (need external integrations/datasets)
+legalis-viz decision-tree visualization; smart-contract generation; knowledge
+graph; LLM statutory interpretation; E-Gov XML parser; EU-law cross-reference;
+comparative analysis (JP/US/FR); multi-jurisdictional conflict resolution;
+case-law (BGH/BVerfG/BAG) databases & precedent citation.
 
 ---
 

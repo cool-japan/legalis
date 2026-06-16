@@ -11,7 +11,7 @@ Legalis-DE provides type-safe Rust implementations of German legal statutes with
 - **Bilingual**: German and English error messages
 - **Validation**: Multi-stage validation with detailed errors
 - **Examples**: 20+ working examples for all major features
-- **Production Ready**: 365 tests, 0 warnings, ~25,000 lines of code
+- **Production Ready**: 835 tests, 0 warnings, ~46,500 lines of code
 
 ## Legal Areas Covered
 
@@ -58,7 +58,7 @@ Legalis-DE provides type-safe Rust implementations of German legal statutes with
 
 ```toml
 [dependencies]
-legalis-de = "0.1.1"
+legalis-de = "0.1.6"
 ```
 
 ### Example: GmbH Formation
@@ -194,7 +194,7 @@ jurisdictions/de/
 │   ├── grundgesetz/    # Constitutional Law
 │   └── arbeitsrecht/   # Labor Law
 ├── examples/           # 20+ working examples
-├── tests/             # 365 tests
+├── tests/             # 835 tests
 ├── docs/              # Documentation (DE/EN)
 └── TODO.md            # Project roadmap
 ```
@@ -238,9 +238,9 @@ cargo tarpaulin --out Html
 
 ## Quality Metrics
 
-- **Tests**: 365 tests (365 passed, 0 failed)
+- **Tests**: 835 tests (835 passed, 0 failed)
 - **Warnings**: 0 (cargo clippy --all-targets)
-- **Lines of Code**: ~25,000 (source + tests + examples)
+- **Lines of Code**: ~46,500 (source + tests + examples)
 - **Documentation**: 100% public API documented
 - **Statutes**: 20+ German statutes covered
 

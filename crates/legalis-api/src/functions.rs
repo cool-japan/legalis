@@ -586,6 +586,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(get_api_key).delete(revoke_api_key),
         )
         .route("/api/v1/api-keys/{id}/rotate", post(rotate_api_key))
+        .merge(crate::governance_routes::governance_router())
         .layer(Extension(graphql_schema))
         .layer(middleware::from_fn(crate::logging::log_request))
         .layer(CompressionLayer::new())

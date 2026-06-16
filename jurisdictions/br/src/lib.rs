@@ -159,7 +159,10 @@ pub mod data_protection;
 pub mod environmental_law;
 pub mod intellectual_property;
 pub mod labor_law;
+pub mod statutes;
 pub mod tax_law;
+
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 // Re-export citation types
 pub use citation::{

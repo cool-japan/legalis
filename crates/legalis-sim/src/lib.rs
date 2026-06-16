@@ -163,14 +163,46 @@
 //! - Predictive maintenance simulation
 //! - Twin-based what-if analysis
 //! - Bidirectional updates between physical and digital entities
+//!
+//! ## Federated Simulation (v0.3.2)
+//! - Privacy-preserving distributed simulation across isolated data partitions
+//! - Federated learning for models (FedAvg and differentially-private DP-FedAvg)
+//! - Cross-organization simulation sharing with policy enforcement
+//! - Secure multi-party computation via additive secret sharing
+//! - Differential privacy guarantees (Laplace/Gaussian mechanisms, budget accounting)
+//!
+//! ## Autonomous Simulation (v0.3.3)
+//! - Self-tuning simulation parameters (UCB bandit and simulated-annealing controllers)
+//! - Automated scenario generation (factorial, Latin-hypercube, Halton, novelty search)
+//! - Intelligent parameter-space exploration (Gaussian-process Bayesian optimization,
+//!   differential evolution)
+//! - Self-healing simulation systems (invariant-based failure detection and recovery)
+//! - Meta-learning for simulation optimization (transferable performance model, warm start)
+//!
+//! ## Immersive Simulation (v0.3.4)
+//! - 3-D scene/entity representation of a simulation population or metrics aggregate
+//! - VR/AR scene export (A-Frame WebXR HTML, X3D XML, glTF-like JSON)
+//! - AR policy overlays (world-anchored, impact-graded info cards)
+//! - Haptic feedback encoding (force/vibration channels mapped from impact metrics)
+//! - Collaborative VR sessions (shared camera/presence/annotations with deterministic
+//!   last-writer-wins conflict resolution)
+//! - Spatial-audio cues (3-D positional sonification of data dimensions)
+//!
+//! ## Cloud-Native Scaling
+//! - Provider-agnostic [`cloud::CloudProvider`] abstraction: node pool, autoscaling
+//!   policy, work-distribution plan and cost model
+//! - In-memory [`cloud::SimulatedCloud`] backend; live AWS/GCP/Azure SDK bindings are
+//!   deferred (no network/credentials offline)
 
 mod agent_based_2;
 mod agent_intelligence;
 mod analysis;
 mod api;
+mod autonomous;
 mod behavior;
 mod builder;
 mod calibration;
+pub mod cloud;
 mod comparison;
 mod demographic_modeling;
 mod digital_twin;
@@ -182,9 +214,11 @@ mod engine;
 mod environmental;
 mod error;
 mod event_driven;
+mod federated;
 mod forecasting;
 mod gpu;
 mod healthcare;
+pub mod immersive;
 mod impact;
 mod incremental;
 mod metrics;
@@ -214,6 +248,7 @@ pub use agent_based_2::*;
 pub use agent_intelligence::*;
 pub use analysis::*;
 pub use api::*;
+pub use autonomous::*;
 pub use behavior::*;
 pub use builder::*;
 pub use calibration::*;
@@ -228,6 +263,7 @@ pub use engine::*;
 pub use environmental::*;
 pub use error::*;
 pub use event_driven::*;
+pub use federated::*;
 pub use forecasting::*;
 pub use gpu::*;
 pub use healthcare::*;

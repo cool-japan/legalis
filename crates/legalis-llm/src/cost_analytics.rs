@@ -575,7 +575,7 @@ pub struct CostAnomaly {
 }
 
 /// Severity level for anomalies.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AnomalySeverity {
     /// Low severity
     Low,

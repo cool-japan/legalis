@@ -129,10 +129,10 @@
 //! | Feature | GDPR | PDPA (Singapore) |
 //! |---------|------|------------------|
 //! | **Scope** | EU/EEA + extraterritorial | Singapore organizations |
-//! | **Legal Basis** | 6 lawful bases | Consent-centric (with exceptions) |
-//! | **DPO** | Mandatory for certain processing | Recommended (not mandatory) |
-//! | **Breach Notification** | 72 hours to authority | 3 calendar days to PDPC (if notifiable) |
-//! | **Fines** | Up to €20M or 4% revenue | Up to SGD 1M |
+//! | **Legal Basis** | 6 lawful bases | Consent-centric (with deemed consent s. 15/15A + Schedule exceptions) |
+//! | **DPO** | Mandatory for certain processing (Art. 37) | Always mandatory to designate (s. 11(3)) |
+//! | **Breach Notification** | 72 hours to authority | 3 calendar days to PDPC from assessment (s. 26D(1)) |
+//! | **Fines** | Up to €20M or 4% revenue | SGD 1M, or 10% of SG turnover if > SGD 10M (s. 48J(3)) |
 //! | **Right to be Forgotten** | Explicit (Art. 17) | Limited (correction/access only) |
 //! | **DNC Registry** | No equivalent | Part IX - opt-out for marketing |
 //!
@@ -140,28 +140,31 @@
 //!
 //! - **Consent** (s. 13): Obtain valid consent for collection, use, disclosure
 //! - **Purpose Limitation** (s. 18): Collect only for reasonable purposes
-//! - **Data Breach Notification** (s. 26B/26C): Notify PDPC within 3 calendar days
-//! - **DNC Compliance** (Part IX): Check Do Not Call Registry before marketing
+//! - **Data Breach Notification** (s. 26B-26D): Notify PDPC within 3 calendar days of assessment
+//! - **DNC Compliance** (Part 9): Check Do Not Call Registry before tele-marketing (21-day validity)
 //! - **Access Requests** (s. 21): Respond within 30 days
+//! - **Data Protection Officer** (s. 11(3)): Mandatory designation of at least one DPO
 //!
 //! ### Example: Consent Management
 //!
 //! ```rust,ignore
 //! use legalis_sg::pdpa::*;
 //!
-//! // Record consent for marketing emails
-//! let consent = ConsentRecord::builder()
-//!     .data_subject_id("customer@example.com")
-//!     .purpose(PurposeOfCollection::Marketing)
-//!     .consent_method(ConsentMethod::Electronic)
-//!     .add_data_category(PersonalDataCategory::Email)
-//!     .timestamp_now()
-//!     .build()?;
+//! // Record express consent for marketing emails (PDPA s. 14)
+//! let consent = ConsentRecordBuilder::express(
+//!     "consent-001",
+//!     "customer@example.com",
+//!     PurposeOfCollection::Marketing,
+//!     ConsentMethod::ExpressElectronic,
+//! )
+//! .data_category(PersonalDataCategory::Email)
+//! .build()?;
 //!
-//! // Validate consent
+//! // Validate consent (s. 13)
 //! match validate_consent(&consent) {
-//!     Ok(()) => println!("✅ Consent valid"),
-//!     Err(PdpaError::MissingConsent { .. }) => eprintln!("❌ Consent not obtained"),
+//!     Ok(()) => println!("Consent valid"),
+//!     Err(PdpaError::ConsentWithdrawn) => eprintln!("Consent has been withdrawn"),
+//!     Err(e) => eprintln!("Consent invalid: {e}"),
 //! }
 //! ```
 //!
@@ -286,12 +289,18 @@ pub mod banking;
 pub mod citation;
 pub mod common; // Common utilities - holidays, currency, names
 pub mod companies;
+pub mod competition;
 pub mod consumer;
+pub mod contract;
 pub mod employment;
+pub mod insolvency;
 pub mod ip;
 pub mod payment;
 pub mod pdpa;
+pub mod property;
 pub mod reasoning;
+pub mod securities;
+pub mod tort;
 
 // Re-export commonly used types from each module
 
@@ -305,7 +314,8 @@ pub use companies::{
     },
     validator::{
         ValidationReport, validate_agm_requirement, validate_annual_return_deadline,
-        validate_company_formation, validate_director_eligibility,
+        validate_company_formation, validate_company_secretary_requirement,
+        validate_director_disqualification, validate_director_eligibility,
         validate_resident_director_requirement,
     },
 };
@@ -314,12 +324,13 @@ pub use companies::{
 pub use employment::{
     error::{EmploymentError, Result as EmploymentResult},
     types::{
-        Allowance, ContractType, CpfContribution, EmploymentContract, LeaveEntitlement, LeaveType,
-        TerminationNotice, WorkingHours,
+        Allowance, ContractType, CpfContribution, EaCoverage, EmployeeCategory, EmploymentContract,
+        LeaveEntitlement, LeaveType, TerminationNotice, WorkingHours,
     },
     validator::{
-        validate_employment_contract, validate_leave_entitlement, validate_overtime_payment,
-        validate_termination_notice, validate_working_hours,
+        determine_ea_coverage, is_covered_by_part_iv, validate_employment_contract,
+        validate_leave_entitlement, validate_overtime_payment, validate_termination_notice,
+        validate_working_hours,
     },
 };
 
@@ -327,13 +338,18 @@ pub use employment::{
 pub use pdpa::{
     error::{PdpaError, Result as PdpaResult},
     types::{
-        BreachType, ConsentMethod, ConsentRecord, DataBreachNotification, DataTransfer,
-        DncRegistry, DncType, DpoContact, OrganisationType, PdpaOrganisation, PersonalDataCategory,
-        PurposeOfCollection,
+        BreachScope, BreachType, ConsentMethod, ConsentRecord, DataBreachNotification, DataContext,
+        DataSubjectRequest, DataSubjectRequestKind, DataTransfer, DeemedConsentBasis,
+        DncCheckConfirmation, DncRegisterKind, DncRegistration, DpoContact,
+        DpoStaffingRecommendation, IndividualNotificationExemption, NotifiabilityAssessment,
+        OrganisationType, PdpaOrganisation, PersonalDataCategory, PurposeOfCollection,
+        TransferMechanism, is_business_contact_information, max_financial_penalty_sgd,
     },
     validator::{
+        ConsentRecordBuilder, DataBreachBuilder, PdpaValidationReport, dpo_appointment_satisfied,
         validate_breach_notification, validate_consent, validate_cross_border_transfer,
-        validate_dnc_compliance, validate_dpo_requirement, validate_purpose_limitation,
+        validate_data_subject_request, validate_dnc_before_marketing,
+        validate_organisation_accountability, validate_purpose_limitation, validate_withdrawal,
     },
 };
 
@@ -347,6 +363,44 @@ pub use consumer::{
     validator::{
         detect_unfair_practices, validate_consumer_contract, validate_implied_terms,
         validate_sale_of_goods,
+    },
+};
+
+// Contract Law exports (Singapore common law)
+pub use contract::{
+    error::{ContractError, Result as ContractResult},
+    remedies::{
+        DamagesAward, DamagesMeasure, HeadOfLoss, RemotenessLimb, SpecificPerformanceFactors,
+    },
+    types::{
+        Acceptance, AcceptanceMode, AgreementContext, Consideration, ConsiderationKind, Contract,
+        ContractTerm as ContractLawTerm, DischargeMode, DuressClaim, DuressKind, FrustratingEvent,
+        Misrepresentation, MisrepresentationCategory, MistakeKind, Offer, OfferStatus,
+        OperativeMistake, TermClassification, TermSource, UndueInfluenceClaim, UndueInfluenceClass,
+    },
+    validator::{
+        BreachConsequence, ContractValidationReport, analyse_contract, assess_damages,
+        assess_duress, assess_frustration, assess_misrepresentation, assess_mistake,
+        assess_specific_performance, assess_undue_influence, classify_breach, is_formed,
+        require_termination_right, validate_formation,
+    },
+};
+
+// Tort Law exports (Singapore common law)
+pub use tort::{
+    error::{Result as TortResult, TortError},
+    nuisance::{
+        EntrantStatus, InterferenceKind, OccupiersLiabilityClaim, PrivateNuisanceClaim,
+        PublicNuisanceClaim, TortDefence,
+    },
+    types::{
+        BreachAnalysis, CausationAnalysis, DefamationClaim, DefamationDefence, DefamationForm,
+        DutyOfCareAnalysis, HarmCategory, NegligenceClaim, SlanderPerSeException, StandardOfCare,
+    },
+    validator::{
+        TortAssessmentReport, TortCategory, apportion_for_contributory_negligence,
+        assess_defamation, assess_negligence, assess_occupiers_liability, assess_private_nuisance,
+        assess_public_nuisance, defamation_succeeds, negligence_succeeds,
     },
 };
 
@@ -396,6 +450,57 @@ pub use payment::{
         assess_safeguarding_status, calculate_required_safeguarding, validate_customer_account,
         validate_dpt_service, validate_payment_provider, validate_safeguarding,
         validate_transaction,
+    },
+};
+
+// Property Law exports (Land Titles Act 1993, conveyancing, leases)
+//
+// `Result` is aliased to `PropertyResult` to avoid clashing with the other
+// modules' `Result` aliases at the crate root.
+pub use property::{
+    conveyancing::{
+        Completion, OptionToPurchase, SaleAndPurchase, compute_buyers_stamp_duty_cents,
+    },
+    error::{PropertyError, Result as PropertyResult},
+    leases::{
+        CovenantParty, ForfeitureClaim, LEASE_REGISTRATION_THRESHOLD_YEARS, Lease, LeaseCovenant,
+        LeaseDetermination,
+    },
+    types::{
+        Caveat, Easement, EasementKind, IndefeasibilityChallenge, IndefeasibilityException,
+        LandTitle, Mortgage, MortgageeRemedy, PropertyType, RegisteredProprietor, Tenure,
+    },
+    validator::{
+        IndefeasibilityReport, LeaseAssessment, assess_forfeiture, assess_indefeasibility,
+        assess_indefeasibility_report, assess_lease_registration, assess_lease_report,
+        assess_option_to_purchase, assess_power_of_sale, assess_sale_and_purchase, validate_caveat,
+        validate_easement, validate_land_contract,
+    },
+};
+
+// Securities and Futures Act exports
+//
+// `Result` is aliased to `SecuritiesResult` to avoid clashing with the other
+// modules' `Result` aliases at the crate root.
+pub use securities::{
+    error::{Result as SecuritiesResult, SecuritiesError},
+    misconduct::{
+        FalseTradingClaim, FraudulentInducementClaim, InsiderConduct, InsiderTradingClaim,
+        MarketManipulationClaim, MisleadingStatementClaim, max_civil_penalty_cents,
+    },
+    offerings::{OfferingExemption, Prospectus, SecuritiesOffering},
+    types::{
+        AppointedRepresentative, CapitalMarketsProduct, CapitalMarketsServicesLicence,
+        CisAuthorisationStatus, CmsLicenceStatus, CollectiveInvestmentScheme, DerivativeKind,
+        DerivativesContract, InvestorClass, RegulatedActivity, Security, SecurityKind,
+        is_accredited_corporation, is_accredited_individual,
+    },
+    validator::{
+        MarketConductReport, OfferingReport, assess_collective_investment_scheme,
+        assess_false_trading, assess_fraudulent_inducement, assess_insider_trading,
+        assess_licensing, assess_market_conduct, assess_market_manipulation,
+        assess_misleading_statement, assess_offering_report, assess_prospectus_requirement,
+        assess_representative, compute_civil_penalty_cents,
     },
 };
 

@@ -182,7 +182,7 @@ impl S3Storage {
         self.cache
             .get(&record_id)
             .cloned()
-            .ok_or_else(|| AuditError::RecordNotFound(record_id))
+            .ok_or(AuditError::RecordNotFound(record_id))
     }
 
     /// Simulates listing objects with a prefix.

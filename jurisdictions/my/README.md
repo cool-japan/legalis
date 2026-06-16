@@ -2,6 +2,8 @@
 
 Comprehensive Malaysian legal system implementation for the Legalis-RS ecosystem.
 
+**Version 0.1.6** — 14 modules, 93 tests passing, 0 warnings.
+
 ## Overview
 
 Legalis-MY provides full support for Malaysia's unique **dual legal system**, combining Common Law heritage with Islamic Law (Syariah). The crate covers company law, employment law, data protection (PDPA), contract law, Islamic law, tax, intellectual property, competition law, and securities regulation.

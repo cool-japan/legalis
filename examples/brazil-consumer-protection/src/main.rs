@@ -500,32 +500,32 @@ fn check_applicability(entity: &BasicEntity, statute: &Statute) -> bool {
 fn evaluate_condition(entity: &BasicEntity, condition: &Condition) -> bool {
     match condition {
         Condition::Age { operator, value } => {
-            if let Some(age_str) = entity.get_attribute("age") {
-                if let Ok(age) = age_str.parse::<u32>() {
-                    return match operator {
-                        ComparisonOp::GreaterOrEqual => age >= *value,
-                        ComparisonOp::GreaterThan => age > *value,
-                        ComparisonOp::LessOrEqual => age <= *value,
-                        ComparisonOp::LessThan => age < *value,
-                        ComparisonOp::Equal => age == *value,
-                        ComparisonOp::NotEqual => age != *value,
-                    };
-                }
+            if let Some(age_str) = entity.get_attribute("age")
+                && let Ok(age) = age_str.parse::<u32>()
+            {
+                return match operator {
+                    ComparisonOp::GreaterOrEqual => age >= *value,
+                    ComparisonOp::GreaterThan => age > *value,
+                    ComparisonOp::LessOrEqual => age <= *value,
+                    ComparisonOp::LessThan => age < *value,
+                    ComparisonOp::Equal => age == *value,
+                    ComparisonOp::NotEqual => age != *value,
+                };
             }
             false
         }
         Condition::Income { operator, value } => {
-            if let Some(income_str) = entity.get_attribute("income") {
-                if let Ok(income) = income_str.parse::<u64>() {
-                    return match operator {
-                        ComparisonOp::GreaterOrEqual => income >= *value,
-                        ComparisonOp::GreaterThan => income > *value,
-                        ComparisonOp::LessOrEqual => income <= *value,
-                        ComparisonOp::LessThan => income < *value,
-                        ComparisonOp::Equal => income == *value,
-                        ComparisonOp::NotEqual => income != *value,
-                    };
-                }
+            if let Some(income_str) = entity.get_attribute("income")
+                && let Ok(income) = income_str.parse::<u64>()
+            {
+                return match operator {
+                    ComparisonOp::GreaterOrEqual => income >= *value,
+                    ComparisonOp::GreaterThan => income > *value,
+                    ComparisonOp::LessOrEqual => income <= *value,
+                    ComparisonOp::LessThan => income < *value,
+                    ComparisonOp::Equal => income == *value,
+                    ComparisonOp::NotEqual => income != *value,
+                };
             }
             false
         }

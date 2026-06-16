@@ -90,7 +90,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 license = "Apache-2.0"
 documentation = "https://docs.rs/legalis"
@@ -122,20 +122,25 @@ rand = "0.10.1"
 hex = "0.4"
 tempfile = "3.27"
 sha2 = "0.11"
-lru = "0.17"
+lru = "0.18"
 base64 = "0.22"
 num_cpus = "1.17"
-oxiarc-deflate = "0.2.6"
+oxiarc-deflate = "0.3.3"
+quick-xml = { version = "0.40", features = ["serialize"] }
+
+# Pure-Rust SQLite-compatible storage (OxiSQL — COOLJAPAN, replaces rusqlite/libsqlite3-sys)
+oxisql-core = "0.1.3"
+oxisql-sqlite-compat = "0.1.5"
 
 # HTTP/API
 reqwest = { version = "0.13", features = ["json", "stream"] }
 axum = "0.8"
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "compression-full"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "compression-full"] }
 governor = "0.10"
 
 # GraphQL
-async-graphql = "7.2.1"
+async-graphql = { version = "7.2.1", features = ["dataloader"] }
 async-graphql-axum = "7.2.1"
 
 # CLI
@@ -149,59 +154,71 @@ criterion = "0.8"
 proptest = "1.11"
 
 # PDF Export (fop-render — COOLJAPAN pure-Rust PDF backend)
-fop-render = "0.1.1"
+fop-render = "0.1.2"
 
 # Tracing/Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internationalization
-rust-i18n = "4.0"
+rust-i18n = "4.1"
 unic-langid = "0.9"
 
 # SMT Solver (OxiZ - Pure Rust Z3 alternative)
 # Using published crates.io version
-oxiz-solver = "0.2.0"
-oxiz-core = "0.2.0"
+oxiz-solver = "0.2.3"
+oxiz-core = "0.2.3"
 num-bigint = "0.4"
 
+# GPU acceleration (NVIDIA CUDA driver + NVRTC runtime kernel compilation).
+# Optional throughout the workspace; only legalis-sim's `cuda` feature pulls it in.
+# `cuda-12000` matches the CUDA 12.x toolchain; `dynamic-loading` dlopen's libcuda/
+# libnvrtc at runtime so crates still build on hosts without the CUDA toolkit.
+cudarc = { version = "0.19", default-features = false, features = [
+    "cuda-12000",
+    "driver",
+    "nvrtc",
+    "std",
+    "dynamic-loading",
+] }
+
 # Internal crates
-legalis-core = { version = "0.1.5", path = "crates/legalis-core" }
-legalis-dsl = { version = "0.1.5", path = "crates/legalis-dsl" }
-legalis-llm = { version = "0.1.5", path = "crates/legalis-llm" }
-legalis-sim = { version = "0.1.5", path = "crates/legalis-sim" }
-legalis-verifier = { version = "0.1.5", path = "crates/legalis-verifier" }
-legalis-chain = { version = "0.1.5", path = "crates/legalis-chain" }
-legalis-viz = { version = "0.1.5", path = "crates/legalis-viz" }
-legalis-i18n = { version = "0.1.5", path = "crates/legalis-i18n" }
-legalis-porting = { version = "0.1.5", path = "crates/legalis-porting" }
-legalis-api = { version = "0.1.5", path = "crates/legalis-api" }
-legalis = { version = "0.1.5", path = "crates/legalis-cli" }
-legalis-audit = { version = "0.1.5", path = "crates/legalis-audit" }
-legalis-registry = { version = "0.1.5", path = "crates/legalis-registry" }
-legalis-diff = { version = "0.1.5", path = "crates/legalis-diff" }
-legalis-interop = { version = "0.1.5", path = "crates/legalis-interop" }
-legalis-lod = { version = "0.1.5", path = "crates/legalis-lod" }
-legalis-jp = { version = "0.1.5", path = "jurisdictions/jp" }
-legalis-de = { version = "0.1.5", path = "jurisdictions/de" }
-legalis-fr = { version = "0.1.5", path = "jurisdictions/fr" }
-legalis-us = { version = "0.1.5", path = "jurisdictions/us" }
-legalis-eu = { version = "0.1.5", path = "jurisdictions/eu" }
-legalis-sg = { version = "0.1.5", path = "jurisdictions/sg" }
-legalis-uk = { version = "0.1.5", path = "jurisdictions/uk" }
-legalis-ca = { version = "0.1.5", path = "jurisdictions/ca" }
-legalis-au = { version = "0.1.5", path = "jurisdictions/au" }
-legalis-la = { version = "0.1.5", path = "jurisdictions/la" }
-legalis-cn = { version = "0.1.5", path = "jurisdictions/cn" }
-legalis-in = { version = "0.1.5", path = "jurisdictions/in" }
-legalis-br = { version = "0.1.5", path = "jurisdictions/br" }
-legalis-th = { version = "0.1.5", path = "jurisdictions/th" }
-legalis-id = { version = "0.1.5", path = "jurisdictions/id" }
-legalis-vn = { version = "0.1.5", path = "jurisdictions/vn" }
-legalis-ae = { version = "0.1.5", path = "jurisdictions/ae" }
-legalis-za = { version = "0.1.5", path = "jurisdictions/za" }
-legalis-kr = { version = "0.1.5", path = "jurisdictions/kr" }
-legalis-my = { version = "0.1.5", path = "jurisdictions/my" }
-legalis-ru = { version = "0.1.5", path = "jurisdictions/ru" }
-legalis-sa = { version = "0.1.5", path = "jurisdictions/sa" }
-legalis-mx = { version = "0.1.5", path = "jurisdictions/mx" }
+legalis-core = { version = "0.1.6", path = "crates/legalis-core" }
+legalis-dsl = { version = "0.1.6", path = "crates/legalis-dsl" }
+legalis-llm = { version = "0.1.6", path = "crates/legalis-llm" }
+legalis-sim = { version = "0.1.6", path = "crates/legalis-sim" }
+legalis-verifier = { version = "0.1.6", path = "crates/legalis-verifier" }
+legalis-chain = { version = "0.1.6", path = "crates/legalis-chain" }
+legalis-viz = { version = "0.1.6", path = "crates/legalis-viz" }
+legalis-i18n = { version = "0.1.6", path = "crates/legalis-i18n" }
+legalis-porting = { version = "0.1.6", path = "crates/legalis-porting" }
+legalis-api = { version = "0.1.6", path = "crates/legalis-api" }
+legalis = { version = "0.1.6", path = "crates/legalis-cli" }
+legalis-audit = { version = "0.1.6", path = "crates/legalis-audit" }
+legalis-registry = { version = "0.1.6", path = "crates/legalis-registry" }
+legalis-diff = { version = "0.1.6", path = "crates/legalis-diff" }
+legalis-interop = { version = "0.1.6", path = "crates/legalis-interop" }
+legalis-lod = { version = "0.1.6", path = "crates/legalis-lod" }
+legalis-jp = { version = "0.1.6", path = "jurisdictions/jp" }
+legalis-de = { version = "0.1.6", path = "jurisdictions/de" }
+legalis-fr = { version = "0.1.6", path = "jurisdictions/fr" }
+legalis-us = { version = "0.1.6", path = "jurisdictions/us" }
+legalis-eu = { version = "0.1.6", path = "jurisdictions/eu" }
+legalis-sg = { version = "0.1.6", path = "jurisdictions/sg" }
+legalis-uk = { version = "0.1.6", path = "jurisdictions/uk" }
+legalis-ca = { version = "0.1.6", path = "jurisdictions/ca" }
+legalis-au = { version = "0.1.6", path = "jurisdictions/au" }
+legalis-la = { version = "0.1.6", path = "jurisdictions/la" }
+legalis-cn = { version = "0.1.6", path = "jurisdictions/cn" }
+legalis-in = { version = "0.1.6", path = "jurisdictions/in" }
+legalis-br = { version = "0.1.6", path = "jurisdictions/br" }
+legalis-th = { version = "0.1.6", path = "jurisdictions/th" }
+legalis-id = { version = "0.1.6", path = "jurisdictions/id" }
+legalis-vn = { version = "0.1.6", path = "jurisdictions/vn" }
+legalis-ae = { version = "0.1.6", path = "jurisdictions/ae" }
+legalis-za = { version = "0.1.6", path = "jurisdictions/za" }
+legalis-kr = { version = "0.1.6", path = "jurisdictions/kr" }
+legalis-my = { version = "0.1.6", path = "jurisdictions/my" }
+legalis-ru = { version = "0.1.6", path = "jurisdictions/ru" }
+legalis-sa = { version = "0.1.6", path = "jurisdictions/sa" }
+legalis-mx = { version = "0.1.6", path = "jurisdictions/mx" }

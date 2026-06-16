@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.2.0 | Status: Stable | Tests: Passing (528 tests) | Warnings: 0
+Version: 0.2.0 | Status: Stable | Tests: Passing (697 tests) | Warnings: 0
 
-All v0.1.x, v0.2.x, v0.3.0, v0.3.1, v0.3.2, v0.3.3, v0.3.4, v0.4.0, v0.4.1, v0.4.2, and v0.4.3 series features complete. Includes Mermaid, GraphViz, D3.js, PlantUML, 3D/WebGL visualization, accessibility (WCAG 2.1 AA), framework wrappers (React, Vue, Angular), mobile/PWA support, analytics dashboards, geographic visualization, **VR statute exploration**, **AR legal document overlay**, **360° panoramic timeline viewing** with spatial audio and haptic feedback, **AI-powered automatic visualization selection**, **AI-generated annotations**, **natural language queries**, **smart data highlighting**, **anomaly detection**, **live court proceeding visualization**, **breaking legal news feeds**, **regulatory change monitoring**, **enforcement action tracking**, **market impact visualization**, **legal history scrollytelling**, **case story generation**, **timeline narrative views**, **guided exploration tours**, **educational walkthroughs**, **Looking Glass holographic display**, **holographic statute models**, **3D print export (STL/OBJ/3MF)**, **volumetric data rendering**, **gesture-based holographic interaction**, **cross-jurisdictional comparison**, **semantic legal networks**, **time-series statute visualization**, **legal evolution timeline**, **amendment impact analysis**, **legislative trend charts**, **historical version comparison**, **LaTeX/TikZ export**, **GraphML export**, **Cypher query export for Neo4j**, **SPARQL/RDF export**, and **Jupyter notebook integration**.
+All v0.1.x, v0.2.x, v0.3.0, v0.3.1, v0.3.2, v0.3.3, v0.3.4, v0.4.0, v0.4.1, v0.4.2, v0.4.3, and v0.4.4 series features complete. Includes Mermaid, GraphViz, D3.js, PlantUML, 3D/WebGL visualization, accessibility (WCAG 2.1 AA), framework wrappers (React, Vue, Angular), mobile/PWA support, analytics dashboards, geographic visualization, **VR statute exploration**, **AR legal document overlay**, **360° panoramic timeline viewing** with spatial audio and haptic feedback, **AI-powered automatic visualization selection**, **AI-generated annotations**, **natural language queries**, **smart data highlighting**, **anomaly detection**, **live court proceeding visualization**, **breaking legal news feeds**, **regulatory change monitoring**, **enforcement action tracking**, **market impact visualization**, **legal history scrollytelling**, **case story generation**, **timeline narrative views**, **guided exploration tours**, **educational walkthroughs**, **Looking Glass holographic display**, **holographic statute models**, **3D print export (STL/OBJ/3MF)**, **volumetric data rendering**, **gesture-based holographic interaction**, **cross-jurisdictional comparison**, **semantic legal networks**, **time-series statute visualization**, **legal evolution timeline**, **amendment impact analysis**, **legislative trend charts**, **historical version comparison**, **LaTeX/TikZ export**, **GraphML export**, **Cypher query export for Neo4j**, **SPARQL/RDF export**, **Jupyter notebook integration**, **incremental viewport rendering with dirty-region diffing**, **graph simplification (leaf pruning, chain contraction, PageRank filtering, modularity coarsening)**, **intelligent node clustering (connected components, label propagation, k-means)**, **adaptive level-of-detail with representative aggregation**, **memory optimization (CSR storage + string interning)**, and **data import/export (RFC-4180 CSV import/export, SpreadsheetML 2003 Excel workbooks, JSON-LD linked data, interoperability XML, and portable SQLite SQL text)**, **motor-impairment navigation modes (keyboard/switch/dwell/voice descriptors with WCAG target-size CSS)**, **interactive filtering (composable AND/OR/NOT filter engine, date-range/tag/attribute criteria, saved presets, and a multi-criteria filter-panel UI)**, and **collaboration 2.0 (visualization version control, change diffing, threaded node comments, role-based access control, and revision-tracked collaborative-edit sessions)**.
 
 ---
 
@@ -1793,7 +1793,7 @@ Features:
 - [x] Add side-by-side statute comparison visualization
 - [x] Implement jurisdictional difference highlighting
 - [x] Add synchronized navigation across jurisdictions
-- [ ] Create comparative timeline views
+- [x] Create comparative timeline views
 - [x] Add jurisdictional heatmap overlays
 
 ### Semantic Legal Network (v0.4.1)
@@ -1818,46 +1818,222 @@ Features:
 - [x] Add Jupyter notebook integration
 
 ### Performance and Optimization (v0.4.4)
-- [ ] Add incremental rendering for massive graphs
-- [ ] Implement graph simplification algorithms
-- [ ] Add intelligent node clustering
-- [ ] Create adaptive level-of-detail
-- [ ] Add memory usage optimization
+- [x] Add incremental rendering for massive graphs
+- [x] Implement graph simplification algorithms
+- [x] Add intelligent node clustering
+- [x] Create adaptive level-of-detail
+- [x] Add memory usage optimization
+
+#### COMPLETED 2026-06-14 — Performance & Scalability (v0.4.4)
+
+Implemented as a new `src/scalability/` submodule directory (wired into
+`src/lib.rs` via `mod scalability; pub use scalability::*;`), all operating
+directly on the existing `DependencyGraph` and reusing its renderers through
+`SimplifiedGraph::to_dependency_graph` / `LodView::to_dependency_graph`.
+
+- **`scalability/incremental.rs`** — viewport-windowed rendering with a
+  dirty-region / diff model. Types: `IncrementalRenderer`, `Viewport`, `Rect`,
+  `RenderState`, `RenderDiff`, `NodeRender`. Only nodes that entered (`added`),
+  changed (`updated`) or left (`removed`) the viewport re-emit SVG; FNV-1a
+  content hashing detects changes; dirty rectangles force localised re-emission.
+- **`scalability/simplification.rs`** — leaf pruning, degree-two chain
+  contraction, PageRank importance filtering with reachability bridging, and
+  modularity-preserving community coarsening (quotient graph). Types:
+  `GraphSimplifier`, `SimplifiedGraph`, `SuperNode`, `SimplifiedEdge`.
+- **`scalability/clustering.rs`** — union-find connected components, label
+  propagation community detection, and deterministic farthest-first-seeded
+  Lloyd k-means over the layout, plus Newman modularity. Types: `NodeClusterer`,
+  `UnionFind`, `Cluster`, `ClusterAssignment`.
+- **`scalability/lod.rs`** — adaptive Full/Reduced/Overview level-of-detail
+  driven by zoom and node budget with representative aggregation. Types:
+  `LevelOfDetailEngine`, `LodConfig`, `LodView`, `RepresentativeNode`,
+  `DetailLevel`.
+- **`scalability/memory.rs`** — arena/CSR compact graph storage with string
+  interning, capacity reservation and streaming emit. Types: `CompactGraph`,
+  `CompactGraphBuilder`, `StringInterner`, `Symbol`, `MemoryFootprint`.
+
+46 new `#[test]` cases (4 shared + 8 memory + 8 incremental + 8 clustering +
+10 simplification + 8 lod). `cargo clippy -p legalis-viz --all-targets -- -D
+warnings`: clean. `cargo nextest run -p legalis-viz`: 569 passed, 0 failed.
+No new dependencies; no public API breakage.
 
 ### Accessibility Enhancements (v0.4.5)
-- [ ] Add audio descriptions for visualizations
-- [ ] Implement tactile graphics export
-- [ ] Add motor impairment navigation modes
-- [ ] Create cognitive load reduction options
-- [ ] Add dyslexia-friendly text rendering
+- [x] Add audio descriptions for visualizations
+- [x] Implement tactile graphics export
+- [x] Add motor impairment navigation modes
+- [x] Create cognitive load reduction options
+- [x] Add dyslexia-friendly text rendering
 
 ### Data Import/Export (v0.4.6)
-- [ ] Add CSV import for statute data
-- [ ] Implement Excel export for charts
-- [ ] Add JSON-LD export for linked data
-- [ ] Create XML export for interoperability
-- [ ] Add SQLite export for offline querying
+- [x] Add CSV import for statute data
+- [x] Implement Excel export for charts
+- [x] Add JSON-LD export for linked data
+- [x] Create XML export for interoperability
+- [x] Add SQLite export for offline querying
+
+#### COMPLETED 2026-06-14 — Data Import/Export (v0.4.6)
+
+Implemented as a new `src/data_exchange/` submodule directory (wired into
+`src/lib.rs` via `mod data_exchange; pub use data_exchange::*;`), reusing the
+existing `Statute`, `DependencyGraph`, `Timeline` and `PopulationChart` models
+plus the crate's `format_condition` helper and `VizResult`/`VizError`. No new
+dependencies were added; only the existing `serde_json` is used. A single shared
+`EffectType` vocabulary (`effect_type_label` / `parse_effect_type`) keeps data
+stable across a round trip through any of these formats.
+
+- **`data_exchange/csv_io.rs`** — RFC-4180-style CSV import/export with a
+  hand-rolled, panic-free parser handling quoting, doubled-quote escapes,
+  embedded delimiters/newlines and CRLF/LF. Types: `CsvImporter`, `CsvExporter`,
+  `CsvDialect`. Header-driven column mapping for statutes
+  (`id`/`title` required; `effect_type`, `effect_description`/`description`,
+  `jurisdiction`, `version`, `discretion_logic` optional) and dependency edges
+  (`from`/`to`/`relation`, header or positional). Export columns mirror the
+  importer for a lossless-for-core-fields round trip.
+- **`data_exchange/spreadsheet.rs`** — Excel-compatible **Office XML
+  SpreadsheetML 2003** workbook export (no binary `.xlsx`/ZIP dependency, per the
+  spreadsheet-without-xlsx guidance). Types: `SpreadsheetExporter`, `Worksheet`,
+  `Cell`, `CellValue`. Multi-sheet workbooks with typed String/Number cells, bold
+  header style, XML escaping, and sheet-name sanitization + de-duplication.
+  Convenience builders for population charts, statutes, timelines and dependency
+  graphs.
+- **`data_exchange/json_ld.rs`** — JSON-LD linked-data export with explicit
+  `@context` + `@graph`, IRI-valued `dependsOn` links, and typed `Statute` /
+  `TimelineEvent` nodes. Type: `JsonLdExporter` (configurable base IRI / vocab),
+  building `serde_json::Value` documents plus compact/pretty string emitters
+  returning `VizResult`.
+- **`data_exchange/xml_export.rs`** — generic well-formed, indented XML for
+  interoperability (statutes with preconditions/appliesTo/derivesFrom,
+  dependency graphs as nodes+edges, timelines as events). Type: `XmlExporter`
+  (configurable indent, optional declaration), all text/attributes escaped.
+- **`data_exchange/sqlite_export.rs`** — SQLite export as **portable SQL text**
+  (DDL + `INSERT`s, standard single-quote escaping, optional transaction and
+  `IF NOT EXISTS`), loadable via `sqlite3 db.sqlite < export.sql` (no `rusqlite`
+  dependency, per the SQLite-as-SQL-text guidance). Type: `SqliteExporter` with
+  `statutes_to_sql`, `dependency_graph_to_sql`, `timeline_to_sql` and
+  `population_chart_to_sql`.
+
+31 new `#[test]` cases (4 shared helpers + 9 csv + 4 spreadsheet + 4 json_ld +
+5 xml + 5 sqlite). `cargo clippy -p legalis-viz --all-targets -- -D warnings`:
+clean. `cargo nextest run -p legalis-viz`: 600 passed, 0 failed. No new
+dependencies; no public API breakage.
 
 ### Visualization Templates (v0.4.7)
-- [ ] Add pre-built visualization templates
-- [ ] Implement template customization system
-- [ ] Add template library with examples
-- [ ] Create template import/export
-- [ ] Add template versioning support
+- [x] Add pre-built visualization templates
+- [x] Implement template customization system
+- [x] Add template library with examples
+- [x] Create template import/export
+- [x] Add template versioning support
+
+#### COMPLETED 2026-06-14 — Templates, Comparative Timelines & Accessibility Alternatives (v0.4.5 / v0.4.7 + comparative timeline)
+
+Implemented as a new `src/presentation/` submodule directory (wired into
+`src/lib.rs` via `mod presentation; pub use presentation::*;`), mirroring the
+`scalability/` and `data_exchange/` precedent. Everything builds on the existing
+model types (`DecisionTree`, `DependencyGraph`, `Timeline`, `Theme`,
+`TimelineEvent`) and reuses crate internals (`AccessibilityEnhancer::aria_label_for_node`,
+`data_exchange::escape_xml` / `timeline_event_parts`) rather than duplicating
+them. The one supporting change outside the new directory was adding
+`#[derive(Debug, Clone)]` to `Timeline` (purely additive) so it can be embedded
+in a comparative track.
+
+- **`presentation/templates.rs`** — pre-built, versioned, customizable
+  visualization templates (Visualization Templates v0.4.7, all 5 items). Types:
+  `VisualizationTemplate`, `TemplateKind`, `TemplateCategory`, `TemplateStyle`
+  (round-trips to/from `Theme`), `TemplateLayout`, `Orientation`,
+  `TemplateVersion` (semantic `major.minor.patch`, `parse`/`version_string`/
+  bumps, `Ord`), `TemplateChange`, `TemplateCustomization` (sparse overlay
+  applied immutably via `VisualizationTemplate::apply`), and `TemplateLibrary`
+  (curated `builtin()` examples spanning litigation/compliance/legislative/
+  academic/comparison, filtering by kind/category/tag, `add_versioned` that
+  rejects downgrades). JSON import/export on templates and libraries.
+- **`presentation/comparative_timeline.rs`** — comparative timeline views
+  (Cross-Jurisdictional Comparison v0.4.0). Types: `ComparativeTimelineView`,
+  `TimelineTrack`. Aligns several named `Timeline` tracks on one shared,
+  de-duplicated date axis; detects "synchronized" dates (2+ tracks active);
+  renders ASCII grid, aligned HTML table, SVG swimlanes and a Mermaid Gantt.
+- **`presentation/accessibility_ext.rs`** — accessible alternatives
+  (Accessibility Enhancements v0.4.5, 4 of 5 items). Audio descriptions as
+  structured text (`AudioDescriber`, `AudioDescription`, `AudioSegment`;
+  plain-text / SSML / WebVTT with timecodes, duration estimation). Tactile
+  graphics as a portable descriptor (`TactileExporter`, `TactileGraphic`,
+  `TactilePrimitive`, `TactilePrimitiveKind`, `TactileTexture`; tactile-
+  conventions SVG, structured listing with an embosser-hardware note, and
+  `to_braille` Grade-1 uncontracted Unicode-braille translation with number/
+  capital signs). Cognitive-load reduction (`CognitiveLoadOptions`: chunking,
+  summarization, decoration hiding, CSS). Dyslexia-friendly text
+  (`DyslexiaTextOptions`: font/spacing/colors, CSS + inline-style wrappers, and
+  word-boundary `reflow`).
+
+Deferred: "Add motor impairment navigation modes" (v0.4.5) — left unchecked for
+a later batch.
+
+36 new `#[test]` cases (2 shared in mod.rs + 12 templates + 8 comparative
+timeline + 14 accessibility). `cargo clippy -p legalis-viz --all-targets --
+-D warnings`: clean. `cargo nextest run -p legalis-viz`: 636 passed, 0 failed
+(600 → 636). No new dependencies (only the existing `serde`/`serde_json` and
+`petgraph`); no public API breakage.
 
 ### Interactive Filtering (v0.4.8)
-- [ ] Add multi-criteria filtering UI
-- [ ] Implement date range filtering
-- [ ] Add tag-based filtering
-- [ ] Create saved filter presets
-- [ ] Add filter combination logic (AND/OR/NOT)
+- [x] Add multi-criteria filtering UI
+- [x] Implement date range filtering
+- [x] Add tag-based filtering
+- [x] Create saved filter presets
+- [x] Add filter combination logic (AND/OR/NOT)
 
 ### Collaboration Features 2.0 (v0.4.9)
-- [ ] Add version control for visualizations
-- [ ] Implement diff view for visualization changes
-- [ ] Add comment threading on nodes
-- [ ] Create collaborative editing sessions
-- [ ] Add user permission management
+- [x] Add version control for visualizations
+- [x] Implement diff view for visualization changes
+- [x] Add comment threading on nodes
+- [x] Create collaborative editing sessions
+- [x] Add user permission management
+
+#### COMPLETED 2026-06-14 — Motor Navigation, Interactive Filtering & Collaboration 2.0 (v0.4.5 / v0.4.8 / v0.4.9)
+
+Finishes the last remaining unchecked items. Everything builds on existing model
+types and reuses the crate's `VizResult`/`VizError`, `escape_xml`,
+`timeline_event_parts`, `DependencyGraph`, `Timeline`, `Theme` and
+`CollaborativeUser` — no new dependencies (only existing `serde`/`serde_json`),
+no public API breakage, all additive.
+
+- **`presentation/motor.rs`** — motor-impairment navigation modes (v0.4.5, final
+  item) as a serializable `MotorAccessibilityProfile` over a
+  `MotorNavigationMode` (keyboard-only, switch scanning, dwell control, voice
+  control) plus `KeyBinding`, `ScanConfig` and `WCAG_AAA_TARGET_SIZE_PX`. Emits
+  WCAG target-size CSS, a navigation-controller `to_javascript`, an HTML key-map
+  table, a JSON descriptor and a plain-text summary with mode-specific default
+  bindings. *Hardware boundary:* switch interfaces / eye-gaze / head-pointer
+  devices emit standard key/pointer/click events; this models the software
+  navigation contract they drive and performs no device I/O (noted in the
+  descriptor and module docs).
+- **`filtering.rs`** — Interactive Filtering (v0.4.8, all 5 items). A composable,
+  serializable engine over a neutral `FilterableRecord`: `FilterCriterion`
+  (text-contains, `TagAny`/`TagAll`, `DateInRange`, attribute equals/one-of),
+  `FilterExpr` (`Always`/`Never`/`Criterion`/`And`/`Or`/`Not` with algebraic
+  identities, `apply`/`apply_indices`/`to_predicate_string`), `DateRange`
+  (inclusive lexical ISO-8601 windows), `Combinator`, `FilterPreset` /
+  `FilterPresetLibrary` (JSON round-trip + `builtin()`), and a `FilterPanel` UI
+  descriptor (HTML controls + `applyLegalisFilter` JS mirroring the engine).
+  Adapters `records_from_timeline` / `records_from_dependency_graph`.
+- **`collaboration/`** — Collaboration Features 2.0 (v0.4.9, all 5 items) on a
+  shared, serializable `VizDocument` (`VizNode`/`VizEdge`, FNV-1a `content_hash`,
+  `from_dependency_graph`). `version.rs`: `VizVersionControl`/`VizSnapshot`
+  (parent-linked history, `commit`/`commit_if_changed`/`checkout`/`revert_to`/
+  `diff_revisions`). `diff.rs`: `VizDiff` (`ChangeKind`/`NodeChange`/`EdgeChange`,
+  text + colour-coded HTML). `comments.rs`: threaded `Comment`/`CommentThread`/
+  `CommentBoard` (nested replies, resolution, nested HTML) reusing
+  `CollaborativeUser`. `permissions.rs`: RBAC `Role`/`Capability`/
+  `AccessControlList` (`can`/`require`/`users_with`). `editing.rs`:
+  `EditOperation`/`EditEntry`/`EditSession` (revision-tracked op log, ACL-gated
+  edits, optimistic-concurrency conflict detection). *Runtime boundary:* live
+  WebSocket transport is a deployment concern — like the existing
+  `CollaborativeSession`, `EditSession::to_javascript` speaks to a
+  caller-supplied endpoint but opens no sockets and runs no server.
+
+61 new `#[test]` cases (11 motor + 13 filtering + 37 collaboration: 5 document +
+6 version + 5 diff + 6 comments + 6 permissions + 9 editing). `cargo clippy -p
+legalis-viz --all-targets -- -D warnings`: clean. `cargo nextest run -p
+legalis-viz`: 697 passed, 0 failed (636 → 697). No new dependencies; no public
+API breakage.
 
 ## New Features Documentation (v0.4.0)
 

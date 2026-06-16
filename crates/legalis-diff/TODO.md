@@ -2,9 +2,9 @@
 
 ## Status Summary
 
-Version: 0.5.3 | Status: Stable | Tests: Passing | Warnings: 0
+Version: 0.5.9 | Status: Stable | Tests: Passing (862 nextest + 308 doctests) | Warnings: 0
 
-All v0.1.x series features through v0.1.9 (Integration) are complete including advanced analytics (v0.2.5) and testing/quality (v0.2.9). Natural Language Processing (v0.2.1) with multi-language support, Collaborative Features (v0.2.4), and Cloud Integration (v0.2.3) including cloud storage backends (S3, Azure, GCS) and distributed diff computation are now complete. Legal-Domain Aware Diffing (v0.3.1) with legislative history, Compliance-Focused Diffing (v0.3.4), Collaborative Diff Review (v0.3.2), and Version Control Integration (v0.3.3) are now complete. Machine Learning Integration (v0.2.0), Time-Travel Diffing (v0.3.5), Cross-Jurisdiction Diffing (v0.3.6), Enterprise Diff Management (v0.3.7), and Machine-Readable Diff Formats (v0.3.8) are now complete. AI-Powered Diff Analysis (v0.3.0) with LLM-based semantic explanations, intent detection, automatic categorization, impact prediction, and AI-assisted merge conflict resolution is now complete. GPU acceleration for large diffs (v0.2.7) and Quantum-Ready Diff Algorithms (v0.3.9) including quantum-inspired similarity, quantum fingerprinting, quantum-safe signing, hybrid classical-quantum computation, and quantum random sampling are now complete. Real-time Diff Streaming (v0.5.1) with WebSocket support, live collaborative editing, incremental streaming, server-sent events, and real-time conflict resolution is now complete. Advanced Caching & Memoization (v0.5.2) with Redis integration, Memcached support, cache invalidation strategies, smart preloading, and multi-level cache hierarchies is now complete. Machine Learning Model Integration (v0.5.3) with custom model training, transfer learning, automated retraining pipeline, model versioning and rollback, and A/B testing is now complete.
+All v0.1.x series features through v0.1.9 (Integration) are complete including advanced analytics (v0.2.5) and testing/quality (v0.2.9). Natural Language Processing (v0.2.1) with multi-language support, Collaborative Features (v0.2.4), and Cloud Integration (v0.2.3) including cloud storage backends (S3, Azure, GCS) and distributed diff computation are now complete. Legal-Domain Aware Diffing (v0.3.1) with legislative history, Compliance-Focused Diffing (v0.3.4), Collaborative Diff Review (v0.3.2), and Version Control Integration (v0.3.3) are now complete. Machine Learning Integration (v0.2.0), Time-Travel Diffing (v0.3.5), Cross-Jurisdiction Diffing (v0.3.6), Enterprise Diff Management (v0.3.7), and Machine-Readable Diff Formats (v0.3.8) are now complete. AI-Powered Diff Analysis (v0.3.0) with LLM-based semantic explanations, intent detection, automatic categorization, impact prediction, and AI-assisted merge conflict resolution is now complete. GPU acceleration for large diffs (v0.2.7) and Quantum-Ready Diff Algorithms (v0.3.9) including quantum-inspired similarity, quantum fingerprinting, quantum-safe signing, hybrid classical-quantum computation, and quantum random sampling are now complete. Real-time Diff Streaming (v0.5.1) with WebSocket support, live collaborative editing, incremental streaming, server-sent events, and real-time conflict resolution is now complete. Advanced Caching & Memoization (v0.5.2) with Redis integration, Memcached support, cache invalidation strategies, smart preloading, and multi-level cache hierarchies is now complete. Machine Learning Model Integration (v0.5.3) with custom model training, transfer learning, automated retraining pipeline, model versioning and rollback, and A/B testing is now complete. Blockchain & Distributed Ledger (v0.5.4) — immutable Merkle/proof-of-work diff recording, a gas-metered smart-contract engine driving review workflows, distributed consensus (PoA/PoS/BFT) for diff verification, a metered token ledger for paid API access, and ERC-721-style NFTs for important diffs — is now complete (pure Rust; live public-chain settlement deferred behind the `ChainAnchor` trait). Advanced Visualization (v0.5.5) — a navigable 3-D `Scene3d` diff graph with deterministic force-directed/sphere/layered/grid layouts, VR/AR scene export (A-Frame/X3D/glTF-JSON), interactive graph navigation, real-time collaborative view sessions (shared camera/cursors/annotations with last-writer-wins convergence), and a custom visualization-plugin registry — is now complete (pure Rust; live GPU/WebXR rasterisation deferred behind the `SceneRenderer` trait). Enterprise Features (v0.5.6) — single sign-on (SAML 2.0 / OIDC with real HMAC-SHA256 token validation), LDAP/Active-Directory support (DN parsing, RFC 4515 filters, bind/scoped-search, transitive nested-group resolution), advanced hierarchical RBAC (role inheritance, resource-pattern + ABAC-conditioned permissions, deny-override, group→role mapping), compliance reporting (SOC 2 / GDPR / HIPAA control catalogues + scored reports), and tamper-evident hash-chained enterprise audit logs with retention policies and legal holds — is now complete, implemented as the pure-Rust `governance` module (live IdP-over-HTTP and networked LDAP deferred behind the `SsoProvider` / `DirectoryService` traits). Mobile & Edge Computing (v0.5.7) — a mobile SDK facade (synchronous JSON-in/JSON-out boundary over the diff engine, ready for a UniFFI/cbindgen Swift/Kotlin wrapper), a latency/work-budgeted edge diff engine with a deterministic node scheduler, offline-first diff computation (local snapshot store + append-only replayable operation queue + durable persistence), a Progressive Web App generator (real W3C manifest + Service Worker + offline diff-viewer shell), and cross-platform synchronization (vector-clock causality, delta sync and convergent conflict resolution) — is now complete, implemented as the pure-Rust `mobile` module (the native language binding is deferred behind the `MobileBridge` trait and PWA hosting/browser runtime is external; both have pure-Rust backends/generators). Advanced Analytics & Insights (v0.5.8) — OLS trend-extrapolation predictive analytics, robust (z-score / MAD modified-z) anomaly detection over configurable change metrics, risk-trajectory change-impact forecasting, explainable factor-weighted risk-assessment automation, and a render-agnostic analytics-dashboard data model with JSON export — is now complete as the pure-Rust `analytics` module. Interoperability & Standards (v0.5.9) legal-XML formats — Akoma Ntoso (OASIS LegalDocML act/meta/body/section/article), OASIS LegalRuleML (prescriptive/constitutive statements with obligation/permission/prohibition deontic operators), and CEN MetaLex (FRBR work/expression interchange with a recursive fragment hierarchy) — are now complete as the pure-Rust `legal_xml` module (parsing via the workspace `quick-xml` reader), each round-tripping both the XML document and a `Statute`; ISO/IEC 27001 (organizational ISMS certification) and the umbrella "W3C Web Standards integration" item are deferred as having no actionable code target.
 
 ---
 
@@ -445,43 +445,267 @@ All v0.1.x series features through v0.1.9 (Integration) are complete including a
 - [x] A/B testing for ML predictions
 
 ### Blockchain & Distributed Ledger (v0.5.4)
-- [ ] Immutable diff recording on blockchain
-- [ ] Smart contract integration for automated workflows
-- [ ] Distributed consensus for diff verification
-- [ ] Cryptocurrency integration for paid API access
-- [ ] NFT generation for important diffs
+- [x] Immutable diff recording on blockchain
+- [x] Smart contract integration for automated workflows
+- [x] Distributed consensus for diff verification
+- [x] Cryptocurrency integration for paid API access
+- [x] NFT generation for important diffs
+
+**Completed 2026-06-14** — Implemented as the pure-Rust `blockchain` module
+(`src/blockchain/`): `mod.rs`, `ledger.rs`, `contract.rs`, `consensus.rs`,
+`token.rs`, `nft.rs`. Real SHA-256 hashing throughout (existing workspace `sha2`
++ `hex` deps).
+
+- **Immutable diff recording** (`ledger.rs`): `DiffLedger`, `Block`,
+  `DiffRecord`, `MerkleTree`/`MerkleProof` — an append-only chain that commits
+  diff records via a binary Merkle tree, links blocks by hash, seals them with
+  proof-of-work, validates the whole chain (header/PoW/Merkle/linkage/content)
+  and produces compact inclusion proofs.
+- **Smart contracts** (`contract.rs`): `SmartContract`/`Clause`/`Trigger`
+  (composable predicate AST) /`Action`, executed by a deterministic,
+  gas-metered `ContractEngine` that drives a `LegalWorkflow` lifecycle state
+  machine (proposed → review → approved → enacted, plus freeze/reject).
+- **Distributed consensus** (`consensus.rs`): `ConsensusEngine`/`Validator`/
+  `Vote`/`Proposal`/`ConsensusOutcome` — PoA round-robin proposer selection,
+  stake-weighted deterministic PoS election, and a BFT 2/3 voting tally with
+  equivocation detection and `f = (n-1)/3` fault tolerance.
+- **Token ledger for paid API** (`token.rs`): `TokenLedger`/`TokenTransaction`/
+  `PricingTable`/`ApiOperation`/`UsageReport` — integer-exact, overflow-checked
+  accounting with key-derived address ownership, nonce replay protection,
+  supply conservation, a deterministic state root, and metered pay-per-call
+  pricing.
+- **NFTs for important diffs** (`nft.rs`): `NftRegistry`/`DiffNft`/`NftMetadata`/
+  `ProvenanceEntry` — ERC-721-style minting (deterministic token ids, duplicate
+  rejection), ownership transfer/burn with a tamper-evident provenance
+  hash-chain, token-URI serialization, and an `is_mint_worthy` heuristic.
+- **Deferred external binding**: live public-chain settlement (Ethereum/Bitcoin
+  RPC) is abstracted behind the `ChainAnchor` trait with `InMemoryAnchor` and
+  `FileAnchor` backends provided; a networked backend can be added without
+  changing callers.
+
+Tests: 84 new `#[test]`s + 3 doctests, all green. Crate suite 529 → 613 tests
+(nextest), 285 doctests; `cargo clippy -p legalis-diff --all-targets -- -D
+warnings` clean. Dependencies: enabled existing workspace `sha2` and `hex` for
+this crate (no new workspace dependencies); added blockchain-specific
+`DiffError` variants (`ChainIntegrity`, `InvalidTransaction`,
+`InsufficientBalance`, `ConsensusFailure`, `ContractError`, `NftError`).
 
 ### Advanced Visualization (v0.5.5)
-- [ ] 3D diff visualization for complex relationships
-- [ ] VR/AR support for immersive diff exploration
-- [ ] Interactive graph-based diff navigation
-- [ ] Real-time collaborative visualization
-- [ ] Custom visualization plugins
+- [x] 3D diff visualization for complex relationships
+- [x] VR/AR support for immersive diff exploration
+- [x] Interactive graph-based diff navigation
+- [x] Real-time collaborative visualization
+- [x] Custom visualization plugins
+
+**Completed 2026-06-14** — Implemented as the pure-Rust `immersive` module
+(`src/immersive/`): `mod.rs`, `scene.rs`, `layout.rs`, `xr.rs`, `navigation.rs`,
+`collab.rs`, `plugin.rs`. Distinct from the existing 2-D `visual`/`advanced_visual`
+modules (DOT/SVG/HTML) and from `collaborative_review` (comment/vote workflows).
+
+- **3D diff visualization** (`scene.rs`): `Scene3d`, `SceneNode`, `SceneEdge`,
+  `NodeKind`/`EdgeKind` — a navigable 3-D scene graph built from one or many
+  `StatuteDiff`s (statute root + change/target-group/impact nodes with typed
+  `Contains`/`Grouped`/`Related`/`Impacts` edges), plus deterministic seeded
+  positions and JSON round-trip. Core 3-D math (`Vec3` with operator traits,
+  `Color`, `Camera`, `Viewport`, `BoundingBox`) lives in `mod.rs`.
+- **Layout** (`layout.rs`): `apply_layout` with four deterministic algorithms —
+  Fruchterman–Reingold force-directed (cooling + centring gravity, O(n²)
+  repulsion / edge attraction), Fibonacci-sphere (golden-angle), BFS-`Layered`,
+  and a cubic `Grid` — all `rand`-free (seeded via FNV-1a; SciRS2 policy).
+- **VR/AR export** (`xr.rs`): `export_scene` to `XrFormat::AFrame` (WebXR HTML),
+  `X3d` (ISO XML), and `GltfJson` (glTF-like manifest), with XML/HTML escaping.
+- **Interactive navigation** (`navigation.rs`): `SceneNavigator` — focus,
+  neighbour expansion/collapse, BFS shortest-path, breadth-first ordering,
+  level-of-detail buckets and a back/forward focus history.
+- **Real-time collaborative visualization** (`collab.rs`): `VizSession` with a
+  shared `CameraState`, per-participant `PresenceCursor`s, `SceneAnnotation`s and
+  a sequence-ordered `VizEvent` log; concurrent updates reconciled by
+  last-writer-wins on monotonic per-resource sequences (replicas converge to an
+  identical SHA-256 `state_digest`).
+- **Custom plugins** (`plugin.rs`): `VisualizationPlugin` trait + `VizPluginRegistry`
+  (reusing `plugins::PluginMetadata`), with built-in `WireframeJsonPlugin` and an
+  orthographic-projection `AsciiScatterPlugin`.
+- **Deferred external binding**: live GPU (WebGL/WebGPU) / WebXR rasterisation is
+  abstracted behind the `SceneRenderer` trait with pure-Rust `JsonSceneRenderer`
+  (depth-sorted draw-call `RenderManifest`) and `NullSceneRenderer` backends; a
+  networked/graphics backend can be added without changing callers.
+
+Tests: 67 new `#[test]`s + 4 doctests, all green. Crate suite 613 → 680 tests
+(nextest), 285 → 289 doctests; `cargo clippy -p legalis-diff --all-targets -- -D
+warnings` clean. Dependencies: none added (reused existing `serde`/`serde_json`/
+`sha2`/`hex`); added one additive `DiffError::Visualization(String)` variant.
 
 ### Enterprise Features (v0.5.6)
-- [ ] Single sign-on (SSO) integration
-- [ ] LDAP/Active Directory support
-- [ ] Advanced role-based access control (RBAC)
-- [ ] Compliance reporting (SOC 2, GDPR, HIPAA)
-- [ ] Enterprise audit logs with retention policies
+- [x] Single sign-on (SSO) integration
+- [x] LDAP/Active Directory support
+- [x] Advanced role-based access control (RBAC)
+- [x] Compliance reporting (SOC 2, GDPR, HIPAA)
+- [x] Enterprise audit logs with retention policies
+
+**Completed 2026-06-14** — Implemented as the pure-Rust `governance` module
+(`src/governance/`): `mod.rs`, `sso.rs`, `directory.rs`, `rbac.rs`,
+`compliance_report.rs`, `audit_log.rs`. Deliberately distinct from the existing
+`enterprise` (diff archiving / basic role checks), `security` (signing /
+encryption) and `compliance` (regulatory *change* impact) modules — here the
+subject is the *system's* identity, authorization and compliance posture. Real
+SHA-256 / HMAC-SHA256 throughout (existing workspace `sha2` + `hex` deps).
+
+- **SSO integration** (`sso.rs`): `SsoProvider` trait + `InMemoryIdentityProvider`,
+  `SamlAssertion`, `OidcIdToken`, `SsoToken`, `SsoSession` — SAML 2.0 / OIDC token
+  modelling with real **HMAC-SHA256 (HS256)** signing/verification (RFC 2104,
+  RFC 4231-tested), plus issuer / audience / validity-window (clock-skew) checks
+  that map a validated token to a `Principal`.
+- **LDAP / Active-Directory** (`directory.rs`): `DirectoryService` trait +
+  `InMemoryDirectory`, `DistinguishedName` parsing, `DirectoryEntry` multi-valued
+  attributes, an RFC 4515 `LdapFilter` parser/matcher (presence / equality /
+  substring / `&`|`!`), password `bind`, scoped `search` (Base/OneLevel/Subtree)
+  and **transitive** nested-group resolution (`memberOf`/`member`).
+- **Advanced RBAC** (`rbac.rs`): `RbacEngine` with hierarchical `Role`
+  inheritance (cycle-safe), resource-pattern `Permission`s (`ResourcePattern`
+  globs), ABAC `Condition`s, deny-override resolution, default-deny, and
+  group→role mapping driven by `Principal` groups; `authorize` returns
+  `AccessDenied`.
+- **Compliance reporting** (`compliance_report.rs`): `ComplianceFramework`
+  (SOC 2 / GDPR / HIPAA) built-in `Control` catalogues, `ComplianceAssessment`,
+  scored `ComplianceReport` (`generate_report`, JSON + Markdown) with findings /
+  recommendations, and a `SecurityPosture` capability mapping that auto-populates
+  controls (tying RBAC / audit-log / encryption posture to controls).
+- **Enterprise audit logs** (`audit_log.rs`): `EnterpriseAuditLog` — an
+  append-only **SHA-256 hash-chained**, tamper-evident log (`verify_integrity`),
+  `RetentionPolicy` (max-age / max-entries / min-retention floor / freeze),
+  **legal holds**, verifiable prefix purge with checkpoint hashing, query
+  filtering and CSV/JSON export.
+- **Deferred external bindings**: live IdP-over-HTTP (SAML redirect/POST, OIDC
+  discovery + JWKS + RSA) and live networked LDAP/AD are abstracted behind the
+  `SsoProvider` and `DirectoryService` traits with pure-Rust in-memory backends
+  provided; networked backends can be added without changing callers.
+
+Tests: 49 new `#[test]`s + 6 doctests, all green. Crate suite 680 → 729 tests
+(nextest), 289 → 295 doctests; `cargo clippy -p legalis-diff --all-targets -- -D
+warnings` clean. Dependencies: none added (reused existing `serde`/`serde_json`/
+`chrono`/`sha2`/`hex`); added three additive `DiffError` variants
+(`AuthenticationFailed`, `AccessDenied`, `DirectoryError`).
 
 ### Mobile & Edge Computing (v0.5.7)
-- [ ] Mobile SDK for iOS and Android
-- [ ] Edge computing support for low-latency diffs
-- [ ] Offline-first diff computation
-- [ ] Progressive Web App (PWA) for diff viewing
-- [ ] Cross-platform synchronization
+- [x] Mobile SDK for iOS and Android
+- [x] Edge computing support for low-latency diffs
+- [x] Offline-first diff computation
+- [x] Progressive Web App (PWA) for diff viewing
+- [x] Cross-platform synchronization
+
+**Completed 2026-06-14** — Implemented as the pure-Rust `mobile` module
+(`src/mobile/`): `mod.rs`, `sdk.rs`, `edge.rs`, `offline.rs`, `pwa.rs`,
+`sync.rs`. Shared `DeviceClass` / `DeviceProfile` / `NetworkQuality` plus SHA-256
+helpers (existing workspace `sha2` + `hex`) underpin the five sub-modules.
+
+- **Mobile SDK** (`sdk.rs`): `MobileSdk` exposes a synchronous, panic-free
+  JSON-in/JSON-out boundary (`handle_json`) over typed `MobileRequest` /
+  `MobileResponse` enums (compute diff / summarize / detailed summary / breaking
+  check / SDK info), the natural surface for a UniFFI/cbindgen Swift/Kotlin
+  wrapper, plus secure-storage helpers (`persist_diff` / `load_diff`).
+- **Edge low-latency diffing** (`edge.rs`): `EdgeDiffer` computes a diff under an
+  explicit `EdgeBudget` (work-unit budget + optional wall-clock deadline) — change
+  cap, value truncation to bound memory, byte-identical fast-path, early-exit
+  `truncated` flag, and an O(1) `quick_severity` triage mode; `EdgeScheduler`
+  deterministically places `EdgeJob`s onto the best `EdgeNode` by
+  capacity/load/network, skipping unhealthy, offline or under-provisioned nodes.
+- **Offline-first** (`offline.rs`): `OfflineEngine` keeps a local snapshot store
+  and an append-only operation queue (`UpsertStatute` / `RecordDiff`), computes
+  diffs optimistically without a network, supports the sync lifecycle
+  (`pending` → `mark_synced` → `drain_synced`), reconstructs state from the log
+  via `replay`, and persists to / restores from disk (`save_to_path` /
+  `load_from_path`).
+- **PWA generator** (`pwa.rs`): `PwaBundle::from_diff` emits a real W3C Web App
+  Manifest (`PwaManifest`), a Service Worker implementing a chosen `CacheStrategy`
+  (`ServiceWorkerConfig::to_javascript`) and an HTML-escaped offline diff-viewer
+  shell, writable to disk (`write_to_dir`).
+- **Cross-platform sync** (`sync.rs`): `SyncEngine` reconciles state across
+  devices using `VectorClock` causality, `delta_since` delta sync and a convergent
+  total-order resolution (Lamport-projection primary key + `ConflictResolution`
+  tiebreak), so `sync_pair` drives two replicas to an identical `state_digest`;
+  concurrent edits are recorded as `SyncConflict`s and tombstones replicate.
+- **Deferred external bindings**: the *native* mobile language binding (UniFFI /
+  cbindgen + Swift/Kotlin, Keychain / Android Keystore, APNs / FCM) is abstracted
+  behind the `sdk::MobileBridge` trait with a complete pure-Rust
+  `InMemoryBridge`; PWA *hosting / browser runtime* is external (the generator
+  produces deployable, standards-compliant assets but does not serve them).
+
+Tests: 47 new `#[test]`s + 6 doctests, all green. Crate suite 729 → 776 tests
+(nextest), 295 → 301 doctests; `cargo clippy -p legalis-diff --all-targets -- -D
+warnings` clean. Dependencies: none added (reused existing `serde`/`serde_json`/
+`chrono`/`sha2`/`hex`); no new `DiffError` variants (reused
+`SerializationError` / `IdMismatch`).
 
 ### Advanced Analytics & Insights (v0.5.8)
-- [ ] Predictive analytics for future changes
-- [ ] Anomaly detection in diff patterns
-- [ ] Change impact forecasting
-- [ ] Risk assessment automation
-- [ ] Custom analytics dashboards
+- [x] Predictive analytics for future changes
+- [x] Anomaly detection in diff patterns
+- [x] Change impact forecasting
+- [x] Risk assessment automation
+- [x] Custom analytics dashboards
 
 ### Interoperability & Standards (v0.5.9)
-- [ ] ISO/IEC 27001 compliance
-- [ ] W3C Web Standards integration
-- [ ] OASIS LegalRuleML support
-- [ ] Akoma Ntoso XML format support
-- [ ] CEN Metalex standard compliance
+- [ ] ISO/IEC 27001 compliance — DEFERRED: an organizational information-security-management-system certification (process/audit scope), not implementable as library code.
+- [ ] W3C Web Standards integration — DEFERRED: no concrete spec named; "W3C Web Standards" is an umbrella term with no single actionable target for this crate (note: a real W3C Web App Manifest + Service Worker generator already ships in the `mobile::pwa` module under v0.5.7).
+- [x] OASIS LegalRuleML support
+- [x] Akoma Ntoso XML format support
+- [x] CEN Metalex standard compliance
+
+## COMPLETED (2026-06-14 — analytics + legal XML formats)
+
+### Advanced Analytics & Insights (v0.5.8)
+Implemented as the pure-Rust `analytics` module (no new external deps; depends
+only on `legalis-core` and this crate's diff types). All analyses are
+deterministic.
+
+- **Predictive analytics for future changes** (`analytics/predictive.rs`):
+  `forecast_change_volume` extrapolates a statute's change-volume history with an
+  ordinary-least-squares `LinearModel` (`slope`/`intercept`/`r_squared`) fitted
+  by `fit_linear_model`, projecting each future revision with a residual-sized
+  interval (`ChangeForecast`/`ChangeProjection`). `series_from_diffs` builds the
+  series from an ordered diff slice.
+- **Anomaly detection in diff patterns** (`analytics/anomaly.rs`):
+  `detect_anomalies` flags statistical outliers over a configurable metric
+  (`AnomalyMetric`: change count / severity rank / kind diversity / removal
+  count) using either a classic z-score or a robust MAD-based modified z-score,
+  with the Iglewicz–Hoaglin mean-absolute-deviation fallback when the MAD
+  collapses on near-constant histories (`AnomalyConfig`/`AnomalyReport`).
+- **Change-impact forecasting** (`analytics/forecast.rs`): `forecast_impact`
+  treats the per-revision risk score as a time series, projects it forward and
+  classifies the `ImpactTrajectory` (escalating / stable / de-escalating)
+  (`ImpactForecast`/`ImpactProjection`).
+- **Risk-assessment automation** (`analytics/risk.rs`): `assess_risk` produces an
+  explainable `[0,100]` score from weighted, retained `RiskFactor`s (severity,
+  outcome, eligibility, discretion, saturating breadth) banded into a
+  `RiskLevel` (`RiskAssessment`).
+- **Custom analytics dashboards (data)** (`analytics/dashboard.rs`):
+  `build_dashboard` assembles a render-agnostic `AnalyticsDashboard` of typed
+  `DashboardWidget`s (scorecard / gauge / time-series / distribution / table)
+  with JSON export/import — the dashboard *data*, not a GUI.
+
+### Interoperability & Standards (v0.5.9) — legal XML formats
+Implemented as the pure-Rust `legal_xml` module. Parsing uses the workspace
+`quick-xml` reader (correct entity/attribute handling) via a shared
+`XmlNode` tree (`legal_xml/xml_util.rs`); emission uses a small indented
+`XmlBuilder` with XML 1.0 escaping (`legal_xml/writer.rs`). Each format models
+the core element vocabulary of the real standard and round-trips both the
+document itself and a `legalis_core::Statute` (machine-readable originals are
+preserved inline so reconstruction is exact).
+
+- **Akoma Ntoso / OASIS LegalDocML** (`legal_xml/akoma_ntoso.rs`):
+  `AkomaNtosoDocument` models `akomaNtoso → act → meta`(FRBR
+  Work/Expression/Manifestation identification) `/ body → section → article`
+  (`num`/`heading`/`content`); `from_statute`/`to_statute`/`to_xml`/`from_xml`.
+- **OASIS LegalRuleML** (`legal_xml/legalruleml.rs`): `LegalRuleMlDocument`
+  models `lrml:LegalRuleML → Statements` of `PrescriptiveStatement`
+  (`ruleml:Rule` if/then) and `ConstitutiveStatement` (facts), with deontic
+  operators `Obligation`/`Permission`/`Prohibition` (`DeonticKind`) chosen from
+  the statute's `EffectType`, and `ruleml:Atom`/`Rel`/`Ind` logical atoms.
+- **CEN MetaLex** (`legal_xml/metalex.rs`): `MetalexDocument` models the
+  FRBR `bibliographicWork` / `bibliographicExpression` interchange structure
+  with a recursive typed `fragment` hierarchy (eligibility → condition,
+  effect, discretion).
+
+Deferred (no actionable code target): **ISO/IEC 27001** (organizational ISMS
+certification) and **W3C Web Standards integration** (umbrella term, no concrete
+spec; note a real W3C Web App Manifest + Service Worker generator already exists
+in `mobile::pwa`).

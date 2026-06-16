@@ -63,13 +63,38 @@ This crate provides type-safe representations and validation logic for seven maj
 - **Digital Payment Token (DPT) Regulation** - Cryptocurrency exchange, wallet custody
 - **KYC/AML** - Enhanced verification for accounts > SGD 5,000
 
+### 8. Contract Law (common law) ✅
+- **Formation** - offer/acceptance (mirror image, postal rule), consideration (*Williams v Roffey*), intention (*Balfour v Balfour*); four requirements per *Gay Choon Ing v Loh Sze Ti* \[2009\] SGCA 3
+- **Terms** - conditions / warranties / innominate terms (*Hongkong Fir*; *RDC Concrete v Sato Kogyo* \[2007\] SGCA 1)
+- **Vitiating factors** - misrepresentation (Misrepresentation Act 1967), mistake (*Chwee Kin Keong v Digilandmall.com* \[2005\] SGCA 2), duress, undue influence
+- **Discharge** - performance, breach, frustration (Frustrated Contracts Act 1959)
+- **Remedies** - damages with *Hadley v Baxendale* remoteness + mitigation, specific performance, termination
+
+### 9. Tort Law (common law) ✅
+- **Negligence** - *Spandeck Engineering v DSTA* \[2007\] SGCA 37 two-stage duty test, breach, causation, remoteness (*The Wagon Mound*)
+- **Defamation** - Defamation Act 1957, libel/slander, defences (justification, fair comment, privilege)
+- **Nuisance** - private and public nuisance
+- **Occupiers' liability** - duty by entrant status; contributory negligence apportionment (CNPI Act 1953)
+
+### 10. Insolvency, Restructuring and Dissolution Act 2018 (IRDA) ✅
+- **Corporate winding up** - compulsory (s. 125(1) grounds; s. 125(2) inability to pay) and voluntary
+- **Judicial management** - s. 89(1) statutory purposes and the moratorium
+- **Schemes of arrangement** - majority-in-number + 75%-in-value test, s. 64 moratorium, s. 70 cram-down
+- **Bankruptcy** - SGD 15,000 threshold, Debt Repayment Scheme (≤ SGD 150,000)
+
+### 11. Competition Act 2004 ✅
+- **Section 34 prohibition** - anti-competitive agreements (price fixing, market sharing, bid rigging); by-object vs by-effect
+- **Section 47 prohibition** - abuse of dominance (indicative 60% market-share threshold)
+- **Section 54** - mergers resulting in a substantial lessening of competition
+- **CCCS enforcement** - penalty up to 10% of turnover for up to 3 years (s. 69(4)); leniency; Third Schedule exclusions
+
 ## Quick Start
 
 Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-sg = "0.1.3"
+legalis-sg = "0.1.6"
 ```
 
 ### Example: Company Formation
@@ -421,15 +446,18 @@ Multi-stage validation:
 
 ## Roadmap
 
+Implemented:
+
+- [x] Intellectual Property (Patents Act, Copyright Act, Trade Marks Act, Registered Designs Act)
+- [x] Banking Act (MAS regulations, licensing)
+- [x] Contract law (common law principles, remedies for breach)
+- [x] Tort law (negligence, defamation, nuisance, occupiers' liability)
+- [x] Insolvency, Restructuring and Dissolution Act 2018 (winding up, judicial management, schemes, bankruptcy)
+- [x] Competition Act 2004 (s. 34, s. 47, mergers, CCCS enforcement)
+
 Future enhancements:
 
-- [ ] Insolvency Act (winding up, judicial management)
-- [ ] Intellectual Property (Patents Act, Copyright Act, Trade Marks Act)
-- [ ] Banking Act (MAS regulations, licensing)
 - [ ] Securities and Futures Act (SFA)
-- [ ] Competition Act (competition law)
-- [ ] Contract law (common law principles)
-- [ ] Tort law (negligence, defamation)
 - [ ] Property law (land titles, conveyancing)
 
 ## Contributing

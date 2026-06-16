@@ -25,10 +25,10 @@ tokio-util = "0.7"
 bytes = "1.11"
 rand.workspace = true
 regex.workspace = true
-opentelemetry = "0.31"
-opentelemetry-otlp = "0.31"
-opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
-tracing-opentelemetry = "0.32"
+opentelemetry = "0.32"
+opentelemetry-otlp = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+tracing-opentelemetry = "0.33"
 uuid.workspace = true
 lru.workspace = true
 base64.workspace = true

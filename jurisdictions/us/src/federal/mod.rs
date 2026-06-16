@@ -90,10 +90,19 @@
 //! 4. **Compliance Analysis**: Check if state regulation survives preemption
 
 pub mod commerce_clause;
+pub mod commerce_power;
+pub mod jurisdiction_hierarchy;
 pub mod preemption;
 
 pub use commerce_clause::{
     CommerceClauseAnalysis, CommerceClauseResult, DormantCommerceClauseTest,
+};
+pub use commerce_power::{
+    ActivityCharacter, CommerceCategory, CommercePowerAnalysis, CommercePowerResult,
+    lopez_fact_pattern, morrison_fact_pattern, raich_fact_pattern, wickard_fact_pattern,
+};
+pub use jurisdiction_hierarchy::{
+    FederalismLevel, JurisdictionConflict, JurisdictionHierarchy, PreemptionKind,
 };
 pub use preemption::{
     ConflictPreemptionType, FieldPreemptionAnalysis, PreemptionAnalysis, PreemptionResult,

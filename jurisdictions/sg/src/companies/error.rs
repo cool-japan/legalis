@@ -142,6 +142,17 @@ pub enum CompaniesError {
     )]
     SecretaryNotResident,
 
+    /// Office of company secretary left vacant beyond the statutory 6-month limit
+    #[error(
+        "Office of company secretary vacant {days_overdue} days beyond the 6-month limit (Companies Act s. 171(1))\n\
+         公司秘书职位空缺超过6个月期限{days_overdue}天 (公司法第171(1)条)\n\
+         Jawatan setiausaha syarikat kosong {days_overdue} hari melebihi had 6 bulan (Akta Syarikat s. 171(1))"
+    )]
+    CompanySecretaryVacancyExceeded {
+        /// Number of days past the 6-month appointment deadline
+        days_overdue: i64,
+    },
+
     /// Annual General Meeting (AGM) overdue
     #[error(
         "Annual General Meeting overdue by {days} days (Companies Act s. 175)\n\
@@ -273,6 +284,7 @@ impl CompaniesError {
             CompaniesError::TooManyShareholders { .. } => Some("CA s. 18(1)"),
             CompaniesError::NoCompanySecretary => Some("CA s. 171"),
             CompaniesError::SecretaryNotResident => Some("CA s. 171(1A)"),
+            CompaniesError::CompanySecretaryVacancyExceeded { .. } => Some("CA s. 171(1)"),
             CompaniesError::AgmOverdue { .. } => Some("CA s. 175"),
             CompaniesError::AnnualReturnOverdue => Some("CA s. 197"),
             CompaniesError::RegisteredOfficeNotInSingapore => Some("CA s. 142"),
@@ -293,6 +305,7 @@ impl CompaniesError {
             CompaniesError::MissingLegalSuffix { .. }
             | CompaniesError::NoShareholders
             | CompaniesError::NoCompanySecretary
+            | CompaniesError::CompanySecretaryVacancyExceeded { .. }
             | CompaniesError::InsufficientCapital { .. }
             | CompaniesError::ShareCapitalMismatch { .. } => ErrorSeverity::Medium,
 

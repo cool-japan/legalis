@@ -122,4 +122,13 @@ impl AuditStorage for MemoryStorage {
         *last_hash = hash;
         Ok(())
     }
+
+    fn remove(&mut self, id: Uuid) -> AuditResult<bool> {
+        let mut records = self.records.write().map_err(|e| {
+            AuditError::StorageError(format!("Failed to acquire write lock: {}", e))
+        })?;
+        let before = records.len();
+        records.retain(|r| r.id != id);
+        Ok(records.len() != before)
+    }
 }

@@ -413,7 +413,7 @@ impl VyperExporter {
                         Some(
                             description
                                 .strip_prefix("Visibility: ")
-                                .unwrap()
+                                .expect("invariant: description starts_with 'Visibility: '")
                                 .to_string(),
                         )
                     } else {

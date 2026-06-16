@@ -19,8 +19,22 @@
 use crate::{DiffResult, StatuteDiff};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+
+/// Monotonic, process-wide access counter used to order cache entries by
+/// recency for LRU eviction. Wall-clock timestamps (`SystemTime`) are unsuitable
+/// for this because their resolution can be coarser than the interval between
+/// consecutive cache operations, producing ties that make eviction order depend
+/// on `HashMap` iteration order (non-deterministic). A strictly increasing
+/// sequence guarantees a total recency order regardless of clock granularity.
+static ACCESS_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Returns the next monotonic access-sequence value.
+fn next_access_sequence() -> u64 {
+    ACCESS_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Cache backend types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +107,10 @@ struct CacheEntry {
     created_at: SystemTime,
     /// Last access time
     last_accessed: SystemTime,
+    /// Monotonic recency rank for LRU eviction (higher = more recently used).
+    /// Independent of wall-clock resolution; see [`next_access_sequence`].
+    #[serde(default)]
+    access_seq: u64,
     /// Access count (for LFU)
     access_count: u64,
 }
@@ -297,6 +315,7 @@ impl CacheManager {
         if let Some(entry) = cache.get_mut(key) {
             // Update access metadata
             entry.last_accessed = SystemTime::now();
+            entry.access_seq = next_access_sequence();
             entry.access_count += 1;
 
             // Check if entry is still valid
@@ -313,6 +332,7 @@ impl CacheManager {
         let mut cache = self.secondary_cache.lock().expect("mutex poisoned");
         if let Some(entry) = cache.get_mut(key) {
             entry.last_accessed = SystemTime::now();
+            entry.access_seq = next_access_sequence();
             entry.access_count += 1;
 
             if self.is_valid(entry) {
@@ -329,6 +349,7 @@ impl CacheManager {
             diff,
             created_at: SystemTime::now(),
             last_accessed: SystemTime::now(),
+            access_seq: next_access_sequence(),
             access_count: 0,
         };
 
@@ -343,6 +364,7 @@ impl CacheManager {
             diff,
             created_at: SystemTime::now(),
             last_accessed: SystemTime::now(),
+            access_seq: next_access_sequence(),
             access_count: 0,
         };
 
@@ -370,10 +392,11 @@ impl CacheManager {
         if cache.len() >= self.config.max_size {
             match self.config.invalidation_strategy {
                 InvalidationStrategy::Lru => {
-                    // Find least recently used entry
+                    // Find least recently used entry by monotonic access sequence
+                    // (resolution-independent, unlike a wall-clock timestamp).
                     if let Some((key, _)) = cache
                         .iter()
-                        .min_by_key(|(_, entry)| entry.last_accessed)
+                        .min_by_key(|(_, entry)| entry.access_seq)
                         .map(|(k, v)| (k.clone(), v.clone()))
                     {
                         cache.remove(&key);

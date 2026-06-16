@@ -75,7 +75,7 @@ impl SubmissionApi {
         let submission = self
             .submissions
             .get(&submission_id)
-            .ok_or_else(|| crate::AuditError::RecordNotFound(submission_id))?;
+            .ok_or(crate::AuditError::RecordNotFound(submission_id))?;
 
         // Validate format
         if !endpoint_formats.contains(&submission.format) {
@@ -120,7 +120,7 @@ impl SubmissionApi {
         let submission = self
             .submissions
             .get_mut(&submission_id)
-            .ok_or_else(|| crate::AuditError::RecordNotFound(submission_id))?;
+            .ok_or(crate::AuditError::RecordNotFound(submission_id))?;
 
         submission.status = SubmissionStatus::Confirmed;
         submission.confirmed_at = Some(Utc::now());

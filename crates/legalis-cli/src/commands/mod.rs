@@ -3,6 +3,8 @@
 pub mod analysis;
 pub mod cloud_team_perf;
 pub mod core;
+pub mod enterprise;
+pub mod profiling_offline;
 pub mod registry_operations;
 pub mod registry_plugin_config;
 pub mod script_ai_workflow;
@@ -28,6 +30,19 @@ pub use core::{
     handle_import, handle_init, handle_lint, handle_lod, handle_parse, handle_port,
     handle_simulate, handle_verify, handle_viz, handle_watch,
 };
+pub use enterprise::{
+    audit_operation_best_effort, handle_assistant_recommend, handle_assistant_record,
+    handle_assistant_stats, handle_assistant_suggest, handle_audit_log_path, handle_audit_log_show,
+    handle_audit_log_verify, handle_central_config_show, handle_central_config_validate,
+    handle_diagnose, handle_policy_check, handle_policy_check_limit, handle_policy_init,
+    handle_policy_show, handle_recover_clean, handle_recover_list, handle_recover_resume,
+    handle_repair, record_usage_best_effort,
+};
+pub use profiling_offline::{
+    handle_offline_cache_prune, handle_offline_cache_stats, handle_offline_clear,
+    handle_offline_conflicts, handle_offline_list, handle_offline_queue, handle_offline_resolve,
+    handle_offline_sync, handle_offline_validate, handle_profiling,
+};
 pub use registry_operations::{
     handle_add, handle_clean, handle_doctor, handle_install, handle_list, handle_new,
     handle_outdated, handle_publish, handle_repl, handle_search, handle_test, handle_uninstall,
@@ -35,10 +50,11 @@ pub use registry_operations::{
 };
 pub use registry_plugin_config::{
     handle_config_activate, handle_config_diff, handle_config_init, handle_config_profiles,
-    handle_config_show, handle_config_validate, handle_plugin_disable, handle_plugin_enable,
-    handle_plugin_info, handle_plugin_install, handle_plugin_list, handle_plugin_uninstall,
-    handle_plugin_update, handle_registry_diff, handle_registry_login, handle_registry_logout,
-    handle_registry_pull, handle_registry_push, handle_registry_sync,
+    handle_config_show, handle_config_validate, handle_plugin_check_version, handle_plugin_deps,
+    handle_plugin_disable, handle_plugin_enable, handle_plugin_info, handle_plugin_install,
+    handle_plugin_list, handle_plugin_scan, handle_plugin_uninstall, handle_plugin_update,
+    handle_registry_diff, handle_registry_login, handle_registry_logout, handle_registry_pull,
+    handle_registry_push, handle_registry_sync,
 };
 pub use script_ai_workflow::{
     handle_ai_complete, handle_ai_help, handle_ai_intent, handle_ai_parse, handle_ai_suggest,

@@ -37,6 +37,16 @@ pub struct PluginManifest {
     /// Hooks this plugin subscribes to
     #[serde(default)]
     pub hooks: Vec<String>,
+
+    /// Other plugins this plugin depends on (name -> semver requirement).
+    ///
+    /// Backward compatible: omitted in older manifests, deserializes to empty.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dependencies: std::collections::BTreeMap<String, String>,
+
+    /// Declared permissions the plugin requests (used by the security scanner).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions: Vec<String>,
 }
 
 /// Type of plugin.
@@ -484,6 +494,8 @@ mod tests {
             plugin_type: PluginType::Hook,
             commands: vec![],
             hooks: vec!["pre-verify".to_string(), "post-verify".to_string()],
+            dependencies: std::collections::BTreeMap::new(),
+            permissions: vec![],
         };
 
         let toml = toml::to_string(&manifest).unwrap();

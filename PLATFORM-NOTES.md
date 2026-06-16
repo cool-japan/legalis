@@ -154,7 +154,7 @@ The publishing scripts work on all platforms without external dependencies:
 
 ```bash
 # macOS
-/Users/kitasan/work/pub_legalis.sh
+~/work/pub_legalis.sh
 
 # Linux
 ~/work/pub_legalis.sh
@@ -304,4 +304,4 @@ All platforms show similar runtime performance. Rust's zero-cost abstractions en
 
 **Last Updated:** 2026-01-05
 **Author:** COOLJAPAN OU (Team Kitasan)
-**License:** MIT OR Apache-2.0
+**License:** Apache-2.0

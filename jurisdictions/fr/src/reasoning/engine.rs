@@ -178,18 +178,14 @@ impl LegalReasoningEngine {
                 operator,
                 value,
             } => {
-                // Calculate weighted sum of attributes
+                // Calculate weighted sum of attributes.
+                // Missing attributes are treated as 0.0 (condition does not fire for absence).
                 let mut sum = 0.0;
                 for (attr_name, weight) in attributes {
                     let attr_value = context
                         .get_attribute(attr_name)
                         .and_then(|v| v.parse::<f64>().ok())
-                        .ok_or_else(|| ReasoningError::MissingContextData {
-                            description: format!(
-                                "Attribute '{}' not available or not numeric",
-                                attr_name
-                            ),
-                        })?;
+                        .unwrap_or(0.0);
                     sum += attr_value * weight;
                 }
 
@@ -230,6 +226,38 @@ impl LegalReasoningEngine {
                     legalis_core::ComparisonOp::LessOrEqual => duration <= *value,
                     legalis_core::ComparisonOp::Equal => duration == *value,
                     legalis_core::ComparisonOp::NotEqual => duration != *value,
+                })
+            }
+            Condition::HasAttribute { key } => Ok(context.get_attribute(key).is_some()),
+            Condition::Not(inner) => {
+                let inner_result = self.evaluate_condition(inner, context)?;
+                Ok(!inner_result)
+            }
+            Condition::Income { operator, value } => {
+                // Try get_income() first (structured), then fall back to common attribute names
+                let income = context
+                    .get_income()
+                    .or_else(|| {
+                        // Support capital-based checks (e.g., SA minimum capital via capital_eur attribute)
+                        context
+                            .get_attribute("capital_eur")
+                            .and_then(|v| v.parse::<u64>().ok())
+                            .or_else(|| {
+                                context
+                                    .get_attribute("income")
+                                    .and_then(|v| v.parse::<u64>().ok())
+                            })
+                    })
+                    .ok_or_else(|| ReasoningError::MissingContextData {
+                        description: "Income information not available".to_string(),
+                    })?;
+                Ok(match operator {
+                    legalis_core::ComparisonOp::GreaterThan => income > *value,
+                    legalis_core::ComparisonOp::GreaterOrEqual => income >= *value,
+                    legalis_core::ComparisonOp::LessThan => income < *value,
+                    legalis_core::ComparisonOp::LessOrEqual => income <= *value,
+                    legalis_core::ComparisonOp::Equal => income == *value,
+                    legalis_core::ComparisonOp::NotEqual => income != *value,
                 })
             }
             _ => Err(ReasoningError::ConditionEvaluationFailed {

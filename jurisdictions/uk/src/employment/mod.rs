@@ -26,12 +26,19 @@
 //! - Fair reasons: Capability, Conduct, Redundancy, Statutory restriction, Some Other Substantial Reason
 //! - Automatically unfair (no qualifying period): Pregnancy, whistleblowing, trade union, etc.
 //!
-//! ### Redundancy Payments (s.162)
-//! Age-based multipliers:
-//! - Under 22: 0.5 week's pay per year
-//! - 22-40: 1.0 week's pay per year
-//! - 41+: 1.5 weeks' pay per year
-//! - Maximum: 20 years, £700/week cap (April 2024)
+//! ### Redundancy Payments (s.162) and Unfair-Dismissal Basic Award (s.119)
+//! Service is reckoned **backwards** from the end of employment, allowing for each complete year:
+//! - Under 22: 0.5 week's pay
+//! - 22-40: 1.0 week's pay
+//! - 41+: 1.5 weeks' pay
+//!
+//! The age band for each year is fixed by the employee's age during that year, not by their
+//! age at the dismissal date. Maximum: 20 years reckoned, £700/week cap (s.227, April 2024).
+//! The basic award for unfair dismissal (s.119) uses the same reckoning.
+//!
+//! ### Unfair-Dismissal Compensatory Award (s.124)
+//! Assessed financial loss (s.123), capped at the lower of 52 weeks' gross pay or the
+//! statutory maximum of £115,115 (April 2024).
 //!
 //! ## Working Time Regulations 1998
 //!
@@ -98,7 +105,7 @@
 //!     weekly_pay_gbp: 600.0,
 //! };
 //! let payment = redundancy.calculate_statutory_payment();
-//! println!("Statutory redundancy: £{:.2}", payment); // £9,000
+//! println!("Statutory redundancy: £{:.2}", payment); // £7,200 (4 years @ 1.5 + 6 @ 1.0)
 //!
 //! // Check minimum wage compliance
 //! let wage_check = MinimumWageAssessment {
@@ -130,10 +137,11 @@ pub mod validator;
 // Re-export commonly used types
 pub use error::{EmploymentError, Result};
 pub use types::{
-    AnnualLeaveEntitlement, AutomaticallyUnfairReason, ContractType, Dismissal, DismissalReason,
-    DismissalType, Employee, Employer, EmploymentContract, EmploymentContractBuilder,
-    FixedTermReason, MinimumWageAssessment, NoticePeriod, PaymentFrequency, PensionScheme,
-    RedundancyPayment, RestEntitlement, Salary, WorkingHours,
+    AnnualLeaveEntitlement, AutomaticallyUnfairReason, BasicAward, CompensatoryAward, ContractType,
+    Dismissal, DismissalReason, DismissalType, Employee, Employer, EmploymentContract,
+    EmploymentContractBuilder, FixedTermReason, MAX_RECKONABLE_YEARS, MinimumWageAssessment,
+    NoticePeriod, PaymentFrequency, PensionScheme, RedundancyPayment, RestEntitlement, Salary,
+    ServiceReckoning, UnfairDismissalAward, WEEKLY_PAY_CAP_GBP, WorkingHours, statutory_weeks_due,
 };
 pub use validator::{
     validate_annual_leave, validate_contract_type, validate_dismissal, validate_dismissal_reason,

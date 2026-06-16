@@ -544,6 +544,147 @@ pub fn handle_plugin_update(_name: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Handles `legalis plugin scan`: security-scan installed plugins.
+pub fn handle_plugin_scan(
+    name: Option<&str>,
+    fail_on: crate::plugin_security::Severity,
+) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use crate::plugin_security::scan_plugin;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    let plugin_root = PluginManager::plugin_directory()?;
+    let manifests: Vec<_> = match name {
+        Some(name) => match manager.get_plugin(name) {
+            Some(manifest) => vec![manifest.clone()],
+            None => anyhow::bail!("Plugin '{name}' is not installed"),
+        },
+        None => manager.list_plugins().into_iter().cloned().collect(),
+    };
+
+    if manifests.is_empty() {
+        println!("{}", "No plugins installed to scan.".yellow());
+        return Ok(());
+    }
+
+    let mut failed = 0usize;
+    for manifest in &manifests {
+        let report = scan_plugin(manifest, Some(&plugin_root.join(&manifest.name)));
+        if report.findings.is_empty() {
+            println!("{} {}: clean", "✓".green(), manifest.name.bold());
+        } else {
+            println!("{} {}:", "•".yellow(), manifest.name.bold());
+            for finding in &report.findings {
+                println!(
+                    "    [{:?}] {} — {}",
+                    finding.severity, finding.code, finding.message
+                );
+            }
+        }
+        if report.has_at_least(fail_on) {
+            failed += 1;
+        }
+    }
+
+    if failed > 0 {
+        anyhow::bail!(
+            "{failed} plugin(s) have findings at or above the {:?} threshold",
+            fail_on
+        );
+    }
+    println!(
+        "{}",
+        "All scanned plugins pass the security threshold.".green()
+    );
+    Ok(())
+}
+
+/// Handles `legalis plugin deps`: validate dependencies and resolve order.
+pub fn handle_plugin_deps(show_order: bool) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use crate::plugin_security::resolve_install_order;
+    use colored::Colorize;
+
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+    let manifests: Vec<_> = manager.list_plugins().into_iter().cloned().collect();
+
+    if manifests.is_empty() {
+        println!("{}", "No plugins installed.".yellow());
+        return Ok(());
+    }
+
+    match resolve_install_order(&manifests) {
+        Ok(order) => {
+            println!(
+                "{}",
+                "All plugin dependencies are satisfied.".green().bold()
+            );
+            if show_order {
+                println!("Install order:");
+                for (index, name) in order.iter().enumerate() {
+                    println!("  {}. {}", index + 1, name);
+                }
+            }
+            Ok(())
+        }
+        Err(errors) => {
+            for error in &errors {
+                eprintln!("{} {}", "✗".red(), error);
+            }
+            anyhow::bail!("{} dependency problem(s) found", errors.len());
+        }
+    }
+}
+
+/// Handles `legalis plugin check-version`: compatibility with running legalis.
+pub fn handle_plugin_check_version(name: Option<&str>) -> Result<()> {
+    use crate::plugin::PluginManager;
+    use crate::plugin_security::check_min_legalis_version;
+    use colored::Colorize;
+
+    let legalis_version = env!("CARGO_PKG_VERSION");
+    let mut manager = PluginManager::new()?;
+    manager.discover_plugins()?;
+
+    let manifests: Vec<_> = match name {
+        Some(name) => match manager.get_plugin(name) {
+            Some(manifest) => vec![manifest.clone()],
+            None => anyhow::bail!("Plugin '{name}' is not installed"),
+        },
+        None => manager.list_plugins().into_iter().cloned().collect(),
+    };
+
+    if manifests.is_empty() {
+        println!("{}", "No plugins installed.".yellow());
+        return Ok(());
+    }
+
+    let mut incompatible = 0usize;
+    for manifest in &manifests {
+        match check_min_legalis_version(manifest, legalis_version) {
+            Ok(()) => println!(
+                "{} {} (v{}): compatible",
+                "✓".green(),
+                manifest.name.bold(),
+                manifest.version
+            ),
+            Err(error) => {
+                incompatible += 1;
+                println!("{} {}", "✗".red(), error);
+            }
+        }
+    }
+
+    if incompatible > 0 {
+        anyhow::bail!("{incompatible} plugin(s) are incompatible with legalis {legalis_version}");
+    }
+    Ok(())
+}
+
 /// Handles the config validate command.
 pub fn handle_config_validate(config_path: Option<&str>, verbose: bool) -> Result<()> {
     use crate::config::Config;

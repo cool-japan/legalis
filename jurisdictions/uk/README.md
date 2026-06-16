@@ -2,6 +2,8 @@
 
 United Kingdom Jurisdiction Support for Legalis-RS
 
+**Version 0.1.6** — 15 modules, 680 tests passing, 0 warnings.
+
 ## Overview
 
 `legalis-uk` provides comprehensive support for the UK legal system within the Legalis-RS framework, covering employment law, data protection, consumer rights, contract law, and company law for England and Wales.
@@ -183,11 +185,23 @@ Not European-style article numbers (e.g., "Article 6").
 
 ## Modules
 
+`legalis-uk` provides 15 modules covering English & Welsh law:
+
+- `common` - Shared UK legal primitives and citation helpers
 - `employment` - Employment Rights Act 1996, Working Time Regulations 1998
+- `intellectual_property` - UK trademark, patent, copyright, and design law
 - `data_protection` - UK GDPR, Data Protection Act 2018 (80% reuse from EU)
 - `consumer_rights` - Consumer Rights Act 2015
 - `contract` - Common law contract principles
 - `company` - Companies Act 2006
+- `financial_services` - Financial Services and Markets Act, FCA/PRA regulation
+- `trusts` - Express, resulting, and constructive trusts
+- `family` - Matrimonial and children law
+- `tort` - Negligence, nuisance, and other common law torts
+- `criminal` - Criminal offences and defences
+- `public_law` - Judicial review and administrative law
+- `land_law` - Real property, estates, and interests in land
+- `reasoning` - Common law reasoning and precedent analysis
 
 ## Dependencies
 
@@ -211,12 +225,24 @@ See the `examples/` directory for comprehensive usage examples:
 
 ## Implementation Status
 
+**15 modules implemented, 680 tests passing, 0 warnings**
+
 - ✅ Project structure and dependencies
-- 🚧 Employment Law module (in progress)
-- ⏳ Data Protection module (planned)
-- ⏳ Consumer Rights module (planned)
-- ⏳ Contract Law module (planned)
-- ⏳ Company Law module (planned)
+- ✅ Common primitives module
+- ✅ Employment Law module (Employment Rights Act 1996)
+- ✅ Intellectual Property module
+- ✅ Data Protection module (UK GDPR / DPA 2018)
+- ✅ Consumer Rights module (Consumer Rights Act 2015)
+- ✅ Contract Law module (common law principles)
+- ✅ Company Law module (Companies Act 2006)
+- ✅ Financial Services module
+- ✅ Trusts module
+- ✅ Family Law module
+- ✅ Tort module
+- ✅ Criminal Law module
+- ✅ Public Law module
+- ✅ Land Law module
+- ✅ Common law reasoning module
 
 ## Contributing
 

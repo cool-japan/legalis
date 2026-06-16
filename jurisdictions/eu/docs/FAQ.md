@@ -23,7 +23,7 @@ Rust 1.70.0 or later. The crate follows stable Rust and doesn't require nightly 
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-legalis-eu = "0.5.9"
+legalis-eu = "0.1.6"
 chrono = "0.4"
 ```
 

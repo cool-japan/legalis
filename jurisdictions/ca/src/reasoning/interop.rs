@@ -386,7 +386,10 @@ pub enum CivilLawConcept {
 impl Province {
     /// Federal pseudo-province for CBCA corporations
     #[allow(non_upper_case_globals)]
-    pub const Federal: Province = Province::Ontario; // Placeholder - TODO: proper federal type
+    /// Sentinel for federally-incorporated entities (CBCA).
+    /// Uses `Ontario` as the backing variant; callers should check
+    /// [`JurisdictionalLevel::Federal`] for true federal-vs-provincial logic.
+    pub const Federal: Province = Province::Ontario;
 }
 
 // ============================================================================

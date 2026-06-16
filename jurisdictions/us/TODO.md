@@ -455,11 +455,38 @@ Implemented comprehensive choice of law analysis system supporting multiple US a
 - [x] `rupa_states()` / `upa_states()` list methods
 - [x] Builder pattern for `UPAAdoption` records
 
-### 1.20 Other Uniform Acts (Future)
-- [ ] Uniform Trust Code (UTC)
-- [ ] Uniform Probate Code (UPC)
-- [ ] Uniform Limited Liability Company Act (ULLCA)
-- [ ] Uniform Arbitration Act
+### 1.20 Other Uniform Acts ✅ COMPLETED (2026-06-14)
+- [x] Uniform Trust Code (UTC) — `src/uniform_acts/utc.rs`
+  - Model-act metadata (ULC, 2000; revisions 2001-2010), 11 articles, key sections
+    (§§ 105, 402, 404, 411, 412, 502, 801, 802, 804, 813)
+  - Adoption tracker (34 states + DC; LA = Louisiana Trust Code, La. R.S. 9:1721)
+  - Validator: `validate_trust_creation` per UTC § 402(a)(1)-(5)
+- [x] Uniform Probate Code (UPC) — `src/uniform_acts/upc.rs`
+  - Model-act metadata (ULC/ALI, 1969; revised 1990), 8 articles, key sections
+    (§§ 2-102, 2-202, 2-501, 2-502, 2-503, 2-603, 3-301)
+  - Adoption tracker (18 enacting states; LA = Civil Code successions)
+  - Validator: `validate_will_execution` per UPC §§ 2-501/2-502 (attested + holographic),
+    constants `MINIMUM_TESTATOR_AGE = 18`, `REQUIRED_WITNESSES = 2`
+- [x] Uniform Limited Liability Company Act (ULLCA/RULLCA) — `src/uniform_acts/ullca.rs`
+  - Model-act metadata (ULC, ULLCA 1996 / RULLCA 2006/2013), key sections
+    (§§ 105, 108, 201, 304, 407, 409, 503, 701), member-managed default (§ 407(a))
+  - Adoption tracker (~20 RULLCA jurisdictions; DE = non-uniform 6 Del. C. ch. 18)
+  - Validator: `validate_llc_formation` per RULLCA §§ 108/113/201
+- [x] Uniform Arbitration Act (UAA/RUAA) — `src/uniform_acts/uaa.rs`
+  - Model-act metadata (ULC, UAA 1955 / RUAA 2000), key sections
+    (§§ 4, 6, 8, 12, 21, 23, 25), `VacaturGround` enum per RUAA § 23(a)(1)-(6)
+  - Adoption tracker (~23 RUAA jurisdictions; CA/NY non-uniform; FAA relationship noted)
+  - Validator: `validate_arbitration_agreement` per RUAA § 6
+- Shared infrastructure: `src/uniform_acts/model_act.rs` (`ModelActMetadata`, `DraftingBody`,
+  `US_JURISDICTIONS`) and `src/uniform_acts/error.rs` (`UniformActError`, `Result`)
+- [x] Uniform Electronic Transactions Act (UETA, 1999) — `src/uniform_acts/ueta.rs` ✅ COMPLETED (2026-06-14)
+  - Model-act metadata (ULC, 1999), 12 key sections via `UetaSection` (§§ 3, 5, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16) with Bluebook citations + summaries
+  - Adoption tracker `UetaTracker` (49 states + DC; New York = non-uniform ESRA,
+    N.Y. State Tech. Law §§ 301-309); `ueta_count`/`ueta_percentage`/`non_uniform_states`
+  - `ElectronicRecord` + `SignatureMethod` + `validate_electronic_record` (legal recognition
+    under §§ 5/7, scope exclusions under § 3(b): wills/codicils/testamentary trusts + UCC) and
+    `signature_attributable` (§ 9 attribution); new `UniformActError::ElectronicTransaction`
 
 ### 1.21 Adoption Status System (`adoption_status.rs`) ✅
 - [x] **AdoptionStatus Type**
@@ -521,11 +548,17 @@ Implemented comprehensive choice of law analysis system supporting multiple US a
   - [x] `CommerceClauseResult` with confidence scoring
   - [x] Summary report generation
 
-- [ ] **Federal Commerce Power** (deferred - not critical for Phase 1)
-  - [ ] Substantial effects test (Wickard v. Filburn)
-  - [ ] Channels of interstate commerce
-  - [ ] Instrumentalities of interstate commerce
-  - [ ] Limits on commerce power (Lopez, Morrison)
+- [x] **Federal Commerce Power** — `src/federal/commerce_power.rs` ✅ COMPLETED (2026-06-14)
+  - [x] Substantial effects test with aggregation (Wickard v. Filburn, 317 U.S. 111 (1942);
+        Gonzales v. Raich, 545 U.S. 1 (2005))
+  - [x] Channels of interstate commerce (Heart of Atlanta Motel v. United States, 379 U.S. 241 (1964))
+  - [x] Instrumentalities of interstate commerce (Shreveport Rate Cases, 234 U.S. 342 (1914))
+  - [x] Limits on commerce power: economic vs non-economic activity, jurisdictional element,
+        congressional findings (relevant not dispositive), attenuated-causal-chain
+        (United States v. Lopez, 514 U.S. 549 (1995); United States v. Morrison, 529 U.S. 598 (2000))
+  - [x] Typed `CommercePowerAnalysis` → `CommercePowerResult` analyzer (likely-valid/likely-invalid
+        + confidence + reasoning); `lopez_fact_pattern`/`morrison_fact_pattern`/`wickard_fact_pattern`/
+        `raich_fact_pattern` landmark reconstructions with tests
 
 ### 1.25 Preemption Analysis (`preemption.rs`) ✅
 - [x] **Express Preemption**
@@ -558,11 +591,17 @@ Implemented comprehensive choice of law analysis system supporting multiple US a
   - [x] Detailed reasoning output
   - [x] Summary report generation
 
-### 1.26 Integration with Core
+### 1.26 Integration with Core ✅ COMPLETED (2026-06-14)
 - [x] Federal jurisdiction coding: "US" vs "US-CA", "US-NY" (documented)
-- [ ] Use `JurisdictionConflictResolver` from legalis-core (deferred - not critical)
-- [ ] Hierarchical jurisdiction system (deferred)
-- [ ] Conflict detection and resolution (deferred)
+- [x] Use `JurisdictionConflictResolver` from legalis-core — `src/federal/jurisdiction_hierarchy.rs`
+      wraps `legalis_core::multi_jurisdictional::{JurisdictionConflictResolver, JurisdictionLevel,
+      ConflictResolution}`, adapting US laws into `legalis_core::Statute` records
+- [x] Hierarchical jurisdiction system — `JurisdictionHierarchy` + `FederalismLevel`
+      (Federal/State/Local) with `register_federal`/`register_state`/`resolve`
+- [x] Conflict detection and resolution — `analyze_conflict` layers the three preemption
+      doctrines (`PreemptionKind::{Express, Field, Conflict, None}`) over core lex-superior
+      resolution, honoring the presumption against preemption for implied (field/conflict)
+      preemption in fields of traditional state police power
 
 ### 1.27 Testing ✅
 - [x] Preemption type tests (2 tests)
@@ -1163,12 +1202,23 @@ Priority based on legal influence, population, and regional diversity:
 
 ### 2.3 Module Template
 Each state module should include:
-- [ ] State ID and metadata integration
-- [ ] Comparative negligence rule with statutory/case basis
-- [ ] Joint and several liability rule
-- [ ] Notable tort law variations (damage caps, etc.)
-- [ ] 1-3 landmark state cases
-- [ ] At least 5 unit tests
+- [x] State ID and metadata integration (all 51 jurisdictions: `StateId` + `StateRegistry`)
+- [x] Comparative negligence rule with statutory/case basis (reconciled 2026-06-14:
+      `StateRule::{PureComparativeNegligence, ModifiedComparative50, ModifiedComparative51,
+      ContributoryNegligence}` encoded per-state with `StatuteReference`/case cites)
+- [x] Joint and several liability rule (reconciled 2026-06-14:
+      `StateRule::{JointAndSeveralLiability, SeveralLiabilityOnly, ModifiedJointAndSeveral}`)
+- [x] Notable tort law variations (damage caps, etc.) (reconciled 2026-06-14:
+      `StateRule::DamagesCap { damage_type, cap_amount, conditions }`, e.g. OH § 2315.18, TX § 74.301)
+- [~] 1-3 landmark state cases (present for major states; partial fill 2026-06-14 — added
+      landmark `CaseReference`s to the contributory-negligence minority states and two
+      doctrinally distinctive states: NC *Smith v. Fiber Controls* (1980), VA *Baskett v. Banks*
+      (1947), MD *Coleman v. Soccer Ass'n* (2013), AL *Williams v. Delta Int'l Machinery* (1993),
+      DC *Wingfield v. Peoples Drug Store* (1994), TN *McIntyre v. Balentine* (1992 judicial
+      adoption of comparative fault), MN *Milkovich v. Saari* (1973 'better law'). Remaining
+      Tier-2/3 states still statute-only.)
+- [~] At least 5 unit tests (2026-06-14 — the 7 states above brought from 4 → 6 tests each;
+      remaining Tier-2/3 states still carry 4 tests, to be raised as accurate cases are added)
 
 **Estimated**: ~200 lines per state × 45 states = ~9,000 lines
 
@@ -1359,8 +1409,9 @@ Each state module should include:
 ### Coverage
 - ✅ 50 states + DC implemented
 - ✅ Choice of law analyzer (5 major approaches)
-- ✅ Uniform Acts tracker (UCC, UPA, UTC, UPC)
-- ✅ Federal preemption analyzer
+- ✅ Uniform Acts tracker (UCC, UPA, UTC, UPC, ULLCA/RULLCA, UAA/RUAA, UETA)
+- ✅ Federal preemption analyzer + affirmative Commerce Power analyzer (Lopez/Morrison/Wickard)
+- ✅ Hierarchical federal/state jurisdiction conflict resolver (legalis-core integration)
 - ✅ Louisiana comparative law with JP/FR/DE
 - ✅ Professional licensing (attorneys, doctors, architects)
 - ✅ Tax variations (income, sales, corporate)
@@ -1485,6 +1536,98 @@ This implementation showcases legalis-RS's unique strengths:
 - ⏳ Phase 3: Professional Licensing (~2,000 lines)
 - ⏳ Phase 4: Tax Variations (~1,500 lines)
 - ⏳ Phase 5: Legislative Tracking (~1,000 lines)
+
+---
+
+## 2026-06-14 Update — Uniform Acts Gap-Fill (UTC / UPC / RULLCA / RUAA)
+
+**Reconciled (already implemented; no code change):**
+- Tort-law variations across all 51 jurisdictions — comparative negligence (pure / modified
+  50% / modified 51% / contributory), joint-and-several liability, and damage caps — encoded
+  via `states::types::StateRule` (§ 2.3 Module Template tort items marked `[x]`).
+- Success-metrics line corrected to list all six tracked uniform acts.
+
+**Newly implemented (Phase 1E § 1.20):**
+- `src/uniform_acts/utc.rs` — Uniform Trust Code (2000): `UtcTracker`, `UtcArticle`,
+  `UtcSection`, `UtcAdoption`, `TrustCreation` + `validate_trust_creation` (UTC § 402).
+- `src/uniform_acts/upc.rs` — Uniform Probate Code (1969/1990): `UpcTracker`, `UpcArticle`,
+  `UpcSection`, `UpcAdoption`, `WillExecution` + `validate_will_execution` (UPC §§ 2-501/2-502).
+- `src/uniform_acts/ullca.rs` — Revised ULLCA (2006/2013): `UllcaTracker`, `UllcaVersion`,
+  `RullcaSection`, `LlcManagementStructure`, `LlcFormation` + `validate_llc_formation`.
+- `src/uniform_acts/uaa.rs` — Revised UAA (2000): `UaaTracker`, `ArbitrationActVersion`,
+  `RuaaSection`, `VacaturGround`, `ArbitrationAgreement` + `validate_arbitration_agreement`.
+- `src/uniform_acts/model_act.rs` — `ModelActMetadata`, `DraftingBody`, `US_JURISDICTIONS`.
+- `src/uniform_acts/error.rs` — `UniformActError` + `Result` (thiserror, section-citing).
+
+**Previously deferred — now COMPLETED on 2026-06-14** (see next section): the "deferred - not
+critical" items below were implemented: Federal Commerce Power (§ 1.24), legalis-core
+`JurisdictionConflictResolver` integration and hierarchical jurisdiction system (§ 1.26),
+and UETA (§ 1.20).
+
+**Quality gates (2026-06-14 prior pass):** `cargo clippy -p legalis-us --all-targets -- -D warnings`
+clean (0 warnings); `cargo nextest run -p legalis-us` = 575 passed / 0 skipped.
+No new dependencies. No version/member changes.
+
+---
+
+## COMPLETED (2026-06-14 — UETA + Commerce Power)
+
+This pass implemented the actionable pure-Rust items previously marked "deferred - not critical",
+plus a partial test-coverage gap-fill. All items below are additive and backward-compatible; no
+files outside `jurisdictions/us` were touched, and no new dependencies were added.
+
+### 1. Uniform Electronic Transactions Act (UETA, 1999) — `src/uniform_acts/ueta.rs` (614 lines)
+- `model_act()` ULC metadata (1999); `UetaSection` enum covering scope/applicability (§§ 3, 5),
+  legal recognition of electronic records & signatures (§ 7), § 8 information-in-writing,
+  attribution (§ 9), effect of change/error (§ 10), § 11 notarization, retention (§ 12),
+  admissibility (§ 13), automated transactions / electronic agents (§ 14), time & place of
+  sending & receipt (§ 15), and § 16 transferable records — each with Bluebook citation + summary.
+- `UetaTracker` adoption tracker across all 51 jurisdictions (49 states + DC enacted; New York =
+  non-uniform ESRA). `UetaAdoption` builder, `has_adopted`/`ueta_count`/`ueta_percentage`/
+  `non_uniform_states`/`ueta_states`.
+- Validators: `validate_electronic_record` + `electronic_record_issues` (legal recognition under
+  §§ 5/7 with § 3(b) scope exclusions for wills/codicils/testamentary trusts and the UCC carve-out),
+  `signature_attributable` (§ 9), `SignatureMethod` enum (typed-name / clickwrap / cryptographic /
+  biometric / electronic-agent). New error variant `UniformActError::ElectronicTransaction`.
+
+### 2. Federal Commerce Power — `src/federal/commerce_power.rs` (636 lines)
+- `CommerceCategory` (Channels / Instrumentalities / SubstantialEffects) with leading cases.
+- `ActivityCharacter` (Economic / NonEconomic) — the Lopez/Morrison pivot for aggregation.
+- `CommercePowerAnalysis` builder (category, character, jurisdictional element, congressional
+  findings, comprehensive-scheme, attenuated-causal-chain) → `CommercePowerResult`
+  (likely-valid/likely-invalid + confidence + reasoning with citations).
+- Encodes Wickard aggregation, Raich comprehensive-scheme, and the Lopez/Morrison limits
+  (non-economic activity not aggregable; jurisdictional element as saving feature; findings
+  relevant not dispositive; no piling inference upon inference). Landmark reconstructions
+  `lopez_fact_pattern`/`morrison_fact_pattern`/`wickard_fact_pattern`/`raich_fact_pattern`.
+
+### 3. JurisdictionConflictResolver wiring — `src/federal/jurisdiction_hierarchy.rs` (355 lines)
+- `JurisdictionHierarchy` wraps `legalis_core::multi_jurisdictional::JurisdictionConflictResolver`,
+  adapting US laws into `legalis_core::Statute` records keyed by jurisdiction string ("US",
+  "US-CA", ...). `FederalismLevel` (Federal/State/Local) maps to core `JurisdictionLevel`.
+- `register`/`register_federal`/`register_state`/`resolve`; `analyze_conflict` overlays the three
+  preemption doctrines (`PreemptionKind::{Express, Field, Conflict, None}`) on core lex-superior
+  resolution and applies the presumption against preemption to implied (field/conflict)
+  preemption in traditional state-police-power fields, while express preemption survives it.
+
+### 4. State test-coverage gap-fill (partial, accurate)
+- Added landmark `CaseReference`s and raised each from 4 → 6 unit tests for: North Carolina
+  (*Smith v. Fiber Controls*, 1980), Virginia (*Baskett v. Banks*, 1947), Maryland
+  (*Coleman v. Soccer Ass'n of Columbia*, 2013), Alabama (*Williams v. Delta Int'l Machinery*,
+  1993), District of Columbia (*Wingfield v. Peoples Drug Store*, 1994), Tennessee
+  (*McIntyre v. Balentine*, 1992), Minnesota (*Milkovich v. Saari*, 1973). States already at the
+  bar were left unchanged; remaining Tier-2/3 states stay statute-only pending accurate cases.
+
+### Wiring & quality gates
+- All modules re-exported from `src/uniform_acts/mod.rs`, `src/federal/mod.rs`, and `src/lib.rs`.
+- `cargo clippy -p legalis-us --all-targets -- -D warnings` — clean (0 warnings).
+- `cargo nextest run -p legalis-us` — 622 passed / 0 skipped (575 → 622, +47 new tests).
+- Every touched file < 2000 lines (largest new file 636). No new dependencies; no version changes.
+
+### Still deferred
+- Full landmark-case + ≥5-test coverage for the remaining ~39 Tier-2/3 states — DEFERRED:
+  requires per-state landmark research to encode accurate citations without fabrication; done
+  here only for states with well-documented, verifiable landmark holdings.
 
 ---
 

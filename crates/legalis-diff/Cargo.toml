@@ -15,9 +15,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 rayon.workspace = true
-rhai = { version = "1.24", features = ["serde", "sync"] }
+rhai = { version = "1.25", features = ["serde", "sync"] }
 lru.workspace = true
 uuid.workspace = true
+sha2.workspace = true
+hex.workspace = true
+quick-xml.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

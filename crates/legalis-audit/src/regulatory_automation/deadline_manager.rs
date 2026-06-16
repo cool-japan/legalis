@@ -83,7 +83,7 @@ impl DeadlineManager {
         let deadline = self
             .deadlines
             .get_mut(&id)
-            .ok_or_else(|| crate::AuditError::RecordNotFound(id))?;
+            .ok_or(crate::AuditError::RecordNotFound(id))?;
 
         deadline.status = DeadlineStatus::Completed;
         deadline.completed_at = Some(Utc::now());
@@ -96,7 +96,7 @@ impl DeadlineManager {
         let deadline = self
             .deadlines
             .get_mut(&id)
-            .ok_or_else(|| crate::AuditError::RecordNotFound(id))?;
+            .ok_or(crate::AuditError::RecordNotFound(id))?;
 
         deadline.status = DeadlineStatus::Cancelled;
         Ok(())
@@ -170,7 +170,7 @@ impl DeadlineManager {
             .notifications
             .iter_mut()
             .find(|n| n.id == notification_id)
-            .ok_or_else(|| crate::AuditError::RecordNotFound(notification_id))?;
+            .ok_or(crate::AuditError::RecordNotFound(notification_id))?;
 
         notification.sent = true;
         Ok(())

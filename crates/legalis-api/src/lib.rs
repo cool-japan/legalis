@@ -17,13 +17,32 @@ pub mod cache;
 pub mod collaborative;
 pub mod config;
 pub mod contract_test;
-// pub mod dataloader; // TODO: Re-enable when Loader trait signature issues are resolved
+pub mod dataloader;
 pub mod edge_cache;
 pub mod field_selection;
 pub mod gateway;
+// Advanced Security (v0.2.7)
+pub mod ip_whitelist;
+pub mod key_rotation;
+pub mod security_headers;
+// Performance Optimization (v0.2.8)
+pub mod pagination;
+pub mod partial_response;
+pub mod prefetch;
+pub mod streaming;
+// Compliance & Governance (v0.2.9)
+pub mod audit_export;
+pub mod consent;
+pub mod data_classification;
+pub mod governance_routes;
+pub mod regulatory_reporting;
+pub mod usage_policy;
+// AI-Powered API (v0.3.0) — pure-Rust algorithmic
+pub mod abuse_detection;
 pub mod graphql;
 #[cfg(feature = "grpc")]
 pub mod grpc;
+pub mod intelligent_rate_limit;
 pub mod live_queries;
 pub mod load_test;
 pub mod logging;
@@ -33,6 +52,7 @@ pub mod oauth2_provider;
 pub mod observability;
 pub mod openapi;
 pub mod persisted_queries;
+pub mod predictive_cache;
 pub mod presence;
 pub mod query_batch;
 pub mod query_cost;

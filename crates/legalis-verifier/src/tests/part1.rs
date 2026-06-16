@@ -1098,7 +1098,10 @@ fn test_verify_for_jurisdiction() {
 }
 #[test]
 fn test_retroactivity_check_pass() {
-    use chrono::{NaiveDate, Utc};
+    use chrono::Utc;
+    // Effective date strictly after enactment keeps the statute prospective
+    // regardless of the current date. (Previously hard-coded to 2026-06-01,
+    // which became retroactive — and failed this check — once that date passed.)
     let statute = Statute::new(
         "test-1",
         "Traffic prohibition",
@@ -1106,7 +1109,7 @@ fn test_retroactivity_check_pass() {
     )
     .with_temporal_validity(
         TemporalValidity::new()
-            .with_effective_date(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap())
+            .with_effective_date(Utc::now().date_naive() + chrono::Days::new(365))
             .with_enacted_at(Utc::now()),
     );
     let result = check_retroactivity(&statute);

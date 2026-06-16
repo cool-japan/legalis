@@ -189,6 +189,9 @@ pub mod securities_law;
 // Intellectual property
 pub mod intellectual_property;
 
+// Statute-based models and legalis-dsl export
+pub mod statutes;
+
 // Re-export citation types
 pub use citation::{Citation, CitationType, Court, acts, cite};
 
@@ -668,6 +671,9 @@ pub use fema::{
     AccountType as FemaAccountType, FdiRoute, FemaViolationType, ForeignInvestment,
     RemittanceTransaction,
 };
+
+// Re-export statute-based models and DSL export
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

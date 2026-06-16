@@ -7,7 +7,8 @@
 //! - Complete bar to recovery if plaintiff at fault
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,24 @@ impl AlabamaLaw {
                 .with_year(1975),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1975, 1, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "Williams v. Delta Int'l Mach. Corp., 619 So. 2d 1330",
+                "Williams v. Delta Int'l Machinery",
+                1993,
+            )
+            .with_significance(
+                "Alabama Supreme Court reaffirmed contributory negligence as a complete defense \
+                 and declined to adopt comparative negligence, leaving any change to the \
+                 legislature.",
+            ),
+        )
         .with_notes(
             "Alabama retains the traditional contributory negligence rule. \
              Any contributory negligence by the plaintiff is a complete bar to \
              recovery, regardless of the defendant's degree of negligence. One of \
-             only 5 US jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL).",
+             only 5 US jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL). \
+             Reaffirmed by the Alabama Supreme Court in 1993.",
         )
     }
 
@@ -117,5 +131,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = AlabamaLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "Williams v. Delta Int'l Machinery");
+        assert_eq!(case.year, 1993);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("complete defense")
+        );
+    }
+
+    #[test]
+    fn test_reaffirmed_1993_noted() {
+        let comp_neg = AlabamaLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("1993"));
     }
 }

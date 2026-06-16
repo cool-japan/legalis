@@ -264,3 +264,15 @@ pub mod realtime;
 
 /// - Field-level encryption
 pub mod enterprise_security;
+
+/// Regulatory Sandbox module (v0.3.3): isolated statute simulation
+/// environments, impact prediction, A/B testing of statute variants,
+/// regulatory experiment tracking, and rollback-safe statute testing.
+pub mod sandbox;
+
+/// Quantum-Safe Registry module (v0.3.4): post-quantum hash-based signatures for
+/// statute entries and versions, quantum-resistant content hashing for the
+/// registry store, a BB84-style QKD key-agreement model, hybrid classical+PQ
+/// signature envelopes, and quantum-safe audit-trail verification over the
+/// registry's event log.
+pub mod quantum_safe;

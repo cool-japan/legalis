@@ -5,7 +5,7 @@
 ---
 
 **著者**: Legalis-RS Development Team
-**バージョン**: 0.2.0
+**バージョン**: 0.1.6
 **言語**: Rust (Edition 2024)
 **ライセンス**: MIT / Apache 2.0
 
@@ -1462,4 +1462,4 @@ SUPERSEDES ::= "SUPERSEDES" IDENT ("," IDENT)*
 ---
 
 **Legalis-RS Development Team**
-バージョン 0.2.0 | 2024年
+バージョン 0.1.6 | 2026年

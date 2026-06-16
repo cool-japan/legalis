@@ -7,7 +7,8 @@
 //! - Complete bar to recovery if plaintiff at fault
 
 use crate::states::types::{
-    LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule, StatuteReference,
+    CaseReference, LegalTopic, LegalTradition, StateId, StateLawVariation, StateRule,
+    StatuteReference,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,24 @@ impl VirginiaLaw {
                 .with_year(1950),
         )
         .with_adoption_date(NaiveDate::from_ymd_opt(1950, 1, 1).unwrap())
+        .with_case(
+            CaseReference::new(
+                "Baskett v. Banks, 186 Va. 1022, 45 S.E.2d 173",
+                "Baskett v. Banks",
+                1947,
+            )
+            .with_significance(
+                "Virginia Supreme Court of Appeals applied contributory negligence as a complete \
+                 bar to recovery, while recognizing the 'last clear chance' doctrine as a limited \
+                 exception.",
+            ),
+        )
         .with_notes(
             "Virginia retains the traditional contributory negligence rule. \
              Any contributory negligence by the plaintiff is a complete bar to \
              recovery, regardless of the defendant's negligence. One of only 5 US \
-             jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL).",
+             jurisdictions maintaining this minority rule (NC, VA, MD, DC, AL). \
+             The 'last clear chance' doctrine remains a limited exception.",
         )
     }
 
@@ -118,5 +132,26 @@ mod tests {
                 .iter()
                 .any(|v| v.topic == LegalTopic::JointAndSeveralLiability)
         );
+    }
+
+    #[test]
+    fn test_landmark_case_present() {
+        let comp_neg = VirginiaLaw::comparative_negligence();
+        assert_eq!(comp_neg.case_basis.len(), 1);
+        let case = &comp_neg.case_basis[0];
+        assert_eq!(case.short_name, "Baskett v. Banks");
+        assert_eq!(case.year, 1947);
+        assert!(
+            case.significance
+                .as_ref()
+                .expect("significance set")
+                .contains("complete")
+        );
+    }
+
+    #[test]
+    fn test_last_clear_chance_exception_noted() {
+        let comp_neg = VirginiaLaw::comparative_negligence();
+        assert!(comp_neg.notes.contains("last clear chance"));
     }
 }

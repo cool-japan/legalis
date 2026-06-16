@@ -211,5 +211,5 @@ See [TODO.md](TODO.md) for the roadmap. Upcoming features include:
 ---
 
 **Version**: 0.1.2
-**License**: MIT OR Apache-2.0
+**License**: Apache-2.0
 **Rust Version**: 1.86+

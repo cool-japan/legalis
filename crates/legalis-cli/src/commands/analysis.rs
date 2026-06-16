@@ -1166,7 +1166,7 @@ fn generate_flamegraph(inputs: &[String], iterations: usize, output_dir: &str) -
     // Run perf record
     let perf_data = format!("{}/perf.data", output_dir);
     let perf_output = Command::new("perf")
-        .args(&[
+        .args([
             "record",
             "-F",
             "99",
@@ -1187,7 +1187,7 @@ fn generate_flamegraph(inputs: &[String], iterations: usize, output_dir: &str) -
 
     // Convert perf data to flamegraph
     let perf_script = Command::new("perf")
-        .args(&["script", "-i", &perf_data])
+        .args(["script", "-i", &perf_data])
         .output()
         .context("Failed to run perf script")?;
 

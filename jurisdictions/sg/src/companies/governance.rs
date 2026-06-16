@@ -23,7 +23,7 @@
 //! println!("First AGM must be held by: {}", deadline);
 //! ```
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Months, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Annual General Meeting (AGM) record
@@ -229,6 +229,94 @@ pub fn calculate_subsequent_agm_deadline(last_agm_date: DateTime<Utc>) -> DateTi
     last_agm_date + Duration::days(456)
 }
 
+/// Months after financial year end (FYE) within which a **listed** company must
+/// hold its AGM. Source: Companies Act 1967 s. 175(1)(a).
+pub const AGM_DEADLINE_MONTHS_LISTED: u32 = 4;
+
+/// Months after FYE within which any **other (non-listed)** company must hold
+/// its AGM. Source: Companies Act 1967 s. 175(1)(b) (in force for financial
+/// years ending on or after 31 August 2018).
+pub const AGM_DEADLINE_MONTHS_NON_LISTED: u32 = 6;
+
+/// Months after FYE within which a **listed** company must file its annual
+/// return. Source: Companies Act 1967 s. 197(1)(a).
+pub const ANNUAL_RETURN_DEADLINE_MONTHS_LISTED: u32 = 5;
+
+/// Months after FYE within which any **other (non-listed)** company must file
+/// its annual return. Source: Companies Act 1967 s. 197(1)(b).
+pub const ANNUAL_RETURN_DEADLINE_MONTHS_NON_LISTED: u32 = 7;
+
+/// Returns the AGM deadline in months after FYE for the given listing status
+/// under the current s. 175(1) regime.
+pub fn agm_deadline_months(is_listed: bool) -> u32 {
+    if is_listed {
+        AGM_DEADLINE_MONTHS_LISTED
+    } else {
+        AGM_DEADLINE_MONTHS_NON_LISTED
+    }
+}
+
+/// Calculates the AGM deadline measured from the financial year end (current
+/// regime, s. 175(1)).
+///
+/// Under the Companies (Amendment) Act 2017 the AGM timing was tied to the
+/// financial year end: a listed company must hold its AGM within 4 months of
+/// FYE, and any other company within 6 months of FYE. Month arithmetic is
+/// calendar-accurate (e.g. a 31 August FYE + 6 months lands at the end of
+/// February).
+///
+/// Returns [`None`] only if the resulting date would overflow the supported
+/// date range.
+///
+/// ## Examples
+///
+/// ```
+/// use legalis_sg::companies::governance::{agm_deadline_months, calculate_agm_deadline_from_fye};
+/// use chrono::Utc;
+///
+/// let fye = Utc::now();
+/// if let Some(deadline) = calculate_agm_deadline_from_fye(fye, false) {
+///     assert!(deadline > fye);
+/// }
+/// assert_eq!(agm_deadline_months(false), 6); // 6 months for a non-listed company
+/// ```
+pub fn calculate_agm_deadline_from_fye(
+    financial_year_end: DateTime<Utc>,
+    is_listed: bool,
+) -> Option<DateTime<Utc>> {
+    financial_year_end.checked_add_months(Months::new(agm_deadline_months(is_listed)))
+}
+
+/// Calculates the annual return filing deadline measured from FYE (current
+/// regime, s. 197(1)): 5 months for a listed company, 7 months otherwise.
+///
+/// Returns [`None`] only if the resulting date would overflow the supported
+/// date range.
+pub fn calculate_annual_return_deadline_from_fye(
+    financial_year_end: DateTime<Utc>,
+    is_listed: bool,
+) -> Option<DateTime<Utc>> {
+    let months = if is_listed {
+        ANNUAL_RETURN_DEADLINE_MONTHS_LISTED
+    } else {
+        ANNUAL_RETURN_DEADLINE_MONTHS_NON_LISTED
+    };
+    financial_year_end.checked_add_months(Months::new(months))
+}
+
+/// Returns whether the AGM is overdue as at `as_of`, under the current FYE-based
+/// regime (s. 175(1)).
+pub fn is_agm_overdue_from_fye(
+    financial_year_end: DateTime<Utc>,
+    is_listed: bool,
+    as_of: DateTime<Utc>,
+) -> bool {
+    match calculate_agm_deadline_from_fye(financial_year_end, is_listed) {
+        Some(deadline) => as_of > deadline,
+        None => false,
+    }
+}
+
 /// Checks if AGM is overdue
 pub fn is_agm_overdue(last_agm_date: DateTime<Utc>, is_first_agm: bool) -> bool {
     let deadline = if is_first_agm {
@@ -327,6 +415,7 @@ pub fn is_annual_return_overdue(financial_year_end: DateTime<Utc>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn test_calculate_first_agm_deadline() {
@@ -405,5 +494,74 @@ mod tests {
         let deadline = calculate_annual_return_deadline(fye);
         let days = (deadline - fye).num_days();
         assert_eq!(days, 213); // 7 months
+    }
+
+    #[test]
+    fn test_agm_deadline_from_fye_non_listed() {
+        let fye = Utc
+            .with_ymd_and_hms(2024, 12, 31, 0, 0, 0)
+            .single()
+            .unwrap();
+        let deadline = calculate_agm_deadline_from_fye(fye, false).unwrap();
+        let expected = Utc.with_ymd_and_hms(2025, 6, 30, 0, 0, 0).single().unwrap();
+        assert_eq!(deadline.date_naive(), expected.date_naive()); // 6 months (s. 175(1)(b))
+    }
+
+    #[test]
+    fn test_agm_deadline_from_fye_listed() {
+        let fye = Utc
+            .with_ymd_and_hms(2024, 12, 31, 0, 0, 0)
+            .single()
+            .unwrap();
+        let deadline = calculate_agm_deadline_from_fye(fye, true).unwrap();
+        let expected = Utc.with_ymd_and_hms(2025, 4, 30, 0, 0, 0).single().unwrap();
+        assert_eq!(deadline.date_naive(), expected.date_naive()); // 4 months (s. 175(1)(a))
+    }
+
+    #[test]
+    fn test_agm_deadline_from_fye_day_clamping() {
+        // 31 Aug + 6 months clamps to the last day of February (calendar-accurate).
+        let fye = Utc.with_ymd_and_hms(2024, 8, 31, 0, 0, 0).single().unwrap();
+        let deadline = calculate_agm_deadline_from_fye(fye, false).unwrap();
+        let expected = Utc.with_ymd_and_hms(2025, 2, 28, 0, 0, 0).single().unwrap();
+        assert_eq!(deadline.date_naive(), expected.date_naive());
+    }
+
+    #[test]
+    fn test_annual_return_deadline_from_fye() {
+        let fye = Utc
+            .with_ymd_and_hms(2024, 12, 31, 0, 0, 0)
+            .single()
+            .unwrap();
+        assert_eq!(
+            calculate_annual_return_deadline_from_fye(fye, false)
+                .unwrap()
+                .date_naive(),
+            Utc.with_ymd_and_hms(2025, 7, 31, 0, 0, 0)
+                .single()
+                .unwrap()
+                .date_naive()
+        ); // 7 months (s. 197(1)(b))
+        assert_eq!(
+            calculate_annual_return_deadline_from_fye(fye, true)
+                .unwrap()
+                .date_naive(),
+            Utc.with_ymd_and_hms(2025, 5, 31, 0, 0, 0)
+                .single()
+                .unwrap()
+                .date_naive()
+        ); // 5 months (s. 197(1)(a))
+    }
+
+    #[test]
+    fn test_is_agm_overdue_from_fye() {
+        let fye = Utc
+            .with_ymd_and_hms(2024, 12, 31, 0, 0, 0)
+            .single()
+            .unwrap();
+        let before = Utc.with_ymd_and_hms(2025, 6, 1, 0, 0, 0).single().unwrap();
+        let after = Utc.with_ymd_and_hms(2025, 7, 1, 0, 0, 0).single().unwrap();
+        assert!(!is_agm_overdue_from_fye(fye, false, before));
+        assert!(is_agm_overdue_from_fye(fye, false, after));
     }
 }

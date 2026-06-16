@@ -7,25 +7,37 @@
 //! - Exporting to various formats
 
 pub mod ai;
+pub mod audit_log;
 pub mod batch;
 pub mod cache;
+pub mod central_config;
 pub mod cli_types;
 pub mod cloud;
 pub mod commands;
+pub mod compliance;
 pub mod config;
 pub mod debug;
+pub mod diagnostics;
 pub mod error_suggestions;
 pub mod interactive;
+pub mod offline;
 pub mod parallel;
+pub mod paths;
 pub mod perf;
 pub mod plugin;
+pub mod plugin_security;
+pub mod policy;
 pub mod profile;
+pub mod profiling;
 pub mod progress;
+pub mod recovery;
 pub mod scripting;
+pub mod suggest;
 pub mod team;
 pub mod theme;
 pub mod tui;
 pub mod tutorial;
+pub mod verbosity;
 pub mod workflow;
 
 pub use cli_types::*;
@@ -59,9 +71,21 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
-    /// Color theme (default, dark, light, monokai, solarized)
+    /// Color theme (default, dark, light, monokai, solarized, high-contrast, none)
     #[arg(long, default_value = "default")]
     pub theme: ColorTheme,
+
+    /// Explicit output verbosity (overrides -v/--quiet defaults for human output)
+    #[arg(long)]
+    pub verbosity: Option<verbosity::VerbosityArg>,
+
+    /// Enable compliance mode (guards sensitive operations, forces audit logging)
+    #[arg(long)]
+    pub compliance: bool,
+
+    /// Path to an enterprise policy file (overrides discovery)
+    #[arg(long)]
+    pub policy: Option<String>,
 
     /// Disable emoji in output
     #[arg(long)]
@@ -97,7 +121,7 @@ pub enum OutputFormat {
 }
 
 /// Color theme options.
-#[derive(Clone, Debug, Default, clap::ValueEnum)]
+#[derive(Clone, Debug, Default, clap::ValueEnum, PartialEq, Eq)]
 pub enum ColorTheme {
     /// Default color scheme
     #[default]
@@ -110,8 +134,17 @@ pub enum ColorTheme {
     Monokai,
     /// Solarized color scheme
     Solarized,
+    /// High-contrast scheme for accessibility (bold, maximally distinct colors)
+    HighContrast,
     /// No colors (plain text)
     None,
+}
+
+impl ColorTheme {
+    /// Whether this theme intentionally disables color output.
+    pub fn is_colorless(&self) -> bool {
+        matches!(self, ColorTheme::None)
+    }
 }
 
 /// Structured logging format options.
@@ -898,6 +931,77 @@ pub enum Commands {
         /// Performance operation to perform
         #[command(subcommand)]
         operation: PerfOperation,
+    },
+
+    /// Phase-level execution profiling with percentiles and allocation tracking
+    Profiling {
+        /// Input statute file(s) to profile (read, parse, and verify phases)
+        #[arg(short, long)]
+        input: Vec<String>,
+
+        /// Number of iterations to sample per phase
+        #[arg(long, default_value = "50")]
+        iterations: usize,
+
+        /// Output file for the profile report (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Offline command queue, local cache, sync, and conflict resolution
+    Offline {
+        /// Offline operation to perform
+        #[command(subcommand)]
+        operation: OfflineOperation,
+    },
+
+    /// Audit logging of CLI operations (enterprise audit trail)
+    AuditLog {
+        /// Audit-log operation to perform
+        #[command(subcommand)]
+        operation: AuditLogOperation,
+    },
+
+    /// Enterprise policy inspection and enforcement
+    Policy {
+        /// Policy operation to perform
+        #[command(subcommand)]
+        operation: PolicyOperation,
+    },
+
+    /// Centralized, layered configuration management
+    CentralConfig {
+        /// Centralized-config operation to perform
+        #[command(subcommand)]
+        operation: CentralConfigOperation,
+    },
+
+    /// Intelligent assistant: suggestions, recommendations, usage learning
+    Assistant {
+        /// Assistant operation to perform
+        #[command(subcommand)]
+        operation: AssistantOperation,
+    },
+
+    /// Run self-diagnostics on environment, config, policy, and audit health
+    Diagnose,
+
+    /// Detect and repair invalid configuration
+    Repair {
+        /// Configuration file to repair (defaults to project/user config)
+        #[arg(short, long)]
+        config: Option<String>,
+
+        /// Show proposed repairs without writing them
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Crash recovery and resume of interrupted long operations
+    Recover {
+        /// Recovery operation to perform
+        #[command(subcommand)]
+        operation: RecoverOperation,
     },
 }
 

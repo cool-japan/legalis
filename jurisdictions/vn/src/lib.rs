@@ -137,6 +137,7 @@ pub mod intellectual_property;
 pub mod investment;
 pub mod labor_code;
 pub mod land_law;
+pub mod statutes;
 pub mod tax_law;
 
 // Re-export commonly used items
@@ -227,6 +228,8 @@ pub use banking_law::{
     LoanClassification, ReserveRequirement, get_banking_checklist, validate_car,
     validate_charter_capital, validate_lending_limit,
 };
+
+pub use statutes::{all_statutes, statutes_as_dsl};
 
 #[cfg(test)]
 mod tests {

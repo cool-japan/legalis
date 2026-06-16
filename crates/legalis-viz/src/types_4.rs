@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[cfg(feature = "png-export")]
+use super::functions::VizResult;
+#[cfg(feature = "png-export")]
 use super::functions::svg_to_png;
-use super::functions::{VizResult, base64_encode, format_change_type};
+use super::functions::{base64_encode, format_change_type};
 use super::types::ComplianceStatus;
 use super::types_3::OfflineConfig;
 use super::types_5::ResponsiveScalingConfig;

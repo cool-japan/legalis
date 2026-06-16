@@ -54,14 +54,15 @@ pub use code_civil::{article_1240, article_1241, article_1242};
 
 // Re-export contract law
 pub use contract::{
-    BreachType, Contract, ContractError, ContractType, ValidityDefect, article1103, article1128,
-    article1217, article1231, calculate_contract_damages, validate_contract_validity,
+    BreachType, Contract, ContractError, ContractType, ValidityDefect, article1103, article1104,
+    article1128, article1217, article1218, article1231, calculate_contract_damages,
+    validate_contract_validity,
 };
 
 // Re-export company law
 pub use company::{
     ArticlesOfIncorporation, BoardOfDirectors, Capital, CompanyLawError, CompanyType, Director,
-    Shareholder, article_l225_1, article_l225_17, article_l225_18,
+    Shareholder, article_l223_1, article_l223_3, article_l225_1, article_l225_17, article_l225_18,
     validate_articles_of_incorporation, validate_sa_board,
 };
 
@@ -297,5 +298,6 @@ pub use reasoning::{
     CompanyAnalyzer, ComplianceStatus, ContractAnalyzer, EntityType, FrenchLawAnalyzer,
     LaborAnalyzer, LegalAnalysis, LegalOpinion, LegalReasoningEngine, ReasoningError,
     ReasoningResult, ReasoningStep, Remedy, RemedyType, RiskLevel, Violation, ViolationSeverity,
-    all_french_statutes, company_law_statutes, contract_law_statutes, labor_law_statutes,
+    all_french_statutes, company_law_statutes, contract_law_statutes, family_law_statutes,
+    labor_law_statutes,
 };

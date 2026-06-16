@@ -6,7 +6,7 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.5-brightgreen.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.6-brightgreen.svg)](CHANGELOG.md)
 [![Crates](https://img.shields.io/badge/crates-46-blue.svg)](#crates)
 [![Jurisdictions](https://img.shields.io/badge/jurisdictions-23%20operational-green.svg)](#jurisdictions)
 [![Tests](https://img.shields.io/badge/tests-14763%20passing-success.svg)](#crates)
@@ -50,7 +50,7 @@ This separation is the philosophical core of Legalis-RS - it explicitly marks wh
 - 🇻🇳 **Vietnam** - Socialist Civil Law (Civil Code 91/2015, Cybersecurity Law, Competition Law)
 - 🇿🇦 **South Africa** - Mixed Law (Constitution 1996, Companies Act, LRA/BCEA, POPIA, Customary Law)
 
-**Total**: **1,371 jurisdiction files** (~341k jurisdiction LoC), **46 workspace crates** (17 core + 23 jurisdictions + 6 examples), **14,763 tests passing** with comprehensive coverage across all jurisdictions.
+**Total**: **1,553 jurisdiction files** (~383k jurisdiction LoC), **74 workspace crates** (16 core + 23 jurisdictions + 35 examples), **18,398 tests passing** with comprehensive coverage across all jurisdictions.
 
 ## Core Philosophy
 
@@ -125,24 +125,24 @@ legalis-rs/
 
 ## Code Metrics
 
-**Project Scale (v0.1.5)**:
+**Project Scale (v0.1.6)**:
 
 | Metric | Count | Details |
 |--------|-------|---------|
-| **Total Lines of Code** | 1,009,738 | Rust (935k), Python (8.6k), Markdown (50k), TypeScript (1.7k) |
-| **Rust Code Lines** | 812,650 | Code only (from tokei) |
-| **Documentation Lines** | 152,112 | Inline Rust documentation (/// and //!) |
-| **Rust Files** | 2,221 | Across 76 workspace crates |
-| **Test Functions** | 14,763 | Unit tests + async tests + property tests |
-| **Workspace Crates** | 76 | 17 core + 23 jurisdictions + 36 examples |
+| **Total Lines of Code** | 1,422,375 | Rust (1.12M), Python (8.6k), Markdown (63k), TypeScript (1.7k) |
+| **Rust Code Lines** | 961,371 | Code only (from tokei) |
+| **Documentation Lines** | 177,689 | Inline Rust documentation (/// and //!) |
+| **Rust Files** | 2,718 | Across 74 workspace crates |
+| **Tests Passing** | 18,398 | cargo nextest: 18,398 passed, 2 skipped (across 136 binaries) |
+| **Workspace Crates** | 74 | 16 core + 23 jurisdictions + 35 examples |
 | **Jurisdictions** | 23 | AE, AU, BR, CA, CN, DE, EU, FR, ID, IN, JP, KR, LA, MX, MY, RU, SA, SG, TH, UK, US, VN, ZA |
 | **Supported Languages** | 60+ | Multi-language i18n support |
 | **Documentation Ratio** | 17.5% | Comments to code ratio (industry average: 10-20%) |
 | **Zero Warnings** | ✅ | Strict clippy compliance enforced |
-| **New Examples (v0.1.5)** | 6 | Proof of universal legal computation engine |
+| **Universal Engine Examples** | 6 | Proof of universal legal computation engine (introduced v0.1.4) |
 
 **Testing Infrastructure**:
-- **Unit Tests**: 14,763 passing tests
+- **Unit Tests**: 18,398 passing (cargo nextest, 2 skipped)
 - **Integration Tests**: 22+ test files
 - **Benchmark Suites**: 13 Criterion benchmarks
 - **Property-Based Tests**: 10+ tests across multiple crates
@@ -153,7 +153,7 @@ legalis-rs/
 
 ## Crates
 
-All 76 workspace crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with **NO WARNINGS** - strict quality policy enforced.
+All 74 workspace crates (16 core + 23 jurisdictions + 35 examples) compile cleanly with **NO WARNINGS** - strict quality policy enforced.
 
 ### Core Layer
 | Crate | Version | Tests | Description |
@@ -205,31 +205,31 @@ Legalis-RS now includes comprehensive support for **23 major jurisdictions** (al
 
 | Jurisdiction | Status | Files | Tests | Description |
 |--------------|--------|-------|-------|-------------|
-| **`au`** (Australia) | ✅ Complete | 39 | 168 | **Common Law + Statutory**: Commonwealth Constitution with implied rights, Contract Law (ACL), Corporate Law (Corporations Act), Criminal Law, Employment Law (Fair Work Act), Family Law, Property Law (Torrens system, Native Title), Tort Law (defamation, negligence). |
-| **`ca`** (Canada) | ✅ Complete | 47 | 238 | **Common Law + Civil Law (Quebec)**: Canadian Charter of Rights and Freedoms, Federal-provincial division of powers, Contract Law, Corporate Law (oppression remedy), Criminal Code, Employment Law, Family Law (child/spousal support), Property Law (Aboriginal rights), Tort Law (occupiers' liability). |
-| **`de`** (Germany) | ✅ Complete | 76 | 318 | **Civil Law System**: BGB 5-book structure (Erbrecht, Familienrecht, Sachenrecht, Schuldrecht, Unerlaubte Handlungen §823-826), GmbHG, HGB, AKTG, Arbeitsrecht, Grundgesetz. **22 examples**, 2 test suites. |
-| **`eu`** (European Union) | ✅ Complete | 80 | 240 | **Supranational Law**: **GDPR (196 tests, 11 languages)**, Consumer Rights Directive, Competition Law (Articles 101-102 TFEU), Charter of Fundamental Rights, Four Freedoms, Treaty Framework. EUR-Lex/CELEX citation system. **25 examples**. |
-| **`fr`** (France) | ✅ Complete | 76 | 545 | **Civil Law System**: Code civil (Napoleonic Code 1804, 2016 reform), Code de commerce (SA/SARL/SAS), **Code du travail (35-hour work week, SMIC)**, Constitution de 1958. **11 domains (highest coverage), 69.7% documentation ratio (industry-leading), 524 tests passing**. |
-| **`jp`** (Japan) | ✅ Complete | 119 | 440 | **Civil Law + Asian Tradition**: **16+ domains (most extensive)** - 民法 (Minpō 709-715), 商法/会社法, 労働基準法, 知的財産法, 消費者保護法, 個人情報保護法 (APPI), 建設業法, 行政手続法 (**e-Gov integration**), 環境法. **398 tests, 27,600+ lines, 7 test suites, 10 examples**. Era system (元号), contract risk analysis. |
-| **`la`** (Lao PDR) | ✅ Complete | 8 | 49 | **Civil Law + Socialist Tradition**: **Civil Code 2020 (Law No. 66/NA, 1087 articles, 6 books)** - General Provisions, Property, Obligations, Family, Inheritance. **Japanese/French influences**, JICA ODA legal assistance documentation, comparative law analysis (比較法学), legal transplantation research. **Bilingual (Lao/English)**, ODA program evaluation. |
-| **`sg`** (Singapore) | ✅ Complete | 56 | 211 | **Common Law + Statutory**: Companies Act (ACRA), Employment Act (CPF), PDPA 2012 (DPO, DNC), Consumer Protection, IP Laws, **Banking Act (Basel III CAR)**, **Payment Services Act 2019 (DPT/Crypto, 7 service types)**. **2 test suites, 10 examples, trilingual (EN/中文/Melayu)**. |
-| **`uk`** (United Kingdom) | ✅ Complete | 127 | 646 | **Common Law**: Employment Rights Act 1996 (unfair dismissal, redundancy), UK GDPR + DPA 2018, Consumer Rights Act 2015 (tiered remedies), Contract Law (common law precedents), Companies Act 2006, Financial Services (AML/CFT, MiFID2, Payment Services). **Most RS files (127), 10-11 domains**. |
-| **`us`** (United States) | ✅ Complete | 102 | 473 | **Common Law System**: Restatement of Torts (ALI §158, §46, §402A), **51 jurisdictions** (50 states + DC) with state-specific variations, Choice of Law (5 approaches), Uniform Acts (UCC/UPA), Federal-State boundary analysis, Professional licensing (UBE, IMLC, NCARB), Tax variations, Cannabis/Privacy tracking. **436 tests, 18,700+ lines**. |
-| **`ae`** (UAE) | ✅ Complete | 36 | 169 | **Civil Law + Islamic Law**: Federal Decree-Laws (Labor 33/2021, Companies 32/2021, PDPL 45/2021), Free Zones (DIFC/ADGM Common Law), Islamic Law (Sharia family/inheritance), Tax Law (VAT 15%, Corporate Tax 2023), Civil Code 5/1985, Banking & Finance. **Bilingual (Arabic/English)**. |
-| **`br`** (Brazil) | ✅ Complete | 38 | 198 | **Civil Law System**: Código Civil (Lei 10.406/2002) with 7 books, Consumer Protection (CDC), LGPD Data Protection, CLT Labor Law, Tax System (ICMS/ISS/IPI/IRPF/IRPJ), Corporations Law 6.404/1976, Bankruptcy Law 11.101/2005. **Portuguese language support**. |
-| **`cn`** (China) | ✅ Complete | 37 | 189 | **Socialist Civil Law**: 民法典 (Civil Code 2021) - 7 Books/1,260 articles, Data Security Law, Foreign Investment Law, Anti-Monopoly Law 2022, Company Law 2023, Labor Contract Law, Cybersecurity Law. **Bilingual (中文/English), Chinese authoritative**. |
-| **`id`** (Indonesia) | ✅ Complete | 34 | 163 | **Civil Law System**: KUHP (Criminal Code), Company Law 40/2007, UU Cipta Kerja (Omnibus Law 2020), Tax Law (PPN/PPh), Capital Markets Law 8/1995, Banking Law, IP Law, Land Law 5/1960 (UUPA). **Bahasa Indonesia support**. |
-| **`in`** (India) | ✅ Complete | 93 | 234 | **Common Law + Statutory**: Constitution, BNS/BNSS/BSA 2023 (new criminal codes), Companies Act 2013, IBC 2016 (Insolvency), DPDP 2023, GST, SEBI Regulations, IP Laws (Patents/Trademarks/Copyright), Competition Act 2002, FEMA 1999. **Hindi/English bilingual**. |
-| **`kr`** (South Korea) | ✅ Complete | 39 | - | **Civil Law System**: 민법 (Civil Code 1958) - 1,118 articles, 근로기준법 (Labor Standards Act) - 40h/week, 개인정보 보호법 (PIPA 2011), Commercial Code 1962, 상법 (Company Law), 공정거래법 (Fair Trade Act). **Bilingual (한국어/English), Korean Won currency**. |
-| **`mx`** (Mexico) | ✅ Complete | 29 | 62 | **Civil Law System**: Código Civil Federal, LFT (Federal Labor Law) - Aguinaldo/Vacation, LFPDPPP (Data Protection), Tax Laws (ISR/IVA/IEPS), LGSM (Commercial Companies Law), LFCE (Competition Law). **Spanish language support, Mexican Peso currency**. |
-| **`my`** (Malaysia) | ✅ Complete | 21 | - | **Common Law + Islamic Law**: Federal Constitution 1957, Companies Act 2016, Employment Act 1955, PDPA 2010, Contracts Act 1950, Islamic Family Law (for Muslims), Islamic Finance, Tax Law (Income Tax/SST). **Trilingual (Malay/English/Chinese), dual legal system**. |
-| **`ru`** (Russia) | ✅ Complete | 21 | 80 | **Civil Law System**: Гражданский кодекс (Civil Code) - 4 Parts, Уголовный кодекс (Criminal Code 63-FZ), Трудовой кодекс (Labor Code 197-FZ) - 40h/week, Tax Code (VAT 20%, Income 13%), 152-FZ Personal Data Law, Company Laws (LLC/JSC), Competition Law 135-FZ. **Bilingual (Русский/English)**. |
-| **`sa`** (Saudi Arabia) | ✅ Complete | 21 | 132 | **Islamic Law + Civil Law**: Basic Law of Governance 1992, Sharia principles (Hanbali), Companies Law 2015, Labor Law 2005 (EOSA/Nitaqat), PDPL 2021, Tax Laws (VAT 15%, Zakat 2.5%, CIT 20%), Capital Market Law, Arbitration Law 2012. **Bilingual (العربية/English), Hijri calendar**. |
-| **`th`** (Thailand) | ✅ Complete | 36 | - | **Civil Law System**: Civil & Commercial Code (6 Books), Criminal Code, Labor Law, Tax Law (Revenue Code - CIT/PIT/VAT), BOI Investment Promotion, IP Law, Immigration Act, Land Code, Securities Law. **Thai Buddhist calendar (พ.ศ.), bilingual Thai/English**. |
-| **`vn`** (Vietnam) | ✅ Complete | 23 | 153 | **Socialist Civil Law**: Civil Code 91/2015 (7 Chapters, 689 articles), Penal Code 100/2015, Tax Laws (VAT/CIT/PIT), Cybersecurity Law 24/2018, Competition Law 23/2018, IP Law 50/2005, Labor Code, Land Law 45/2013. **Vietnamese language support**. |
-| **`za`** (South Africa) | ✅ Complete | 17 | 162 | **Mixed Law System**: Constitution 1996 (Bill of Rights), Companies Act 71/2008, LRA/BCEA Labor Laws, POPIA (Data Protection), Tax Laws (VAT/Income Tax/CGT), Competition Act 89/1998, Customary Law, IP Law, Financial Services (FAIS). **English + customary law integration**. |
+| **`au`** (Australia) | ✅ Complete | 118 | 571 | **Common Law + Statutory**: Commonwealth Constitution with implied rights, Contract Law (ACL), Corporate Law (Corporations Act), Criminal Law, Employment Law (Fair Work Act), Family Law, Property Law (Torrens system, Native Title), Tort Law (defamation, negligence). |
+| **`ca`** (Canada) | ✅ Complete | 48 | 239 | **Common Law + Civil Law (Quebec)**: Canadian Charter of Rights and Freedoms, Federal-provincial division of powers, Contract Law, Corporate Law (oppression remedy), Criminal Code, Employment Law, Family Law (child/spousal support), Property Law (Aboriginal rights), Tort Law (occupiers' liability). |
+| **`de`** (Germany) | ✅ Complete | 115 | 835 | **Civil Law System**: BGB 5-book structure (Erbrecht, Familienrecht, Sachenrecht, Schuldrecht, Unerlaubte Handlungen §823-826), GmbHG, HGB, AKTG, Arbeitsrecht, Grundgesetz. **22 examples**, 2 test suites. |
+| **`eu`** (European Union) | ✅ Complete | 102 | 309 | **Supranational Law**: **GDPR (11 languages)**, Consumer Rights Directive, Competition Law (Articles 101-102 TFEU), Charter of Fundamental Rights, Four Freedoms, Treaty Framework. EUR-Lex/CELEX citation system. **25 examples**. |
+| **`fr`** (France) | ✅ Complete | 79 | 573 | **Civil Law System**: Code civil (Napoleonic Code 1804, 2016 reform), Code de commerce (SA/SARL/SAS), **Code du travail (35-hour work week, SMIC)**, Constitution de 1958. **11 domains (highest coverage), 69.7% documentation ratio (industry-leading), 573 tests passing**. |
+| **`jp`** (Japan) | ✅ Complete | 122 | 676 | **Civil Law + Asian Tradition**: **16+ domains (most extensive)** - 民法 (Minpō 709-715), 商法/会社法, 労働基準法, 知的財産法, 消費者保護法, 個人情報保護法 (APPI), 建設業法, 行政手続法 (**e-Gov integration**), 環境法. **676 tests, 27,600+ lines, 7 test suites, 21 examples**. Era system (元号), contract risk analysis. |
+| **`la`** (Lao PDR) | ✅ Complete | 104 | 702 | **Civil Law + Socialist Tradition**: **Civil Code 2020 (Law No. 66/NA, 1087 articles, 6 books)** - General Provisions, Property, Obligations, Family, Inheritance. **Japanese/French influences**, JICA ODA legal assistance documentation, comparative law analysis (比較法学), legal transplantation research. **Bilingual (Lao/English)**, ODA program evaluation. |
+| **`sg`** (Singapore) | ✅ Complete | 114 | 711 | **Common Law + Statutory**: Companies Act (ACRA), Employment Act (CPF), PDPA 2012 (DPO, DNC), Consumer Protection, IP Laws, **Banking Act (Basel III CAR)**, **Payment Services Act 2019 (DPT/Crypto, 7 service types)**. **2 test suites, 19 examples, trilingual (EN/中文/Melayu)**. |
+| **`uk`** (United Kingdom) | ✅ Complete | 140 | 680 | **Common Law**: Employment Rights Act 1996 (unfair dismissal, redundancy), UK GDPR + DPA 2018, Consumer Rights Act 2015 (tiered remedies), Contract Law (common law precedents), Companies Act 2006, Financial Services (AML/CFT, MiFID2, Payment Services). **Most RS files (127), 10-11 domains**. |
+| **`us`** (United States) | ✅ Complete | 121 | 626 | **Common Law System**: Restatement of Torts (ALI §158, §46, §402A), **51 jurisdictions** (50 states + DC) with state-specific variations, Choice of Law (5 approaches), Uniform Acts (UCC/UPA), Federal-State boundary analysis, Professional licensing (UBE, IMLC, NCARB), Tax variations, Cannabis/Privacy tracking. **626 tests, 18,700+ lines**. |
+| **`ae`** (UAE) | ✅ Complete | 37 | 170 | **Civil Law + Islamic Law**: Federal Decree-Laws (Labor 33/2021, Companies 32/2021, PDPL 45/2021), Free Zones (DIFC/ADGM Common Law), Islamic Law (Sharia family/inheritance), Tax Law (VAT 15%, Corporate Tax 2023), Civil Code 5/1985, Banking & Finance. **Bilingual (Arabic/English)**. |
+| **`br`** (Brazil) | ✅ Complete | 39 | 199 | **Civil Law System**: Código Civil (Lei 10.406/2002) with 7 books, Consumer Protection (CDC), LGPD Data Protection, CLT Labor Law, Tax System (ICMS/ISS/IPI/IRPF/IRPJ), Corporations Law 6.404/1976, Bankruptcy Law 11.101/2005. **Portuguese language support**. |
+| **`cn`** (China) | ✅ Complete | 38 | 190 | **Socialist Civil Law**: 民法典 (Civil Code 2021) - 7 Books/1,260 articles, Data Security Law, Foreign Investment Law, Anti-Monopoly Law 2022, Company Law 2023, Labor Contract Law, Cybersecurity Law. **Bilingual (中文/English), Chinese authoritative**. |
+| **`id`** (Indonesia) | ✅ Complete | 35 | 164 | **Civil Law System**: KUHP (Criminal Code), Company Law 40/2007, UU Cipta Kerja (Omnibus Law 2020), Tax Law (PPN/PPh), Capital Markets Law 8/1995, Banking Law, IP Law, Land Law 5/1960 (UUPA). **Bahasa Indonesia support**. |
+| **`in`** (India) | ✅ Complete | 94 | 235 | **Common Law + Statutory**: Constitution, BNS/BNSS/BSA 2023 (new criminal codes), Companies Act 2013, IBC 2016 (Insolvency), DPDP 2023, GST, SEBI Regulations, IP Laws (Patents/Trademarks/Copyright), Competition Act 2002, FEMA 1999. **Hindi/English bilingual**. |
+| **`kr`** (South Korea) | ✅ Complete | 40 | 131 | **Civil Law System**: 민법 (Civil Code 1958) - 1,118 articles, 근로기준법 (Labor Standards Act) - 40h/week, 개인정보 보호법 (PIPA 2011), Commercial Code 1962, 상법 (Company Law), 공정거래법 (Fair Trade Act). **Bilingual (한국어/English), Korean Won currency**. |
+| **`mx`** (Mexico) | ✅ Complete | 42 | 111 | **Civil Law System**: Código Civil Federal, LFT (Federal Labor Law) - Aguinaldo/Vacation, LFPDPPP (Data Protection), Tax Laws (ISR/IVA/IEPS), LGSM (Commercial Companies Law), LFCE (Competition Law). **Spanish language support, Mexican Peso currency**. |
+| **`my`** (Malaysia) | ✅ Complete | 42 | 93 | **Common Law + Islamic Law**: Federal Constitution 1957, Companies Act 2016, Employment Act 1955, PDPA 2010, Contracts Act 1950, Islamic Family Law (for Muslims), Islamic Finance, Tax Law (Income Tax/SST). **Trilingual (Malay/English/Chinese), dual legal system**. |
+| **`ru`** (Russia) | ✅ Complete | 22 | 80 | **Civil Law System**: Гражданский кодекс (Civil Code) - 4 Parts, Уголовный кодекс (Criminal Code 63-FZ), Трудовой кодекс (Labor Code 197-FZ) - 40h/week, Tax Code (VAT 20%, Income 13%), 152-FZ Personal Data Law, Company Laws (LLC/JSC), Competition Law 135-FZ. **Bilingual (Русский/English)**. |
+| **`sa`** (Saudi Arabia) | ✅ Complete | 22 | 133 | **Islamic Law + Civil Law**: Basic Law of Governance 1992, Sharia principles (Hanbali), Companies Law 2015, Labor Law 2005 (EOSA/Nitaqat), PDPL 2021, Tax Laws (VAT 15%, Zakat 2.5%, CIT 20%), Capital Market Law, Arbitration Law 2012. **Bilingual (العربية/English), Hijri calendar**. |
+| **`th`** (Thailand) | ✅ Complete | 37 | 174 | **Civil Law System**: Civil & Commercial Code (6 Books), Criminal Code, Labor Law, Tax Law (Revenue Code - CIT/PIT/VAT), BOI Investment Promotion, IP Law, Immigration Act, Land Code, Securities Law. **Thai Buddhist calendar (พ.ศ.), bilingual Thai/English**. |
+| **`vn`** (Vietnam) | ✅ Complete | 24 | 154 | **Socialist Civil Law**: Civil Code 91/2015 (7 Chapters, 689 articles), Penal Code 100/2015, Tax Laws (VAT/CIT/PIT), Cybersecurity Law 24/2018, Competition Law 23/2018, IP Law 50/2005, Labor Code, Land Law 45/2013. **Vietnamese language support**. |
+| **`za`** (South Africa) | ✅ Complete | 18 | 162 | **Mixed Law System**: Constitution 1996 (Bill of Rights), Companies Act 71/2008, LRA/BCEA Labor Laws, POPIA (Data Protection), Tax Laws (VAT/Income Tax/CGT), Competition Act 89/1998, Customary Law, IP Law, Financial Services (FAIS). **English + customary law integration**. |
 
-**Total**: **1,371 jurisdiction files** (~341k jurisdiction LoC), **46 workspace crates** (17 core + 23 jurisdictions + 6 examples), **comprehensive test coverage** across all 23 jurisdictions
+**Total**: **1,553 jurisdiction files** (~383k jurisdiction LoC), **74 workspace crates** (16 core + 23 jurisdictions + 35 examples), **comprehensive test coverage** across all 23 jurisdictions
 
 ### Examples
 
@@ -531,6 +531,8 @@ This enables integration with knowledge graphs and semantic web systems, allowin
 ## Documentation
 
 ### Release Notes
+- **[v0.1.6](CHANGELOG.md)** (June 16, 2026) - CUDA GPU acceleration, legalis-api security/governance layer, legalis-audit new modules (autonomous, federation, quantum, scale, tenant), OxiSQL migration (pure Rust), DSL round-trip improvements, French law enhancements
+- **[v0.1.5](RELEASE-0.1.5.md)** (February 2026) - Pure-Rust PDF Backend (fop-render), Full Code Splitting (2,221 Rust files), No-Unwrap Policy, Workspace Versioning, CVE Remediation
 - **[v0.1.4](RELEASE-0.1.4.md)** (January 27, 2026) - **Universal Engine Proof**: 6 new examples proving Legalis-RS is a generic legal computation platform (not country-specific code)
 - **[v0.1.3](RELEASE-0.1.3.md)** (January 21, 2026) - Global Expansion: 11 new jurisdictions (AE, AU, BR, CN, ID, IN, TH, VN, ZA + more)
 - **[v0.1.2](RELEASE-0.1.2.md)** (January 15, 2026) - Code Quality: Clippy Compliance

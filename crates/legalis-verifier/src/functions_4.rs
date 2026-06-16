@@ -1337,7 +1337,9 @@ pub fn analyze_centrality(statutes: &[Statute]) -> Vec<CentralityMetrics> {
     }
     for statute in statutes {
         let refs = extract_statute_references_from_conditions(&statute.preconditions);
-        *out_degree.get_mut(&statute.id).unwrap() = refs.len();
+        *out_degree
+            .get_mut(&statute.id)
+            .expect("invariant: all statute ids inserted into out_degree above") = refs.len();
         for ref_id in refs {
             *in_degree.entry(ref_id).or_insert(0) += 1;
         }
@@ -1417,7 +1419,8 @@ fn compute_betweenness(statutes: &[Statute]) -> HashMap<String, f64> {
                 for path in &paths {
                     for statute_id in path {
                         if statute_id != &source.id && statute_id != &target.id {
-                            *betweenness.get_mut(statute_id).unwrap() += 1.0 / (paths.len() as f64);
+                            *betweenness.entry(statute_id.clone()).or_insert(0.0) +=
+                                1.0 / (paths.len() as f64);
                         }
                     }
                 }

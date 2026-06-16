@@ -8,6 +8,24 @@ use legalis_core::LegalEntity;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// Real NVIDIA CUDA backend (driver API + NVRTC runtime kernel compilation).
+//
+// Design note: legalis is intentionally free of the SciRS2 stack (zero `scirs2`
+// dependencies across the workspace), so — per the COOLJAPAN SciRS2 policy escape
+// hatch for projects without a SciRS2 policy — the GPU path binds `cudarc`
+// directly rather than routing through `scirs2-core::gpu`. `cudarc` is the same
+// pure-Rust CUDA binding the rest of the ecosystem (scirs2, optirs, torsh) builds
+// on. The whole backend is gated behind the optional `cuda` feature; with the
+// feature off the module is byte-for-byte the previous CPU model.
+#[cfg(feature = "cuda")]
+use cudarc::driver::{
+    CudaContext, CudaFunction, CudaModule, CudaStream, LaunchConfig, PushKernelArg,
+};
+#[cfg(feature = "cuda")]
+use cudarc::nvrtc::compile_ptx;
+#[cfg(feature = "cuda")]
+use std::sync::Arc;
+
 /// GPU backend type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum GpuBackend {
@@ -470,26 +488,62 @@ pub struct GpuExecutor {
     memory_pool: GpuMemoryPool,
     /// Compiled kernels
     kernels: HashMap<String, GpuKernel>,
+    /// Active real CUDA backend, when the `cuda` feature is enabled and a device
+    /// was initialised. `None` means the CPU model is used for all operations.
+    #[cfg(feature = "cuda")]
+    cuda: Option<CudaState>,
 }
 
 impl GpuExecutor {
-    /// Create a new GPU executor
+    /// Create a new GPU executor.
+    ///
+    /// With the `cuda` feature enabled and `config.backend == GpuBackend::Cuda`,
+    /// this initialises a real CUDA context on device 0 and NVRTC-compiles the
+    /// condition-evaluation kernels. If no CUDA device is available at runtime (or
+    /// the feature is disabled) it transparently falls back to the CPU model, so
+    /// the call never fails for lack of a GPU.
     pub fn new(config: GpuConfig) -> SimResult<Self> {
-        // For now, use CPU fallback
+        #[cfg(feature = "cuda")]
+        {
+            if config.backend == GpuBackend::Cuda
+                && let Some(state) = CudaState::try_new()
+            {
+                let device = state.device.clone();
+                let memory_pool = GpuMemoryPool::new(config.backend);
+                return Ok(GpuExecutor {
+                    config,
+                    device,
+                    memory_pool,
+                    kernels: HashMap::new(),
+                    cuda: Some(state),
+                });
+            }
+        }
+
         let device = GpuDevice::cpu_fallback();
         let memory_pool = GpuMemoryPool::new(config.backend);
-
         Ok(GpuExecutor {
             config,
             device,
             memory_pool,
             kernels: HashMap::new(),
+            #[cfg(feature = "cuda")]
+            cuda: None,
         })
     }
 
-    /// Get available devices
+    /// Get available devices.
+    ///
+    /// With the `cuda` feature and a working driver this enumerates the real CUDA
+    /// devices; otherwise it returns the single CPU fallback device.
     pub fn list_devices() -> Vec<GpuDevice> {
-        // For now, just return CPU fallback
+        #[cfg(feature = "cuda")]
+        {
+            let devices = CudaState::list_cuda_devices();
+            if !devices.is_empty() {
+                return devices;
+            }
+        }
         vec![GpuDevice::cpu_fallback()]
     }
 
@@ -516,12 +570,24 @@ impl GpuExecutor {
             SimulationError::InvalidParameter(format!("Kernel '{}' not found", kernel_name))
         })?;
 
-        // For CPU fallback, just do a simple computation
         let threshold = params.get("threshold").copied().unwrap_or(0.0);
         let mut output = EntityTensor::new(input.num_entities(), 1);
         output.feature_names = vec!["result".to_string()];
         output.entity_ids = input.entity_ids.clone();
 
+        // Real GPU path: run the NVRTC-compiled condition kernel on-device. Any
+        // runtime failure falls through to the identical CPU computation below.
+        #[cfg(feature = "cuda")]
+        if let Some(state) = &self.cuda
+            && let Ok(results) = state.run_condition_eval(input, threshold)
+        {
+            for (entity_idx, value) in results.into_iter().enumerate() {
+                output.set(entity_idx, 0, value)?;
+            }
+            return Ok(output);
+        }
+
+        // CPU computation: sum of features >= threshold.
         for entity_idx in 0..input.num_entities() {
             let sum: f32 = (0..input.num_features())
                 .filter_map(|f| input.get(entity_idx, f))
@@ -550,6 +616,374 @@ impl GpuExecutor {
             self.memory_pool.num_allocated_blocks(),
             self.memory_pool.num_free_blocks(),
         )
+    }
+
+    /// Returns `true` when a real GPU backend is active (the `cuda` feature is
+    /// enabled and a device was initialised). When `false`, every GPU operation
+    /// is served by the CPU model.
+    pub fn is_gpu_active(&self) -> bool {
+        #[cfg(feature = "cuda")]
+        let active = self.cuda.is_some();
+        #[cfg(not(feature = "cuda"))]
+        let active = false;
+        active
+    }
+
+    /// Evaluate a weighted-sum threshold condition
+    /// (`Σⱼ attrⱼ · multⱼ  <op>  value`) across an entire population.
+    ///
+    /// This is the GPU-accelerated analogue of the engine's `Condition::Threshold`
+    /// evaluation: it runs as an NVRTC-compiled kernel when a CUDA device is
+    /// active, and on the CPU otherwise. Both paths return identical results. The
+    /// number of `multipliers` must equal the tensor's feature count.
+    pub fn evaluate_population_threshold(
+        &self,
+        input: &EntityTensor,
+        multipliers: &[f32],
+        value: f32,
+        op: ThresholdOp,
+    ) -> SimResult<Vec<bool>> {
+        if multipliers.len() != input.num_features() {
+            return Err(SimulationError::InvalidParameter(format!(
+                "expected {} multipliers (one per feature), got {}",
+                input.num_features(),
+                multipliers.len()
+            )));
+        }
+
+        #[cfg(feature = "cuda")]
+        if let Some(state) = &self.cuda
+            && let Ok(results) = state.run_threshold(input, multipliers, value, op)
+        {
+            return Ok(results);
+        }
+
+        Ok(cpu_evaluate_threshold(input, multipliers, value, op))
+    }
+}
+
+// ===================================================================
+// Threshold condition evaluation (backend-agnostic + CUDA acceleration)
+// ===================================================================
+
+/// Comparison operator for a weighted-sum threshold condition.
+///
+/// Mirrors `legalis_core::ComparisonOp` and the simulation engine's
+/// `Condition::Threshold` semantics, so a population can be evaluated on the GPU
+/// and on the CPU with identical results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThresholdOp {
+    /// `total == value` (within 1e-6)
+    Equal,
+    /// `total != value` (outside 1e-6)
+    NotEqual,
+    /// `total > value`
+    GreaterThan,
+    /// `total >= value`
+    GreaterOrEqual,
+    /// `total < value`
+    LessThan,
+    /// `total <= value`
+    LessOrEqual,
+}
+
+impl ThresholdOp {
+    /// Integer op-code passed to the CUDA kernel (kept in sync with the kernel's
+    /// `switch` statement).
+    pub fn op_code(self) -> i32 {
+        match self {
+            ThresholdOp::Equal => 0,
+            ThresholdOp::NotEqual => 1,
+            ThresholdOp::GreaterThan => 2,
+            ThresholdOp::GreaterOrEqual => 3,
+            ThresholdOp::LessThan => 4,
+            ThresholdOp::LessOrEqual => 5,
+        }
+    }
+
+    /// Apply the operator on the CPU (reference semantics).
+    pub fn apply(self, total: f32, value: f32) -> bool {
+        match self {
+            ThresholdOp::Equal => (total - value).abs() < 1e-6,
+            ThresholdOp::NotEqual => (total - value).abs() >= 1e-6,
+            ThresholdOp::GreaterThan => total > value,
+            ThresholdOp::GreaterOrEqual => total >= value,
+            ThresholdOp::LessThan => total < value,
+            ThresholdOp::LessOrEqual => total <= value,
+        }
+    }
+}
+
+/// CPU reference implementation of the weighted-sum threshold evaluation.
+///
+/// Used whenever the GPU backend is unavailable, and as the oracle the GPU path
+/// is validated against in tests.
+pub fn cpu_evaluate_threshold(
+    input: &EntityTensor,
+    multipliers: &[f32],
+    value: f32,
+    op: ThresholdOp,
+) -> Vec<bool> {
+    (0..input.num_entities())
+        .map(|entity_idx| {
+            let mut total = 0.0f32;
+            for feature_idx in 0..input.num_features() {
+                let attr = input.get(entity_idx, feature_idx).unwrap_or(0.0);
+                let mult = multipliers.get(feature_idx).copied().unwrap_or(1.0);
+                total += attr * mult;
+            }
+            op.apply(total, value)
+        })
+        .collect()
+}
+
+/// Returns `true` if a real CUDA device can be initialised right now.
+///
+/// Always `false` unless the `cuda` feature is enabled and a working driver and
+/// device are present at runtime.
+pub fn gpu_available() -> bool {
+    #[cfg(feature = "cuda")]
+    let available = CudaState::try_new().is_some();
+    #[cfg(not(feature = "cuda"))]
+    let available = false;
+    available
+}
+
+/// CUDA C source for the uniform sum-threshold condition kernel (one flag per
+/// entity: `Σ featuresᵢ >= threshold`).
+#[cfg(feature = "cuda")]
+const CUDA_CONDITION_SRC: &str = r#"
+extern "C" __global__ void eval_condition(
+    const float* input,
+    float* output,
+    int num_entities,
+    int num_features,
+    float threshold
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_entities) {
+        float sum = 0.0f;
+        for (int i = 0; i < num_features; i++) {
+            sum += input[idx * num_features + i];
+        }
+        output[idx] = (sum >= threshold) ? 1.0f : 0.0f;
+    }
+}
+"#;
+
+/// CUDA C source for the weighted-sum threshold kernel (per-feature multipliers
+/// plus a comparison op-code matching [`ThresholdOp::op_code`]).
+#[cfg(feature = "cuda")]
+const CUDA_THRESHOLD_SRC: &str = r#"
+extern "C" __global__ void eval_threshold(
+    const float* input,
+    const float* mult,
+    float* output,
+    int num_entities,
+    int num_features,
+    float value,
+    int op
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_entities) {
+        float total = 0.0f;
+        for (int i = 0; i < num_features; i++) {
+            total += input[idx * num_features + i] * mult[i];
+        }
+        float r = 0.0f;
+        switch (op) {
+            case 0: r = (fabsf(total - value) < 1e-6f) ? 1.0f : 0.0f; break;
+            case 1: r = (fabsf(total - value) >= 1e-6f) ? 1.0f : 0.0f; break;
+            case 2: r = (total > value) ? 1.0f : 0.0f; break;
+            case 3: r = (total >= value) ? 1.0f : 0.0f; break;
+            case 4: r = (total < value) ? 1.0f : 0.0f; break;
+            case 5: r = (total <= value) ? 1.0f : 0.0f; break;
+            default: r = 0.0f; break;
+        }
+        output[idx] = r;
+    }
+}
+"#;
+
+/// Live CUDA backend: a retained context/stream plus NVRTC-compiled kernels.
+#[cfg(feature = "cuda")]
+struct CudaState {
+    /// Retained primary context (keeps the device alive for `stream`).
+    _ctx: Arc<CudaContext>,
+    /// Default stream used for all transfers and launches.
+    stream: Arc<CudaStream>,
+    /// Loaded kernel functions keyed by entry-point name.
+    functions: HashMap<String, CudaFunction>,
+    /// Retained modules (own the loaded functions for their lifetime).
+    _modules: Vec<Arc<CudaModule>>,
+    /// Real device descriptor.
+    device: GpuDevice,
+}
+
+#[cfg(feature = "cuda")]
+impl std::fmt::Debug for CudaState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CudaState")
+            .field("device", &self.device.name)
+            .field("kernels", &self.functions.len())
+            .finish()
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn cuda_err<E: std::fmt::Display>(e: E) -> SimulationError {
+    SimulationError::ExecutionError(format!("CUDA error: {e}"))
+}
+
+#[cfg(feature = "cuda")]
+impl CudaState {
+    /// Attempt to initialise CUDA device 0 and compile the kernels. Returns
+    /// `None` if no driver/device is available or compilation fails — callers
+    /// then fall back to the CPU model.
+    fn try_new() -> Option<Self> {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let ctx = CudaContext::new(0).ok()?;
+            let stream = ctx.default_stream();
+
+            let mut functions = HashMap::new();
+            let mut modules = Vec::new();
+            for (entry, src) in [
+                ("eval_condition", CUDA_CONDITION_SRC),
+                ("eval_threshold", CUDA_THRESHOLD_SRC),
+            ] {
+                let ptx = compile_ptx(src).ok()?;
+                let module = ctx.load_module(ptx).ok()?;
+                let func = module.load_function(entry).ok()?;
+                functions.insert(entry.to_string(), func);
+                modules.push(module);
+            }
+
+            let device = Self::device_descriptor(0, &ctx);
+            Some(CudaState {
+                _ctx: ctx,
+                stream,
+                functions,
+                _modules: modules,
+                device,
+            })
+        }));
+        result.ok().flatten()
+    }
+
+    /// Build a `GpuDevice` descriptor for an initialised context.
+    fn device_descriptor(ordinal: usize, ctx: &Arc<CudaContext>) -> GpuDevice {
+        let name = ctx
+            .name()
+            .unwrap_or_else(|_| format!("CUDA device {ordinal}"));
+        GpuDevice {
+            name,
+            id: ordinal,
+            backend: GpuBackend::Cuda,
+            total_memory: 0,
+            available_memory: 0,
+            compute_capability: None,
+            max_work_group_size: 1024,
+            max_threads_per_block: 1024,
+        }
+    }
+
+    /// Enumerate all CUDA devices as descriptors (does not retain contexts).
+    fn list_cuda_devices() -> Vec<GpuDevice> {
+        let count = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            CudaContext::device_count().unwrap_or(0)
+        }))
+        .unwrap_or(0);
+        let mut devices = Vec::new();
+        for ordinal in 0..count as usize {
+            let ctx_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                CudaContext::new(ordinal)
+            }));
+            if let Ok(Ok(ctx)) = ctx_result {
+                devices.push(Self::device_descriptor(ordinal, &ctx));
+            }
+        }
+        devices
+    }
+
+    /// Run the uniform sum-threshold kernel; returns one 1.0/0.0 flag per entity.
+    fn run_condition_eval(&self, input: &EntityTensor, threshold: f32) -> SimResult<Vec<f32>> {
+        let func = self
+            .functions
+            .get("eval_condition")
+            .ok_or_else(|| cuda_err("eval_condition kernel not loaded"))?;
+
+        let num_entities = input.num_entities();
+        if num_entities == 0 {
+            return Ok(Vec::new());
+        }
+        let entities_i = num_entities as i32;
+        let features_i = input.num_features() as i32;
+
+        let d_input = self.stream.clone_htod(&input.data).map_err(cuda_err)?;
+        let mut d_output = self
+            .stream
+            .alloc_zeros::<f32>(num_entities)
+            .map_err(cuda_err)?;
+
+        unsafe {
+            self.stream
+                .launch_builder(func)
+                .arg(&d_input)
+                .arg(&mut d_output)
+                .arg(&entities_i)
+                .arg(&features_i)
+                .arg(&threshold)
+                .launch(LaunchConfig::for_num_elems(num_entities as u32))
+        }
+        .map_err(cuda_err)?;
+
+        self.stream.clone_dtoh(&d_output).map_err(cuda_err)
+    }
+
+    /// Run the weighted-sum threshold kernel; returns one bool per entity.
+    fn run_threshold(
+        &self,
+        input: &EntityTensor,
+        multipliers: &[f32],
+        value: f32,
+        op: ThresholdOp,
+    ) -> SimResult<Vec<bool>> {
+        let func = self
+            .functions
+            .get("eval_threshold")
+            .ok_or_else(|| cuda_err("eval_threshold kernel not loaded"))?;
+
+        let num_entities = input.num_entities();
+        if num_entities == 0 {
+            return Ok(Vec::new());
+        }
+        let entities_i = num_entities as i32;
+        let features_i = input.num_features() as i32;
+        let op_code = op.op_code();
+
+        let d_input = self.stream.clone_htod(&input.data).map_err(cuda_err)?;
+        let d_mult = self.stream.clone_htod(multipliers).map_err(cuda_err)?;
+        let mut d_output = self
+            .stream
+            .alloc_zeros::<f32>(num_entities)
+            .map_err(cuda_err)?;
+
+        unsafe {
+            self.stream
+                .launch_builder(func)
+                .arg(&d_input)
+                .arg(&d_mult)
+                .arg(&mut d_output)
+                .arg(&entities_i)
+                .arg(&features_i)
+                .arg(&value)
+                .arg(&op_code)
+                .launch(LaunchConfig::for_num_elems(num_entities as u32))
+        }
+        .map_err(cuda_err)?;
+
+        let raw = self.stream.clone_dtoh(&d_output).map_err(cuda_err)?;
+        Ok(raw.into_iter().map(|v| v != 0.0).collect())
     }
 }
 
@@ -708,7 +1142,14 @@ mod tests {
     fn test_gpu_executor_creation() {
         let config = GpuConfig::cuda();
         let executor = GpuExecutor::new(config).unwrap();
-        assert_eq!(executor.device().backend, GpuBackend::CpuFallback);
+        // Without the `cuda` feature (or with no GPU at runtime) the executor
+        // falls back to the CPU device; with the feature and a real CUDA device
+        // present it initialises the GPU backend instead.
+        if executor.is_gpu_active() {
+            assert_eq!(executor.device().backend, GpuBackend::Cuda);
+        } else {
+            assert_eq!(executor.device().backend, GpuBackend::CpuFallback);
+        }
     }
 
     #[test]
@@ -771,7 +1212,13 @@ mod tests {
     fn test_gpu_executor_list_devices() {
         let devices = GpuExecutor::list_devices();
         assert!(!devices.is_empty());
-        assert_eq!(devices[0].backend, GpuBackend::CpuFallback);
+        // With the `cuda` feature and a real device the first entry is a GPU;
+        // otherwise it is the CPU fallback device.
+        if gpu_available() {
+            assert!(devices[0].is_gpu());
+        } else {
+            assert_eq!(devices[0].backend, GpuBackend::CpuFallback);
+        }
     }
 
     #[test]
@@ -796,5 +1243,170 @@ mod tests {
     fn test_device_memory_utilization_zero() {
         let device = GpuDevice::cpu_fallback();
         assert_eq!(device.memory_utilization(), 0.0);
+    }
+
+    // ---- Threshold evaluation (CPU; always compiled) ----
+
+    fn small_tensor() -> EntityTensor {
+        // 3 entities x 2 features; weighted totals (mult [1, 2]) are 5, 3, 1.5.
+        let mut input = EntityTensor::new(3, 2);
+        for (i, row) in [[1.0f32, 2.0], [3.0, 0.0], [0.5, 0.5]].iter().enumerate() {
+            for (j, v) in row.iter().enumerate() {
+                input.set(i, j, *v).unwrap();
+            }
+        }
+        input
+    }
+
+    #[test]
+    fn test_threshold_op_codes_and_apply() {
+        assert_eq!(ThresholdOp::Equal.op_code(), 0);
+        assert_eq!(ThresholdOp::LessOrEqual.op_code(), 5);
+        assert!(ThresholdOp::GreaterOrEqual.apply(5.0, 5.0));
+        assert!(!ThresholdOp::GreaterThan.apply(5.0, 5.0));
+        assert!(ThresholdOp::LessThan.apply(1.0, 2.0));
+        assert!(ThresholdOp::Equal.apply(3.0, 3.0));
+        assert!(ThresholdOp::NotEqual.apply(3.0, 4.0));
+    }
+
+    #[test]
+    fn test_cpu_evaluate_threshold() {
+        let input = small_tensor();
+        let res = cpu_evaluate_threshold(&input, &[1.0, 2.0], 3.0, ThresholdOp::GreaterOrEqual);
+        assert_eq!(res, vec![true, true, false]);
+    }
+
+    #[test]
+    fn test_evaluate_population_threshold_cpu_path() {
+        // Default config uses the CPU fallback backend (even when the `cuda`
+        // feature is compiled in), so this exercises the CPU path.
+        let executor = GpuExecutor::new(GpuConfig::default()).unwrap();
+        let input = small_tensor();
+        let res = executor
+            .evaluate_population_threshold(&input, &[1.0, 2.0], 3.0, ThresholdOp::GreaterOrEqual)
+            .unwrap();
+        assert_eq!(res, vec![true, true, false]);
+    }
+
+    #[test]
+    fn test_evaluate_population_threshold_multiplier_mismatch() {
+        let executor = GpuExecutor::new(GpuConfig::default()).unwrap();
+        let input = EntityTensor::new(2, 3);
+        let result =
+            executor.evaluate_population_threshold(&input, &[1.0], 0.0, ThresholdOp::Equal);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gpu_available_does_not_panic() {
+        // True only with the `cuda` feature and a real device; must never panic.
+        let _ = gpu_available();
+    }
+
+    // ---- Real CUDA backend (feature = "cuda", requires a GPU at runtime) ----
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn test_cuda_condition_eval_matches_cpu() {
+        if !gpu_available() {
+            return; // no CUDA device present at runtime
+        }
+        let mut executor = GpuExecutor::new(GpuConfig::cuda()).unwrap();
+        assert!(executor.is_gpu_active());
+        assert_eq!(executor.device().backend, GpuBackend::Cuda);
+        executor
+            .add_kernel(GpuKernel::condition_eval_cuda())
+            .unwrap();
+
+        let mut input = EntityTensor::new(4, 3);
+        input.entity_ids = vec!["e0".into(), "e1".into(), "e2".into(), "e3".into()];
+        for (i, row) in [
+            [1.0f32, 2.0, 3.0], // sum 6
+            [0.0, 0.0, 0.0],    // sum 0
+            [2.0, 2.0, 2.0],    // sum 6
+            [1.0, 0.0, 0.0],    // sum 1
+        ]
+        .iter()
+        .enumerate()
+        {
+            for (j, v) in row.iter().enumerate() {
+                input.set(i, j, *v).unwrap();
+            }
+        }
+        let mut params = HashMap::new();
+        params.insert("threshold".to_string(), 5.0);
+
+        let out = executor.execute("condition_eval", &input, &params).unwrap();
+        assert_eq!(out.get(0, 0), Some(1.0));
+        assert_eq!(out.get(1, 0), Some(0.0));
+        assert_eq!(out.get(2, 0), Some(1.0));
+        assert_eq!(out.get(3, 0), Some(0.0));
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn test_cuda_threshold_matches_cpu_all_ops() {
+        if !gpu_available() {
+            return;
+        }
+        let executor = GpuExecutor::new(GpuConfig::cuda()).unwrap();
+        assert!(executor.is_gpu_active());
+
+        let mut input = EntityTensor::new(5, 2);
+        for (i, row) in [
+            [1.0f32, 2.0],
+            [3.0, 0.0],
+            [0.5, 0.5],
+            [10.0, 10.0],
+            [0.0, 0.0],
+        ]
+        .iter()
+        .enumerate()
+        {
+            for (j, v) in row.iter().enumerate() {
+                input.set(i, j, *v).unwrap();
+            }
+        }
+        let multipliers = [1.0f32, 2.0];
+        let value = 5.0f32;
+        for op in [
+            ThresholdOp::Equal,
+            ThresholdOp::NotEqual,
+            ThresholdOp::GreaterThan,
+            ThresholdOp::GreaterOrEqual,
+            ThresholdOp::LessThan,
+            ThresholdOp::LessOrEqual,
+        ] {
+            let gpu = executor
+                .evaluate_population_threshold(&input, &multipliers, value, op)
+                .unwrap();
+            let cpu = cpu_evaluate_threshold(&input, &multipliers, value, op);
+            assert_eq!(gpu, cpu, "GPU/CPU mismatch for {op:?}");
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn test_cuda_list_devices_reports_gpu() {
+        if !gpu_available() {
+            return;
+        }
+        let devices = GpuExecutor::list_devices();
+        assert!(devices.iter().any(|d| d.is_gpu()));
+        assert!(devices.iter().any(|d| d.backend == GpuBackend::Cuda));
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn test_cuda_empty_population() {
+        if !gpu_available() {
+            return;
+        }
+        let executor = GpuExecutor::new(GpuConfig::cuda()).unwrap();
+        let input = EntityTensor::new(0, 2);
+        let res = executor
+            .evaluate_population_threshold(&input, &[1.0, 1.0], 0.0, ThresholdOp::GreaterOrEqual)
+            .unwrap();
+        assert!(res.is_empty());
     }
 }

@@ -18,8 +18,16 @@ thiserror.workspace = true
 chrono.workspace = true
 indexmap.workspace = true
 num_cpus.workspace = true
-wide = "1.3"
+wide = "1.5"
 rand.workspace = true
+cudarc = { workspace = true, optional = true }
+
+[features]
+default = []
+# Real NVIDIA CUDA acceleration for the GPU module. When enabled (and a CUDA
+# device is present at runtime) condition evaluation runs as an NVRTC-compiled
+# kernel on the GPU; otherwise the module transparently falls back to the CPU.
+cuda = ["dep:cudarc"]
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

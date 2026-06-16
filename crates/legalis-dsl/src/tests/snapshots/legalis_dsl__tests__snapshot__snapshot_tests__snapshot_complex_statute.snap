@@ -11,6 +11,12 @@ statutes:
     title: Tax Credit Eligibility
     visibility: Private
     conditions:
+      - Between:
+          field: income
+          min:
+            Number: 20000
+          max:
+            Number: 100000
       - And:
           - Comparison:
               field: age

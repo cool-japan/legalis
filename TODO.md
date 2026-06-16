@@ -1,10 +1,22 @@
 # Legalis-RS TODO
 
-## Project Status Summary (v0.1.5)
+## Project Status Summary (v0.1.6)
 
-All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no warnings. The project follows a "NO WARNINGS POLICY".
+All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no warnings, including under `--all-features --all-targets`. The project follows a "NO WARNINGS POLICY".
 
-**Statistics**: 2,221 Rust files | 812k LoC (code) | 1,009k LoC (total with comments/blanks) | 14,763+ tests | 23 jurisdictions
+**Statistics**: 2,221 Rust files | 812k LoC (code) | 1,009k LoC (total with comments/blanks) | 14,832+ tests | 23 jurisdictions
+
+### Recent Additions (v0.1.6)
+- **CUDA GPU Acceleration (legalis-sim)**: Real NVIDIA CUDA backend via `cudarc = "0.19"` with `CudaState` struct, `GpuExecutor::is_gpu_active()`, `evaluate_population_threshold()`, and `ThresholdOp` enum — all gated behind `#[cfg(feature = "cuda")]` with transparent CPU fallback
+- **OxiSQL Migration (legalis-audit)**: Replaced `rusqlite` with `oxisql-sqlite-compat` (COOLJAPAN Pure Rust policy); dedicated Tokio runtime bridge for async↔sync SQLite operations
+- **legalis-api Security/Governance Layer**: New `security.rs`, `governance.rs`, `compliance_reporting.rs`, `audit_integration.rs`, `circuit_breaker.rs`, `query_optimizer.rs` modules
+- **legalis-audit New Modules**: `autonomous/` (self-healing, proactive compliance, decision intelligence), `federation/` (cross-border, multi-jurisdiction, treaty verification), `quantum/` (quantum-safe algorithms), `scale/` (distributed, columnar storage, multi-tenant analytics), `tenant/` (isolation, billing, SLA, onboarding)
+- **legalis-chain Autonomous Layer**: New `autonomous/` module with self-executing contracts, smart compliance, multi-party coordination
+- **legalis-llm Analytics**: New analytics modules for provider health, usage analytics, performance benchmarking
+- **`--all-features` Build Restored**: `legalis-registry` had 88 compile errors under `--all-features` only — the splitrs code-split dropped `use` imports (serde derives, `Uuid`, `StatuteStatus`, `RegistryBackup`, `SetMembership` analytics types, …) for symbols referenced solely inside `#[cfg(feature = …)]` modules (`functions.rs`, `functions_2.rs`, `types_4_impl.rs`). The default build was green, which masked it. Imports re-scoped per feature-gated module; the whole workspace now compiles cleanly under `--all-features --all-targets`.
+- **Time-bomb Test Fixed**: `legalis-verifier::test_retroactivity_check_pass` hard-coded `effective_date = 2026-06-01` against `enacted_at = now()` and began failing once that date passed (the production retroactivity check was correct). It now derives the effective date relative to enactment so it stays prospective on any date.
+- **DSL Round-trip Fidelity (parser/printer unification)**: `legalis-dsl` `ConditionNode::to_core()` maps `IN → SetMembership`, `LIKE`/`MATCHES → Pattern` (was lossy `Condition::Custom`). The primary `parse_statute` parser now round-trips the printer output for **15 condition kinds**: `Age`, `Income`, `HasAttribute`, `AttributeEquals`, `Pattern` (incl. `NOT MATCHES`), `Duration`, `ResidencyDuration`, `SetMembership` (incl. `NOT IN`, accepting `{..}`/`(..)` set literals), `Geographic`, `EntityRelationship`, `Percentage`, `Custom`, `Calculation`, `DateRange`, and the `And`/`Or`/`Not` combinators. The fieldless `RegionType`/`RelationshipType` enums printed via `{:?}` parse straight back as their variant names; the lexer now tokenizes float literals (`Token::Float`, preserving decimal precision so `0.05 ≠ 0.5`), and dates reconstruct numerically. Covered by 26 round-trip/lowering tests. (Remaining, genuinely complex nested/statistical forms: `Composite` (weighted sub-conditions), `Temporal`, `Threshold`, `Probabilistic`, `Fuzzy`.)
+- **Jurisdiction ↔ legalis-dsl Integration (all 23 jurisdictions)**: every jurisdiction now exposes `dsl::statutes_as_dsl()` rendering its modelled statutes as legalis-dsl source via `legalis_dsl::format_statutes`, each covered by a render test. JP, DE, EU, UK, US, SG, FR use `reasoning::dsl` over their existing `statute_adapter`; AU, CA, KR, CN use a crate-root `dsl` over existing `Statute` builders; and AE, BR, ID, IN, LA, MX, MY, RU, SA, TH, VN, ZA each received a new `src/statutes.rs` with 8 substantive `Statute` builders grounded in the jurisdiction's real laws (e.g. ZA Companies Act 71/2008, BR LGPD Lei 13.709/2018, IN DPDP Act 2023, RU Federal Law 152-FZ) — accurate IDs, citations, effects, and preconditions, sourced from each crate's own constants/validators.
 
 ### Recent Additions (v0.1.5)
 - **Pure-Rust PDF Backend**: Migrated from `printpdf` to `fop-render = "0.1.1"` (COOLJAPAN ecosystem, `SimpleDocumentBuilder` API) — eliminates RSA CVE and achieves 100% pure-Rust stack
@@ -24,50 +36,50 @@ All 76 crates (17 core + 23 jurisdictions + 36 examples) compile cleanly with no
 
 | Crate | Version | Status | Tests |
 |-------|---------|--------|-------|
-| legalis-core | 0.1.5 | Stable | 466 passing |
-| legalis-dsl | 0.1.5 | Stable | 495 passing |
-| legalis-registry | 0.1.5 | Stable | 827 passing |
-| legalis-llm | 0.1.5 | Stable | 593 passing |
-| legalis-verifier | 0.1.5 | Stable | 532 passing |
-| legalis-sim | 0.1.5 | Stable | 685 passing |
-| legalis-diff | 0.1.5 | Stable | 529 passing |
-| legalis-i18n | 0.1.5 | Stable | 595 passing |
-| legalis-porting | 0.1.5 | Stable | 342 passing |
-| legalis-viz | 0.1.5 | Stable | 523 passing |
-| legalis-chain | 0.1.5 | Stable | 81 passing |
-| legalis-lod | 0.1.5 | Stable | 799 passing |
-| legalis-audit | 0.1.5 | Stable | 608 passing |
-| legalis-interop | 0.1.5 | Stable | 523 passing |
-| legalis-api | 0.1.5 | Stable | 281 passing |
-| legalis (CLI) | 0.1.5 | Stable | 167 passing |
+| legalis-core | 0.1.6 | Stable | 466 passing |
+| legalis-dsl | 0.1.6 | Stable | 495 passing |
+| legalis-registry | 0.1.6 | Stable | 827 passing |
+| legalis-llm | 0.1.6 | Stable | 593 passing |
+| legalis-verifier | 0.1.6 | Stable | 532 passing |
+| legalis-sim | 0.1.6 | Stable | 845 passing |
+| legalis-diff | 0.1.6 | Stable | 529 passing |
+| legalis-i18n | 0.1.6 | Stable | 595 passing |
+| legalis-porting | 0.1.6 | Stable | 342 passing |
+| legalis-viz | 0.1.6 | Stable | 523 passing |
+| legalis-chain | 0.1.6 | Stable | 81 passing |
+| legalis-lod | 0.1.6 | Stable | 799 passing |
+| legalis-audit | 0.1.6 | Stable | 861 passing |
+| legalis-interop | 0.1.6 | Stable | 523 passing |
+| legalis-api | 0.1.6 | Stable | 281 passing |
+| legalis (CLI) | 0.1.6 | Stable | 167 passing |
 
 ### Jurisdiction Crates (23)
 
 | Crate | Version | Status | Tests | Coverage |
 |-------|---------|--------|-------|----------|
-| legalis-ae | 0.1.5 | Stable | 700+ | Civil Code, Criminal Code, Commercial Companies, Labor Law, Tax Law, Data Protection, Cybercrime, Banking/Finance, IP, Real Estate, Islamic Law, Arbitration, Free Zones |
-| legalis-au | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-br | 0.1.5 | Stable | 800+ | Civil Code (Obligations, Contracts, Property, Family), Corporate Law (Governance, M&A), Tax Law (Income, ICMS, IPI, PIS/COFINS), Criminal Code, Environmental Law, Banking Law, Bankruptcy Law, IP |
-| legalis-ca | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-cn | 0.1.5 | Stable | 900+ | Civil Code (Personality Rights, Marriage, Succession, Property, Contracts, Torts), Foreign Investment, Data Security, Antitrust |
-| legalis-de | 0.1.5 | Stable | Passing | Constitutional, Criminal, Civil, Family |
-| legalis-eu | 0.1.5 | Stable | Passing | Constitutional, Treaties |
-| legalis-fr | 0.1.5 | Stable | Passing | Civil Code, Criminal Code, Labor Code |
-| legalis-id | 0.1.5 | Stable | 1,000+ | Company Law, Tax Law (Income, VAT, WHT, PBB), Omnibus Law (Cipta Kerja, Investment, Labor), Banking Law, Capital Markets, Land Law, Construction Law, Criminal Code, IP |
-| legalis-in | 0.1.5 | Stable | 1,200+ | Arbitration Act, Civil/Criminal Procedure Code, Competition Law, Environmental Law, Evidence Act, FEMA, Insolvency Code, IP (Patents, Trademarks), Securities Law |
-| legalis-jp | 0.1.5 | Stable | Passing | Civil Code, Criminal Code, Labor Law |
-| legalis-kr | 0.1.5 | Stable | 1,500+ | Civil Code (General, Property, Obligations, Family, Succession), Commercial Code, Criminal Code, Labor Law, Tax Law (Income, Corporate, VAT), Data Protection, Competition Law, IP, Financial Services, Real Estate, Procedure Law |
-| legalis-la | 0.1.5 | Stable | Passing | Civil Code |
-| legalis-mx | 0.1.5 | Stable | 800+ | Civil Code, Commercial Code, Criminal Code, Labor Law, Tax Law, Constitutional Law |
-| legalis-my | 0.1.5 | Stable | 600+ | Companies Act, Contract Law, Employment Law, Tax Law, Islamic Law, Land Law, IP |
-| legalis-ru | 0.1.5 | Stable | 900+ | Civil Code, Commercial Law, Criminal Code, Labor Law, Tax Law, Administrative Law, Constitutional Law |
-| legalis-sa | 0.1.5 | Stable | 700+ | Islamic Law (Sharia, Hanbali School), Commercial Code, Labor Law, Tax Law (Zakat, VAT, Income), Corporate Governance, Real Estate Law, IP |
-| legalis-sg | 0.1.5 | Stable | Passing | Companies Act, Employment Act, PDPA |
-| legalis-th | 0.1.5 | Stable | 1,100+ | Civil/Commercial Code (Property, Obligations, Family, Succession), Company Act, Securities Law, Tax Law (Income, VAT, WHT), Criminal Code, Labor Law, IP, Competition Law, Bankruptcy, Investment Promotion, Land Code, Immigration, Consumer Protection, Arbitration |
-| legalis-uk | 0.1.5 | Stable | Passing | Common Law, Employment Law |
-| legalis-us | 0.1.5 | Stable | Passing | Constitutional, Employment Law, Environmental |
-| legalis-vn | 0.1.5 | Stable | 1,000+ | Civil Code (Property, Obligations, Inheritance), Company Law, Tax Law (VAT, CIT, PIT, SCT), Banking Law, Competition Law, Construction Law, Consumer Protection, Criminal Code, Cybersecurity Law, IP, Land Law |
-| legalis-za | 0.1.5 | Stable | 900+ | Constitution, Constitutional Court, Criminal Law, Property Law (Common Law, Deeds Registration, MPRDA), Competition Law, Environmental Law, Financial Services, Insolvency, IP, Tax Law, Customary Law |
+| legalis-ae | 0.1.6 | Stable | 700+ | Civil Code, Criminal Code, Commercial Companies, Labor Law, Tax Law, Data Protection, Cybercrime, Banking/Finance, IP, Real Estate, Islamic Law, Arbitration, Free Zones |
+| legalis-au | 0.1.6 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-br | 0.1.6 | Stable | 800+ | Civil Code (Obligations, Contracts, Property, Family), Corporate Law (Governance, M&A), Tax Law (Income, ICMS, IPI, PIS/COFINS), Criminal Code, Environmental Law, Banking Law, Bankruptcy Law, IP |
+| legalis-ca | 0.1.6 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-cn | 0.1.6 | Stable | 900+ | Civil Code (Personality Rights, Marriage, Succession, Property, Contracts, Torts), Foreign Investment, Data Security, Antitrust |
+| legalis-de | 0.1.6 | Stable | Passing | Constitutional, Criminal, Civil, Family |
+| legalis-eu | 0.1.6 | Stable | Passing | Constitutional, Treaties |
+| legalis-fr | 0.1.6 | Stable | Passing | Civil Code, Criminal Code, Labor Code |
+| legalis-id | 0.1.6 | Stable | 1,000+ | Company Law, Tax Law (Income, VAT, WHT, PBB), Omnibus Law (Cipta Kerja, Investment, Labor), Banking Law, Capital Markets, Land Law, Construction Law, Criminal Code, IP |
+| legalis-in | 0.1.6 | Stable | 1,200+ | Arbitration Act, Civil/Criminal Procedure Code, Competition Law, Environmental Law, Evidence Act, FEMA, Insolvency Code, IP (Patents, Trademarks), Securities Law |
+| legalis-jp | 0.1.6 | Stable | Passing | Civil Code, Criminal Code, Labor Law |
+| legalis-kr | 0.1.6 | Stable | 1,500+ | Civil Code (General, Property, Obligations, Family, Succession), Commercial Code, Criminal Code, Labor Law, Tax Law (Income, Corporate, VAT), Data Protection, Competition Law, IP, Financial Services, Real Estate, Procedure Law |
+| legalis-la | 0.1.6 | Stable | Passing | Civil Code |
+| legalis-mx | 0.1.6 | Stable | 800+ | Civil Code, Commercial Code, Criminal Code, Labor Law, Tax Law, Constitutional Law |
+| legalis-my | 0.1.6 | Stable | 600+ | Companies Act, Contract Law, Employment Law, Tax Law, Islamic Law, Land Law, IP |
+| legalis-ru | 0.1.6 | Stable | 900+ | Civil Code, Commercial Law, Criminal Code, Labor Law, Tax Law, Administrative Law, Constitutional Law |
+| legalis-sa | 0.1.6 | Stable | 700+ | Islamic Law (Sharia, Hanbali School), Commercial Code, Labor Law, Tax Law (Zakat, VAT, Income), Corporate Governance, Real Estate Law, IP |
+| legalis-sg | 0.1.6 | Stable | Passing | Companies Act, Employment Act, PDPA |
+| legalis-th | 0.1.6 | Stable | 1,100+ | Civil/Commercial Code (Property, Obligations, Family, Succession), Company Act, Securities Law, Tax Law (Income, VAT, WHT), Criminal Code, Labor Law, IP, Competition Law, Bankruptcy, Investment Promotion, Land Code, Immigration, Consumer Protection, Arbitration |
+| legalis-uk | 0.1.6 | Stable | Passing | Common Law, Employment Law |
+| legalis-us | 0.1.6 | Stable | Passing | Constitutional, Employment Law, Environmental |
+| legalis-vn | 0.1.6 | Stable | 1,000+ | Civil Code (Property, Obligations, Inheritance), Company Law, Tax Law (VAT, CIT, PIT, SCT), Banking Law, Competition Law, Construction Law, Consumer Protection, Criminal Code, Cybersecurity Law, IP, Land Law |
+| legalis-za | 0.1.6 | Stable | 900+ | Constitution, Constitutional Court, Criminal Law, Property Law (Common Law, Deeds Registration, MPRDA), Competition Law, Environmental Law, Financial Services, Insolvency, IP, Tax Law, Customary Law |
 
 ### Jurisdiction Integration Improvements
 
@@ -106,7 +118,7 @@ The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis
 - [x] **UK**: legislation.gov.uk integration with legalis-lod (ERA, NMWA, WTR RDF export)
 
 **Recommended future improvements:**
-- [ ] **All jurisdictions**: Integrate with `legalis-dsl` for rule definitions
+- [x] **All jurisdictions**: Integrate with `legalis-dsl` for rule definitions — DSL export (`dsl::statutes_as_dsl()` / `reasoning::dsl::statutes_as_dsl()`) now done for **all 23 jurisdictions** (the 11 with existing `Statute` adapters plus AE, BR, ID, IN, LA, MX, MY, RU, SA, TH, VN, ZA, each given an 8-statute `src/statutes.rs` grounded in real laws). 13 condition kinds (incl. `AttributeEquals`, `Pattern`, `Duration`, `SetMembership`, `Geographic`, `EntityRelationship`, `Percentage`, `Custom`) round-trip through `parse_statute`; only `Calculation`/`DateRange`/`Composite`/`Temporal`/`Threshold`/`Probabilistic`/`Fuzzy` remain, deferred pending float/date/nested lexer support (see note above).
 
 **Benefits achieved:**
 1. Unified rule engine evaluation across all jurisdictions
@@ -544,13 +556,40 @@ The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis
 
 ## Documentation
 
-- [ ] Write architecture decision records (ADRs)
-- [ ] Create user guide with tutorials
+- [x] Write architecture decision records (ADRs)
+- [x] Create user guide with tutorials
 - [ ] Add API reference documentation (rustdoc)
-- [ ] Create contributor's guide
-- [ ] Write deployment guide
+- [x] Create contributor's guide
+- [x] Write deployment guide
 - [x] Add example applications for each use case
 - [ ] Create video tutorials
+
+### COMPLETED (2026-06-14 — documentation)
+
+A workspace documentation set was written under `docs/` (grounded in the actual
+codebase — real crate names, real CLI commands, the real DSL grammar, and the
+shipped `examples/welfare-benefits` pipeline):
+
+- **ADRs** — `docs/adr/` with an index (`docs/adr/README.md`) plus 9 records:
+  pure-Rust/no-C deps, the workspace dependency policy, the Statute/Condition/
+  Effect core model, the `LegalResult` deterministic-vs-discretion split, the DSL
+  as a first-class authoring language, static verification + SMT conflict
+  detection, jurisdiction-crate-per-country, the no-panic/no-unwrap policy, and
+  offline-first design. (These are workspace-level ADRs; the crate-internal
+  `crates/legalis-core/ADR.md` remains the place for core data-structure ADRs.)
+- **User guide** — `docs/user-guide.md` (install/build, core concepts, DSL,
+  worked welfare-benefits example, CLI usage, verification, simulation, export).
+- **Contributor's guide** — `CONTRIBUTING.md` at the repo root (layout,
+  build/test commands, coding policies, TODO.md workflow, how to add a
+  jurisdiction crate).
+- **Deployment guide** — `docs/deployment.md` (release binaries, the
+  `legalis-api-server` / `legalis serve` service, ports/env, feature flags);
+  complements the existing Docker-focused root `DEPLOYMENT.md`.
+
+Left unchecked deliberately:
+- **API reference documentation (rustdoc)** — not produced/verified in this pass
+  (this is a `cargo doc` artifact, not a hand-written Markdown doc).
+- **Video tutorials** — out of scope for written documentation.
 
 ---
 

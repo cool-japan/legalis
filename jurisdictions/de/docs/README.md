@@ -11,7 +11,7 @@ Legalis-DE bietet typsichere Rust-Implementierungen deutscher Rechtsvorschriften
 - **Mehrsprachig**: Deutsche und englische Fehlermeldungen
 - **Validierung**: Mehrstufige Validierung mit detaillierten Fehlern
 - **Beispiele**: 20+ Arbeitsbeispiele für alle Hauptmerkmale
-- **Produktionsreif**: 365 Tests, 0 Warnungen, ~25.000 Zeilen Code
+- **Produktionsreif**: 835 Tests, 0 Warnungen, ~46.500 Zeilen Code
 
 ## Abgedeckte Rechtsbereiche
 
@@ -58,7 +58,7 @@ Legalis-DE bietet typsichere Rust-Implementierungen deutscher Rechtsvorschriften
 
 ```toml
 [dependencies]
-legalis-de = "0.1.1"
+legalis-de = "0.1.6"
 ```
 
 ### Beispiel: GmbH-Gründung
@@ -194,7 +194,7 @@ jurisdictions/de/
 │   ├── grundgesetz/    # Verfassungsrecht
 │   └── arbeitsrecht/   # Arbeitsrecht
 ├── examples/           # 20+ Arbeitsbeispiele
-├── tests/             # 365 Tests
+├── tests/             # 835 Tests
 ├── docs/              # Dokumentation (DE/EN)
 └── TODO.md            # Projekt-Roadmap
 ```
@@ -238,9 +238,9 @@ cargo tarpaulin --out Html
 
 ## Qualitätsmetriken
 
-- **Tests**: 365 Tests (365 bestanden, 0 fehlgeschlagen)
+- **Tests**: 835 Tests (835 bestanden, 0 fehlgeschlagen)
 - **Warnungen**: 0 (cargo clippy --all-targets)
-- **Codezeilen**: ~25.000 (Quelle + Tests + Beispiele)
+- **Codezeilen**: ~46.500 (Quelle + Tests + Beispiele)
 - **Dokumentation**: 100% öffentliche API dokumentiert
 - **Gesetze**: 20+ deutsche Gesetze abgedeckt
 

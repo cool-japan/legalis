@@ -496,6 +496,81 @@ pub enum TerminatingParty {
     Mutual,
 }
 
+/// Part IV basic-salary ceiling for a **workman**, in cents (SGD 4,500/month).
+///
+/// Source: Employment Act 1968 Part IV, s. 35(a). Part IV (rest days, hours of
+/// work, overtime and related conditions of service) applies to a workman whose
+/// basic monthly salary does not exceed this amount.
+pub const PART_IV_WORKMAN_SALARY_CEILING_CENTS: u64 = 450_000;
+
+/// Part IV basic-salary ceiling for a **non-workman** (other employee), in cents
+/// (SGD 2,600/month).
+///
+/// Source: Employment Act 1968 Part IV, s. 35(b) — the figure prescribed with
+/// effect from 1 April 2019. Part IV applies to an employee who is neither a
+/// workman nor a person employed in a managerial or executive position, and
+/// whose basic monthly salary does not exceed this amount.
+pub const PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS: u64 = 260_000;
+
+/// Employee category for Employment Act coverage purposes.
+///
+/// The distinction follows Employment Act 1968 s. 2 (definition of "workman")
+/// and Part IV, which draws a line between workmen, other rank-and-file
+/// employees, and persons employed in a managerial or executive position (PMEs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EmployeeCategory {
+    /// A "workman" within the meaning of EA s. 2 (broadly, manual labour and
+    /// directly related roles).
+    Workman,
+
+    /// A rank-and-file employee who is neither a workman nor a manager/executive
+    /// (e.g. clerical or administrative staff).
+    NonWorkman,
+
+    /// A person employed in a managerial or executive position (PME). Covered by
+    /// the general provisions of the EA (since 1 April 2019) but never by Part IV.
+    ManagerOrExecutive,
+}
+
+impl EmployeeCategory {
+    /// Returns the Part IV basic-salary ceiling (in cents) for this category, or
+    /// [`None`] for managers/executives, who are never covered by Part IV.
+    pub fn part_iv_salary_ceiling_cents(&self) -> Option<u64> {
+        match self {
+            EmployeeCategory::Workman => Some(PART_IV_WORKMAN_SALARY_CEILING_CENTS),
+            EmployeeCategory::NonWorkman => Some(PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS),
+            EmployeeCategory::ManagerOrExecutive => None,
+        }
+    }
+}
+
+/// Result of an Employment Act coverage determination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EaCoverage {
+    /// Not covered by the Employment Act at all. Seafarers, domestic workers and
+    /// public officers are excluded and governed by separate regimes.
+    NotCovered,
+
+    /// Covered by the general provisions of the Employment Act, but **not** by
+    /// Part IV (rest days, hours of work, overtime and related conditions).
+    GeneralOnly,
+
+    /// Covered by the general provisions **and** Part IV.
+    GeneralAndPartIv,
+}
+
+impl EaCoverage {
+    /// Returns whether the employee is covered by the Employment Act at all.
+    pub fn is_covered(&self) -> bool {
+        !matches!(self, EaCoverage::NotCovered)
+    }
+
+    /// Returns whether Part IV (hours of work, overtime, rest days) applies.
+    pub fn includes_part_iv(&self) -> bool {
+        matches!(self, EaCoverage::GeneralAndPartIv)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -559,5 +634,36 @@ mod tests {
         let mut hours = WorkingHours::standard();
         hours.hours_per_week = 50.0;
         assert_eq!(hours.overtime_hours(), 6.0); // 50 - 44 = 6 hours overtime
+    }
+
+    #[test]
+    fn test_employee_category_part_iv_ceiling() {
+        assert_eq!(
+            EmployeeCategory::Workman.part_iv_salary_ceiling_cents(),
+            Some(PART_IV_WORKMAN_SALARY_CEILING_CENTS)
+        );
+        assert_eq!(
+            EmployeeCategory::NonWorkman.part_iv_salary_ceiling_cents(),
+            Some(PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS)
+        );
+        assert_eq!(
+            EmployeeCategory::ManagerOrExecutive.part_iv_salary_ceiling_cents(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_part_iv_ceiling_constants_in_sgd() {
+        assert_eq!(PART_IV_WORKMAN_SALARY_CEILING_CENTS, 450_000); // SGD 4,500
+        assert_eq!(PART_IV_NON_WORKMAN_SALARY_CEILING_CENTS, 260_000); // SGD 2,600
+    }
+
+    #[test]
+    fn test_ea_coverage_helpers() {
+        assert!(!EaCoverage::NotCovered.is_covered());
+        assert!(EaCoverage::GeneralOnly.is_covered());
+        assert!(!EaCoverage::GeneralOnly.includes_part_iv());
+        assert!(EaCoverage::GeneralAndPartIv.is_covered());
+        assert!(EaCoverage::GeneralAndPartIv.includes_part_iv());
     }
 }

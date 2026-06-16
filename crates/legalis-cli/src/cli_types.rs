@@ -304,6 +304,59 @@ pub enum PluginOperation {
         #[arg(short, long)]
         name: Option<String>,
     },
+
+    /// Security-scan installed plugins (or one by name)
+    Scan {
+        /// Plugin name to scan (scans all if not specified)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Minimum severity that fails the scan (info, low, medium, high, critical)
+        #[arg(long, default_value = "high")]
+        fail_on: PluginSeverityArg,
+    },
+
+    /// Validate plugin dependencies and show a resolved install order
+    Deps {
+        /// Show the resolved install order on success
+        #[arg(short, long)]
+        order: bool,
+    },
+
+    /// Check installed plugins' compatibility with the running legalis version
+    CheckVersion {
+        /// Plugin name to check (checks all if not specified)
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+}
+
+/// Severity threshold for plugin security scanning.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum PluginSeverityArg {
+    /// Informational
+    Info,
+    /// Low
+    Low,
+    /// Medium
+    Medium,
+    /// High
+    #[default]
+    High,
+    /// Critical
+    Critical,
+}
+
+impl From<PluginSeverityArg> for crate::plugin_security::Severity {
+    fn from(value: PluginSeverityArg) -> Self {
+        match value {
+            PluginSeverityArg::Info => Self::Info,
+            PluginSeverityArg::Low => Self::Low,
+            PluginSeverityArg::Medium => Self::Medium,
+            PluginSeverityArg::High => Self::High,
+            PluginSeverityArg::Critical => Self::Critical,
+        }
+    }
 }
 
 /// Plugin type filter options.
@@ -1444,4 +1497,290 @@ pub enum ConflictResolution {
     /// Ask user for each conflict
     #[default]
     Ask,
+}
+
+/// Offline-capability operations (queue, cache, validate, sync, conflicts).
+#[derive(Subcommand)]
+pub enum OfflineOperation {
+    /// Queue a command for later execution while offline
+    Queue {
+        /// Command name to queue (e.g. publish)
+        #[arg(short, long)]
+        command: String,
+
+        /// Command arguments
+        #[arg(short, long)]
+        args: Vec<String>,
+
+        /// Resource key the command mutates (required for mutating commands)
+        #[arg(short, long)]
+        resource: Option<String>,
+
+        /// JSON payload representing the intended new state
+        #[arg(short, long)]
+        payload: Option<String>,
+
+        /// Base version the payload is derived from (for conflict detection)
+        #[arg(long)]
+        base_version: Option<u64>,
+    },
+
+    /// List queued commands
+    List {
+        /// Filter by queue status
+        #[arg(short, long)]
+        status: Option<OfflineQueueStatusFilter>,
+    },
+
+    /// Validate all queued commands without executing them
+    Validate,
+
+    /// Synchronize the queue with the authoritative store when online
+    Sync {
+        /// Host to probe for connectivity (defaults to assuming online)
+        #[arg(long)]
+        host: Option<String>,
+
+        /// Port to probe for connectivity
+        #[arg(long, default_value = "443")]
+        port: u16,
+
+        /// Force sync even if the connectivity probe fails
+        #[arg(short, long)]
+        force: bool,
+
+        /// Conflict resolution strategy
+        #[arg(long, default_value = "last-writer-wins")]
+        strategy: OfflineConflictStrategy,
+    },
+
+    /// List recorded conflicts
+    Conflicts,
+
+    /// Manually resolve a recorded conflict
+    Resolve {
+        /// Conflict identifier
+        #[arg(short, long)]
+        id: String,
+
+        /// Which side to keep
+        #[arg(short, long, default_value = "local")]
+        prefer: OfflineResolvePreference,
+    },
+
+    /// Show local cache statistics
+    CacheStats,
+
+    /// Remove expired cache entries
+    CachePrune,
+
+    /// Clear all queued commands
+    Clear,
+}
+
+/// Conflict resolution strategy for offline sync.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum OfflineConflictStrategy {
+    /// The locally queued change wins
+    #[default]
+    LastWriterWins,
+    /// The remote (authoritative) state wins
+    RemoteWins,
+    /// Attempt a three-way merge, recording unresolved conflicts
+    Merge,
+}
+
+impl From<OfflineConflictStrategy> for crate::offline::ConflictStrategy {
+    fn from(value: OfflineConflictStrategy) -> Self {
+        match value {
+            OfflineConflictStrategy::LastWriterWins => Self::LastWriterWins,
+            OfflineConflictStrategy::RemoteWins => Self::RemoteWins,
+            OfflineConflictStrategy::Merge => Self::Merge,
+        }
+    }
+}
+
+/// Queue status filter for the offline list command.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum OfflineQueueStatusFilter {
+    /// Newly queued
+    Pending,
+    /// Passed validation
+    Validated,
+    /// Successfully synced
+    Synced,
+    /// Failed and awaiting retry
+    Failed,
+    /// In conflict, needs manual resolution
+    Conflicted,
+}
+
+impl From<OfflineQueueStatusFilter> for crate::offline::QueueStatus {
+    fn from(value: OfflineQueueStatusFilter) -> Self {
+        match value {
+            OfflineQueueStatusFilter::Pending => Self::Pending,
+            OfflineQueueStatusFilter::Validated => Self::Validated,
+            OfflineQueueStatusFilter::Synced => Self::Synced,
+            OfflineQueueStatusFilter::Failed => Self::Failed,
+            OfflineQueueStatusFilter::Conflicted => Self::Conflicted,
+        }
+    }
+}
+
+/// Which side to prefer when manually resolving a conflict.
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum OfflineResolvePreference {
+    /// Keep the local queued change
+    #[default]
+    Local,
+    /// Keep the remote authoritative state
+    Remote,
+}
+
+/// Audit-log operations (enterprise audit logging of CLI operations).
+#[derive(Subcommand)]
+pub enum AuditLogOperation {
+    /// Show recent recorded CLI operations
+    Show {
+        /// Maximum number of records to show (most recent first)
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
+
+    /// Verify the integrity (hash chain) of the audit log
+    Verify,
+
+    /// Print the path to the audit log file
+    Path,
+}
+
+/// Enterprise policy operations.
+#[derive(Subcommand)]
+pub enum PolicyOperation {
+    /// Show the active enterprise policy
+    Show {
+        /// Explicit policy file path (defaults to discovered policy)
+        #[arg(short, long)]
+        file: Option<String>,
+    },
+
+    /// Check whether a command is permitted by policy
+    Check {
+        /// Command name to check (e.g. publish)
+        #[arg(short, long)]
+        command: String,
+
+        /// Explicit policy file path
+        #[arg(short, long)]
+        file: Option<String>,
+    },
+
+    /// Check whether a numeric value is within a policy limit
+    CheckLimit {
+        /// Which limit to check
+        #[arg(short, long)]
+        kind: PolicyLimitArg,
+
+        /// The value to validate
+        #[arg(short, long)]
+        value: usize,
+
+        /// Explicit policy file path
+        #[arg(short, long)]
+        file: Option<String>,
+    },
+
+    /// Write a starter enterprise policy file
+    Init {
+        /// Output path (defaults to the global policy location)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Overwrite an existing policy file
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+/// The numeric limit kind for `policy check-limit`.
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum PolicyLimitArg {
+    /// Simulation population size
+    Population,
+    /// Parallel worker count
+    Workers,
+    /// Iteration count
+    Iterations,
+    /// Input file count
+    InputFiles,
+}
+
+impl From<PolicyLimitArg> for crate::policy::LimitKind {
+    fn from(value: PolicyLimitArg) -> Self {
+        match value {
+            PolicyLimitArg::Population => Self::Population,
+            PolicyLimitArg::Workers => Self::Workers,
+            PolicyLimitArg::Iterations => Self::Iterations,
+            PolicyLimitArg::InputFiles => Self::InputFiles,
+        }
+    }
+}
+
+/// Centralized configuration management operations.
+#[derive(Subcommand)]
+pub enum CentralConfigOperation {
+    /// Show the resolved layered configuration with provenance
+    Show,
+
+    /// Validate the resolved layered configuration
+    Validate,
+}
+
+/// Intelligent-assistant operations (suggestions, recommendations, learning).
+#[derive(Subcommand)]
+pub enum AssistantOperation {
+    /// Suggest likely next commands from context and history
+    Suggest {
+        /// The previous command (defaults to the last recorded one)
+        #[arg(short, long)]
+        previous: Option<String>,
+
+        /// Maximum number of suggestions
+        #[arg(short, long, default_value = "5")]
+        limit: usize,
+    },
+
+    /// Surface proactive recommendations from usage and project state
+    Recommend,
+
+    /// Show learned usage statistics
+    Stats {
+        /// Maximum number of top commands to show
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Manually record a command invocation into the usage model
+    Record {
+        /// The command name to record
+        #[arg(short, long)]
+        command: String,
+    },
+}
+
+/// Crash-recovery / resume operations over saved checkpoints.
+#[derive(Subcommand)]
+pub enum RecoverOperation {
+    /// List resumable operations (pending checkpoints)
+    List,
+
+    /// Show how to resume a specific checkpoint
+    Resume {
+        /// Checkpoint id
+        #[arg(short, long)]
+        id: String,
+    },
+
+    /// Remove completed checkpoints
+    Clean,
 }
