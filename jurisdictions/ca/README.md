@@ -2,7 +2,7 @@
 
 Canada / Le Canada - Legal System Support for Legalis-RS
 
-**Version 0.1.6** - Charter of Rights, Federal/Provincial Law, Quebec Civil Law
+**Version 0.1.7** - Charter of Rights, Federal/Provincial Law, Quebec Civil Law
 
 ## Overview / Aperçu
 
@@ -148,7 +148,7 @@ Criminal Code of Canada (federal jurisdiction)
 
 ## 📊 Current Implementation Status
 
-**Version 0.1.6 Statistics:**
+**Version 0.1.7 Statistics:**
 - ✅ **Modules**: 11 modules (common, constitution, contract, tort, employment, criminal, family, property, corporate, reasoning, dsl)
 - ✅ **Tests**: 239 tests passing, 0 warnings
 - ✅ **Charter Analysis**: Full section 1 (Oakes test) implementation

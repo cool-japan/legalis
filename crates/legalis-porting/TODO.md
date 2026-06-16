@@ -129,7 +129,7 @@ All v0.1.x series features complete (through v0.1.9 Integration). All v0.2.x fea
 - [x] Add plain language explanation generation
 - [x] Add 11 comprehensive tests for AI-assisted porting functionality
 
-### Validation Framework (v0.1.6)
+### Validation Framework (v0.1.7)
 - [x] Add target jurisdiction compliance checking
 - [x] Add constitutional compatibility analysis
 - [x] Add treaty/international law compliance

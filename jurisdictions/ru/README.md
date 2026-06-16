@@ -2,7 +2,7 @@
 
 Comprehensive Russian legal system implementation for the Legalis-RS ecosystem.
 
-**Version 0.1.6** — 12 modules, 80 tests passing, 0 warnings.
+**Version 0.1.7** — 12 modules, 80 tests passing, 0 warnings.
 
 ## Overview
 

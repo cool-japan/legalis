@@ -809,7 +809,7 @@ core data-structure ADRs; the new workspace-level ADRs live in `docs/adr/`.)
 - [x] All doc tests passing (117 doc tests total)
 - [x] 0 warnings (adhering to NO WARNINGS POLICY) ✓
 
-### Builder Pattern Extensions (v0.1.6) - COMPLETED
+### Builder Pattern Extensions (v0.1.7) - COMPLETED
 - [x] Add `StatuteBuilder::from_template()` - build from statute templates
 - [x] Add `StatuteBuilder::validate_progressive()` - validation at each step
 - [x] Add `ConditionBuilder` - fluent API for complex condition construction

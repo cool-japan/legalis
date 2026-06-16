@@ -232,7 +232,7 @@ All v0.1.x series features through v0.1.9 (Integration) are complete including a
 - [x] Add best practice recommendations
 - [x] Add historical pattern learning
 
-### Audit Trail (v0.1.6)
+### Audit Trail (v0.1.7)
 - [x] Add change attribution (who changed what)
 - [x] Add change justification tracking
 - [x] Add approval workflow integration

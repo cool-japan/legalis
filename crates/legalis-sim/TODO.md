@@ -445,7 +445,7 @@ Network effects module fully integrated with UUID-based RelationshipGraph API.
 - Code quality: 100% NO WARNINGS compliance maintained
 - Validation Framework Module: 15 comprehensive tests covering all features
 
-### Persistence Module (v0.1.6 Partial - 2025-12-29)
+### Persistence Module (v0.1.7 Partial - 2025-12-29)
 - [x] File-based checkpoint persistence with PersistenceConfig
 - [x] CheckpointStore for save/load operations to disk
 - [x] Resume from failure with ResumeManager and InterruptedSimulation
@@ -607,7 +607,7 @@ Network effects module fully integrated with UUID-based RelationshipGraph API.
 - [x] Add uncertainty quantification (UncertaintyQuantification, CV-based uncertainty levels)
 - [x] Add model calibration automation (AutoCalibrationConfig, AutoCalibrationResult)
 
-### Parallel & Distributed (v0.1.6) - IN PROGRESS 2025-12-29
+### Parallel & Distributed (v0.1.7) - IN PROGRESS 2025-12-29
 - [x] Add GPU acceleration for simulations — **real NVIDIA CUDA backend** (cudarc 0.19, NVRTC runtime kernel compilation, on-device condition evaluation) behind the optional `cuda` feature; see "Real CUDA Acceleration" below
 - [x] Add distributed simulation across nodes (completed in v0.2.1, see Distributed Simulation section)
 - [x] Add cloud-native scaling (AWS, GCP, Azure) — provider-agnostic pure-Rust abstraction with simulated backend; live SDK bindings deferred (see Cloud-Native Scaling section below)

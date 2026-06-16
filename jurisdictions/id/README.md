@@ -2,7 +2,7 @@
 
 Republik Indonesia - Dukungan Sistem Hukum untuk Legalis-RS
 
-**Versi 0.1.6** - Hukum Perdata, PDP, Ketenagakerjaan, Investasi, Omnibus Law
+**Versi 0.1.7** - Hukum Perdata, PDP, Ketenagakerjaan, Investasi, Omnibus Law
 
 ## Ikhtisar (Overview)
 
@@ -124,7 +124,7 @@ assert!(validate_investment(&investment).is_ok());
 
 ## 📊 Status Implementasi Saat Ini
 
-**Statistik Versi 0.1.6:**
+**Statistik Versi 0.1.7:**
 - ✅ **Hukum Perdata**: KUHPerdata dasar
 - ✅ **PDP**: UU No. 27/2022 lengkap
 - ✅ **Ketenagakerjaan**: UU 13/2003 jo. UU 11/2020

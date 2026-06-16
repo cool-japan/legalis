@@ -1325,7 +1325,7 @@ The Import/Export Extensions (v0.1.5) milestone is now **100% complete** with al
 
 ## Recent Enhancements (2025-12-29 - Session 15)
 
-### Workflow Integration Testing & Completion (v0.1.6 Implementation)
+### Workflow Integration Testing & Completion (v0.1.7 Implementation)
 
 #### Type Complexity Fix
 - [x] Fixed clippy warning for complex type in WorkflowManager
@@ -1379,14 +1379,14 @@ The Import/Export Extensions (v0.1.5) milestone is now **100% complete** with al
 - [x] Comprehensive test coverage
 
 #### Summary
-Session 15 completed the Workflow Integration (v0.1.6) milestone by adding comprehensive tests for all five workflow modules that were previously implemented but untested:
+Session 15 completed the Workflow Integration (v0.1.7) milestone by adding comprehensive tests for all five workflow modules that were previously implemented but untested:
 1. **Approval Workflows** - Request/response workflow with status management and auto-approval rules
 2. **Notification System** - Multi-channel notifications with priority filtering and read tracking
 3. **Task Assignment** - Review task creation, status transitions, and user assignment
 4. **SLA Tracking** - SLA definitions, measurements, and completion rate tracking
 5. **Escalation Rules** - Time-based and condition-based escalation with priority ordering
 
-The Workflow Integration (v0.1.6) milestone is now **100% complete** with all five planned features fully implemented, tested, and production-ready with comprehensive testing (362 total tests), zero warnings, and full documentation.
+The Workflow Integration (v0.1.7) milestone is now **100% complete** with all five planned features fully implemented, tested, and production-ready with comprehensive testing (362 total tests), zero warnings, and full documentation.
 
 ## Recent Enhancements (2025-12-29 - Session 16)
 
@@ -1852,7 +1852,7 @@ The API Extensions (v0.1.7) milestone is now **100% complete** with all five pla
 - [x] Add export templates for reporting
 - [x] Add selective export by criteria
 
-### Workflow Integration (v0.1.6) - COMPLETED ✅
+### Workflow Integration (v0.1.7) - COMPLETED ✅
 - [x] Add approval workflows for statute changes
 - [x] Add notification system for stakeholders
 - [x] Add task assignment for reviews

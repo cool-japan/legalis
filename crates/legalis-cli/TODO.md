@@ -214,7 +214,7 @@ one-line reason.
 - [x] Add `registry sync` - synchronize with registry
 - [x] Add `registry login/logout` - authentication
 
-### Plugin System (v0.1.6)
+### Plugin System (v0.1.7)
 - [x] Add plugin discovery and loading
 - [x] Add plugin manifest format
 - [x] Add plugin sandboxing

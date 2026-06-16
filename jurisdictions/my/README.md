@@ -2,7 +2,7 @@
 
 Comprehensive Malaysian legal system implementation for the Legalis-RS ecosystem.
 
-**Version 0.1.6** — 14 modules, 93 tests passing, 0 warnings.
+**Version 0.1.7** — 14 modules, 93 tests passing, 0 warnings.
 
 ## Overview
 

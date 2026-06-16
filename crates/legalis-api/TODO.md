@@ -181,7 +181,7 @@ Deferred (require external infra/services/hardware unavailable in-crate): mTLS, 
 - [x] Add query result caching with TTL
 - [x] Add cache warming strategies (warm() method with batch loading, stats tracking)
 
-### Observability (v0.1.6)
+### Observability (v0.1.7)
 - [x] Add OpenTelemetry distributed tracing (OTLP with configurable sampling)
 - [x] Add custom metrics for business logic (statute operations, verification results, simulation outcomes, permissions, etc.)
 - [x] Add request sampling for high-volume endpoints (adaptive, random, head-based strategies)

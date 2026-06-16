@@ -1732,7 +1732,7 @@ All v0.1.x, v0.2.x, and v0.3.x features complete. OxiZ SMT solver (Z3), temporal
 - [x] Add interactive proof exploration
 - [x] Add proof compression
 
-### Quality Metrics (v0.1.6)
+### Quality Metrics (v0.1.7)
 - [x] Add legislative drafting quality score
 - [x] Add clarity index calculation
 - [x] Add ambiguity detection

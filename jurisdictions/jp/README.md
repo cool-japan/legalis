@@ -2,7 +2,7 @@
 
 日本法サポートライブラリ for Legalis-RS
 
-**Version 0.1.6** - 5 Major Law Domains with e-Gov Electronic Filing Support
+**Version 0.1.7** - 5 Major Law Domains with e-Gov Electronic Filing Support
 
 ## 概要
 

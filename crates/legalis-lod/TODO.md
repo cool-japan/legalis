@@ -122,7 +122,7 @@ All v0.1.x through v0.3.10 features complete. RDF serialization (Turtle, N-Tripl
 - [x] Add graph reasoning (inference)
 - [x] Add graph visualization export
 
-### Validation & Quality (v0.1.6)
+### Validation & Quality (v0.1.7)
 - [x] Add comprehensive SHACL shape library
 - [x] Add ShEx validation rules
 - [x] Add data quality metrics

@@ -65,7 +65,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-eu = "0.1.6"
+legalis-eu = "0.1.7"
 chrono = "0.4"  # Required for date/time handling
 ```
 
@@ -77,7 +77,7 @@ cargo add legalis-eu chrono
 
 ## Status
 
-**Current Version**: v0.1.6 - **Core Implementation Complete** ✅
+**Current Version**: v0.1.7 - **Core Implementation Complete** ✅
 
 - ✅ 309 tests passing (incl. property and i18n tests), 0 warnings
 - ✅ 25 comprehensive examples

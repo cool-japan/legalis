@@ -2,7 +2,7 @@
 
 Australia Legal System Support for Legalis-RS
 
-**Version 0.1.6** - Commonwealth Constitution, ACL, Fair Work, Native Title
+**Version 0.1.7** - Commonwealth Constitution, ACL, Fair Work, Native Title
 
 ## Overview
 
@@ -148,7 +148,7 @@ Superannuation Guarantee (Administration) Act 1992
 
 ## 📊 Current Implementation Status
 
-**Version 0.1.6 Statistics:**
+**Version 0.1.7 Statistics:**
 - ✅ **Modules**: 20 modules (common, competition, constitution, consumer_law, contract, corporate, criminal, dsl, employment, family, financial_services, immigration, intellectual_property, mining_resources, privacy, property, reasoning, superannuation, tax, tort)
 - ✅ **Tests**: 571 tests passing, 0 warnings
 - ✅ **Constitution**: Key sections with implied rights

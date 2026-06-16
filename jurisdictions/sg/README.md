@@ -94,7 +94,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-legalis-sg = "0.1.6"
+legalis-sg = "0.1.7"
 ```
 
 ### Example: Company Formation

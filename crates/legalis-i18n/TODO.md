@@ -192,7 +192,7 @@ All v0.2.x series features, v0.3.0 (AI-Powered Translation), v0.3.1 (Real-Time I
 - Added TableOfContents generator with hierarchical entries
 - Added IndexGenerator with sub-entries and alphabetical sorting
 
-### v0.1.6: Deadline Calculator Extensions
+### v0.1.7: Deadline Calculator Extensions
 - Added statute_of_limitations calculator
 - Added apply_holiday_rollover for non-working day adjustment
 - Added add_grace_period for deadline extensions
@@ -1512,7 +1512,7 @@ All v0.2.x series features, v0.3.0 (AI-Powered Translation), v0.3.1 (Real-Time I
 - [x] Add table of contents generation
 - [x] Add index generation
 
-### Deadline Calculator Extensions (v0.1.6) - COMPLETED
+### Deadline Calculator Extensions (v0.1.7) - COMPLETED
 - [x] Add statute of limitations calculator
 - [x] Add holiday rollover rules
 - [x] Add grace period calculations

@@ -2,7 +2,7 @@
 
 Cộng hòa Xã hội Chủ nghĩa Việt Nam - Hỗ trợ Hệ thống Pháp luật cho Legalis-RS
 
-**Phiên bản 0.1.6** - Bộ luật Lao động, Luật Doanh nghiệp, Luật Đầu tư
+**Phiên bản 0.1.7** - Bộ luật Lao động, Luật Doanh nghiệp, Luật Đầu tư
 
 ## Tổng quan (Overview)
 
@@ -103,7 +103,7 @@ assert!(validate_investment(&investment).is_ok());
 
 ## 📊 Trạng thái triển khai hiện tại
 
-**Thống kê phiên bản 0.1.6:**
+**Thống kê phiên bản 0.1.7:**
 - ✅ **Bộ luật Lao động**: Luật số 45/2019/QH14
 - ✅ **Luật Doanh nghiệp**: Luật số 59/2020/QH14
 - ✅ **Luật Đầu tư**: Luật số 61/2020/QH14

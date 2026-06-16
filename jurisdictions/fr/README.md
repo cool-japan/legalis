@@ -2,7 +2,7 @@
 
 **World-class implementation of French law for the Legalis-RS legal reasoning framework**
 
-[![Version](https://img.shields.io/badge/version-0.1.6-brightgreen)](#)
+[![Version](https://img.shields.io/badge/version-0.1.7-brightgreen)](#)
 [![Tests](https://img.shields.io/badge/tests-573%20passing-success)](#)
 [![Documentation](https://img.shields.io/badge/docs-69.7%25-success)](#)
 [![Articles](https://img.shields.io/badge/articles-86-blue)](#)

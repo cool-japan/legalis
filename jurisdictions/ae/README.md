@@ -2,7 +2,7 @@
 
 الإمارات العربية المتحدة (UAE) Legal System Support for Legalis-RS
 
-**Version 0.1.6** - Federal Laws, Labor, Commercial Companies, Data Protection, Free Zones
+**Version 0.1.7** - Federal Laws, Labor, Commercial Companies, Data Protection, Free Zones
 
 ## نظرة عامة (Overview)
 
@@ -111,7 +111,7 @@ DIFC (Dubai International Financial Centre) and ADGM (Abu Dhabi Global Market)
 
 ## 📊 Current Implementation Status
 
-**Version 0.1.6 Statistics:**
+**Version 0.1.7 Statistics:**
 - ✅ **Labor Law**: Federal Decree-Law No. 33/2021
 - ✅ **Commercial Companies**: Federal Decree-Law No. 32/2021
 - ✅ **Data Protection**: Federal Decree-Law No. 45/2021

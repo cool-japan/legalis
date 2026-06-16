@@ -258,7 +258,7 @@ All v0.1.x series features complete (through v0.1.9 Forensic Features). Hash cha
 - [x] Add outcome prediction based on patterns
 - [x] Add what-if analysis for historical decisions
 
-### Integration (v0.1.6)
+### Integration (v0.1.7)
 - [x] Add webhook notifications for new records
 - [x] Add SIEM integration (syslog, CEF, LEEF)
 - [x] Add Elasticsearch export for analytics

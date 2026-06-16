@@ -425,7 +425,7 @@ New module wired into `src/lib.rs` via `mod research; pub use research::*;`. Top
 - [x] Add entity extraction for legal entities
 - [x] Add relationship extraction for statute dependencies
 
-### Context Management (v0.1.6)
+### Context Management (v0.1.7)
 - [x] Add sliding window context for long documents
 - [x] Add hierarchical summarization for context
 - [x] Add retrieval-augmented context building

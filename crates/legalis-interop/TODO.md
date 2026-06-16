@@ -146,7 +146,7 @@ All v0.1.x, v0.2.x, and v0.3.0 series features complete, plus the v0.3.2 AI-Nati
   - YAML configuration file support
   - Progress tracking and reporting
   - 9 comprehensive tests
-- **Advanced error handling module added (v0.1.6)**
+- **Advanced error handling module added (v0.1.7)**
   - Graceful degradation for unsupported features
   - Partial conversion with detailed warnings
   - Configurable error recovery strategies (Skip, UseDefault, TryAlternative, AskUser, Abort)
@@ -304,7 +304,7 @@ All v0.1.x, v0.2.x, and v0.3.0 series features complete, plus the v0.3.2 AI-Nati
 - [x] Add conversion pipeline configuration
 - [x] Add resume capability for interrupted conversions
 
-### Error Handling (v0.1.6) - COMPLETED
+### Error Handling (v0.1.7) - COMPLETED
 - [x] Add graceful degradation for unsupported features
 - [x] Add partial conversion with warnings
 - [x] Add error recovery strategies

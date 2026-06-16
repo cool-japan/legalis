@@ -2,7 +2,7 @@
 
 Deutsche Rechtsordnung-Unterstützung für Legalis-RS
 
-**Version 0.1.6** — 11 Module, 835 Tests bestanden, 0 Warnungen.
+**Version 0.1.7** — 11 Module, 835 Tests bestanden, 0 Warnungen.
 
 ## Überblick
 

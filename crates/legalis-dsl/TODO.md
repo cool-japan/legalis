@@ -487,7 +487,7 @@ avoid invasive churn). All constructs round-trip through `parse_contract_documen
 - [x] Add conditional macro expansion `#IF`, `#ELSE`
 - [x] Add built-in macros for common patterns
 
-### Error Recovery (v0.1.6) ✅ COMPLETE
+### Error Recovery (v0.1.7) ✅ COMPLETE
 - [x] Add panic mode recovery for syntax errors
 - [x] Add missing delimiter insertion
 - [x] Add typo correction with Levenshtein distance

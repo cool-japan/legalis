@@ -2,7 +2,7 @@
 
 Comprehensive Saudi Arabian legal system implementation for the Legalis-RS ecosystem, based on **Islamic Law (Sharia)** and modern regulatory frameworks.
 
-**Version 0.1.6** — 13 modules, 133 tests passing, 0 warnings.
+**Version 0.1.7** — 13 modules, 133 tests passing, 0 warnings.
 
 ## Overview
 

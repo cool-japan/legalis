@@ -6,10 +6,10 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.6-brightgreen.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.7-brightgreen.svg)](CHANGELOG.md)
 [![Crates](https://img.shields.io/badge/crates-46-blue.svg)](#crates)
 [![Jurisdictions](https://img.shields.io/badge/jurisdictions-23%20operational-green.svg)](#jurisdictions)
-[![Tests](https://img.shields.io/badge/tests-14763%20passing-success.svg)](#crates)
+[![Tests](https://img.shields.io/badge/tests-18467%20passing-success.svg)](#crates)
 [![Files](https://img.shields.io/badge/rust%20files-2221-orange.svg)](#workspace-structure)
 [![Code](https://img.shields.io/badge/lines-935k-informational.svg)](#workspace-structure)
 
@@ -50,7 +50,7 @@ This separation is the philosophical core of Legalis-RS - it explicitly marks wh
 - 🇻🇳 **Vietnam** - Socialist Civil Law (Civil Code 91/2015, Cybersecurity Law, Competition Law)
 - 🇿🇦 **South Africa** - Mixed Law (Constitution 1996, Companies Act, LRA/BCEA, POPIA, Customary Law)
 
-**Total**: **1,553 jurisdiction files** (~383k jurisdiction LoC), **74 workspace crates** (16 core + 23 jurisdictions + 35 examples), **18,398 tests passing** with comprehensive coverage across all jurisdictions.
+**Total**: **1,553 jurisdiction files** (~383k jurisdiction LoC), **74 workspace crates** (16 core + 23 jurisdictions + 35 examples), **18,467 tests passing** with comprehensive coverage across all jurisdictions.
 
 ## Core Philosophy
 
@@ -125,7 +125,7 @@ legalis-rs/
 
 ## Code Metrics
 
-**Project Scale (v0.1.6)**:
+**Project Scale (v0.1.7)**:
 
 | Metric | Count | Details |
 |--------|-------|---------|
@@ -133,7 +133,7 @@ legalis-rs/
 | **Rust Code Lines** | 961,371 | Code only (from tokei) |
 | **Documentation Lines** | 177,689 | Inline Rust documentation (/// and //!) |
 | **Rust Files** | 2,718 | Across 74 workspace crates |
-| **Tests Passing** | 18,398 | cargo nextest: 18,398 passed, 2 skipped (across 136 binaries) |
+| **Tests Passing** | 18,467 | cargo nextest: 18,467 passed, 2 skipped (across 136 binaries) |
 | **Workspace Crates** | 74 | 16 core + 23 jurisdictions + 35 examples |
 | **Jurisdictions** | 23 | AE, AU, BR, CA, CN, DE, EU, FR, ID, IN, JP, KR, LA, MX, MY, RU, SA, SG, TH, UK, US, VN, ZA |
 | **Supported Languages** | 60+ | Multi-language i18n support |
@@ -142,7 +142,7 @@ legalis-rs/
 | **Universal Engine Examples** | 6 | Proof of universal legal computation engine (introduced v0.1.4) |
 
 **Testing Infrastructure**:
-- **Unit Tests**: 18,398 passing (cargo nextest, 2 skipped)
+- **Unit Tests**: 18,467 passing (cargo nextest, 2 skipped)
 - **Integration Tests**: 22+ test files
 - **Benchmark Suites**: 13 Criterion benchmarks
 - **Property-Based Tests**: 10+ tests across multiple crates
@@ -531,6 +531,7 @@ This enables integration with knowledge graphs and semantic web systems, allowin
 ## Documentation
 
 ### Release Notes
+- **[v0.1.7](CHANGELOG.md)** (June 16, 2026) - Version bump and ecosystem updates
 - **[v0.1.6](CHANGELOG.md)** (June 16, 2026) - CUDA GPU acceleration, legalis-api security/governance layer, legalis-audit new modules (autonomous, federation, quantum, scale, tenant), OxiSQL migration (pure Rust), DSL round-trip improvements, French law enhancements
 - **[v0.1.5](RELEASE-0.1.5.md)** (February 2026) - Pure-Rust PDF Backend (fop-render), Full Code Splitting (2,221 Rust files), No-Unwrap Policy, Workspace Versioning, CVE Remediation
 - **[v0.1.4](RELEASE-0.1.4.md)** (January 27, 2026) - **Universal Engine Proof**: 6 new examples proving Legalis-RS is a generic legal computation platform (not country-specific code)

@@ -337,7 +337,7 @@ New module `src/tokenization/` (`mod.rs` + 5 generator files + `tests.rs`, every
 - [x] Add constant propagation
 - [x] Add dead code elimination in contracts
 
-### Formal Methods (v0.1.6)
+### Formal Methods (v0.1.7)
 - [x] Add SMTChecker integration
 - [x] Add Certora spec template generation
 - [x] Add Halmos symbolic testing

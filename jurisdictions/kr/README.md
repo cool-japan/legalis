@@ -2,7 +2,7 @@
 
 Comprehensive South Korean legal system implementation for the Legalis-RS ecosystem.
 
-**Version 0.1.6** — 18 modules, 131 tests passing, 0 warnings.
+**Version 0.1.7** — 18 modules, 131 tests passing, 0 warnings.
 
 ## Overview
 

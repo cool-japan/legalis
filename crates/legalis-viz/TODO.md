@@ -431,7 +431,7 @@ Features:
 - [x] Add annotation sharing
 - [x] Add cursor presence indicators
 
-### Embedding (v0.1.6)
+### Embedding (v0.1.7)
 - [x] Add React component wrapper
 - [x] Add Vue.js component wrapper
 - [x] Add Angular component wrapper
@@ -1023,7 +1023,7 @@ Features:
 - **Performance Optimized**: Hardware-accelerated when available
 - **SVG Fallback**: Small graphs still use SVG
 
-## Web Components (v0.1.6)
+## Web Components (v0.1.7)
 
 ### Web Component Standard
 
@@ -1050,7 +1050,7 @@ Usage:
 <legalis-viz-component data='{"nodes": [...]}' theme='dark'></legalis-viz-component>
 ```
 
-## Framework Integration (v0.1.6)
+## Framework Integration (v0.1.7)
 
 ### React Component Wrapper
 

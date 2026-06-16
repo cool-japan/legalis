@@ -2,7 +2,7 @@
 
 United Kingdom Jurisdiction Support for Legalis-RS
 
-**Version 0.1.6** — 15 modules, 680 tests passing, 0 warnings.
+**Version 0.1.7** — 15 modules, 680 tests passing, 0 warnings.
 
 ## Overview
 
