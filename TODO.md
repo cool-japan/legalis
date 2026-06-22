@@ -558,7 +558,7 @@ The jurisdiction crates now utilize `legalis-core`, `legalis-verifier`, `legalis
 
 - [x] Write architecture decision records (ADRs)
 - [x] Create user guide with tutorials
-- [ ] Add API reference documentation (rustdoc)
+- [x] Add API reference documentation (rustdoc)
 - [x] Create contributor's guide
 - [x] Write deployment guide
 - [x] Add example applications for each use case

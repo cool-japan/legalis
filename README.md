@@ -564,6 +564,27 @@ Detailed technical papers are available in multiple languages:
 
 These papers provide comprehensive coverage of the system architecture, core technologies, design philosophy, and case studies.
 
+### API Reference
+
+Full rustdoc API documentation for every workspace crate is published automatically to [docs.rs](https://docs.rs):
+
+| Crate | docs.rs link | Description |
+|-------|-------------|-------------|
+| `legalis-api` | <https://docs.rs/legalis-api> | REST / GraphQL / gRPC server — routes, handlers, auth, middleware |
+| `legalis-verifier` | <https://docs.rs/legalis-verifier> | Static analysis and formal verification engine |
+| `legalis-core` | <https://docs.rs/legalis-core> | Core types: `LegalResult`, `Statute`, `Condition`, `Effect` |
+| `legalis-eu` | <https://docs.rs/legalis-eu> | European Union jurisdiction module (GDPR, competition law, treaties) |
+| `legalis-dsl` | <https://docs.rs/legalis-dsl> | Legal DSL parser with LSP support |
+| `legalis-registry` | <https://docs.rs/legalis-registry> | Statute registry with distributed Raft consensus |
+| `legalis-sim` | <https://docs.rs/legalis-sim> | Legal simulation engine |
+| `legalis-audit` | <https://docs.rs/legalis-audit> | Audit trail with blockchain anchoring |
+
+To generate documentation locally with all features enabled:
+
+```bash
+cargo doc --workspace --all-features --no-deps --open
+```
+
 ## Sponsorship
 
 Legalis is developed and maintained by **COOLJAPAN OU (Team Kitasan)**.

@@ -2,7 +2,7 @@
 //!
 //! This crate provides comprehensive modeling of EU law across major regulatory areas.
 //!
-//! **Status**: v0.6.0 - Phase 1C Complete ✅
+//! **Status**: 0.1.7 - Phase 1C Complete
 //! - 200+ unit tests passing (0 warnings)
 //! - 25+ comprehensive examples
 //! - Production-ready
@@ -26,7 +26,7 @@
 //!    - Cross-border transfers (Articles 44-49, Chapter V)
 //!    - Administrative fines (Article 83)
 //!
-//! 2. **ePrivacy Directive** (Directive 2002/58/EC) - ✅ NEW in v0.6.0
+//! 2. **ePrivacy Directive** (Directive 2002/58/EC) - ✅ added in 0.1.7
 //!    - Cookie consent requirements (Article 5(3))
 //!    - Direct marketing (Article 13)
 //!    - Location data processing (Article 9)
@@ -34,7 +34,7 @@
 //!
 //! ### Digital Services & Markets
 //!
-//! 3. **Digital Services Act (DSA)** (Regulation EU 2022/2065) - ✅ NEW in v0.6.0
+//! 3. **Digital Services Act (DSA)** (Regulation EU 2022/2065) - ✅ added in 0.1.7
 //!    - Platform classification (VLOP, VLOSE, online platforms)
 //!    - Notice and action mechanism (Article 16)
 //!    - Content moderation transparency (Article 17)
@@ -42,7 +42,7 @@
 //!    - Risk mitigation measures (Article 35)
 //!    - Algorithmic transparency (Article 27)
 //!
-//! 4. **Digital Markets Act (DMA)** (Regulation EU 2022/1925) - ✅ NEW in v0.6.0
+//! 4. **Digital Markets Act (DMA)** (Regulation EU 2022/1925) - ✅ added in 0.1.7
 //!    - Gatekeeper designation (Article 3)
 //!    - Core platform services
 //!    - Gatekeeper obligations (Articles 5-7)
@@ -50,7 +50,7 @@
 //!
 //! ### Artificial Intelligence
 //!
-//! 5. **AI Act** (Regulation EU 2024/1689) - ✅ NEW in v0.6.0
+//! 5. **AI Act** (Regulation EU 2024/1689) - ✅ added in 0.1.7
 //!    - Risk-based classification (unacceptable, high, limited, minimal)
 //!    - Prohibited AI practices (Article 5)
 //!    - High-risk AI requirements (Articles 9-15)
@@ -59,7 +59,7 @@
 //!
 //! ### Financial Services
 //!
-//! 6. **MiFID II** (Directive 2014/65/EU) - ✅ NEW in v0.6.0
+//! 6. **MiFID II** (Directive 2014/65/EU) - ✅ added in 0.1.7
 //!    - Investment services and activities
 //!    - Client categorization (retail, professional, eligible counterparty)
 //!    - Conduct of business rules (Articles 24-25)
@@ -67,7 +67,7 @@
 //!    - Product governance (Article 16)
 //!    - Transaction reporting (Article 26)
 //!
-//! 7. **PSD2** (Directive 2015/2366/EU) - ✅ NEW in v0.6.0
+//! 7. **PSD2** (Directive 2015/2366/EU) - ✅ added in 0.1.7
 //!    - Payment services
 //!    - Strong Customer Authentication (SCA) - Article 97
 //!    - Open banking / API access (Article 67)
@@ -83,7 +83,7 @@
 //!    - Information requirements
 //!    - All 13 exceptions to withdrawal (Article 17)
 //!
-//! 9. **Unfair Commercial Practices Directive** (Directive 2005/29/EC) - ✅ NEW in v0.6.0
+//! 9. **Unfair Commercial Practices Directive** (Directive 2005/29/EC) - ✅ added in 0.1.7
 //!    - Misleading actions and omissions
 //!    - Aggressive practices
 //!    - 31 prohibited practices ("blacklist")

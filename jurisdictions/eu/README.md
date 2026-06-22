@@ -15,7 +15,11 @@ European Union jurisdiction support for Legalis-RS, providing comprehensive mode
 📘 **[GDPR Guide](docs/GDPR_GUIDE.md)** •
 🎨 **[IP Guide](docs/IP_GUIDE.md)** •
 ❓ **[FAQ](docs/FAQ.md)** •
-🤝 **[Contributing](docs/CONTRIBUTING.md)**
+🤝 **[Contributing](docs/CONTRIBUTING.md)** •
+🎓 **[Tutorial: Building GDPR-Compliant Systems](docs/TUTORIAL_GDPR_SYSTEMS.md)** •
+🔄 **[Migration Guide: Manual → legalis-eu](docs/MIGRATION_GUIDE.md)** •
+✅ **[Best Practices Guide](docs/BEST_PRACTICES.md)** •
+📚 **[API Reference](docs/API_REFERENCE.md)**
 
 ## Table of Contents
 

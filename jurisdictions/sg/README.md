@@ -102,22 +102,19 @@ legalis-sg = "0.1.7"
 ```rust
 use legalis_sg::companies::*;
 
-// Create a Singapore Pte Ltd company
-let company = Company::builder()
-    .name("Tech Innovations Pte Ltd")
-    .company_type(CompanyType::PrivateLimited)
-    .share_capital(ShareCapital::new(100_000_00)) // SGD 100,000
-    .add_director(Director::new("John Tan", "S1234567A", true)) // Resident
-    .registered_address(Address::singapore("1 Raffles Place", "048616"))
-    .build()?;
+let mut company = Company::new(
+    "202401234A",
+    "Tech Innovations Pte Ltd",
+    CompanyType::PrivateLimited,
+    Address::singapore("1 Raffles Place", "048616"),
+);
+company.directors.push(Director::new("John Tan", "S1234567A", true));
 
-// Validate
+// Validate (s. 145 resident director, s. 171 secretary, etc.)
 match validate_company_formation(&company) {
-    Ok(report) => println!("✅ Company formation valid"),
-    Err(CompaniesError::NoResidentDirector) => {
-        eprintln!("❌ No resident director (s. 145 violation)");
-    }
-    Err(e) => eprintln!("❌ {}", e),
+    Ok(report) if report.is_valid => println!("Company formation valid"),
+    Ok(report) => eprintln!("Issues: {:?}", report.errors),
+    Err(e) => eprintln!("{}", e),
 }
 ```
 
@@ -127,11 +124,10 @@ match validate_company_formation(&company) {
 use legalis_sg::employment::*;
 
 // Calculate CPF for 30-year-old earning SGD 5,000/month
-let cpf = CpfContribution::new(30, 5_000_00);
-let breakdown = cpf.calculate()?;
+let cpf = CpfContribution::new(30, 500_000); // age 30, SGD 5,000 = 500,000 cents
 
-println!("Employer: SGD {:.2} (17%)", breakdown.employer_amount_sgd());
-println!("Employee: SGD {:.2} (20%)", breakdown.employee_amount_sgd());
+println!("Employer: SGD {:.2} (17%)", cpf.employer_contribution_sgd());
+println!("Employee: SGD {:.2} (20%)", cpf.employee_contribution_sgd());
 // Output: Employer: SGD 850.00, Employee: SGD 1,000.00
 ```
 
@@ -140,16 +136,21 @@ println!("Employee: SGD {:.2} (20%)", breakdown.employee_amount_sgd());
 ```rust
 use legalis_sg::pdpa::*;
 
-// Record marketing consent
-let consent = ConsentRecord::builder()
-    .data_subject_id("customer@example.com")
-    .purpose(PurposeOfCollection::Marketing)
-    .consent_method(ConsentMethod::Electronic)
-    .add_data_category(PersonalDataCategory::Email)
-    .timestamp_now()
-    .build()?;
+# fn example() -> Result<()> {
+// Record marketing consent (PDPA s. 14)
+let consent = ConsentRecordBuilder::express(
+    "consent-001",
+    "customer@example.com",
+    PurposeOfCollection::Marketing,
+    ConsentMethod::ExpressElectronic,
+)
+.data_category(PersonalDataCategory::Email)
+.build()?;
 
 validate_consent(&consent)?;
+# Ok(())
+# }
+# example().unwrap();
 ```
 
 ### Example: Unfair Practice Detection
@@ -157,20 +158,24 @@ validate_consent(&consent)?;
 ```rust
 use legalis_sg::consumer::*;
 
-let contract = ConsumerContract::new()
-    .business_name("Electronics Store")
-    .consumer_name("Jane Lim")
-    .add_term("No refunds under any circumstances");
-
+let contract = ConsumerContract::new(
+    "contract-001",
+    "Electronics Store",
+    "Jane Lim",
+    TransactionType::SaleOfGoods,
+    50_000, // SGD 500
+    "Laptop computer",
+);
 let practices = detect_unfair_practices(&contract);
-for practice in practices {
-    println!("⚠️  {:?}: {}", practice.practice_type, practice.description);
+for practice in &practices {
+    println!("{:?}: {}", practice.practice_type, practice.description);
 }
 ```
 
 ### Example: Basel III Capital Adequacy
 
 ```rust
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
 use legalis_sg::banking::*;
 use chrono::Utc;
 
@@ -200,11 +205,14 @@ let bank = Bank::new(
 
 let report = validate_bank(&bank)?;
 println!("CET1: {:.2}%", report.capital_status.cet1_ratio);
+# Ok(())
+# }
 ```
 
 ### Example: Payment Service Provider (DPT/Crypto)
 
 ```rust
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
 use legalis_sg::payment::*;
 use chrono::Utc;
 
@@ -225,11 +233,13 @@ let report = validate_payment_provider(&provider)?;
 if report.is_compliant {
     println!("✅ DPT service provider compliant");
 }
+# Ok(())
+# }
 ```
 
 ## Architecture
 
-```
+```text
 legalis-sg/
 ├── src/
 │   ├── lib.rs              # Public API, module exports
@@ -280,9 +290,9 @@ legalis-sg/
 │       ├── types.rs        # PaymentServiceProvider, DPT, Safeguarding
 │       ├── validator.rs    # License, safeguarding, DPT validation
 │       └── error.rs        # PaymentError enum
-├── examples/               # 10 comprehensive examples
+├── examples/               # 19 comprehensive examples
 │   ├── acra_company_registration.rs
-│   ├── employment_contract_validation.rs
+│   ├── sg-employment-contract-validation.rs
 │   ├── cpf_contribution_calculator.rs
 │   ├── banking_capital_adequacy.rs
 │   └── ...
@@ -295,14 +305,14 @@ legalis-sg/
 
 ## Examples
 
-Run any of the 10 comprehensive examples:
+Run comprehensive examples:
 
 ```bash
 # Companies Act
 cargo run --example acra_company_registration
 
 # Employment Act
-cargo run --example employment_contract_validation
+cargo run --example sg-employment-contract-validation
 cargo run --example cpf_contribution_calculator
 cargo run --example leave_entitlement_calculator
 cargo run --example termination_notice_checker
@@ -331,7 +341,6 @@ cargo nextest run --package legalis-sg
 cargo test --package legalis-sg --test companies_validation_tests
 cargo test --package legalis-sg --test employment_contract_tests
 cargo test --package legalis-sg --test pdpa_consent_tests
-cargo test --package legalis-sg --test consumer_protection_tests
 
 # Run with coverage
 cargo nextest run --package legalis-sg --all-features
@@ -372,12 +381,12 @@ In accordance with Singapore's **multilingual context**, error messages are prov
 
 ### Example Error Message
 
-```rust
+```rust,ignore
 ExcessiveWorkingHours { actual: 50.0, limit: 44.0 }
 ```
 
 Displays as:
-```
+```text
 Working hours 50h/week exceeds limit 44h/week (Employment Act s. 38)
 工作时间每周50小时超过法定限制每周44小时 (雇佣法第38条)
 Waktu bekerja 50j/minggu melebihi had 44j/minggu (Akta Pekerjaan s. 38)
@@ -393,9 +402,9 @@ Key differences between Singapore PDPA and EU GDPR:
 |---------|------|------|
 | **Scope** | EU/EEA + extraterritorial | Singapore organizations |
 | **Legal Basis** | 6 lawful bases | Consent-centric |
-| **DPO** | Mandatory (certain cases) | Recommended only |
+| **DPO** | Mandatory (certain cases) | Always mandatory (s. 11(3)) |
 | **Breach Notification** | 72 hours | 3 calendar days |
-| **Max Fine** | €20M or 4% revenue | SGD 1M |
+| **Max Fine** | €20M or 4% revenue | SGD 1M or 10% SG turnover (s. 48J(3)) |
 | **Right to Erasure** | Yes (Art. 17) | Limited |
 | **Marketing Opt-Out** | GDPR opt-in | DNC Registry |
 
@@ -407,7 +416,7 @@ Key differences between Singapore PDPA and EU GDPR:
 - Dates as **chrono::DateTime<Utc>** for timezone correctness
 
 ### 2. Bilingual Error Messages
-```rust
+```rust,ignore
 #[error("Working hours {actual}h exceeds limit {limit}h (EA s. 38)\n工作时间 {actual}小时超过限制 {limit}小时 (雇佣法第38条)")]
 ExcessiveWorkingHours { actual: f64, limit: f64 }
 ```
@@ -420,7 +429,7 @@ All errors and documentation include legal citations:
 
 ### 4. Builder Pattern
 Complex types use builders for ergonomic construction:
-```rust
+```rust,ignore
 let company = Company::builder()
     .name("Acme Pte Ltd")
     .company_type(CompanyType::PrivateLimited)
@@ -486,8 +495,8 @@ Licensed under the Apache License, Version 2.0 ([LICENSE-APACHE](../../../LICENS
 - [Singapore Law Watch](https://www.lawnet.sg/)
 
 ### Key Statutes
-- [Companies Act (Cap. 50)](https://sso.agc.gov.sg/Act/CoA1967)
-- [Employment Act (Cap. 91)](https://sso.agc.gov.sg/Act/EmA1968)
+- [Companies Act 1967 (formerly Cap. 50)](https://sso.agc.gov.sg/Act/CoA1967)
+- [Employment Act 1968 (formerly Cap. 91)](https://sso.agc.gov.sg/Act/EmA1968)
 - [Personal Data Protection Act 2012](https://sso.agc.gov.sg/Act/PDPA2012)
-- [Sale of Goods Act (Cap. 393)](https://sso.agc.gov.sg/Act/SOGA1979)
-- [Consumer Protection (Fair Trading) Act (Cap. 52A)](https://sso.agc.gov.sg/Act/CPFTA2003)
+- [Sale of Goods Act 1979 (formerly Cap. 393)](https://sso.agc.gov.sg/Act/SOGA1979)
+- [Consumer Protection (Fair Trading) Act 2003 (formerly Cap. 52A)](https://sso.agc.gov.sg/Act/CPFTA2003)

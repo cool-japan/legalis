@@ -129,8 +129,8 @@ oxiarc-deflate = "0.3.3"
 quick-xml = { version = "0.40", features = ["serialize"] }
 
 # Pure-Rust SQLite-compatible storage (OxiSQL — COOLJAPAN, replaces rusqlite/libsqlite3-sys)
-oxisql-core = "0.2.1"
-oxisql-sqlite-compat = "0.2.1"
+oxisql-core = "0.3.0"
+oxisql-sqlite-compat = "0.3.0"
 
 # HTTP/API
 reqwest = { version = "0.13", features = ["json", "stream"] }

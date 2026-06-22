@@ -12,7 +12,7 @@
 //! * [`StreamingVerifier`] — maintains an internal corpus and verification state,
 //!   accepts a stream of [`StreamEvent`]s, and incrementally updates the
 //!   verification result. Unchanged statutes reuse their previously computed
-//!   per-statute results via [`IncrementalState`].
+//!   per-statute results via `IncrementalState`.
 //! * [`ContinuousComplianceMonitor`] — tracks compliance of a changing rule set
 //!   against any number of registered compliance evaluators and emits
 //!   [`ComplianceAlert`]s when the compliance posture degrades.

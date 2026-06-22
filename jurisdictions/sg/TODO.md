@@ -369,8 +369,8 @@ several inaccurate citations/thresholds); it has been fully re-implemented.
 - [x] All public items have documentation (verified for the 2026-06-14 batch 1 domains; pre-existing modules already documented)
 - [x] All modules have overview documentation (contract/tort/insolvency/competition each have rich `//!` module docs)
 - [x] Code examples in documentation compile (doctests: 58 passed / 11 ignored, incl. new contract & tort doc examples)
-- [ ] README examples are accurate and tested
-- [ ] Statute references accurate (verified against Singapore Statutes Online)
+- [x] README examples are accurate and tested
+- [x] Statute references accurate (verified against Singapore Statutes Online)
 
 ### Performance
 - [x] Validation functions are efficient (< 1ms for typical cases) (contract/tort tests assert < 1ms over 10,000-iteration loops; insolvency/competition include perf-style tests)

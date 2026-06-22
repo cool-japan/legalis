@@ -135,7 +135,7 @@ Deferred (require external infra/services/hardware unavailable in-crate): mTLS, 
 - [x] Create Kubernetes manifests (Deployment, Service, Ingress, HPA, ConfigMap, ServiceMonitor)
 - [x] Implement graceful shutdown
 - [x] Add configuration via environment variables
-- [ ] Create deployment documentation
+- [x] Create deployment documentation
 
 ## Testing
 

@@ -529,3 +529,7 @@ pub use common::{
     is_singapore_holiday,
     is_working_day,
 };
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

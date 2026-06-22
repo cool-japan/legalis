@@ -567,10 +567,10 @@ New `member_states` module layering national GDPR specifics on the existing GDPR
 - [x] Schema generation for GDPR types (schemars with chrono support)
 
 ### Documentation
-- [ ] API reference generation (rustdoc)
-- [ ] Tutorial: Building GDPR-compliant systems
-- [ ] Migration guide from manual compliance checking
-- [ ] Best practices guide
+- [x] API reference generation (rustdoc)
+- [x] Tutorial: Building GDPR-compliant systems
+- [x] Migration guide from manual compliance checking
+- [x] Best practices guide
 
 ### Testing
 - [x] Property-based testing (proptest) - 11 property tests for GDPR Article 6

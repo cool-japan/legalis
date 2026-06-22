@@ -11,7 +11,7 @@
 //! formula.
 //!
 //! The finite-trace LTL semantics are reused from
-//! [`crate::functions_3::check_formula_on_trace`] so behaviour stays consistent
+//! `check_formula_on_trace` so behaviour stays consistent
 //! with the rest of the crate.
 
 use std::collections::{HashSet, VecDeque};

@@ -40,7 +40,7 @@
 //!     50,
 //!     Some(1967)
 //! );
-//! assert_eq!(companies_act.to_string(), "Companies Act (Cap. 50)");
+//! assert_eq!(companies_act.to_string(), "Companies Act 1967");
 //!
 //! // PDPA citation (no chapter)
 //! let pdpa = Statute::without_chapter(
@@ -51,7 +51,7 @@
 //!
 //! // Specific section
 //! let section = companies_act.section(145, Some(1));
-//! assert_eq!(section.to_string(), "Companies Act (Cap. 50), s. 145(1)");
+//! assert_eq!(section.to_string(), "Companies Act 1967, s. 145(1)");
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -147,14 +147,13 @@ impl Statute {
 
 impl fmt::Display for Statute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(chapter) = self.chapter {
-            // Older act with chapter: "Companies Act (Cap. 50)"
-            write!(f, "{} (Cap. {})", self.name, chapter)
-        } else if let Some(year) = self.year {
-            // Modern act without chapter: "Personal Data Protection Act 2012"
+        if let Some(year) = self.year {
+            // Year-based title (Singapore 2020 Revised Edition)
             write!(f, "{} {}", self.name, year)
+        } else if let Some(chapter) = self.chapter {
+            // Fallback: chapter citation for acts without a year
+            write!(f, "{} (Cap. {})", self.name, chapter)
         } else {
-            // Just the name
             write!(f, "{}", self.name)
         }
     }
@@ -355,7 +354,7 @@ mod tests {
     #[test]
     fn test_statute_with_chapter() {
         let ca = Statute::with_chapter("Companies Act", 50, Some(1967));
-        assert_eq!(ca.to_string(), "Companies Act (Cap. 50)");
+        assert_eq!(ca.to_string(), "Companies Act 1967");
         assert_eq!(ca.chapter, Some(50));
     }
 
@@ -370,7 +369,7 @@ mod tests {
     fn test_statute_section() {
         let ca = Statute::with_chapter("Companies Act", 50, Some(1967));
         let section = ca.section(145, Some(1));
-        assert_eq!(section.to_string(), "Companies Act (Cap. 50), s. 145(1)");
+        assert_eq!(section.to_string(), "Companies Act 1967, s. 145(1)");
     }
 
     #[test]
@@ -402,7 +401,7 @@ mod tests {
         };
         assert_eq!(
             citation.to_string(),
-            "Companies Regulations Companies Act (Cap. 50) (Cap. 50, Rg 1), reg. 3"
+            "Companies Regulations Companies Act 1967 (Cap. 50, Rg 1), reg. 3"
         );
     }
 
