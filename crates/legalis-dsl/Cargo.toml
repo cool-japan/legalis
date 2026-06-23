@@ -13,19 +13,19 @@ legalis-core.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml = "0.9"
+serde_yaml.workspace = true
 toml.workspace = true
 thiserror.workspace = true
-regex = "1"
-rustyline = "18"
-tower-lsp = "0.20"
-tokio = { version = "1", features = ["full"] }
-env_logger = "0.11"
+regex.workspace = true
+rustyline.workspace = true
+tower-lsp.workspace = true
+tokio.workspace = true
+env_logger.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
-proptest = "1"
-insta = { version = "1", features = ["json", "yaml"] }
+proptest.workspace = true
+insta = { workspace = true, features = ["json", "yaml"] }
 tempfile.workspace = true
 
 [[bench]]

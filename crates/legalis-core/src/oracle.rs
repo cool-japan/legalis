@@ -4,6 +4,7 @@
 //! the blockchain for legal statute evaluation.
 
 use crate::EvaluationContext;
+use chrono::Datelike;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -328,12 +329,20 @@ impl EvaluationContext for OracleContext {
             .map(|i| i as u64)
     }
 
-    fn get_percentage(&self, _key: &str) -> Option<u32> {
-        None // Not implemented for simplicity
+    fn get_percentage(&self, key: &str) -> Option<u32> {
+        self.registry
+            .get_value(&format!("{}-{}", self.entity_id, key))
+            .and_then(|v| v.as_integer())
+            .map(|i| i as u32)
     }
 
-    fn evaluate_formula(&self, _formula: &str) -> Option<f64> {
-        None // Not implemented for simplicity
+    fn evaluate_formula(&self, formula: &str) -> Option<f64> {
+        let resolve = |name: &str| -> Option<f64> {
+            self.registry
+                .get_value(&format!("{}-{}", self.entity_id, name))
+                .and_then(|v| v.as_float())
+        };
+        formula_eval::eval(formula, &resolve).ok()
     }
 
     fn get_current_timestamp(&self) -> Option<i64> {
@@ -341,7 +350,7 @@ impl EvaluationContext for OracleContext {
     }
 
     fn get_current_date(&self) -> Option<chrono::NaiveDate> {
-        None // Not implemented for simplicity
+        Some(chrono::Utc::now().date_naive())
     }
 
     fn check_geographic(&self, _region_type: crate::RegionType, _region_id: &str) -> bool {
@@ -357,7 +366,27 @@ impl EvaluationContext for OracleContext {
     }
 
     fn get_residency_months(&self) -> Option<u32> {
-        None // Not implemented for simplicity
+        // Check for directly stored residency_months attribute
+        if let Some(months) = self
+            .registry
+            .get_value(&format!("{}-residency_months", self.entity_id))
+            .and_then(|v| v.as_integer())
+        {
+            return Some(months as u32);
+        }
+        // Compute from residency_start date if available (ISO 8601 string)
+        self.registry
+            .get_value(&format!("{}-residency_start", self.entity_id))
+            .and_then(|v| {
+                v.as_string()
+                    .and_then(|s| s.parse::<chrono::NaiveDate>().ok())
+            })
+            .map(|start| {
+                let today = chrono::Utc::now().date_naive();
+                let months = (today.year() - start.year()) * 12 + today.month() as i32
+                    - start.month() as i32;
+                months.max(0) as u32
+            })
     }
 
     fn get_duration(&self, _unit: crate::DurationUnit) -> Option<u32> {
@@ -371,6 +400,314 @@ fn current_timestamp() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+/// Pure-Rust recursive-descent arithmetic formula evaluator.
+///
+/// Supports literals, variables, `+` `-` `*` `/` `()` grouping, and
+/// comparison operators `<` `>` `<=` `>=` `==` `!=`.
+/// Operator precedence: comparison < add/sub < mul/div < unary < primary.
+///
+/// # Safety
+/// This is a self-contained Rust parser with no dynamic code execution.
+/// It operates purely on the input string and a variable-resolver closure.
+pub(crate) mod formula_eval {
+    #[derive(Debug, Clone, PartialEq)]
+    enum Token {
+        Number(f64),
+        Ident(String),
+        Plus,
+        Minus,
+        Star,
+        Slash,
+        Lt,
+        Gt,
+        Le,
+        Ge,
+        Eq,
+        Ne,
+        LParen,
+        RParen,
+        Eof,
+    }
+
+    struct Lexer<'a> {
+        bytes: &'a [u8],
+        pos: usize,
+    }
+
+    impl<'a> Lexer<'a> {
+        fn new(input: &'a str) -> Self {
+            Self {
+                bytes: input.as_bytes(),
+                pos: 0,
+            }
+        }
+
+        fn skip_ws(&mut self) {
+            while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_whitespace() {
+                self.pos += 1;
+            }
+        }
+
+        fn next_token(&mut self) -> Result<Token, String> {
+            self.skip_ws();
+            if self.pos >= self.bytes.len() {
+                return Ok(Token::Eof);
+            }
+            match self.bytes[self.pos] {
+                b'+' => {
+                    self.pos += 1;
+                    Ok(Token::Plus)
+                }
+                b'-' => {
+                    self.pos += 1;
+                    Ok(Token::Minus)
+                }
+                b'*' => {
+                    self.pos += 1;
+                    Ok(Token::Star)
+                }
+                b'/' => {
+                    self.pos += 1;
+                    Ok(Token::Slash)
+                }
+                b'(' => {
+                    self.pos += 1;
+                    Ok(Token::LParen)
+                }
+                b')' => {
+                    self.pos += 1;
+                    Ok(Token::RParen)
+                }
+                b'<' => {
+                    if self.pos + 1 < self.bytes.len() && self.bytes[self.pos + 1] == b'=' {
+                        self.pos += 2;
+                        Ok(Token::Le)
+                    } else {
+                        self.pos += 1;
+                        Ok(Token::Lt)
+                    }
+                }
+                b'>' => {
+                    if self.pos + 1 < self.bytes.len() && self.bytes[self.pos + 1] == b'=' {
+                        self.pos += 2;
+                        Ok(Token::Ge)
+                    } else {
+                        self.pos += 1;
+                        Ok(Token::Gt)
+                    }
+                }
+                b'=' if self.pos + 1 < self.bytes.len() && self.bytes[self.pos + 1] == b'=' => {
+                    self.pos += 2;
+                    Ok(Token::Eq)
+                }
+                b'!' if self.pos + 1 < self.bytes.len() && self.bytes[self.pos + 1] == b'=' => {
+                    self.pos += 2;
+                    Ok(Token::Ne)
+                }
+                b'0'..=b'9' | b'.' => {
+                    let start = self.pos;
+                    while self.pos < self.bytes.len()
+                        && (self.bytes[self.pos].is_ascii_digit() || self.bytes[self.pos] == b'.')
+                    {
+                        self.pos += 1;
+                    }
+                    let s = std::str::from_utf8(&self.bytes[start..self.pos])
+                        .map_err(|_| "invalid UTF-8 in number".to_string())?;
+                    s.parse::<f64>()
+                        .map(Token::Number)
+                        .map_err(|_| format!("invalid number: {}", s))
+                }
+                c if c.is_ascii_alphabetic() || c == b'_' => {
+                    let start = self.pos;
+                    while self.pos < self.bytes.len()
+                        && (self.bytes[self.pos].is_ascii_alphanumeric()
+                            || self.bytes[self.pos] == b'_')
+                    {
+                        self.pos += 1;
+                    }
+                    let s = std::str::from_utf8(&self.bytes[start..self.pos])
+                        .map_err(|_| "invalid UTF-8 in identifier".to_string())?;
+                    Ok(Token::Ident(s.to_string()))
+                }
+                c => Err(format!("unexpected character: {}", c as char)),
+            }
+        }
+    }
+
+    struct Parser<'a> {
+        lexer: Lexer<'a>,
+        current: Token,
+        resolve: &'a dyn Fn(&str) -> Option<f64>,
+    }
+
+    impl<'a> Parser<'a> {
+        fn new(input: &'a str, resolve: &'a dyn Fn(&str) -> Option<f64>) -> Result<Self, String> {
+            let mut lexer = Lexer::new(input);
+            let current = lexer.next_token()?;
+            Ok(Self {
+                lexer,
+                current,
+                resolve,
+            })
+        }
+
+        fn advance(&mut self) -> Result<(), String> {
+            self.current = self.lexer.next_token()?;
+            Ok(())
+        }
+
+        fn parse_expr(&mut self) -> Result<f64, String> {
+            self.parse_comparison()
+        }
+
+        fn parse_comparison(&mut self) -> Result<f64, String> {
+            let mut left = self.parse_additive()?;
+            loop {
+                let tok = self.current.clone();
+                match tok {
+                    Token::Lt => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if left < r { 1.0 } else { 0.0 };
+                    }
+                    Token::Gt => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if left > r { 1.0 } else { 0.0 };
+                    }
+                    Token::Le => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if left <= r { 1.0 } else { 0.0 };
+                    }
+                    Token::Ge => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if left >= r { 1.0 } else { 0.0 };
+                    }
+                    Token::Eq => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if (left - r).abs() < f64::EPSILON {
+                            1.0
+                        } else {
+                            0.0
+                        };
+                    }
+                    Token::Ne => {
+                        self.advance()?;
+                        let r = self.parse_additive()?;
+                        left = if (left - r).abs() >= f64::EPSILON {
+                            1.0
+                        } else {
+                            0.0
+                        };
+                    }
+                    _ => break,
+                }
+            }
+            Ok(left)
+        }
+
+        fn parse_additive(&mut self) -> Result<f64, String> {
+            let mut left = self.parse_multiplicative()?;
+            loop {
+                let tok = self.current.clone();
+                match tok {
+                    Token::Plus => {
+                        self.advance()?;
+                        left += self.parse_multiplicative()?;
+                    }
+                    Token::Minus => {
+                        self.advance()?;
+                        left -= self.parse_multiplicative()?;
+                    }
+                    _ => break,
+                }
+            }
+            Ok(left)
+        }
+
+        fn parse_multiplicative(&mut self) -> Result<f64, String> {
+            let mut left = self.parse_unary()?;
+            loop {
+                let tok = self.current.clone();
+                match tok {
+                    Token::Star => {
+                        self.advance()?;
+                        left *= self.parse_unary()?;
+                    }
+                    Token::Slash => {
+                        self.advance()?;
+                        let right = self.parse_unary()?;
+                        if right == 0.0 {
+                            return Err("division by zero".to_string());
+                        }
+                        left /= right;
+                    }
+                    _ => break,
+                }
+            }
+            Ok(left)
+        }
+
+        fn parse_unary(&mut self) -> Result<f64, String> {
+            let tok = self.current.clone();
+            if let Token::Minus = tok {
+                self.advance()?;
+                return Ok(-self.parse_unary()?);
+            }
+            self.parse_primary()
+        }
+
+        fn parse_primary(&mut self) -> Result<f64, String> {
+            let tok = self.current.clone();
+            match tok {
+                Token::Number(n) => {
+                    self.advance()?;
+                    Ok(n)
+                }
+                Token::Ident(name) => {
+                    self.advance()?;
+                    (self.resolve)(&name).ok_or_else(|| format!("unknown variable: {}", name))
+                }
+                Token::LParen => {
+                    self.advance()?;
+                    let val = self.parse_expr()?;
+                    let is_rparen = matches!(self.current, Token::RParen);
+                    if is_rparen {
+                        self.advance()?;
+                        Ok(val)
+                    } else {
+                        Err("expected closing parenthesis".to_string())
+                    }
+                }
+                Token::Eof => Err("unexpected end of formula".to_string()),
+                _ => Err("unexpected token in expression".to_string()),
+            }
+        }
+    }
+
+    /// Evaluates an arithmetic formula string with a variable resolver closure.
+    ///
+    /// Returns `Ok(f64)` on success, or `Err(reason)` on failure.
+    /// The `resolve_var` closure maps variable names to their numeric values.
+    ///
+    /// This is a safe, pure-Rust recursive-descent parser — no dynamic
+    /// code execution or external crate dependencies.
+    pub(crate) fn eval(
+        formula: &str,
+        resolve_var: &dyn Fn(&str) -> Option<f64>,
+    ) -> Result<f64, String> {
+        let mut parser = Parser::new(formula, resolve_var)?;
+        let result = parser.parse_expr()?;
+        if !matches!(parser.current, Token::Eof) {
+            return Err("unexpected tokens after expression".to_string());
+        }
+        Ok(result)
+    }
 }
 
 /// Oracle request for fetching data
@@ -568,6 +905,84 @@ mod tests {
         assert_eq!(
             OracleSource::GovernmentDb.to_string(),
             "Government Database"
+        );
+    }
+
+    #[test]
+    fn test_get_percentage_found() {
+        let mut registry = OracleRegistry::new();
+        registry.register_feed(
+            "entity-1-ownership",
+            OracleSource::InternalDb,
+            OracleValue::Integer(30),
+        );
+        let context = OracleContext::new("entity-1", registry);
+        assert_eq!(context.get_percentage("ownership"), Some(30));
+    }
+
+    #[test]
+    fn test_get_percentage_not_found() {
+        let registry = OracleRegistry::new();
+        let context = OracleContext::new("entity-1", registry);
+        assert_eq!(context.get_percentage("ownership"), None);
+    }
+
+    #[test]
+    fn test_get_current_date_returns_something() {
+        let registry = OracleRegistry::new();
+        let context = OracleContext::new("entity-1", registry);
+        let date = context.get_current_date();
+        assert!(date.is_some());
+        // Year must be reasonable (2020 or later)
+        assert!(date.unwrap().year() >= 2020);
+    }
+
+    #[test]
+    fn test_get_residency_months_from_stored_value() {
+        let mut registry = OracleRegistry::new();
+        registry.register_feed(
+            "entity-1-residency_months",
+            OracleSource::GovernmentDb,
+            OracleValue::Integer(24),
+        );
+        let context = OracleContext::new("entity-1", registry);
+        assert_eq!(context.get_residency_months(), Some(24));
+    }
+
+    #[test]
+    fn test_evaluate_formula_basic_arithmetic() {
+        let registry = OracleRegistry::new();
+        let context = OracleContext::new("entity-1", registry);
+        assert_eq!(context.evaluate_formula("2 + 3 * 4"), Some(14.0));
+    }
+
+    #[test]
+    fn test_evaluate_formula_precedence_with_parens() {
+        let registry = OracleRegistry::new();
+        let context = OracleContext::new("entity-1", registry);
+        assert_eq!(context.evaluate_formula("(2 + 3) * 4"), Some(20.0));
+    }
+
+    #[test]
+    fn test_evaluate_formula_division_by_zero() {
+        // Test the underlying evaluator directly for error detail
+        let resolver = |_: &str| -> Option<f64> { None };
+        let result = super::formula_eval::eval("5 / 0", &resolver);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("division by zero"),
+            "Expected 'division by zero' error"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_formula_unknown_variable() {
+        let resolver = |_: &str| -> Option<f64> { None };
+        let result = super::formula_eval::eval("x + 1", &resolver);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("unknown variable"),
+            "Expected 'unknown variable' error"
         );
     }
 }

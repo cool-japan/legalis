@@ -35,33 +35,33 @@ serde_yaml.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 clap.workspace = true
-clap_complete = "4.6"
-clap_mangen = "0.3"
+clap_complete.workspace = true
+clap_mangen.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 toml.workspace = true
-dirs = "6.0"
-colored = "3.1"
-comfy-table = "7.2"
-rustyline = "18.0"
-indicatif = "0.18"
-csv = "1.4"
+dirs.workspace = true
+colored.workspace = true
+comfy-table.workspace = true
+rustyline.workspace = true
+indicatif.workspace = true
+csv.workspace = true
 rayon.workspace = true
-glob = "0.3"
+glob.workspace = true
 num_cpus.workspace = true
-terminal_size = "0.4"
+terminal_size.workspace = true
 mlua = { version = "0.11", features = ["lua54", "vendored", "serialize"] }
-ratatui = "0.30"
-crossterm = "0.29"
+ratatui.workspace = true
+crossterm.workspace = true
 uuid.workspace = true
-whoami = "2.1"
+whoami.workspace = true
 
 [dev-dependencies]
-assert_cmd = "2.2"
-predicates = "3.1"
+assert_cmd.workspace = true
+predicates.workspace = true
 tempfile.workspace = true
-insta = { version = "1.48", features = ["yaml"] }
+insta = { workspace = true, features = ["yaml"] }
 criterion = { workspace = true, features = ["html_reports"] }
 
 [[bench]]

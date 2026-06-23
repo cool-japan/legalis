@@ -655,17 +655,20 @@ impl Condition {
             _ => Ok(true),
         }
     }
-    /// Evaluates a simple formula.
-    /// This is a basic implementation - can be extended with a proper expression parser.
-    #[allow(dead_code)]
-    fn evaluate_formula(
-        formula: &str,
-        _ctx: &AttributeBasedContext,
-    ) -> Result<f64, ConditionError> {
-        Err(ConditionError::InvalidFormula {
-            formula: formula.to_string(),
-            error: "Formula evaluation not yet implemented - consider using 'meval' or 'evalexpr' crate"
-                .to_string(),
+    /// Evaluates a formula using the shared pure-Rust recursive-descent parser.
+    ///
+    /// Variables are resolved from `ctx.attributes` by parsing their string
+    /// values as `f64`. Returns `Err(ConditionError::InvalidFormula)` on any
+    /// parse or evaluation failure.
+    fn evaluate_formula(formula: &str, ctx: &AttributeBasedContext) -> Result<f64, ConditionError> {
+        let resolve = |name: &str| -> Option<f64> {
+            ctx.attributes.get(name).and_then(|s| s.parse::<f64>().ok())
+        };
+        crate::oracle::formula_eval::eval(formula, &resolve).map_err(|reason| {
+            ConditionError::InvalidFormula {
+                formula: formula.to_string(),
+                error: reason,
+            }
         })
     }
     /// Evaluates this condition using the `EvaluationContext` trait.
@@ -1663,5 +1666,21 @@ impl StatuteDiff {
     #[must_use]
     pub fn change_count(&self) -> usize {
         self.changes.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_evaluate_formula_types5_basic() {
+        // formula "x + 1" with x=5 should return 6.0
+        let mut attrs = HashMap::new();
+        attrs.insert("x".to_string(), "5".to_string());
+        let ctx = AttributeBasedContext::new(attrs);
+        let result = Condition::evaluate_formula("x + 1", &ctx);
+        assert_eq!(result, Ok(6.0));
     }
 }

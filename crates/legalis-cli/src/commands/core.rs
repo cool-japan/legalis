@@ -1346,6 +1346,13 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
     use std::time::Duration;
     use tokio::time::sleep;
 
+    if inputs.is_empty() {
+        eprintln!("Error: at least one file path is required.");
+        eprintln!("Usage: legalis watch <FILE>... <COMMAND>");
+        eprintln!("Run `legalis watch --help` for more information.");
+        return Err(anyhow::anyhow!("No file paths provided to watch"));
+    }
+
     println!("Watching files: {:?}", inputs);
     println!("Command: {:?}", command);
 
@@ -1379,7 +1386,56 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
                         let _ = handle_lint(std::slice::from_ref(input), false, false);
                     }
                     WatchCommand::Test => {
-                        println!("Test command not yet implemented");
+                        match std::process::Command::new("cargo")
+                            .args(["test"])
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .output()
+                        {
+                            Ok(output) => {
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                let combined = format!("{}{}", stdout, stderr);
+
+                                let mut total_passed = 0usize;
+                                let mut total_failed = 0usize;
+                                for line in combined.lines() {
+                                    if line.contains("test result:") {
+                                        if let Some(p) = parse_test_count(line, "passed") {
+                                            total_passed += p;
+                                        }
+                                        if let Some(f) = parse_test_count(line, "failed") {
+                                            total_failed += f;
+                                        }
+                                    }
+                                }
+
+                                if output.status.success() {
+                                    println!(
+                                        "{} Tests: {} passed",
+                                        "✓".green(),
+                                        total_passed.to_string().green()
+                                    );
+                                } else {
+                                    println!(
+                                        "{} Tests: {} passed, {} failed",
+                                        "✗".red(),
+                                        total_passed.to_string().green(),
+                                        total_failed.to_string().red()
+                                    );
+                                    for line in combined.lines().filter(|l| {
+                                        l.contains("FAILED")
+                                            || l.contains("test result:")
+                                            || l.starts_with("error")
+                                    }) {
+                                        println!("  {}", line);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("{} Failed to run cargo test: {}", "Error:".red(), e);
+                            }
+                        }
                     }
                     WatchCommand::Format => {
                         let _ = handle_format(input, None, true, &FormatStyle::Default, false);
@@ -1388,5 +1444,49 @@ pub async fn handle_watch(inputs: &[String], command: &WatchCommand) -> Result<(
                 last_modified.insert(input.clone(), modified);
             }
         }
+    }
+}
+
+/// Parses an integer count that precedes `keyword` in a `cargo test` output line.
+///
+/// For example, given `"test result: ok. 5 passed; 0 failed;"` and keyword `"passed"`,
+/// this returns `Some(5)`.
+fn parse_test_count(line: &str, keyword: &str) -> Option<usize> {
+    let pos = line.find(keyword)?;
+    // Grab all text before the keyword, trim trailing whitespace, then take
+    // the last whitespace-separated token (the count immediately before the keyword).
+    let before = line[..pos].trim_end();
+    before.split_whitespace().last()?.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_watch_test_arm_exists() {
+        // Structural test: verify WatchCommand::Test is a valid variant and
+        // that the match in handle_watch handles it (compilation proves this).
+        let cmd = WatchCommand::Test;
+        let is_test = matches!(cmd, WatchCommand::Test);
+        assert!(is_test, "WatchCommand::Test should be a valid variant");
+    }
+
+    #[test]
+    fn test_parse_test_count_passed() {
+        let line = "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured;";
+        assert_eq!(parse_test_count(line, "passed"), Some(5));
+    }
+
+    #[test]
+    fn test_parse_test_count_failed() {
+        let line = "test result: FAILED. 3 passed; 2 failed; 0 ignored;";
+        assert_eq!(parse_test_count(line, "failed"), Some(2));
+    }
+
+    #[test]
+    fn test_parse_test_count_missing() {
+        // keyword absent → None
+        assert_eq!(parse_test_count("unrelated line", "passed"), None);
     }
 }

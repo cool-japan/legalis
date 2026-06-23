@@ -1,0 +1,5 @@
+STATUTE sample-adult-rights: "Sample Adult Rights Act" {
+    WHEN AGE >= 18
+    THEN GRANT "Full legal capacity"
+    DISCRETION "Consider individual maturity in exceptional cases"
+}

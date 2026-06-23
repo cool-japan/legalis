@@ -18,7 +18,7 @@ thiserror.workspace = true
 chrono.workspace = true
 indexmap.workspace = true
 num_cpus.workspace = true
-wide = "1.5"
+wide.workspace = true
 rand.workspace = true
 cudarc = { workspace = true, optional = true }
 

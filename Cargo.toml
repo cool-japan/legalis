@@ -133,10 +133,10 @@ oxisql-core = "0.3.0"
 oxisql-sqlite-compat = "0.3.0"
 
 # HTTP/API
-reqwest = { version = "0.13", features = ["json", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-no-provider"] }
 axum = "0.8"
 tower = "0.5"
-tower-http = { version = "0.7", features = ["cors", "trace", "compression-full"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "compression-gzip", "compression-deflate"] }
 governor = "0.10"
 
 # GraphQL
@@ -181,6 +181,94 @@ cudarc = { version = "0.19", default-features = false, features = [
     "std",
     "dynamic-loading",
 ] }
+
+# Additional dependencies
+
+# Monitoring / metrics
+prometheus = "0.14"
+lazy_static = "1.5"
+
+# Async utilities
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = "0.7"
+bytes = "1.11"
+
+# URL parsing
+url = "2.5"
+
+# OpenTelemetry
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.33"
+
+# Caching / auth
+redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
+oauth2 = "5.0"
+
+# gRPC / Protobuf
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
+tonic-reflection = "0.14"
+tonic-health = "0.14"
+tonic-web = "0.14"
+tonic-build = "0.14"
+tonic-prost-build = "0.14"
+
+# Text matching / search
+regex-lite = "0.1"
+fuzzy-matcher = "0.3"
+
+# Encryption
+aes-gcm = "0.10"
+
+# Office / spreadsheet
+rust_xlsxwriter = "0.95"
+
+# Logging
+env_logger = "0.11"
+
+# REPL / LSP
+rustyline = "18"
+tower-lsp = "0.20"
+
+# Testing / snapshots
+insta = { version = "1", features = ["json", "yaml"] }
+tokio-test = "0.4"
+
+# Numerics
+ordered-float = "5.3"
+
+# Hashing
+md5 = "0.8"
+
+# SIMD
+wide = "1.5"
+
+# CLI extras
+clap_complete = "4.6"
+clap_mangen = "0.3"
+dirs = "6.0"
+colored = "3.1"
+comfy-table = "7.2"
+indicatif = "0.18"
+csv = "1.4"
+glob = "0.3"
+terminal_size = "0.4"
+
+# TUI
+ratatui = "0.30"
+crossterm = "0.29"
+
+# System info
+whoami = "2.1"
+
+# Integration testing
+assert_cmd = "2.2"
+predicates = "3.1"
+once_cell = "1.21"
 
 # Internal crates
 legalis-core = { version = "0.1.7", path = "crates/legalis-core" }

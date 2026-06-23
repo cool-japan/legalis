@@ -280,12 +280,60 @@ impl MacroExpander {
     ) -> Result<Option<ConditionNode>, MacroExpansionError> {
         match template {
             ConditionTemplate::Direct(cond) => Ok(Some(cond.clone())),
-            ConditionTemplate::Placeholder(_param) => {
-                // For now, we don't support condition placeholders directly
-                // This would require parsing the parameter value as a condition
-                Err(MacroExpansionError::UnsupportedFeature(
-                    "Condition placeholders not yet implemented".to_string(),
-                ))
+            ConditionTemplate::Placeholder(param) => {
+                // Retrieve the condition expression string from the expansion context.
+                // `param` is a macro parameter name whose bound value must be a
+                // parseable condition expression (e.g. "age >= 18").
+                let condition_str = match context.get(param) {
+                    Some(values) => values
+                        .first()
+                        .ok_or_else(|| {
+                            MacroExpansionError::InvalidArgument(format!(
+                                "Condition placeholder '{}' is bound but has no values",
+                                param
+                            ))
+                        })?
+                        .clone(),
+                    None => {
+                        // Fall back: treat `param` as a template string that may
+                        // contain ${...} references and substitute them first.
+                        let substituted = context.substitute(param);
+                        if substituted == *param {
+                            return Err(MacroExpansionError::InvalidArgument(format!(
+                                "Condition placeholder '{}' is not bound in the expansion context",
+                                param
+                            )));
+                        }
+                        substituted
+                    }
+                };
+
+                // Tokenize the condition expression string.
+                let parser = crate::LegalDslParser::new();
+                let spanned_tokens = parser.tokenize(&condition_str).map_err(|e| {
+                    MacroExpansionError::InvalidArgument(format!(
+                        "Failed to tokenize condition for placeholder '{}': {}",
+                        param, e
+                    ))
+                })?;
+
+                // Parse the token stream as a ConditionNode.
+                let mut iter = spanned_tokens.iter().map(|st| &st.token).peekable();
+                let cond_node = parser.parse_condition_node(&mut iter).map_err(|e| {
+                    MacroExpansionError::InvalidArgument(format!(
+                        "Failed to parse condition for placeholder '{}': {}",
+                        param, e
+                    ))
+                })?;
+
+                match cond_node {
+                    Some(cond) => Ok(Some(cond)),
+                    None => Err(MacroExpansionError::InvalidArgument(format!(
+                        "Condition placeholder '{}' produced an empty condition \
+                         from value '{}'",
+                        param, condition_str
+                    ))),
+                }
             }
             ConditionTemplate::Conditional {
                 condition,
@@ -612,6 +660,62 @@ mod tests {
         assert!(result.is_ok());
         let statute = result.unwrap();
         assert_eq!(statute.title, "My List");
+    }
+
+    #[test]
+    fn test_placeholder_expansion_valid() {
+        let mut expander = MacroExpander::new();
+        // Build a macro whose sole condition is a Placeholder.
+        let macro_def = MacroDefinition {
+            name: "cond_macro".to_string(),
+            parameters: vec![MacroParameter {
+                name: "cond_expr".to_string(),
+                is_variadic: false,
+                default: None,
+            }],
+            body: MacroBody {
+                title: "Conditional statute".to_string(),
+                conditions: vec![ConditionTemplate::Placeholder("cond_expr".to_string())],
+                effects: vec![],
+                conditionals: vec![],
+            },
+        };
+        expander.define(macro_def);
+
+        // "age >= 18" is a valid condition expression.
+        let result = expander.expand("cond_macro", vec!["age >= 18".to_string()]);
+        assert!(
+            result.is_ok(),
+            "Expected Ok but got: {:?}",
+            result.unwrap_err()
+        );
+        let statute = result.unwrap();
+        assert_eq!(statute.conditions.len(), 1);
+    }
+
+    #[test]
+    fn test_placeholder_expansion_invalid_param() {
+        let mut expander = MacroExpander::new();
+        // Build a macro that references an unbound condition placeholder.
+        let macro_def = MacroDefinition {
+            name: "unbound_macro".to_string(),
+            parameters: vec![],
+            body: MacroBody {
+                title: "Unbound placeholder".to_string(),
+                // The placeholder name is not in the context — must return Err, not panic.
+                conditions: vec![ConditionTemplate::Placeholder("missing_cond".to_string())],
+                effects: vec![],
+                conditionals: vec![],
+            },
+        };
+        expander.define(macro_def);
+
+        let result = expander.expand("unbound_macro", vec![]);
+        assert!(result.is_err(), "Expected Err for unbound placeholder");
+        assert!(matches!(
+            result.unwrap_err(),
+            MacroExpansionError::InvalidArgument(_)
+        ));
     }
 
     #[test]

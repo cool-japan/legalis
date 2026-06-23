@@ -1,0 +1,15 @@
+# Legalis Project Configuration
+version: "0.2.0"
+
+# Default jurisdiction
+jurisdiction: "JP"
+
+# Verification settings
+verification:
+  strict: false
+  constitutional_checks: true
+
+# Output settings
+output:
+  format: "json"
+  directory: "./output"

@@ -717,8 +717,10 @@ mod tests {
 
     #[test]
     fn test_resolve_config_path_explicit() {
-        let path = resolve_config_path(Some("/tmp/whatever.toml")).expect("explicit");
-        assert_eq!(path, PathBuf::from("/tmp/whatever.toml"));
+        let tmp = std::env::temp_dir().join("whatever.toml");
+        let tmp_str = tmp.to_str().expect("valid path");
+        let path = resolve_config_path(Some(tmp_str)).expect("explicit");
+        assert_eq!(path, tmp);
     }
 
     #[test]

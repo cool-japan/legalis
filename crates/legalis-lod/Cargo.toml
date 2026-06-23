@@ -16,6 +16,6 @@ chrono.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 rand.workspace = true
-ordered-float = "5.3"
+ordered-float.workspace = true
 sha2.workspace = true
 hex.workspace = true

@@ -15,13 +15,13 @@ serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 sha2.workspace = true
-regex-lite = "0.1"
-quick-xml = { version = "0.40", features = ["serialize"] }
-rayon = { version = "1.12", optional = true }
-tokio = { version = "1.52", features = ["rt", "fs"], optional = true }
+regex-lite.workspace = true
+quick-xml.workspace = true
+rayon = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 walkdir = { version = "2.5", optional = true }
 notify = { version = "8.2", optional = true }
-serde_yaml = { version = "0.9", optional = true }
+serde_yaml = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -31,7 +31,7 @@ batch = ["walkdir", "notify", "serde_yaml", "rayon"]
 
 [dev-dependencies]
 criterion.workspace = true
-tokio = { version = "1.52", features = ["macros", "rt"] }
+tokio.workspace = true
 tempfile.workspace = true
 
 [[bench]]

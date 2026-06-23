@@ -112,20 +112,10 @@ pub enum OffenceMensRea {
 ///   is present.
 pub fn check_mens_rea(offence: OffenceMensRea, actor: Schuldform) -> Result<()> {
     match offence {
-        OffenceMensRea::VorsatzOnly => {
-            if actor.is_vorsatz() {
-                Ok(())
-            } else {
-                Err(StgbError::FahrlaessigkeitNichtStrafbar)
-            }
-        }
-        OffenceMensRea::FahrlaessigkeitPunishable => {
-            if actor.is_at_least_negligence() {
-                Ok(())
-            } else {
-                Err(StgbError::NoSchuldform)
-            }
-        }
+        OffenceMensRea::VorsatzOnly if actor.is_vorsatz() => Ok(()),
+        OffenceMensRea::VorsatzOnly => Err(StgbError::FahrlaessigkeitNichtStrafbar),
+        OffenceMensRea::FahrlaessigkeitPunishable if actor.is_at_least_negligence() => Ok(()),
+        OffenceMensRea::FahrlaessigkeitPunishable => Err(StgbError::NoSchuldform),
     }
 }
 

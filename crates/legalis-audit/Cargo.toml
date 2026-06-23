@@ -19,12 +19,12 @@ tracing.workspace = true
 oxisql-core.workspace = true
 oxisql-sqlite-compat.workspace = true
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros"] }
-aes-gcm = "0.10"
+tokio.workspace = true
+aes-gcm.workspace = true
 base64.workspace = true
 rand.workspace = true
 fop-render.workspace = true
-rust_xlsxwriter = "0.95"
+rust_xlsxwriter.workspace = true
 oxiarc-deflate.workspace = true
 num_cpus.workspace = true
 hostname = "0.4"

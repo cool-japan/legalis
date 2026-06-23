@@ -17,18 +17,18 @@ uuid.workspace = true
 chrono.workspace = true
 indexmap.workspace = true
 lru.workspace = true
-fuzzy-matcher = "0.3"
-serde_yaml = { version = "0.9", optional = true }
-csv = { version = "1.4", optional = true }
+fuzzy-matcher.workspace = true
+serde_yaml = { workspace = true, optional = true }
+csv = { workspace = true, optional = true }
 oxiarc-deflate = { workspace = true, optional = true }
-tokio = { version = "1.52", features = ["sync", "macros", "rt-multi-thread"], optional = true }
-futures = { version = "0.3", optional = true }
+tokio = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
 async-stream = { version = "0.3", optional = true }
-quick-xml = { version = "0.40", features = ["serialize"], optional = true }
+quick-xml = { workspace = true, optional = true }
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "uuid", "json"], optional = true }
 async-graphql = { workspace = true, optional = true }
 async-graphql-axum = { workspace = true, optional = true }
-async-trait = { version = "0.1", optional = true }
+async-trait = { workspace = true, optional = true }
 sha2.workspace = true
 hex.workspace = true
 
@@ -47,8 +47,8 @@ all-formats = ["yaml", "csv-export", "compression", "akoma-ntoso"]
 
 [dev-dependencies]
 criterion.workspace = true
-proptest = "1.11"
-tokio-test = "0.4"
+proptest.workspace = true
+tokio-test.workspace = true
 
 [[bench]]
 name = "registry_benchmarks"

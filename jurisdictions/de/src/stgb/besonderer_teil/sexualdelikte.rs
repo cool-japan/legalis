@@ -326,30 +326,30 @@ pub fn validate_sexual_offence(case: &SexualOffenceCase) -> Result<()> {
     }
 
     match &case.offence {
+        // § 177 Abs. 6 StGB Regelbeispiel: penetrative act or joint
+        // commission. Absent either, the especially serious case is not made
+        // out and the act remains a basic sexual assault.
         SexualOffence::Vergewaltigung {
             penetration,
             gemeinschaftlich,
-        } => {
-            // § 177 Abs. 6 StGB Regelbeispiel: penetrative act or joint
-            // commission. Absent either, the especially serious case is not made
-            // out and the act remains a basic sexual assault.
-            if !*penetration && !*gemeinschaftlich {
-                return Err(StgbError::TatbestandNotFulfilled {
-                    element: "Regelbeispiel der Vergewaltigung: Penetration oder \
-                              gemeinschaftliche Begehung (§ 177 Abs. 6 StGB)"
-                        .to_string(),
-                });
-            }
+        } if !*penetration && !*gemeinschaftlich => {
+            return Err(StgbError::TatbestandNotFulfilled {
+                element: "Regelbeispiel der Vergewaltigung: Penetration oder \
+                          gemeinschaftliche Begehung (§ 177 Abs. 6 StGB)"
+                    .to_string(),
+            });
         }
-        SexualOffence::QualifizierterUebergriff { qualifikation, .. } => {
-            if qualifikation.is_empty() {
-                return Err(StgbError::AbsichtMissing {
-                    detail: "qualifizierter Übergriff setzt mindestens eine \
-                             Qualifikation voraus (§ 177 Abs. 7/Abs. 8 StGB)"
-                        .to_string(),
-                });
-            }
+        SexualOffence::Vergewaltigung { .. } => {}
+        SexualOffence::QualifizierterUebergriff { qualifikation, .. }
+            if qualifikation.is_empty() =>
+        {
+            return Err(StgbError::AbsichtMissing {
+                detail: "qualifizierter Übergriff setzt mindestens eine \
+                         Qualifikation voraus (§ 177 Abs. 7/Abs. 8 StGB)"
+                    .to_string(),
+            });
         }
+        SexualOffence::QualifizierterUebergriff { .. } => {}
         // § 178 StGB: erfolgsqualifiziertes Delikt requiring the death to have
         // occurred and to have been caused at least leichtfertig.
         SexualOffence::MitTodesfolge

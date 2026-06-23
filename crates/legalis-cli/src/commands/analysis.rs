@@ -499,15 +499,17 @@ pub fn handle_graph(
             graph_output = serde_json::to_string_pretty(&graph_data)?;
         }
         GraphFormat::Svg => {
-            graph_output.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-            graph_output.push_str(
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"600\">\n",
-            );
-            graph_output.push_str("  <!-- SVG graph generation not yet implemented -->\n");
-            graph_output.push_str(
-                "  <text x=\"400\" y=\"300\" text-anchor=\"middle\">Graph visualization</text>\n",
-            );
-            graph_output.push_str("</svg>\n");
+            let svg_nodes: Vec<(String, String)> = statutes
+                .iter()
+                .map(|s| (s.id.clone(), s.title.clone()))
+                .collect();
+            let mut svg_edges: Vec<(String, String)> = Vec::new();
+            for s in &statutes {
+                for dep in &s.derives_from {
+                    svg_edges.push((dep.clone(), s.id.clone()));
+                }
+            }
+            graph_output = generate_svg_graph(&svg_nodes, &svg_edges);
         }
     }
 
@@ -631,7 +633,21 @@ pub fn handle_diff_viewer(old_path: &str, new_path: &str) -> Result<()> {
             println!("{}", "✓ Merged versions".green().bold());
         }
         "edit" => {
-            println!("{}", "Manual editing not yet implemented".yellow());
+            let new_content = fs::read_to_string(&result.new_path).with_context(|| {
+                format!("Failed to read new file for editing: {}", result.new_path)
+            })?;
+            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+            let edited_content = run_editor_on_temp_content_with(&new_content, &editor)?;
+            if result.should_backup {
+                let backup_path = format!("{}.backup", result.old_path);
+                fs::copy(&result.old_path, &backup_path)
+                    .with_context(|| format!("Failed to create backup: {}", backup_path))?;
+                println!("{}", format!("✓ Created backup: {}", backup_path).yellow());
+            }
+            fs::write(&result.old_path, &edited_content).with_context(|| {
+                format!("Failed to write edited content to: {}", result.old_path)
+            })?;
+            println!("{}", "✓ Applied edited version".green().bold());
         }
         "cancel" => {
             println!("{}", "✓ Cancelled (no changes made)".yellow());
@@ -1317,9 +1333,206 @@ pub fn handle_debug(
     Ok(())
 }
 
+/// Generates SVG markup for a dependency graph using a hierarchical layered layout.
+///
+/// `nodes` is a slice of `(node_id, label)` pairs.
+/// `edges` is a slice of `(from_id, to_id)` pairs representing directed dependencies.
+fn generate_svg_graph(nodes: &[(String, String)], edges: &[(String, String)]) -> String {
+    use std::collections::HashMap;
+
+    // Initialise depth for every node that appears in the node list or in edge endpoints.
+    let mut depth: HashMap<String, usize> = HashMap::new();
+    for (id, _) in nodes {
+        depth.entry(id.clone()).or_insert(0);
+    }
+    for (from, to) in edges {
+        depth.entry(from.clone()).or_insert(0);
+        depth.entry(to.clone()).or_insert(0);
+    }
+
+    // Compute hierarchical depth via iterative relaxation.
+    // An edge (A → B) means B depends on A, so depth[B] ≥ depth[A] + 1.
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (from, to) in edges {
+            let from_d = depth.get(from.as_str()).copied().unwrap_or(0);
+            let to_d = depth.get(to.as_str()).copied().unwrap_or(0);
+            let candidate = from_d + 1;
+            if candidate > to_d {
+                depth.insert(to.clone(), candidate);
+                changed = true;
+            }
+        }
+    }
+
+    let max_depth = depth.values().max().copied().unwrap_or(0);
+    let num_layers = max_depth + 1;
+
+    // Group nodes by their depth layer (layer 0 = roots / no dependencies).
+    let mut layers: Vec<Vec<(&str, &str)>> = vec![Vec::new(); num_layers];
+    for (id, label) in nodes {
+        let d = depth.get(id.as_str()).copied().unwrap_or(0);
+        let layer_idx = d.min(layers.len().saturating_sub(1));
+        layers[layer_idx].push((id.as_str(), label.as_str()));
+    }
+
+    // Scale canvas with the number of nodes / layers.
+    let node_count = nodes.len().max(1);
+    let canvas_width = 800_usize.max(140 * node_count);
+    let canvas_height = 600_usize.max(160 * num_layers);
+
+    // Assign (cx, cy) to each node within its layer.
+    let node_radius = 20.0_f64;
+    let mut positions: HashMap<String, (f64, f64)> = HashMap::new();
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        let layer_count = layer.len().max(1);
+        let y = (layer_idx as f64 + 1.0) * (canvas_height as f64 / (num_layers as f64 + 1.0));
+        for (pos_idx, (id, _)) in layer.iter().enumerate() {
+            let x = (pos_idx as f64 + 1.0) * (canvas_width as f64 / (layer_count as f64 + 1.0));
+            positions.insert((*id).to_string(), (x, y));
+        }
+    }
+
+    let mut svg = String::new();
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\">\n",
+        canvas_width, canvas_height
+    ));
+
+    // Draw edges first so they appear behind the nodes.
+    for (from, to) in edges {
+        if let (Some(&(x1, y1)), Some(&(x2, y2))) =
+            (positions.get(from.as_str()), positions.get(to.as_str()))
+        {
+            svg.push_str(&format!(
+                "  <line x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\" \
+                 stroke=\"black\" stroke-width=\"1\"/>\n",
+                x1, y1, x2, y2
+            ));
+        }
+    }
+
+    // Draw nodes (circle + label).
+    for (id, label) in nodes {
+        if let Some(&(cx, cy)) = positions.get(id.as_str()) {
+            svg.push_str(&format!(
+                "  <circle cx=\"{:.1}\" cy=\"{:.1}\" r=\"{:.0}\" \
+                 fill=\"#4a9eff\" stroke=\"#2255cc\" stroke-width=\"2\"/>\n",
+                cx, cy, node_radius
+            ));
+            svg.push_str(&format!(
+                "  <text x=\"{:.1}\" y=\"{:.1}\" text-anchor=\"middle\" \
+                 font-size=\"12\">{}</text>\n",
+                cx,
+                cy + node_radius + 14.0,
+                label
+            ));
+        }
+    }
+
+    svg.push_str("</svg>\n");
+    svg
+}
+
+/// Opens `editor` on a temp copy of `content` and returns the edited content.
+fn run_editor_on_temp_content_with(content: &str, editor: &str) -> Result<String> {
+    let temp_dir = std::env::temp_dir();
+    let pid = std::process::id();
+    let temp_path = temp_dir.join(format!("legalis_diff_edit_{}.txt", pid));
+
+    fs::write(&temp_path, content).with_context(|| {
+        format!(
+            "Failed to write temp file for editor: {}",
+            temp_path.display()
+        )
+    })?;
+
+    let status = std::process::Command::new(editor)
+        .arg(&temp_path)
+        .status()
+        .with_context(|| {
+            format!(
+                "Failed to spawn editor '{}': verify it is installed and in PATH",
+                editor
+            )
+        })?;
+
+    if !status.success() {
+        let _ = fs::remove_file(&temp_path);
+        anyhow::bail!(
+            "Editor '{}' exited with non-zero status: {}",
+            editor,
+            status
+        );
+    }
+
+    let edited =
+        fs::read_to_string(&temp_path).with_context(|| "Failed to read back edited temp file")?;
+
+    let _ = fs::remove_file(&temp_path);
+
+    if edited.trim().is_empty() {
+        anyhow::bail!("Edited content is empty; aborting apply to avoid data loss");
+    }
+
+    Ok(edited)
+}
+
 impl crate::profile::ProfileData {
     /// Convert to JSON string.
     pub fn to_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self).context("Failed to serialize profile data to JSON")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_edit_arm_editor_passthrough() {
+        // "true" exits 0 without reading or modifying the temp file, so the
+        // original content is returned unchanged.
+        let content = "--- a/foo.leg\n+++ b/foo.leg\n@@ -1 +1 @@\n-old\n+new\n";
+        let result = run_editor_on_temp_content_with(content, "true");
+        assert!(
+            result.is_ok(),
+            "Expected editor passthrough to succeed, got: {:?}",
+            result
+        );
+        assert_eq!(
+            result.unwrap(),
+            content,
+            "Content should be unchanged after no-op passthrough editor"
+        );
+    }
+
+    #[test]
+    fn test_svg_output_contains_expected_elements() {
+        let nodes = vec![
+            ("statute-a".to_string(), "Statute A".to_string()),
+            ("statute-b".to_string(), "Statute B".to_string()),
+        ];
+        let edges = vec![("statute-a".to_string(), "statute-b".to_string())];
+
+        let svg = generate_svg_graph(&nodes, &edges);
+
+        assert!(
+            svg.contains("<svg"),
+            "SVG output should contain <svg element"
+        );
+        assert!(
+            svg.contains("<circle"),
+            "SVG output should contain <circle element"
+        );
+        assert!(
+            svg.contains("<line"),
+            "SVG output should contain <line element"
+        );
+        assert!(
+            svg.contains("<text"),
+            "SVG output should contain <text element"
+        );
     }
 }
