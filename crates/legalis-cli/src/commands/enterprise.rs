@@ -656,7 +656,6 @@ impl From<&Vec<suggest::Recommendation>> for RecommendationView {
 mod tests {
     use super::*;
     use crate::paths;
-    use std::path::PathBuf;
 
     /// Runs `f` with the data dir redirected to a fresh temp directory.
     fn with_temp_data_dir<F: FnOnce()>(f: F) {

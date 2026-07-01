@@ -435,22 +435,22 @@ pub fn validate_bodily_harm(case: &BodilyHarmCase) -> Result<()> {
 
     // Offence-specific objective requirements.
     match &case.offence {
-        BodilyHarmOffence::GefaehrlicheKoerperverletzung { mittel, .. } => {
+        BodilyHarmOffence::GefaehrlicheKoerperverletzung { mittel, .. }
             // § 224 requires at least one qualifying dangerous means.
-            if mittel.is_empty() {
-                return Err(StgbError::AbsichtMissing {
-                    detail: "§ 224 StGB setzt mindestens ein gefährliches Mittel \
-                             (Nr. 1-5) voraus"
-                        .to_string(),
-                });
-            }
+            if mittel.is_empty() =>
+        {
+            return Err(StgbError::AbsichtMissing {
+                detail: "§ 224 StGB setzt mindestens ein gefährliches Mittel \
+                         (Nr. 1-5) voraus"
+                    .to_string(),
+            });
         }
-        BodilyHarmOffence::SchwereKoerperverletzung { .. } => {
+        BodilyHarmOffence::SchwereKoerperverletzung { .. }
             // § 226: the serious consequence must have occurred and, per § 18 StGB,
             // be attributable at least by negligence.
-            if !case.schwere_folge_eingetreten || !case.schwere_folge_wenigstens_fahrlaessig {
-                return Err(StgbError::NoSchuldform);
-            }
+            if !case.schwere_folge_eingetreten || !case.schwere_folge_wenigstens_fahrlaessig =>
+        {
+            return Err(StgbError::NoSchuldform);
         }
         // § 227: the death must have resulted from the bodily harm.
         BodilyHarmOffence::KoerperverletzungMitTodesfolge { .. } if !case.tod_eingetreten => {
