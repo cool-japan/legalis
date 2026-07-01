@@ -126,7 +126,7 @@ lru = "0.18"
 base64 = "0.22"
 num_cpus = "1.17"
 oxiarc-deflate = "0.3.3"
-quick-xml = { version = "0.40", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 
 # Pure-Rust SQLite-compatible storage (OxiSQL — COOLJAPAN, replaces rusqlite/libsqlite3-sys)
 oxisql-core = "0.3.1"
@@ -192,7 +192,7 @@ lazy_static = "1.5"
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = "0.7"
-bytes = "1.11"
+bytes = "1.12"
 
 # URL parsing
 url = "2.5"
@@ -204,7 +204,7 @@ opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic"] }
 tracing-opentelemetry = "0.33"
 
 # Caching / auth
-redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.3", features = ["tokio-comp", "connection-manager"] }
 oauth2 = "5.0"
 
 # gRPC / Protobuf
@@ -222,7 +222,7 @@ regex-lite = "0.1"
 fuzzy-matcher = "0.3"
 
 # Encryption
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 
 # Office / spreadsheet
 rust_xlsxwriter = "0.95"

@@ -5,8 +5,8 @@
 
 use crate::{AuditError, AuditRecord, AuditResult};
 use aes_gcm::{
-    Aes256Gcm, Key, Nonce,
-    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Key,
+    aead::{Aead, KeyInit, Nonce},
 };
 use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
@@ -37,8 +37,11 @@ impl EncryptionKey {
     /// let key = EncryptionKey::generate();
     /// ```
     pub fn generate() -> Self {
-        let key = Aes256Gcm::generate_key(&mut OsRng);
-        Self { key }
+        let mut key_bytes = [0u8; 32];
+        rand::fill(&mut key_bytes);
+        Self {
+            key: Key::<Aes256Gcm>::from(key_bytes),
+        }
     }
 
     /// Creates a key from a base64-encoded string.
@@ -63,8 +66,9 @@ impl EncryptionKey {
             )));
         }
 
-        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
-        Ok(Self { key: *key })
+        let key = Key::<Aes256Gcm>::try_from(key_bytes.as_slice())
+            .map_err(|_| AuditError::StorageError("Invalid key length".to_string()))?;
+        Ok(Self { key })
     }
 
     /// Converts the key to a base64-encoded string.
@@ -84,11 +88,11 @@ impl EncryptionKey {
 
         // Generate a random nonce
         let nonce_bytes = rand::random::<[u8; 12]>();
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::<Aes256Gcm>::from(nonce_bytes);
 
         // Encrypt
         let ciphertext = cipher
-            .encrypt(nonce, plaintext.as_ref())
+            .encrypt(&nonce, plaintext.as_ref())
             .map_err(|e| AuditError::StorageError(format!("Encryption failed: {}", e)))?;
 
         Ok(EncryptedRecord {
@@ -118,11 +122,12 @@ impl EncryptionKey {
             )));
         }
 
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::<Aes256Gcm>::try_from(nonce_bytes.as_slice())
+            .map_err(|_| AuditError::StorageError("Invalid nonce length".to_string()))?;
 
         // Decrypt
         let plaintext = cipher
-            .decrypt(nonce, ciphertext.as_ref())
+            .decrypt(&nonce, ciphertext.as_ref())
             .map_err(|e| AuditError::StorageError(format!("Decryption failed: {}", e)))?;
 
         // Deserialize

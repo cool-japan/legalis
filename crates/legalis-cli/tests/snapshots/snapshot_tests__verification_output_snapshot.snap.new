@@ -1,0 +1,10 @@
+---
+source: crates/legalis-cli/tests/snapshot_tests.rs
+assertion_line: 103
+expression: "serde_json::to_string_pretty(&snapshot_data).unwrap()"
+---
+{
+  "passed": true,
+  "error_count": 0,
+  "warning_count": 0
+}
