@@ -166,8 +166,8 @@ unic-langid = "0.9"
 
 # SMT Solver (OxiZ - Pure Rust Z3 alternative)
 # Using published crates.io version
-oxiz-solver = "0.3.2"
-oxiz-core = "0.3.2"
+oxiz-solver = "0.3.3"
+oxiz-core = "0.3.3"
 num-bigint = "0.4"
 
 # GPU acceleration (NVIDIA CUDA driver + NVRTC runtime kernel compilation).
