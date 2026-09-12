@@ -125,7 +125,7 @@ sha2 = "0.11"
 lru = "0.18"
 base64 = "0.22"
 num_cpus = "1.17"
-oxiarc-deflate = "0.4.1"
+oxiarc-deflate = "0.4.2"
 quick-xml = { package = "oxixml-quickxml-compat", version = "0.1.2", features = ["serialize"] }
 
 # Pure-Rust SQLite-compatible storage (OxiSQL — COOLJAPAN, replaces rusqlite/libsqlite3-sys)
