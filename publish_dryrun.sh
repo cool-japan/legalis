@@ -2,7 +2,7 @@
 
 # Legalis-RS Dry-Run Publishing Script
 # Tests publishing without actually uploading to crates.io
-# Author: COOLJAPAN OU (Team Kitasan)
+# Author: COOLJAPAN OU (Team KitaSan)
 # License: MIT OR Apache-2.0
 
 # Note: cargo publish builds with default features only.

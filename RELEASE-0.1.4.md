@@ -1003,7 +1003,7 @@ cargo run --example judgment-anonymization
 
 **Version**: 0.1.4
 **Release Date**: January 27, 2026
-**Author**: COOLJAPAN OU (Team Kitasan)
+**Author**: COOLJAPAN OU (Team KitaSan)
 **License**: Apache-2.0
 
 ---

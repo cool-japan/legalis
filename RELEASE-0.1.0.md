@@ -3,7 +3,7 @@
 **Release Date**: January 5, 2026
 **Version**: 0.1.0
 **License**: Apache-2.0
-**Author**: COOLJAPAN OU (Team Kitasan)
+**Author**: COOLJAPAN OU (Team KitaSan)
 
 ## Overview
 
@@ -254,7 +254,7 @@ N/A - Initial release
 
 ## Contributors
 
-- COOLJAPAN OU (Team Kitasan)
+- COOLJAPAN OU (Team KitaSan)
 - Built with Claude Code
 
 ## Acknowledgments

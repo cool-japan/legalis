@@ -262,11 +262,11 @@ cargo yank --undo --vers 0.1.0 legalis-core
 
 For issues with publishing:
 - Check crates.io status: https://status.crates.io/
-- Contact: COOLJAPAN OU (Team Kitasan)
+- Contact: COOLJAPAN OU (Team KitaSan)
 - License: Apache-2.0
 
 ---
 
 **Version:** 0.1.6
 **Last Updated:** 2026-06-16
-**Author:** COOLJAPAN OU (Team Kitasan)
+**Author:** COOLJAPAN OU (Team KitaSan)

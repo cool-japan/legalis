@@ -216,7 +216,7 @@ Support court systems in preparing judgments for public disclosure under transpa
 
 Apache-2.0
 
-Copyright 2026 COOLJAPAN OU (Team Kitasan)
+Copyright 2026 COOLJAPAN OU (Team KitaSan)
 
 ---
 

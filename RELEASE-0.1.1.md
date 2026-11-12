@@ -3,7 +3,7 @@
 **Release Date**: January 10, 2026
 **Version**: 0.1.1
 **License**: Apache-2.0
-**Author**: COOLJAPAN OU (Team Kitasan)
+**Author**: COOLJAPAN OU (Team KitaSan)
 
 ## Overview
 
@@ -350,7 +350,7 @@ The release includes 24 comprehensive examples covering:
 
 ## Contributors
 
-- COOLJAPAN OU (Team Kitasan)
+- COOLJAPAN OU (Team KitaSan)
 - Built with Claude Code
 
 ## Acknowledgments

@@ -303,5 +303,5 @@ All platforms show similar runtime performance. Rust's zero-cost abstractions en
 ---
 
 **Last Updated:** 2026-01-05
-**Author:** COOLJAPAN OU (Team Kitasan)
+**Author:** COOLJAPAN OU (Team KitaSan)
 **License:** Apache-2.0

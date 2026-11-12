@@ -1364,4 +1364,4 @@ guidance on legitimate interests).
 ---
 
 *Tutorial version: legalis-eu 0.1.7 · Last updated: 2026-06-22*
-*Copyright © COOLJAPAN OU (Team Kitasan). All rights reserved.*
+*Copyright © COOLJAPAN OU (Team KitaSan). All rights reserved.*

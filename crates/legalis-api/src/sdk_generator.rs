@@ -656,7 +656,7 @@ impl SdkGenerator for TypeScriptSdkGenerator {
                 "prepublishOnly": "npm run build"
             },
             "keywords": ["sdk", "api", "legalis", "typescript"],
-            "author": "COOLJAPAN OU (Team Kitasan)",
+            "author": "COOLJAPAN OU (Team KitaSan)",
             "license": "Apache-2.0",
             "dependencies": self.get_dependencies(),
             "devDependencies": {
@@ -1334,7 +1334,7 @@ impl SdkGenerator for PythonSdkGenerator {
             "    description='Python SDK for {}',\n",
             config.package_name
         ));
-        setup.push_str("    author='COOLJAPAN OU (Team Kitasan)',\n");
+        setup.push_str("    author='COOLJAPAN OU (Team KitaSan)',\n");
         setup.push_str("    license='Apache-2.0',\n");
         setup.push_str("    packages=find_packages(),\n");
         setup.push_str("    install_requires=[\n");
@@ -1665,7 +1665,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {{text = "Apache-2.0"}}
 authors = [
-    {{name = "COOLJAPAN OU (Team Kitasan)"}}
+    {{name = "COOLJAPAN OU (Team KitaSan)"}}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

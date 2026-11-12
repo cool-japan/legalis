@@ -587,7 +587,7 @@ cargo doc --workspace --all-features --no-deps --open
 
 ## Sponsorship
 
-Legalis is developed and maintained by **COOLJAPAN OU (Team Kitasan)**.
+Legalis is developed and maintained by **COOLJAPAN OU (Team KitaSan)**.
 
 If you find Legalis useful, please consider sponsoring the project to support continued development of the Pure Rust ecosystem.
 

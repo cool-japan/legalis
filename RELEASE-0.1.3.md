@@ -255,7 +255,7 @@ cargo build --all-features
 
 ## Contributors
 
-This release was made possible by the Legalis-RS development team at COOLJAPAN OU (Team Kitasan).
+This release was made possible by the Legalis-RS development team at COOLJAPAN OU (Team KitaSan).
 
 **Special Thanks**:
 - Comprehensive jurisdiction research and implementation
