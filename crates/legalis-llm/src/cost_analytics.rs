@@ -523,7 +523,15 @@ impl CostOptimizer {
     pub async fn get_pricing(&self, provider: &str, model: &str) -> Option<ModelPricing> {
         let key = format!("{}/{}", provider, model);
         let pricing = self.pricing.read().await;
-        pricing.get(&key).cloned()
+        pricing.get(&key).cloned().or_else(|| {
+            let price = llm_prices::lookup_provider(provider, model)?;
+            Some(ModelPricing::new(
+                provider,
+                model,
+                price.input? / 1000.0,
+                price.output? / 1000.0,
+            ))
+        })
     }
 
     /// Adds or updates pricing information for a model.
@@ -732,6 +740,29 @@ mod tests {
         assert_eq!(pricing.provider, "openai");
         assert_eq!(pricing.model, "gpt-4");
         assert!((pricing.input_cost_per_1k - 0.03).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_get_pricing_current_models() {
+        let optimizer = CostOptimizer::new();
+
+        let pricing = optimizer.get_pricing("openai", "gpt-4o").await.unwrap();
+        assert!((pricing.input_cost_per_1k - 0.0025).abs() < 1e-12);
+        assert!((pricing.output_cost_per_1k - 0.01).abs() < 1e-12);
+
+        let pricing = optimizer
+            .get_pricing("anthropic", "claude-sonnet-4-5")
+            .await
+            .unwrap();
+        assert!((pricing.input_cost_per_1k - 0.003).abs() < 1e-12);
+        assert!((pricing.output_cost_per_1k - 0.015).abs() < 1e-12);
+
+        assert!(
+            optimizer
+                .get_pricing("openai", "not-a-model")
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]
