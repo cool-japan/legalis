@@ -33,6 +33,7 @@ uuid.workspace = true
 lru.workspace = true
 base64.workspace = true
 md5 = "0.8"
+llm-prices.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
